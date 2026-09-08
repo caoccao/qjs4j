@@ -111,8 +111,8 @@ final class ExpressionBinaryParser {
     Expression parseEqualityExpression() {
         Expression left = expressions.parseRelationalExpression();
 
-        while (parserContext.match(TokenType.EQ) || parserContext.match(TokenType.NE) ||
-                parserContext.match(TokenType.STRICT_EQ) || parserContext.match(TokenType.STRICT_NE)) {
+        while (parserContext.match(TokenType.EQ) || parserContext.match(TokenType.NE)
+                || parserContext.match(TokenType.STRICT_EQ) || parserContext.match(TokenType.STRICT_NE)) {
             BinaryOperator op = switch (parserContext.currentToken.type()) {
                 case EQ -> BinaryOperator.EQ;
                 case NE -> BinaryOperator.NE;
@@ -135,8 +135,7 @@ final class ExpressionBinaryParser {
 
         if (parserContext.match(TokenType.EXP)) {
             if (isDisallowedExponentiationUnaryBaseToken(firstTokenType)
-                    || (left instanceof AwaitExpression
-                    && !parserContext.isParenthesizedExpression(left))) {
+                    || (left instanceof AwaitExpression && !parserContext.isParenthesizedExpression(left))) {
                 throw new JSSyntaxErrorException("Unary operator used immediately before exponentiation expression");
             }
             SourceLocation location = parserContext.getLocation();
@@ -204,7 +203,8 @@ final class ExpressionBinaryParser {
     Expression parseMultiplicativeExpression() {
         Expression left = expressions.parseExponentiationExpression();
 
-        while (parserContext.match(TokenType.MUL) || parserContext.match(TokenType.DIV) || parserContext.match(TokenType.MOD)) {
+        while (parserContext.match(TokenType.MUL) || parserContext.match(TokenType.DIV)
+                || parserContext.match(TokenType.MOD)) {
             BinaryOperator op = switch (parserContext.currentToken.type()) {
                 case DIV -> BinaryOperator.DIV;
                 case MOD -> BinaryOperator.MOD;
@@ -223,9 +223,10 @@ final class ExpressionBinaryParser {
     Expression parseRelationalExpression() {
         Expression left = expressions.parseShiftExpression();
 
-        while (parserContext.match(TokenType.LT) || parserContext.match(TokenType.LE) ||
-                parserContext.match(TokenType.GT) || parserContext.match(TokenType.GE) ||
-                (parserContext.inOperatorAllowed && parserContext.match(TokenType.IN)) || parserContext.match(TokenType.INSTANCEOF)) {
+        while (parserContext.match(TokenType.LT) || parserContext.match(TokenType.LE)
+                || parserContext.match(TokenType.GT) || parserContext.match(TokenType.GE)
+                || (parserContext.inOperatorAllowed && parserContext.match(TokenType.IN))
+                || parserContext.match(TokenType.INSTANCEOF)) {
             BinaryOperator op = switch (parserContext.currentToken.type()) {
                 case LT -> BinaryOperator.LT;
                 case LE -> BinaryOperator.LE;
@@ -247,7 +248,8 @@ final class ExpressionBinaryParser {
     Expression parseShiftExpression() {
         Expression left = expressions.parseAdditiveExpression();
 
-        while (parserContext.match(TokenType.LSHIFT) || parserContext.match(TokenType.RSHIFT) || parserContext.match(TokenType.URSHIFT)) {
+        while (parserContext.match(TokenType.LSHIFT) || parserContext.match(TokenType.RSHIFT)
+                || parserContext.match(TokenType.URSHIFT)) {
             BinaryOperator op = switch (parserContext.currentToken.type()) {
                 case LSHIFT -> BinaryOperator.LSHIFT;
                 case RSHIFT -> BinaryOperator.RSHIFT;

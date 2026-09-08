@@ -82,13 +82,9 @@ final class TaggedTemplateExpressionCompiler extends AstNodeCompiler<TaggedTempl
         int argCount = 1 + expressions.size();
         boolean isMethodCall = taggedTemplate.getTag() instanceof MemberExpression;
         if (isMethodCall) {
-            compilerContext.emitter.emitOpcodeU16(
-                    isTailCall ? Opcode.TAIL_CALL_METHOD : Opcode.CALL_METHOD,
-                    argCount);
+            compilerContext.emitter.emitOpcodeU16(isTailCall ? Opcode.TAIL_CALL_METHOD : Opcode.CALL_METHOD, argCount);
         } else {
-            compilerContext.emitter.emitOpcodeU16(
-                    isTailCall ? Opcode.TAIL_CALL : Opcode.CALL,
-                    argCount);
+            compilerContext.emitter.emitOpcodeU16(isTailCall ? Opcode.TAIL_CALL : Opcode.CALL, argCount);
         }
     }
 
@@ -103,21 +99,21 @@ final class TaggedTemplateExpressionCompiler extends AstNodeCompiler<TaggedTempl
         for (int i = 0; i < segmentCount; i++) {
             JSString rawValue = new JSString(rawQuasis.get(i));
             rawArray.set(i, rawValue);
-            rawArray.defineProperty(
-                    PropertyKey.fromIndex(i),
+            rawArray.defineProperty(PropertyKey.fromIndex(i),
                     PropertyDescriptor.dataDescriptor(rawValue, PropertyDescriptor.DataState.Enumerable));
 
             String cookedQuasi = cookedQuasis.get(i);
             JSValue cookedValue = cookedQuasi == null ? JSUndefined.INSTANCE : new JSString(cookedQuasi);
             templateObject.set(i, cookedValue);
-            templateObject.defineProperty(
-                    PropertyKey.fromIndex(i),
+            templateObject.defineProperty(PropertyKey.fromIndex(i),
                     PropertyDescriptor.dataDescriptor(cookedValue, PropertyDescriptor.DataState.Enumerable));
         }
 
         // QuickJS/spec attributes for template objects.
-        rawArray.defineProperty(PropertyKey.fromString("length"), JSNumber.of(segmentCount), PropertyDescriptor.DataState.None);
-        templateObject.defineProperty(PropertyKey.fromString("length"), JSNumber.of(segmentCount), PropertyDescriptor.DataState.None);
+        rawArray.defineProperty(PropertyKey.fromString("length"), JSNumber.of(segmentCount),
+                PropertyDescriptor.DataState.None);
+        templateObject.defineProperty(PropertyKey.fromString("length"), JSNumber.of(segmentCount),
+                PropertyDescriptor.DataState.None);
         templateObject.defineProperty(PropertyKey.fromString("raw"), rawArray, PropertyDescriptor.DataState.None);
 
         rawArray.freeze();

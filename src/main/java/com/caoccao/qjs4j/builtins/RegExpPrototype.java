@@ -20,8 +20,7 @@ import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.regexp.RegExpEngine;
 
 /**
- * Implementation of JavaScript RegExp.prototype methods.
- * Based on ES2020 RegExp specification.
+ * Implementation of JavaScript RegExp.prototype methods. Based on ES2020 RegExp specification.
  */
 public final class RegExpPrototype {
     private static final PropertyKey PROPERTY_DOT_ALL = PropertyKey.fromString("dotAll");
@@ -108,9 +107,7 @@ public final class RegExpPrototype {
     }
 
     /**
-     * RegExp.prototype.compile(pattern, flags)
-     * AnnexB B.2.5.1
-     * Reinitializes the RegExp object in-place.
+     * RegExp.prototype.compile(pattern, flags) AnnexB B.2.5.1 Reinitializes the RegExp object in-place.
      */
     public static JSValue compile(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSRegExp regexp)) {
@@ -165,11 +162,13 @@ public final class RegExpPrototype {
         return constructWithSpecies(context, constructorValue, regexpObject, flags);
     }
 
-    private static JSObject constructWithSpecies(JSContext context, JSValue constructorValue, JSObject regexpObject, String flags) {
+    private static JSObject constructWithSpecies(JSContext context, JSValue constructorValue, JSObject regexpObject,
+            String flags) {
         JSArray argsArray = context.createJSArray();
         argsArray.push(regexpObject);
         argsArray.push(new JSString(flags));
-        JSValue constructed = JSReflectObject.construct(context, JSUndefined.INSTANCE, new JSValue[]{constructorValue, argsArray});
+        JSValue constructed = JSReflectObject.construct(context, JSUndefined.INSTANCE,
+                new JSValue[]{constructorValue, argsArray});
         if (context.hasPendingException()) {
             return null;
         }
@@ -204,7 +203,8 @@ public final class RegExpPrototype {
                 String groupName = groupNames[i];
                 if (groupName != null) {
                     if (!(pairValue instanceof JSUndefined) || !groupIndices.hasOwnProperty(groupName)) {
-                        groupIndices.defineProperty(PropertyKey.fromString(groupName), pairValue, PropertyDescriptor.DataState.All);
+                        groupIndices.defineProperty(PropertyKey.fromString(groupName), pairValue,
+                                PropertyDescriptor.DataState.All);
                     }
                 }
             }
@@ -234,9 +234,11 @@ public final class RegExpPrototype {
             String groupName = groupNames[i];
             if (groupName != null) {
                 if (captures[i] != null) {
-                    groups.defineProperty(PropertyKey.fromString(groupName), new JSString(captures[i]), PropertyDescriptor.DataState.All);
+                    groups.defineProperty(PropertyKey.fromString(groupName), new JSString(captures[i]),
+                            PropertyDescriptor.DataState.All);
                 } else if (!groups.hasOwnProperty(groupName)) {
-                    groups.defineProperty(PropertyKey.fromString(groupName), JSUndefined.INSTANCE, PropertyDescriptor.DataState.All);
+                    groups.defineProperty(PropertyKey.fromString(groupName), JSUndefined.INSTANCE,
+                            PropertyDescriptor.DataState.All);
                 }
             }
         }
@@ -296,9 +298,7 @@ public final class RegExpPrototype {
     }
 
     /**
-     * RegExp.prototype.exec(str)
-     * ES2020 21.2.5.2.1
-     * Executes a search for a match in a string.
+     * RegExp.prototype.exec(str) ES2020 21.2.5.2.1 Executes a search for a match in a string.
      */
     public static JSValue exec(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSRegExp regexp)) {
@@ -359,10 +359,12 @@ public final class RegExpPrototype {
             }
             array.defineProperty(PropertyKey.INPUT, new JSString(str), PropertyDescriptor.DataState.All);
             array.defineProperty(PropertyKey.GROUPS,
-                    createNamedGroupsValue(context, captures, regexp.getBytecode().groupNames()), PropertyDescriptor.DataState.All);
+                    createNamedGroupsValue(context, captures, regexp.getBytecode().groupNames()),
+                    PropertyDescriptor.DataState.All);
             if (regexp.hasIndices()) {
                 array.defineProperty(PropertyKey.INDICES,
-                        createIndicesValue(context, indices, regexp.getBytecode().groupNames()), PropertyDescriptor.DataState.All);
+                        createIndicesValue(context, indices, regexp.getBytecode().groupNames()),
+                        PropertyDescriptor.DataState.All);
             }
 
             context.updateRegExpLegacyStatics(str, captures, indices, lastIndex);
@@ -388,10 +390,7 @@ public final class RegExpPrototype {
         return JSNull.INSTANCE;
     }
 
-    private static JSValue getBooleanFlagAccessorValue(
-            JSContext context,
-            JSValue thisArg,
-            String errorName,
+    private static JSValue getBooleanFlagAccessorValue(JSContext context, JSValue thisArg, String errorName,
             java.util.function.Function<JSRegExp, Boolean> getter) {
         if (isRegExpPrototypeObject(context, thisArg)) {
             return JSUndefined.INSTANCE;
@@ -406,8 +405,7 @@ public final class RegExpPrototype {
     }
 
     /**
-     * get RegExp.prototype.dotAll
-     * ES2020 21.2.5.6
+     * get RegExp.prototype.dotAll ES2020 21.2.5.6
      */
     public static JSValue getDotAll(JSContext context, JSValue thisArg, JSValue[] args) {
         if (isRegExpPrototypeObject(context, thisArg)) {
@@ -425,8 +423,7 @@ public final class RegExpPrototype {
     }
 
     /**
-     * get RegExp.prototype.flags
-     * ES2020 21.2.5.3
+     * get RegExp.prototype.flags ES2020 21.2.5.3
      */
     public static JSValue getFlags(JSContext context, JSValue thisArg, JSValue[] args) {
         if (isRegExpPrototypeObject(context, thisArg)) {
@@ -472,8 +469,7 @@ public final class RegExpPrototype {
     }
 
     /**
-     * get RegExp.prototype.global
-     * ES2020 21.2.5.4
+     * get RegExp.prototype.global ES2020 21.2.5.4
      */
     public static JSValue getGlobal(JSContext context, JSValue thisArg, JSValue[] args) {
         if (isRegExpPrototypeObject(context, thisArg)) {
@@ -491,8 +487,7 @@ public final class RegExpPrototype {
     }
 
     /**
-     * get RegExp.prototype.hasIndices
-     * ES2022
+     * get RegExp.prototype.hasIndices ES2022
      */
     public static JSValue getHasIndices(JSContext context, JSValue thisArg, JSValue[] args) {
         if (isRegExpPrototypeObject(context, thisArg)) {
@@ -510,8 +505,7 @@ public final class RegExpPrototype {
     }
 
     /**
-     * get RegExp.prototype.ignoreCase
-     * ES2020 21.2.5.5
+     * get RegExp.prototype.ignoreCase ES2020 21.2.5.5
      */
     public static JSValue getIgnoreCase(JSContext context, JSValue thisArg, JSValue[] args) {
         if (isRegExpPrototypeObject(context, thisArg)) {
@@ -529,8 +523,7 @@ public final class RegExpPrototype {
     }
 
     /**
-     * get RegExp.prototype.multiline
-     * ES2020 21.2.5.7
+     * get RegExp.prototype.multiline ES2020 21.2.5.7
      */
     public static JSValue getMultiline(JSContext context, JSValue thisArg, JSValue[] args) {
         if (isRegExpPrototypeObject(context, thisArg)) {
@@ -576,8 +569,7 @@ public final class RegExpPrototype {
     }
 
     /**
-     * get RegExp.prototype.source
-     * ES2020 21.2.5.10
+     * get RegExp.prototype.source ES2020 21.2.5.10
      */
     public static JSValue getSource(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSRegExp regexp)) {
@@ -601,8 +593,7 @@ public final class RegExpPrototype {
     }
 
     /**
-     * get RegExp.prototype.sticky
-     * ES2020 21.2.5.12
+     * get RegExp.prototype.sticky ES2020 21.2.5.12
      */
     public static JSValue getSticky(JSContext context, JSValue thisArg, JSValue[] args) {
         if (isRegExpPrototypeObject(context, thisArg)) {
@@ -620,8 +611,7 @@ public final class RegExpPrototype {
     }
 
     /**
-     * get RegExp.prototype.unicode
-     * ES2020 21.2.5.15
+     * get RegExp.prototype.unicode ES2020 21.2.5.15
      */
     public static JSValue getUnicode(JSContext context, JSValue thisArg, JSValue[] args) {
         if (isRegExpPrototypeObject(context, thisArg)) {
@@ -639,8 +629,7 @@ public final class RegExpPrototype {
     }
 
     /**
-     * get RegExp.prototype.unicodeSets
-     * ES2024
+     * get RegExp.prototype.unicodeSets ES2024
      */
     public static JSValue getUnicodeSets(JSContext context, JSValue thisArg, JSValue[] args) {
         if (isRegExpPrototypeObject(context, thisArg)) {
@@ -699,7 +688,8 @@ public final class RegExpPrototype {
      */
     public static JSValue regExpStringIteratorNext(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSRegExpStringIterator regExpStringIterator)) {
-            return context.throwTypeError("Method RegExp String Iterator.prototype.next called on incompatible receiver");
+            return context
+                    .throwTypeError("Method RegExp String Iterator.prototype.next called on incompatible receiver");
         }
         return regExpStringIterator.next(context);
     }
@@ -750,8 +740,7 @@ public final class RegExpPrototype {
     }
 
     /**
-     * RegExp.prototype[@@match](string)
-     * ES2024 22.2.5.6
+     * RegExp.prototype[@@match](string) ES2024 22.2.5.6
      */
     public static JSValue symbolMatch(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSObject rxObj)) {
@@ -828,8 +817,7 @@ public final class RegExpPrototype {
     }
 
     /**
-     * RegExp.prototype[@@matchAll](string)
-     * ES2024 22.2.6.9 (subset aligned with test262 semantics in current slice).
+     * RegExp.prototype[@@matchAll](string) ES2024 22.2.6.9 (subset aligned with test262 semantics in current slice).
      */
     public static JSValue symbolMatchAll(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSObject regexpObject)) {
@@ -882,15 +870,15 @@ public final class RegExpPrototype {
     }
 
     /**
-     * RegExp.prototype[@@replace](string, replaceValue)
-     * ES2024 22.2.6.11 (subset sufficient for current test262 slice).
+     * RegExp.prototype[@@replace](string, replaceValue) ES2024 22.2.6.11 (subset sufficient for current test262 slice).
      */
     public static JSValue symbolReplace(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSObject regexpObject)) {
             return context.throwTypeError("RegExp.prototype[Symbol.replace] called on non-object");
         }
 
-        JSString inputStringValue = JSTypeConversions.toString(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        JSString inputStringValue = JSTypeConversions.toString(context,
+                args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1040,14 +1028,8 @@ public final class RegExpPrototype {
                     }
                 }
 
-                String replacement = StringPrototype.applyRegExpReplacementWithNamedCapturesObject(
-                        context,
-                        replaceValue,
-                        inputString,
-                        position,
-                        tailPosition,
-                        captures,
-                        groupsValue);
+                String replacement = StringPrototype.applyRegExpReplacementWithNamedCapturesObject(context,
+                        replaceValue, inputString, position, tailPosition, captures, groupsValue);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -1069,8 +1051,7 @@ public final class RegExpPrototype {
     }
 
     /**
-     * RegExp.prototype[@@search](string)
-     * ES2024 22.2.6.13
+     * RegExp.prototype[@@search](string) ES2024 22.2.6.13
      */
     public static JSValue symbolSearch(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSObject regexpObject)) {
@@ -1135,8 +1116,7 @@ public final class RegExpPrototype {
     }
 
     /**
-     * RegExp.prototype[@@split](string, limit)
-     * ES2024 22.2.6.14
+     * RegExp.prototype[@@split](string, limit) ES2024 22.2.6.14
      */
     public static JSValue symbolSplit(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSObject regexpObject)) {
@@ -1173,7 +1153,9 @@ public final class RegExpPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        long limit = args.length > 1 && !(args[1] instanceof JSUndefined) ? JSTypeConversions.toUint32(context, args[1]) : 0xFFFFFFFFL;
+        long limit = args.length > 1 && !(args[1] instanceof JSUndefined)
+                ? JSTypeConversions.toUint32(context, args[1])
+                : 0xFFFFFFFFL;
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1270,9 +1252,7 @@ public final class RegExpPrototype {
     }
 
     /**
-     * RegExp.prototype.test(str)
-     * ES2020 21.2.5.17
-     * Tests for a match in a string.
+     * RegExp.prototype.test(str) ES2020 21.2.5.17 Tests for a match in a string.
      */
     public static JSValue test(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSObject regexpObject)) {
@@ -1290,9 +1270,8 @@ public final class RegExpPrototype {
     }
 
     /**
-     * RegExp.prototype.toString()
-     * ES2024 22.2.5.14
-     * Reads "source" and "flags" properties from the this value (any object).
+     * RegExp.prototype.toString() ES2024 22.2.5.14 Reads "source" and "flags" properties from the this value (any
+     * object).
      */
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSObject regexpObject)) {
@@ -1318,17 +1297,13 @@ public final class RegExpPrototype {
     }
 
     private static final class JSRegExpStringIterator extends JSObject {
+        private boolean done;
         private final boolean fullUnicode;
         private final boolean global;
         private final JSObject regexpObject;
         private final JSString stringValue;
-        private boolean done;
 
-        private JSRegExpStringIterator(
-                JSContext context,
-                JSObject regexpObject,
-                JSString stringValue,
-                boolean global,
+        private JSRegExpStringIterator(JSContext context, JSObject regexpObject, JSString stringValue, boolean global,
                 boolean fullUnicode) {
             super(context);
             this.regexpObject = regexpObject;

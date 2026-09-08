@@ -19,7 +19,8 @@ package com.caoccao.qjs4j.regexp;
 /**
  * Marker value used by Literal nodes to distinguish regex literals from string literals.
  *
- * @param source the source form including delimiters, e.g. /pattern/flags
+ * @param source
+ *            the source form including delimiters, e.g. /pattern/flags
  */
 public record RegExpLiteralValue(String source) {
 }

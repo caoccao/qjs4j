@@ -43,7 +43,8 @@ final class LexerTemplateScanner {
                 }
                 continue;
             }
-            if (c == '$' && lexer.position + 1 < lexer.source.length() && lexer.source.charAt(lexer.position + 1) == '{') {
+            if (c == '$' && lexer.position + 1 < lexer.source.length()
+                    && lexer.source.charAt(lexer.position + 1) == '{') {
                 value.append(lexer.advance());
                 value.append(lexer.advance());
                 scanTemplateExpression(value);
@@ -140,14 +141,14 @@ final class LexerTemplateScanner {
             }
 
             if (c == '.') {
-                if (lexer.position + 2 < lexer.source.length()
-                        && lexer.source.charAt(lexer.position + 1) == '.'
+                if (lexer.position + 2 < lexer.source.length() && lexer.source.charAt(lexer.position + 1) == '.'
                         && lexer.source.charAt(lexer.position + 2) == '.') {
                     value.append(lexer.advance());
                     value.append(lexer.advance());
                     value.append(lexer.advance());
                     regexAllowed = true;
-                } else if (lexer.position + 1 < lexer.source.length() && Character.isDigit(lexer.source.charAt(lexer.position + 1))) {
+                } else if (lexer.position + 1 < lexer.source.length()
+                        && Character.isDigit(lexer.source.charAt(lexer.position + 1))) {
                     scanTemplateNumber(value);
                     regexAllowed = false;
                 } else {
@@ -160,8 +161,9 @@ final class LexerTemplateScanner {
             if (lexer.isIdentifierStart(c)) {
                 String identifier = scanTemplateIdentifier(value);
                 regexAllowed = switch (identifier) {
-                    case "return", "throw", "case", "delete", "void", "typeof",
-                         "instanceof", "in", "of", "new", "do", "else", "yield", "await" -> true;
+                    case "return", "throw", "case", "delete", "void", "typeof", "instanceof", "in", "of", "new", "do",
+                            "else", "yield", "await" ->
+                        true;
                     default -> false;
                 };
                 continue;
@@ -240,7 +242,8 @@ final class LexerTemplateScanner {
                 }
                 continue;
             }
-            if (c == '$' && lexer.position + 1 < lexer.source.length() && lexer.source.charAt(lexer.position + 1) == '{') {
+            if (c == '$' && lexer.position + 1 < lexer.source.length()
+                    && lexer.source.charAt(lexer.position + 1) == '{') {
                 value.append(lexer.advance());
                 value.append(lexer.advance());
                 scanTemplateExpression(value);

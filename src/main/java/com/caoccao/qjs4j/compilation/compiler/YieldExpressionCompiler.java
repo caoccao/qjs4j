@@ -32,7 +32,8 @@ final class YieldExpressionCompiler extends AstNodeCompiler<YieldExpression> {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
         if (yieldExpr.isDelegate()) {
-            compilerContext.emitter.emitOpcode(compilerContext.isInAsyncFunction ? Opcode.ASYNC_YIELD_STAR : Opcode.YIELD_STAR);
+            compilerContext.emitter
+                    .emitOpcode(compilerContext.isInAsyncFunction ? Opcode.ASYNC_YIELD_STAR : Opcode.YIELD_STAR);
         } else {
             compilerContext.emitter.emitOpcode(Opcode.YIELD);
         }

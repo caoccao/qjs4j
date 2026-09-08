@@ -26,52 +26,30 @@ import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import java.util.*;
 
 /**
- * Shared mutable state for the parser.
- * Holds all fields, token utilities, validation methods, and context management
+ * Shared mutable state for the parser. Holds all fields, token utilities, validation methods, and context management
  * that are shared across the delegate parser classes.
  */
 final class ParserContext {
-    private static final Set<String> ALWAYS_RESERVED_IDENTIFIER_NAMES = Set.of(
-            JSKeyword.BREAK,
-            JSKeyword.CASE,
-            JSKeyword.CATCH,
-            JSKeyword.CLASS,
-            JSKeyword.CONST,
-            JSKeyword.CONTINUE,
-            JSKeyword.DEBUGGER,
-            JSKeyword.DEFAULT,
-            JSKeyword.DELETE,
-            JSKeyword.DO,
-            JSKeyword.ELSE,
-            JSKeyword.ENUM,
-            JSKeyword.EXPORT,
-            JSKeyword.EXTENDS,
-            JSKeyword.FALSE,
-            JSKeyword.FINALLY,
-            JSKeyword.FOR,
-            JSKeyword.FUNCTION,
-            JSKeyword.IF,
-            JSKeyword.IMPORT,
-            JSKeyword.IN,
-            JSKeyword.INSTANCEOF,
-            JSKeyword.NEW,
-            JSKeyword.NULL,
-            JSKeyword.RETURN,
-            JSKeyword.SUPER,
-            JSKeyword.SWITCH,
-            JSKeyword.THIS,
-            JSKeyword.THROW,
-            JSKeyword.TRUE,
-            JSKeyword.TRY,
-            JSKeyword.TYPEOF,
-            JSKeyword.VAR,
-            JSKeyword.VOID,
-            JSKeyword.WHILE,
-            JSKeyword.WITH
-    );
+    private static final Set<String> ALWAYS_RESERVED_IDENTIFIER_NAMES = Set.of(JSKeyword.BREAK, JSKeyword.CASE,
+            JSKeyword.CATCH, JSKeyword.CLASS, JSKeyword.CONST, JSKeyword.CONTINUE, JSKeyword.DEBUGGER,
+            JSKeyword.DEFAULT, JSKeyword.DELETE, JSKeyword.DO, JSKeyword.ELSE, JSKeyword.ENUM, JSKeyword.EXPORT,
+            JSKeyword.EXTENDS, JSKeyword.FALSE, JSKeyword.FINALLY, JSKeyword.FOR, JSKeyword.FUNCTION, JSKeyword.IF,
+            JSKeyword.IMPORT, JSKeyword.IN, JSKeyword.INSTANCEOF, JSKeyword.NEW, JSKeyword.NULL, JSKeyword.RETURN,
+            JSKeyword.SUPER, JSKeyword.SWITCH, JSKeyword.THIS, JSKeyword.THROW, JSKeyword.TRUE, JSKeyword.TRY,
+            JSKeyword.TYPEOF, JSKeyword.VAR, JSKeyword.VOID, JSKeyword.WHILE, JSKeyword.WITH);
     final boolean allowNewTargetInEval;
+    int asyncFunctionNesting;
+    int classBodyNesting;
+    Token currentToken;
     final Set<String> evalPrivateNames;
+    int functionNesting;
+    int generatorFunctionNesting;
+    boolean inClassFieldInitializer;
+    boolean inClassStaticInit;
+    boolean inDerivedConstructor;
+    boolean inFunctionBody;
     final boolean inheritedStrictMode;
+    boolean inOperatorAllowed;
     final boolean isEval;
     final Deque<Set<String>> labelStack = new ArrayDeque<>();
     final Lexer lexer;
@@ -80,36 +58,22 @@ final class ParserContext {
     final Set<String> moduleLexicalNames = new HashSet<>();
     final boolean moduleMode;
     final Set<String> moduleVarNames = new HashSet<>();
-    final Set<Expression> parenthesizedExpressions;
-    final List<String> pendingExportBindings = new ArrayList<>();
-    final Deque<int[]> savedFunctionNestingStack = new ArrayDeque<>();
-    int asyncFunctionNesting;
-    int classBodyNesting;
-    Token currentToken;
-    int functionNesting;
-    int generatorFunctionNesting;
-    boolean inClassFieldInitializer;
-    boolean inClassStaticInit;
-    boolean inDerivedConstructor;
-    boolean inFunctionBody;
-    boolean inOperatorAllowed;
     boolean needsArguments;
     int newTargetNesting;
     Token nextToken;
+    final Set<Expression> parenthesizedExpressions;
     boolean parsingClassWithSuper;
+    final List<String> pendingExportBindings = new ArrayList<>();
     int previousTokenEndOffset;
     int previousTokenLine;
+    final Deque<int[]> savedFunctionNestingStack = new ArrayDeque<>();
     int statementNesting;
     boolean strictMode;
     boolean superPropertyAllowed;
 
-    ParserContext(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode,
-                  int functionNesting, int asyncFunctionNesting,
-                  int generatorFunctionNesting,
-                  int newTargetNesting,
-                  boolean initialSuperPropertyAllowed,
-                  boolean allowNewTargetInEval,
-                  Set<String> evalPrivateNames) {
+    ParserContext(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode, int functionNesting,
+            int asyncFunctionNesting, int generatorFunctionNesting, int newTargetNesting,
+            boolean initialSuperPropertyAllowed, boolean allowNewTargetInEval, Set<String> evalPrivateNames) {
         inFunctionBody = true;
         inOperatorAllowed = true;
         this.lexer = lexer;
@@ -127,26 +91,6 @@ final class ParserContext {
         lexer.setModuleMode(moduleMode);
         this.currentToken = lexer.nextToken();
         this.nextToken = lexer.nextToken();
-    }
-
-    /**
-     * Whether an expression is an {@code IdentifierReference}.
-     * <p>
-     * {@code this}, {@code new.target} and {@code import.meta} are parsed into {@link Identifier}
-     * nodes because they resolve like one, but grammatically they are a {@code PrimaryExpression}
-     * and a {@code MetaProperty}, not an {@code IdentifierReference}. Rules that are stated over
-     * {@code IdentifierReference} — the strict-mode {@code delete} early error, the
-     * {@code for}-{@code in}/{@code of} assignment target — must not catch them.
-     *
-     * @param expression the expression to classify
-     * @return true when the expression is a real identifier reference
-     */
-    static boolean isIdentifierReference(Expression expression) {
-        if (!(expression instanceof Identifier identifier)) {
-            return false;
-        }
-        String name = identifier.getName();
-        return !"import.meta".equals(name) && !"new.target".equals(name) && !JSKeyword.THIS.equals(name);
     }
 
     void advance() {
@@ -170,12 +114,11 @@ final class ParserContext {
     /**
      * Name the current token the way a diagnostic should, when it is the token that cannot follow.
      * <p>
-     * Quoting the raw text for everything is wrong for whole categories: a number, a string or a
-     * template has no name worth quoting, and a word that is reserved is reserved rather than
-     * unexpected-as-written — {@code export {} let x = 1;} is rejected because {@code let} is a
-     * reserved word in module code, not because a token called "let" turned up. The categories
-     * below are the ones ECMAScript itself distinguishes, and they are what V8 reports too, so
-     * differential tests can compare the message rather than only the error type.
+     * Quoting the raw text for everything is wrong for whole categories: a number, a string or a template has no name
+     * worth quoting, and a word that is reserved is reserved rather than unexpected-as-written —
+     * {@code export {} let x = 1;} is rejected because {@code let} is a reserved word in module code, not because a
+     * token called "let" turned up. The categories below are the ones ECMAScript itself distinguishes, and they are
+     * what V8 reports too, so differential tests can compare the message rather than only the error type.
      *
      * @return the diagnostic message
      */
@@ -200,7 +143,8 @@ final class ParserContext {
     /**
      * Name a word-shaped token: reserved, reserved in strict mode only, or an identifier.
      *
-     * @param name the word
+     * @param name
+     *            the word
      * @return the diagnostic message
      */
     private String describeUnexpectedWord(String name) {
@@ -227,8 +171,8 @@ final class ParserContext {
                 // says the input ended.
                 throw new JSSyntaxErrorException("Unexpected end of input");
             }
-            throw new JSSyntaxErrorException("Expected " + type + " but got " + currentToken.type() +
-                    " at line " + currentToken.line() + ", column " + currentToken.column());
+            throw new JSSyntaxErrorException("Expected " + type + " but got " + currentToken.type() + " at line "
+                    + currentToken.line() + ", column " + currentToken.column());
         }
         Token token = currentToken;
         advance();
@@ -243,18 +187,6 @@ final class ParserContext {
         return currentToken.line() > previousTokenLine;
     }
 
-    boolean isASIToken() {
-        return switch (currentToken.type()) {
-            case NUMBER, STRING, IDENTIFIER,
-                 INC, DEC, NULL, FALSE, TRUE,
-                 IF, RETURN, VAR, THIS, DELETE, TYPEOF,
-                 NEW, DO, WHILE, FOR, SWITCH, THROW,
-                 TRY, FUNCTION, CLASS,
-                 CONST, LET -> true;
-            default -> false;
-        };
-    }
-
     boolean isAlwaysReservedIdentifier(String name) {
         return isAlwaysReservedIdentifierName(name);
     }
@@ -263,15 +195,22 @@ final class ParserContext {
         return ALWAYS_RESERVED_IDENTIFIER_NAMES.contains(name);
     }
 
+    boolean isASIToken() {
+        return switch (currentToken.type()) {
+            case NUMBER, STRING, IDENTIFIER, INC, DEC, NULL, FALSE, TRUE, IF, RETURN, VAR, THIS, DELETE, TYPEOF, NEW,
+                    DO, WHILE, FOR, SWITCH, THROW, TRY, FUNCTION, CLASS, CONST, LET ->
+                true;
+            default -> false;
+        };
+    }
+
     boolean isAssignmentOperator(TokenType type) {
-        return type == TokenType.ASSIGN || type == TokenType.PLUS_ASSIGN ||
-                type == TokenType.MINUS_ASSIGN || type == TokenType.MUL_ASSIGN ||
-                type == TokenType.DIV_ASSIGN || type == TokenType.MOD_ASSIGN ||
-                type == TokenType.EXP_ASSIGN || type == TokenType.LSHIFT_ASSIGN ||
-                type == TokenType.RSHIFT_ASSIGN || type == TokenType.URSHIFT_ASSIGN ||
-                type == TokenType.AND_ASSIGN || type == TokenType.OR_ASSIGN ||
-                type == TokenType.XOR_ASSIGN || type == TokenType.LOGICAL_AND_ASSIGN ||
-                type == TokenType.LOGICAL_OR_ASSIGN || type == TokenType.NULLISH_ASSIGN;
+        return type == TokenType.ASSIGN || type == TokenType.PLUS_ASSIGN || type == TokenType.MINUS_ASSIGN
+                || type == TokenType.MUL_ASSIGN || type == TokenType.DIV_ASSIGN || type == TokenType.MOD_ASSIGN
+                || type == TokenType.EXP_ASSIGN || type == TokenType.LSHIFT_ASSIGN || type == TokenType.RSHIFT_ASSIGN
+                || type == TokenType.URSHIFT_ASSIGN || type == TokenType.AND_ASSIGN || type == TokenType.OR_ASSIGN
+                || type == TokenType.XOR_ASSIGN || type == TokenType.LOGICAL_AND_ASSIGN
+                || type == TokenType.LOGICAL_OR_ASSIGN || type == TokenType.NULLISH_ASSIGN;
     }
 
     boolean isAwaitExpressionAllowed() {
@@ -307,8 +246,7 @@ final class ParserContext {
         // [no LineTerminator here] between 'using' and BindingIdentifier
         // Also verify the next token is a valid BindingIdentifier start.
         Token afterUsing = lexer.peekToken();
-        return isBindingIdentifierStartToken(afterUsing)
-                && afterUsing.line() == nextToken.line();
+        return isBindingIdentifierStartToken(afterUsing) && afterUsing.line() == nextToken.line();
     }
 
     private boolean isBindingIdentifierStartToken(Token token) {
@@ -320,9 +258,9 @@ final class ParserContext {
 
     boolean isExpressionStartToken(TokenType tokenType) {
         return switch (tokenType) {
-            case ASYNC, AWAIT, BIGINT, CLASS, FALSE, FUNCTION, IDENTIFIER,
-                 LBRACE, LBRACKET, LPAREN, NEW, NULL, NUMBER, REGEX,
-                 STRING, TEMPLATE, THIS, TRUE -> true;
+            case ASYNC, AWAIT, BIGINT, CLASS, FALSE, FUNCTION, IDENTIFIER, LBRACE, LBRACKET, LPAREN, NEW, NULL, NUMBER,
+                    REGEX, STRING, TEMPLATE, THIS, TRUE ->
+                true;
             default -> false;
         };
     }
@@ -344,9 +282,7 @@ final class ParserContext {
     }
 
     boolean isPatternStartToken(TokenType tokenType) {
-        return tokenType == TokenType.IDENTIFIER
-                || tokenType == TokenType.LBRACE
-                || tokenType == TokenType.LBRACKET
+        return tokenType == TokenType.IDENTIFIER || tokenType == TokenType.LBRACE || tokenType == TokenType.LBRACKET
                 || tokenType == TokenType.AWAIT;
     }
 
@@ -402,16 +338,15 @@ final class ParserContext {
     private boolean isStrictReservedIdentifierName(String name) {
         return switch (name) {
             case JSKeyword.IMPLEMENTS, JSKeyword.INTERFACE, JSKeyword.LET, JSKeyword.PACKAGE, JSKeyword.PRIVATE,
-                 JSKeyword.PROTECTED, JSKeyword.PUBLIC, JSKeyword.STATIC, JSKeyword.YIELD -> true;
+                    JSKeyword.PROTECTED, JSKeyword.PUBLIC, JSKeyword.STATIC, JSKeyword.YIELD ->
+                true;
             default -> false;
         };
     }
 
     boolean isUsingDeclarationStart() {
-        return currentToken.type() == TokenType.IDENTIFIER
-                && JSKeyword.USING.equals(currentToken.value())
-                && isBindingIdentifierStartToken(nextToken)
-                && nextToken.line() == currentToken.line();
+        return currentToken.type() == TokenType.IDENTIFIER && JSKeyword.USING.equals(currentToken.value())
+                && isBindingIdentifierStartToken(nextToken) && nextToken.line() == currentToken.line();
     }
 
     boolean isUsingIdentifierToken(Token token) {
@@ -446,20 +381,18 @@ final class ParserContext {
     }
 
     /**
-     * Parse directives at the beginning of a program or function.
-     * Returns true if "use strict" directive was found.
-     * Directive strings are also valid expression statements per the ES spec,
-     * so they are added to the provided body list if non-null.
+     * Parse directives at the beginning of a program or function. Returns true if "use strict" directive was found.
+     * Directive strings are also valid expression statements per the ES spec, so they are added to the provided body
+     * list if non-null.
      */
     boolean parseDirectives() {
         return parseDirectives(null);
     }
 
     /**
-     * Parse directives at the beginning of a program or function.
-     * Returns true if "use strict" directive was found.
-     * Directive strings are also valid expression statements per the ES spec,
-     * so they are added to the provided body list if non-null.
+     * Parse directives at the beginning of a program or function. Returns true if "use strict" directive was found.
+     * Directive strings are also valid expression statements per the ES spec, so they are added to the provided body
+     * list if non-null.
      */
     boolean parseDirectives(List<Statement> body) {
         boolean hasUseStrict = false;
@@ -481,12 +414,9 @@ final class ParserContext {
             } else {
                 TokenType nextType = next.type();
                 boolean isASI = switch (nextType) {
-                    case NUMBER, STRING, IDENTIFIER,
-                         INC, DEC, NULL, FALSE, TRUE,
-                         IF, RETURN, VAR, THIS, DELETE, TYPEOF,
-                         NEW, DO, WHILE, FOR, SWITCH, THROW,
-                         TRY, FUNCTION, CLASS,
-                         CONST, LET -> true;
+                    case NUMBER, STRING, IDENTIFIER, INC, DEC, NULL, FALSE, TRUE, IF, RETURN, VAR, THIS, DELETE, TYPEOF,
+                            NEW, DO, WHILE, FOR, SWITCH, THROW, TRY, FUNCTION, CLASS, CONST, LET ->
+                        true;
                     default -> false;
                 };
                 if (isASI && next.line() > stringLine) {
@@ -571,7 +501,8 @@ final class ParserContext {
             // ES2024 14.7.1 Static Semantics: ContainsArguments
             // 'arguments' is forbidden in class field initializers (including arrows)
             if (JSKeyword.ARGUMENTS.equals(name) && (inClassFieldInitializer || inClassStaticInit)) {
-                throw new JSSyntaxErrorException("'arguments' is not allowed in class field initializer or static initialization block");
+                throw new JSSyntaxErrorException(
+                        "'arguments' is not allowed in class field initializer or static initialization block");
             }
             if (JSKeyword.ARGUMENTS.equals(name) || JSKeyword.EVAL.equals(name)) {
                 needsArguments = true;
@@ -631,6 +562,26 @@ final class ParserContext {
 
     Token peek() {
         return nextToken;
+    }
+
+    /**
+     * Whether an expression is an {@code IdentifierReference}.
+     * <p>
+     * {@code this}, {@code new.target} and {@code import.meta} are parsed into {@link Identifier} nodes because they
+     * resolve like one, but grammatically they are a {@code PrimaryExpression} and a {@code MetaProperty}, not an
+     * {@code IdentifierReference}. Rules that are stated over {@code IdentifierReference} — the strict-mode
+     * {@code delete} early error, the {@code for}-{@code in}/{@code of} assignment target — must not catch them.
+     *
+     * @param expression
+     *            the expression to classify
+     * @return true when the expression is a real identifier reference
+     */
+    static boolean isIdentifierReference(Expression expression) {
+        if (!(expression instanceof Identifier identifier)) {
+            return false;
+        }
+        String name = identifier.getName();
+        return !"import.meta".equals(name) && !"new.target".equals(name) && !JSKeyword.THIS.equals(name);
     }
 
 }

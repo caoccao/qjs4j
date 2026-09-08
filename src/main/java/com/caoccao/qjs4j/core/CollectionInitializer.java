@@ -17,8 +17,8 @@
 package com.caoccao.qjs4j.core;
 
 /**
- * Shared iterable initialization for Map, Set, WeakMap, and WeakSet.
- * Each collection retains its own storage and adder while sharing the constructor protocol.
+ * Shared iterable initialization for Map, Set, WeakMap, and WeakSet. Each collection retains its own storage and adder
+ * while sharing the constructor protocol.
  */
 final class CollectionInitializer {
     private CollectionInitializer() {

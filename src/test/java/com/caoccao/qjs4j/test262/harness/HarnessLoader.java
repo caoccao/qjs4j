@@ -40,15 +40,6 @@ public class HarnessLoader {
     }
 
     /**
-     * Get default harness files that should be loaded for most tests.
-     *
-     * @return Set of default harness file names
-     */
-    public static List<String> getDefaultIncludes() {
-        return List.of("assert.js", "sta.js");
-    }
-
-    /**
      * Clear the harness file cache.
      */
     public void clearCache() {
@@ -58,7 +49,8 @@ public class HarnessLoader {
     /**
      * Load a harness file by name.
      *
-     * @param filename The harness file name (e.g., "assert.js")
+     * @param filename
+     *            The harness file name (e.g., "assert.js")
      * @return The harness file content
      */
     public String loadHarness(String filename) {
@@ -78,14 +70,26 @@ public class HarnessLoader {
     /**
      * Load harness files into a JavaScript context.
      *
-     * @param context  The JavaScript context
-     * @param includes The harness files to load
-     * @throws JSException If a harness file cannot be evaluated
+     * @param context
+     *            The JavaScript context
+     * @param includes
+     *            The harness files to load
+     * @throws JSException
+     *             If a harness file cannot be evaluated
      */
     public void loadIntoContext(JSContext context, Collection<String> includes) throws JSException {
         for (String include : includes) {
             String code = loadHarness(include);
             context.eval(code, include, false);
         }
+    }
+
+    /**
+     * Get default harness files that should be loaded for most tests.
+     *
+     * @return Set of default harness file names
+     */
+    public static List<String> getDefaultIncludes() {
+        return List.of("assert.js", "sta.js");
     }
 }

@@ -17,14 +17,12 @@
 package com.caoccao.qjs4j.core;
 
 /**
- * Special marker value pushed on stack by CATCH opcode.
- * Contains the PC offset to the catch/finally handler.
- * When an exception occurs, the VM unwinds the stack looking for this marker,
- * then jumps to the handler.
+ * Special marker value pushed on stack by CATCH opcode. Contains the PC offset to the catch/finally handler. When an
+ * exception occurs, the VM unwinds the stack looking for this marker, then jumps to the handler.
  * <p>
- * The {@code isFinally} flag distinguishes try-catch from try-finally handlers.
- * During generator return unwinding, catch handlers are skipped while finally
- * handlers are entered (to execute finally blocks before completing the return).
+ * The {@code isFinally} flag distinguishes try-catch from try-finally handlers. During generator return unwinding,
+ * catch handlers are skipped while finally handlers are entered (to execute finally blocks before completing the
+ * return).
  * <p>
  * This is an internal VM type, not a JavaScript value.
  */
@@ -37,9 +35,7 @@ public record JSCatchOffset(int offset, boolean isFinally, boolean isIteratorClo
 
     @Override
     public String toString() {
-        return "[CatchOffset:" + offset
-                + (isFinally ? ",finally" : "")
-                + (isIteratorCloseMarker ? ",iteratorClose" : "")
-                + "]";
+        return "[CatchOffset:" + offset + (isFinally ? ",finally" : "")
+                + (isIteratorCloseMarker ? ",iteratorClose" : "") + "]";
     }
 }

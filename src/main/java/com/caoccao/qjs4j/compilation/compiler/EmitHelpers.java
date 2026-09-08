@@ -28,25 +28,14 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Delegate compiler for bytecode emission helper methods.
- * Provides utility methods for emitting common bytecode patterns
- * such as iterator close, captured values, method calls, and using disposal.
+ * Delegate compiler for bytecode emission helper methods. Provides utility methods for emitting common bytecode
+ * patterns such as iterator close, captured values, method calls, and using disposal.
  */
 final class EmitHelpers {
     private final CompilerContext compilerContext;
 
     EmitHelpers(CompilerContext compilerContext) {
         this.compilerContext = compilerContext;
-    }
-
-    static boolean hasUsingDeclarations(java.util.List<Statement> statements) {
-        for (Statement stmt : statements) {
-            if (stmt instanceof VariableDeclaration vd
-                    && (vd.getKind() == VariableKind.USING || vd.getKind() == VariableKind.AWAIT_USING)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     void emitAbruptCompletionIteratorClose() {
@@ -58,10 +47,9 @@ final class EmitHelpers {
     }
 
     /**
-     * Emit the Annex B.3.3 var-scope store for a function declaration.
-     * In global scope, uses PUT_VAR (global object property).
-     * In function scope, uses PUT_LOCAL to the function-scope local
-     * (bypassing the block-scoped lexical binding).
+     * Emit the Annex B.3.3 var-scope store for a function declaration. In global scope, uses PUT_VAR (global object
+     * property). In function scope, uses PUT_LOCAL to the function-scope local (bypassing the block-scoped lexical
+     * binding).
      */
     void emitAnnexBVarStore(String functionName) {
         if (compilerContext.inGlobalScope) {
@@ -80,8 +68,7 @@ final class EmitHelpers {
     void emitArgumentsArrayWithSpread(List<Expression> arguments) {
         compilerContext.emitter.emitOpcodeU16(Opcode.ARRAY_FROM, 0);
 
-        boolean hasSpread = arguments.stream()
-                .anyMatch(arg -> arg instanceof SpreadElement);
+        boolean hasSpread = arguments.stream().anyMatch(arg -> arg instanceof SpreadElement);
 
         // Always use index-based pattern (QuickJS style)
         compilerContext.emitter.emitOpcodeU32(Opcode.PUSH_I32, 0);
@@ -99,11 +86,10 @@ final class EmitHelpers {
     }
 
     /**
-     * Build capture source info and set it on the template function.
-     * Instead of emitting GET_LOCAL/GET_VAR_REF opcodes to push values onto the stack,
-     * we store the capture source information in the template function so FCLOSURE
-     * can create VarRef objects directly from the parent frame at runtime.
-     * This enables reference-based closure capture (mutations visible across closures).
+     * Build capture source info and set it on the template function. Instead of emitting GET_LOCAL/GET_VAR_REF opcodes
+     * to push values onto the stack, we store the capture source information in the template function so FCLOSURE can
+     * create VarRef objects directly from the parent frame at runtime. This enables reference-based closure capture
+     * (mutations visible across closures).
      */
     void emitCapturedValues(BytecodeCompiler nestedCompiler, JSBytecodeFunction templateFunction) {
         int captureCount = nestedCompiler.context().captureResolver.getCapturedBindingCount();
@@ -127,14 +113,11 @@ final class EmitHelpers {
     }
 
     /**
-     * Emit the correct opcode sequence for a class method definition.
-     * Class methods always use DEFINE_METHOD_COMPUTED so attributes and
-     * DefinePropertyOrThrow semantics match ECMAScript class semantics.
-     * Stack before: ... obj
-     * Stack after:  ... obj (method added to obj)
+     * Emit the correct opcode sequence for a class method definition. Class methods always use DEFINE_METHOD_COMPUTED
+     * so attributes and DefinePropertyOrThrow semantics match ECMAScript class semantics. Stack before: ... obj Stack
+     * after: ... obj (method added to obj)
      */
-    void emitClassMethodDefinition(MethodDefinition method,
-                                   JSBytecodeFunction methodFunc, String methodName) {
+    void emitClassMethodDefinition(MethodDefinition method, JSBytecodeFunction methodFunc, String methodName) {
         String kind = method.getKind();
         boolean isComputedKey = method.isComputed() && !(method.getKey() instanceof Literal);
         // Class definitions must create fresh function objects per evaluation.
@@ -169,18 +152,7 @@ final class EmitHelpers {
     }
 
     /**
-     * Emit CLOSE_LOC opcodes for variables declared in a VariableDeclaration.
-     * Used at the end of for-loop iteration bodies to freeze VarRefs for per-iteration binding.
-     */
-    void emitCloseLocForPattern(VariableDeclaration varDecl) {
-        for (VariableDeclarator decl : varDecl.getDeclarations()) {
-            emitCloseLocForPattern(decl.getId());
-        }
-    }
-
-    /**
-     * Emit CLOSE_LOC opcodes for variables in a pattern.
-     * Recursively handles Identifier, ArrayPattern, ObjectPattern,
+     * Emit CLOSE_LOC opcodes for variables in a pattern. Recursively handles Identifier, ArrayPattern, ObjectPattern,
      * AssignmentPattern, and RestElement.
      */
     void emitCloseLocForPattern(Pattern pattern) {
@@ -213,6 +185,16 @@ final class EmitHelpers {
         }
     }
 
+    /**
+     * Emit CLOSE_LOC opcodes for variables declared in a VariableDeclaration. Used at the end of for-loop iteration
+     * bodies to freeze VarRefs for per-iteration binding.
+     */
+    void emitCloseLocForPattern(VariableDeclaration varDecl) {
+        for (VariableDeclarator decl : varDecl.getDeclarations()) {
+            emitCloseLocForPattern(decl.getId());
+        }
+    }
+
     void emitConditionalVarInit(String name) {
         compilerContext.emitter.emitOpcodeAtom(Opcode.PUSH_ATOM_VALUE, name);
         compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, "globalThis");
@@ -227,20 +209,15 @@ final class EmitHelpers {
         emitScopeUsingDisposal(compilerContext.scopeManager.currentScope());
     }
 
-    void emitDefaultParameterInit(
-            BytecodeCompiler functionCompiler,
-            FunctionParams functionParams,
-            List<Integer> parameterSlotIndexes,
-            ASTNode ast) {
+    void emitDefaultParameterInit(BytecodeCompiler functionCompiler, FunctionParams functionParams,
+            List<Integer> parameterSlotIndexes, ASTNode ast) {
         List<Pattern> params = functionParams.params();
         List<Expression> defaults = functionParams.defaults();
         if (defaults == null || defaults.isEmpty()) {
             return;
         }
         if (parameterSlotIndexes == null || parameterSlotIndexes.size() < defaults.size()) {
-            throw new JSCompilerException(
-                    "Parameter slot indexes are not aligned with default parameters",
-                    ast);
+            throw new JSCompilerException("Parameter slot indexes are not aligned with default parameters", ast);
         }
 
         boolean hasNonSimpleParameters = functionParams.hasNonSimpleParameters();
@@ -285,8 +262,7 @@ final class EmitHelpers {
                 functionCompiler.context().emitter.emitOpcode(Opcode.DROP);
                 // Compile the default expression
                 functionCompiler.context().expressionCompiler.compile(defaultExpr);
-                if (params.get(i) instanceof Identifier parameterIdentifier
-                        && defaultExpr.isAnonymousFunction()) {
+                if (params.get(i) instanceof Identifier parameterIdentifier && defaultExpr.isAnonymousFunction()) {
                     functionCompiler.context().emitter.emitOpcodeAtom(Opcode.SET_NAME, parameterIdentifier.getName());
                 }
                 // DUP - duplicate for PUT_ARG
@@ -294,7 +270,8 @@ final class EmitHelpers {
                 // PUT_ARG idx - store back into the argument slot
                 functionCompiler.context().emitter.emitOpcodeU16(Opcode.PUT_ARG, i);
                 // label: - skip target (value is on stack, either original arg or default)
-                functionCompiler.context().emitter.patchJump(skipLabel, functionCompiler.context().emitter.currentOffset());
+                functionCompiler.context().emitter.patchJump(skipLabel,
+                        functionCompiler.context().emitter.currentOffset());
             }
             // PUT_LOCAL idx - store into the local variable slot
             int parameterSlotIndex = parameterSlotIndexes.get(i);
@@ -310,17 +287,16 @@ final class EmitHelpers {
     }
 
     /**
-     * Emit the Annex B.3.3 var store at the function declaration's source position.
-     * This copies the block-scoped function value to the enclosing var-scope binding.
-     * Per spec, this happens when the FunctionDeclaration is evaluated, not when hoisted.
+     * Emit the Annex B.3.3 var store at the function declaration's source position. This copies the block-scoped
+     * function value to the enclosing var-scope binding. Per spec, this happens when the FunctionDeclaration is
+     * evaluated, not when hoisted.
      */
     void emitDeferredAnnexBVarStore(FunctionDeclaration functionDeclaration) {
         if (functionDeclaration.getId() == null) {
             return;
         }
         String functionName = functionDeclaration.getId().getName();
-        boolean isAnnexB = compilerContext.annexBFunctionNames.contains(functionName)
-                && !functionDeclaration.isAsync()
+        boolean isAnnexB = compilerContext.annexBFunctionNames.contains(functionName) && !functionDeclaration.isAsync()
                 && !functionDeclaration.isGenerator()
                 && !compilerContext.scopeManager.hasEnclosingBlockScopeLocal(functionName);
         if (!isAnnexB) {
@@ -364,10 +340,9 @@ final class EmitHelpers {
     }
 
     /**
-     * Emit ITERATOR_CLOSE for any for-of loops between the current position and the target
-     * loop context. This is needed when labeled break/continue crosses for-of loop boundaries,
-     * to properly close inner iterators whose cleanup code would otherwise be skipped.
-     * Following QuickJS close_scopes pattern for iterator cleanup.
+     * Emit ITERATOR_CLOSE for any for-of loops between the current position and the target loop context. This is needed
+     * when labeled break/continue crosses for-of loop boundaries, to properly close inner iterators whose cleanup code
+     * would otherwise be skipped. Following QuickJS close_scopes pattern for iterator cleanup.
      */
     void emitIteratorCloseForLoopsUntil(LoopContext target) {
         for (LoopContext loopCtx : compilerContext.loopManager) {
@@ -388,7 +363,8 @@ final class EmitHelpers {
     }
 
     void emitMethodCallWithSingleArgOnLocalObject(int localIndex, String methodName) {
-        int argLocalIndex = compilerContext.scopeManager.currentScope().declareLocal("$using_arg_" + compilerContext.emitter.currentOffset());
+        int argLocalIndex = compilerContext.scopeManager.currentScope()
+                .declareLocal("$using_arg_" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, argLocalIndex);
 
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
@@ -416,9 +392,7 @@ final class EmitHelpers {
             } else if (value instanceof String str) {
                 compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(str));
             } else {
-                throw new JSCompilerException(
-                        "Unsupported field key literal type: " + value.getClass(),
-                        key);
+                throw new JSCompilerException("Unsupported field key literal type: " + value.getClass(), key);
             }
             return;
         }
@@ -442,9 +416,8 @@ final class EmitHelpers {
     }
 
     /**
-     * Emit disposal with a caught exception passed as an argument.
-     * Stack on entry: [caught_exception]
-     * The caught exception is passed to dispose/disposeAsync so it can compose SuppressedErrors.
+     * Emit disposal with a caught exception passed as an argument. Stack on entry: [caught_exception] The caught
+     * exception is passed to dispose/disposeAsync so it can compose SuppressedErrors.
      */
     void emitScopeUsingDisposalWithException(CompilerScope scope) {
         Integer usingStackLocalIndex = scope.getUsingStackLocalIndex();
@@ -456,8 +429,8 @@ final class EmitHelpers {
 
         // Stack: [caught_exception]
         // Save exception to a temp local so we can pass it as an argument
-        int exceptionLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
-                "$using_exception_" + compilerContext.emitter.currentOffset());
+        int exceptionLocalIndex = compilerContext.scopeManager.currentScope()
+                .declareLocal("$using_exception_" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, exceptionLocalIndex);
 
         // Check if the using stack was actually initialized at runtime.
@@ -503,9 +476,7 @@ final class EmitHelpers {
         } else if (memberExpr.getProperty() instanceof Identifier propId) {
             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(propId.getName()));
         } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateIdentifier) {
-            throw new JSCompilerException(
-                    "super private fields are not supported",
-                    privateIdentifier);
+            throw new JSCompilerException("super private fields are not supported", privateIdentifier);
         } else {
             compilerContext.expressionCompiler.compile(memberExpr.getProperty());
         }
@@ -531,16 +502,15 @@ final class EmitHelpers {
         Integer existingLocalIndex = scope.getUsingStackLocalIndex();
         if (existingLocalIndex != null) {
             if (asyncUsingDeclaration && !scope.isUsingStackAsync()) {
-                throw new JSCompilerException(
-                        "Cannot mix await using with sync using stack in the same scope",
-                        ast);
+                throw new JSCompilerException("Cannot mix await using with sync using stack in the same scope", ast);
             }
             return existingLocalIndex;
         }
 
         boolean useAsyncStack = asyncUsingDeclaration || compilerContext.isInAsyncFunction;
         String constructorName = useAsyncStack ? JSAsyncDisposableStack.NAME : JSDisposableStack.NAME;
-        int stackLocalIndex = scope.declareLocal("$using_stack_" + scope.getScopeDepth() + "_" + compilerContext.emitter.currentOffset());
+        int stackLocalIndex = scope
+                .declareLocal("$using_stack_" + scope.getScopeDepth() + "_" + compilerContext.emitter.currentOffset());
 
         compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, constructorName);
         compilerContext.emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, 0);
@@ -548,5 +518,15 @@ final class EmitHelpers {
 
         scope.setUsingStackLocal(stackLocalIndex, useAsyncStack);
         return stackLocalIndex;
+    }
+
+    static boolean hasUsingDeclarations(java.util.List<Statement> statements) {
+        for (Statement stmt : statements) {
+            if (stmt instanceof VariableDeclaration vd
+                    && (vd.getKind() == VariableKind.USING || vd.getKind() == VariableKind.AWAIT_USING)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

@@ -20,26 +20,24 @@ import com.caoccao.qjs4j.core.JSObject;
 import com.caoccao.qjs4j.core.JSValue;
 
 /**
- * Special return value to indicate generator yield.
- * Based on QuickJS FUNC_RET_YIELD constants.
+ * Special return value to indicate generator yield. Based on QuickJS FUNC_RET_YIELD constants.
  * <p>
- * When the VM encounters a yield opcode, it returns this special value
- * instead of a regular JSValue. The generator execution logic can then
- * detect this and suspend execution properly.
+ * When the VM encounters a yield opcode, it returns this special value instead of a regular JSValue. The generator
+ * execution logic can then detect this and suspend execution properly.
  *
- * @param value                    The yielded value
- * @param delegateIterator         The delegated iterator for yield* (optional)
- * @param cachedNextMethod         The cached next method from GetIterator for yield* (optional)
- * @param delegationProgramCounter The opcode program counter for yield* delegation (optional)
- * @param nativeAsyncIterator      True if the delegate iterator was obtained via Symbol.asyncIterator
+ * @param value
+ *            The yielded value
+ * @param delegateIterator
+ *            The delegated iterator for yield* (optional)
+ * @param cachedNextMethod
+ *            The cached next method from GetIterator for yield* (optional)
+ * @param delegationProgramCounter
+ *            The opcode program counter for yield* delegation (optional)
+ * @param nativeAsyncIterator
+ *            True if the delegate iterator was obtained via Symbol.asyncIterator
  */
-public record YieldResult(
-        Type type,
-        JSValue value,
-        JSObject delegateIterator,
-        JSValue cachedNextMethod,
-        int delegationProgramCounter,
-        boolean nativeAsyncIterator) {
+public record YieldResult(Type type, JSValue value, JSObject delegateIterator, JSValue cachedNextMethod,
+        int delegationProgramCounter, boolean nativeAsyncIterator) {
     public YieldResult(Type type, JSValue value) {
         this(type, value, null, null, -1, false);
     }
@@ -53,12 +51,12 @@ public record YieldResult(
     }
 
     public YieldResult(Type type, JSValue value, JSObject delegateIterator, JSValue cachedNextMethod,
-                       int delegationProgramCounter) {
+            int delegationProgramCounter) {
         this(type, value, delegateIterator, cachedNextMethod, delegationProgramCounter, false);
     }
 
     public YieldResult(Type type, JSValue value, JSObject delegateIterator, JSValue cachedNextMethod,
-                       boolean nativeAsyncIterator) {
+            boolean nativeAsyncIterator) {
         this(type, value, delegateIterator, cachedNextMethod, -1, nativeAsyncIterator);
     }
 
@@ -78,8 +76,11 @@ public record YieldResult(
      * Yield types matching QuickJS FUNC_RET_* constants
      */
     public enum Type {
-        INITIAL_YIELD,  // Initial yield at generator start (FUNC_RET_INITIAL_YIELD)
-        YIELD,          // Regular yield (FUNC_RET_YIELD)
-        YIELD_STAR      // Delegating yield* (FUNC_RET_YIELD_STAR)
+        /** Initial yield at generator start (FUNC_RET_INITIAL_YIELD) */
+        INITIAL_YIELD,
+        /** Regular yield (FUNC_RET_YIELD) */
+        YIELD,
+        /** Delegating yield* (FUNC_RET_YIELD_STAR) */
+        YIELD_STAR
     }
 }

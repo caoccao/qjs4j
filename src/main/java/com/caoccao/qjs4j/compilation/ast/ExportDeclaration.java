@@ -26,7 +26,8 @@ public final class ExportDeclaration extends ModuleItem {
     private final Literal source;
     private final List<ExportSpecifier> specifiers;
 
-    public ExportDeclaration(Declaration declaration, List<ExportSpecifier> specifiers, Literal source, SourceLocation location) {
+    public ExportDeclaration(Declaration declaration, List<ExportSpecifier> specifiers, Literal source,
+            SourceLocation location) {
         super(location);
         this.declaration = declaration;
         this.specifiers = specifiers;

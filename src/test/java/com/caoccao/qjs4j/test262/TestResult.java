@@ -58,16 +58,11 @@ public record TestResult(String message, TestStatus status, Test262TestCase test
 
     @Override
     public String toString() {
-        return String.format("TestResult{%s: %s%s}",
-                status,
-                testCase.getPath(),
+        return String.format("TestResult{%s: %s%s}", status, testCase.getPath(),
                 message != null ? " - " + message : "");
     }
 
     public enum TestStatus {
-        PASS,
-        FAIL,
-        SKIP,
-        TIMEOUT
+        FAIL, PASS, SKIP, TIMEOUT
     }
 }

@@ -23,19 +23,11 @@ import java.math.BigInteger;
 import java.nio.ByteBuffer;
 
 /**
- * Represents a JavaScript BigInt64Array.
- * 64-bit signed integer array.
+ * Represents a JavaScript BigInt64Array. 64-bit signed integer array.
  */
 public final class JSBigInt64Array extends JSTypedArray {
     public static final int BYTES_PER_ELEMENT = 8;
     public static final String NAME = "BigInt64Array";
-
-    /**
-     * Create a BigInt64Array with a new buffer.
-     */
-    public JSBigInt64Array(JSContext context, int length) {
-        super(context, length, BYTES_PER_ELEMENT);
-    }
 
     /**
      * Create a BigInt64Array view on an existing buffer.
@@ -44,9 +36,11 @@ public final class JSBigInt64Array extends JSTypedArray {
         super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 
-    public static JSObject create(JSContext context, JSValue... args) {
-        return createFromArguments(context, BYTES_PER_ELEMENT,
-                context::createJSBigInt64Array, context::createJSBigInt64Array, args);
+    /**
+     * Create a BigInt64Array with a new buffer.
+     */
+    public JSBigInt64Array(JSContext context, int length) {
+        super(context, length, BYTES_PER_ELEMENT);
     }
 
     @Override
@@ -120,5 +114,10 @@ public final class JSBigInt64Array extends JSTypedArray {
         ByteBuffer buf = getByteBuffer();
         // Write raw signed 64-bit value directly to avoid precision loss via double.
         buf.putLong(index * BYTES_PER_ELEMENT, longVal);
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        return createFromArguments(context, BYTES_PER_ELEMENT, context::createJSBigInt64Array,
+                context::createJSBigInt64Array, args);
     }
 }

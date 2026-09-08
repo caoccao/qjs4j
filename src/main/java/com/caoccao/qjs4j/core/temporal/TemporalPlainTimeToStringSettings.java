@@ -16,12 +16,8 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
-public record TemporalPlainTimeToStringSettings(
-        TemporalUnit smallestUnit,
-        TemporalRoundingMode roundingMode,
-        boolean autoFractionalSecondDigits,
-        int fractionalSecondDigits,
-        long roundingIncrementNanoseconds) {
-    public static final TemporalPlainTimeToStringSettings DEFAULT =
-            new TemporalPlainTimeToStringSettings(null, TemporalRoundingMode.TRUNC, true, -1, 1L);
+public record TemporalPlainTimeToStringSettings(TemporalUnit smallestUnit, TemporalRoundingMode roundingMode,
+        boolean autoFractionalSecondDigits, int fractionalSecondDigits, long roundingIncrementNanoseconds) {
+    public static final TemporalPlainTimeToStringSettings DEFAULT = new TemporalPlainTimeToStringSettings(null,
+            TemporalRoundingMode.TRUNC, true, -1, 1L);
 }

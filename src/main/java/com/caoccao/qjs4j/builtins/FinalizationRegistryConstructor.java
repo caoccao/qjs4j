@@ -21,8 +21,7 @@ import com.caoccao.qjs4j.core.JSFinalizationRegistry;
 import com.caoccao.qjs4j.core.JSValue;
 
 /**
- * FinalizationRegistry constructor implementation.
- * Based on ES2021 FinalizationRegistry specification.
+ * FinalizationRegistry constructor implementation. Based on ES2021 FinalizationRegistry specification.
  * <p>
  * FinalizationRegistry(cleanupCallback) creates a registry for cleanup callbacks.
  */
@@ -31,12 +30,14 @@ public final class FinalizationRegistryConstructor {
     }
 
     /**
-     * FinalizationRegistry constructor function.
-     * Delegates to JSFinalizationRegistry.create().
+     * FinalizationRegistry constructor function. Delegates to JSFinalizationRegistry.create().
      *
-     * @param context The execution context
-     * @param thisArg The this value
-     * @param args    Constructor arguments [cleanupCallback]
+     * @param context
+     *            The execution context
+     * @param thisArg
+     *            The this value
+     * @param args
+     *            Constructor arguments [cleanupCallback]
      * @return FinalizationRegistry instance
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {

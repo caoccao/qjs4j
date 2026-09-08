@@ -19,14 +19,12 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 /**
- * Implementation of ArrayBuffer constructor and static methods.
- * Based on ES2020 ArrayBuffer specification.
+ * Implementation of ArrayBuffer constructor and static methods. Based on ES2020 ArrayBuffer specification.
  */
 public final class ArrayBufferConstructor {
 
     /**
-     * ArrayBuffer constructor call/new.
-     * Delegates to JSArrayBuffer.create().
+     * ArrayBuffer constructor call/new. Delegates to JSArrayBuffer.create().
      * <p>
      * Based on ES2020 24.1.1.1
      */
@@ -35,18 +33,14 @@ public final class ArrayBufferConstructor {
     }
 
     /**
-     * get ArrayBuffer[@@species]
-     * ES2020 24.1.3.3
-     * Returns the ArrayBuffer constructor.
+     * get ArrayBuffer[@@species] ES2020 24.1.3.3 Returns the ArrayBuffer constructor.
      */
     public static JSValue getSpecies(JSContext context, JSValue thisArg, JSValue[] args) {
         return thisArg;
     }
 
     /**
-     * ArrayBuffer.isView(value)
-     * ES2020 24.1.3.1
-     * Returns true if value is a TypedArray or DataView.
+     * ArrayBuffer.isView(value) ES2020 24.1.3.1 Returns true if value is a TypedArray or DataView.
      */
     public static JSValue isView(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {

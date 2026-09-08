@@ -17,8 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 /**
- * ShadowRealm instance object.
- * Stores the child realm execution context used by evaluate() / importValue().
+ * ShadowRealm instance object. Stores the child realm execution context used by evaluate() / importValue().
  */
 public final class JSShadowRealm extends JSObject {
     public static final String NAME = "ShadowRealm";

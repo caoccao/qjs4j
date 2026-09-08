@@ -23,16 +23,15 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 /**
- * Auto-growing byte buffer similar to QuickJS's DynBuf.
- * Based on cutils.c implementation.
+ * Auto-growing byte buffer similar to QuickJS's DynBuf. Based on cutils.c implementation.
  */
 public final class DynamicBuffer {
     /**
      * The largest array the JVM will allocate, less a margin HotSpot reserves.
      */
     public static final int MAX_CAPACITY = Integer.MAX_VALUE - 8;
-    private final int maxCapacity;
     private byte[] buffer;
+    private final int maxCapacity;
     private int size;
 
     /**
@@ -52,11 +51,13 @@ public final class DynamicBuffer {
     /**
      * Create a buffer with an explicit ceiling.
      * <p>
-     * The ceiling exists so the growth-failure path can be exercised without exhausting the test
-     * JVM, which is otherwise the only way to reach it.
+     * The ceiling exists so the growth-failure path can be exercised without exhausting the test JVM, which is
+     * otherwise the only way to reach it.
      *
-     * @param initialCapacity the starting capacity
-     * @param maxCapacity     the largest capacity this buffer may reach
+     * @param initialCapacity
+     *            the starting capacity
+     * @param maxCapacity
+     *            the largest capacity this buffer may reach
      */
     public DynamicBuffer(int initialCapacity, int maxCapacity) {
         this.maxCapacity = Math.min(Math.max(maxCapacity, 16), MAX_CAPACITY);
@@ -111,12 +112,14 @@ public final class DynamicBuffer {
     /**
      * Append an unsigned 16-bit value (little-endian).
      * <p>
-     * A value outside {@code 0..65535} is a caller bug, not data: the old behaviour of writing the
-     * low two bytes of whatever arrived is what turned a 65,538-byte RegExp payload into a
-     * declared length of 2, with no diagnostic anywhere.
+     * A value outside {@code 0..65535} is a caller bug, not data: the old behaviour of writing the low two bytes of
+     * whatever arrived is what turned a 65,538-byte RegExp payload into a declared length of 2, with no diagnostic
+     * anywhere.
      *
-     * @param value the value to append
-     * @throws IllegalArgumentException when the value does not fit in 16 bits
+     * @param value
+     *            the value to append
+     * @throws IllegalArgumentException
+     *             when the value does not fit in 16 bits
      */
     public void appendU16(int value) {
         if (value < 0 || value > 0xFFFF) {
@@ -177,17 +180,18 @@ public final class DynamicBuffer {
     /**
      * Ensure the buffer has enough capacity for the required size, growing by doubling.
      * <p>
-     * Growth failure <strong>throws</strong>. It used to set an {@code error} flag and make every
-     * later append a silent no-op, and {@code RegExpCompiler.compile()} never read the flag: under
-     * memory pressure it appended a final {@code MATCH} that was also ignored and returned the
-     * truncated bytes as a valid program, so the symptom surfaced later as a wrong match or an
-     * opcode error with nothing left to say the allocation had failed.
+     * Growth failure <strong>throws</strong>. It used to set an {@code error} flag and make every later append a silent
+     * no-op, and {@code RegExpCompiler.compile()} never read the flag: under memory pressure it appended a final
+     * {@code MATCH} that was also ignored and returned the truncated bytes as a valid program, so the symptom surfaced
+     * later as a wrong match or an opcode error with nothing left to say the allocation had failed.
      * <p>
-     * An {@code OutOfMemoryError} is not caught either. Converting one into a flag is what turned a
-     * fatal, diagnosable condition into corrupt output.
+     * An {@code OutOfMemoryError} is not caught either. Converting one into a flag is what turned a fatal, diagnosable
+     * condition into corrupt output.
      *
-     * @param required the capacity needed
-     * @throws JSRangeErrorException when the required capacity exceeds this buffer's ceiling
+     * @param required
+     *            the capacity needed
+     * @throws JSRangeErrorException
+     *             when the required capacity exceeds this buffer's ceiling
      */
     private void ensureCapacity(int required) {
         if (required >= 0 && required <= buffer.length) {
@@ -197,8 +201,7 @@ public final class DynamicBuffer {
         // silently satisfy the test above.
         long requiredCapacity = required & 0xFFFFFFFFL;
         if (required < 0 || requiredCapacity > maxCapacity) {
-            throw new JSRangeErrorException(
-                    "Buffer cannot grow beyond " + maxCapacity + " bytes");
+            throw new JSRangeErrorException("Buffer cannot grow beyond " + maxCapacity + " bytes");
         }
         long doubled = (long) buffer.length * 2L;
         int newCapacity = (int) Math.min(Math.max(doubled, requiredCapacity), maxCapacity);
@@ -206,8 +209,7 @@ public final class DynamicBuffer {
     }
 
     /**
-     * Get the internal buffer (for advanced use only).
-     * Note: The returned array may be larger than size().
+     * Get the internal buffer (for advanced use only). Note: The returned array may be larger than size().
      */
     byte[] getInternalBuffer() {
         return buffer;
@@ -228,16 +230,20 @@ public final class DynamicBuffer {
     /**
      * Insert bytes at the specified position.
      * <p>
-     * The length was not validated, so {@code insert(5, -1)} on a ten-byte buffer performed a
-     * perfectly legal overlapping copy from index 5 to index 4 and then set the size to 9: it
-     * deleted a byte and reported success, where an invalid insertion should have been an argument
-     * error. The arithmetic is checked in {@code long} for the same reason {@code ensureCapacity}
-     * is — {@code size + length} can overflow into a value that passes an {@code int} test.
+     * The length was not validated, so {@code insert(5, -1)} on a ten-byte buffer performed a perfectly legal
+     * overlapping copy from index 5 to index 4 and then set the size to 9: it deleted a byte and reported success,
+     * where an invalid insertion should have been an argument error. The arithmetic is checked in {@code long} for the
+     * same reason {@code ensureCapacity} is — {@code size + length} can overflow into a value that passes an
+     * {@code int} test.
      *
-     * @param position where to open the gap
-     * @param length   how many bytes to open
-     * @throws IndexOutOfBoundsException when the position or the length is out of range
-     * @throws JSRangeErrorException     when the result would exceed this buffer's ceiling
+     * @param position
+     *            where to open the gap
+     * @param length
+     *            how many bytes to open
+     * @throws IndexOutOfBoundsException
+     *             when the position or the length is out of range
+     * @throws JSRangeErrorException
+     *             when the result would exceed this buffer's ceiling
      */
     public void insert(int position, int length) {
         if (position < 0 || position > size) {

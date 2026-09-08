@@ -19,9 +19,8 @@ package com.caoccao.qjs4j.core;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 
 /**
- * Represents a JavaScript SuppressedError object.
- * SuppressedError is used when an error is suppressed in favor of another error,
- * typically in cleanup/dispose operations.
+ * Represents a JavaScript SuppressedError object. SuppressedError is used when an error is suppressed in favor of
+ * another error, typically in cleanup/dispose operations.
  */
 public final class JSSuppressedError extends JSError {
 
@@ -36,6 +35,25 @@ public final class JSSuppressedError extends JSError {
 
     public JSSuppressedError(JSContext context, String message, SourceLocation sourceLocation) {
         super(context, message, sourceLocation);
+    }
+
+    /**
+     * Get the main error.
+     */
+    public JSValue getError() {
+        return get(PropertyKey.ERROR);
+    }
+
+    @Override
+    public String getErrorName() {
+        return NAME;
+    }
+
+    /**
+     * Get the suppressed error.
+     */
+    public JSValue getSuppressed() {
+        return get(PropertyKey.SUPPRESSED);
     }
 
     public static JSValue create(JSContext context, JSValue... args) {
@@ -56,8 +74,8 @@ public final class JSSuppressedError extends JSError {
         // Per spec: property creation order is message, error, suppressed
         // Step 3b: CreateNonEnumerableDataPropertyOrThrow(O, "message", messageString)
         if (hasMessage) {
-            jsSuppressedError.defineProperty(PropertyKey.MESSAGE,
-                    PropertyDescriptor.dataDescriptor(new JSString(messageStr), PropertyDescriptor.DataState.ConfigurableWritable));
+            jsSuppressedError.defineProperty(PropertyKey.MESSAGE, PropertyDescriptor
+                    .dataDescriptor(new JSString(messageStr), PropertyDescriptor.DataState.ConfigurableWritable));
         }
 
         // Step 4: CreateNonEnumerableDataPropertyOrThrow(O, "error", error)
@@ -86,40 +104,23 @@ public final class JSSuppressedError extends JSError {
         context.transferPrototype(errorPrototype, JSError.NAME);
 
         // Properties: writable, non-enumerable, configurable
-        errorPrototype.defineProperty(PropertyKey.fromString("name"), new JSString(NAME), PropertyDescriptor.DataState.ConfigurableWritable);
-        errorPrototype.defineProperty(PropertyKey.fromString("message"), new JSString(""), PropertyDescriptor.DataState.ConfigurableWritable);
+        errorPrototype.defineProperty(PropertyKey.fromString("name"), new JSString(NAME),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        errorPrototype.defineProperty(PropertyKey.fromString("message"), new JSString(""),
+                PropertyDescriptor.DataState.ConfigurableWritable);
 
         // SuppressedError(error, suppressed, message)
         int length = 3;
 
-        JSNativeFunction errorConstructor = new JSNativeFunction(context, NAME,
-                length,
-                (childContext, thisObj, childArgs) -> create(childContext, childArgs),
-                true);
-        errorConstructor.defineProperty(PropertyKey.fromString("prototype"), errorPrototype, PropertyDescriptor.DataState.None);
+        JSNativeFunction errorConstructor = new JSNativeFunction(context, NAME, length,
+                (childContext, thisObj, childArgs) -> create(childContext, childArgs), true);
+        errorConstructor.defineProperty(PropertyKey.fromString("prototype"), errorPrototype,
+                PropertyDescriptor.DataState.None);
 
         // Set constructor property on prototype (writable, non-enumerable, configurable)
-        errorPrototype.defineProperty(PropertyKey.fromString("constructor"), errorConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        errorPrototype.defineProperty(PropertyKey.fromString("constructor"), errorConstructor,
+                PropertyDescriptor.DataState.ConfigurableWritable);
 
         return errorConstructor;
-    }
-
-    /**
-     * Get the main error.
-     */
-    public JSValue getError() {
-        return get(PropertyKey.ERROR);
-    }
-
-    @Override
-    public String getErrorName() {
-        return NAME;
-    }
-
-    /**
-     * Get the suppressed error.
-     */
-    public JSValue getSuppressed() {
-        return get(PropertyKey.SUPPRESSED);
     }
 }

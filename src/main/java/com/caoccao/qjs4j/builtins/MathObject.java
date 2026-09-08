@@ -20,28 +20,26 @@ import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.utils.Float16;
 
 /**
- * Implementation of JavaScript Math object.
- * Based on ES2020 Math object specification.
+ * Implementation of JavaScript Math object. Based on ES2020 Math object specification.
  */
 public final class MathObject {
     // Math constants
-    public static final double E = Math.E;           // 2.718281828459045
-    public static final double LN10 = Math.log(10);  // 2.302585092994046
-    public static final double LN2 = Math.log(2);    // 0.6931471805599453
-    public static final double LOG10E = Math.log10(Math.E);  // 0.4342944819032518
-    public static final double LOG2E = 1.0 / Math.log(2);    // 1.4426950408889634
-    public static final double PI = Math.PI;          // 3.141592653589793
-    public static final double SQRT1_2 = Math.sqrt(0.5);     // 0.7071067811865476
-    public static final double SQRT2 = Math.sqrt(2); // 1.4142135623730951
+    public static final double E = Math.E; // 2.718281828459045
+    public static final double LN10 = Math.log(10); // 2.302585092994046
+    public static final double LN2 = Math.log(2); // 0.6931471805599453
+    public static final double LOG10E = Math.log10(Math.E); // 0.4342944819032518
+    public static final double LOG2E = 1.0 / Math.log(2); // 1.4426950408889634
+    public static final double PI = Math.PI; // 3.141592653589793
     private static final int SP_LIMB_BITS = 56;
     private static final long SP_LIMB_MASK = (1L << SP_LIMB_BITS) - 1;
     private static final int SP_RND_BITS = SP_LIMB_BITS - 53;
+    public static final double SQRT1_2 = Math.sqrt(0.5); // 0.7071067811865476
+    public static final double SQRT2 = Math.sqrt(2); // 1.4142135623730951
     private static final int SUM_PRECISE_ACC_LEN = 39;
     private static final int SUM_PRECISE_COUNTER_INIT = 250;
 
     /**
-     * Math.abs(x)
-     * ES2020 20.2.2.1
+     * Math.abs(x) ES2020 20.2.2.1
      */
     public static JSValue abs(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -52,8 +50,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.acos(x)
-     * ES2020 20.2.2.2
+     * Math.acos(x) ES2020 20.2.2.2
      */
     public static JSValue acos(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -64,8 +61,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.acosh(x)
-     * ES2020 20.2.2.3
+     * Math.acosh(x) ES2020 20.2.2.3
      */
     public static JSValue acosh(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -98,8 +94,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.asin(x)
-     * ES2020 20.2.2.4
+     * Math.asin(x) ES2020 20.2.2.4
      */
     public static JSValue asin(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -110,8 +105,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.asinh(x)
-     * ES2020 20.2.2.5
+     * Math.asinh(x) ES2020 20.2.2.5
      */
     public static JSValue asinh(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -129,7 +123,8 @@ public final class MathObject {
         } else if (absoluteValue > 0x1.0p28) {
             resultMagnitude = Math.log(absoluteValue) + LN2;
         } else if (absoluteValue > 2.0) {
-            resultMagnitude = Math.log(2.0 * absoluteValue + 1.0 / (Math.sqrt(absoluteValue * absoluteValue + 1.0) + absoluteValue));
+            resultMagnitude = Math
+                    .log(2.0 * absoluteValue + 1.0 / (Math.sqrt(absoluteValue * absoluteValue + 1.0) + absoluteValue));
         } else {
             double squared = absoluteValue * absoluteValue;
             resultMagnitude = Math.log1p(absoluteValue + squared / (1.0 + Math.sqrt(1.0 + squared)));
@@ -138,8 +133,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.atan(x)
-     * ES2020 20.2.2.6
+     * Math.atan(x) ES2020 20.2.2.6
      */
     public static JSValue atan(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -150,8 +144,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.atan2(y, x)
-     * ES2020 20.2.2.8
+     * Math.atan2(y, x) ES2020 20.2.2.8
      */
     public static JSValue atan2(JSContext context, JSValue thisArg, JSValue[] args) {
         double y = args.length > 0 ? JSTypeConversions.toNumber(context, args[0]).value() : Double.NaN;
@@ -160,8 +153,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.atanh(x)
-     * ES2020 20.2.2.7
+     * Math.atanh(x) ES2020 20.2.2.7
      */
     public static JSValue atanh(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -187,7 +179,8 @@ public final class MathObject {
         double absoluteValue = Math.abs(x);
         double resultMagnitude;
         if (absoluteValue < 0.5) {
-            resultMagnitude = 0.5 * Math.log1p(2.0 * absoluteValue + 2.0 * absoluteValue * absoluteValue / (1.0 - absoluteValue));
+            resultMagnitude = 0.5
+                    * Math.log1p(2.0 * absoluteValue + 2.0 * absoluteValue * absoluteValue / (1.0 - absoluteValue));
         } else {
             resultMagnitude = 0.5 * Math.log1p((2.0 * absoluteValue) / (1.0 - absoluteValue));
         }
@@ -195,8 +188,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.cbrt(x)
-     * ES2020 20.2.2.9
+     * Math.cbrt(x) ES2020 20.2.2.9
      */
     public static JSValue cbrt(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -207,8 +199,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.ceil(x)
-     * ES2020 20.2.2.10
+     * Math.ceil(x) ES2020 20.2.2.10
      */
     public static JSValue ceil(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -233,9 +224,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.clz32(x)
-     * ES2020 20.2.2.11
-     * Count leading zeros in 32-bit representation
+     * Math.clz32(x) ES2020 20.2.2.11 Count leading zeros in 32-bit representation
      */
     public static JSValue clz32(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -246,8 +235,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.cos(x)
-     * ES2020 20.2.2.12
+     * Math.cos(x) ES2020 20.2.2.12
      */
     public static JSValue cos(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -258,8 +246,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.cosh(x)
-     * ES2020 20.2.2.13
+     * Math.cosh(x) ES2020 20.2.2.13
      */
     public static JSValue cosh(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -270,8 +257,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.exp(x)
-     * ES2020 20.2.2.14
+     * Math.exp(x) ES2020 20.2.2.14
      */
     public static JSValue exp(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -288,9 +274,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.expm1(x)
-     * ES2020 20.2.2.15
-     * Returns e^x - 1
+     * Math.expm1(x) ES2020 20.2.2.15 Returns e^x - 1
      */
     public static JSValue expm1(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -301,8 +285,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.f16round(x)
-     * QuickJS extension.
+     * Math.f16round(x) QuickJS extension.
      */
     public static JSValue f16round(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -314,8 +297,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.floor(x)
-     * ES2020 20.2.2.16
+     * Math.floor(x) ES2020 20.2.2.16
      */
     public static JSValue floor(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -326,9 +308,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.fround(x)
-     * ES2020 20.2.2.17
-     * Round to nearest 32-bit float
+     * Math.fround(x) ES2020 20.2.2.17 Round to nearest 32-bit float
      */
     public static JSValue fround(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -339,9 +319,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.hypot(...values)
-     * ES2020 20.2.2.18
-     * Returns sqrt(sum of squares)
+     * Math.hypot(...values) ES2020 20.2.2.18 Returns sqrt(sum of squares)
      */
     public static JSValue hypot(JSContext context, JSValue thisArg, JSValue[] args) {
         double result = 0.0;
@@ -360,9 +338,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.imul(x, y)
-     * ES2020 20.2.2.19
-     * 32-bit integer multiplication
+     * Math.imul(x, y) ES2020 20.2.2.19 32-bit integer multiplication
      */
     public static JSValue imul(JSContext context, JSValue thisArg, JSValue[] args) {
         int a = args.length > 0 ? JSTypeConversions.toInt32(context, args[0]) : 0;
@@ -371,8 +347,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.log(x)
-     * ES2020 20.2.2.20
+     * Math.log(x) ES2020 20.2.2.20
      */
     public static JSValue log(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -383,8 +358,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.log10(x)
-     * ES2020 20.2.2.22
+     * Math.log10(x) ES2020 20.2.2.22
      */
     public static JSValue log10(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -395,9 +369,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.log1p(x)
-     * ES2020 20.2.2.21
-     * Returns ln(1 + x)
+     * Math.log1p(x) ES2020 20.2.2.21 Returns ln(1 + x)
      */
     public static JSValue log1p(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -408,8 +380,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.log2(x)
-     * ES2020 20.2.2.23
+     * Math.log2(x) ES2020 20.2.2.23
      */
     public static JSValue log2(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -420,8 +391,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.max(...values)
-     * ES2020 20.2.2.24
+     * Math.max(...values) ES2020 20.2.2.24
      */
     public static JSValue max(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -446,8 +416,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.min(...values)
-     * ES2020 20.2.2.25
+     * Math.min(...values) ES2020 20.2.2.25
      */
     public static JSValue min(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -472,8 +441,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.pow(base, exponent)
-     * ES2020 20.2.2.26
+     * Math.pow(base, exponent) ES2020 20.2.2.26
      */
     public static JSValue pow(JSContext context, JSValue thisArg, JSValue[] args) {
         double base = args.length > 0 ? JSTypeConversions.toNumber(context, args[0]).value() : Double.NaN;
@@ -482,16 +450,14 @@ public final class MathObject {
     }
 
     /**
-     * Math.random()
-     * ES2020 20.2.2.27
+     * Math.random() ES2020 20.2.2.27
      */
     public static JSValue random(JSContext context, JSValue thisArg, JSValue[] args) {
         return JSNumber.of(Math.random());
     }
 
     /**
-     * Math.round(x)
-     * ES2020 20.2.2.28
+     * Math.round(x) ES2020 20.2.2.28
      */
     public static JSValue round(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -514,8 +480,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.sign(x)
-     * ES2020 20.2.2.29
+     * Math.sign(x) ES2020 20.2.2.29
      */
     public static JSValue sign(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -526,8 +491,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.sin(x)
-     * ES2020 20.2.2.30
+     * Math.sin(x) ES2020 20.2.2.30
      */
     public static JSValue sin(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -538,8 +502,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.sinh(x)
-     * ES2020 20.2.2.31
+     * Math.sinh(x) ES2020 20.2.2.31
      */
     public static JSValue sinh(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -550,8 +513,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.sqrt(x)
-     * ES2020 20.2.2.32
+     * Math.sqrt(x) ES2020 20.2.2.32
      */
     public static JSValue sqrt(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -562,8 +524,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.sumPrecise(iterable)
-     * QuickJS extension.
+     * Math.sumPrecise(iterable) QuickJS extension.
      */
     public static JSValue sumPrecise(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue iterable = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -598,8 +559,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.tan(x)
-     * ES2020 20.2.2.33
+     * Math.tan(x) ES2020 20.2.2.33
      */
     public static JSValue tan(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -610,8 +570,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.tanh(x)
-     * ES2020 20.2.2.34
+     * Math.tanh(x) ES2020 20.2.2.34
      */
     public static JSValue tanh(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -622,8 +581,7 @@ public final class MathObject {
     }
 
     /**
-     * Math.trunc(x)
-     * ES2020 20.2.2.35
+     * Math.trunc(x) ES2020 20.2.2.35
      */
     public static JSValue trunc(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -634,13 +592,6 @@ public final class MathObject {
             return JSNumber.of(x);
         }
         return JSNumber.of(x > 0 ? Math.floor(x) : Math.ceil(x));
-    }
-
-    private enum SumPreciseStateType {
-        FINITE,
-        INFINITY,
-        MINUS_INFINITY,
-        NAN,
     }
 
     private static final class SumPreciseState {
@@ -664,8 +615,7 @@ public final class MathObject {
 
             if (exponent == 2047) {
                 if (mantissa == 0) {
-                    if (state == SumPreciseStateType.NAN
-                            || (state == SumPreciseStateType.MINUS_INFINITY && sign == 0)
+                    if (state == SumPreciseStateType.NAN || (state == SumPreciseStateType.MINUS_INFINITY && sign == 0)
                             || (state == SumPreciseStateType.INFINITY && sign != 0)) {
                         state = SumPreciseStateType.NAN;
                     } else {
@@ -805,5 +755,9 @@ public final class MathObject {
                 acc[nLimbs++] = carry;
             }
         }
+    }
+
+    private enum SumPreciseStateType {
+        FINITE, INFINITY, MINUS_INFINITY, NAN,
     }
 }

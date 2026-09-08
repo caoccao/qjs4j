@@ -19,11 +19,11 @@ package com.caoccao.qjs4j.core;
 /**
  * Functional interface for observing failures that escape a microtask.
  * <p>
- * Draining the microtask queue cannot propagate an exception to a caller — there is no caller to
- * propagate to — so a failure that escapes {@code microtask.execute()} would otherwise disappear.
- * That includes a throwing {@code .then()} handler, but also an engine defect surfacing as a
- * {@link NullPointerException} or a {@code JSVirtualMachineException}. Install a callback to see
- * them; without one they are still recorded on the context and, for engine defects, logged.
+ * Draining the microtask queue cannot propagate an exception to a caller — there is no caller to propagate to — so a
+ * failure that escapes {@code microtask.execute()} would otherwise disappear. That includes a throwing {@code .then()}
+ * handler, but also an engine defect surfacing as a {@link NullPointerException} or a
+ * {@code JSVirtualMachineException}. Install a callback to see them; without one they are still recorded on the context
+ * and, for engine defects, logged.
  *
  * @see JSContext#setMicrotaskFailureCallback(IJSMicrotaskFailureCallback)
  * @see JSContext#getMicrotaskFailures()
@@ -33,7 +33,8 @@ public interface IJSMicrotaskFailureCallback {
     /**
      * Called when a microtask fails.
      *
-     * @param failure the exception that escaped the microtask
+     * @param failure
+     *            the exception that escaped the microtask
      */
     void onMicrotaskFailure(Throwable failure);
 }

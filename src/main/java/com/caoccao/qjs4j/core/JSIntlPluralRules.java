@@ -28,7 +28,6 @@ import java.util.Locale;
  * Intl.PluralRules instance object.
  */
 public final class JSIntlPluralRules extends JSObject {
-    public static final String NAME = "Intl.PluralRules";
     private static final List<String> CATEGORIES_AR = List.of("zero", "one", "two", "few", "many", "other");
     private static final List<String> CATEGORIES_EN = List.of("one", "other");
     private static final List<String> CATEGORIES_FA = List.of("one", "other");
@@ -37,6 +36,7 @@ public final class JSIntlPluralRules extends JSObject {
     private static final List<String> CATEGORIES_KO = List.of("other");
     private static final List<String> CATEGORIES_ORDINAL = List.of("one", "two", "few", "other");
     private static final List<String> CATEGORIES_SL = List.of("one", "two", "few", "other");
+    public static final String NAME = "Intl.PluralRules";
     private final Locale locale;
     private final int maximumFractionDigits;
     private final Integer maximumSignificantDigits;
@@ -46,15 +46,9 @@ public final class JSIntlPluralRules extends JSObject {
     private final String notation;
     private final String type;
 
-    public JSIntlPluralRules(JSContext context,
-                             Locale locale,
-                             String type,
-                             String notation,
-                             int minimumIntegerDigits,
-                             int minimumFractionDigits,
-                             int maximumFractionDigits,
-                             Integer minimumSignificantDigits,
-                             Integer maximumSignificantDigits) {
+    public JSIntlPluralRules(JSContext context, Locale locale, String type, String notation, int minimumIntegerDigits,
+            int minimumFractionDigits, int maximumFractionDigits, Integer minimumSignificantDigits,
+            Integer maximumSignificantDigits) {
         super(context);
         this.locale = locale;
         this.type = type;
@@ -64,21 +58,6 @@ public final class JSIntlPluralRules extends JSObject {
         this.maximumFractionDigits = maximumFractionDigits;
         this.minimumSignificantDigits = minimumSignificantDigits;
         this.maximumSignificantDigits = maximumSignificantDigits;
-    }
-
-    private static boolean isInteger(double value) {
-        return Double.isFinite(value) && Math.floor(value) == value;
-    }
-
-    private static boolean isNegativeZero(double value) {
-        return Double.doubleToRawLongBits(value) == Double.doubleToRawLongBits(-0.0d);
-    }
-
-    private static double toAbsolute(double value) {
-        if (isNegativeZero(value)) {
-            return 0.0d;
-        }
-        return Math.abs(value);
     }
 
     private String applyRounding(double value) {
@@ -266,5 +245,20 @@ public final class JSIntlPluralRules extends JSObject {
             throw new JSRangeErrorException("NaN is not allowed");
         }
         return select(end);
+    }
+
+    private static boolean isInteger(double value) {
+        return Double.isFinite(value) && Math.floor(value) == value;
+    }
+
+    private static boolean isNegativeZero(double value) {
+        return Double.doubleToRawLongBits(value) == Double.doubleToRawLongBits(-0.0d);
+    }
+
+    private static double toAbsolute(double value) {
+        if (isNegativeZero(value)) {
+            return 0.0d;
+        }
+        return Math.abs(value);
     }
 }

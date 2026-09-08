@@ -37,9 +37,7 @@ final class ForInStatementCompiler extends AstNodeCompiler<ForInStatement> {
         if (!isExpressionBased) {
             varDecl = (VariableDeclaration) forInStmt.getLeft();
             if (varDecl.getDeclarations().size() != 1) {
-                throw new JSCompilerException(
-                        "for-in loop must have exactly one variable",
-                        varDecl);
+                throw new JSCompilerException("for-in loop must have exactly one variable", varDecl);
             }
             declarationPattern = varDecl.getDeclarations().get(0).getId();
             isVar = varDecl.getKind() == VariableKind.VAR;
@@ -77,13 +75,11 @@ final class ForInStatementCompiler extends AstNodeCompiler<ForInStatement> {
             Expression initializer = varDecl != null ? varDecl.getDeclarations().get(0).getInit() : null;
             if (initializer != null && declarationPattern != null) {
                 if (declarationPattern instanceof Identifier identifier
-                        && initializer instanceof ClassExpression classExpression
-                        && classExpression.getId() == null) {
+                        && initializer instanceof ClassExpression classExpression && classExpression.getId() == null) {
                     compilerContext.inferredClassName = identifier.getName();
                 }
                 compilerContext.expressionCompiler.compile(initializer);
-                if (declarationPattern instanceof Identifier identifier
-                        && initializer.isAnonymousFunction()) {
+                if (declarationPattern instanceof Identifier identifier && initializer.isAnonymousFunction()) {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
                 }
                 compilerContext.inferredClassName = null;
@@ -97,10 +93,8 @@ final class ForInStatementCompiler extends AstNodeCompiler<ForInStatement> {
         }
 
         int loopStart = compilerContext.emitter.currentOffset();
-        LoopContext loop = compilerContext.loopManager.createLoopContext(
-                loopStart,
-                compilerContext.scopeManager.getScopeDepth() - 1,
-                compilerContext.scopeManager.getScopeDepth());
+        LoopContext loop = compilerContext.loopManager.createLoopContext(loopStart,
+                compilerContext.scopeManager.getScopeDepth() - 1, compilerContext.scopeManager.getScopeDepth());
         compilerContext.loopManager.pushLoop(loop);
 
         compilerContext.emitter.emitOpcode(Opcode.FOR_IN_NEXT);

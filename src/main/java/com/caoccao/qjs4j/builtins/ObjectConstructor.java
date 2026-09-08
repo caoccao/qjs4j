@@ -23,15 +23,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Implementation of Object constructor and static methods.
- * Based on ES2020 Object specification.
+ * Implementation of Object constructor and static methods. Based on ES2020 Object specification.
  */
 public final class ObjectConstructor {
 
     /**
-     * Object.assign(target, ...sources)
-     * ES2024 19.1.2.1
-     * Copies all enumerable own properties from one or more source objects to a target object.
+     * Object.assign(target, ...sources) ES2024 19.1.2.1 Copies all enumerable own properties from one or more source
+     * objects to a target object.
      */
     public static JSValue assign(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -81,8 +79,8 @@ public final class ObjectConstructor {
                     return JSUndefined.INSTANCE;
                 }
                 if (!setSuccess) {
-                    return context.throwTypeError("Cannot assign to read only property '"
-                            + key.toPropertyString() + "' of object '#<Object>'");
+                    return context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString()
+                            + "' of object '#<Object>'");
                 }
             }
         }
@@ -91,12 +89,9 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object(value)
-     * ES2020 19.1.1.1
-     * When called as a function, creates a wrapper object for the given value.
-     * - For null/undefined, returns a new empty object
-     * - For primitives (number, string, boolean, symbol, bigint), returns a wrapper object
-     * - For objects, returns the object itself
+     * Object(value) ES2020 19.1.1.1 When called as a function, creates a wrapper object for the given value. - For
+     * null/undefined, returns a new empty object - For primitives (number, string, boolean, symbol, bigint), returns a
+     * wrapper object - For objects, returns the object itself
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue newTarget = context.getConstructorNewTarget();
@@ -179,8 +174,8 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Close iterator while preserving the current pending exception.
-     * Per spec, the original error takes precedence over any error from return().
+     * Close iterator while preserving the current pending exception. Per spec, the original error takes precedence over
+     * any error from return().
      */
     private static JSValue closeIteratorPreserveError(JSContext context, JSValue iterator) {
         JSValue savedError = context.getPendingException();
@@ -195,9 +190,7 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.create(proto, propertiesObject)
-     * ES2020 19.1.2.2
-     * Creates a new object with the specified prototype object.
+     * Object.create(proto, propertiesObject) ES2020 19.1.2.2 Creates a new object with the specified prototype object.
      */
     public static JSValue create(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -209,7 +202,8 @@ public final class ObjectConstructor {
             if (firstArg instanceof JSObject jsObject) {
                 proto = jsObject;
             } else {
-                return context.throwTypeError("Object prototype may only be an Object or null: " + JSTypeConversions.toString(context, firstArg).value());
+                return context.throwTypeError("Object prototype may only be an Object or null: "
+                        + JSTypeConversions.toString(context, firstArg).value());
             }
         }
         // Create new object
@@ -259,9 +253,8 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.defineProperties(obj, props)
-     * ES5.1 15.2.3.7
-     * Defines new or modifies existing properties directly on an object, returning the object.
+     * Object.defineProperties(obj, props) ES5.1 15.2.3.7 Defines new or modifies existing properties directly on an
+     * object, returning the object.
      */
     public static JSValue defineProperties(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 2) {
@@ -322,9 +315,8 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.entries(obj)
-     * ES2024 20.1.2.5 / EnumerableOwnProperties (7.3.25)
-     * Returns an array of a given object's own enumerable string-keyed [key, value] pairs.
+     * Object.entries(obj) ES2024 20.1.2.5 / EnumerableOwnProperties (7.3.25) Returns an array of a given object's own
+     * enumerable string-keyed [key, value] pairs.
      */
     public static JSValue entries(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -377,9 +369,8 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.freeze(obj)
-     * ES2024 20.1.2.6 / SetIntegrityLevel (7.3.16) with level "frozen".
-     * Following QuickJS js_object_seal() implementation with freeze_flag=1.
+     * Object.freeze(obj) ES2024 20.1.2.6 / SetIntegrityLevel (7.3.16) with level "frozen". Following QuickJS
+     * js_object_seal() implementation with freeze_flag=1.
      */
     public static JSValue freeze(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 && context.getVirtualMachine().getCurrentFrame() == null) {
@@ -395,7 +386,8 @@ public final class ObjectConstructor {
         if (jsObject instanceof JSTypedArray jsTypedArray) {
             IJSArrayBuffer buffer = jsTypedArray.getBuffer();
             if ((buffer instanceof JSArrayBuffer jsArrayBuffer && jsArrayBuffer.isResizable())
-                    || (buffer instanceof JSSharedArrayBuffer jsSharedArrayBuffer && jsSharedArrayBuffer.isGrowable())) {
+                    || (buffer instanceof JSSharedArrayBuffer jsSharedArrayBuffer
+                            && jsSharedArrayBuffer.isGrowable())) {
                 return context.throwTypeError("Cannot freeze a TypedArray backed by a resizable buffer");
             }
         }
@@ -443,9 +435,8 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.fromEntries(iterable)
-     * ES2024 20.1.2.8 / AddEntriesFromIterable (7.4.38)
-     * Creates an object from an iterable of key-value pairs.
+     * Object.fromEntries(iterable) ES2024 20.1.2.8 / AddEntriesFromIterable (7.4.38) Creates an object from an iterable
+     * of key-value pairs.
      */
     public static JSValue fromEntries(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -506,8 +497,8 @@ public final class ObjectConstructor {
             try {
                 // Step 4d: If nextItem is not an Object, close iterator and throw TypeError
                 if (!(nextItem instanceof JSObject entryObj)) {
-                    closeIteratorAndThrow(context, iterator,
-                            "Iterator value " + JSTypeConversions.toString(context, nextItem).value() + " is not an entry object");
+                    closeIteratorAndThrow(context, iterator, "Iterator value "
+                            + JSTypeConversions.toString(context, nextItem).value() + " is not an entry object");
                     return JSUndefined.INSTANCE;
                 }
 
@@ -557,9 +548,8 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.getOwnPropertyDescriptor(obj, prop)
-     * ES2015 19.1.2.6
-     * Returns a property descriptor for an own property of an object.
+     * Object.getOwnPropertyDescriptor(obj, prop) ES2015 19.1.2.6 Returns a property descriptor for an own property of
+     * an object.
      */
     public static JSValue getOwnPropertyDescriptor(JSContext context, JSValue thisArg, JSValue[] args) {
         // ES2015 19.1.2.6 step 1: Let obj be ? ToObject(O)
@@ -603,9 +593,7 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.getOwnPropertyDescriptors(obj)
-     * ES2017 19.1.2.7
-     * Returns all own property descriptors of an object.
+     * Object.getOwnPropertyDescriptors(obj) ES2017 19.1.2.7 Returns all own property descriptors of an object.
      */
     public static JSValue getOwnPropertyDescriptors(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -654,9 +642,8 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.getOwnPropertyNames(obj)
-     * ES2015 19.1.2.8
-     * Returns an array of all own property names (including non-enumerable).
+     * Object.getOwnPropertyNames(obj) ES2015 19.1.2.8 Returns an array of all own property names (including
+     * non-enumerable).
      */
     public static JSValue getOwnPropertyNames(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -690,9 +677,7 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.getOwnPropertySymbols(obj)
-     * ES2015 19.1.2.9
-     * Returns an array of all own symbol properties.
+     * Object.getOwnPropertySymbols(obj) ES2015 19.1.2.9 Returns an array of all own symbol properties.
      */
     public static JSValue getOwnPropertySymbols(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -731,9 +716,7 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.getPrototypeOf(obj)
-     * ES2020 19.1.2.9
-     * Returns the prototype of the specified object.
+     * Object.getPrototypeOf(obj) ES2020 19.1.2.9 Returns the prototype of the specified object.
      */
     public static JSValue getPrototypeOf(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -760,9 +743,8 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.groupBy(items, callbackFn)
-     * ES2024 20.1.2.11
-     * Groups array elements by a key returned from the callback function.
+     * Object.groupBy(items, callbackFn) ES2024 20.1.2.11 Groups array elements by a key returned from the callback
+     * function.
      */
     public static JSValue groupBy(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 2) {
@@ -771,8 +753,8 @@ public final class ObjectConstructor {
 
         JSValue items = args[0];
         if (items.isNullOrUndefined()) {
-            return context.throwTypeError("Cannot read properties of " +
-                    (items instanceof JSNull ? "null" : "undefined") + " (reading 'Symbol(Symbol.iterator)')");
+            return context.throwTypeError("Cannot read properties of "
+                    + (items instanceof JSNull ? "null" : "undefined") + " (reading 'Symbol(Symbol.iterator)')");
         }
 
         if (!(args[1] instanceof JSFunction callback)) {
@@ -865,9 +847,7 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.hasOwn(obj, prop)
-     * ES2022 20.1.2.10
-     * Static method to check if an object has a property as its own property.
+     * Object.hasOwn(obj, prop) ES2022 20.1.2.10 Static method to check if an object has a property as its own property.
      */
     public static JSValue hasOwn(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -903,8 +883,7 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.hasOwnProperty(obj, prop)
-     * This is actually Object.prototype.hasOwnProperty, but we implement it here.
+     * Object.hasOwnProperty(obj, prop) This is actually Object.prototype.hasOwnProperty, but we implement it here.
      */
     public static JSValue hasOwnProperty(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSObject obj)) {
@@ -922,10 +901,8 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.is(value1, value2)
-     * ES2015 19.1.2.10
-     * Determines whether two values are the same value using SameValue algorithm.
-     * Unlike ===, Object.is treats NaN as equal to NaN and +0 as different from -0.
+     * Object.is(value1, value2) ES2015 19.1.2.10 Determines whether two values are the same value using SameValue
+     * algorithm. Unlike ===, Object.is treats NaN as equal to NaN and +0 as different from -0.
      */
     public static JSValue is(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue x = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -980,9 +957,8 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.isExtensible(obj)
-     * ES5.1 15.2.3.13
-     * Determines if an object is extensible (whether new properties can be added to it).
+     * Object.isExtensible(obj) ES5.1 15.2.3.13 Determines if an object is extensible (whether new properties can be
+     * added to it).
      */
     public static JSValue isExtensible(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -996,8 +972,7 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.isFrozen(obj)
-     * ES2020 19.1.2.12
+     * Object.isFrozen(obj) ES2020 19.1.2.12
      */
     public static JSValue isFrozen(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 && context.getVirtualMachine().getCurrentFrame() == null) {
@@ -1012,8 +987,7 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.isSealed(obj)
-     * ES2020 19.1.2.13
+     * Object.isSealed(obj) ES2020 19.1.2.13
      */
     public static JSValue isSealed(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 && context.getVirtualMachine().getCurrentFrame() == null) {
@@ -1028,9 +1002,7 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.keys(obj)
-     * ES2020 19.1.2.16
-     * Returns an array of a given object's own enumerable property names.
+     * Object.keys(obj) ES2020 19.1.2.16 Returns an array of a given object's own enumerable property names.
      */
     public static JSValue keys(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -1078,9 +1050,7 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.preventExtensions(obj)
-     * ES5.1 15.2.3.10
-     * Prevents new properties from ever being added to an object.
+     * Object.preventExtensions(obj) ES5.1 15.2.3.10 Prevents new properties from ever being added to an object.
      */
     public static JSValue preventExtensions(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 && context.getVirtualMachine().getCurrentFrame() == null) {
@@ -1106,10 +1076,8 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.seal(obj)
-     * ES2020 19.1.2.17
-     * Seals an object.
-     * Following QuickJS js_object_seal() implementation with freeze_flag=0.
+     * Object.seal(obj) ES2020 19.1.2.17 Seals an object. Following QuickJS js_object_seal() implementation with
+     * freeze_flag=0.
      */
     public static JSValue seal(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 && context.getVirtualMachine().getCurrentFrame() == null) {
@@ -1154,9 +1122,7 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.setPrototypeOf(obj, prototype)
-     * ES2020 19.1.2.18
-     * Sets the prototype of a specified object.
+     * Object.setPrototypeOf(obj, prototype) ES2020 19.1.2.18 Sets the prototype of a specified object.
      */
     public static JSValue setPrototypeOf(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 2) {
@@ -1206,9 +1172,7 @@ public final class ObjectConstructor {
     }
 
     /**
-     * TestIntegrityLevel(O, level)
-     * ES2024 7.3.17
-     * Tests whether all own properties of an object are non-configurable
+     * TestIntegrityLevel(O, level) ES2024 7.3.17 Tests whether all own properties of an object are non-configurable
      * (sealed) and additionally non-writable (frozen).
      */
     private static boolean testIntegrityLevel(JSContext context, JSObject obj, boolean frozen) {
@@ -1232,7 +1196,7 @@ public final class ObjectConstructor {
                     return false;
                 }
                 // Step 4.b.ii: If level is frozen and IsDataDescriptor(currentDesc)
-                //   and currentDesc.[[Writable]] is true, return false
+                // and currentDesc.[[Writable]] is true, return false
                 if (frozen && currentDesc.isDataDescriptor() && currentDesc.isWritable()) {
                     return false;
                 }
@@ -1242,9 +1206,8 @@ public final class ObjectConstructor {
     }
 
     /**
-     * ToPropertyDescriptor(Obj)
-     * ES2024 6.2.6.5 / QuickJS js_obj_to_desc
-     * Converts a descriptor object to a PropertyDescriptor, using HasProperty + Get.
+     * ToPropertyDescriptor(Obj) ES2024 6.2.6.5 / QuickJS js_obj_to_desc Converts a descriptor object to a
+     * PropertyDescriptor, using HasProperty + Get.
      */
     static PropertyDescriptor toPropertyDescriptor(JSContext context, JSObject descObj) {
         PropertyDescriptor desc = new PropertyDescriptor();
@@ -1297,7 +1260,8 @@ public final class ObjectConstructor {
             }
             // Step 7b: If IsCallable(getter) is false and getter is not undefined, throw TypeError
             if (!(getter instanceof JSUndefined) && !JSTypeChecking.isCallable(getter)) {
-                context.throwTypeError("Getter must be a function: " + JSTypeConversions.toString(context, getter).value());
+                context.throwTypeError(
+                        "Getter must be a function: " + JSTypeConversions.toString(context, getter).value());
                 return null;
             }
             if (getter instanceof JSFunction getterFn) {
@@ -1317,7 +1281,8 @@ public final class ObjectConstructor {
             }
             // Step 8b: If IsCallable(setter) is false and setter is not undefined, throw TypeError
             if (!(setter instanceof JSUndefined) && !JSTypeChecking.isCallable(setter)) {
-                context.throwTypeError("Setter must be a function: " + JSTypeConversions.toString(context, setter).value());
+                context.throwTypeError(
+                        "Setter must be a function: " + JSTypeConversions.toString(context, setter).value());
                 return null;
             }
             if (setter instanceof JSFunction setterFn) {
@@ -1331,7 +1296,8 @@ public final class ObjectConstructor {
 
         // Step 8: If accessor and data properties are both present, throw TypeError
         if (hasAccessor && hasData) {
-            context.throwTypeError("Invalid property descriptor. Cannot both specify accessors and a value or writable attribute, #<Object>");
+            context.throwTypeError(
+                    "Invalid property descriptor. Cannot both specify accessors and a value or writable attribute, #<Object>");
             return null;
         }
 
@@ -1339,9 +1305,7 @@ public final class ObjectConstructor {
     }
 
     /**
-     * Object.values(obj)
-     * ES2020 19.1.2.21
-     * Returns an array of a given object's own enumerable property values.
+     * Object.values(obj) ES2020 19.1.2.21 Returns an array of a given object's own enumerable property values.
      */
     public static JSValue values(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {

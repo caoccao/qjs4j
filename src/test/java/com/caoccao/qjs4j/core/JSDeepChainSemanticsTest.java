@@ -21,14 +21,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 /**
- * Neither a prototype chain's length nor a {@code Proxy} chain's depth may change what a program
- * means.
+ * Neither a prototype chain's length nor a {@code Proxy} chain's depth may change what a program means.
  * <p>
- * Both walks used a recursion limit of 1,000 and then gave a wrong answer past it: a property read
- * through 1,001 {@code Object.create} links raised a {@code RangeError} where the value was plainly
- * there, and a function behind 1,002 proxies reported {@code typeof "object"} and refused to be
- * constructed. The boundary values are pinned on both sides, because a cutoff that moves is still
- * a cutoff.
+ * Both walks used a recursion limit of 1,000 and then gave a wrong answer past it: a property read through 1,001
+ * {@code Object.create} links raised a {@code RangeError} where the value was plainly there, and a function behind
+ * 1,002 proxies reported {@code typeof "object"} and refused to be constructed. The boundary values are pinned on both
+ * sides, because a cutoff that moves is still a cutoff.
  */
 public class JSDeepChainSemanticsTest extends BaseJavetTest {
     private static final String BUILD_PROTOTYPE_CHAIN = """
@@ -50,8 +48,7 @@ public class JSDeepChainSemanticsTest extends BaseJavetTest {
     @Timeout(120)
     public void testDeepPrototypeChainAbsentPropertyReadsUndefined() {
         for (int depth : new int[]{999, 1000, 1001, 20000}) {
-            assertStringWithJavet(BUILD_PROTOTYPE_CHAIN
-                    + "String(chainOf(" + depth + ", { x: 1 }).notThere);");
+            assertStringWithJavet(BUILD_PROTOTYPE_CHAIN + "String(chainOf(" + depth + ", { x: 1 }).notThere);");
         }
     }
 
@@ -114,8 +111,7 @@ public class JSDeepChainSemanticsTest extends BaseJavetTest {
         // proxy, so it is bounded by the interpreter's call-stack budget — a documented, now
         // configurable limit (JSRuntimeOptions.setMaxStackSize), not the classification cutoff this
         // class is about. Classification at 20,000 is covered by testDeepProxyChainTypeof.
-        assertIntegerWithJavet(BUILD_PROXY_CHAIN
-                + "proxiesOf(200, function (a, b) { return a + b })(2, 3);");
+        assertIntegerWithJavet(BUILD_PROXY_CHAIN + "proxiesOf(200, function (a, b) { return a + b })(2, 3);");
     }
 
     @Test

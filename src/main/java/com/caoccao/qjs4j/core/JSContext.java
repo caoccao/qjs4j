@@ -25,62 +25,34 @@ import com.caoccao.qjs4j.vm.VirtualMachine;
 import java.util.*;
 
 /**
- * Represents a JavaScript execution context.
- * Based on QuickJS JSContext structure.
+ * Represents a JavaScript execution context. Based on QuickJS JSContext structure.
  * <p>
- * A context is an independent JavaScript execution environment with:
- * - Its own global object and built-in objects
- * - Its own module cache
- * - Its own call stack and exception state
- * - Shared runtime resources (atoms, GC, job queue)
+ * A context is an independent JavaScript execution environment with: - Its own global object and built-in objects - Its
+ * own module cache - Its own call stack and exception state - Shared runtime resources (atoms, GC, job queue)
  * <p>
- * Multiple contexts can exist in a single runtime, each isolated
- * from the others (separate globals, separate module namespaces).
+ * Multiple contexts can exist in a single runtime, each isolated from the others (separate globals, separate module
+ * namespaces).
  */
 public final class JSContext implements AutoCloseable {
     private static final int DEFAULT_MAX_STACK_DEPTH = 1000;
     /**
-     * Upper bound on the failures retained by {@link #recordMicrotaskFailure(Throwable)}, so a
-     * repeatedly failing microtask cannot itself become a leak.
+     * Upper bound on the failures retained by {@link #recordMicrotaskFailure(Throwable)}, so a repeatedly failing
+     * microtask cannot itself become a leak.
      */
     private static final int MAX_RECORDED_MICROTASK_FAILURES = 64;
     // Call stack management
     private final Deque<JSStackFrame> callStack;
+    private boolean closed;
+    // Temporarily holds new.target during native constructor calls
+    // so native constructors can check if called directly vs from subclass
+    private JSValue constructorNewTarget;
+    private JSValue currentThis;
     // Builds error values and their stack traces; see JSErrorReporter
     private final JSErrorReporter errorReporter;
     // The temporary global-object overlays a module's imports are installed as
     private final EvalOverlayManager evalOverlayManager;
     // Runs source: the eval pipeline; see EvalRunner
     private final EvalRunner evalRunner;
-    private final List<JSFinalizationRegistry> finalizationRegistries;
-    // Global declaration tracking for cross-script collision detection
-    // Following QuickJS global_var_obj pattern (GlobalDeclarationInstantiation)
-    private final GlobalLexicalScope globalLexicalScope;
-    // Installs a module's imports and exports where running code can see them
-    private final ImportBindingInstaller importBindingInstaller;
-    private final JSGlobalObject jsGlobalObject;
-    // Failures that escaped a microtask, oldest first
-    private final List<Throwable> microtaskFailures = new ArrayList<>();
-    // Microtask queue for promise resolution and async operations
-    private final JSMicrotaskQueue microtaskQueue;
-    // Links a module graph before any of it is evaluated; see ModuleLinker
-    private final ModuleLinker moduleLinker;
-    // Loads, caches and orders the evaluation of modules; see ModuleLoader
-    private final ModuleLoader moduleLoader;
-    // The realm's intrinsic objects and prototype-resolution rules; see RealmIntrinsics
-    private final RealmIntrinsics realmIntrinsics;
-    // RegExp.input / .lastMatch / .lastParen / .leftContext / .rightContext / .$1-$9
-    private final RegExpLegacyStatics regExpLegacyStatics;
-    private final JSRuntime runtime;
-    private final UnicodePropertyResolver unicodePropertyResolver;
-    // Allocates built-in objects with their prototypes attached; see JSValueFactory
-    private final JSValueFactory valueFactory;
-    private final VirtualMachine virtualMachine;
-    private boolean closed;
-    // Temporarily holds new.target during native constructor calls
-    // so native constructors can check if called directly vs from subclass
-    private JSValue constructorNewTarget;
-    private JSValue currentThis;
     /**
      * Whether the module body about to run was pulled in to satisfy an import.
      * <p>
@@ -93,6 +65,12 @@ public final class JSContext implements AutoCloseable {
      * See {@link #getFailedModuleBodyEvaluationCount()}.
      */
     private int failedModuleBodyEvaluationCount;
+    private final List<JSFinalizationRegistry> finalizationRegistries;
+    // Global declaration tracking for cross-script collision detection
+    // Following QuickJS global_var_obj pattern (GlobalDeclarationInstantiation)
+    private final GlobalLexicalScope globalLexicalScope;
+    // Installs a module's imports and exports where running code can see them
+    private final ImportBindingInstaller importBindingInstaller;
     /**
      * How many of the module bodies that ran were pulled in to satisfy an import.
      * <p>
@@ -104,23 +82,41 @@ public final class JSContext implements AutoCloseable {
     // (which should throw TypeError) from property-based writes (which should succeed).
     private boolean inBareVariableAssignment;
     private boolean inCatchHandler;
+    private final JSGlobalObject jsGlobalObject;
     private int maxStackDepth;
     private IJSMicrotaskFailureCallback microtaskFailureCallback;
+    // Failures that escaped a microtask, oldest first
+    private final List<Throwable> microtaskFailures = new ArrayList<>();
+    // Microtask queue for promise resolution and async operations
+    private final JSMicrotaskQueue microtaskQueue;
     /**
      * How many module bodies have begun executing in this context.
      * <p>
      * See {@link #getModuleBodyEvaluationCount()}.
      */
     private int moduleBodyEvaluationCount;
+    // Links a module graph before any of it is evaluated; see ModuleLinker
+    private final ModuleLinker moduleLinker;
+    // Loads, caches and orders the evaluation of modules; see ModuleLoader
+    private final ModuleLoader moduleLoader;
     private JSValue nativeConstructorNewTarget;
     // Exception state
     private JSValue pendingException;
     // Promise rejection callback
     private IJSPromiseRejectCallback promiseRejectCallback;
+    // The realm's intrinsic objects and prototype-resolution rules; see RealmIntrinsics
+    private final RealmIntrinsics realmIntrinsics;
+    // RegExp.input / .lastMatch / .lastParen / .leftContext / .rightContext / .$1-$9
+    private final RegExpLegacyStatics regExpLegacyStatics;
+    private final JSRuntime runtime;
     private int stackDepth;
     // Execution state
     private boolean strictMode;
     private boolean suppressEvalMicrotaskProcessing;
+    private final UnicodePropertyResolver unicodePropertyResolver;
+    // Allocates built-in objects with their prototypes attached; see JSValueFactory
+    private final JSValueFactory valueFactory;
+    private final VirtualMachine virtualMachine;
     private boolean waitable;
 
     /**
@@ -149,8 +145,7 @@ public final class JSContext implements AutoCloseable {
         ModuleSourceTransformer moduleSourceTransformer = new ModuleSourceTransformer(this);
         this.evalRunner = new EvalRunner(this, moduleSourceTransformer);
         this.moduleLinker = new ModuleLinker(this, moduleSourceTransformer);
-        this.importBindingInstaller =
-                new ImportBindingInstaller(this, moduleSourceTransformer, moduleLinker);
+        this.importBindingInstaller = new ImportBindingInstaller(this, moduleSourceTransformer, moduleLinker);
         this.moduleLoader = new ModuleLoader(this, moduleSourceTransformer, moduleLinker);
         this.pendingException = null;
         this.runtime = runtime;
@@ -188,8 +183,7 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
-     * Clear the pending exception in both context and VM.
-     * This is needed when an async function catches an exception.
+     * Clear the pending exception in both context and VM. This is needed when an async function catches an exception.
      */
     public void clearAllPendingExceptions() {
         clearPendingException();
@@ -222,8 +216,8 @@ public final class JSContext implements AutoCloseable {
     /**
      * Reset the transient execution state an eval activation leaves behind.
      * <p>
-     * The stack depth is re-derived from the call stack rather than decremented, so a frame the VM
-     * abandoned on an abrupt exit cannot leave the counter drifting.
+     * The stack depth is re-derived from the call stack rather than decremented, so a frame the VM abandoned on an
+     * abrupt exit cannot leave the counter drifting.
      */
     void clearTransientEvalState() {
         stackDepth = callStack.size();
@@ -234,16 +228,15 @@ public final class JSContext implements AutoCloseable {
     /**
      * Close this context and release its realm.
      * <p>
-     * The post-close contract is that this context owns nothing: every collection it holds is
-     * empty, every cached intrinsic and host callback is dropped, and the global object is stripped
-     * of its properties and its prototype. An embedder that keeps a reference to the context, to
-     * the global object, or to a value it read out of the realm therefore retains that one object
-     * and not the realm graph behind it.
+     * The post-close contract is that this context owns nothing: every collection it holds is empty, every cached
+     * intrinsic and host callback is dropped, and the global object is stripped of its properties and its prototype. An
+     * embedder that keeps a reference to the context, to the global object, or to a value it read out of the realm
+     * therefore retains that one object and not the realm graph behind it.
      * <p>
-     * Clearing a selection of collections is not enough for that claim. The global object alone
-     * reaches every intrinsic, every constructor and everything a script attached to
-     * {@code globalThis}, so leaving it populated left the entire realm reachable through a closed
-     * context — as did the declaration tables, the cached prototypes and the host callbacks.
+     * Clearing a selection of collections is not enough for that claim. The global object alone reaches every
+     * intrinsic, every constructor and everything a script attached to {@code globalThis}, so leaving it populated left
+     * the entire realm reachable through a closed context — as did the declaration tables, the cached prototypes and
+     * the host callbacks.
      * <p>
      * Idempotent: a second call does nothing.
      */
@@ -300,7 +293,8 @@ public final class JSContext implements AutoCloseable {
     /**
      * The {@code import.meta} object for a module, created on first use and cached per file name.
      *
-     * @param filename the module's file name
+     * @param filename
+     *            the module's file name
      * @return the module's {@code import.meta}
      */
     public JSObject createImportMetaObject(String filename) {
@@ -319,12 +313,12 @@ public final class JSContext implements AutoCloseable {
         return valueFactory.createJSArray(values);
     }
 
-    public JSArray createJSArray(long length) {
-        return valueFactory.createJSArray(length);
-    }
-
     public JSArray createJSArray(JSValue[] values, boolean takeOwnership) {
         return valueFactory.createJSArray(values, takeOwnership);
+    }
+
+    public JSArray createJSArray(long length) {
+        return valueFactory.createJSArray(length);
     }
 
     public JSArray createJSArray(long length, int capacity) {
@@ -343,24 +337,24 @@ public final class JSContext implements AutoCloseable {
         return valueFactory.createJSArraySpecies(originalArray, length);
     }
 
-    public JSBigInt64Array createJSBigInt64Array(int length) {
-        return valueFactory.createJSBigInt64Array(length);
-    }
-
     public JSBigInt64Array createJSBigInt64Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         return valueFactory.createJSBigInt64Array(buffer, byteOffset, length);
+    }
+
+    public JSBigInt64Array createJSBigInt64Array(int length) {
+        return valueFactory.createJSBigInt64Array(length);
     }
 
     public JSBigIntObject createJSBigIntObject(JSBigInt value) {
         return valueFactory.createJSBigIntObject(value);
     }
 
-    public JSBigUint64Array createJSBigUint64Array(int length) {
-        return valueFactory.createJSBigUint64Array(length);
-    }
-
     public JSBigUint64Array createJSBigUint64Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         return valueFactory.createJSBigUint64Array(buffer, byteOffset, length);
+    }
+
+    public JSBigUint64Array createJSBigUint64Array(int length) {
+        return valueFactory.createJSBigUint64Array(length);
     }
 
     public JSBooleanObject createJSBooleanObject(JSBoolean value) {
@@ -387,52 +381,52 @@ public final class JSContext implements AutoCloseable {
         return valueFactory.createJSEvalError(message);
     }
 
-    public JSFloat16Array createJSFloat16Array(int length) {
-        return valueFactory.createJSFloat16Array(length);
-    }
-
     public JSFloat16Array createJSFloat16Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         return valueFactory.createJSFloat16Array(buffer, byteOffset, length);
     }
 
-    public JSFloat32Array createJSFloat32Array(int length) {
-        return valueFactory.createJSFloat32Array(length);
+    public JSFloat16Array createJSFloat16Array(int length) {
+        return valueFactory.createJSFloat16Array(length);
     }
 
     public JSFloat32Array createJSFloat32Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         return valueFactory.createJSFloat32Array(buffer, byteOffset, length);
     }
 
-    public JSFloat64Array createJSFloat64Array(int length) {
-        return valueFactory.createJSFloat64Array(length);
+    public JSFloat32Array createJSFloat32Array(int length) {
+        return valueFactory.createJSFloat32Array(length);
     }
 
     public JSFloat64Array createJSFloat64Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         return valueFactory.createJSFloat64Array(buffer, byteOffset, length);
     }
 
-    public JSInt16Array createJSInt16Array(int length) {
-        return valueFactory.createJSInt16Array(length);
+    public JSFloat64Array createJSFloat64Array(int length) {
+        return valueFactory.createJSFloat64Array(length);
     }
 
     public JSInt16Array createJSInt16Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         return valueFactory.createJSInt16Array(buffer, byteOffset, length);
     }
 
-    public JSInt32Array createJSInt32Array(int length) {
-        return valueFactory.createJSInt32Array(length);
+    public JSInt16Array createJSInt16Array(int length) {
+        return valueFactory.createJSInt16Array(length);
     }
 
     public JSInt32Array createJSInt32Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         return valueFactory.createJSInt32Array(buffer, byteOffset, length);
     }
 
-    public JSInt8Array createJSInt8Array(int length) {
-        return valueFactory.createJSInt8Array(length);
+    public JSInt32Array createJSInt32Array(int length) {
+        return valueFactory.createJSInt32Array(length);
     }
 
     public JSInt8Array createJSInt8Array(IJSArrayBuffer buffer, int byteOffset, int length) {
         return valueFactory.createJSInt8Array(buffer, byteOffset, length);
+    }
+
+    public JSInt8Array createJSInt8Array(int length) {
+        return valueFactory.createJSInt8Array(length);
     }
 
     public JSMap createJSMap() {
@@ -491,40 +485,40 @@ public final class JSContext implements AutoCloseable {
         return valueFactory.createJSTypeError(message);
     }
 
-    public JSURIError createJSURIError(String message) {
-        return valueFactory.createJSURIError(message);
+    public JSUint16Array createJSUint16Array(IJSArrayBuffer buffer, int byteOffset, int length) {
+        return valueFactory.createJSUint16Array(buffer, byteOffset, length);
     }
 
     public JSUint16Array createJSUint16Array(int length) {
         return valueFactory.createJSUint16Array(length);
     }
 
-    public JSUint16Array createJSUint16Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return valueFactory.createJSUint16Array(buffer, byteOffset, length);
+    public JSUint32Array createJSUint32Array(IJSArrayBuffer buffer, int byteOffset, int length) {
+        return valueFactory.createJSUint32Array(buffer, byteOffset, length);
     }
 
     public JSUint32Array createJSUint32Array(int length) {
         return valueFactory.createJSUint32Array(length);
     }
 
-    public JSUint32Array createJSUint32Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return valueFactory.createJSUint32Array(buffer, byteOffset, length);
+    public JSUint8Array createJSUint8Array(IJSArrayBuffer buffer, int byteOffset, int length) {
+        return valueFactory.createJSUint8Array(buffer, byteOffset, length);
     }
 
     public JSUint8Array createJSUint8Array(int length) {
         return valueFactory.createJSUint8Array(length);
     }
 
-    public JSUint8Array createJSUint8Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return valueFactory.createJSUint8Array(buffer, byteOffset, length);
+    public JSUint8ClampedArray createJSUint8ClampedArray(IJSArrayBuffer buffer, int byteOffset, int length) {
+        return valueFactory.createJSUint8ClampedArray(buffer, byteOffset, length);
     }
 
     public JSUint8ClampedArray createJSUint8ClampedArray(int length) {
         return valueFactory.createJSUint8ClampedArray(length);
     }
 
-    public JSUint8ClampedArray createJSUint8ClampedArray(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return valueFactory.createJSUint8ClampedArray(buffer, byteOffset, length);
+    public JSURIError createJSURIError(String message) {
+        return valueFactory.createJSURIError(message);
     }
 
     public JSWeakMap createJSWeakMap() {
@@ -538,7 +532,8 @@ public final class JSContext implements AutoCloseable {
     /**
      * Enqueue a microtask to be executed.
      *
-     * @param microtask The microtask to enqueue
+     * @param microtask
+     *            The microtask to enqueue
      */
     public void enqueueMicrotask(JSMicrotaskQueue.Microtask microtask) {
         microtaskQueue.enqueue(microtask);
@@ -554,50 +549,53 @@ public final class JSContext implements AutoCloseable {
     /**
      * Evaluate JavaScript code in this context.
      * <p>
-     * In full implementation, this would:
-     * 1. Parse the source code
-     * 2. Compile to bytecode
-     * 3. Execute the bytecode
-     * 4. Return the completion value
+     * In full implementation, this would: 1. Parse the source code 2. Compile to bytecode 3. Execute the bytecode 4.
+     * Return the completion value
      *
-     * @param code JavaScript source code
+     * @param code
+     *            JavaScript source code
      * @return The completion value, or exception if eval throws
      */
     public JSValue eval(String code) {
-        return evalRunner.evalOrThrow(
-                evalRunner.eval(code, "<eval>", false, false, false, false, false, false));
+        return evalRunner.evalOrThrow(evalRunner.eval(code, "<eval>", false, false, false, false, false, false));
     }
 
     /**
      * Evaluate code with source location information.
      *
-     * @param code     JavaScript source code
-     * @param filename Source filename for stack traces
-     * @param isModule Whether to evaluate as module (vs script)
+     * @param code
+     *            JavaScript source code
+     * @param filename
+     *            Source filename for stack traces
+     * @param isModule
+     *            Whether to evaluate as module (vs script)
      * @return The completion value
      */
     public JSValue eval(String code, String filename, boolean isModule) {
-        return evalRunner.evalOrThrow(
-                evalRunner.eval(code, filename, isModule, false, false, false, false, false));
+        return evalRunner.evalOrThrow(evalRunner.eval(code, filename, isModule, false, false, false, false, false));
     }
 
     /**
      * Eval js value.
      *
-     * @param code         the code
-     * @param filename     the filename
-     * @param isModule     the is module
-     * @param isDirectEval the is direct eval
+     * @param code
+     *            the code
+     * @param filename
+     *            the filename
+     * @param isModule
+     *            the is module
+     * @param isDirectEval
+     *            the is direct eval
      * @return the js value
      */
     public JSValue eval(String code, String filename, boolean isModule, boolean isDirectEval) {
-        return evalRunner.evalOrThrow(
-                evalRunner.eval(code, filename, isModule, isDirectEval, false, false, false, false));
+        return evalRunner
+                .evalOrThrow(evalRunner.eval(code, filename, isModule, isDirectEval, false, false, false, false));
     }
 
     public JSValue evalDirect(String code, String filename, boolean inheritedStrictMode) {
-        return evalRunner.evalOrThrow(
-                evalRunner.eval(code, filename, false, true, false, false, inheritedStrictMode, true));
+        return evalRunner
+                .evalOrThrow(evalRunner.eval(code, filename, false, true, false, false, inheritedStrictMode, true));
     }
 
     JSValue evalDirectInternal(String code, String filename, boolean inheritedStrictMode) {
@@ -605,8 +603,7 @@ public final class JSContext implements AutoCloseable {
     }
 
     public JSValue evalIndirect(String code, String filename) {
-        return evalRunner.evalOrThrow(
-                evalRunner.eval(code, filename, false, true, false, false, false, false));
+        return evalRunner.evalOrThrow(evalRunner.eval(code, filename, false, true, false, false, false, false));
     }
 
     JSValue evalIndirectInternal(String code, String filename) {
@@ -622,22 +619,22 @@ public final class JSContext implements AutoCloseable {
         return evalOverlayManager;
     }
 
-    public JSValue evalWithProgramLexicalsAsLocals(String code, String filename, boolean isModule) {
-        return evalRunner.evalOrThrow(
-                evalRunner.eval(code, filename, isModule, false, true, true, false, false));
-    }
-
     /**
      * Evaluate one module's body, through its transformed source.
      * <p>
-     * Kept on the context because {@link JSDeferredModuleNamespace} settles a deferred namespace
-     * through it; the work itself belongs to {@link ModuleLoader}.
+     * Kept on the context because {@link JSDeferredModuleNamespace} settles a deferred namespace through it; the work
+     * itself belongs to {@link ModuleLoader}.
      *
-     * @param moduleRecord the module to evaluate
+     * @param moduleRecord
+     *            the module to evaluate
      * @return the body's completion value, or its evaluation promise for a top-level-await module
      */
     JSValue evaluateDynamicImportModule(JSDynamicImportModule moduleRecord) {
         return moduleLoader.evaluateDynamicImportModule(moduleRecord);
+    }
+
+    public JSValue evalWithProgramLexicalsAsLocals(String code, String filename, boolean isModule) {
+        return evalRunner.evalOrThrow(evalRunner.eval(code, filename, isModule, false, true, true, false, false));
     }
 
     /**
@@ -718,8 +715,8 @@ public final class JSContext implements AutoCloseable {
     /**
      * Get the names currently bound in the realm's global lexical scope.
      * <p>
-     * Exposed so an embedder — and this project's own tests — can observe that {@link #close()}
-     * actually releases realm state.
+     * Exposed so an embedder — and this project's own tests — can observe that {@link #close()} actually releases realm
+     * state.
      *
      * @return a snapshot of the global lexical binding names
      */
@@ -732,13 +729,13 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
-     * How many of the module bodies counted by {@link #getModuleBodyEvaluationCount()} belong to
-     * modules pulled in to satisfy an import.
+     * How many of the module bodies counted by {@link #getModuleBodyEvaluationCount()} belong to modules pulled in to
+     * satisfy an import.
      * <p>
-     * The difference between the two counts is what a host needs to distinguish a graph that
-     * failed to link from one that linked and then threw. A module whose import cannot be resolved
-     * may still have evaluated the dependency it imports <em>from</em> — so "something ran" does
-     * not mean the module the host asked for ran. When the two counts differ, it did.
+     * The difference between the two counts is what a host needs to distinguish a graph that failed to link from one
+     * that linked and then threw. A module whose import cannot be resolved may still have evaluated the dependency it
+     * imports <em>from</em> — so "something ran" does not mean the module the host asked for ran. When the two counts
+     * differ, it did.
      *
      * @return the number of imported module bodies that have started executing
      */
@@ -778,8 +775,8 @@ public final class JSContext implements AutoCloseable {
     /**
      * Get the failures that escaped a microtask, oldest first.
      * <p>
-     * The list is capped so a repeatedly failing microtask cannot itself become a leak; once it is
-     * full the oldest entries are dropped.
+     * The list is capped so a repeatedly failing microtask cannot itself become a leak; once it is full the oldest
+     * entries are dropped.
      *
      * @return a snapshot of the recorded failures
      */
@@ -797,13 +794,12 @@ public final class JSContext implements AutoCloseable {
     /**
      * How many module bodies have begun executing in this context.
      * <p>
-     * ECMAScript loads, links and evaluates a module graph as three stages, and a conformance
-     * suite's negative module tests declare which of the three they fail in. This engine still
-     * performs all three inside one {@code eval}, so a host that has to tell them apart cannot do
-     * it by catching the error alone: a link failure and an evaluation failure can carry the same
-     * constructor. The count moves exactly once per module body, at the point where that module's
-     * imports have all been resolved and its own code is about to run, so a host can ask the one
-     * question the stages differ on — whether anything was evaluated at all.
+     * ECMAScript loads, links and evaluates a module graph as three stages, and a conformance suite's negative module
+     * tests declare which of the three they fail in. This engine still performs all three inside one {@code eval}, so a
+     * host that has to tell them apart cannot do it by catching the error alone: a link failure and an evaluation
+     * failure can carry the same constructor. The count moves exactly once per module body, at the point where that
+     * module's imports have all been resolved and its own code is about to run, so a host can ask the one question the
+     * stages differ on — whether anything was evaluated at all.
      * <p>
      * It counts every module body in the graph, dependencies included, and never decreases.
      *
@@ -915,17 +911,15 @@ public final class JSContext implements AutoCloseable {
     /**
      * Whether any module body failed, rather than the graph failing to link.
      * <p>
-     * A module graph can fail in two quite different ways that carry the same error: an import that
-     * names an export nothing provides fails while the graph is linked, and a dependency whose body
-     * throws fails while the graph is evaluated. This engine pulls a dependency in and evaluates it
-     * in one step, so "a body ran" cannot tell them apart on its own — a failed import may well
-     * have evaluated the module it was importing from. "A body failed" can, because a link failure
-     * raises its error with every body it touched having run to completion.
+     * A module graph can fail in two quite different ways that carry the same error: an import that names an export
+     * nothing provides fails while the graph is linked, and a dependency whose body throws fails while the graph is
+     * evaluated. This engine pulls a dependency in and evaluates it in one step, so "a body ran" cannot tell them apart
+     * on its own — a failed import may well have evaluated the module it was importing from. "A body failed" can,
+     * because a link failure raises its error with every body it touched having run to completion.
      * <p>
-     * Both shapes of failure count: a body that threw, and a top-level-await body that finished but
-     * whose evaluation promise rejected. Only the body's own failure counts — a module marked as
-     * failed because something it imported failed did not fail itself, and a graph that could not
-     * be linked marks records that way too.
+     * Both shapes of failure count: a body that threw, and a top-level-await body that finished but whose evaluation
+     * promise rejected. Only the body's own failure counts — a module marked as failed because something it imported
+     * failed did not fail itself, and a graph that could not be linked marks records that way too.
      *
      * @return true when a module body failed
      */
@@ -943,8 +937,8 @@ public final class JSContext implements AutoCloseable {
     /**
      * The realm's import-binding installer.
      * <p>
-     * Package-private, and reached through the context rather than injected, because the linker is
-     * built before the installer that it calls back into.
+     * Package-private, and reached through the context rather than injected, because the linker is built before the
+     * installer that it calls back into.
      *
      * @return the import-binding installer
      */
@@ -953,8 +947,8 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
-     * Initialize the global object with built-in properties.
-     * Delegates to JSGlobalObject to set up all global functions and properties.
+     * Initialize the global object with built-in properties. Delegates to JSGlobalObject to set up all global functions
+     * and properties.
      */
     private void initializeGlobalObject() {
         jsGlobalObject.initialize();
@@ -1003,9 +997,9 @@ public final class JSContext implements AutoCloseable {
     /**
      * Whether an {@code eval} that finishes now should leave the microtask queue alone.
      * <p>
-     * The module loader raises this while it evaluates a graph's dependencies, so that a nested
-     * {@code eval} cannot drain the queue before every import has been processed — which is what
-     * decides the order asynchronous module completions run in.
+     * The module loader raises this while it evaluates a graph's dependencies, so that a nested {@code eval} cannot
+     * drain the queue before every import has been processed — which is what decides the order asynchronous module
+     * completions run in.
      *
      * @return true while microtask processing is suppressed
      */
@@ -1021,39 +1015,26 @@ public final class JSContext implements AutoCloseable {
         return moduleLoader.loadDynamicImportModule(specifier, referrerFilename);
     }
 
-    public JSObject loadDynamicImportModule(
-            String specifier,
-            String referrerFilename,
+    public JSObject loadDynamicImportModule(String specifier, String referrerFilename,
             Map<String, String> importAttributes) {
         return moduleLoader.loadDynamicImportModule(specifier, referrerFilename, importAttributes);
     }
 
-    public JSObject loadDynamicImportModule(
-            String specifier,
-            String referrerFilename,
-            Map<String, String> importAttributes,
-            JSPromise importPromise,
-            JSPromise.ResolveState resolveState) {
-        return moduleLoader.loadDynamicImportModule(
-                specifier, referrerFilename, importAttributes, importPromise, resolveState);
+    public JSObject loadDynamicImportModule(String specifier, String referrerFilename,
+            Map<String, String> importAttributes, JSPromise importPromise, JSPromise.ResolveState resolveState) {
+        return moduleLoader.loadDynamicImportModule(specifier, referrerFilename, importAttributes, importPromise,
+                resolveState);
     }
 
-    public JSObject loadDynamicImportModuleDeferred(
-            String specifier,
-            String referrerFilename,
+    public JSObject loadDynamicImportModuleDeferred(String specifier, String referrerFilename,
             Map<String, String> importAttributes) {
-        return moduleLoader.loadDynamicImportModuleDeferred(
-                specifier, referrerFilename, importAttributes);
+        return moduleLoader.loadDynamicImportModuleDeferred(specifier, referrerFilename, importAttributes);
     }
 
-    public JSObject loadDynamicImportModuleDeferred(
-            String specifier,
-            String referrerFilename,
-            Map<String, String> importAttributes,
-            JSPromise importPromise,
-            JSPromise.ResolveState resolveState) {
-        return moduleLoader.loadDynamicImportModuleDeferred(
-                specifier, referrerFilename, importAttributes, importPromise, resolveState);
+    public JSObject loadDynamicImportModuleDeferred(String specifier, String referrerFilename,
+            Map<String, String> importAttributes, JSPromise importPromise, JSPromise.ResolveState resolveState) {
+        return moduleLoader.loadDynamicImportModuleDeferred(specifier, referrerFilename, importAttributes,
+                importPromise, resolveState);
     }
 
     /**
@@ -1068,8 +1049,8 @@ public final class JSContext implements AutoCloseable {
     /**
      * The realm's module loader.
      * <p>
-     * Package-private, and reached through the context rather than injected, because the loader is
-     * built after the transformer and the linker that call back into it.
+     * Package-private, and reached through the context rather than injected, because the loader is built after the
+     * transformer and the linker that call back into it.
      *
      * @return the module loader
      */
@@ -1103,8 +1084,7 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
-     * Process all pending microtasks.
-     * This should be called at the end of each task in the event loop.
+     * Process all pending microtasks. This should be called at the end of each task in the event loop.
      */
     public void processMicrotasks() {
         requireOpen();
@@ -1121,8 +1101,7 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
-     * Push a new stack frame.
-     * Returns false if stack limit exceeded.
+     * Push a new stack frame. Returns false if stack limit exceeded.
      */
     public boolean pushStackFrame(JSStackFrame frame) {
         if (stackDepth >= maxStackDepth) {
@@ -1140,11 +1119,13 @@ public final class JSContext implements AutoCloseable {
     /**
      * Whether a module and everything it reaches can be evaluated synchronously.
      * <p>
-     * Kept on the context because {@link JSDeferredModuleNamespace} asks it before forcing a
-     * deferred namespace; the work itself belongs to {@link ModuleLoader}.
+     * Kept on the context because {@link JSDeferredModuleNamespace} asks it before forcing a deferred namespace; the
+     * work itself belongs to {@link ModuleLoader}.
      *
-     * @param resolvedSpecifier the module's resolved path
-     * @param seen              the specifiers already visited, so a cycle terminates
+     * @param resolvedSpecifier
+     *            the module's resolved path
+     * @param seen
+     *            the specifiers already visited, so a cycle terminates
      * @return true when nothing in the graph needs to await
      */
     boolean readyForSyncExecution(String resolvedSpecifier, Set<String> seen) {
@@ -1154,8 +1135,8 @@ public final class JSContext implements AutoCloseable {
     /**
      * Count a module body that failed rather than running to completion.
      * <p>
-     * See {@link #hasModuleBodyEvaluationFailed()}. A top-level-await body that finished and then
-     * rejected counts too, which is why the module loader reports it rather than the eval pipeline.
+     * See {@link #hasModuleBodyEvaluationFailed()}. A top-level-await body that finished and then rejected counts too,
+     * which is why the module loader reports it rather than the eval pipeline.
      */
     void recordFailedModuleBodyEvaluation() {
         failedModuleBodyEvaluationCount++;
@@ -1164,13 +1145,13 @@ public final class JSContext implements AutoCloseable {
     /**
      * Record a failure that escaped a microtask.
      * <p>
-     * Draining the microtask queue has no caller to propagate to, so without this a throwing
-     * {@code .then()} handler — or an engine defect surfacing as a {@link NullPointerException} —
-     * disappeared with no trace at all. Failures are always recorded; an installed
-     * {@link IJSMicrotaskFailureCallback} sees them immediately, and an engine defect with no
-     * callback installed is logged so it cannot pass unnoticed.
+     * Draining the microtask queue has no caller to propagate to, so without this a throwing {@code .then()} handler —
+     * or an engine defect surfacing as a {@link NullPointerException} — disappeared with no trace at all. Failures are
+     * always recorded; an installed {@link IJSMicrotaskFailureCallback} sees them immediately, and an engine defect
+     * with no callback installed is logged so it cannot pass unnoticed.
      *
-     * @param failure the exception that escaped the microtask
+     * @param failure
+     *            the exception that escaped the microtask
      */
     public void recordMicrotaskFailure(Throwable failure) {
         if (failure == null) {
@@ -1188,16 +1169,15 @@ public final class JSContext implements AutoCloseable {
         if (!(failure instanceof JSException)) {
             // A JSException is a script-level error and is reported through the promise reject
             // callback. Anything else is an engine defect and must never be silent.
-            System.getLogger(JSContext.class.getName()).log(
-                    System.Logger.Level.WARNING, "Unhandled failure in microtask", failure);
+            System.getLogger(JSContext.class.getName()).log(System.Logger.Level.WARNING,
+                    "Unhandled failure in microtask", failure);
         }
     }
 
     /**
      * Count a module body that is about to start executing.
      * <p>
-     * See {@link #getModuleBodyEvaluationCount()} and
-     * {@link #getImportedModuleBodyEvaluationCount()}.
+     * See {@link #getModuleBodyEvaluationCount()} and {@link #getImportedModuleBodyEvaluationCount()}.
      */
     void recordModuleBodyEvaluation() {
         moduleBodyEvaluationCount++;
@@ -1217,11 +1197,12 @@ public final class JSContext implements AutoCloseable {
     /**
      * Fail fast when an operation is attempted on a closed context.
      * <p>
-     * {@code close()} used to set no flag at all, so {@code close()} followed by {@code eval()}
-     * silently worked and masked lifecycle bugs in embedder code. This is one of the few places a
-     * raw Java exception is right: it is embedder API misuse, not a JavaScript error.
+     * {@code close()} used to set no flag at all, so {@code close()} followed by {@code eval()} silently worked and
+     * masked lifecycle bugs in embedder code. This is one of the few places a raw Java exception is right: it is
+     * embedder API misuse, not a JavaScript error.
      *
-     * @throws IllegalStateException when this context is closed
+     * @throws IllegalStateException
+     *             when this context is closed
      */
     void requireOpen() {
         if (closed) {
@@ -1232,15 +1213,15 @@ public final class JSContext implements AutoCloseable {
     /**
      * Resolve a module's {@code export * from} and indirect re-exports into its namespace.
      * <p>
-     * Kept on the context because {@link JSDeferredModuleNamespace} settles a deferred namespace
-     * through it; the work itself belongs to {@link ModuleLinker}.
+     * Kept on the context because {@link JSDeferredModuleNamespace} settles a deferred namespace through it; the work
+     * itself belongs to {@link ModuleLinker}.
      *
-     * @param moduleRecord          the module whose re-exports are being resolved
-     * @param importResolutionStack the specifiers already being resolved, so a cycle is detected
+     * @param moduleRecord
+     *            the module whose re-exports are being resolved
+     * @param importResolutionStack
+     *            the specifiers already being resolved, so a cycle is detected
      */
-    void resolveDynamicImportReExports(
-            JSDynamicImportModule moduleRecord,
-            Set<String> importResolutionStack) {
+    void resolveDynamicImportReExports(JSDynamicImportModule moduleRecord, Set<String> importResolutionStack) {
         moduleLinker.resolveDynamicImportReExports(moduleRecord, importResolutionStack);
     }
 
@@ -1305,7 +1286,8 @@ public final class JSContext implements AutoCloseable {
     /**
      * Install a callback that observes failures escaping a microtask.
      *
-     * @param callback the callback, or {@code null} to remove the current one
+     * @param callback
+     *            the callback, or {@code null} to remove the current one
      */
     public void setMicrotaskFailureCallback(IJSMicrotaskFailureCallback callback) {
         this.microtaskFailureCallback = callback;
@@ -1326,10 +1308,9 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
-     * Set the promise rejection callback.
-     * This callback is invoked when a promise rejection occurs in an await expression.
-     * If the callback returns true, the rejection is considered handled and the catch
-     * clause will take effect instead of throwing an exception.
+     * Set the promise rejection callback. This callback is invoked when a promise rejection occurs in an await
+     * expression. If the callback returns true, the rejection is considered handled and the catch clause will take
+     * effect instead of throwing an exception.
      */
     public void setPromiseRejectCallback(IJSPromiseRejectCallback callback) {
         this.promiseRejectCallback = callback;
@@ -1423,10 +1404,7 @@ public final class JSContext implements AutoCloseable {
         return realmIntrinsics.transferPrototypeFromConstructor(receiver, constructor);
     }
 
-    public void updateRegExpLegacyStatics(
-            String inputValue,
-            String[] captureValues,
-            int[][] captureIndices,
+    public void updateRegExpLegacyStatics(String inputValue, String[] captureValues, int[][] captureIndices,
             int fallbackStartIndex) {
         regExpLegacyStatics.update(inputValue, captureValues, captureIndices, fallbackStartIndex);
     }

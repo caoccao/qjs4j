@@ -20,10 +20,10 @@ import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
 /**
- * The strict-mode early error for {@code delete} is stated over {@code IdentifierReference}.
- * {@code this} and {@code new.target} are parsed as {@code Identifier} nodes because they resolve
- * like one, but grammatically they are a {@code PrimaryExpression} and a {@code MetaProperty}, so
- * deleting them is legal in strict mode and evaluates to {@code true}.
+ * The strict-mode early error for {@code delete} is stated over {@code IdentifierReference}. {@code this} and
+ * {@code new.target} are parsed as {@code Identifier} nodes because they resolve like one, but grammatically they are a
+ * {@code PrimaryExpression} and a {@code MetaProperty}, so deleting them is legal in strict mode and evaluates to
+ * {@code true}.
  * <p>
  * Both assertions run in sloppy and strict mode: {@code BaseJavetTest} evaluates every source twice.
  */

@@ -24,14 +24,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Represents a JavaScript AsyncDisposableStack object.
- * Tracks disposable callbacks and runs them in LIFO order.
+ * Represents a JavaScript AsyncDisposableStack object. Tracks disposable callbacks and runs them in LIFO order.
  */
 public final class JSAsyncDisposableStack extends JSObject {
     public static final String NAME = "AsyncDisposableStack";
     private static final String SUPPRESSED_ERROR_MESSAGE = "An error was suppressed during disposal";
-    private final List<DisposeRecord> disposeRecords;
     private boolean disposed;
+    private final List<DisposeRecord> disposeRecords;
     private boolean movedFrom;
     private boolean needsAwait;
 
@@ -43,16 +42,11 @@ public final class JSAsyncDisposableStack extends JSObject {
         this.needsAwait = false;
     }
 
-    public static JSObject create(JSContext context, JSValue... args) {
-        JSAsyncDisposableStack stack = new JSAsyncDisposableStack(context);
-        context.transferPrototype(stack, NAME);
-        return stack;
-    }
-
     public JSValue adopt(JSContext context, JSValue value, JSValue onDisposeAsync) {
         if (disposed) {
             if (movedFrom) {
-                return context.throwTypeError("Cannot call AsyncDisposableStack.prototype.adopt on an already-disposed AsyncDisposableStack");
+                return context.throwTypeError(
+                        "Cannot call AsyncDisposableStack.prototype.adopt on an already-disposed AsyncDisposableStack");
             }
             return context.throwReferenceError("Cannot add values to a disposed stack!");
         }
@@ -70,7 +64,8 @@ public final class JSAsyncDisposableStack extends JSObject {
     public JSValue defer(JSContext context, JSValue onDisposeAsync) {
         if (disposed) {
             if (movedFrom) {
-                return context.throwTypeError("Cannot call AsyncDisposableStack.prototype.defer on an already-disposed AsyncDisposableStack");
+                return context.throwTypeError(
+                        "Cannot call AsyncDisposableStack.prototype.defer on an already-disposed AsyncDisposableStack");
             }
             return context.throwReferenceError("Cannot add values to a disposed stack!");
         }
@@ -107,11 +102,7 @@ public final class JSAsyncDisposableStack extends JSObject {
         return promise;
     }
 
-    private void disposeNextRecord(
-            JSContext context,
-            int index,
-            JSValue accumulatedError,
-            boolean hasAwaited,
+    private void disposeNextRecord(JSContext context, int index, JSValue accumulatedError, boolean hasAwaited,
             JSPromise completionPromise) {
         if (index < 0) {
             disposeRecords.clear();
@@ -119,28 +110,25 @@ public final class JSAsyncDisposableStack extends JSObject {
                 // Per spec: If needsAwait is true and hasAwaited is false, Perform ! Await(undefined).
                 JSPromise awaitPromise = context.createJSPromise();
                 awaitPromise.resolve(context, JSUndefined.INSTANCE);
-                JSNativeFunction onFulfilled = new JSNativeFunction(context, "", 1,
-                        (childContext, thisArg, args) -> {
-                            if (accumulatedError != null) {
-                                completionPromise.reject(accumulatedError);
-                            } else {
-                                completionPromise.fulfill(JSUndefined.INSTANCE);
-                            }
-                            return JSUndefined.INSTANCE;
-                        });
-                JSNativeFunction onRejected = new JSNativeFunction(context, "", 1,
-                        (childContext, thisArg, args) -> {
-                            if (accumulatedError != null) {
-                                completionPromise.reject(accumulatedError);
-                            } else {
-                                completionPromise.fulfill(JSUndefined.INSTANCE);
-                            }
-                            return JSUndefined.INSTANCE;
-                        });
+                JSNativeFunction onFulfilled = new JSNativeFunction(context, "", 1, (childContext, thisArg, args) -> {
+                    if (accumulatedError != null) {
+                        completionPromise.reject(accumulatedError);
+                    } else {
+                        completionPromise.fulfill(JSUndefined.INSTANCE);
+                    }
+                    return JSUndefined.INSTANCE;
+                });
+                JSNativeFunction onRejected = new JSNativeFunction(context, "", 1, (childContext, thisArg, args) -> {
+                    if (accumulatedError != null) {
+                        completionPromise.reject(accumulatedError);
+                    } else {
+                        completionPromise.fulfill(JSUndefined.INSTANCE);
+                    }
+                    return JSUndefined.INSTANCE;
+                });
                 context.transferPrototype(onFulfilled, JSFunction.NAME);
                 context.transferPrototype(onRejected, JSFunction.NAME);
-                awaitPromise.addReactions(
-                        new JSPromise.ReactionRecord(onFulfilled, null, context),
+                awaitPromise.addReactions(new JSPromise.ReactionRecord(onFulfilled, null, context),
                         new JSPromise.ReactionRecord(onRejected, null, context));
                 return;
             }
@@ -202,22 +190,19 @@ public final class JSAsyncDisposableStack extends JSObject {
         }
         JSPromise awaitedResult = context.createJSPromise();
         awaitedResult.resolve(context, disposerResult);
-        JSNativeFunction onFulfilled = new JSNativeFunction(context, "", 1,
-                (childContext, thisArg, args) -> {
-                    disposeNextRecord(childContext, index - 1, nextAccumulatedError, true, completionPromise);
-                    return JSUndefined.INSTANCE;
-                });
-        JSNativeFunction onRejected = new JSNativeFunction(context, "", 1,
-                (childContext, thisArg, args) -> {
-                    JSValue rejectionValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                    JSValue mergedError = mergeDisposalError(childContext, rejectionValue, nextAccumulatedError);
-                    disposeNextRecord(childContext, index - 1, mergedError, true, completionPromise);
-                    return JSUndefined.INSTANCE;
-                });
+        JSNativeFunction onFulfilled = new JSNativeFunction(context, "", 1, (childContext, thisArg, args) -> {
+            disposeNextRecord(childContext, index - 1, nextAccumulatedError, true, completionPromise);
+            return JSUndefined.INSTANCE;
+        });
+        JSNativeFunction onRejected = new JSNativeFunction(context, "", 1, (childContext, thisArg, args) -> {
+            JSValue rejectionValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            JSValue mergedError = mergeDisposalError(childContext, rejectionValue, nextAccumulatedError);
+            disposeNextRecord(childContext, index - 1, mergedError, true, completionPromise);
+            return JSUndefined.INSTANCE;
+        });
         context.transferPrototype(onFulfilled, JSFunction.NAME);
         context.transferPrototype(onRejected, JSFunction.NAME);
-        awaitedResult.addReactions(
-                new JSPromise.ReactionRecord(onFulfilled, null, context),
+        awaitedResult.addReactions(new JSPromise.ReactionRecord(onFulfilled, null, context),
                 new JSPromise.ReactionRecord(onRejected, null, context));
 
     }
@@ -239,7 +224,8 @@ public final class JSAsyncDisposableStack extends JSObject {
     public JSValue move(JSContext context) {
         if (disposed) {
             if (movedFrom) {
-                return context.throwTypeError("Cannot call AsyncDisposableStack.prototype.move on an already-disposed AsyncDisposableStack");
+                return context.throwTypeError(
+                        "Cannot call AsyncDisposableStack.prototype.move on an already-disposed AsyncDisposableStack");
             }
             return context.throwReferenceError("Cannot move elements from a disposed stack!");
         }
@@ -256,7 +242,8 @@ public final class JSAsyncDisposableStack extends JSObject {
     public JSValue use(JSContext context, JSValue value) {
         if (disposed) {
             if (movedFrom) {
-                return context.throwTypeError("Cannot call AsyncDisposableStack.prototype.use on an already-disposed AsyncDisposableStack");
+                return context.throwTypeError(
+                        "Cannot call AsyncDisposableStack.prototype.use on an already-disposed AsyncDisposableStack");
             }
             return context.throwReferenceError("Cannot add values to a disposed stack!");
         }
@@ -282,6 +269,12 @@ public final class JSAsyncDisposableStack extends JSObject {
             disposeRecords.add(new DisposeRecord(disposeMethod, objectValue, JSValue.NO_ARGS, false));
         }
         return value;
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        JSAsyncDisposableStack stack = new JSAsyncDisposableStack(context);
+        context.transferPrototype(stack, NAME);
+        return stack;
     }
 
     private record DisposeRecord(JSFunction function, JSValue thisArg, JSValue[] args, boolean awaitResult) {

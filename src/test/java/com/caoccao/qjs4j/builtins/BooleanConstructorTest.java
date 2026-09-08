@@ -26,14 +26,8 @@ public class BooleanConstructorTest extends BaseJavetTest {
 
     @Test
     public void testBooleanAsFunctionFalsyValues() {
-        assertBooleanWithJavet(
-                "Boolean(false)",
-                "Boolean(0)",
-                "Boolean(-0)",
-                "Boolean('')",
-                "Boolean(null)",
-                "Boolean(undefined)",
-                "Boolean(NaN)");
+        assertBooleanWithJavet("Boolean(false)", "Boolean(0)", "Boolean(-0)", "Boolean('')", "Boolean(null)",
+                "Boolean(undefined)", "Boolean(NaN)");
     }
 
     @Test
@@ -43,23 +37,13 @@ public class BooleanConstructorTest extends BaseJavetTest {
 
     @Test
     public void testBooleanAsFunctionReturnsPrimitive() {
-        assertStringWithJavet(
-                "typeof Boolean(true)",
-                "typeof Boolean(false)");
+        assertStringWithJavet("typeof Boolean(true)", "typeof Boolean(false)");
     }
 
     @Test
     public void testBooleanAsFunctionTruthyValues() {
-        assertBooleanWithJavet(
-                "Boolean(true)",
-                "Boolean(1)",
-                "Boolean(-1)",
-                "Boolean('hello')",
-                "Boolean(' ')",
-                "Boolean([])",
-                "Boolean({})",
-                "Boolean(Infinity)",
-                "Boolean(-Infinity)");
+        assertBooleanWithJavet("Boolean(true)", "Boolean(1)", "Boolean(-1)", "Boolean('hello')", "Boolean(' ')",
+                "Boolean([])", "Boolean({})", "Boolean(Infinity)", "Boolean(-Infinity)");
     }
 
     @Test
@@ -86,16 +70,14 @@ public class BooleanConstructorTest extends BaseJavetTest {
 
     @Test
     public void testBooleanConstructorPrototypeDescriptor() {
-        assertBooleanWithJavet(
-                "Object.getOwnPropertyDescriptor(Boolean, 'prototype').writable === false",
+        assertBooleanWithJavet("Object.getOwnPropertyDescriptor(Boolean, 'prototype').writable === false",
                 "Object.getOwnPropertyDescriptor(Boolean, 'prototype').enumerable === false",
                 "Object.getOwnPropertyDescriptor(Boolean, 'prototype').configurable === false");
     }
 
     @Test
     public void testBooleanGlobalDescriptor() {
-        assertBooleanWithJavet(
-                "Object.getOwnPropertyDescriptor(globalThis, 'Boolean').writable === true",
+        assertBooleanWithJavet("Object.getOwnPropertyDescriptor(globalThis, 'Boolean').writable === true",
                 "Object.getOwnPropertyDescriptor(globalThis, 'Boolean').enumerable === false",
                 "Object.getOwnPropertyDescriptor(globalThis, 'Boolean').configurable === true");
     }
@@ -107,31 +89,23 @@ public class BooleanConstructorTest extends BaseJavetTest {
 
     @Test
     public void testInstanceofWithObject() {
-        assertBooleanWithJavet(
-                "new Boolean(true) instanceof Boolean",
-                "new Boolean(false) instanceof Boolean");
+        assertBooleanWithJavet("new Boolean(true) instanceof Boolean", "new Boolean(false) instanceof Boolean");
     }
 
     @Test
     public void testInstanceofWithPrimitive() {
-        assertBooleanWithJavet(
-                "true instanceof Boolean",
-                "false instanceof Boolean");
+        assertBooleanWithJavet("true instanceof Boolean", "false instanceof Boolean");
     }
 
     @Test
     public void testNewBooleanCreatesObject() {
-        assertBooleanObjectWithJavet(
-                "new Boolean(true)",
-                "new Boolean(false)");
+        assertBooleanObjectWithJavet("new Boolean(true)", "new Boolean(false)");
     }
 
     @Test
     public void testNewBooleanIsTruthy() {
         // Boolean objects are always truthy, even new Boolean(false)
-        assertBooleanWithJavet(
-                "!!(new Boolean(false))",
-                "new Boolean(false) ? true : false");
+        assertBooleanWithJavet("!!(new Boolean(false))", "new Boolean(false) ? true : false");
     }
 
     @Test
@@ -141,8 +115,7 @@ public class BooleanConstructorTest extends BaseJavetTest {
 
     @Test
     public void testNewBooleanObjectHasOwnProperty() {
-        assertBooleanWithJavet(
-                "var b = new Boolean(true); b.x = 1; b.hasOwnProperty('x')");
+        assertBooleanWithJavet("var b = new Boolean(true); b.x = 1; b.hasOwnProperty('x')");
     }
 
     @Test
@@ -153,40 +126,27 @@ public class BooleanConstructorTest extends BaseJavetTest {
 
     @Test
     public void testNewBooleanObjectTypeof() {
-        assertStringWithJavet(
-                "typeof new Boolean(true)",
-                "typeof new Boolean(false)");
+        assertStringWithJavet("typeof new Boolean(true)", "typeof new Boolean(false)");
     }
 
     @Test
     public void testNewBooleanWithDifferentValues() {
         assertBooleanObjectWithJavet(
                 // Truthy values
-                "new Boolean(1)",
-                "new Boolean('hello')",
+                "new Boolean(1)", "new Boolean('hello')",
                 // Falsy values
-                "new Boolean(0)",
-                "new Boolean('')",
-                "new Boolean(null)",
-                "new Boolean(undefined)");
+                "new Boolean(0)", "new Boolean('')", "new Boolean(null)", "new Boolean(undefined)");
     }
 
     @Test
     public void testNewBooleanWithFalsyValues() {
-        assertBooleanWithJavet(
-                "(new Boolean(0)).valueOf()",
-                "(new Boolean('')).valueOf()",
-                "(new Boolean(null)).valueOf()",
-                "(new Boolean(undefined)).valueOf()",
-                "(new Boolean(NaN)).valueOf()");
+        assertBooleanWithJavet("(new Boolean(0)).valueOf()", "(new Boolean('')).valueOf()",
+                "(new Boolean(null)).valueOf()", "(new Boolean(undefined)).valueOf()", "(new Boolean(NaN)).valueOf()");
     }
 
     @Test
     public void testNewBooleanWithTruthyValues() {
-        assertBooleanWithJavet(
-                "(new Boolean(1)).valueOf()",
-                "(new Boolean('hello')).valueOf()",
-                "(new Boolean([])).valueOf()",
-                "(new Boolean({})).valueOf()");
+        assertBooleanWithJavet("(new Boolean(1)).valueOf()", "(new Boolean('hello')).valueOf()",
+                "(new Boolean([])).valueOf()", "(new Boolean({})).valueOf()");
     }
 }

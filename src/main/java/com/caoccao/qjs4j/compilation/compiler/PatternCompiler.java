@@ -20,8 +20,8 @@ import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.vm.Opcode;
 
 /**
- * Delegate compiler for pattern matching and destructuring assignment compilation.
- * Handles assignment targets, pattern assignments, and destructuring for arrays and objects.
+ * Delegate compiler for pattern matching and destructuring assignment compilation. Handles assignment targets, pattern
+ * assignments, and destructuring for arrays and objects.
  */
 final class PatternCompiler extends AstNodeCompiler<Pattern> {
 
@@ -46,9 +46,8 @@ final class PatternCompiler extends AstNodeCompiler<Pattern> {
     }
 
     /**
-     * Assign the iteration value in a for-of loop.
-     * For var declarations, use findLocalInScopes to store to the parent scope's local
-     * (since var is function-scoped, not block-scoped). For let/const, use the normal
+     * Assign the iteration value in a for-of loop. For var declarations, use findLocalInScopes to store to the parent
+     * scope's local (since var is function-scoped, not block-scoped). For let/const, use the normal
      * compilePatternAssignment which creates locals in the current (loop) scope.
      */
     void compileForOfValueAssignment(Pattern pattern, boolean isVar) {
@@ -79,8 +78,8 @@ final class PatternCompiler extends AstNodeCompiler<Pattern> {
     }
 
     /**
-     * Declare all variables in a pattern (used for for-of loops with destructuring).
-     * This recursively declares variables for Identifier, ArrayPattern, and ObjectPattern.
+     * Declare all variables in a pattern (used for for-of loops with destructuring). This recursively declares
+     * variables for Identifier, ArrayPattern, and ObjectPattern.
      */
     void declarePatternVariables(Pattern pattern) {
         if (pattern instanceof Identifier id) {

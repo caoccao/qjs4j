@@ -20,8 +20,8 @@ import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit tests for Symbol object wrapper (JSSymbolObject).
- * Tests the object form of symbols created with Object(Symbol()).
+ * Unit tests for Symbol object wrapper (JSSymbolObject). Tests the object form of symbols created with
+ * Object(Symbol()).
  */
 public class SymbolObjectTest extends BaseJavetTest {
 
@@ -51,8 +51,7 @@ public class SymbolObjectTest extends BaseJavetTest {
     @Test
     public void testSymbolObjectEquality() {
         // Test equality comparisons
-        assertBooleanWithJavet(
-                "var symObj1 = Object(Symbol('test')); var symObj2 = symObj1; symObj1 === symObj2;",
+        assertBooleanWithJavet("var symObj1 = Object(Symbol('test')); var symObj2 = symObj1; symObj1 === symObj2;",
                 "var symObj1 = Object(Symbol('test')); var symObj2 = Object(Symbol('test')); symObj1 === symObj2;",
                 "var symObj = Object(Symbol('test')); var sym = symObj.valueOf(); symObj === sym;");
     }
@@ -67,8 +66,7 @@ public class SymbolObjectTest extends BaseJavetTest {
 
     @Test
     public void testSymbolObjectInstanceof() {
-        assertBooleanWithJavet(
-                "Object(Symbol('test')) instanceof Symbol;",
+        assertBooleanWithJavet("Object(Symbol('test')) instanceof Symbol;",
                 "Object(Symbol('test')) instanceof Object;");
     }
 
@@ -82,9 +80,7 @@ public class SymbolObjectTest extends BaseJavetTest {
 
     @Test
     public void testSymbolObjectToString() {
-        assertStringWithJavet(
-                "Object(Symbol('foo')).toString();",
-                "Object(Symbol()).toString();",
+        assertStringWithJavet("Object(Symbol('foo')).toString();", "Object(Symbol()).toString();",
                 "Object(Symbol('')).toString();");
     }
 
@@ -92,12 +88,9 @@ public class SymbolObjectTest extends BaseJavetTest {
     public void testSymbolObjectTypeof() {
         assertStringWithJavet(
                 // typeof on Symbol object should return "object", not "symbol"
-                "typeof Object(Symbol('test'));",
-                "typeof Object(Symbol('foo'));",
-                "typeof Object(Symbol());",
+                "typeof Object(Symbol('test'));", "typeof Object(Symbol('foo'));", "typeof Object(Symbol());",
                 // Compare with primitive symbol
-                "typeof Symbol('test');",
-                "var symObj = Object(Symbol('key')); typeof symObj;",
+                "typeof Symbol('test');", "var symObj = Object(Symbol('key')); typeof symObj;",
                 "var sym = Symbol('key'); typeof sym;");
     }
 
@@ -143,11 +136,7 @@ public class SymbolObjectTest extends BaseJavetTest {
 
     @Test
     public void testSymbolRegistryArgumentCoercion() {
-        assertStringWithJavet(
-                "Symbol.keyFor(Symbol.for());",
-                "Symbol.keyFor(Symbol.for(undefined));");
-        assertBooleanWithJavet(
-                "Symbol.for() === Symbol.for(undefined);",
-                "Symbol.for() === Symbol.for('undefined');");
+        assertStringWithJavet("Symbol.keyFor(Symbol.for());", "Symbol.keyFor(Symbol.for(undefined));");
+        assertBooleanWithJavet("Symbol.for() === Symbol.for(undefined);", "Symbol.for() === Symbol.for('undefined');");
     }
 }

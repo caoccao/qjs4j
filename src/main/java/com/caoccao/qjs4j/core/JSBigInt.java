@@ -19,8 +19,7 @@ package com.caoccao.qjs4j.core;
 import java.math.BigInteger;
 
 /**
- * Represents a JavaScript BigInt value.
- * Uses Java's BigInteger for implementation.
+ * Represents a JavaScript BigInt value. Uses Java's BigInteger for implementation.
  */
 public record JSBigInt(BigInteger value) implements JSValue {
 

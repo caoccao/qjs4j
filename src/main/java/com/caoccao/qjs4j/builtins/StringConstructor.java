@@ -19,17 +19,13 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 /**
- * Implementation of String constructor.
- * Based on ES2020 String specification.
+ * Implementation of String constructor. Based on ES2020 String specification.
  */
 public final class StringConstructor {
 
     /**
-     * String(value)
-     * ES2020 21.1.1.1
-     * Converts the argument to a string primitive value.
-     * When called as a function (not with new), returns a string primitive.
-     * When called with new, creates a String object wrapper.
+     * String(value) ES2020 21.1.1.1 Converts the argument to a string primitive value. When called as a function (not
+     * with new), returns a string primitive. When called with new, creates a String object wrapper.
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         // ES2020: If no argument is passed, return empty string
@@ -59,9 +55,7 @@ public final class StringConstructor {
     }
 
     /**
-     * String.fromCharCode(...codeUnits)
-     * ES2020 21.1.2.1
-     * Returns a string created from a sequence of UTF-16 code units.
+     * String.fromCharCode(...codeUnits) ES2020 21.1.2.1 Returns a string created from a sequence of UTF-16 code units.
      */
     public static JSValue fromCharCode(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -79,9 +73,8 @@ public final class StringConstructor {
     }
 
     /**
-     * String.fromCodePoint(...codePoints)
-     * ES2020 21.1.2.2
-     * Returns a string created from a sequence of Unicode code points.
+     * String.fromCodePoint(...codePoints) ES2020 21.1.2.2 Returns a string created from a sequence of Unicode code
+     * points.
      */
     public static JSValue fromCodePoint(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -117,10 +110,8 @@ public final class StringConstructor {
     }
 
     /**
-     * String.raw(template, ...substitutions)
-     * ES2020 21.1.2.4
-     * Returns a string created from a raw template string.
-     * This is used as a tag function for template literals.
+     * String.raw(template, ...substitutions) ES2020 21.1.2.4 Returns a string created from a raw template string. This
+     * is used as a tag function for template literals.
      */
     public static JSValue raw(JSContext context, JSValue thisArg, JSValue[] args) {
         // If called without arguments or with undefined/null, throw TypeError

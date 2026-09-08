@@ -58,7 +58,8 @@ public final class TemporalPlainDateConstructor {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        int isoMonth = TemporalUtils.toIntegerThrowOnInfinity(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
+        int isoMonth = TemporalUtils.toIntegerThrowOnInfinity(context,
+                args.length > 1 ? args[1] : JSUndefined.INSTANCE);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -138,8 +139,8 @@ public final class TemporalPlainDateConstructor {
             if (monthCodeValue instanceof JSString monthCodeString) {
                 monthCodeText = monthCodeString.value();
             } else if (monthCodeValue instanceof JSObject) {
-                JSValue primitiveMonthCode =
-                        JSTypeConversions.toPrimitive(context, monthCodeValue, JSTypeConversions.PreferredType.STRING);
+                JSValue primitiveMonthCode = JSTypeConversions.toPrimitive(context, monthCodeValue,
+                        JSTypeConversions.PreferredType.STRING);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -152,9 +153,7 @@ public final class TemporalPlainDateConstructor {
                 context.throwTypeError("Temporal error: Month code must be string.");
                 return JSUndefined.INSTANCE;
             }
-            parsedMonthCode = IsoMonth.parseByMonthCode(
-                    context,
-                    monthCodeText,
+            parsedMonthCode = IsoMonth.parseByMonthCode(context, monthCodeText,
                     "Temporal error: Month code out of range.");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -272,14 +271,8 @@ public final class TemporalPlainDateConstructor {
             }
         }
         Integer monthFromProperty = hasMonth ? resolvedMonth : null;
-        IsoDate convertedIsoDate = IsoDate.calendarDateToIsoDate(
-                context,
-                calendarId,
-                year,
-                monthFromProperty,
-                monthCodeText,
-                dayOfMonth,
-                overflow);
+        IsoDate convertedIsoDate = IsoDate.calendarDateToIsoDate(context, calendarId, year, monthFromProperty,
+                monthCodeText, dayOfMonth, overflow);
         if (context.hasPendingException() || convertedIsoDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -344,15 +337,15 @@ public final class TemporalPlainDateConstructor {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            return JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId());
+            return JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(),
+                    plainDateTime.getCalendarId());
         }
         if (item instanceof JSTemporalZonedDateTime zonedDateTime) {
             TemporalUtils.getOverflowOption(context, options);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            IsoDateTime localDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
-                    zonedDateTime.getEpochNanoseconds(),
+            IsoDateTime localDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(zonedDateTime.getEpochNanoseconds(),
                     zonedDateTime.getTimeZoneId());
             return JSTemporalPlainDate.create(context, localDateTime.date(), zonedDateTime.getCalendarId());
         }

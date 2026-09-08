@@ -23,11 +23,10 @@ import java.util.List;
 /**
  * Base sealed class for all statement nodes.
  */
-public abstract sealed class Statement extends ASTNode permits
-        ExpressionStatement, BlockStatement, IfStatement, WhileStatement, DoWhileStatement,
-        ForStatement, ForOfStatement, ForInStatement, ReturnStatement, BreakStatement, ContinueStatement,
-        ThrowStatement, TryStatement, SwitchStatement, WithStatement, DebuggerStatement, VariableDeclaration,
-        LabeledStatement, Declaration {
+public abstract sealed class Statement extends ASTNode permits ExpressionStatement, BlockStatement, IfStatement,
+        WhileStatement, DoWhileStatement, ForStatement, ForOfStatement, ForInStatement, ReturnStatement, BreakStatement,
+        ContinueStatement, ThrowStatement, TryStatement, SwitchStatement, WithStatement, DebuggerStatement,
+        VariableDeclaration, LabeledStatement, Declaration {
 
     protected List<VariableDeclarator> varDeclarators;
 
@@ -38,8 +37,7 @@ public abstract sealed class Statement extends ASTNode permits
 
     public boolean containsVarArguments() {
         for (VariableDeclarator declarator : getVarDeclarators()) {
-            if (declarator != null
-                    && declarator.getId() instanceof Identifier identifier
+            if (declarator != null && declarator.getId() instanceof Identifier identifier
                     && JSKeyword.ARGUMENTS.equals(identifier.getName())) {
                 return true;
             }
@@ -55,10 +53,9 @@ public abstract sealed class Statement extends ASTNode permits
     }
 
     /**
-     * Unwrap nested labeled statements to find a FunctionDeclaration.
-     * Per Annex B.3.2, labeled function declarations in sloppy mode are
-     * hoisted like regular function declarations.
-     * Returns null if the statement is not a (possibly labeled) function declaration.
+     * Unwrap nested labeled statements to find a FunctionDeclaration. Per Annex B.3.2, labeled function declarations in
+     * sloppy mode are hoisted like regular function declarations. Returns null if the statement is not a (possibly
+     * labeled) function declaration.
      */
     public FunctionDeclaration unwrapLabeledFunctionDeclaration() {
         if (this instanceof FunctionDeclaration functionDeclaration) {

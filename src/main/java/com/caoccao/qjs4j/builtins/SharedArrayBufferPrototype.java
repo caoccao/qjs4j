@@ -23,15 +23,12 @@ import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 import java.nio.ByteBuffer;
 
 /**
- * SharedArrayBuffer.prototype methods implementation.
- * Based on ES2024 SharedArrayBuffer specification.
+ * SharedArrayBuffer.prototype methods implementation. Based on ES2024 SharedArrayBuffer specification.
  */
 public final class SharedArrayBufferPrototype {
 
     /**
-     * get SharedArrayBuffer.prototype.byteLength
-     * ES2017 24.2.4.1
-     * Returns the byte length of the SharedArrayBuffer.
+     * get SharedArrayBuffer.prototype.byteLength ES2017 24.2.4.1 Returns the byte length of the SharedArrayBuffer.
      */
     public static JSValue getByteLength(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSharedArrayBuffer buffer)) {
@@ -42,8 +39,7 @@ public final class SharedArrayBufferPrototype {
     }
 
     /**
-     * get SharedArrayBuffer.prototype.growable
-     * Returns whether this SharedArrayBuffer is growable.
+     * get SharedArrayBuffer.prototype.growable Returns whether this SharedArrayBuffer is growable.
      */
     public static JSValue getGrowable(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSharedArrayBuffer buffer)) {
@@ -54,8 +50,7 @@ public final class SharedArrayBufferPrototype {
     }
 
     /**
-     * get SharedArrayBuffer.prototype.maxByteLength
-     * Returns the maximum byte length.
+     * get SharedArrayBuffer.prototype.maxByteLength Returns the maximum byte length.
      */
     public static JSValue getMaxByteLength(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSharedArrayBuffer buffer)) {
@@ -66,17 +61,14 @@ public final class SharedArrayBufferPrototype {
     }
 
     /**
-     * get SharedArrayBuffer.prototype[@@toStringTag]
-     * ES2017 24.2.4.2
-     * Returns "SharedArrayBuffer".
+     * get SharedArrayBuffer.prototype[@@toStringTag] ES2017 24.2.4.2 Returns "SharedArrayBuffer".
      */
     public static JSValue getToStringTag(JSContext context, JSValue thisArg, JSValue[] args) {
         return new JSString(JSSharedArrayBuffer.NAME);
     }
 
     /**
-     * SharedArrayBuffer.prototype.grow(newByteLength)
-     * Grows a growable SharedArrayBuffer to the specified new length.
+     * SharedArrayBuffer.prototype.grow(newByteLength) Grows a growable SharedArrayBuffer to the specified new length.
      */
     public static JSValue grow(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSharedArrayBuffer buffer)) {
@@ -106,9 +98,8 @@ public final class SharedArrayBufferPrototype {
     }
 
     /**
-     * SharedArrayBuffer.prototype.slice(start, end)
-     * ES2024 25.2.4.3
-     * Returns a new SharedArrayBuffer with a copy of bytes from start to end.
+     * SharedArrayBuffer.prototype.slice(start, end) ES2024 25.2.4.3 Returns a new SharedArrayBuffer with a copy of
+     * bytes from start to end.
      */
     public static JSValue slice(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSharedArrayBuffer buffer)) {
@@ -209,10 +200,8 @@ public final class SharedArrayBufferPrototype {
     }
 
     /**
-     * SpeciesConstructor(O, defaultConstructor) per ES2024 7.3.20.
-     * Returns JSUndefined.INSTANCE to use the default constructor,
-     * or the species constructor function.
-     * Sets pending exception on error.
+     * SpeciesConstructor(O, defaultConstructor) per ES2024 7.3.20. Returns JSUndefined.INSTANCE to use the default
+     * constructor, or the species constructor function. Sets pending exception on error.
      */
     private static JSValue speciesConstructor(JSContext context, JSObject obj) {
         JSValue ctor = obj.get(PropertyKey.CONSTRUCTOR);

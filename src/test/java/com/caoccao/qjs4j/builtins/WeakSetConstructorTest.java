@@ -40,38 +40,35 @@ public class WeakSetConstructorTest extends BaseJavetTest {
 
     @Test
     void testWeakSetConstructorAbruptCompletions() {
-        assertErrorWithJavet(
-                """
-                        new WeakSet({
-                          get [Symbol.iterator]() {
-                            throw new Error('iterator getter boom');
+        assertErrorWithJavet("""
+                new WeakSet({
+                  get [Symbol.iterator]() {
+                    throw new Error('iterator getter boom');
+                  }
+                })""", """
+                (() => {
+                  Object.defineProperty(WeakSet.prototype, 'add', {
+                    configurable: true,
+                    get() {
+                      throw new Error('adder getter boom');
+                    }
+                  });
+                  return new WeakSet([{}]);
+                })()""", """
+                new WeakSet({
+                  [Symbol.iterator]() {
+                    return {
+                      next() {
+                        return {
+                          done: false,
+                          get value() {
+                            throw new Error('value getter boom');
                           }
-                        })""",
-                """
-                        (() => {
-                          Object.defineProperty(WeakSet.prototype, 'add', {
-                            configurable: true,
-                            get() {
-                              throw new Error('adder getter boom');
-                            }
-                          });
-                          return new WeakSet([{}]);
-                        })()""",
-                """
-                        new WeakSet({
-                          [Symbol.iterator]() {
-                            return {
-                              next() {
-                                return {
-                                  done: false,
-                                  get value() {
-                                    throw new Error('value getter boom');
-                                  }
-                                };
-                              }
-                            };
-                          }
-                        })""");
+                        };
+                      }
+                    };
+                  }
+                })""");
     }
 
     @Test
@@ -83,11 +80,9 @@ public class WeakSetConstructorTest extends BaseJavetTest {
                 var ws = new WeakSet(source);
                 ws.has(v1) && ws.has(v2)""");
 
-        assertThatThrownBy(() -> context.eval("new WeakSet({})"))
-                .isInstanceOf(JSException.class)
+        assertThatThrownBy(() -> context.eval("new WeakSet({})")).isInstanceOf(JSException.class)
                 .hasMessageContaining("TypeError");
-        assertThatThrownBy(() -> context.eval("new WeakSet([1])"))
-                .isInstanceOf(JSException.class)
+        assertThatThrownBy(() -> context.eval("new WeakSet([1])")).isInstanceOf(JSException.class)
                 .hasMessageContaining("TypeError");
     }
 

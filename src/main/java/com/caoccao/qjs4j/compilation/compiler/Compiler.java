@@ -40,17 +40,17 @@ import java.util.Set;
  * Pipeline: JavaScript Source → Lexer → Tokens → Parser → AST → BytecodeCompiler → Bytecode
  */
 public final class Compiler {
-    private final String fileName;
-    private final String source;
     private boolean classFieldEval;
     private JSContext context;
     private boolean evalAllowNewTarget;
     private boolean evalAllowSuperCall;
     private boolean evalAllowSuperProperty;
     private Map<String, JSSymbol> evalPrivateSymbols;
+    private final String fileName;
     private boolean inheritedStrictMode;
     private boolean isEval; // true if compiling eval code
     private boolean predeclareProgramLexicalsAsLocals;
+    private final String source;
 
     public Compiler(String source, String fileName) {
         if (source == null) {
@@ -70,9 +70,11 @@ public final class Compiler {
     /**
      * Compile JavaScript source code into executable bytecode.
      *
-     * @param isModule true to compile as ES6 module (always strict), false for script
+     * @param isModule
+     *            true to compile as ES6 module (always strict), false for script
      * @return A CompileResult containing the bytecode function and parsed AST
-     * @throws JSCompilerException if compilation fails
+     * @throws JSCompilerException
+     *             if compilation fails
      */
     public CompileResult compile(boolean isModule) {
         Program ast = null;
@@ -95,19 +97,8 @@ public final class Compiler {
             Bytecode bytecode = compiler.compile(ast);
             String name = fileName != null ? fileName : (isModule ? "<module>" : "<script>");
             boolean strict = isModule || ast.isStrict();
-            JSBytecodeFunction func = new JSBytecodeFunction(
-                    context,
-                    bytecode,
-                    name,
-                    0,
-                    JSValue.NO_ARGS,
-                    null,
-                    true,
-                    false,
-                    false,
-                    false,
-                    strict,
-                    null);
+            JSBytecodeFunction func = new JSBytecodeFunction(context, bytecode, name, 0, JSValue.NO_ARGS, null, true,
+                    false, false, false, strict, null);
             return new CompileResult(func, ast);
         } catch (JSCompilerException | JSErrorException e) {
             throw e;
@@ -117,23 +108,19 @@ public final class Compiler {
     }
 
     /**
-     * Parse JavaScript source code into an AST (without bytecode compilation).
-     * Useful for static analysis, code transformation, etc.
+     * Parse JavaScript source code into an AST (without bytecode compilation). Useful for static analysis, code
+     * transformation, etc.
      *
-     * @param isModule the is module
+     * @param isModule
+     *            the is module
      * @return The parsed AST Program node
-     * @throws JSCompilerException if parsing fails
+     * @throws JSCompilerException
+     *             if parsing fails
      */
     public Program parse(boolean isModule) {
         Lexer lexer = new Lexer(source);
-        Parser parser = new Parser(
-                lexer,
-                isModule,
-                isEval,
-                inheritedStrictMode,
-                evalAllowSuperProperty,
-                evalAllowNewTarget,
-                evalAllowSuperCall,
+        Parser parser = new Parser(lexer, isModule, isEval, inheritedStrictMode, evalAllowSuperProperty,
+                evalAllowNewTarget, evalAllowSuperCall,
                 evalPrivateSymbols.isEmpty() ? Set.of() : evalPrivateSymbols.keySet());
         if (classFieldEval) {
             parser.setClassFieldEval(true);
@@ -152,10 +139,11 @@ public final class Compiler {
     }
 
     /**
-     * Set whether this is compiling eval code.
-     * Per QuickJS, return statements at top level of eval code throw SyntaxError.
+     * Set whether this is compiling eval code. Per QuickJS, return statements at top level of eval code throw
+     * SyntaxError.
      *
-     * @param isEval true if compiling eval code
+     * @param isEval
+     *            true if compiling eval code
      * @return this compiler for chaining
      */
     public Compiler setEval(boolean isEval) {
@@ -193,8 +181,7 @@ public final class Compiler {
             if (statement instanceof VariableDeclaration variableDeclaration) {
                 VariableKind kind = variableDeclaration.getKind();
                 if (kind == VariableKind.USING || kind == VariableKind.AWAIT_USING) {
-                    throw new JSSyntaxErrorException(
-                            "using declarations are not allowed at the top level of scripts",
+                    throw new JSSyntaxErrorException("using declarations are not allowed at the top level of scripts",
                             variableDeclaration.getLocation());
                 }
             }

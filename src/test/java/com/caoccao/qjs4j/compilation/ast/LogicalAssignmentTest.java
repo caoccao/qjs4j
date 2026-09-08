@@ -20,16 +20,15 @@ import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit tests for logical assignment operators (&&=, ||=, ??=).
- * Based on ES2021 logical assignment operators specification.
+ * Unit tests for logical assignment operators (&&=, ||=, ??=). Based on ES2021 logical assignment operators
+ * specification.
  */
 public class LogicalAssignmentTest extends BaseJavetTest {
 
     @Test
     public void testLogicalAndAssignment_Identifier() {
         // Normal case: don't assign when falsy
-        assertBooleanWithJavet(
-                "var a = false; a &&= true; a");
+        assertBooleanWithJavet("var a = false; a &&= true; a");
 
         assertIntegerWithJavet(
                 // Normal case: don't assign when 0
@@ -42,8 +41,7 @@ public class LogicalAssignmentTest extends BaseJavetTest {
                 "var a = 5; a &&= 10; a");
 
         // Normal case: assign when true
-        assertStringWithJavet(
-                "var a = true; a &&= 'yes'; a");
+        assertStringWithJavet("var a = true; a &&= 'yes'; a");
     }
 
     @Test
@@ -57,8 +55,7 @@ public class LogicalAssignmentTest extends BaseJavetTest {
                 "var obj = {y: 5}; var key = 'y'; obj[key] &&= 99; obj.y");
 
         // Normal case: computed property with falsy value
-        assertBooleanWithJavet(
-                "var obj = {y: false}; var key = 'y'; obj[key] &&= true; obj.y");
+        assertBooleanWithJavet("var obj = {y: false}; var key = 'y'; obj[key] &&= true; obj.y");
     }
 
     @Test
@@ -76,8 +73,7 @@ public class LogicalAssignmentTest extends BaseJavetTest {
                 "var a = 5; a ||= 10; a");
 
         // Normal case: assign when empty string
-        assertStringWithJavet(
-                "var a = ''; a ||= 'default'; a");
+        assertStringWithJavet("var a = ''; a ||= 'default'; a");
     }
 
     @Test
@@ -106,12 +102,10 @@ public class LogicalAssignmentTest extends BaseJavetTest {
                 "var a = 5; a ??= 10; a");
 
         // Normal case: don't assign when false
-        assertBooleanWithJavet(
-                "var a = false; a ??= true; a");
+        assertBooleanWithJavet("var a = false; a ??= true; a");
 
         // Normal case: don't assign when empty string
-        assertStringWithJavet(
-                "var a = ''; a ??= 'default'; a");
+        assertStringWithJavet("var a = ''; a ??= 'default'; a");
     }
 
     @Test
@@ -135,14 +129,11 @@ public class LogicalAssignmentTest extends BaseJavetTest {
     public void testReturnValue() {
         assertIntegerWithJavet(
                 // ??= should return the final value
-                "var a = null; a ??= 42",
-                "var a = 10; a ??= 42",
+                "var a = null; a ??= 42", "var a = 10; a ??= 42",
                 // &&= should return the final value
-                "var a = 5; a &&= 10",
-                "var a = 0; a &&= 10",
+                "var a = 5; a &&= 10", "var a = 0; a &&= 10",
                 // ||= should return the final value
-                "var a = 0; a ||= 10",
-                "var a = 5; a ||= 10");
+                "var a = 0; a ||= 10", "var a = 5; a ||= 10");
     }
 
     @Test

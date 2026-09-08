@@ -17,18 +17,23 @@
 package com.caoccao.qjs4j.core.temporal;
 
 /**
- * Temporal timeZoneName display option enum (auto / never / critical) used by
- * ZonedDateTime {@code toString()} to control time-zone annotation rendering.
+ * Temporal timeZoneName display option enum (auto / never / critical) used by ZonedDateTime {@code toString()} to
+ * control time-zone annotation rendering.
  */
 public enum TemporalDisplayTimeZone {
-    AUTO("auto"),
-    NEVER("never"),
-    CRITICAL("critical");
+    AUTO("auto"), CRITICAL("critical"), NEVER("never");
 
     private final String jsName;
 
     TemporalDisplayTimeZone(String jsName) {
         this.jsName = jsName;
+    }
+
+    /**
+     * Returns the JS-canonical name (e.g. "auto").
+     */
+    public String jsName() {
+        return jsName;
     }
 
     /**
@@ -44,12 +49,5 @@ public enum TemporalDisplayTimeZone {
             case "critical" -> CRITICAL;
             default -> null;
         };
-    }
-
-    /**
-     * Returns the JS-canonical name (e.g. "auto").
-     */
-    public String jsName() {
-        return jsName;
     }
 }

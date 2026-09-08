@@ -19,8 +19,7 @@ package com.caoccao.qjs4j.core;
 import java.util.Locale;
 
 /**
- * Intl.Locale instance object.
- * Getters derive from the canonical {@code tag} string per ECMA-402 spec.
+ * Intl.Locale instance object. Getters derive from the canonical {@code tag} string per ECMA-402 spec.
  */
 public final class JSIntlLocale extends JSObject {
     public static final String NAME = "Intl.Locale";
@@ -40,14 +39,14 @@ public final class JSIntlLocale extends JSObject {
     }
 
     public JSIntlLocale(JSContext context, Locale locale, String tag, String calendar, String caseFirst,
-                        String collation, String hourCycle, String numberingSystem,
-                        boolean numeric, boolean numericSet) {
-        this(context, locale, tag, calendar, caseFirst, collation, null, hourCycle, numberingSystem, numeric, numericSet);
+            String collation, String hourCycle, String numberingSystem, boolean numeric, boolean numericSet) {
+        this(context, locale, tag, calendar, caseFirst, collation, null, hourCycle, numberingSystem, numeric,
+                numericSet);
     }
 
     public JSIntlLocale(JSContext context, Locale locale, String tag, String calendar, String caseFirst,
-                        String collation, String firstDayOfWeek, String hourCycle,
-                        String numberingSystem, boolean numeric, boolean numericSet) {
+            String collation, String firstDayOfWeek, String hourCycle, String numberingSystem, boolean numeric,
+            boolean numericSet) {
         super(context);
         this.locale = locale;
         this.tag = tag;
@@ -62,8 +61,8 @@ public final class JSIntlLocale extends JSObject {
     }
 
     /**
-     * Per spec: GetLocaleBaseName returns the longest prefix of the locale tag
-     * matched by unicode_language_id (everything before the first singleton extension).
+     * Per spec: GetLocaleBaseName returns the longest prefix of the locale tag matched by unicode_language_id
+     * (everything before the first singleton extension).
      */
     public String getBaseName() {
         String[] parts = tag.split("-");
@@ -121,16 +120,16 @@ public final class JSIntlLocale extends JSObject {
     }
 
     /**
-     * Per spec: GetLocaleRegion returns the region subtag from baseName, or empty string.
-     * Region is 2 alpha or 3 digit, appearing after language and optional script.
+     * Per spec: GetLocaleRegion returns the region subtag from baseName, or empty string. Region is 2 alpha or 3 digit,
+     * appearing after language and optional script.
      */
     public String getRegion() {
         String baseName = getBaseName();
         String[] parts = baseName.split("-");
         for (int i = 1; i < parts.length; i++) {
             String p = parts[i];
-            if ((p.length() == 2 && p.chars().allMatch(Character::isLetter)) ||
-                    (p.length() == 3 && p.chars().allMatch(Character::isDigit))) {
+            if ((p.length() == 2 && p.chars().allMatch(Character::isLetter))
+                    || (p.length() == 3 && p.chars().allMatch(Character::isDigit))) {
                 return p;
             }
         }
@@ -138,8 +137,8 @@ public final class JSIntlLocale extends JSObject {
     }
 
     /**
-     * Per spec: GetLocaleScript returns the script subtag from baseName, or empty string.
-     * Script is exactly 4 alpha letters.
+     * Per spec: GetLocaleScript returns the script subtag from baseName, or empty string. Script is exactly 4 alpha
+     * letters.
      */
     public String getScript() {
         String baseName = getBaseName();
@@ -155,8 +154,8 @@ public final class JSIntlLocale extends JSObject {
     }
 
     /**
-     * Per spec: GetLocaleVariants returns the longest suffix of baseName starting
-     * with a variant subtag (5-8 alphanum or digit+3alphanum), or empty string.
+     * Per spec: GetLocaleVariants returns the longest suffix of baseName starting with a variant subtag (5-8 alphanum
+     * or digit+3alphanum), or empty string.
      */
     public String getVariant() {
         String baseName = getBaseName();
@@ -164,8 +163,8 @@ public final class JSIntlLocale extends JSObject {
         int variantStart = -1;
         for (int i = parts.length - 1; i >= 1; i--) {
             String p = parts[i];
-            boolean isVariant = (p.length() >= 5 && p.length() <= 8) ||
-                    (p.length() == 4 && Character.isDigit(p.charAt(0)));
+            boolean isVariant = (p.length() >= 5 && p.length() <= 8)
+                    || (p.length() == 4 && Character.isDigit(p.charAt(0)));
             if (isVariant) {
                 variantStart = i;
             } else {

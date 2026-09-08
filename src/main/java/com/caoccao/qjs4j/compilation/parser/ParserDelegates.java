@@ -17,8 +17,8 @@
 package com.caoccao.qjs4j.compilation.parser;
 
 /**
- * Container for all parser delegate instances.
- * Provides cross-delegate access so each delegate can call methods on other delegates.
+ * Container for all parser delegate instances. Provides cross-delegate access so each delegate can call methods on
+ * other delegates.
  */
 final class ParserDelegates {
     final ExpressionParser expressions;

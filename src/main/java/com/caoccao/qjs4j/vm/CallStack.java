@@ -25,9 +25,8 @@ import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import java.util.Arrays;
 
 /**
- * Represents the value stack for the VM.
- * Following QuickJS stack operations: sp[-1], sp[-2], etc.
- * Can store both JSValue and internal markers like CatchOffset.
+ * Represents the value stack for the VM. Following QuickJS stack operations: sp[-1], sp[-2], etc. Can store both
+ * JSValue and internal markers like CatchOffset.
  */
 public final class CallStack {
     private static final int INITIAL_STACK_SIZE = 8192;
@@ -35,14 +34,13 @@ public final class CallStack {
      * Maximum number of operand slots across all active frames.
      * <p>
      * Exhausting it is what a script sees as call-stack exhaustion, so it is reported as
-     * {@code RangeError: Maximum call stack size exceeded} — the same error V8 raises and the same
-     * error the VM's own frame-depth limit raises. It used to surface as an untyped
-     * {@code "Stack overflow"}, so the same condition reached scripts under two different names
-     * depending on which limit tripped first.
+     * {@code RangeError: Maximum call stack size exceeded} — the same error V8 raises and the same error the VM's own
+     * frame-depth limit raises. It used to surface as an untyped {@code "Stack overflow"}, so the same condition
+     * reached scripts under two different names depending on which limit tripped first.
      */
     private static final int MAX_STACK_SIZE = 65536;
-    JSStackValue[] stack;  // package-private for direct access from VirtualMachine
-    int stackTop;          // package-private for direct access from VirtualMachine
+    JSStackValue[] stack; // package-private for direct access from VirtualMachine
+    int stackTop; // package-private for direct access from VirtualMachine
 
     public CallStack() {
         this.stack = new JSStackValue[INITIAL_STACK_SIZE];
@@ -55,34 +53,36 @@ public final class CallStack {
      * A bare cast turns a {@link JSCatchOffset} left in the slot by miscompiled bytecode into a
      * {@link ClassCastException} with no context.
      *
-     * @param stackValue the raw slot contents
-     * @param operation  the operation being performed, used in the error message
+     * @param stackValue
+     *            the raw slot contents
+     * @param operation
+     *            the operation being performed, used in the error message
      * @return the slot contents as a JSValue
      */
     private JSValue asJSValue(JSStackValue stackValue, String operation) {
         if (stackValue instanceof JSValue value) {
             return value;
         }
-        throw new JSVirtualMachineException(
-                "Internal engine error: " + operation + " found "
-                        + (stackValue == null ? "an empty slot" : stackValue.getClass().getSimpleName())
-                        + " where a value was expected, at stackTop=" + stackTop);
+        throw new JSVirtualMachineException("Internal engine error: " + operation + " found "
+                + (stackValue == null ? "an empty slot" : stackValue.getClass().getSimpleName())
+                + " where a value was expected, at stackTop=" + stackTop);
     }
 
     /**
      * Drop count values from the stack (QuickJS: sp -= count).
      * <p>
-     * The count is bounds-checked: an unchecked {@code stackTop -= count} could silently drive the
-     * stack top negative, after which every later index computation is wrong with no diagnostic.
-     * The vacated slots are cleared so the values they held become collectable.
+     * The count is bounds-checked: an unchecked {@code stackTop -= count} could silently drive the stack top negative,
+     * after which every later index computation is wrong with no diagnostic. The vacated slots are cleared so the
+     * values they held become collectable.
      *
-     * @param count how many values to drop
-     * @throws JSVirtualMachineException when the count is negative or exceeds the stack depth
+     * @param count
+     *            how many values to drop
+     * @throws JSVirtualMachineException
+     *             when the count is negative or exceeds the stack depth
      */
     public void drop(int count) {
         if (count < 0 || count > stackTop) {
-            throw new JSVirtualMachineException(
-                    "Stack underflow in drop: stackTop=" + stackTop + ", count=" + count);
+            throw new JSVirtualMachineException("Stack underflow in drop: stackTop=" + stackTop + ", count=" + count);
         }
         Arrays.fill(stack, stackTop - count, stackTop, null);
         stackTop -= count;
@@ -110,21 +110,18 @@ public final class CallStack {
     }
 
     /**
-     * Peek at a value on the stack (QuickJS: sp[-1-offset]).
-     * offset=0 means sp[-1], offset=1 means sp[-2], etc.
+     * Peek at a value on the stack (QuickJS: sp[-1-offset]). offset=0 means sp[-1], offset=1 means sp[-2], etc.
      */
     public JSValue peek(int offset) {
         int index = stackTop - 1 - offset;
         if (index < 0) {
-            throw new JSVirtualMachineException(
-                    "Stack underflow in peek: stackTop=" + stackTop + ", offset=" + offset);
+            throw new JSVirtualMachineException("Stack underflow in peek: stackTop=" + stackTop + ", offset=" + offset);
         }
         return asJSValue(stack[index], "peek");
     }
 
     /**
-     * Pop a value from the stack (QuickJS: *--sp).
-     * Returns JSValue for normal stack operations.
+     * Pop a value from the stack (QuickJS: *--sp). Returns JSValue for normal stack operations.
      */
     public JSValue pop() {
         if (stackTop <= 0) {
@@ -134,13 +131,11 @@ public final class CallStack {
     }
 
     /**
-     * Pop any stack value, including internal markers.
-     * Used for exception unwinding to find CatchOffset markers.
+     * Pop any stack value, including internal markers. Used for exception unwinding to find CatchOffset markers.
      */
     public JSStackValue popStackValue() {
         if (stackTop <= 0) {
-            throw new JSVirtualMachineException(
-                    "Stack underflow in popStackValue: stackTop=" + stackTop);
+            throw new JSVirtualMachineException("Stack underflow in popStackValue: stackTop=" + stackTop);
         }
         return stack[--stackTop];
     }
@@ -166,33 +161,31 @@ public final class CallStack {
     }
 
     /**
-     * Set a value at a stack position (QuickJS: sp[-1-offset] = value).
-     * offset=0 means sp[-1], offset=1 means sp[-2], etc.
+     * Set a value at a stack position (QuickJS: sp[-1-offset] = value). offset=0 means sp[-1], offset=1 means sp[-2],
+     * etc.
      */
     public void set(int offset, JSValue value) {
         int index = stackTop - 1 - offset;
         if (index < 0) {
-            throw new JSVirtualMachineException(
-                    "Stack underflow in set: stackTop=" + stackTop + ", offset=" + offset);
+            throw new JSVirtualMachineException("Stack underflow in set: stackTop=" + stackTop + ", offset=" + offset);
         }
         stack[index] = value;
     }
 
     /**
-     * Set the stack top position.
-     * Used to restore stack state after function calls.
+     * Set the stack top position. Used to restore stack state after function calls.
      * <p>
-     * When the stack shrinks, the vacated slots are cleared. Leaving them populated pinned whatever
-     * object graph the dead values referenced for as long as the slot was not overwritten — up to
-     * {@code MAX_STACK_SIZE} entries' worth. This is the once-per-return sweep, so the cost is one
-     * short {@code Arrays.fill} per call rather than a write barrier on every {@code pop()}.
+     * When the stack shrinks, the vacated slots are cleared. Leaving them populated pinned whatever object graph the
+     * dead values referenced for as long as the slot was not overwritten — up to {@code MAX_STACK_SIZE} entries' worth.
+     * This is the once-per-return sweep, so the cost is one short {@code Arrays.fill} per call rather than a write
+     * barrier on every {@code pop()}.
      *
-     * @param top the new stack top
+     * @param top
+     *            the new stack top
      */
     public void setStackTop(int top) {
         if (top < 0 || top > stack.length) {
-            throw new JSVirtualMachineException(
-                    "Invalid stack top: " + top + " (capacity " + stack.length + ")");
+            throw new JSVirtualMachineException("Invalid stack top: " + top + " (capacity " + stack.length + ")");
         }
         if (top < stackTop) {
             Arrays.fill(stack, top, stackTop, null);

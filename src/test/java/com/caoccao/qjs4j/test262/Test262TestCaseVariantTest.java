@@ -25,8 +25,8 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Test262 defines how many interpretations a file has. Running one per file — which is what the
- * runner did — meant no ordinary test was ever executed in strict mode.
+ * Test262 defines how many interpretations a file has. Running one per file — which is what the runner did — meant no
+ * ordinary test was ever executed in strict mode.
  */
 public class Test262TestCaseVariantTest {
     private Test262TestCase testCaseWithFlags(String... flags) {
@@ -38,8 +38,7 @@ public class Test262TestCaseVariantTest {
 
     @Test
     void testDefaultFileRunsNonStrictAndStrict() {
-        assertThat(variantsOf())
-                .containsExactly(Test262TestCase.Variant.NON_STRICT, Test262TestCase.Variant.STRICT);
+        assertThat(variantsOf()).containsExactly(Test262TestCase.Variant.NON_STRICT, Test262TestCase.Variant.STRICT);
     }
 
     @Test
@@ -100,8 +99,6 @@ public class Test262TestCaseVariantTest {
     }
 
     private List<Test262TestCase.Variant> variantsOf(String... flags) {
-        return testCaseWithFlags(flags).expandVariants().stream()
-                .map(Test262TestCase::getVariant)
-                .toList();
+        return testCaseWithFlags(flags).expandVariants().stream().map(Test262TestCase::getVariant).toList();
     }
 }

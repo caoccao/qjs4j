@@ -27,12 +27,7 @@ public final class ObjectExpressionProperty extends ASTNode {
     private final boolean shorthand;
     private final Expression value;
 
-    public ObjectExpressionProperty(
-            Expression key,
-            Expression value,
-            String kind,
-            boolean computed,
-            boolean shorthand,
+    public ObjectExpressionProperty(Expression key, Expression value, String kind, boolean computed, boolean shorthand,
             boolean method) {
         super(key != null ? key.getLocation() : (value != null ? value.getLocation() : new SourceLocation(0, 0, 0, 0)));
         this.key = key;

@@ -23,11 +23,10 @@ import static org.assertj.core.api.Assertions.*;
 /**
  * {@code JSContext.close()} must actually close the context.
  * <p>
- * It used to clear only the module cache, call stack, pending exception and stack trace: pending
- * microtasks were abandoned with no callback, and the realm's lexical bindings, iterator
- * prototypes, finalization registries, eval overlays, {@code import.meta} cache and the VM's value
- * stack all stayed reachable. No {@code closed} flag was set either, so {@code close()} followed by
- * {@code eval()} silently worked and masked lifecycle bugs in embedder code.
+ * It used to clear only the module cache, call stack, pending exception and stack trace: pending microtasks were
+ * abandoned with no callback, and the realm's lexical bindings, iterator prototypes, finalization registries, eval
+ * overlays, {@code import.meta} cache and the VM's value stack all stayed reachable. No {@code closed} flag was set
+ * either, so {@code close()} followed by {@code eval()} silently worked and masked lifecycle bugs in embedder code.
  */
 public class JSContextLifecycleTest {
 
@@ -42,8 +41,7 @@ public class JSContextLifecycleTest {
 
         context.close();
         assertThat(context.getMicrotaskQueue().hasPendingMicrotasks())
-                .as("close() must not leave reactions queued on a dead context")
-                .isFalse();
+                .as("close() must not leave reactions queued on a dead context").isFalse();
         runtime.close();
     }
 
@@ -70,8 +68,7 @@ public class JSContextLifecycleTest {
         context.close();
 
         assertThat(context.getGlobalLexicalBindingNames()).isEmpty();
-        assertThat(context.getPromiseRejectCallback())
-                .as("a host callback can reach arbitrary application state")
+        assertThat(context.getPromiseRejectCallback()).as("a host callback can reach arbitrary application state")
                 .isNull();
         assertThat(context.getMicrotaskFailureCallback()).isNull();
         assertThat(context.getMicrotaskFailures()).isEmpty();
@@ -85,9 +82,7 @@ public class JSContextLifecycleTest {
         context.eval("let bound = 1; (function () { return [1, 2, 3] })()");
         context.close();
         // The realm's binding table is one of the structures close() used to leave populated.
-        assertThat(context.getGlobalLexicalBindingNames())
-                .as("global lexical bindings must be released")
-                .isEmpty();
+        assertThat(context.getGlobalLexicalBindingNames()).as("global lexical bindings must be released").isEmpty();
         runtime.close();
     }
 
@@ -104,9 +99,7 @@ public class JSContextLifecycleTest {
 
         context.close();
 
-        assertThat(global.getOwnPropertyKeys())
-                .as("close() must strip the global object")
-                .isEmpty();
+        assertThat(global.getOwnPropertyKeys()).as("close() must strip the global object").isEmpty();
         assertThat(global.get(PropertyKey.fromString("payload"))).isEqualTo(JSUndefined.INSTANCE);
         assertThat(global.get(PropertyKey.fromString("Array"))).isEqualTo(JSUndefined.INSTANCE);
         assertThat(global.getPrototype()).isNull();
@@ -130,14 +123,11 @@ public class JSContextLifecycleTest {
         assertThat(context.eval("1 + 1")).isEqualTo(JSNumber.of(2));
         context.close();
 
-        assertThatThrownBy(() -> context.eval("1 + 1"))
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(() -> context.eval("1 + 1")).isInstanceOf(IllegalStateException.class)
                 .hasMessage("JSContext is closed");
-        assertThatThrownBy(() -> context.eval("1 + 1", "test.js", false))
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(() -> context.eval("1 + 1", "test.js", false)).isInstanceOf(IllegalStateException.class)
                 .hasMessage("JSContext is closed");
-        assertThatThrownBy(context::processMicrotasks)
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(context::processMicrotasks).isInstanceOf(IllegalStateException.class)
                 .hasMessage("JSContext is closed");
         runtime.close();
     }
@@ -154,8 +144,7 @@ public class JSContextLifecycleTest {
 
         assertThatThrownBy(() -> context.eval("globalThis.afterClose = 42", "closed.js", false, false))
                 .isInstanceOf(IllegalStateException.class);
-        assertThat(global.get(PropertyKey.fromString("afterClose")))
-                .as("a closed realm must not have been mutated")
+        assertThat(global.get(PropertyKey.fromString("afterClose"))).as("a closed realm must not have been mutated")
                 .isEqualTo(JSUndefined.INSTANCE);
         runtime.close();
     }
@@ -168,15 +157,12 @@ public class JSContextLifecycleTest {
         JSContext context = runtime.createContext();
         context.close();
 
-        assertThatThrownBy(() -> context.eval("1 + 1"))
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(() -> context.eval("1 + 1")).isInstanceOf(IllegalStateException.class)
                 .hasMessage("JSContext is closed");
-        assertThatThrownBy(() -> context.eval("1 + 1", "closed.js", false))
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(() -> context.eval("1 + 1", "closed.js", false)).isInstanceOf(IllegalStateException.class)
                 .hasMessage("JSContext is closed");
         assertThatThrownBy(() -> context.eval("1 + 1", "closed.js", false, false))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("JSContext is closed");
+                .isInstanceOf(IllegalStateException.class).hasMessage("JSContext is closed");
         runtime.close();
     }
 

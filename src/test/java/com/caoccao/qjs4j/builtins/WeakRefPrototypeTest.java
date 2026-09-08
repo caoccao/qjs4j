@@ -56,8 +56,7 @@ public class WeakRefPrototypeTest extends BaseJavetTest {
 
     @Test
     void testWeakRefPrototypeDerefReceiverValidation() {
-        assertThatThrownBy(() -> context.eval("WeakRef.prototype.deref.call({})"))
-                .isInstanceOf(JSException.class)
+        assertThatThrownBy(() -> context.eval("WeakRef.prototype.deref.call({})")).isInstanceOf(JSException.class)
                 .hasMessageContaining("TypeError");
     }
 }

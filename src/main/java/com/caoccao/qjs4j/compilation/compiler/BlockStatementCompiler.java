@@ -52,8 +52,7 @@ final class BlockStatementCompiler extends AstNodeCompiler<BlockStatement> {
                         if (localIndex == null) {
                             localIndex = compilerContext.scopeManager.currentScope().declareLocal(name);
                         }
-                        if (vd.getKind() == VariableKind.CONST
-                                || vd.getKind() == VariableKind.USING
+                        if (vd.getKind() == VariableKind.CONST || vd.getKind() == VariableKind.USING
                                 || vd.getKind() == VariableKind.AWAIT_USING) {
                             compilerContext.scopeManager.currentScope().markConstLocal(name);
                         }
@@ -122,7 +121,8 @@ final class BlockStatementCompiler extends AstNodeCompiler<BlockStatement> {
 
             // Exception path: caught exception is on the stack
             compilerContext.emitter.patchJump(usingCatchJump, compilerContext.emitter.currentOffset());
-            compilerContext.emitHelpers.emitScopeUsingDisposalWithException(compilerContext.scopeManager.currentScope());
+            compilerContext.emitHelpers
+                    .emitScopeUsingDisposalWithException(compilerContext.scopeManager.currentScope());
 
             compilerContext.emitter.patchJump(jumpOverCatch, compilerContext.emitter.currentOffset());
         } else {

@@ -25,53 +25,42 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Represents a JavaScript runtime environment.
- * Based on QuickJS JSRuntime structure.
+ * Represents a JavaScript runtime environment. Based on QuickJS JSRuntime structure.
  * <p>
- * The runtime is the top-level container that manages:
- * - Multiple execution contexts (JSContext)
- * - Shared atom table for string interning
- * - JVM garbage collection hints
- * - Job queue for promises and microtasks
- * - Runtime-wide limits and configuration
+ * The runtime is the top-level container that manages: - Multiple execution contexts (JSContext) - Shared atom table
+ * for string interning - JVM garbage collection hints - Job queue for promises and microtasks - Runtime-wide limits and
+ * configuration
  * <p>
- * A single runtime can have multiple contexts that share:
- * - Atom table (interned strings)
- * - JVM garbage collection hints
- * - Job queue
+ * A single runtime can have multiple contexts that share: - Atom table (interned strings) - JVM garbage collection
+ * hints - Job queue
  * <p>
- * But contexts have separate:
- * - Global objects
- * - Module caches
- * - Stack traces
- * <h2>Threading</h2>
- * <strong>A {@link JSContext} is confined to one thread.</strong> {@code JSContext},
- * {@code JSObject}, {@code JSArray}, {@code VirtualMachine}, {@code JSShape} and {@code AtomTable}
- * have no synchronisation at all, and {@code JSShape} in particular carries a mutable single-entry
- * lookup memo that concurrent readers would tear. Evaluating on two threads against one context —
- * or against two contexts that share values — is undefined behaviour.
+ * But contexts have separate: - Global objects - Module caches - Stack traces
+ * <h2>Threading</h2> <strong>A {@link JSContext} is confined to one thread.</strong> {@code JSContext},
+ * {@code JSObject}, {@code JSArray}, {@code VirtualMachine}, {@code JSShape} and {@code AtomTable} have no
+ * synchronisation at all, and {@code JSShape} in particular carries a mutable single-entry lookup memo that concurrent
+ * readers would tear. Evaluating on two threads against one context — or against two contexts that share values — is
+ * undefined behaviour.
  * <p>
  * Only three things on a {@code JSRuntime} are safe to touch from another thread:
  * <ul>
- * <li>{@link #requestInterrupt()} and {@link #clearInterrupt()}, which is the supported way to stop
- * a running evaluation;</li>
- * <li>the global symbol registry ({@link #getOrCreateGlobalSymbol(String)},
- * {@link #getGlobalSymbolKey(JSSymbol)}), which is synchronised;</li>
- * <li>enqueueing work — {@link #enqueueJob(Job)} and {@code JSContext.enqueueMicrotask}, which some
- * host integrations (for example {@code Atomics.waitAsync}) call from helper threads. Enqueueing is
- * safe; <em>draining</em> the queue must happen on the owning thread.</li>
+ * <li>{@link #requestInterrupt()} and {@link #clearInterrupt()}, which is the supported way to stop a running
+ * evaluation;</li>
+ * <li>the global symbol registry ({@link #getOrCreateGlobalSymbol(String)}, {@link #getGlobalSymbolKey(JSSymbol)}),
+ * which is synchronised;</li>
+ * <li>enqueueing work — {@link #enqueueJob(Job)} and {@code JSContext.enqueueMicrotask}, which some host integrations
+ * (for example {@code Atomics.waitAsync}) call from helper threads. Enqueueing is safe; <em>draining</em> the queue
+ * must happen on the owning thread.</li>
  * </ul>
- * The collections here are concurrent so those three paths are sound. That is the whole extent of
- * the guarantee: it does not make the engine thread-safe.
+ * The collections here are concurrent so those three paths are sound. That is the whole extent of the guarantee: it
+ * does not make the engine thread-safe.
  */
 public final class JSRuntime implements AutoCloseable {
     /**
      * The {@link AtomicsObject} this runtime's contexts coordinate through, fixed at construction.
      * <p>
-     * A snapshot rather than a look-up through {@link #options}, because the options object is
-     * mutable and shared: reading it again at shutdown could close an instance this runtime never
-     * used while leaking the one it did, and two contexts of one runtime created either side of a
-     * mutation would have stopped coordinating with each other.
+     * A snapshot rather than a look-up through {@link #options}, because the options object is mutable and shared:
+     * reading it again at shutdown could close an instance this runtime never used while leaking the one it did, and
+     * two contexts of one runtime created either side of a mutation would have stopped coordinating with each other.
      */
     private final AtomicsObject atomicsObject;
     private final AtomTable atoms;
@@ -80,18 +69,26 @@ public final class JSRuntime implements AutoCloseable {
      */
     private final AtomicBoolean closed = new AtomicBoolean();
     private final List<JSContext> contexts;
+    /**
+     * Written by {@code VirtualMachine.execute} on the evaluating thread and read from cross-realm proxy paths.
+     * Declared volatile so a reader never observes a stale context.
+     */
+    private volatile JSContext currentExecutingContext;
     private final Map<String, JSSymbol> globalSymbolRegistry;
     private final Map<JSSymbol, String> globalSymbolReverseRegistry;
+    /**
+     * Set from any thread by {@link #requestInterrupt()} and polled by the interpreter loop.
+     */
+    private volatile boolean interruptRequested;
     private final Queue<Job> jobQueue;
     /**
      * Serialises admission against shutdown.
      * <p>
-     * Setting {@link #closed} and clearing what the runtime owns were two independent steps, so a
-     * producer that had already passed the closed check could be suspended, let {@code close()}
-     * clear the queue, and then deposit its job into a runtime that had finished letting go of it.
-     * The registry had the same window, because it tested {@code closed} outside its own monitor.
-     * Every accepted mutation now happens under this lock, and {@code close()} clears under it —
-     * after sealing intake, so a producer either gets in before the clear or is refused.
+     * Setting {@link #closed} and clearing what the runtime owns were two independent steps, so a producer that had
+     * already passed the closed check could be suspended, let {@code close()} clear the queue, and then deposit its job
+     * into a runtime that had finished letting go of it. The registry had the same window, because it tested
+     * {@code closed} outside its own monitor. Every accepted mutation now happens under this lock, and {@code close()}
+     * clears under it — after sealing intake, so a producer either gets in before the clear or is refused.
      */
     private final Object lifecycleLock = new Object();
     private final JSMemoryAccounting memoryAccounting;
@@ -103,24 +100,14 @@ public final class JSRuntime implements AutoCloseable {
     /**
      * The weak collections this runtime's keys have outlived.
      * <p>
-     * A {@code WeakMap}/{@code WeakSet} entry lives on its key and holds its value strongly, so a
-     * collection that dies while its keys live has to be noticed somewhere or the value is retained
-     * for as long as the key is. Each entry is a weak reference registered here, and the weak
-     * collection operations — and {@link #gc()} — drain the queue on the calling thread. Owning the
-     * queue rather than sharing a process-wide {@code Cleaner} keeps reclamation on the thread that
-     * is using the engine, which is the only thread allowed to touch anything reachable from a
+     * A {@code WeakMap}/{@code WeakSet} entry lives on its key and holds its value strongly, so a collection that dies
+     * while its keys live has to be noticed somewhere or the value is retained for as long as the key is. Each entry is
+     * a weak reference registered here, and the weak collection operations — and {@link #gc()} — drain the queue on the
+     * calling thread. Owning the queue rather than sharing a process-wide {@code Cleaner} keeps reclamation on the
+     * thread that is using the engine, which is the only thread allowed to touch anything reachable from a
      * {@link JSContext}.
      */
     private final ReferenceQueue<Object> weakCollectionOwners = new ReferenceQueue<>();
-    /**
-     * Written by {@code VirtualMachine.execute} on the evaluating thread and read from cross-realm
-     * proxy paths. Declared volatile so a reader never observes a stale context.
-     */
-    private volatile JSContext currentExecutingContext;
-    /**
-     * Set from any thread by {@link #requestInterrupt()} and polled by the interpreter loop.
-     */
-    private volatile boolean interruptRequested;
 
     /**
      * Create a new runtime with default options.
@@ -132,13 +119,14 @@ public final class JSRuntime implements AutoCloseable {
     /**
      * Create a new runtime with custom options.
      * <p>
-     * When {@link JSRuntimeOptions#setAtomicsObject(AtomicsObject)} injected a shared instance,
-     * this runtime uses it and never closes it — that is how the members of an agent cluster
-     * coordinate through {@code Atomics.wait}/{@code notify}. Otherwise this runtime constructs its
-     * own and closes it on shutdown, so handing one options object to several runtimes gives each
-     * of them an executor of its own rather than one they all take turns shutting down.
+     * When {@link JSRuntimeOptions#setAtomicsObject(AtomicsObject)} injected a shared instance, this runtime uses it
+     * and never closes it — that is how the members of an agent cluster coordinate through
+     * {@code Atomics.wait}/{@code notify}. Otherwise this runtime constructs its own and closes it on shutdown, so
+     * handing one options object to several runtimes gives each of them an executor of its own rather than one they all
+     * take turns shutting down.
      *
-     * @param options the configuration to snapshot
+     * @param options
+     *            the configuration to snapshot
      */
     public JSRuntime(JSRuntimeOptions options) {
         this.contexts = Collections.synchronizedList(new ArrayList<>());
@@ -166,18 +154,15 @@ public final class JSRuntime implements AutoCloseable {
     /**
      * Close the runtime. Terminal and idempotent.
      * <p>
-     * Closing used to be advisory: there was no closed state, so after {@code close()} an embedder
-     * could still create a context and evaluate in it, still enqueue jobs and still drain them, and
-     * the global symbol registries kept whatever they held. Shutdown is now an ownership boundary —
-     * {@link #createContext()}, {@link #enqueueJob(Job)} and
-     * {@link #getOrCreateGlobalSymbol(String)} refuse afterwards, and everything the runtime owns
-     * is released.
+     * Closing used to be advisory: there was no closed state, so after {@code close()} an embedder could still create a
+     * context and evaluate in it, still enqueue jobs and still drain them, and the global symbol registries kept
+     * whatever they held. Shutdown is now an ownership boundary — {@link #createContext()}, {@link #enqueueJob(Job)}
+     * and {@link #getOrCreateGlobalSymbol(String)} refuse afterwards, and everything the runtime owns is released.
      * <p>
-     * Asynchronous producers are stopped before the queues are cleared, so nothing can be deposited
-     * into a runtime that has already let go of it: {@code Atomics.waitAsync} operations this
-     * runtime started are cancelled, which also releases the promises and contexts an unbounded
-     * wait would otherwise have pinned for the life of the process. Waits belonging to other
-     * runtimes in the same agent cluster are untouched.
+     * Asynchronous producers are stopped before the queues are cleared, so nothing can be deposited into a runtime that
+     * has already let go of it: {@code Atomics.waitAsync} operations this runtime started are cancelled, which also
+     * releases the promises and contexts an unbounded wait would otherwise have pinned for the life of the process.
+     * Waits belonging to other runtimes in the same agent cluster are untouched.
      */
     @Override
     public void close() {
@@ -220,7 +205,8 @@ public final class JSRuntime implements AutoCloseable {
      * Create a new execution context.
      *
      * @return the new context
-     * @throws IllegalStateException when the runtime is closed
+     * @throws IllegalStateException
+     *             when the runtime is closed
      */
     public JSContext createContext() {
         synchronized (lifecycleLock) {
@@ -241,14 +227,15 @@ public final class JSRuntime implements AutoCloseable {
     /**
      * Enqueue a host job to run on the next {@link #runJobs()} drain.
      * <p>
-     * This is the embedder's entry point for scheduling work alongside the engine's own promise
-     * reactions. It is <em>not</em> where those reactions live: promise reactions and
-     * {@code queueMicrotask} go to the owning context's microtask queue, which {@link #runJobs()}
-     * deliberately does <strong>not</strong> drain. Settling promises requires
-     * {@link JSContext#processMicrotasks()} on the context that owns them.
+     * This is the embedder's entry point for scheduling work alongside the engine's own promise reactions. It is
+     * <em>not</em> where those reactions live: promise reactions and {@code queueMicrotask} go to the owning context's
+     * microtask queue, which {@link #runJobs()} deliberately does <strong>not</strong> drain. Settling promises
+     * requires {@link JSContext#processMicrotasks()} on the context that owns them.
      *
-     * @param job the job to enqueue; {@code null} is ignored
-     * @throws IllegalStateException when the runtime is closed
+     * @param job
+     *            the job to enqueue; {@code null} is ignored
+     * @throws IllegalStateException
+     *             when the runtime is closed
      */
     public void enqueueJob(Job job) {
         synchronized (lifecycleLock) {
@@ -262,15 +249,14 @@ public final class JSRuntime implements AutoCloseable {
     /**
      * Poll every context's finalization registries.
      * <p>
-     * This does <strong>not</strong> ask the JVM to collect, despite the name — it drains
-     * {@code FinalizationRegistry} callbacks for objects the JVM has <em>already</em> collected,
-     * which is all an engine can usefully do. Deciding when to collect belongs to the embedder:
-     * call {@link System#gc()} yourself if you want that, then call this to drain the callbacks it
-     * makes eligible.
+     * This does <strong>not</strong> ask the JVM to collect, despite the name — it drains {@code FinalizationRegistry}
+     * callbacks for objects the JVM has <em>already</em> collected, which is all an engine can usefully do. Deciding
+     * when to collect belongs to the embedder: call {@link System#gc()} yourself if you want that, then call this to
+     * drain the callbacks it makes eligible.
      * <p>
-     * The Javadoc here used to say it triggered a collection, which it never did. Making it
-     * actually call {@code System.gc()} is not the fix: {@link #close()} calls this method, so an
-     * embedder that creates a runtime per unit of work would pay a full JVM collection every time.
+     * The Javadoc here used to say it triggered a collection, which it never did. Making it actually call
+     * {@code System.gc()} is not the fix: {@link #close()} calls this method, so an embedder that creates a runtime per
+     * unit of work would pay a full JVM collection every time.
      */
     public void gc() {
         releaseDeadWeakCollectionEntries();
@@ -285,8 +271,8 @@ public final class JSRuntime implements AutoCloseable {
     /**
      * The {@link AtomicsObject} this runtime's contexts coordinate through.
      * <p>
-     * Fixed when the runtime was constructed: either the instance the embedder injected, or one
-     * this runtime made and will close. Mutating the options object afterwards does not change it.
+     * Fixed when the runtime was constructed: either the instance the embedder injected, or one this runtime made and
+     * will close. Mutating the options object afterwards does not change it.
      *
      * @return this runtime's instance, never null
      */
@@ -301,17 +287,17 @@ public final class JSRuntime implements AutoCloseable {
         return atoms;
     }
 
-    private List<JSContext> getContextSnapshot() {
-        synchronized (contexts) {
-            return new ArrayList<>(contexts);
-        }
-    }
-
     /**
      * Get all contexts in this runtime.
      */
     public List<JSContext> getContexts() {
         return getContextSnapshot();
+    }
+
+    private List<JSContext> getContextSnapshot() {
+        synchronized (contexts) {
+            return new ArrayList<>(contexts);
+        }
     }
 
     public JSContext getCurrentExecutingContext() {
@@ -330,9 +316,8 @@ public final class JSRuntime implements AutoCloseable {
     /**
      * Accounting for the binary data blocks guest code sizes directly.
      * <p>
-     * This is what makes {@link JSRuntimeOptions#setMaxMemoryUsage(long)} an enforced limit rather
-     * than a stored number. See {@link JSMemoryAccounting} for exactly what it does and does not
-     * bound.
+     * This is what makes {@link JSRuntimeOptions#setMaxMemoryUsage(long)} an enforced limit rather than a stored
+     * number. See {@link JSMemoryAccounting} for exactly what it does and does not bound.
      *
      * @return this runtime's accounting, never {@code null}
      */
@@ -367,9 +352,8 @@ public final class JSRuntime implements AutoCloseable {
     /**
      * Check whether any host job is pending on this runtime.
      * <p>
-     * This covers the host queue only. Promise reactions and {@code queueMicrotask} live on the
-     * owning {@link JSContext}'s microtask queue — ask
-     * {@code context.getMicrotaskQueue().hasPendingMicrotasks()} for those.
+     * This covers the host queue only. Promise reactions and {@code queueMicrotask} live on the owning
+     * {@link JSContext}'s microtask queue — ask {@code context.getMicrotaskQueue().hasPendingMicrotasks()} for those.
      *
      * @return true when a host job enqueued with {@link #enqueueJob(Job)} is waiting
      */
@@ -398,11 +382,10 @@ public final class JSRuntime implements AutoCloseable {
     /**
      * Ask any evaluation running on this runtime to stop.
      * <p>
-     * Safe to call from another thread. The interpreter polls this every
-     * {@code INTERRUPT_CHECK_INTERVAL} opcodes and terminates with an exception that JavaScript
-     * {@code try}/{@code catch} cannot intercept, so a script cannot keep itself alive by
-     * swallowing the signal. The flag stays set until {@link #clearInterrupt()} is called, so a
-     * later evaluation on this runtime would also stop immediately.
+     * Safe to call from another thread. The interpreter polls this every {@code INTERRUPT_CHECK_INTERVAL} opcodes and
+     * terminates with an exception that JavaScript {@code try}/{@code catch} cannot intercept, so a script cannot keep
+     * itself alive by swallowing the signal. The flag stays set until {@link #clearInterrupt()} is called, so a later
+     * evaluation on this runtime would also stop immediately.
      */
     public void requestInterrupt() {
         this.interruptRequested = true;
@@ -417,10 +400,9 @@ public final class JSRuntime implements AutoCloseable {
     /**
      * Run all pending host jobs on this runtime.
      * <p>
-     * <strong>This drains the host queue only.</strong> It deliberately does <em>not</em> touch any
-     * context's microtask queue, for two reasons: a microtask queue belongs to one
-     * {@link JSContext} and must be drained on that context's own thread (see the threading
-     * contract on this class), and draining it here would be unbounded — a microtask that
+     * <strong>This drains the host queue only.</strong> It deliberately does <em>not</em> touch any context's microtask
+     * queue, for two reasons: a microtask queue belongs to one {@link JSContext} and must be drained on that context's
+     * own thread (see the threading contract on this class), and draining it here would be unbounded — a microtask that
      * re-enqueues itself would spin forever with no deadline to stop it.
      * <p>
      * To settle promises, call {@link JSContext#processMicrotasks()} on the context that owns them.
@@ -442,18 +424,18 @@ public final class JSRuntime implements AutoCloseable {
     }
 
     /**
-     * Record the context whose bytecode is currently executing.
-     * Used by cross-realm proxy paths to find the active realm.
+     * Record the context whose bytecode is currently executing. Used by cross-realm proxy paths to find the active
+     * realm.
      *
-     * @param context the executing context, or {@code null} when execution has finished
+     * @param context
+     *            the executing context, or {@code null} when execution has finished
      */
     public void setCurrentExecutingContext(JSContext context) {
         this.currentExecutingContext = context;
     }
 
     /**
-     * Check if execution should be interrupted.
-     * Called periodically during bytecode execution.
+     * Check if execution should be interrupted. Called periodically during bytecode execution.
      *
      * @return true when a host thread has called {@link #requestInterrupt()}
      */
@@ -471,8 +453,7 @@ public final class JSRuntime implements AutoCloseable {
     }
 
     /**
-     * A job to be executed in the job queue.
-     * Used for promises, queueMicrotask, and other async operations.
+     * A job to be executed in the job queue. Used for promises, queueMicrotask, and other async operations.
      */
     @FunctionalInterface
     public interface Job {

@@ -21,14 +21,12 @@ import com.caoccao.qjs4j.core.JSSet;
 import com.caoccao.qjs4j.core.JSValue;
 
 /**
- * Implementation of Set constructor and static methods.
- * Based on ES2020 Set specification.
+ * Implementation of Set constructor and static methods. Based on ES2020 Set specification.
  */
 public final class SetConstructor {
 
     /**
-     * Set constructor call/new.
-     * Delegates to JSSet.create().
+     * Set constructor call/new. Delegates to JSSet.create().
      * <p>
      * Based on ES2020 23.2.1
      */
@@ -44,8 +42,7 @@ public final class SetConstructor {
     }
 
     /**
-     * Set.groupBy(items, callbackFn)
-     * QuickJS extension (same behavior as Map.groupBy()).
+     * Set.groupBy(items, callbackFn) QuickJS extension (same behavior as Map.groupBy()).
      */
     public static JSValue groupBy(JSContext context, JSValue thisArg, JSValue[] args) {
         return MapConstructor.groupBy(context, thisArg, args);

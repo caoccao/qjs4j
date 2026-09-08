@@ -20,23 +20,19 @@ import java.util.ArrayDeque;
 import java.util.Queue;
 
 /**
- * Represents an async generator object in JavaScript.
- * Based on ES2018 async generator specification.
+ * Represents an async generator object in JavaScript. Based on ES2018 async generator specification.
  * <p>
- * Async generators combine generator functions with async iteration:
- * - Defined with async function* syntax
- * - yield produces promises
- * - Can await within the generator body
- * - Implements async iterator protocol (Symbol.asyncIterator)
- * - Methods return promises: next(), return(), throw()
+ * Async generators combine generator functions with async iteration: - Defined with async function* syntax - yield
+ * produces promises - Can await within the generator body - Implements async iterator protocol (Symbol.asyncIterator) -
+ * Methods return promises: next(), return(), throw()
  */
 public final class JSAsyncGenerator extends JSObject {
     public static final String NAME = "AsyncGenerator";
     private final JSContext context;
-    private final AsyncGeneratorFunction generatorFunction;
-    private final Queue<AsyncGeneratorRequest> requestQueue;
     private boolean drainScheduled;
+    private final AsyncGeneratorFunction generatorFunction;
     private JSPromise pendingRequestPromise;
+    private final Queue<AsyncGeneratorRequest> requestQueue;
     private JSValue returnValue;
     private AsyncGeneratorState state;
     private JSValue thrownValue;
@@ -44,8 +40,10 @@ public final class JSAsyncGenerator extends JSObject {
     /**
      * Create a new async generator.
      *
-     * @param generatorFunction The generator implementation
-     * @param context           The execution context
+     * @param generatorFunction
+     *            The generator implementation
+     * @param context
+     *            The execution context
      */
     public JSAsyncGenerator(AsyncGeneratorFunction generatorFunction, JSContext context) {
         super(context);
@@ -81,36 +79,9 @@ public final class JSAsyncGenerator extends JSObject {
     }
 
     /**
-     * Create a simple async generator from a function that yields promises.
-     *
-     * @param yielder Function that returns promise values in sequence
-     * @param context The execution context
-     * @return An async generator
-     */
-    public static JSAsyncGenerator create(AsyncYieldFunction yielder, JSContext context) {
-        return new JSAsyncGenerator((inputValue, requestKind) -> {
-            if (requestKind == AsyncGeneratorRequestKind.THROW) {
-                // If throwing, reject the promise
-                JSPromise promise = context.createJSPromise();
-                promise.reject(inputValue);
-                return promise;
-            }
-            if (requestKind == AsyncGeneratorRequestKind.RETURN) {
-                JSPromise promise = context.createJSPromise();
-                JSObject result = context.createJSObject();
-                result.set(PropertyKey.VALUE, inputValue);
-                result.set(PropertyKey.DONE, JSBoolean.TRUE);
-                promise.fulfill(result);
-                return promise;
-            }
-            return yielder.yieldNext(inputValue);
-        }, context);
-    }
-
-    /**
-     * Directly complete the current pending request with a result, bypassing the intermediate
-     * promise layer. Used by the async generator's await-resume handler to avoid extra microtask ticks.
-     * Per QuickJS, resolving the request's promise is synchronous within the reaction callback.
+     * Directly complete the current pending request with a result, bypassing the intermediate promise layer. Used by
+     * the async generator's await-resume handler to avoid extra microtask ticks. Per QuickJS, resolving the request's
+     * promise is synchronous within the reaction callback.
      */
     public void completeCurrentRequest(JSValue result) {
         if (pendingRequestPromise != null) {
@@ -138,8 +109,10 @@ public final class JSAsyncGenerator extends JSObject {
     /**
      * Create an iterator result promise.
      *
-     * @param value The iterator value
-     * @param done  Whether iteration is complete
+     * @param value
+     *            The iterator value
+     * @param done
+     *            Whether iteration is complete
      * @return A promise that resolves to {value, done}
      */
     private JSPromise createIteratorResultPromise(JSValue value, boolean done) {
@@ -204,10 +177,8 @@ public final class JSAsyncGenerator extends JSObject {
                         ? JSUndefined.INSTANCE
                         : request.value();
                 if (request.kind() == AsyncGeneratorRequestKind.RETURN) {
-                    JSPromise completionPromise = JSAsyncIterator.createAsyncFromSyncResultPromise(
-                            context,
-                            completedValue,
-                            true);
+                    JSPromise completionPromise = JSAsyncIterator.createAsyncFromSyncResultPromise(context,
+                            completedValue, true);
                     if (completionPromise.getState() == JSPromise.PromiseState.FULFILLED) {
                         JSValue completionResult = completionPromise.getResult();
                         context.enqueueMicrotask(() -> request.promise().fulfill(completionResult));
@@ -215,26 +186,17 @@ public final class JSAsyncGenerator extends JSObject {
                         JSValue completionError = completionPromise.getResult();
                         context.enqueueMicrotask(() -> request.promise().reject(completionError));
                     } else {
-                        completionPromise.addReactions(
-                                new JSPromise.ReactionRecord(
-                                        new JSNativeFunction(context, "onReturnResolve", 1, (childContext, thisArg, args) -> {
-                                            JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                                            request.promise().fulfill(result);
-                                            return JSUndefined.INSTANCE;
-                                        }),
-                                        null,
-                                        context
-                                ),
-                                new JSPromise.ReactionRecord(
-                                        new JSNativeFunction(context, "onReturnReject", 1, (childContext, thisArg, args) -> {
+                        completionPromise.addReactions(new JSPromise.ReactionRecord(
+                                new JSNativeFunction(context, "onReturnResolve", 1, (childContext, thisArg, args) -> {
+                                    JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                    request.promise().fulfill(result);
+                                    return JSUndefined.INSTANCE;
+                                }), null, context), new JSPromise.ReactionRecord(new JSNativeFunction(context,
+                                        "onReturnReject", 1, (childContext, thisArg, args) -> {
                                             JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                                             request.promise().reject(error);
                                             return JSUndefined.INSTANCE;
-                                        }),
-                                        null,
-                                        context
-                                )
-                        );
+                                        }), null, context));
                     }
                 } else {
                     request.promise().fulfill(createIteratorResultObject(completedValue, true));
@@ -287,22 +249,17 @@ public final class JSAsyncGenerator extends JSObject {
             // Result is PENDING (e.g., await suspension, yield* delegation, thenable yield value).
             // Add fallback reactions that guard against double-fulfillment since the lambda's
             // await handler may directly fulfill request.promise() via completeCurrentRequest.
-            resultPromise.addReactions(
-                    new JSPromise.ReactionRecord(
-                            new JSNativeFunction(context, "onFulfilled", 1, (childContext, thisArg, args) -> {
-                                if (request.promise().getState() != JSPromise.PromiseState.PENDING) {
-                                    return JSUndefined.INSTANCE;
-                                }
-                                JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                                processResult(result);
-                                request.promise().fulfill(result);
-                                scheduleDrainRequestQueue();
-                                return JSUndefined.INSTANCE;
-                            }),
-                            null,
-                            context
-                    ),
-                    new JSPromise.ReactionRecord(
+            resultPromise.addReactions(new JSPromise.ReactionRecord(
+                    new JSNativeFunction(context, "onFulfilled", 1, (childContext, thisArg, args) -> {
+                        if (request.promise().getState() != JSPromise.PromiseState.PENDING) {
+                            return JSUndefined.INSTANCE;
+                        }
+                        JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                        processResult(result);
+                        request.promise().fulfill(result);
+                        scheduleDrainRequestQueue();
+                        return JSUndefined.INSTANCE;
+                    }), null, context), new JSPromise.ReactionRecord(
                             new JSNativeFunction(context, "onRejected", 1, (childContext, thisArg, args) -> {
                                 if (request.promise().getState() != JSPromise.PromiseState.PENDING) {
                                     return JSUndefined.INSTANCE;
@@ -312,11 +269,7 @@ public final class JSAsyncGenerator extends JSObject {
                                 request.promise().reject(error);
                                 scheduleDrainRequestQueue();
                                 return JSUndefined.INSTANCE;
-                            }),
-                            null,
-                            context
-                    )
-            );
+                            }), null, context));
         } catch (Exception e) {
             state = AsyncGeneratorState.COMPLETED;
             if (context.hasPendingException()) {
@@ -327,7 +280,8 @@ public final class JSAsyncGenerator extends JSObject {
                 request.promise().reject(request.value());
             } else {
                 String message = e.getMessage();
-                request.promise().reject(new JSString("Async generator error: " + (message != null ? message : e.toString())));
+                request.promise()
+                        .reject(new JSString("Async generator error: " + (message != null ? message : e.toString())));
             }
             scheduleDrainRequestQueue();
         }
@@ -341,10 +295,10 @@ public final class JSAsyncGenerator extends JSObject {
     }
 
     /**
-     * Get the next value from the async generator.
-     * ES2018 AsyncGenerator.prototype.next()
+     * Get the next value from the async generator. ES2018 AsyncGenerator.prototype.next()
      *
-     * @param value Value to send into the generator
+     * @param value
+     *            Value to send into the generator
      * @return A promise that resolves to {value, done}
      */
     public JSPromise next(JSValue value) {
@@ -365,10 +319,10 @@ public final class JSAsyncGenerator extends JSObject {
     }
 
     /**
-     * Return a value from the async generator and close it.
-     * ES2018 AsyncGenerator.prototype.return()
+     * Return a value from the async generator and close it. ES2018 AsyncGenerator.prototype.return()
      *
-     * @param value The return value
+     * @param value
+     *            The return value
      * @return A promise that resolves to {value, done: true}
      */
     public JSPromise return_(JSValue value) {
@@ -387,10 +341,10 @@ public final class JSAsyncGenerator extends JSObject {
     }
 
     /**
-     * Throw an exception into the async generator.
-     * ES2018 AsyncGenerator.prototype.throw()
+     * Throw an exception into the async generator. ES2018 AsyncGenerator.prototype.throw()
      *
-     * @param exception The exception to throw
+     * @param exception
+     *            The exception to throw
      * @return A promise that resolves to the next value or rejects
      */
     public JSPromise throw_(JSValue exception) {
@@ -402,21 +356,33 @@ public final class JSAsyncGenerator extends JSObject {
         return "[object AsyncGenerator]";
     }
 
-    public enum AsyncGeneratorRequestKind {
-        NEXT,
-        RETURN,
-        THROW
-    }
-
     /**
-     * Async generator states based on ES2018.
+     * Create a simple async generator from a function that yields promises.
+     *
+     * @param yielder
+     *            Function that returns promise values in sequence
+     * @param context
+     *            The execution context
+     * @return An async generator
      */
-    public enum AsyncGeneratorState {
-        SUSPENDED_START,    // Created but not started
-        SUSPENDED_YIELD,    // Suspended at a yield point
-        EXECUTING,          // Currently executing
-        AWAITING_RETURN,    // Awaiting a return value
-        COMPLETED           // Generator has completed
+    public static JSAsyncGenerator create(AsyncYieldFunction yielder, JSContext context) {
+        return new JSAsyncGenerator((inputValue, requestKind) -> {
+            if (requestKind == AsyncGeneratorRequestKind.THROW) {
+                // If throwing, reject the promise
+                JSPromise promise = context.createJSPromise();
+                promise.reject(inputValue);
+                return promise;
+            }
+            if (requestKind == AsyncGeneratorRequestKind.RETURN) {
+                JSPromise promise = context.createJSPromise();
+                JSObject result = context.createJSObject();
+                result.set(PropertyKey.VALUE, inputValue);
+                result.set(PropertyKey.DONE, JSBoolean.TRUE);
+                promise.fulfill(result);
+                return promise;
+            }
+            return yielder.yieldNext(inputValue);
+        }, context);
     }
 
     /**
@@ -427,11 +393,36 @@ public final class JSAsyncGenerator extends JSObject {
         /**
          * Execute the next step of the generator.
          *
-         * @param inputValue  Value passed to next()/return()/throw()
-         * @param requestKind The async generator request kind
+         * @param inputValue
+         *            Value passed to next()/return()/throw()
+         * @param requestKind
+         *            The async generator request kind
          * @return A promise that resolves to {value, done}
          */
         JSPromise executeNext(JSValue inputValue, AsyncGeneratorRequestKind requestKind);
+    }
+
+    private record AsyncGeneratorRequest(AsyncGeneratorRequestKind kind, JSValue value, JSPromise promise) {
+    }
+
+    public enum AsyncGeneratorRequestKind {
+        NEXT, RETURN, THROW
+    }
+
+    /**
+     * Async generator states based on ES2018.
+     */
+    public enum AsyncGeneratorState {
+        /** Awaiting a return value */
+        AWAITING_RETURN,
+        /** Generator has completed */
+        COMPLETED,
+        /** Currently executing */
+        EXECUTING,
+        /** Created but not started */
+        SUSPENDED_START,
+        /** Suspended at a yield point */
+        SUSPENDED_YIELD
     }
 
     /**
@@ -442,12 +433,10 @@ public final class JSAsyncGenerator extends JSObject {
         /**
          * Yield the next value.
          *
-         * @param inputValue Value passed to next()
+         * @param inputValue
+         *            Value passed to next()
          * @return A promise that resolves to {value, done}
          */
         JSPromise yieldNext(JSValue inputValue);
-    }
-
-    private record AsyncGeneratorRequest(AsyncGeneratorRequestKind kind, JSValue value, JSPromise promise) {
     }
 }

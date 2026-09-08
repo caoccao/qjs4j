@@ -192,23 +192,6 @@ public class ProxyConstructorTest extends BaseJavetTest {
     }
 
     @Test
-    public void testProxyChainWithMultipleLevels() {
-        // Test proxy chain with 3 levels
-        assertIntegerWithJavet("""
-                var target = {x: 1};
-                var proxy1 = new Proxy(target, {
-                  get: function(t, p) { return t[p] + 1; }
-                });
-                var proxy2 = new Proxy(proxy1, {
-                  get: function(t, p) { return t[p] + 1; }
-                });
-                var proxy3 = new Proxy(proxy2, {
-                  get: function(t, p) { return t[p] + 1; }
-                });
-                proxy3.x""");
-    }
-
-    @Test
     public void testProxyChaining() {
         // Test proxy of proxy
         assertIntegerWithJavet("""
@@ -226,6 +209,23 @@ public class ProxyConstructorTest extends BaseJavetTest {
                 };
                 var proxy2 = new Proxy(proxy1, handler2);
                 proxy2.x""");
+    }
+
+    @Test
+    public void testProxyChainWithMultipleLevels() {
+        // Test proxy chain with 3 levels
+        assertIntegerWithJavet("""
+                var target = {x: 1};
+                var proxy1 = new Proxy(target, {
+                  get: function(t, p) { return t[p] + 1; }
+                });
+                var proxy2 = new Proxy(proxy1, {
+                  get: function(t, p) { return t[p] + 1; }
+                });
+                var proxy3 = new Proxy(proxy2, {
+                  get: function(t, p) { return t[p] + 1; }
+                });
+                proxy3.x""");
     }
 
     @Test
@@ -515,19 +515,10 @@ public class ProxyConstructorTest extends BaseJavetTest {
     @Test
     public void testProxyGetOwnPropertyDescriptorInvariantNonConfigurable() {
         // Test invariant: can't return undefined for non-configurable property
-        assertErrorWithJavet(
-                "var target = {}; " +
-                        "Object.defineProperty(target, 'x', { " +
-                        "  value: 1, " +
-                        "  configurable: false " +
-                        "}); " +
-                        "var handler = { " +
-                        "  getOwnPropertyDescriptor: function(target, prop) { " +
-                        "    return undefined; " +
-                        "  } " +
-                        "}; " +
-                        "var proxy = new Proxy(target, handler); " +
-                        "Object.getOwnPropertyDescriptor(proxy, 'x')");
+        assertErrorWithJavet("var target = {}; " + "Object.defineProperty(target, 'x', { " + "  value: 1, "
+                + "  configurable: false " + "}); " + "var handler = { "
+                + "  getOwnPropertyDescriptor: function(target, prop) { " + "    return undefined; " + "  } " + "}; "
+                + "var proxy = new Proxy(target, handler); " + "Object.getOwnPropertyDescriptor(proxy, 'x')");
     }
 
     @Test
@@ -545,24 +536,16 @@ public class ProxyConstructorTest extends BaseJavetTest {
 
     @Test
     public void testProxyGetPrototypeOfBasic() {
-        assertIntegerWithJavet("var proto = {x: 1}; " +
-                "var target = Object.create(proto); " +
-                "var handler = { " +
-                "  getPrototypeOf: function(target) { " +
-                "    return proto; " +
-                "  } " +
-                "}; " +
-                "var proxy = new Proxy(target, handler); " +
-                "Object.getPrototypeOf(proxy).x");
+        assertIntegerWithJavet("var proto = {x: 1}; " + "var target = Object.create(proto); " + "var handler = { "
+                + "  getPrototypeOf: function(target) { " + "    return proto; " + "  } " + "}; "
+                + "var proxy = new Proxy(target, handler); " + "Object.getPrototypeOf(proxy).x");
     }
 
     @Test
     public void testProxyGetPrototypeOfForward() {
         // Test that missing trap forwards to target
-        assertIntegerWithJavet("var proto = {x: 1}; " +
-                "var target = Object.create(proto); " +
-                "var proxy = new Proxy(target, {}); " +
-                "Object.getPrototypeOf(proxy).x");
+        assertIntegerWithJavet("var proto = {x: 1}; " + "var target = Object.create(proto); "
+                + "var proxy = new Proxy(target, {}); " + "Object.getPrototypeOf(proxy).x");
     }
 
     @Test
@@ -1746,43 +1729,44 @@ public class ProxyConstructorTest extends BaseJavetTest {
     @Test
     public void testTargetApplyAccessedInTrap() {
         // Access target's apply in the trap and check type
-        assertIntegerWithJavet("""
-                var target = function(a, b) { return a + b; };
-                
-                // Check prototype before proxy
-                var protoBefore = Object.getPrototypeOf(target);
-                if (!protoBefore) {
-                    throw new Error('target has null prototype before proxy');
-                }
-                if (protoBefore !== Function.prototype) {
-                    throw new Error('target prototype BEFORE PROXY is not Function.prototype! It is: ' + Object.prototype.toString.call(protoBefore) + ', has apply: ' + (typeof protoBefore.apply));
-                }
-                // Also check apply directly
-                if (typeof target.apply !== 'function') {
-                    throw new Error('target.apply is not function before proxy, it is: ' + typeof target.apply);
-                }
-                
-                var handler = {
-                  apply: function(t, thisArg, args) {
-                    // Check prototype of t inside trap
-                    var protoInTrap = Object.getPrototypeOf(t);
-                    if (!protoInTrap) {
-                      throw new Error('t has null prototype inside trap, t is ' + typeof t);
-                    }
-                    if (protoInTrap !== Function.prototype) {
-                      throw new Error('t prototype inside trap is not Function.prototype! It is: ' + Object.prototype.toString.call(protoInTrap) + ', t === target: ' + (t === target));
-                    }
-                
-                    // Access t.apply
-                    var applyType = typeof t.apply;
-                    if (applyType !== 'function') {
-                      throw new Error('t.apply is ' + applyType);
-                    }
-                    return 42;
-                  }
-                };
-                var proxy = new Proxy(target, handler);
-                proxy(1, 2)""");
+        assertIntegerWithJavet(
+                """
+                        var target = function(a, b) { return a + b; };
+
+                        // Check prototype before proxy
+                        var protoBefore = Object.getPrototypeOf(target);
+                        if (!protoBefore) {
+                            throw new Error('target has null prototype before proxy');
+                        }
+                        if (protoBefore !== Function.prototype) {
+                            throw new Error('target prototype BEFORE PROXY is not Function.prototype! It is: ' + Object.prototype.toString.call(protoBefore) + ', has apply: ' + (typeof protoBefore.apply));
+                        }
+                        // Also check apply directly
+                        if (typeof target.apply !== 'function') {
+                            throw new Error('target.apply is not function before proxy, it is: ' + typeof target.apply);
+                        }
+
+                        var handler = {
+                          apply: function(t, thisArg, args) {
+                            // Check prototype of t inside trap
+                            var protoInTrap = Object.getPrototypeOf(t);
+                            if (!protoInTrap) {
+                              throw new Error('t has null prototype inside trap, t is ' + typeof t);
+                            }
+                            if (protoInTrap !== Function.prototype) {
+                              throw new Error('t prototype inside trap is not Function.prototype! It is: ' + Object.prototype.toString.call(protoInTrap) + ', t === target: ' + (t === target));
+                            }
+
+                            // Access t.apply
+                            var applyType = typeof t.apply;
+                            if (applyType !== 'function') {
+                              throw new Error('t.apply is ' + applyType);
+                            }
+                            return 42;
+                          }
+                        };
+                        var proxy = new Proxy(target, handler);
+                        proxy(1, 2)""");
     }
 
     @Test
@@ -1798,7 +1782,7 @@ public class ProxyConstructorTest extends BaseJavetTest {
         // Access target through closure instead of parameter
         assertIntegerWithJavet("""
                 var target = function(a, b) { return a + b; };
-                
+
                 var handler = {
                   apply: function(t, thisArg, args) {
                     // Access target (closure) instead of t (parameter)
@@ -1824,8 +1808,6 @@ public class ProxyConstructorTest extends BaseJavetTest {
         // Proxy.name should be "Proxy"
         assertStringWithJavet("Proxy.name");
 
-        assertErrorWithJavet(
-                "new Proxy()",
-                "Proxy()");
+        assertErrorWithJavet("new Proxy()", "Proxy()");
     }
 }

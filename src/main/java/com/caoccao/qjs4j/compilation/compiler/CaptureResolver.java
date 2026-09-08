@@ -99,19 +99,29 @@ final class CaptureResolver {
         return slot;
     }
 
+    Integer resolveCapturedBindingIndex(String name) {
+        Integer capturedIndex = findCapturedBindingIndex(name);
+        if (capturedIndex != null || parentResolver == null) {
+            return capturedIndex;
+        }
+        CaptureSource captureSource = parentResolver.resolveCaptureSourceForChild(name);
+        if (captureSource == null) {
+            return null;
+        }
+        return registerCapturedBinding(name, captureSource);
+    }
+
     CaptureSource resolveCaptureSourceForChild(String name) {
         BindingInfo bindingInfo = bindingLookup.findBinding(name);
         if (bindingInfo != null) {
-            return new CaptureSource(CaptureSourceType.LOCAL, bindingInfo.index(),
-                    bindingInfo.immutable(), bindingInfo.functionName());
+            return new CaptureSource(CaptureSourceType.LOCAL, bindingInfo.index(), bindingInfo.immutable(),
+                    bindingInfo.functionName());
         }
 
         Integer capturedIndex = findCapturedBindingIndex(name);
         if (capturedIndex != null) {
             CaptureBinding captureBinding = capturedBindings.get(name);
-            return new CaptureSource(
-                    CaptureSourceType.VAR_REF,
-                    capturedIndex,
+            return new CaptureSource(CaptureSourceType.VAR_REF, capturedIndex,
                     captureBinding != null && captureBinding.source().immutable(),
                     captureBinding != null && captureBinding.source().functionName());
         }
@@ -126,25 +136,11 @@ final class CaptureResolver {
         }
 
         int capturedSlot = registerCapturedBinding(name, parentSource);
-        return new CaptureSource(CaptureSourceType.VAR_REF, capturedSlot,
-                parentSource.immutable(), parentSource.functionName());
+        return new CaptureSource(CaptureSourceType.VAR_REF, capturedSlot, parentSource.immutable(),
+                parentSource.functionName());
     }
 
-    Integer resolveCapturedBindingIndex(String name) {
-        Integer capturedIndex = findCapturedBindingIndex(name);
-        if (capturedIndex != null || parentResolver == null) {
-            return capturedIndex;
-        }
-        CaptureSource captureSource = parentResolver.resolveCaptureSourceForChild(name);
-        if (captureSource == null) {
-            return null;
-        }
-        return registerCapturedBinding(name, captureSource);
-    }
-
-    enum CaptureSourceType {
-        LOCAL,
-        VAR_REF
+    record BindingInfo(int index, boolean immutable, boolean functionName) {
     }
 
     @FunctionalInterface
@@ -152,12 +148,13 @@ final class CaptureResolver {
         BindingInfo findBinding(String name);
     }
 
-    record BindingInfo(int index, boolean immutable, boolean functionName) {
-    }
-
     record CaptureBinding(int slot, CaptureSource source) {
     }
 
     record CaptureSource(CaptureSourceType type, int index, boolean immutable, boolean functionName) {
+    }
+
+    enum CaptureSourceType {
+        LOCAL, VAR_REF
     }
 }

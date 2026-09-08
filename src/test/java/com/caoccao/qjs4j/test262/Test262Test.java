@@ -36,12 +36,10 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * JUnit integration for test262 tests.
- * This allows running test262 tests from IDEs and Gradle.
+ * JUnit integration for test262 tests. This allows running test262 tests from IDEs and Gradle.
  * <p>
- * Note: This test is disabled by default as it runs a large suite of tests.
- * Enable it by removing the @Disabled annotation or run via command line:
- * ./gradlew test --tests "Test262Test"
+ * Note: This test is disabled by default as it runs a large suite of tests. Enable it by removing the @Disabled
+ * annotation or run via command line: ./gradlew test --tests "Test262Test"
  */
 public class Test262Test {
     private static final Path TEST262_ROOT = Paths.get("../test262");
@@ -50,13 +48,10 @@ public class Test262Test {
         List<Path> testFiles = new ArrayList<>();
 
         try (Stream<Path> paths = Files.walk(testsDir)) {
-            paths.filter(Files::isRegularFile)
-                    .filter(p -> p.toString().endsWith(".js"))
-                    .filter(p -> !p.toString().contains("_FIXTURE"))
-                    .filter(p -> config.matchesIncludePattern(p))
+            paths.filter(Files::isRegularFile).filter(p -> p.toString().endsWith(".js"))
+                    .filter(p -> !p.toString().contains("_FIXTURE")).filter(p -> config.matchesIncludePattern(p))
                     .sorted(Comparator.comparing(Path::toString)) // Sort for consistent order
-                    .limit(config.getMaxTests())
-                    .forEach(testFiles::add);
+                    .limit(config.getMaxTests()).forEach(testFiles::add);
         }
 
         return testFiles;
@@ -85,29 +80,24 @@ public class Test262Test {
         Path testsDir = TEST262_ROOT.resolve("test");
         List<Path> testFiles = discoverTests(testsDir, config);
 
-        return testFiles.stream()
-                .map(testFile -> DynamicTest.dynamicTest(
-                        getTestName(testFile),
-                        () -> {
-                            Test262TestCase testCase = new Test262TestCase(testFile);
-                            parser.parse(testCase);
+        return testFiles.stream().map(testFile -> DynamicTest.dynamicTest(getTestName(testFile), () -> {
+            Test262TestCase testCase = new Test262TestCase(testFile);
+            parser.parse(testCase);
 
-                            // Skip if necessary
-                            if (config.shouldSkipTest(testCase)) {
-                                return; // JUnit doesn't have explicit skip, just return
-                            }
+            // Skip if necessary
+            if (config.shouldSkipTest(testCase)) {
+                return; // JUnit doesn't have explicit skip, just return
+            }
 
-                            TestResult result = executor.execute(testCase);
+            TestResult result = executor.execute(testCase);
 
-                            if (result.isFailed()) {
-                                fail(result.message());
-                            } else if (result.isTimeout()) {
-                                fail("Test timeout after " + config.getAsyncTimeoutMs() + "ms");
-                            }
-                            // Pass and skip are both successful
-                        }
-                ))
-                .collect(Collectors.toList());
+            if (result.isFailed()) {
+                fail(result.message());
+            } else if (result.isTimeout()) {
+                fail("Test timeout after " + config.getAsyncTimeoutMs() + "ms");
+            }
+            // Pass and skip are both successful
+        })).collect(Collectors.toList());
     }
 
     @Test

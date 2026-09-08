@@ -19,8 +19,8 @@ package com.caoccao.qjs4j.core;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 
 /**
- * Represents a JavaScript AggregateError object.
- * AggregateError represents an error when multiple errors need to be wrapped in a single error.
+ * Represents a JavaScript AggregateError object. AggregateError represents an error when multiple errors need to be
+ * wrapped in a single error.
  */
 public final class JSAggregateError extends JSError {
 
@@ -35,6 +35,18 @@ public final class JSAggregateError extends JSError {
 
     public JSAggregateError(JSContext context, String message, SourceLocation sourceLocation) {
         super(context, message, sourceLocation);
+    }
+
+    @Override
+    public String getErrorName() {
+        return NAME;
+    }
+
+    /**
+     * Get the errors array.
+     */
+    public JSArray getErrors() {
+        return get("errors").asArray().orElseGet(() -> new JSArray(context));
     }
 
     public static JSValue create(JSContext context, JSValue... args) {
@@ -73,19 +85,18 @@ public final class JSAggregateError extends JSError {
         // Create AggregateError.prototype (not an error instance per spec)
         JSObject errorPrototype = new JSObject(context);
         context.transferPrototype(errorPrototype, JSError.NAME);
-        errorPrototype.defineProperty(PropertyKey.fromString("name"),
-                PropertyDescriptor.dataDescriptor(new JSString(NAME), PropertyDescriptor.DataState.ConfigurableWritable));
+        errorPrototype.defineProperty(PropertyKey.fromString("name"), PropertyDescriptor
+                .dataDescriptor(new JSString(NAME), PropertyDescriptor.DataState.ConfigurableWritable));
         errorPrototype.defineProperty(PropertyKey.MESSAGE,
                 PropertyDescriptor.dataDescriptor(new JSString(""), PropertyDescriptor.DataState.ConfigurableWritable));
 
         // AggregateError(errors, message)
         int length = 2;
 
-        JSNativeFunction errorConstructor = new JSNativeFunction(context, NAME,
-                length,
-                (childContext, thisObj, childArgs) -> create(childContext, childArgs),
-                true);
-        errorConstructor.defineProperty(PropertyKey.fromString("prototype"), errorPrototype, PropertyDescriptor.DataState.None);
+        JSNativeFunction errorConstructor = new JSNativeFunction(context, NAME, length,
+                (childContext, thisObj, childArgs) -> create(childContext, childArgs), true);
+        errorConstructor.defineProperty(PropertyKey.fromString("prototype"), errorPrototype,
+                PropertyDescriptor.DataState.None);
 
         // AggregateError.[[Prototype]] = Error (the constructor inherits from Error)
         JSValue errorCtor = context.getGlobalObject().get(JSError.NAME);
@@ -98,17 +109,5 @@ public final class JSAggregateError extends JSError {
                 PropertyDescriptor.dataDescriptor(errorConstructor, PropertyDescriptor.DataState.ConfigurableWritable));
 
         return errorConstructor;
-    }
-
-    @Override
-    public String getErrorName() {
-        return NAME;
-    }
-
-    /**
-     * Get the errors array.
-     */
-    public JSArray getErrors() {
-        return get("errors").asArray().orElseGet(() -> new JSArray(context));
     }
 }

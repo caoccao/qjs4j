@@ -23,26 +23,26 @@ import java.util.*;
  */
 final class JSDynamicImportModule {
     private final Set<String> ambiguousExportNames;
-    private final Set<String> explicitExportNames;
-    private final Map<String, String> exportOrigins;
-    private final List<HoistedFunctionExportBinding> hoistedFunctionExportBindings;
-    private final List<LocalExportBinding> localExportBindings;
-    private final JSImportNamespaceObject namespace;
-    private final List<JSDynamicImportModule> pendingDependents;
-    private final List<ReExportBinding> reExportBindings;
-    private final String resolvedSpecifier;
     private int asyncEvaluationOrder;
     private JSPromise asyncEvaluationPromise;
     private JSDynamicImportModule cycleRoot;
     private JSObject deferredNamespace;
     private boolean deferredPreload;
     private JSValue evaluationError;
+    private final Set<String> explicitExportNames;
     private String exportBindingName;
+    private final Map<String, String> exportOrigins;
     private boolean hasExportSyntax;
     private boolean hasTLA;
+    private final List<HoistedFunctionExportBinding> hoistedFunctionExportBindings;
     private boolean hoistedFunctionExportBindingsInitialized;
+    private final List<LocalExportBinding> localExportBindings;
+    private final JSImportNamespaceObject namespace;
     private int pendingAsyncDependencyCount;
+    private final List<JSDynamicImportModule> pendingDependents;
     private String rawSource;
+    private final List<ReExportBinding> reExportBindings;
+    private final String resolvedSpecifier;
     private Status status;
     private String transformedSource;
 
@@ -224,27 +224,16 @@ final class JSDynamicImportModule {
         return transformedSource;
     }
 
-    enum Status {
-        LOADING,
-        EVALUATING,
-        EVALUATED,
-        EVALUATING_ASYNC,
-        EVALUATED_ERROR
-    }
-
-    record HoistedFunctionExportBinding(
-            String localName,
-            String exportedName,
-            String functionDeclarationSource) {
+    record HoistedFunctionExportBinding(String localName, String exportedName, String functionDeclarationSource) {
     }
 
     record LocalExportBinding(String localName, String exportedName) {
     }
 
-    record ReExportBinding(
-            String sourceSpecifier,
-            String importedName,
-            String exportedName,
-            boolean starExport) {
+    record ReExportBinding(String sourceSpecifier, String importedName, String exportedName, boolean starExport) {
+    }
+
+    enum Status {
+        EVALUATED, EVALUATED_ERROR, EVALUATING, EVALUATING_ASYNC, LOADING
     }
 }

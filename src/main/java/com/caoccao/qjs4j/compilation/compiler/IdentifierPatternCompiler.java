@@ -22,9 +22,8 @@ import com.caoccao.qjs4j.vm.Opcode;
 import java.util.Deque;
 
 /**
- * Compiles Identifier pattern assignments into bytecode.
- * Handles var/let/const declarations, global scope, TDZ, with-objects,
- * and pre-resolved binding references.
+ * Compiles Identifier pattern assignments into bytecode. Handles var/let/const declarations, global scope, TDZ,
+ * with-objects, and pre-resolved binding references.
  */
 final class IdentifierPatternCompiler extends AstNodeCompiler<Identifier> {
 
@@ -66,7 +65,8 @@ final class IdentifierPatternCompiler extends AstNodeCompiler<Identifier> {
             }
         } else {
             Integer localIndex;
-            if (compilerContext.useExistingBindingInParentScopes && compilerContext.varDeclarationScopeOverride != null) {
+            if (compilerContext.useExistingBindingInParentScopes
+                    && compilerContext.varDeclarationScopeOverride != null) {
                 CompilerScope varDeclarationScope = compilerContext.varDeclarationScopeOverride;
                 localIndex = varDeclarationScope.getLocal(varName);
                 if (localIndex == null) {
@@ -90,7 +90,8 @@ final class IdentifierPatternCompiler extends AstNodeCompiler<Identifier> {
     }
 
     private boolean emitAssignmentUsingPreResolvedBindingReference(String variableName) {
-        Deque<CompilerContext.PreResolvedReference> references = compilerContext.preResolvedBindingReferences.get(variableName);
+        Deque<CompilerContext.PreResolvedReference> references = compilerContext.preResolvedBindingReferences
+                .get(variableName);
         if (references == null || references.isEmpty()) {
             return false;
         }

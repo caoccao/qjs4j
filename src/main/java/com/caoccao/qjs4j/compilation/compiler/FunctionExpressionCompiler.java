@@ -34,44 +34,13 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
     }
 
     /**
-     * Add a name to the set of named-function-expression bindings the enclosing parameter
-     * environments make visible.
-     * <p>
-     * A set that already carries the name is already the answer, and is returned as it stands: an
-     * inner function expression reusing an outer one's name shadows it, and the entry says all the
-     * consumers ask — whether the name resolves through a parameter environment.
-     *
-     * @param enclosingNames the enclosing environments' names
-     * @param name           the name to add
-     * @return the set including that name
-     */
-    private static Set<String> withParameterScopeName(Set<String> enclosingNames, String name) {
-        if (enclosingNames.isEmpty()) {
-            return Set.of(name);
-        }
-        if (enclosingNames.contains(name)) {
-            return enclosingNames;
-        }
-        Set<String> names = new HashSet<>(enclosingNames);
-        names.add(name);
-        return Collections.unmodifiableSet(names);
-    }
-
-    /**
-     * Returns true when a strict-mode wrapper function can safely be used
-     * around a class body expression. Wrapper functions introduce a new
-     * function boundary, which breaks yield/await semantics, so they must
-     * only be used when the enclosing context is a plain (non-generator,
-     * non-async) sloppy-mode function.
+     * Returns true when a strict-mode wrapper function can safely be used around a class body expression. Wrapper
+     * functions introduce a new function boundary, which breaks yield/await semantics, so they must only be used when
+     * the enclosing context is a plain (non-generator, non-async) sloppy-mode function.
      */
     private boolean canUseStrictWrapper() {
-        return !compilerContext.strictMode
-                && !compilerContext.isInGeneratorFunction
+        return !compilerContext.strictMode && !compilerContext.isInGeneratorFunction
                 && !compilerContext.isInAsyncFunction;
-    }
-
-    void compile(FunctionExpression functionExpression, boolean forceNonConstructor) {
-        compileFunctionExpressionInternal(functionExpression, forceNonConstructor);
     }
 
     @Override
@@ -79,10 +48,15 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         compileFunctionExpressionInternal(functionExpression, false);
     }
 
+    void compile(FunctionExpression functionExpression, boolean forceNonConstructor) {
+        compileFunctionExpressionInternal(functionExpression, forceNonConstructor);
+    }
+
     private void compileFunctionExpressionInternal(FunctionExpression functionExpression, boolean forceNonConstructor) {
         // Create a new compiler for the function body
         // Nested functions inherit strict mode from parent (QuickJS behavior)
-        BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode, compilerContext.captureResolver, compilerContext.context);
+        BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode,
+                compilerContext.captureResolver, compilerContext.context);
         CompilerContext functionContext = functionCompiler.context();
 
         functionContext.sourceCode = compilerContext.sourceCode;
@@ -97,11 +71,8 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         functionContext.isInGeneratorFunction = functionExpression.isGenerator();
         // Inherit class inner name so eval() inside nested functions can resolve it.
         inheritClassInnerNameCapture(functionContext);
-        Set<String> enclosingParameterScopeFunctionNames =
-                inheritParameterScopeFunctionNameCapture(functionContext);
-        inheritVisibleLexicalCapturesForDirectEvalInBody(
-                functionContext,
-                functionExpression.getBody(),
+        Set<String> enclosingParameterScopeFunctionNames = inheritParameterScopeFunctionNameCapture(functionContext);
+        inheritVisibleLexicalCapturesForDirectEvalInBody(functionContext, functionExpression.getBody(),
                 functionExpression.getFunctionParams().hasNonSimpleParameters());
 
         // Check for "use strict" directive early and update strict mode
@@ -111,9 +82,7 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         }
 
         List<Integer> parameterSlotIndexes = new ArrayList<>();
-        List<int[]> destructuringParams = declareParameters(
-                functionExpression.getParams(),
-                functionContext,
+        List<int[]> destructuringParams = declareParameters(functionExpression.getParams(), functionContext,
                 parameterSlotIndexes);
         if (functionExpression.needsArguments()) {
             declareAndInitializeImplicitArgumentsBinding(functionContext);
@@ -143,8 +112,8 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
                 conflictsWithParameter = restBoundNames.contains(selfName);
             }
             if (!conflictsWithParameter) {
-                selfNameShadowedByBodyDeclaration = functionContext.compilerAnalysis.bodyDeclaresBinding(
-                        functionExpression.getBody().getBody(), selfName);
+                selfNameShadowedByBodyDeclaration = functionContext.compilerAnalysis
+                        .bodyDeclaresBinding(functionExpression.getBody().getBody(), selfName);
                 selfNameLocalIndex = functionContext.scopeManager.currentScope().declareLocal(selfName);
                 // Per ES2024 15.2.5: The BindingIdentifier in a named function expression
                 // is an immutable binding. Following QuickJS add_func_var:
@@ -167,17 +136,14 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         // inside that initializer, body and all.
         Set<String> inheritedParameterScopeFunctionNames = functionContext.parameterScopeFunctionNames;
         if (selfNameShadowedByBodyDeclaration) {
-            functionContext.parameterScopeFunctionNames = withParameterScopeName(
-                    inheritedParameterScopeFunctionNames, functionExpression.getId().getName());
+            functionContext.parameterScopeFunctionNames = withParameterScopeName(inheritedParameterScopeFunctionNames,
+                    functionExpression.getId().getName());
         }
 
         // Emit default parameter initialization following QuickJS pattern
         if (functionExpression.getDefaults() != null) {
-            compilerContext.emitHelpers.emitDefaultParameterInit(
-                    functionCompiler,
-                    functionExpression.getFunctionParams(),
-                    parameterSlotIndexes,
-                    functionExpression);
+            compilerContext.emitHelpers.emitDefaultParameterInit(functionCompiler,
+                    functionExpression.getFunctionParams(), parameterSlotIndexes, functionExpression);
         }
 
         // Handle rest parameter if present
@@ -216,8 +182,7 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
                     .declareLocal("$function_expression_body_entered_" + selfName);
             functionContext.emitter.emitOpcode(Opcode.PUSH_TRUE);
             functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, bodyScopeEnteredLocalIndex);
-            functionContext.scopeManager.currentScope().shadowLocalWithFreshSlot(
-                    selfName,
+            functionContext.scopeManager.currentScope().shadowLocalWithFreshSlot(selfName,
                     "$function_expression_name_" + selfName);
         }
 
@@ -240,7 +205,8 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         // to the function scope as var bindings (initialized to undefined).
         // Build parameterNames set (BoundNames of argumentsList).
         Set<String> exprParamNames = functionExpression.getParameterNames();
-        functionContext.compilerAnalysis.hoistFunctionBodyAnnexBDeclarations(functionExpression.getBody().getBody(), exprParamNames);
+        functionContext.compilerAnalysis.hoistFunctionBodyAnnexBDeclarations(functionExpression.getBody().getBody(),
+                exprParamNames);
 
         // Set up CATCH for exception-safe using disposal in function body
         boolean bodyHasUsing = EmitHelpers.hasUsingDeclarations(functionExpression.getBody().getBody());
@@ -268,7 +234,8 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
                 functionContext.emitter.emitOpcode(Opcode.DROP);
             }
             functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            int returnValueIndex = functionContext.scopeManager.currentScope().declareLocal("$function_return_" + functionContext.emitter.currentOffset());
+            int returnValueIndex = functionContext.scopeManager.currentScope()
+                    .declareLocal("$function_return_" + functionContext.emitter.currentOffset());
             functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
             functionContext.emitHelpers.emitCurrentScopeUsingDisposal();
             functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
@@ -284,7 +251,8 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
             }
             int jumpOverCatch = functionContext.emitter.emitJump(Opcode.GOTO);
             functionContext.emitter.patchJump(functionUsingCatchJump, functionContext.emitter.currentOffset());
-            functionContext.emitHelpers.emitScopeUsingDisposalWithException(functionContext.scopeManager.currentScope());
+            functionContext.emitHelpers
+                    .emitScopeUsingDisposalWithException(functionContext.scopeManager.currentScope());
             functionContext.emitter.patchJump(jumpOverCatch, functionContext.emitter.currentOffset());
         }
 
@@ -300,8 +268,7 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
 
         // Detect "use strict" directive in function body
         // Combine inherited strict mode with local "use strict" directive
-        boolean isStrict = functionContext.strictMode
-                || functionExpression.getBody().hasUseStrictDirective();
+        boolean isStrict = functionContext.strictMode || functionExpression.getBody().hasUseStrictDirective();
 
         // Extract function source code from original source
         String functionSource = compilerContext.extractSourceCode(functionExpression.getLocation());
@@ -310,30 +277,23 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         int definedArgCount = functionExpression.getFunctionParams().computeDefinedArgCount();
         // Per ES spec FunctionAllocate: async functions, generator functions,
         // async generators, and getter/setter methods are NOT constructable
-        boolean isFuncConstructor = !forceNonConstructor
-                && !functionExpression.isAsync()
+        boolean isFuncConstructor = !forceNonConstructor && !functionExpression.isAsync()
                 && !functionExpression.isGenerator();
-        JSBytecodeFunction function = new JSBytecodeFunction(
-                compilerContext.context,
-                functionBytecode,
-                functionName,
-                definedArgCount,
-                JSValue.NO_ARGS,
-                null,            // prototype - will be set by VM
-                isFuncConstructor,
-                functionExpression.isAsync(),
-                functionExpression.isGenerator(),
-                false,           // isArrow - regular function, not arrow
-                isStrict,        // strict - detected from "use strict" directive in function body
-                functionSource   // source code for toString()
+        JSBytecodeFunction function = new JSBytecodeFunction(compilerContext.context, functionBytecode, functionName,
+                definedArgCount, JSValue.NO_ARGS, null, // prototype - will be set by VM
+                isFuncConstructor, functionExpression.isAsync(), functionExpression.isGenerator(), false, // isArrow -
+                                                                                                          // regular
+                                                                                                          // function,
+                                                                                                          // not arrow
+                isStrict, // strict - detected from "use strict" directive in function body
+                functionSource // source code for toString()
         );
         function.setHasParameterExpressions(functionExpression.getFunctionParams().hasNonSimpleParameters());
         if (selfNameLocalIndex != null) {
             function.setSelfLocalIndex(selfNameLocalIndex);
         }
         if (bodyScopeEnteredLocalIndex >= 0) {
-            function.setOwnParameterScopeFunctionName(
-                    functionExpression.getId().getName(), bodyScopeEnteredLocalIndex);
+            function.setOwnParameterScopeFunctionName(functionExpression.getId().getName(), bodyScopeEnteredLocalIndex);
         }
         // Created inside enclosing default initializers: those captures are the bindings, and they
         // are in scope for this function's whole lifetime, so they have no phase slot.
@@ -363,17 +323,14 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
     }
 
     /**
-     * Declare function parameters and emit destructuring for pattern params.
-     * For Identifier params, declares as a named parameter slot.
-     * For destructuring Pattern params (ObjectPattern, ArrayPattern), declares
-     * a synthetic parameter slot and emits destructuring code after defaults/rest.
+     * Declare function parameters and emit destructuring for pattern params. For Identifier params, declares as a named
+     * parameter slot. For destructuring Pattern params (ObjectPattern, ArrayPattern), declares a synthetic parameter
+     * slot and emits destructuring code after defaults/rest.
      *
-     * @return list of (index, pattern) pairs for destructuring params that need
-     * post-processing after default/rest initialization
+     * @return list of (index, pattern) pairs for destructuring params that need post-processing after default/rest
+     *         initialization
      */
-    List<int[]> declareParameters(
-            List<Pattern> params,
-            CompilerContext functionContext,
+    List<int[]> declareParameters(List<Pattern> params, CompilerContext functionContext,
             List<Integer> parameterSlotIndexes) {
         List<int[]> destructuringParams = new ArrayList<>();
         for (int i = 0; i < params.size(); i++) {
@@ -394,7 +351,7 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
     }
 
     void emitParameterDestructuring(List<Pattern> params, List<int[]> destructuringParams,
-                                    CompilerContext functionContext) {
+            CompilerContext functionContext) {
         for (int[] entry : destructuringParams) {
             int slotIndex = entry[0];
             int paramIndex = entry[1];
@@ -407,11 +364,10 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
     }
 
     /**
-     * Emit destructuring code for pattern parameters after defaults and rest handling.
-     * Reads the argument value from the synthetic parameter slot and destructures it.
+     * Emit destructuring code for pattern parameters after defaults and rest handling. Reads the argument value from
+     * the synthetic parameter slot and destructures it.
      */
-    void emitRestParameterBinding(RestParameter restParameter,
-                                  CompilerContext functionContext) {
+    void emitRestParameterBinding(RestParameter restParameter, CompilerContext functionContext) {
         if (restParameter.getArgument() instanceof Identifier restId) {
             // Simple rest: ...args → declare local and store
             String restParamName = restId.getName();
@@ -425,10 +381,9 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
     }
 
     /**
-     * Compile a class body expression ensuring it executes in strict mode.
-     * If the enclosing function is sloppy and not a generator/async, wraps
-     * the expression in a strict-mode wrapper function called inline.
-     * Otherwise, compiles inline with compile-time strict mode set.
+     * Compile a class body expression ensuring it executes in strict mode. If the enclosing function is sloppy and not
+     * a generator/async, wraps the expression in a strict-mode wrapper function called inline. Otherwise, compiles
+     * inline with compile-time strict mode set.
      */
     void emitStrictClassBodyExpression(Expression expression) {
         if (canUseStrictWrapper()) {
@@ -445,8 +400,8 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
     }
 
     private void emitStrictExpressionCall(Expression expression) {
-        BytecodeCompiler wrapperCompiler = new BytecodeCompiler(
-                true, compilerContext.captureResolver, compilerContext.context);
+        BytecodeCompiler wrapperCompiler = new BytecodeCompiler(true, compilerContext.captureResolver,
+                compilerContext.context);
         CompilerContext wrapperContext = wrapperCompiler.context();
 
         wrapperContext.sourceCode = compilerContext.sourceCode;
@@ -465,17 +420,8 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         String[] localVarNames = wrapperContext.scopeManager.getLocalVarNames();
         Bytecode bytecode = wrapperContext.emitter.build(localCount, localVarNames);
 
-        JSBytecodeFunction wrapperFunction = new JSBytecodeFunction(
-                compilerContext.context,
-                bytecode,
-                "",
-                0,
-                JSValue.NO_ARGS,
-                null,
-                false, false, false, false,
-                true,
-                null
-        );
+        JSBytecodeFunction wrapperFunction = new JSBytecodeFunction(compilerContext.context, bytecode, "", 0,
+                JSValue.NO_ARGS, null, false, false, false, false, true, null);
         compilerContext.emitHelpers.emitCapturedValues(wrapperCompiler, wrapperFunction);
 
         compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, wrapperFunction);
@@ -492,16 +438,16 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
     }
 
     /**
-     * Carry the enclosing parameter environment's function-expression binding into a nested
-     * function, and on into anything nested inside that.
+     * Carry the enclosing parameter environment's function-expression binding into a nested function, and on into
+     * anything nested inside that.
      * <p>
-     * Compiled references need nothing: they resolve to the enclosing slot by index. A direct
-     * {@code eval} does, because it resolves by name on the frame it runs on — the closure's — and
-     * from there the enclosing function's slot is reachable only through a capture. The name is
-     * captured whether or not the closure mentions it, since whether it does is only knowable by
-     * reading a string at run time.
+     * Compiled references need nothing: they resolve to the enclosing slot by index. A direct {@code eval} does,
+     * because it resolves by name on the frame it runs on — the closure's — and from there the enclosing function's
+     * slot is reachable only through a capture. The name is captured whether or not the closure mentions it, since
+     * whether it does is only knowable by reading a string at run time.
      *
-     * @param targetContext the nested function's compilation context
+     * @param targetContext
+     *            the nested function's compilation context
      * @return the inherited bindings; empty when there are none
      */
     Set<String> inheritParameterScopeFunctionNameCapture(CompilerContext targetContext) {
@@ -516,9 +462,7 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         return parameterScopeFunctionNames;
     }
 
-    void inheritVisibleLexicalCapturesForDirectEvalInBody(
-            CompilerContext targetContext,
-            BlockStatement functionBody,
+    void inheritVisibleLexicalCapturesForDirectEvalInBody(CompilerContext targetContext, BlockStatement functionBody,
             boolean hasNonSimpleParameters) {
         if (hasNonSimpleParameters || !mayContainDirectEvalInBody(functionBody)) {
             return;
@@ -541,8 +485,8 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
     }
 
     void inheritVisibleWithObjectBindings(CompilerContext functionContext) {
-        functionContext.withObjectManager.addInheritedBindingNames(
-                compilerContext.withObjectManager.getVisibleBindingNamesForNestedFunction(compilerContext.scopeManager));
+        functionContext.withObjectManager.addInheritedBindingNames(compilerContext.withObjectManager
+                .getVisibleBindingNamesForNestedFunction(compilerContext.scopeManager));
     }
 
     private boolean mayContainDirectEvalInBody(BlockStatement functionBody) {
@@ -561,5 +505,30 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         } else {
             return functionBodySourceSlice.contains("eval (");
         }
+    }
+
+    /**
+     * Add a name to the set of named-function-expression bindings the enclosing parameter environments make visible.
+     * <p>
+     * A set that already carries the name is already the answer, and is returned as it stands: an inner function
+     * expression reusing an outer one's name shadows it, and the entry says all the consumers ask — whether the name
+     * resolves through a parameter environment.
+     *
+     * @param enclosingNames
+     *            the enclosing environments' names
+     * @param name
+     *            the name to add
+     * @return the set including that name
+     */
+    private static Set<String> withParameterScopeName(Set<String> enclosingNames, String name) {
+        if (enclosingNames.isEmpty()) {
+            return Set.of(name);
+        }
+        if (enclosingNames.contains(name)) {
+            return enclosingNames;
+        }
+        Set<String> names = new HashSet<>(enclosingNames);
+        names.add(name);
+        return Collections.unmodifiableSet(names);
     }
 }

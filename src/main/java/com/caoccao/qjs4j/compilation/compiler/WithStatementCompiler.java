@@ -31,8 +31,8 @@ final class WithStatementCompiler extends AstNodeCompiler<WithStatement> {
     @Override
     void compile(WithStatement withStmt) {
         if (compilerContext.strictMode) {
-            throw new JSSyntaxErrorException(
-                    "Strict mode code may not include a with statement", withStmt.getLocation());
+            throw new JSSyntaxErrorException("Strict mode code may not include a with statement",
+                    withStmt.getLocation());
         }
 
         if (compilerContext.evalReturnLocalIndex >= 0) {
@@ -42,7 +42,8 @@ final class WithStatementCompiler extends AstNodeCompiler<WithStatement> {
         }
 
         compilerContext.scopeManager.enterScope();
-        int withObjectLocalIndex = compilerContext.scopeManager.currentScope().declareLocal("$withObject" + compilerContext.scopeManager.getScopeDepth());
+        int withObjectLocalIndex = compilerContext.scopeManager.currentScope()
+                .declareLocal("$withObject" + compilerContext.scopeManager.getScopeDepth());
         compilerContext.expressionCompiler.compile(withStmt.getObject());
         compilerContext.emitter.emitOpcode(Opcode.TO_OBJECT);
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, withObjectLocalIndex);

@@ -23,13 +23,10 @@ import java.util.Optional;
 /**
  * Parsed and validated settings for Temporal since()/until() operations.
  * <p>
- * The {@link #parse} factory method consolidates the duplicated option-parsing
- * logic that was previously reimplemented in each Temporal prototype.
+ * The {@link #parse} factory method consolidates the duplicated option-parsing logic that was previously reimplemented
+ * in each Temporal prototype.
  */
-public record TemporalDifferenceSettings(
-        TemporalUnit largestUnit,
-        TemporalUnit smallestUnit,
-        long roundingIncrement,
+public record TemporalDifferenceSettings(TemporalUnit largestUnit, TemporalUnit smallestUnit, long roundingIncrement,
         TemporalRoundingMode roundingMode) {
 
     private static long getRoundingIncrementOption(JSContext context, JSObject optionsObject) {
@@ -58,30 +55,32 @@ public record TemporalDifferenceSettings(
     }
 
     /**
-     * Parses and validates difference options from a JS options argument.
-     * This replaces the per-prototype getDifferenceSettings / parseDifferenceOptions methods.
+     * Parses and validates difference options from a JS options argument. This replaces the per-prototype
+     * getDifferenceSettings / parseDifferenceOptions methods.
      *
-     * @param context                 the JS context
-     * @param sinceOperation          true for .since(), false for .until()
-     * @param optionsArg              the raw JS options argument (may be undefined/null)
-     * @param allowedMin              the largest allowed unit (e.g. YEAR for PlainDate, HOUR for PlainTime)
-     * @param allowedMax              the smallest allowed unit (e.g. DAY for PlainDate, NANOSECOND for PlainTime)
-     * @param defaultSmallestUnit     the default smallestUnit when not specified (e.g. DAY for PlainDate, NANOSECOND for PlainTime)
-     * @param autoLargestUnit         what "auto" resolves to before being compared with smallestUnit
-     * @param negateModeForSince      whether to negate roundingMode for since operations
-     * @param validateSubDayIncrement whether to validate increment against sub-day maximums (hour:24, minute:60, etc.)
+     * @param context
+     *            the JS context
+     * @param sinceOperation
+     *            true for .since(), false for .until()
+     * @param optionsArg
+     *            the raw JS options argument (may be undefined/null)
+     * @param allowedMin
+     *            the largest allowed unit (e.g. YEAR for PlainDate, HOUR for PlainTime)
+     * @param allowedMax
+     *            the smallest allowed unit (e.g. DAY for PlainDate, NANOSECOND for PlainTime)
+     * @param defaultSmallestUnit
+     *            the default smallestUnit when not specified (e.g. DAY for PlainDate, NANOSECOND for PlainTime)
+     * @param autoLargestUnit
+     *            what "auto" resolves to before being compared with smallestUnit
+     * @param negateModeForSince
+     *            whether to negate roundingMode for since operations
+     * @param validateSubDayIncrement
+     *            whether to validate increment against sub-day maximums (hour:24, minute:60, etc.)
      * @return parsed settings, or null if a JS error was thrown
      */
-    public static TemporalDifferenceSettings parse(
-            JSContext context,
-            boolean sinceOperation,
-            JSValue optionsArg,
-            TemporalUnit allowedMin,
-            TemporalUnit allowedMax,
-            TemporalUnit defaultSmallestUnit,
-            TemporalUnit autoLargestUnit,
-            boolean negateModeForSince,
-            boolean validateSubDayIncrement) {
+    public static TemporalDifferenceSettings parse(JSContext context, boolean sinceOperation, JSValue optionsArg,
+            TemporalUnit allowedMin, TemporalUnit allowedMax, TemporalUnit defaultSmallestUnit,
+            TemporalUnit autoLargestUnit, boolean negateModeForSince, boolean validateSubDayIncrement) {
 
         // 1. Convert options to object
         JSObject optionsObject = null;
@@ -180,7 +179,8 @@ public record TemporalDifferenceSettings(
         if (validateSubDayIncrement) {
             if (smallestUnit.isTimeUnit()) {
                 long maximumIncrement = smallestUnit.getMaximumSubDayIncrement();
-                if (maximumIncrement > 0 && (roundingIncrement >= maximumIncrement || maximumIncrement % roundingIncrement != 0)) {
+                if (maximumIncrement > 0
+                        && (roundingIncrement >= maximumIncrement || maximumIncrement % roundingIncrement != 0)) {
                     context.throwRangeError("Temporal error: Invalid rounding increment.");
                     return null;
                 }

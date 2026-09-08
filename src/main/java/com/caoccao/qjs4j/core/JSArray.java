@@ -21,29 +21,27 @@ import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import java.util.*;
 
 /**
- * Represents a JavaScript Array object.
- * Based on QuickJS array implementation.
+ * Represents a JavaScript Array object. Based on QuickJS array implementation.
  * <p>
- * Uses dual storage strategy:
- * - Dense array for consecutive indices [0, 1, 2, ...]
- * - Sparse map (inherited from JSObject) for gaps or large indices
+ * Uses dual storage strategy: - Dense array for consecutive indices [0, 1, 2, ...] - Sparse map (inherited from
+ * JSObject) for gaps or large indices
  * <p>
  * Automatically switches between dense and sparse based on usage patterns.
  */
 public final class JSArray extends JSObject {
     public static final int INITIAL_CAPACITY = 8;
+    private static final long MAX_ARRAY_INDEX = 0xFFFF_FFFEL; // 2^32 - 2
+    private static final long MAX_ARRAY_LENGTH = 0xFFFF_FFFFL; // 2^32 - 1
     /**
      * Upper bound on dense element storage. Beyond this an array falls back to sparse storage.
      */
     public static final int MAX_DENSE_SIZE = 10000;
-    public static final String NAME = "Array";
-    private static final long MAX_ARRAY_INDEX = 0xFFFF_FFFEL; // 2^32 - 2
-    private static final long MAX_ARRAY_LENGTH = 0xFFFF_FFFFL; // 2^32 - 1
     /**
-     * Bound on the prototype chain walk performed before an indexed write to a hole.
-     * A real Array prototype chain is two links; the bound only stops a cyclic chain.
+     * Bound on the prototype chain walk performed before an indexed write to a hole. A real Array prototype chain is
+     * two links; the bound only stops a cyclic chain.
      */
     private static final int MAX_PROTOTYPE_SET_DEPTH = 1000;
+    public static final String NAME = "Array";
     private static final double UINT32_MAX_DOUBLE = 4_294_967_295d;
     private static final double UINT32_MODULO = 4_294_967_296d;
     private JSValue[] denseArray;
@@ -61,6 +59,35 @@ public final class JSArray extends JSObject {
     }
 
     /**
+     * Create an array from values.
+     */
+    public JSArray(JSContext context, JSValue... values) {
+        super(context);
+        this.length = values.length;
+        this.denseArray = Arrays.copyOf(values, Math.max(values.length, INITIAL_CAPACITY));
+        // Mark as array class (equivalent to QuickJS class_id == JS_CLASS_ARRAY)
+        this.arrayObject = true;
+        initializeLengthProperty();
+    }
+
+    /**
+     * Create an array from values taking ownership of the provided dense storage. Internal fast path: caller must not
+     * reuse or mutate {@code ownedValues}.
+     */
+    JSArray(JSContext context, JSValue[] ownedValues, boolean takeOwnership) {
+        super(context);
+        this.length = ownedValues.length;
+        if (takeOwnership) {
+            this.denseArray = ownedValues;
+        } else {
+            this.denseArray = Arrays.copyOf(ownedValues, Math.max(ownedValues.length, INITIAL_CAPACITY));
+        }
+        // Mark as array class (equivalent to QuickJS class_id == JS_CLASS_ARRAY)
+        this.arrayObject = true;
+        initializeLengthProperty();
+    }
+
+    /**
      * Create an array with a specific initial length.
      */
     public JSArray(JSContext context, long length) {
@@ -70,15 +97,19 @@ public final class JSArray extends JSObject {
     /**
      * Create an array with a specific initial length and a dense-storage capacity hint.
      * <p>
-     * The hint is clamped into {@code [INITIAL_CAPACITY, MAX_DENSE_SIZE]}. Clamping it down to
-     * {@code INITIAL_CAPACITY} with {@code Math.min} made every capacity hint in the engine a
-     * no-op, and let a negative hint — produced by narrowing a length above {@code 2^31} to
-     * {@code int} — reach {@code new JSValue[capacity]} as a {@link NegativeArraySizeException}.
+     * The hint is clamped into {@code [INITIAL_CAPACITY, MAX_DENSE_SIZE]}. Clamping it down to {@code INITIAL_CAPACITY}
+     * with {@code Math.min} made every capacity hint in the engine a no-op, and let a negative hint — produced by
+     * narrowing a length above {@code 2^31} to {@code int} — reach {@code new JSValue[capacity]} as a
+     * {@link NegativeArraySizeException}.
      *
-     * @param context  the owning context
-     * @param length   the array length; must be a valid ECMAScript array length
-     * @param capacity the dense-storage capacity hint
-     * @throws JSRangeErrorException when {@code length} is not in {@code [0, 2^32 - 1]}
+     * @param context
+     *            the owning context
+     * @param length
+     *            the array length; must be a valid ECMAScript array length
+     * @param capacity
+     *            the dense-storage capacity hint
+     * @throws JSRangeErrorException
+     *             when {@code length} is not in {@code [0, 2^32 - 1]}
      */
     public JSArray(JSContext context, long length, int capacity) {
         super(context);
@@ -97,106 +128,10 @@ public final class JSArray extends JSObject {
     }
 
     /**
-     * Create an array from values.
-     */
-    public JSArray(JSContext context, JSValue... values) {
-        super(context);
-        this.length = values.length;
-        this.denseArray = Arrays.copyOf(values, Math.max(values.length, INITIAL_CAPACITY));
-        // Mark as array class (equivalent to QuickJS class_id == JS_CLASS_ARRAY)
-        this.arrayObject = true;
-        initializeLengthProperty();
-    }
-
-    /**
-     * Create an array from values taking ownership of the provided dense storage.
-     * Internal fast path: caller must not reuse or mutate {@code ownedValues}.
-     */
-    JSArray(JSContext context, JSValue[] ownedValues, boolean takeOwnership) {
-        super(context);
-        this.length = ownedValues.length;
-        if (takeOwnership) {
-            this.denseArray = ownedValues;
-        } else {
-            this.denseArray = Arrays.copyOf(ownedValues, Math.max(ownedValues.length, INITIAL_CAPACITY));
-        }
-        // Mark as array class (equivalent to QuickJS class_id == JS_CLASS_ARRAY)
-        this.arrayObject = true;
-        initializeLengthProperty();
-    }
-
-    /**
-     * Array constructor implementation.
-     * new Array() - creates an empty array
-     * new Array(len) - creates an array with specified length (if len is a number)
-     * new Array(element0, element1, ..., elementN) - creates an array with the given elements
-     * <p>
-     * Based on ES2020 22.1.1.1
-     */
-    public static JSArray create(JSContext context, JSValue... args) {
-        JSArray array = context.createJSArray();
-
-        // Special case: single numeric argument sets array length
-        if (args.length == 1 && args[0] instanceof JSNumber num) {
-            Long length = toArrayLengthFromNumber(num.value());
-            if (length == null) {
-                context.throwRangeError("Invalid array length");
-                return context.createJSArray();
-            }
-            array.setLength(length);
-            return array;
-        }
-
-        // Multiple arguments or non-numeric single argument: create array with elements
-        for (JSValue arg : args) {
-            array.push(arg);
-        }
-
-        return array;
-    }
-
-    /**
-     * Reject a length that no ECMAScript array can have.
-     * <p>
-     * A public engine API must raise an error the engine's own machinery understands, not a raw
-     * {@code java.lang} exception that is neither catchable from JavaScript nor typed for
-     * embedders.
-     *
-     * @param length the candidate length
-     * @throws JSRangeErrorException when {@code length} is not in {@code [0, 2^32 - 1]}
-     */
-    private static void requireValidLength(long length) {
-        if (length < 0 || length > MAX_ARRAY_LENGTH) {
-            throw new JSRangeErrorException("Invalid array length: " + length);
-        }
-    }
-
-    private static Long toArrayLengthFromNumber(double value) {
-        if (!(value >= 0 && value <= UINT32_MAX_DOUBLE)) {
-            return null;
-        }
-        long length = (long) value;
-        return ((double) length == value) ? length : null;
-    }
-
-    private static long toUint32(double value) {
-        if (Double.isNaN(value) || Double.isInfinite(value) || value == 0.0) {
-            return 0;
-        }
-        double integer = value > 0 ? Math.floor(value) : Math.ceil(value);
-        double modulo = integer % UINT32_MODULO;
-        if (modulo < 0) {
-            modulo += UINT32_MODULO;
-        }
-        return (long) modulo;
-    }
-
-    /**
      * Take the index that last blocked a length truncation, clearing it.
      * <p>
-     * Set by {@link #defineProperty(PropertyKey, PropertyDescriptor)} and read by whichever caller
-     * is going to throw, so that a non-throwing caller such as {@code Reflect.defineProperty} is
-     * unaffected.
+     * Set by {@link #defineProperty(PropertyKey, PropertyDescriptor)} and read by whichever caller is going to throw,
+     * so that a non-throwing caller such as {@code Reflect.defineProperty} is unaffected.
      *
      * @return the blocking index, or -1 when the last length truncation was not blocked
      */
@@ -322,8 +257,8 @@ public final class JSArray extends JSObject {
             int intIndex = (int) index;
             // For default data descriptors (writable, enumerable, configurable),
             // store in array storage (denseArray/sparseProperties) rather than shape.
-            if (descriptor.isDataDescriptor() && !descriptor.isAccessorDescriptor()
-                    && descriptor.isWritable() && descriptor.isEnumerable() && descriptor.isConfigurable()) {
+            if (descriptor.isDataDescriptor() && !descriptor.isAccessorDescriptor() && descriptor.isWritable()
+                    && descriptor.isEnumerable() && descriptor.isConfigurable()) {
                 if (index >= length) {
                     if (isLengthWritable()) {
                         setLength(index + 1);
@@ -408,6 +343,11 @@ public final class JSArray extends JSObject {
         return getOwnPropertyKeysInternal(true).toArray(new PropertyKey[0]);
     }
 
+    @Override
+    public JSValue get(int index) {
+        return get((long) index);
+    }
+
     /**
      * Get element at index.
      */
@@ -441,11 +381,6 @@ public final class JSArray extends JSObject {
         }
 
         return JSUndefined.INSTANCE;
-    }
-
-    @Override
-    public JSValue get(int index) {
-        return get((long) index);
     }
 
     /**
@@ -527,9 +462,7 @@ public final class JSArray extends JSObject {
     }
 
     private List<PropertyKey> getOwnPropertyKeysInternal(boolean enumerableOnly) {
-        if (sparseProperties == null
-                && shape.getDeletedPropCount() == 0
-                && shape.getPropertyCount() == 1
+        if (sparseProperties == null && shape.getDeletedPropCount() == 0 && shape.getPropertyCount() == 1
                 && PropertyKey.LENGTH.equals(shape.getPropertyKeyAt(0))) {
             long denseLimit = Math.min(length, denseArray.length);
             boolean packedDenseRange = denseLimit == length;
@@ -703,10 +636,8 @@ public final class JSArray extends JSObject {
      */
     private void initializeLengthProperty() {
         // The length property is special - it's writable but not enumerable or configurable
-        PropertyDescriptor lengthDesc = PropertyDescriptor.dataDescriptor(
-                JSNumber.of(length),
-                PropertyDescriptor.DataState.Writable
-        );
+        PropertyDescriptor lengthDesc = PropertyDescriptor.dataDescriptor(JSNumber.of(length),
+                PropertyDescriptor.DataState.Writable);
         super.defineProperty(PropertyKey.LENGTH, lengthDesc);
     }
 
@@ -718,13 +649,15 @@ public final class JSArray extends JSObject {
     /**
      * Own-property lookup, so a prototype-chain walk finds dense array elements.
      * <p>
-     * This used to override {@code getWithReceiver}, which meant an array link in a prototype
-     * chain could only be reached by recursing into it — one Java frame and one unit of the
-     * prototype-depth budget per link. Adding the elements to the own lookup instead lets the
-     * iterative walk in {@link JSObject} handle arrays like any other ordinary object.
+     * This used to override {@code getWithReceiver}, which meant an array link in a prototype chain could only be
+     * reached by recursing into it — one Java frame and one unit of the prototype-depth budget per link. Adding the
+     * elements to the own lookup instead lets the iterative walk in {@link JSObject} handle arrays like any other
+     * ordinary object.
      *
-     * @param key      the property key
-     * @param receiver the receiver a getter is called with
+     * @param key
+     *            the property key
+     * @param receiver
+     *            the receiver a getter is called with
      * @return the value, or {@code null} when there is no own property
      */
     @Override
@@ -792,10 +725,14 @@ public final class JSArray extends JSObject {
             if (!extensible) {
                 this.context.throwTypeError("Cannot add property " + previousLength + ", object is not extensible");
             } else if (!isLengthWritable()) {
-                this.context.throwTypeError(
-                        "Cannot assign to read only property 'length' of object '[object Array]'");
+                this.context.throwTypeError("Cannot assign to read only property 'length' of object '[object Array]'");
             }
         }
+    }
+
+    @Override
+    public void set(int index, JSValue value) {
+        set((long) index, value);
     }
 
     /**
@@ -815,8 +752,7 @@ public final class JSArray extends JSObject {
         if (isAddingNewElement && !extensible) {
             // In strict mode, throw TypeError when trying to add to non-extensible array
             if (this.context.isStrictMode()) {
-                this.context.throwTypeError(
-                        "Cannot add property " + index + ", object is not extensible");
+                this.context.throwTypeError("Cannot add property " + index + ", object is not extensible");
             }
             return;
         }
@@ -824,8 +760,7 @@ public final class JSArray extends JSObject {
         // Growing the array requires writable length.
         if (isAddingNewElement && !isLengthWritable()) {
             if (this.context.isStrictMode()) {
-                this.context.throwTypeError(
-                        "Cannot assign to read only property 'length' of object '[object Array]'");
+                this.context.throwTypeError("Cannot assign to read only property 'length' of object '[object Array]'");
             }
             return;
         }
@@ -880,11 +815,6 @@ public final class JSArray extends JSObject {
         }
     }
 
-    @Override
-    public void set(int index, JSValue value) {
-        set((long) index, value);
-    }
-
     /**
      * Override set by PropertyKey to handle array indices.
      */
@@ -904,8 +834,7 @@ public final class JSArray extends JSObject {
             boolean result = setWithResult(key, value, this);
             if (!result && !this.context.hasPendingException() && this.context.isStrictMode()
                     && throwBlockedLengthTruncation() == null) {
-                this.context.throwTypeError(
-                        "Cannot assign to read only property 'length' of object '[object Array]'");
+                this.context.throwTypeError("Cannot assign to read only property 'length' of object '[object Array]'");
             }
         } else {
             // Otherwise, use the shape-based storage from JSObject
@@ -914,8 +843,7 @@ public final class JSArray extends JSObject {
     }
 
     /**
-     * Set the array length.
-     * When length is reduced, elements beyond the new length are deleted.
+     * Set the array length. When length is reduced, elements beyond the new length are deleted.
      */
     public void setLength(long newLength) {
         requireValidLength(newLength);
@@ -1038,11 +966,10 @@ public final class JSArray extends JSObject {
     /**
      * Raise the {@code TypeError} for a length truncation a non-configurable element blocked.
      * <p>
-     * V8 names the element rather than the length assignment, because the delete is the operation
-     * that actually failed. Both throwing callers — a strict-mode {@code length} assignment and
-     * {@code Object.defineProperty} — report it through here so the message stays in one place;
-     * a non-throwing caller such as {@code Reflect.defineProperty} never calls it and still just
-     * sees {@code false}.
+     * V8 names the element rather than the length assignment, because the delete is the operation that actually failed.
+     * Both throwing callers — a strict-mode {@code length} assignment and {@code Object.defineProperty} — report it
+     * through here so the message stays in one place; a non-throwing caller such as {@code Reflect.defineProperty}
+     * never calls it and still just sees {@code false}.
      *
      * @return the error value, or {@code null} when the last truncation was not blocked
      */
@@ -1058,17 +985,17 @@ public final class JSArray extends JSObject {
     /**
      * Convert array to a Java array.
      * <p>
-     * A JavaScript array length is a {@code uint32} and can exceed {@code Integer.MAX_VALUE}, which
-     * no Java array can hold. Narrowing the length to {@code int} produced a negative size and a
-     * {@link NegativeArraySizeException}; the range is checked explicitly instead.
+     * A JavaScript array length is a {@code uint32} and can exceed {@code Integer.MAX_VALUE}, which no Java array can
+     * hold. Narrowing the length to {@code int} produced a negative size and a {@link NegativeArraySizeException}; the
+     * range is checked explicitly instead.
      *
      * @return the array elements
-     * @throws JSRangeErrorException when the length exceeds {@code Integer.MAX_VALUE}
+     * @throws JSRangeErrorException
+     *             when the length exceeds {@code Integer.MAX_VALUE}
      */
     public JSValue[] toArray() {
         if (length > Integer.MAX_VALUE) {
-            throw new JSRangeErrorException(
-                    "Array length " + length + " exceeds the maximum Java array size");
+            throw new JSRangeErrorException("Array length " + length + " exceeds the maximum Java array size");
         }
         JSValue[] result = new JSValue[(int) length];
         for (int i = 0; i < result.length; i++) {
@@ -1106,14 +1033,13 @@ public final class JSArray extends JSObject {
     }
 
     /**
-     * Align array element conversion with Javet's object conversion:
-     * integral finite numbers are boxed as Integer/Long instead of Double.
+     * Align array element conversion with Javet's object conversion: integral finite numbers are boxed as Integer/Long
+     * instead of Double.
      */
     private Object toJavaArrayElement(JSValue value) {
         if (value instanceof JSNumber number) {
             double numberValue = number.value();
-            if (Double.isFinite(numberValue)
-                    && numberValue == Math.rint(numberValue)
+            if (Double.isFinite(numberValue) && numberValue == Math.rint(numberValue)
                     && Double.doubleToRawLongBits(numberValue) != Double.doubleToRawLongBits(-0.0d)) {
                 if (numberValue >= Integer.MIN_VALUE && numberValue <= Integer.MAX_VALUE) {
                     return (int) numberValue;
@@ -1167,5 +1093,71 @@ public final class JSArray extends JSObject {
         if (offset >= 0) {
             propertyValues[offset] = JSNumber.of(length);
         }
+    }
+
+    /**
+     * Array constructor implementation. new Array() - creates an empty array new Array(len) - creates an array with
+     * specified length (if len is a number) new Array(element0, element1, ..., elementN) - creates an array with the
+     * given elements
+     * <p>
+     * Based on ES2020 22.1.1.1
+     */
+    public static JSArray create(JSContext context, JSValue... args) {
+        JSArray array = context.createJSArray();
+
+        // Special case: single numeric argument sets array length
+        if (args.length == 1 && args[0] instanceof JSNumber num) {
+            Long length = toArrayLengthFromNumber(num.value());
+            if (length == null) {
+                context.throwRangeError("Invalid array length");
+                return context.createJSArray();
+            }
+            array.setLength(length);
+            return array;
+        }
+
+        // Multiple arguments or non-numeric single argument: create array with elements
+        for (JSValue arg : args) {
+            array.push(arg);
+        }
+
+        return array;
+    }
+
+    /**
+     * Reject a length that no ECMAScript array can have.
+     * <p>
+     * A public engine API must raise an error the engine's own machinery understands, not a raw {@code java.lang}
+     * exception that is neither catchable from JavaScript nor typed for embedders.
+     *
+     * @param length
+     *            the candidate length
+     * @throws JSRangeErrorException
+     *             when {@code length} is not in {@code [0, 2^32 - 1]}
+     */
+    private static void requireValidLength(long length) {
+        if (length < 0 || length > MAX_ARRAY_LENGTH) {
+            throw new JSRangeErrorException("Invalid array length: " + length);
+        }
+    }
+
+    private static Long toArrayLengthFromNumber(double value) {
+        if (!(value >= 0 && value <= UINT32_MAX_DOUBLE)) {
+            return null;
+        }
+        long length = (long) value;
+        return ((double) length == value) ? length : null;
+    }
+
+    private static long toUint32(double value) {
+        if (Double.isNaN(value) || Double.isInfinite(value) || value == 0.0) {
+            return 0;
+        }
+        double integer = value > 0 ? Math.floor(value) : Math.ceil(value);
+        double modulo = integer % UINT32_MODULO;
+        if (modulo < 0) {
+            modulo += UINT32_MODULO;
+        }
+        return (long) modulo;
     }
 }

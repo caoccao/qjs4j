@@ -22,17 +22,13 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Represents the arguments object available in functions.
- * Based on QuickJS JS_CLASS_ARGUMENTS implementation.
+ * Represents the arguments object available in functions. Based on QuickJS JS_CLASS_ARGUMENTS implementation.
  * <p>
- * The arguments object is an array-like object accessible inside functions that contains
- * the values of the arguments passed to that function.
+ * The arguments object is an array-like object accessible inside functions that contains the values of the arguments
+ * passed to that function.
  * <p>
- * Key characteristics:
- * - Array-like: Has indexed access and a length property
- * - Available in non-arrow functions
- * - In strict mode, has no callee property (throws TypeError if accessed)
- * - Has Symbol.iterator for iteration support
+ * Key characteristics: - Array-like: Has indexed access and a length property - Available in non-arrow functions - In
+ * strict mode, has no callee property (throws TypeError if accessed) - Has Symbol.iterator for iteration support
  * <p>
  * ECMAScript Specification: 10.2.11 FunctionDeclarationInstantiation
  */
@@ -46,9 +42,12 @@ public final class JSArguments extends JSObject {
     /**
      * Create an arguments object.
      *
-     * @param context  The execution context
-     * @param args     The argument values
-     * @param isStrict Whether the function is in strict mode
+     * @param context
+     *            The execution context
+     * @param args
+     *            The argument values
+     * @param isStrict
+     *            Whether the function is in strict mode
      */
     public JSArguments(JSContext context, JSValue[] args, boolean isStrict) {
         this(context, args, isStrict, null, null);
@@ -57,10 +56,14 @@ public final class JSArguments extends JSObject {
     /**
      * Create an arguments object with function reference.
      *
-     * @param context  The execution context
-     * @param args     The argument values
-     * @param isStrict Whether the function is in strict mode
-     * @param callee   The function being called (for non-strict mode)
+     * @param context
+     *            The execution context
+     * @param args
+     *            The argument values
+     * @param isStrict
+     *            Whether the function is in strict mode
+     * @param callee
+     *            The function being called (for non-strict mode)
      */
     public JSArguments(JSContext context, JSValue[] args, boolean isStrict, JSFunction callee) {
         this(context, args, isStrict, callee, null);
@@ -69,40 +72,37 @@ public final class JSArguments extends JSObject {
     /**
      * Create an arguments object with optional mapped parameter references.
      *
-     * @param context       The execution context
-     * @param args          The argument values
-     * @param isStrict      Whether the function is in strict mode
-     * @param callee        The function being called (for non-strict mode)
-     * @param mappedVarRefs Optional per-index references for mapped arguments object
+     * @param context
+     *            The execution context
+     * @param args
+     *            The argument values
+     * @param isStrict
+     *            Whether the function is in strict mode
+     * @param callee
+     *            The function being called (for non-strict mode)
+     * @param mappedVarRefs
+     *            Optional per-index references for mapped arguments object
      */
-    public JSArguments(
-            JSContext context,
-            JSValue[] args,
-            boolean isStrict,
-            JSFunction callee,
-            VarRef[] mappedVarRefs) {
+    public JSArguments(JSContext context, JSValue[] args, boolean isStrict, JSFunction callee, VarRef[] mappedVarRefs) {
         super(context);
         this.argumentValues = args != null ? args : JSValue.NO_ARGS;
         this.isStrict = isStrict;
         this.parameterVarRefs = mappedVarRefs;
 
         // Set length property (writable, non-enumerable, configurable per ES spec)
-        defineProperty(PropertyKey.fromString("length"), JSNumber.of(argumentValues.length), PropertyDescriptor.DataState.ConfigurableWritable);
+        defineProperty(PropertyKey.fromString("length"), JSNumber.of(argumentValues.length),
+                PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Set indexed properties for each argument
         for (int i = 0; i < argumentValues.length; i++) {
             if (mappedVarRefs != null && i < mappedVarRefs.length && mappedVarRefs[i] != null) {
                 mappedIndices.add(i);
-                PropertyDescriptor argDesc = PropertyDescriptor.dataDescriptor(
-                        argumentValues[i],
-                        PropertyDescriptor.DataState.All
-                );
+                PropertyDescriptor argDesc = PropertyDescriptor.dataDescriptor(argumentValues[i],
+                        PropertyDescriptor.DataState.All);
                 defineProperty(PropertyKey.fromIndex(i), argDesc);
             } else {
-                PropertyDescriptor argDesc = PropertyDescriptor.dataDescriptor(
-                        argumentValues[i],
-                        PropertyDescriptor.DataState.All
-                );
+                PropertyDescriptor argDesc = PropertyDescriptor.dataDescriptor(argumentValues[i],
+                        PropertyDescriptor.DataState.All);
                 defineProperty(PropertyKey.fromIndex(i), argDesc);
             }
         }
@@ -115,20 +115,15 @@ public final class JSArguments extends JSObject {
             JSNativeFunction thrower = context.getThrowTypeErrorIntrinsic();
             if (thrower == null) {
                 // Fallback if intrinsic not yet initialized
-                thrower = new JSNativeFunction(context, "ThrowTypeError",
-                        0,
+                thrower = new JSNativeFunction(context, "ThrowTypeError", 0,
                         (ctx, thisArg, argsArray) -> ctx.throwTypeError(
-                                "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them"
-                        )
-                );
+                                "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them"));
             }
 
             // Define callee as accessor with thrower for both get and set
-            PropertyDescriptor calleeDesc = PropertyDescriptor.accessorDescriptor(
-                    thrower,  // getter throws
-                    thrower,  // setter throws
-                    PropertyDescriptor.AccessorState.None
-            );
+            PropertyDescriptor calleeDesc = PropertyDescriptor.accessorDescriptor(thrower, // getter throws
+                    thrower, // setter throws
+                    PropertyDescriptor.AccessorState.None);
             defineProperty(PropertyKey.CALLEE, calleeDesc);
 
             // Note: arguments.caller is NOT defined in strict mode (returns undefined when accessed)
@@ -136,7 +131,8 @@ public final class JSArguments extends JSObject {
         } else {
             // In non-strict mode, callee is a data property referencing the function
             if (callee != null) {
-                defineProperty(PropertyKey.fromString("callee"), callee, PropertyDescriptor.DataState.ConfigurableWritable);
+                defineProperty(PropertyKey.fromString("callee"), callee,
+                        PropertyDescriptor.DataState.ConfigurableWritable);
             }
 
             // Note: arguments.caller is NOT defined (returns undefined when accessed)
@@ -157,7 +153,8 @@ public final class JSArguments extends JSObject {
                         if (arrayProto instanceof JSObject arrayProtoObj) {
                             JSValue arrayIterator = arrayProtoObj.get(PropertyKey.fromSymbol(sym));
                             if (arrayIterator != null && !(arrayIterator instanceof JSUndefined)) {
-                                defineProperty(PropertyKey.fromSymbol(sym), arrayIterator, PropertyDescriptor.DataState.ConfigurableWritable);
+                                defineProperty(PropertyKey.fromSymbol(sym), arrayIterator,
+                                        PropertyDescriptor.DataState.ConfigurableWritable);
                             }
                         }
                     }
@@ -169,13 +166,11 @@ public final class JSArguments extends JSObject {
     }
 
     /**
-     * Override [[DefineOwnProperty]] per ES2024 10.4.4.2.
-     * Mapped parameters are stored as accessor properties for VarRef synchronization,
-     * but the spec treats them as data properties. This override implements ES2024
-     * 10.4.4.2 [[DefineOwnProperty]] for arguments objects:
-     * - Before applying, unmap the accessor so OrdinaryDefineOwnProperty sees a data property
-     * - After applying, sync VarRef if descriptor has [[Value]]
-     * - Unmap on accessor descriptor or writable:false
+     * Override [[DefineOwnProperty]] per ES2024 10.4.4.2. Mapped parameters are stored as accessor properties for
+     * VarRef synchronization, but the spec treats them as data properties. This override implements ES2024 10.4.4.2
+     * [[DefineOwnProperty]] for arguments objects: - Before applying, unmap the accessor so OrdinaryDefineOwnProperty
+     * sees a data property - After applying, sync VarRef if descriptor has [[Value]] - Unmap on accessor descriptor or
+     * writable:false
      */
     @Override
     public boolean defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
@@ -196,8 +191,8 @@ public final class JSArguments extends JSObject {
                 mappedIndices.remove(index);
             } else {
                 // Step 7b.i: sync parameter map when value is explicitly provided.
-                if (descriptor.hasValue() && parameterVarRefs != null
-                        && index < parameterVarRefs.length && parameterVarRefs[index] != null) {
+                if (descriptor.hasValue() && parameterVarRefs != null && index < parameterVarRefs.length
+                        && parameterVarRefs[index] != null) {
                     parameterVarRefs[index].set(descriptor.getValue());
                     argumentValues[index] = descriptor.getValue();
                 }
@@ -277,9 +272,8 @@ public final class JSArguments extends JSObject {
     }
 
     /**
-     * Override set to handle indexed properties.
-     * When setting an indexed property, we need to update both the property descriptor
-     * AND the underlying argumentValues array to keep them in sync.
+     * Override set to handle indexed properties. When setting an indexed property, we need to update both the property
+     * descriptor AND the underlying argumentValues array to keep them in sync.
      */
     @Override
     public void set(PropertyKey key, JSValue value) {

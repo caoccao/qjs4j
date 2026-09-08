@@ -23,26 +23,18 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 
 /**
- * JavaScript type conversion operations as defined in ECMAScript specification.
- * Based on QuickJS quickjs.c type conversion implementation.
+ * JavaScript type conversion operations as defined in ECMAScript specification. Based on QuickJS quickjs.c type
+ * conversion implementation.
  * <p>
- * Implements all abstract operations from ES2020:
- * - ToPrimitive
- * - ToBoolean
- * - ToNumber
- * - ToString
- * - ToObject
- * - ToInteger
- * - ToInt32, ToUint32
- * - ToLength
+ * Implements all abstract operations from ES2020: - ToPrimitive - ToBoolean - ToNumber - ToString - ToObject -
+ * ToInteger - ToInt32, ToUint32 - ToLength
  */
 public final class JSTypeConversions {
     private static final int MAX_CACHED_NUMBER_STRING_LENGTH = 256;
     private static volatile NumberStringCacheEntry numberStringCacheEntry;
 
     /**
-     * Abstract Equality Comparison (==).
-     * ES2020 7.2.14
+     * Abstract Equality Comparison (==). ES2020 7.2.14
      */
     public static boolean abstractEquals(JSContext context, JSValue x, JSValue y) {
         // Same type comparison
@@ -142,31 +134,24 @@ public final class JSTypeConversions {
     }
 
     /**
-     * Check if a character is ECMAScript whitespace (StrWhiteSpaceChar).
-     * Includes all characters from the ES spec's WhiteSpace and LineTerminator productions.
+     * Check if a character is ECMAScript whitespace (StrWhiteSpaceChar). Includes all characters from the ES spec's
+     * WhiteSpace and LineTerminator productions.
      */
     private static boolean isEcmaWhitespace(char c) {
         if (c <= 0x20) {
             return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\u000B';
         }
-        return c == '\u00A0' || c == '\u1680' ||
-                (c >= '\u2000' && c <= '\u200A') ||
-                c == '\u2028' || c == '\u2029' ||
-                c == '\u202F' || c == '\u205F' ||
-                c == '\u3000' || c == '\uFEFF';
+        return c == '\u00A0' || c == '\u1680' || (c >= '\u2000' && c <= '\u200A') || c == '\u2028' || c == '\u2029'
+                || c == '\u202F' || c == '\u205F' || c == '\u3000' || c == '\uFEFF';
     }
 
     /**
      * Check if a value is primitive.
      */
     public static boolean isPrimitive(JSValue value) {
-        return value instanceof JSUndefined ||
-                value instanceof JSNull ||
-                value instanceof JSBoolean ||
-                value instanceof JSNumber ||
-                value instanceof JSString ||
-                value instanceof JSSymbol ||
-                value instanceof JSBigInt;
+        return value instanceof JSUndefined || value instanceof JSNull || value instanceof JSBoolean
+                || value instanceof JSNumber || value instanceof JSString || value instanceof JSSymbol
+                || value instanceof JSBigInt;
     }
 
     private static boolean isValidBigIntDigits(String digits, int radix) {
@@ -176,9 +161,7 @@ public final class JSTypeConversions {
                 case 2 -> c == '0' || c == '1';
                 case 8 -> c >= '0' && c <= '7';
                 case 10 -> c >= '0' && c <= '9';
-                case 16 -> (c >= '0' && c <= '9') ||
-                        (c >= 'a' && c <= 'f') ||
-                        (c >= 'A' && c <= 'F');
+                case 16 -> (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
                 default -> false;
             };
             if (!valid) {
@@ -236,8 +219,7 @@ public final class JSTypeConversions {
     }
 
     /**
-     * Less Than Comparison ({@code x < y}).
-     * ES2020 7.2.13
+     * Less Than Comparison ({@code x < y}). ES2020 7.2.13
      */
     public static boolean lessThan(JSContext context, JSValue x, JSValue y) {
         return lessThanResult(context, x, y) == RelationalComparisonResult.TRUE;
@@ -247,10 +229,7 @@ public final class JSTypeConversions {
         return lessThanResult(context, x, y, true);
     }
 
-    public static RelationalComparisonResult lessThanResult(
-            JSContext context,
-            JSValue x,
-            JSValue y,
+    public static RelationalComparisonResult lessThanResult(JSContext context, JSValue x, JSValue y,
             boolean leftFirst) {
         JSValue px;
         JSValue py;
@@ -337,9 +316,7 @@ public final class JSTypeConversions {
         if (Double.isNaN(numberX) || Double.isNaN(numberY)) {
             return RelationalComparisonResult.UNDEFINED;
         }
-        return numberX < numberY
-                ? RelationalComparisonResult.TRUE
-                : RelationalComparisonResult.FALSE;
+        return numberX < numberY ? RelationalComparisonResult.TRUE : RelationalComparisonResult.FALSE;
     }
 
     private static boolean numberEqualsBigInt(double number, BigInteger bigInt) {
@@ -363,8 +340,8 @@ public final class JSTypeConversions {
     }
 
     /**
-     * Parse a radix literal string (digits after the 0x/0b/0o prefix) into a JSNumber.
-     * Handles values that overflow long by using Double.
+     * Parse a radix literal string (digits after the 0x/0b/0o prefix) into a JSNumber. Handles values that overflow
+     * long by using Double.
      */
     private static JSNumber parseRadixLiteral(String digits, int radix) {
         if (digits.isEmpty()) {
@@ -443,8 +420,7 @@ public final class JSTypeConversions {
                 context.setPendingException(virtualMachineException.getJsError());
                 return;
             }
-            context.throwError(
-                    "Error",
+            context.throwError("Error",
                     throwable.getMessage() == null ? "Unhandled exception" : throwable.getMessage());
             return;
         }
@@ -452,14 +428,11 @@ public final class JSTypeConversions {
             context.setPendingException(jsException.getErrorValue());
             return;
         }
-        context.throwError(
-                "Error",
-                throwable.getMessage() == null ? "Unhandled exception" : throwable.getMessage());
+        context.throwError("Error", throwable.getMessage() == null ? "Unhandled exception" : throwable.getMessage());
     }
 
     /**
-     * Strict Equality Comparison (===).
-     * ES2020 7.2.15
+     * Strict Equality Comparison (===). ES2020 7.2.15
      */
     public static boolean strictEquals(JSValue x, JSValue y) {
         // Different types
@@ -505,10 +478,8 @@ public final class JSTypeConversions {
     }
 
     /**
-     * Convert string to BigInt following QuickJS JS_StringToBigInt semantics.
-     * Empty/whitespace-only strings convert to 0n.
-     * Decimal strings allow an optional leading sign.
-     * Binary/octal/hex prefixes do not allow a leading sign.
+     * Convert string to BigInt following QuickJS JS_StringToBigInt semantics. Empty/whitespace-only strings convert to
+     * 0n. Decimal strings allow an optional leading sign. Binary/octal/hex prefixes do not allow a leading sign.
      *
      */
     public static JSBigInt stringToBigInt(String value) {
@@ -597,9 +568,7 @@ public final class JSTypeConversions {
     }
 
     /**
-     * ToBigInt(value)
-     * ES2020 7.1.13
-     * Converts a value to a BigInt.
+     * ToBigInt(value) ES2020 7.1.13 Converts a value to a BigInt.
      */
     public static JSBigInt toBigInt(JSContext context, JSValue value) {
         if (value instanceof JSBigInt bigInt) {
@@ -614,8 +583,7 @@ public final class JSTypeConversions {
         if (value instanceof JSString stringValue) {
             JSBigInt parsed = stringToBigInt(stringValue.value());
             if (parsed == null) {
-                throw new JSSyntaxErrorException(
-                        "Cannot convert " + stringValue.value() + " to a BigInt");
+                throw new JSSyntaxErrorException("Cannot convert " + stringValue.value() + " to a BigInt");
             }
             return parsed;
         }
@@ -626,14 +594,12 @@ public final class JSTypeConversions {
             }
             return toBigInt(context, primitive);
         }
-        throw new JSTypeErrorException(
-                "Cannot convert " + value + " to a BigInt");
+        throw new JSTypeErrorException("Cannot convert " + value + " to a BigInt");
     }
 
     /**
-     * ToBigInt64(value)
-     * Converts a value to BigInt, then truncates to int64 (mod 2^64).
-     * Following QuickJS JS_ToBigInt64Free.
+     * ToBigInt64(value) Converts a value to BigInt, then truncates to int64 (mod 2^64). Following QuickJS
+     * JS_ToBigInt64Free.
      */
     public static long toBigInt64(JSContext context, JSValue value) {
         JSBigInt bigInt = toBigInt(context, value);
@@ -641,8 +607,7 @@ public final class JSTypeConversions {
     }
 
     /**
-     * ToBoolean(argument)
-     * ES2020 7.1.2
+     * ToBoolean(argument) ES2020 7.1.2
      */
     public static JSBoolean toBoolean(JSValue value) {
         if (value instanceof JSUndefined) {
@@ -674,9 +639,7 @@ public final class JSTypeConversions {
     }
 
     /**
-     * ToIndex(argument)
-     * ES2020 7.1.23
-     * Used for typed array indices
+     * ToIndex(argument) ES2020 7.1.23 Used for typed array indices
      */
     public static long toIndex(JSContext context, JSValue value) {
         if (value instanceof JSUndefined) {
@@ -703,17 +666,7 @@ public final class JSTypeConversions {
     }
 
     /**
-     * ToInt32(argument)
-     * ES2020 7.1.6
-     */
-    public static int toInt32(JSContext context, JSValue value) {
-        JSNumber number = toNumber(context, value);
-        return toInt32(number.value());
-    }
-
-    /**
-     * ToInt32 for a primitive double value.
-     * Mirrors QuickJS JS_ToInt32Free() bit-level conversion semantics.
+     * ToInt32 for a primitive double value. Mirrors QuickJS JS_ToInt32Free() bit-level conversion semantics.
      */
     public static int toInt32(double d) {
         if (!Double.isFinite(d) || d == 0.0d) {
@@ -731,16 +684,22 @@ public final class JSTypeConversions {
     }
 
     /**
-     * ToInt8(argument)
-     * ES2020 7.1.9
+     * ToInt32(argument) ES2020 7.1.6
+     */
+    public static int toInt32(JSContext context, JSValue value) {
+        JSNumber number = toNumber(context, value);
+        return toInt32(number.value());
+    }
+
+    /**
+     * ToInt8(argument) ES2020 7.1.9
      */
     public static byte toInt8(JSContext context, JSValue value) {
         return (byte) toInt32(context, value);
     }
 
     /**
-     * ToInteger(argument)
-     * ES2020 7.1.20 (ToIntegerOrInfinity)
+     * ToInteger(argument) ES2020 7.1.20 (ToIntegerOrInfinity)
      */
     public static double toInteger(JSContext context, JSValue value) {
         JSNumber number = toNumber(context, value);
@@ -759,9 +718,7 @@ public final class JSTypeConversions {
     }
 
     /**
-     * ToLength(argument)
-     * ES2020 7.1.22
-     * Converts to integer suitable for array length (0 to 2^53-1)
+     * ToLength(argument) ES2020 7.1.22 Converts to integer suitable for array length (0 to 2^53-1)
      */
     public static long toLength(JSContext context, JSValue value) {
         double len = toInteger(context, value);
@@ -774,8 +731,7 @@ public final class JSTypeConversions {
     }
 
     /**
-     * ToNumber(argument)
-     * ES2020 7.1.4
+     * ToNumber(argument) ES2020 7.1.4
      */
     public static JSNumber toNumber(JSContext context, JSValue value) {
         if (value instanceof JSUndefined) {
@@ -819,10 +775,8 @@ public final class JSTypeConversions {
     }
 
     /**
-     * ToObject(argument)
-     * ES2024 7.1.18
-     * Converts a value to an Object by auto-boxing primitives.
-     * Returns null for null/undefined.
+     * ToObject(argument) ES2024 7.1.18 Converts a value to an Object by auto-boxing primitives. Returns null for
+     * null/undefined.
      */
     public static JSObject toObject(JSContext context, JSValue value) {
         if (value instanceof JSObject jsObj) {
@@ -850,8 +804,7 @@ public final class JSTypeConversions {
     }
 
     /**
-     * ToPrimitive(input, preferredType)
-     * ES2020 7.1.1
+     * ToPrimitive(input, preferredType) ES2020 7.1.1
      */
     public static JSValue toPrimitive(JSContext context, JSValue input, PreferredType hint) {
         // If input is already primitive, return it
@@ -934,16 +887,12 @@ public final class JSTypeConversions {
     }
 
     /**
-     * ToString(argument)
-     * ES2020 7.1.17
+     * ToString(argument) ES2020 7.1.17
      */
     public static JSString toString(JSContext context, JSValue value) {
         if (value == null) {
             return new JSString("null");
-        } else if (value.isNullOrUndefined()
-                || value.isBigInt()
-                || value.isBoolean()
-                || value.isNumber()
+        } else if (value.isNullOrUndefined() || value.isBigInt() || value.isBoolean() || value.isNumber()
                 || value.isTypedArray()) {
             return new JSString(value.toString());
         } else if (value instanceof JSString s) {
@@ -967,32 +916,28 @@ public final class JSTypeConversions {
     }
 
     /**
-     * ToUint16(argument)
-     * ES2020 7.1.8
+     * ToUint16(argument) ES2020 7.1.8
      */
     public static int toUint16(JSContext context, JSValue value) {
         return toInt32(context, value) & 0xFFFF;
     }
 
     /**
-     * ToUint32(argument)
-     * ES2020 7.1.7
+     * ToUint32(argument) ES2020 7.1.7
      */
     public static long toUint32(JSContext context, JSValue value) {
         return Integer.toUnsignedLong(toInt32(context, value));
     }
 
     /**
-     * ToUint8(argument)
-     * ES2020 7.1.10
+     * ToUint8(argument) ES2020 7.1.10
      */
     public static short toUint8(JSContext context, JSValue value) {
         return (short) (toInt32(context, value) & 0xFF);
     }
 
     /**
-     * ToUint8Clamp for a primitive double value.
-     * Mirrors QuickJS JS_ToUint8ClampFree() semantics (ties-to-even).
+     * ToUint8Clamp for a primitive double value. Mirrors QuickJS JS_ToUint8ClampFree() semantics (ties-to-even).
      */
     public static int toUint8Clamp(double d) {
         if (Double.isNaN(d)) {
@@ -1008,8 +953,7 @@ public final class JSTypeConversions {
     }
 
     /**
-     * ToUint8Clamp(value)
-     * ES operation used by Uint8ClampedArray element writes.
+     * ToUint8Clamp(value) ES operation used by Uint8ClampedArray element writes.
      */
     public static int toUint8Clamp(JSContext context, JSValue value) {
         return toUint8Clamp(toNumber(context, value).value());
@@ -1019,21 +963,17 @@ public final class JSTypeConversions {
         return stringToBigInt(value);
     }
 
+    private record NumberStringCacheEntry(String source, JSNumber number) {
+    }
+
     /**
      * Preferred type for ToPrimitive operation.
      */
     public enum PreferredType {
-        NUMBER,
-        STRING,
-        DEFAULT
+        DEFAULT, NUMBER, STRING
     }
 
     public enum RelationalComparisonResult {
-        TRUE,
-        FALSE,
-        UNDEFINED
-    }
-
-    private record NumberStringCacheEntry(String source, JSNumber number) {
+        FALSE, TRUE, UNDEFINED
     }
 }

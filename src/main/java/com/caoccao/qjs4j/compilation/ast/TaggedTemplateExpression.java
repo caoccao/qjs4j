@@ -17,17 +17,13 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 /**
- * Tagged template expression.
- * Represents tagged template literals like String.raw`hello`.
+ * Tagged template expression. Represents tagged template literals like String.raw`hello`.
  */
 public final class TaggedTemplateExpression extends Expression {
     private final TemplateLiteral quasi;
     private final Expression tag;
 
-    public TaggedTemplateExpression(
-            Expression tag,
-            TemplateLiteral quasi,
-            SourceLocation location) {
+    public TaggedTemplateExpression(Expression tag, TemplateLiteral quasi, SourceLocation location) {
         super(location);
         this.tag = tag;
         this.quasi = quasi;

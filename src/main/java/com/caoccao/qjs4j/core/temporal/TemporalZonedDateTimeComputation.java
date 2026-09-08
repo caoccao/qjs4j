@@ -19,8 +19,6 @@ package com.caoccao.qjs4j.core.temporal;
 import java.math.BigInteger;
 import java.time.LocalDateTime;
 
-public record TemporalZonedDateTimeComputation(
-        LocalDateTime localDateTime,
-        BigInteger epochNanoseconds,
+public record TemporalZonedDateTimeComputation(LocalDateTime localDateTime, BigInteger epochNanoseconds,
         int offsetSeconds) {
 }

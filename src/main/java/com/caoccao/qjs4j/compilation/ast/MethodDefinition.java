@@ -27,12 +27,7 @@ public final class MethodDefinition extends ClassElement {
     private final String kind;
     private final FunctionExpression value;
 
-    public MethodDefinition(
-            Expression key,
-            FunctionExpression value,
-            String kind,
-            boolean computed,
-            boolean isStatic,
+    public MethodDefinition(Expression key, FunctionExpression value, String kind, boolean computed, boolean isStatic,
             boolean isPrivate) {
         super(key != null ? key.getLocation() : (value != null ? value.getLocation() : new SourceLocation(0, 0, 0, 0)));
         this.key = key;
@@ -94,8 +89,7 @@ public final class MethodDefinition extends ClassElement {
     }
 
     /**
-     * Per ES2024, only non-static, non-computed "constructor" defines
-     * a class constructor method.
+     * Per ES2024, only non-static, non-computed "constructor" defines a class constructor method.
      */
     public boolean isConstructor() {
         if (isStatic || computed) {

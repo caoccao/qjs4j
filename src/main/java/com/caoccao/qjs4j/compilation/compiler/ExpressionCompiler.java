@@ -21,8 +21,7 @@ import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 
 /**
- * Compiles expression AST nodes into bytecode.
- * Dispatches to specialized expression compilers.
+ * Compiles expression AST nodes into bytecode. Dispatches to specialized expression compilers.
  */
 final class ExpressionCompiler extends AstNodeCompiler<Expression> {
     ExpressionCompiler(CompilerContext compilerContext) {
@@ -36,8 +35,7 @@ final class ExpressionCompiler extends AstNodeCompiler<Expression> {
         } else if (expr instanceof Identifier identifier) {
             compilerContext.identifierCompiler.compile(identifier);
         } else if (expr instanceof PrivateIdentifier privateIdentifier) {
-            throw new JSCompilerException(
-                    "undefined private field '#" + privateIdentifier.getName() + "'",
+            throw new JSCompilerException("undefined private field '#" + privateIdentifier.getName() + "'",
                     privateIdentifier);
         } else if (expr instanceof BinaryExpression binExpr) {
             compilerContext.binaryExpressionCompiler.compile(binExpr);
@@ -93,10 +91,9 @@ final class ExpressionCompiler extends AstNodeCompiler<Expression> {
     }
 
     /**
-     * Pre-evaluate the LHS of a destructuring assignment element before calling FOR_OF_NEXT.
-     * Per spec (IteratorDestructuringAssignmentEvaluation step 1a): if the target is not
-     * a pattern, evaluate it first to get the reference.
-     * Returns the number of values pushed on the stack (the depth for FOR_OF_NEXT).
+     * Pre-evaluate the LHS of a destructuring assignment element before calling FOR_OF_NEXT. Per spec
+     * (IteratorDestructuringAssignmentEvaluation step 1a): if the target is not a pattern, evaluate it first to get the
+     * reference. Returns the number of values pushed on the stack (the depth for FOR_OF_NEXT).
      */
     int preEvaluateAssignmentTarget(Expression element) {
         Expression target = getAssignmentTarget(element);

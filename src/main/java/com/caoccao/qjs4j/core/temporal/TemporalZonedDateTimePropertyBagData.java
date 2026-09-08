@@ -16,18 +16,7 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
-public record TemporalZonedDateTimePropertyBagData(
-        TemporalCalendarId calendarId,
-        int year,
-        Integer month,
-        IsoMonth parsedMonthCode,
-        int day,
-        int hour,
-        int minute,
-        int second,
-        int millisecond,
-        int microsecond,
-        int nanosecond,
-        String timeZoneId,
-        Integer offsetSeconds) {
+public record TemporalZonedDateTimePropertyBagData(TemporalCalendarId calendarId, int year, Integer month,
+        IsoMonth parsedMonthCode, int day, int hour, int minute, int second, int millisecond, int microsecond,
+        int nanosecond, String timeZoneId, Integer offsetSeconds) {
 }

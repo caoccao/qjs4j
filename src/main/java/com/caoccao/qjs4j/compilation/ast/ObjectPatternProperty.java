@@ -25,11 +25,7 @@ public final class ObjectPatternProperty extends ASTNode {
     private final boolean shorthand;
     private final Pattern value;
 
-    public ObjectPatternProperty(
-            Expression key,
-            Pattern value,
-            boolean computed,
-            boolean shorthand) {
+    public ObjectPatternProperty(Expression key, Pattern value, boolean computed, boolean shorthand) {
         super(key != null ? key.getLocation() : (value != null ? value.getLocation() : new SourceLocation(0, 0, 0, 0)));
         this.key = key;
         this.value = value;

@@ -47,90 +47,13 @@ public final class JSIntlSegments extends JSObject {
     private static final int SUPPLEMENTAL_VS_START = 0xE0100;
 
     private final JSIntlSegmenter segmenter;
-    private final String text;
     private List<SegmentRange> segmentRanges;
+    private final String text;
 
     public JSIntlSegments(JSContext context, JSIntlSegmenter segmenter, String text) {
         super(context);
         this.segmenter = segmenter;
         this.text = text;
-    }
-
-    private static HangulType getHangulType(int codePoint) {
-        if ((codePoint >= HANGUL_JAMO_L_START && codePoint <= HANGUL_JAMO_L_END)
-                || (codePoint >= HANGUL_JAMO_EXTENDED_A_START && codePoint <= HANGUL_JAMO_EXTENDED_A_END)) {
-            return HangulType.L;
-        }
-        if ((codePoint >= HANGUL_JAMO_V_START && codePoint <= HANGUL_JAMO_V_END)
-                || (codePoint >= HANGUL_JAMO_EXTENDED_B_START_L && codePoint <= HANGUL_JAMO_EXTENDED_B_END_L)) {
-            return HangulType.V;
-        }
-        if ((codePoint >= HANGUL_JAMO_T_START && codePoint <= HANGUL_JAMO_T_END)
-                || (codePoint >= HANGUL_JAMO_EXTENDED_B_START_T && codePoint <= HANGUL_JAMO_EXTENDED_B_END_T)) {
-            return HangulType.T;
-        }
-        if (codePoint >= HANGUL_SYLLABLE_START && codePoint <= HANGUL_SYLLABLE_END) {
-            int tIndex = (codePoint - HANGUL_SYLLABLE_START) % 28;
-            return tIndex == 0 ? HangulType.LV : HangulType.LVT;
-        }
-        return HangulType.NONE;
-    }
-
-    private static boolean isCombiningMark(int codePoint) {
-        int characterType = Character.getType(codePoint);
-        return characterType == Character.NON_SPACING_MARK
-                || characterType == Character.COMBINING_SPACING_MARK
-                || characterType == Character.ENCLOSING_MARK;
-    }
-
-    private static boolean isEmojiModifier(int codePoint) {
-        return codePoint >= EMOJI_MODIFIER_START && codePoint <= EMOJI_MODIFIER_END;
-    }
-
-    private static boolean isVariationSelector(int codePoint) {
-        return (codePoint >= CODE_POINT_VS_START && codePoint <= CODE_POINT_VS_END)
-                || (codePoint >= SUPPLEMENTAL_VS_START && codePoint <= SUPPLEMENTAL_VS_END);
-    }
-
-    private static boolean isWordLikeSegment(String segment) {
-        for (int offset = 0; offset < segment.length(); ) {
-            int codePoint = segment.codePointAt(offset);
-            if (Character.isLetterOrDigit(codePoint)) {
-                return true;
-            }
-            offset += Character.charCount(codePoint);
-        }
-        return false;
-    }
-
-    private static boolean shouldMergeGrapheme(String previousSegment, String currentSegment) {
-        if (previousSegment.isEmpty() || currentSegment.isEmpty()) {
-            return false;
-        }
-
-        int previousCodePoint = previousSegment.codePointBefore(previousSegment.length());
-        int currentCodePoint = currentSegment.codePointAt(0);
-
-        if (isCombiningMark(currentCodePoint)
-                || isVariationSelector(currentCodePoint)
-                || isEmojiModifier(currentCodePoint)
-                || currentCodePoint == CODE_POINT_ZWJ
-                || previousCodePoint == CODE_POINT_ZWJ) {
-            return true;
-        }
-
-        HangulType previousType = getHangulType(previousCodePoint);
-        HangulType currentType = getHangulType(currentCodePoint);
-        if (previousType == HangulType.L
-                && (currentType == HangulType.L || currentType == HangulType.V
-                || currentType == HangulType.LV || currentType == HangulType.LVT)) {
-            return true;
-        }
-        if ((previousType == HangulType.LV || previousType == HangulType.V)
-                && (currentType == HangulType.V || currentType == HangulType.T)) {
-            return true;
-        }
-        return (previousType == HangulType.LVT || previousType == HangulType.T) && currentType == HangulType.T;
     }
 
     public JSValue containing(JSContext context, JSValue indexValue) {
@@ -167,11 +90,14 @@ public final class JSIntlSegments extends JSObject {
 
     private JSObject createSegmentDataObject(JSContext context, SegmentRange segmentRange) {
         JSObject result = context.createJSObject();
-        result.defineProperty(PropertyKey.fromString("segment"), new JSString(segmentRange.segment()), PropertyDescriptor.DataState.All);
-        result.defineProperty(PropertyKey.fromString("index"), JSNumber.of(segmentRange.start()), PropertyDescriptor.DataState.All);
+        result.defineProperty(PropertyKey.fromString("segment"), new JSString(segmentRange.segment()),
+                PropertyDescriptor.DataState.All);
+        result.defineProperty(PropertyKey.fromString("index"), JSNumber.of(segmentRange.start()),
+                PropertyDescriptor.DataState.All);
         result.defineProperty(PropertyKey.fromString("input"), new JSString(text), PropertyDescriptor.DataState.All);
         if (segmenter.isWordGranularity()) {
-            result.defineProperty(PropertyKey.fromString("isWordLike"), JSBoolean.valueOf(segmentRange.wordLike()), PropertyDescriptor.DataState.All);
+            result.defineProperty(PropertyKey.fromString("isWordLike"), JSBoolean.valueOf(segmentRange.wordLike()),
+                    PropertyDescriptor.DataState.All);
         }
         return result;
     }
@@ -205,8 +131,7 @@ public final class JSIntlSegments extends JSObject {
                 if (shouldMergeGrapheme(previousRange.segment(), currentRange.segment())) {
                     String mergedSegment = previousRange.segment() + currentRange.segment();
                     boolean mergedWordLike = segmenter.isWordGranularity() && isWordLikeSegment(mergedSegment);
-                    mergedRanges.set(
-                            mergedRanges.size() - 1,
+                    mergedRanges.set(mergedRanges.size() - 1,
                             new SegmentRange(previousRange.start(), currentRange.end(), mergedSegment, mergedWordLike));
                 } else {
                     mergedRanges.add(currentRange);
@@ -218,13 +143,81 @@ public final class JSIntlSegments extends JSObject {
         segmentRanges = ranges;
     }
 
+    private static HangulType getHangulType(int codePoint) {
+        if ((codePoint >= HANGUL_JAMO_L_START && codePoint <= HANGUL_JAMO_L_END)
+                || (codePoint >= HANGUL_JAMO_EXTENDED_A_START && codePoint <= HANGUL_JAMO_EXTENDED_A_END)) {
+            return HangulType.L;
+        }
+        if ((codePoint >= HANGUL_JAMO_V_START && codePoint <= HANGUL_JAMO_V_END)
+                || (codePoint >= HANGUL_JAMO_EXTENDED_B_START_L && codePoint <= HANGUL_JAMO_EXTENDED_B_END_L)) {
+            return HangulType.V;
+        }
+        if ((codePoint >= HANGUL_JAMO_T_START && codePoint <= HANGUL_JAMO_T_END)
+                || (codePoint >= HANGUL_JAMO_EXTENDED_B_START_T && codePoint <= HANGUL_JAMO_EXTENDED_B_END_T)) {
+            return HangulType.T;
+        }
+        if (codePoint >= HANGUL_SYLLABLE_START && codePoint <= HANGUL_SYLLABLE_END) {
+            int tIndex = (codePoint - HANGUL_SYLLABLE_START) % 28;
+            return tIndex == 0 ? HangulType.LV : HangulType.LVT;
+        }
+        return HangulType.NONE;
+    }
+
+    private static boolean isCombiningMark(int codePoint) {
+        int characterType = Character.getType(codePoint);
+        return characterType == Character.NON_SPACING_MARK || characterType == Character.COMBINING_SPACING_MARK
+                || characterType == Character.ENCLOSING_MARK;
+    }
+
+    private static boolean isEmojiModifier(int codePoint) {
+        return codePoint >= EMOJI_MODIFIER_START && codePoint <= EMOJI_MODIFIER_END;
+    }
+
+    private static boolean isVariationSelector(int codePoint) {
+        return (codePoint >= CODE_POINT_VS_START && codePoint <= CODE_POINT_VS_END)
+                || (codePoint >= SUPPLEMENTAL_VS_START && codePoint <= SUPPLEMENTAL_VS_END);
+    }
+
+    private static boolean isWordLikeSegment(String segment) {
+        for (int offset = 0; offset < segment.length();) {
+            int codePoint = segment.codePointAt(offset);
+            if (Character.isLetterOrDigit(codePoint)) {
+                return true;
+            }
+            offset += Character.charCount(codePoint);
+        }
+        return false;
+    }
+
+    private static boolean shouldMergeGrapheme(String previousSegment, String currentSegment) {
+        if (previousSegment.isEmpty() || currentSegment.isEmpty()) {
+            return false;
+        }
+
+        int previousCodePoint = previousSegment.codePointBefore(previousSegment.length());
+        int currentCodePoint = currentSegment.codePointAt(0);
+
+        if (isCombiningMark(currentCodePoint) || isVariationSelector(currentCodePoint)
+                || isEmojiModifier(currentCodePoint) || currentCodePoint == CODE_POINT_ZWJ
+                || previousCodePoint == CODE_POINT_ZWJ) {
+            return true;
+        }
+
+        HangulType previousType = getHangulType(previousCodePoint);
+        HangulType currentType = getHangulType(currentCodePoint);
+        if (previousType == HangulType.L && (currentType == HangulType.L || currentType == HangulType.V
+                || currentType == HangulType.LV || currentType == HangulType.LVT)) {
+            return true;
+        }
+        if ((previousType == HangulType.LV || previousType == HangulType.V)
+                && (currentType == HangulType.V || currentType == HangulType.T)) {
+            return true;
+        }
+        return (previousType == HangulType.LVT || previousType == HangulType.T) && currentType == HangulType.T;
+    }
+
     private enum HangulType {
-        NONE,
-        L,
-        V,
-        T,
-        LV,
-        LVT
+        L, LV, LVT, NONE, T, V
     }
 
     private record SegmentRange(int start, int end, String segment, boolean wordLike) {

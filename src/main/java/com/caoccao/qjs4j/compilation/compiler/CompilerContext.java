@@ -23,9 +23,8 @@ import com.caoccao.qjs4j.core.JSSymbol;
 import java.util.*;
 
 /**
- * Shared mutable state for the bytecode compiler.
- * Holds data fields and references to manager services.
- * All scope, loop, and with-object logic is delegated to dedicated managers.
+ * Shared mutable state for the bytecode compiler. Holds data fields and references to manager services. All scope,
+ * loop, and with-object logic is delegated to dedicated managers.
  */
 final class CompilerContext {
     // Finally management
@@ -34,19 +33,6 @@ final class CompilerContext {
     // Annex B
     final Set<String> annexBFunctionNames;
     final Map<String, Integer> annexBFunctionScopeLocals;
-    // Services
-    final CaptureResolver captureResolver;
-    final BytecodeEmitter emitter;
-    final LoopManager loopManager;
-    // TDZ and global bindings
-    final Set<String> nonDeletableGlobalBindings;
-    // Pre-resolved binding references for with-statement var destructuring
-    final Map<String, Deque<PreResolvedReference>> preResolvedBindingReferences;
-    final ScopeManager scopeManager;
-    final Set<String> tdzLocals;
-    final WithObjectManager withObjectManager;
-    // State stack
-    private final Deque<CompilerStateFrame> stateStack;
     // Delegate compilers (initialized via initializeDelegates)
     ArrayExpressionCompiler arrayExpressionCompiler;
     ArrayExpressionDestructuringAssignmentCompiler arrayExpressionDestructuringAssignmentCompiler;
@@ -59,6 +45,8 @@ final class CompilerContext {
     BlockStatementCompiler blockStatementCompiler;
     BreakStatementCompiler breakStatementCompiler;
     CallExpressionCompiler callExpressionCompiler;
+    // Services
+    final CaptureResolver captureResolver;
     ClassDeclarationCompiler classDeclarationCompiler;
     ClassExpressionCompiler classExpressionCompiler;
     // Other flags (not stack-managed)
@@ -72,6 +60,7 @@ final class CompilerContext {
     EmitHelpers emitHelpers;
     // Flags (managed by state stack)
     boolean emitTailCalls;
+    final BytecodeEmitter emitter;
     boolean evalMode;
     int evalReturnLocalIndex;
     ExpressionCompiler expressionCompiler;
@@ -90,8 +79,8 @@ final class CompilerContext {
     ImportExpressionCompiler importExpressionCompiler;
     boolean inClassBody;
     boolean inClassFieldInitializer;
-    boolean inGlobalScope;
     String inferredClassName;
+    boolean inGlobalScope;
     boolean isGlobalProgram;
     boolean isInArrowFunction;
     boolean isInAsyncFunction;
@@ -99,28 +88,29 @@ final class CompilerContext {
     boolean isLastInProgram;
     LabeledStatementCompiler labeledStatementCompiler;
     LiteralCompiler literalCompiler;
+    final LoopManager loopManager;
     MemberExpressionCompiler memberExpressionCompiler;
     MemberExpressionDestructuringAssignmentCompiler memberExpressionDestructuringAssignmentCompiler;
     NewExpressionCompiler newExpressionCompiler;
+    // TDZ and global bindings
+    final Set<String> nonDeletableGlobalBindings;
     ObjectExpressionCompiler objectExpressionCompiler;
     ObjectExpressionDestructuringAssignmentCompiler objectExpressionDestructuringAssignmentCompiler;
     ObjectPatternCompiler objectPatternCompiler;
     /**
-     * The named-function-expression bindings the code being compiled resolves through enclosing
-     * parameter environments. Never null; empty when there are none.
+     * The named-function-expression bindings the code being compiled resolves through enclosing parameter environments.
+     * Never null; empty when there are none.
      * <p>
-     * Set while a default initializer of a function expression whose body redeclares its own name
-     * is being compiled, and inherited by every function nested inside that initializer —
-     * everything lexically there is in the parameter environment, whose outer environment holds the
-     * name. A closure created there must capture the bindings by name, because a direct
-     * {@code eval} inside it resolves names at run time and the frame it runs on is the closure's,
-     * not the one whose parameters were being initialized.
+     * Set while a default initializer of a function expression whose body redeclares its own name is being compiled,
+     * and inherited by every function nested inside that initializer — everything lexically there is in the parameter
+     * environment, whose outer environment holds the name. A closure created there must capture the bindings by name,
+     * because a direct {@code eval} inside it resolves names at run time and the frame it runs on is the closure's, not
+     * the one whose parameters were being initialized.
      * <p>
-     * A set rather than one name, because the initializers nest: a named function expression inside
-     * another one's default initializer is inside <em>both</em> parameter environments, and a single
-     * slot could only remember the inner one. It held the inner one, so the outer binding silently
-     * disappeared from anything compiled there. A set rather than a list because membership is the
-     * only question asked of it.
+     * A set rather than one name, because the initializers nest: a named function expression inside another one's
+     * default initializer is inside <em>both</em> parameter environments, and a single slot could only remember the
+     * inner one. It held the inner one, so the outer binding silently disappeared from anything compiled there. A set
+     * rather than a list because membership is the only question asked of it.
      *
      * @see com.caoccao.qjs4j.core.JSBytecodeFunction#getInheritedParameterScopeFunctionNames()
      */
@@ -128,25 +118,32 @@ final class CompilerContext {
     PatternCompiler patternCompiler;
     Runnable pendingPostSuperInitialization;
     boolean predeclareProgramLexicalsAsLocals;
+    // Pre-resolved binding references for with-statement var destructuring
+    final Map<String, Deque<PreResolvedReference>> preResolvedBindingReferences;
     Map<String, JSSymbol> privateSymbols;
     ProgramCompiler programCompiler;
     ReturnStatementCompiler returnStatementCompiler;
+    final ScopeManager scopeManager;
     SequenceExpressionCompiler sequenceExpressionCompiler;
     String sourceCode;
     StatementCompiler statementCompiler;
+    // State stack
+    private final Deque<CompilerStateFrame> stateStack;
     boolean strictMode;
     boolean suppressAnnexBVarStore;
     SwitchStatementCompiler switchStatementCompiler;
     TaggedTemplateExpressionCompiler taggedTemplateExpressionCompiler;
+    final Set<String> tdzLocals;
     TemplateLiteralCompiler templateLiteralCompiler;
     ThrowStatementCompiler throwStatementCompiler;
     TryStatementCompiler tryStatementCompiler;
     UnaryExpressionCompiler unaryExpressionCompiler;
     boolean useExistingBindingInParentScopes;
     CompilerScope varDeclarationScopeOverride;
-    boolean varInGlobalProgram;
     VariableDeclarationCompiler variableDeclarationCompiler;
+    boolean varInGlobalProgram;
     WhileStatementCompiler whileStatementCompiler;
+    final WithObjectManager withObjectManager;
     WithStatementCompiler withStatementCompiler;
     YieldExpressionCompiler yieldExpressionCompiler;
 
@@ -232,10 +229,12 @@ final class CompilerContext {
         this.labeledStatementCompiler = new LabeledStatementCompiler(this);
         this.literalCompiler = new LiteralCompiler(this);
         this.memberExpressionCompiler = new MemberExpressionCompiler(this);
-        this.memberExpressionDestructuringAssignmentCompiler = new MemberExpressionDestructuringAssignmentCompiler(this);
+        this.memberExpressionDestructuringAssignmentCompiler = new MemberExpressionDestructuringAssignmentCompiler(
+                this);
         this.newExpressionCompiler = new NewExpressionCompiler(this);
         this.objectExpressionCompiler = new ObjectExpressionCompiler(this);
-        this.objectExpressionDestructuringAssignmentCompiler = new ObjectExpressionDestructuringAssignmentCompiler(this);
+        this.objectExpressionDestructuringAssignmentCompiler = new ObjectExpressionDestructuringAssignmentCompiler(
+                this);
         this.objectPatternCompiler = new ObjectPatternCompiler(this);
         this.patternCompiler = new PatternCompiler(this);
         this.programCompiler = new ProgramCompiler(this);
@@ -267,10 +266,8 @@ final class CompilerContext {
     }
 
     void pushState() {
-        stateStack.push(new CompilerStateFrame(
-                strictMode, inGlobalScope, inClassBody,
-                inClassFieldInitializer, emitTailCalls,
-                varInGlobalProgram, privateSymbols, inferredClassName));
+        stateStack.push(new CompilerStateFrame(strictMode, inGlobalScope, inClassBody, inClassFieldInitializer,
+                emitTailCalls, varInGlobalProgram, privateSymbols, inferredClassName));
     }
 
     record PreResolvedReference(int objectLocalIndex, int propertyLocalIndex) {

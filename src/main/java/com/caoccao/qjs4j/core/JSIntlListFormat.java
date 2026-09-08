@@ -22,8 +22,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Intl.ListFormat instance object.
- * Uses CLDR-based patterns for locale-specific list formatting.
+ * Intl.ListFormat instance object. Uses CLDR-based patterns for locale-specific list formatting.
  */
 public final class JSIntlListFormat extends JSObject {
     public static final String NAME = "Intl.ListFormat";
@@ -67,9 +66,12 @@ public final class JSIntlListFormat extends JSObject {
         PATTERNS.put("ja|conjunction|long", new ListPatterns("\u3001", "\u3001", "\u3001", "\u3001"));
         PATTERNS.put("ja|conjunction|short", new ListPatterns("\u3001", "\u3001", "\u3001", "\u3001"));
         PATTERNS.put("ja|conjunction|narrow", new ListPatterns("\u3001", "\u3001", "\u3001", "\u3001"));
-        PATTERNS.put("ja|disjunction|long", new ListPatterns("\u307E\u305F\u306F", "\u3001", "\u3001", "\u3001\u307E\u305F\u306F"));
-        PATTERNS.put("ja|disjunction|short", new ListPatterns("\u307E\u305F\u306F", "\u3001", "\u3001", "\u3001\u307E\u305F\u306F"));
-        PATTERNS.put("ja|disjunction|narrow", new ListPatterns("\u307E\u305F\u306F", "\u3001", "\u3001", "\u3001\u307E\u305F\u306F"));
+        PATTERNS.put("ja|disjunction|long",
+                new ListPatterns("\u307E\u305F\u306F", "\u3001", "\u3001", "\u3001\u307E\u305F\u306F"));
+        PATTERNS.put("ja|disjunction|short",
+                new ListPatterns("\u307E\u305F\u306F", "\u3001", "\u3001", "\u3001\u307E\u305F\u306F"));
+        PATTERNS.put("ja|disjunction|narrow",
+                new ListPatterns("\u307E\u305F\u306F", "\u3001", "\u3001", "\u3001\u307E\u305F\u306F"));
         PATTERNS.put("ja|unit|long", new ListPatterns(" ", " ", " ", " "));
         PATTERNS.put("ja|unit|short", new ListPatterns(" ", " ", " ", " "));
         PATTERNS.put("ja|unit|narrow", new ListPatterns("", "", "", ""));

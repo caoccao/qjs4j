@@ -44,9 +44,7 @@ final class BreakStatementCompiler extends AstNodeCompiler<BreakStatement> {
                 }
             }
             if (target == null) {
-                throw new JSCompilerException(
-                        "Undefined label '" + labelName + "'",
-                        breakStmt);
+                throw new JSCompilerException("Undefined label '" + labelName + "'", breakStmt);
             }
             compilerContext.emitHelpers.emitIteratorCloseForLoopsUntil(target);
             compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(target.breakTargetScopeDepth);

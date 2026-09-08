@@ -19,19 +19,18 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 /**
- * Implementation of WeakMap.prototype methods.
- * Based on ES2020 WeakMap specification.
+ * Implementation of WeakMap.prototype methods. Based on ES2020 WeakMap specification.
  */
 public final class WeakMapPrototype {
 
     /**
-     * WeakMap.prototype.delete(key)
-     * ES2020 23.3.3.2
-     * Removes the element with the specified key. Returns true if an element existed and was removed.
+     * WeakMap.prototype.delete(key) ES2020 23.3.3.2 Removes the element with the specified key. Returns true if an
+     * element existed and was removed.
      */
     public static JSValue delete(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSWeakMap jsWeakMap)) {
-            return context.throwTypeError("Method WeakMap.prototype.delete called on incompatible receiver not weakmap");
+            return context
+                    .throwTypeError("Method WeakMap.prototype.delete called on incompatible receiver not weakmap");
         }
         JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         if (!JSWeakMap.isWeakMapKey(key)) {
@@ -41,9 +40,8 @@ public final class WeakMapPrototype {
     }
 
     /**
-     * WeakMap.prototype.get(key)
-     * ES2020 23.3.3.3
-     * Returns the value associated with the key, or undefined if none exists.
+     * WeakMap.prototype.get(key) ES2020 23.3.3.3 Returns the value associated with the key, or undefined if none
+     * exists.
      */
     public static JSValue get(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSWeakMap jsWeakMap)) {
@@ -57,8 +55,7 @@ public final class WeakMapPrototype {
     }
 
     /**
-     * WeakMap.prototype.getOrInsert(key, defaultValue)
-     * QuickJS extension.
+     * WeakMap.prototype.getOrInsert(key, defaultValue) QuickJS extension.
      */
     public static JSValue getOrInsert(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSWeakMap jsWeakMap)) {
@@ -77,8 +74,7 @@ public final class WeakMapPrototype {
     }
 
     /**
-     * WeakMap.prototype.getOrInsertComputed(key, callback)
-     * QuickJS extension.
+     * WeakMap.prototype.getOrInsertComputed(key, callback) QuickJS extension.
      */
     public static JSValue getOrInsertComputed(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSWeakMap jsWeakMap)) {
@@ -105,9 +101,8 @@ public final class WeakMapPrototype {
     }
 
     /**
-     * WeakMap.prototype.has(key)
-     * ES2020 23.3.3.4
-     * Returns a boolean indicating whether an element with the specified key exists.
+     * WeakMap.prototype.has(key) ES2020 23.3.3.4 Returns a boolean indicating whether an element with the specified key
+     * exists.
      */
     public static JSValue has(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSWeakMap jsWeakMap)) {
@@ -121,10 +116,8 @@ public final class WeakMapPrototype {
     }
 
     /**
-     * WeakMap.prototype.set(key, value)
-     * ES2020 23.3.3.5
-     * Sets the value for the key in the WeakMap object. Returns the WeakMap object.
-     * Key must be an object.
+     * WeakMap.prototype.set(key, value) ES2020 23.3.3.5 Sets the value for the key in the WeakMap object. Returns the
+     * WeakMap object. Key must be an object.
      */
     public static JSValue set(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSWeakMap jsWeakMap)) {

@@ -7,23 +7,17 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
 
     @Test
     public void testBigIntElementSetConversionErrors() {
-        assertErrorWithJavet(
-                "(() => { const a = new BigInt64Array(1); a[0] = '1.2'; })()",
+        assertErrorWithJavet("(() => { const a = new BigInt64Array(1); a[0] = '1.2'; })()",
                 "(() => { const a = new BigUint64Array(1); a[0] = Symbol('x'); })()");
     }
 
     @Test
     public void testBigIntObjectArgStringToBigInt() {
-        assertStringWithJavet(
-                "new BigInt64Array(['', '1'])[0].toString()",
-                "new BigInt64Array(['', '1'])[1].toString()",
-                "new BigUint64Array(['', '1'])[0].toString()",
+        assertStringWithJavet("new BigInt64Array(['', '1'])[0].toString()",
+                "new BigInt64Array(['', '1'])[1].toString()", "new BigUint64Array(['', '1'])[0].toString()",
                 "new BigUint64Array(['', '1'])[1].toString()");
-        assertErrorWithJavet(
-                "new BigInt64Array(['1n'])",
-                "new BigInt64Array(['Infinity'])",
-                "new BigInt64Array(['1.1'])",
-                "new BigInt64Array(['1e7'])");
+        assertErrorWithJavet("new BigInt64Array(['1n'])", "new BigInt64Array(['Infinity'])",
+                "new BigInt64Array(['1.1'])", "new BigInt64Array(['1e7'])");
     }
 
     @Test
@@ -56,32 +50,30 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
 
     @Test
     public void testBigIntTypedArrayFromWithMapFn() {
-        assertBooleanWithJavet(
-                """
-                        (() => {
-                        const mapfn = (kValue) => kValue * 2n;
-                        const a = BigInt64Array.from([42n, 43n, 42n], mapfn);
-                        const b = BigUint64Array.from([42n, 43n, 42n], mapfn);
-                        return a.length === 3
-                          && a[0] === 84n
-                          && a[1] === 86n
-                          && a[2] === 84n
-                          && b.length === 3
-                          && b[0] === 84n
-                          && b[1] === 86n
-                          && b[2] === 84n;
-                        })()""");
+        assertBooleanWithJavet("""
+                (() => {
+                const mapfn = (kValue) => kValue * 2n;
+                const a = BigInt64Array.from([42n, 43n, 42n], mapfn);
+                const b = BigUint64Array.from([42n, 43n, 42n], mapfn);
+                return a.length === 3
+                  && a[0] === 84n
+                  && a[1] === 86n
+                  && a[2] === 84n
+                  && b.length === 3
+                  && b[0] === 84n
+                  && b[1] === 86n
+                  && b[2] === 84n;
+                })()""");
     }
 
     @Test
     public void testBigIntTypedArrayIterableAbruptCompletion() {
-        assertBooleanWithJavet(
-                """
-                        (() => {
-                        function Test262Error(message) { this.message = message || ''; }
-                        var obj = (function*() { yield 0; throw new Test262Error('boom'); })();
-                        try { new BigInt64Array(obj); return false; } catch (e) { return e instanceof Test262Error; }
-                        })()""");
+        assertBooleanWithJavet("""
+                (() => {
+                function Test262Error(message) { this.message = message || ''; }
+                var obj = (function*() { yield 0; throw new Test262Error('boom'); })();
+                try { new BigInt64Array(obj); return false; } catch (e) { return e instanceof Test262Error; }
+                })()""");
     }
 
     @Test
@@ -93,39 +85,27 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
 
     @Test
     public void testByteOffsetToNumberDetachBufferThrowsTypeError() {
-        assertBooleanWithJavet(
-                """
-                        (() => {
-                        const offset = Uint16Array.BYTES_PER_ELEMENT;
-                        const buffer = new ArrayBuffer(3 * offset);
-                        const byteOffset = {
-                          valueOf() {
-                            ArrayBuffer.prototype.transfer.call(buffer, 0);
-                            return offset;
-                          }
-                        };
-                        try { new Uint16Array(buffer, byteOffset); return false; }
-                        catch (e) { return e instanceof TypeError; }
-                        })()""");
+        assertBooleanWithJavet("""
+                (() => {
+                const offset = Uint16Array.BYTES_PER_ELEMENT;
+                const buffer = new ArrayBuffer(3 * offset);
+                const byteOffset = {
+                  valueOf() {
+                    ArrayBuffer.prototype.transfer.call(buffer, 0);
+                    return offset;
+                  }
+                };
+                try { new Uint16Array(buffer, byteOffset); return false; }
+                catch (e) { return e instanceof TypeError; }
+                })()""");
     }
 
     @Test
     public void testConstructor() {
-        assertErrorWithJavet(
-                "BigInt64Array(1)",
-                "BigUint64Array(1)",
-                "Float16Array(1)",
-                "Float32Array(1)",
-                "Float64Array(1)",
-                "Int16Array(1)",
-                "Int32Array(1)",
-                "Int8Array(1)",
-                "Uint16Array(1)",
-                "Uint32Array(1)",
-                "Uint8Array(1)",
-                "Uint8ClampedArray(1)");
-        assertStringWithJavet(
-                "var aUint8Array = new Uint8Array(); aUint8Array.toString()",
+        assertErrorWithJavet("BigInt64Array(1)", "BigUint64Array(1)", "Float16Array(1)", "Float32Array(1)",
+                "Float64Array(1)", "Int16Array(1)", "Int32Array(1)", "Int8Array(1)", "Uint16Array(1)", "Uint32Array(1)",
+                "Uint8Array(1)", "Uint8ClampedArray(1)");
+        assertStringWithJavet("var aUint8Array = new Uint8Array(); aUint8Array.toString()",
                 "var aUint8Array = new Uint8Array(3); aUint8Array.toString()",
                 "var aUint8Array = new Uint8Array({0:1,1:2,2:3,length:3}); aUint8Array.toString()",
                 "var aUint8Array = new Uint8Array([1,2,3]); aUint8Array.toString()");
@@ -133,8 +113,7 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
 
     @Test
     public void testDefaultSortPrimitivePaths() {
-        assertBooleanWithJavet(
-                "new Int16Array([32767, -1, -32768, 0]).sort().toString() === '-32768,-1,0,32767'",
+        assertBooleanWithJavet("new Int16Array([32767, -1, -32768, 0]).sort().toString() === '-32768,-1,0,32767'",
                 "new Uint16Array([65535, 1, 0, 32768]).sort().toString() === '0,1,32768,65535'",
                 "(() => { const a = new Int16Array(65536); for (let i = 0; i < a.length; i++) a[i] = 32767 - i; a.sort(); return a[0] === -32768 && a[32768] === 0 && a[65535] === 32767; })()",
                 "(() => { const a = new Float64Array([NaN, 0, -0, 3, -Infinity]).sort(); return a[0] === -Infinity && Object.is(a[1], -0) && Object.is(a[2], 0) && a[3] === 3 && Number.isNaN(a[4]); })()",
@@ -157,38 +136,33 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
 
     @Test
     public void testFromOfAndSpecies() {
-        assertStringWithJavet(
-                "Uint8Array.of(1, 2, 3).toString()",
-                "Uint8Array.from([1, 2, 3]).toString()",
+        assertStringWithJavet("Uint8Array.of(1, 2, 3).toString()", "Uint8Array.from([1, 2, 3]).toString()",
                 "Uint8Array.from([1, 2, 3], x => x + 1).toString()",
                 "Uint8Array.from({0: 7, 1: 8, length: 2}).toString()");
-        assertBooleanWithJavet(
-                "(() => { class X extends Uint8Array {}; return X[Symbol.species] === X; })()",
+        assertBooleanWithJavet("(() => { class X extends Uint8Array {}; return X[Symbol.species] === X; })()",
                 "(() => { try { Uint8Array.from.call({}, [1]); return false; } catch (e) { return e instanceof TypeError; } })()");
     }
 
     @Test
     public void testFromWithCustomConstructorReturningTypedArray() {
-        assertBooleanWithJavet(
-                """
-                        (() => {
-                        const custom = new Uint8Array(3);
-                        const ctor = function() { return custom; };
-                        const result = TypedArray.from.call(ctor, [1, 2, 3]);
-                        return result === custom
-                          && result[0] === 1
-                          && result[1] === 2
-                          && result[2] === 3;
-                        })()""",
-                """
-                        (() => {
-                        const custom = new BigInt64Array(2);
-                        const ctor = function() { return custom; };
-                        const result = TypedArray.from.call(ctor, [1n, 2n]);
-                        return result === custom
-                          && result[0] === 1n
-                          && result[1] === 2n;
-                        })()""");
+        assertBooleanWithJavet("""
+                (() => {
+                const custom = new Uint8Array(3);
+                const ctor = function() { return custom; };
+                const result = TypedArray.from.call(ctor, [1, 2, 3]);
+                return result === custom
+                  && result[0] === 1
+                  && result[1] === 2
+                  && result[2] === 3;
+                })()""", """
+                (() => {
+                const custom = new BigInt64Array(2);
+                const ctor = function() { return custom; };
+                const result = TypedArray.from.call(ctor, [1n, 2n]);
+                return result === custom
+                  && result[0] === 1n
+                  && result[1] === 2n;
+                })()""");
     }
 
     @Test
@@ -214,114 +188,91 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
 
     @Test
     public void testSharedArrayBufferBackedTypedArraySourceCreatesArrayBufferBackedTarget() {
-        assertBooleanWithJavet(
-                """
-                        (() => {
-                        const sab = new SharedArrayBuffer(4);
-                        const views = [Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array];
-                        for (const View1 of views) {
-                          const ta1 = new View1(sab);
-                          for (const View2 of views) {
-                            const ta2 = new View2(ta1);
-                            if (ta2.buffer.constructor !== ArrayBuffer) {
-                              return false;
-                            }
-                          }
-                        }
-                        return true;
-                        })()""");
+        assertBooleanWithJavet("""
+                (() => {
+                const sab = new SharedArrayBuffer(4);
+                const views = [Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array];
+                for (const View1 of views) {
+                  const ta1 = new View1(sab);
+                  for (const View2 of views) {
+                    const ta2 = new View2(ta1);
+                    if (ta2.buffer.constructor !== ArrayBuffer) {
+                      return false;
+                    }
+                  }
+                }
+                return true;
+                })()""");
     }
 
     @Test
     public void testTypedArrayOfConstructorBehavior() {
-        assertStringWithJavet(
-                "TypedArray.of.call(Uint8Array, 1, 2, 3).toString()",
-                """
-                        (() => {
-                          let capturedLength = -1;
-                          const ctor = function(length) {
-                            capturedLength = length;
-                            return new Uint8Array(length);
-                          };
-                          const out = TypedArray.of.call(ctor, 8, 9);
-                          return [capturedLength, out.length, out[0], out[1]].join(',');
-                        })()""");
-        assertErrorWithJavet(
-                "TypedArray.of.call({}, 1)",
-                "TypedArray.of.call(function() { return {}; }, 1)");
+        assertStringWithJavet("TypedArray.of.call(Uint8Array, 1, 2, 3).toString()", """
+                (() => {
+                  let capturedLength = -1;
+                  const ctor = function(length) {
+                    capturedLength = length;
+                    return new Uint8Array(length);
+                  };
+                  const out = TypedArray.of.call(ctor, 8, 9);
+                  return [capturedLength, out.length, out[0], out[1]].join(',');
+                })()""");
+        assertErrorWithJavet("TypedArray.of.call({}, 1)", "TypedArray.of.call(function() { return {}; }, 1)");
     }
 
     @Test
     public void testTypedArrayPrototypeExoticSetWithArrayReceiver() {
-        assertStringWithJavet(
-                """
-                        (() => {
-                          const typedArray = new Uint8Array([7]);
-                          const receiverArray = [];
-                          Object.setPrototypeOf(receiverArray, typedArray);
-                          receiverArray[0] = 9;
-                          return [
-                            receiverArray.hasOwnProperty('0'),
-                            receiverArray[0],
-                            typedArray[0]
-                          ].join(',');
-                        })()""",
-                """
-                        (() => {
-                          const typedArray = new Uint8Array([7]);
-                          const receiverArray = [];
-                          Object.setPrototypeOf(receiverArray, typedArray);
-                          receiverArray[1] = 9;
-                          return [
-                            receiverArray.hasOwnProperty('1'),
-                            String(typedArray[1])
-                          ].join(',');
-                        })()""");
+        assertStringWithJavet("""
+                (() => {
+                  const typedArray = new Uint8Array([7]);
+                  const receiverArray = [];
+                  Object.setPrototypeOf(receiverArray, typedArray);
+                  receiverArray[0] = 9;
+                  return [
+                    receiverArray.hasOwnProperty('0'),
+                    receiverArray[0],
+                    typedArray[0]
+                  ].join(',');
+                })()""", """
+                (() => {
+                  const typedArray = new Uint8Array([7]);
+                  const receiverArray = [];
+                  Object.setPrototypeOf(receiverArray, typedArray);
+                  receiverArray[1] = 9;
+                  return [
+                    receiverArray.hasOwnProperty('1'),
+                    String(typedArray[1])
+                  ].join(',');
+                })()""");
     }
 
     @Test
     public void testTypedArrayWith() {
-        assertStringWithJavet(
-                "new Int32Array([1,2,3]).with(1, 42).toString()",
-                "new Int32Array([1,2,3]).with(-1, 99).toString()",
-                "new Int32Array([1,2,3]).with(0, 100).toString()");
+        assertStringWithJavet("new Int32Array([1,2,3]).with(1, 42).toString()",
+                "new Int32Array([1,2,3]).with(-1, 99).toString()", "new Int32Array([1,2,3]).with(0, 100).toString()");
     }
 
     @Test
     public void testTypedArrayWithDetachedDuringValueOf() {
-        assertErrorWithJavet(
-                """
-                        (() => {
-                            let ta = new Int32Array(5);
-                            let value = { valueOf() { $262.detachArrayBuffer(ta.buffer); return 0; } };
-                            ta.with(0, value);
-                        })()""");
+        assertErrorWithJavet("""
+                (() => {
+                    let ta = new Int32Array(5);
+                    let value = { valueOf() { $262.detachArrayBuffer(ta.buffer); return 0; } };
+                    ta.with(0, value);
+                })()""");
     }
 
     @Test
     public void testTypedArrayWithOutOfBoundsIndex() {
-        assertErrorWithJavet(
-                "new Int32Array([1,2,3]).with(3, 0)",
-                "new Int32Array([1,2,3]).with(-4, 0)",
-                "new Int32Array([1,2,3]).with(Infinity, 0)",
-                "new Int32Array([1,2,3]).with(-Infinity, 0)");
+        assertErrorWithJavet("new Int32Array([1,2,3]).with(3, 0)", "new Int32Array([1,2,3]).with(-4, 0)",
+                "new Int32Array([1,2,3]).with(Infinity, 0)", "new Int32Array([1,2,3]).with(-Infinity, 0)");
     }
 
     @Test
     public void testTypeof() {
-        assertStringWithJavet(
-                "typeof BigInt64Array",
-                "typeof BigUint64Array",
-                "typeof Float16Array",
-                "typeof Float32Array",
-                "typeof Float64Array",
-                "typeof Int16Array",
-                "typeof Int32Array",
-                "typeof Int8Array",
-                "typeof TypedArray",
-                "typeof Uint16Array",
-                "typeof Uint32Array",
-                "typeof Uint8Array",
-                "typeof Uint8ClampedArray");
+        assertStringWithJavet("typeof BigInt64Array", "typeof BigUint64Array", "typeof Float16Array",
+                "typeof Float32Array", "typeof Float64Array", "typeof Int16Array", "typeof Int32Array",
+                "typeof Int8Array", "typeof TypedArray", "typeof Uint16Array", "typeof Uint32Array",
+                "typeof Uint8Array", "typeof Uint8ClampedArray");
     }
 }

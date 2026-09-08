@@ -24,13 +24,13 @@ import java.util.Iterator;
 import java.util.Objects;
 
 /**
- * Manages lexical scopes during compilation.
- * Tracks scope depth, local variables, and provides scope traversal operations.
+ * Manages lexical scopes during compilation. Tracks scope depth, local variables, and provides scope traversal
+ * operations.
  */
 final class ScopeManager implements Iterable<CompilerScope> {
-    private final Deque<CompilerScope> scopes;
     private int maxLocalCount;
     private int scopeDepth;
+    private final Deque<CompilerScope> scopes;
 
     ScopeManager() {
         this.scopes = new ArrayDeque<>();
@@ -77,35 +77,23 @@ final class ScopeManager implements Iterable<CompilerScope> {
     }
 
     CaptureResolver.BindingInfo findBindingInScopes(String name) {
-        return scopes.stream()
-                .map(scope -> {
-                    Integer localIndex = scope.getLocal(name);
-                    return localIndex == null
-                            ? null
-                            : new CaptureResolver.BindingInfo(
-                            localIndex,
-                            scope.isConstLocal(name),
+        return scopes.stream().map(scope -> {
+            Integer localIndex = scope.getLocal(name);
+            return localIndex == null
+                    ? null
+                    : new CaptureResolver.BindingInfo(localIndex, scope.isConstLocal(name),
                             scope.isFunctionNameLocal(name));
-                })
-                .filter(Objects::nonNull)
-                .findFirst()
-                .orElse(null);
+        }).filter(Objects::nonNull).findFirst().orElse(null);
     }
 
     Integer findLocalInScopes(String name) {
-        return scopes.stream()
-                .map(scope -> scope.getLocal(name))
-                .filter(java.util.Objects::nonNull)
-                .findFirst()
+        return scopes.stream().map(scope -> scope.getLocal(name)).filter(java.util.Objects::nonNull).findFirst()
                 .orElse(null);
     }
 
     String findLocalNameByIndex(int index) {
-        return scopes.stream()
-                .map(scope -> scope.getLocalNamesByIndex().get(index))
-                .filter(java.util.Objects::nonNull)
-                .findFirst()
-                .orElse(null);
+        return scopes.stream().map(scope -> scope.getLocalNamesByIndex().get(index)).filter(java.util.Objects::nonNull)
+                .findFirst().orElse(null);
     }
 
     String[] getLocalVarNames() {
@@ -132,9 +120,7 @@ final class ScopeManager implements Iterable<CompilerScope> {
         // Per B.3.5, simple catch parameters do not block Annex B hoisting.
         // Only lexical bindings (let/const/block-scoped functions) are blockers.
         // Ignore current (innermost) and function-body (outermost) scopes.
-        return scopes.stream()
-                .skip(1)
-                .limit(Math.max(0L, scopes.size() - 2L))
+        return scopes.stream().skip(1).limit(Math.max(0L, scopes.size() - 2L))
                 .anyMatch(scope -> scope.hasLexicalLocal(name));
     }
 
@@ -143,19 +129,13 @@ final class ScopeManager implements Iterable<CompilerScope> {
     }
 
     boolean isLocalBindingConst(String name) {
-        return scopes.stream()
-                .filter(scope -> scope.getLocal(name) != null)
-                .map(scope -> scope.isConstLocal(name))
-                .findFirst()
-                .orElse(false);
+        return scopes.stream().filter(scope -> scope.getLocal(name) != null).map(scope -> scope.isConstLocal(name))
+                .findFirst().orElse(false);
     }
 
     boolean isLocalBindingFunctionName(String name) {
-        return scopes.stream()
-                .filter(scope -> scope.getLocal(name) != null)
-                .map(scope -> scope.isFunctionNameLocal(name))
-                .findFirst()
-                .orElse(false);
+        return scopes.stream().filter(scope -> scope.getLocal(name) != null)
+                .map(scope -> scope.isFunctionNameLocal(name)).findFirst().orElse(false);
     }
 
     @Override

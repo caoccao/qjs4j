@@ -26,34 +26,20 @@ public final class MemberExpression extends Expression {
     private final boolean partOfOptionalChain;
     private final Expression property;
 
-    public MemberExpression(
-            Expression object,
-            Expression property,
-            boolean computed,
-            boolean optional,
-            SourceLocation location) {
-        this(
-                object,
-                property,
-                computed,
-                optional,
-                optional || (object != null && object.isPartOfOptionalChain()),
-                location);
-    }
-
-    public MemberExpression(
-            Expression object,
-            Expression property,
-            boolean computed,
-            boolean optional,
-            boolean partOfOptionalChain,
-            SourceLocation location) {
+    public MemberExpression(Expression object, Expression property, boolean computed, boolean optional,
+            boolean partOfOptionalChain, SourceLocation location) {
         super(location);
         this.object = object;
         this.property = property;
         this.computed = computed;
         this.optional = optional;
         this.partOfOptionalChain = partOfOptionalChain;
+    }
+
+    public MemberExpression(Expression object, Expression property, boolean computed, boolean optional,
+            SourceLocation location) {
+        this(object, property, computed, optional, optional || (object != null && object.isPartOfOptionalChain()),
+                location);
     }
 
     @Override

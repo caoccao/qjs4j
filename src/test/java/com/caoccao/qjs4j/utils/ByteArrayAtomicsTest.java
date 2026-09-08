@@ -30,19 +30,15 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * {@code Atomics} used to call {@code byteArrayViewVarHandle} directly. Those view handles offer no
- * atomic access modes at all on JDK 25, so `Atomics.add` failed there with an
- * {@code UnsupportedOperationException} the engine reported as an internal VM error.
+ * {@code Atomics} used to call {@code byteArrayViewVarHandle} directly. Those view handles offer no atomic access modes
+ * at all on JDK 25, so `Atomics.add` failed there with an {@code UnsupportedOperationException} the engine reported as
+ * an internal VM error.
  * <p>
- * Both paths are asserted on whichever JDK the suite runs on: the dispatching methods take the path
- * this JDK supports, and {@code ByteArrayAtomics.Fallback} is called directly so the locked path is
- * covered even where the lock-free one is available.
+ * Both paths are asserted on whichever JDK the suite runs on: the dispatching methods take the path this JDK supports,
+ * and {@code ByteArrayAtomics.Fallback} is called directly so the locked path is covered even where the lock-free one
+ * is available.
  */
 public class ByteArrayAtomicsTest {
-    private static byte[] block() {
-        return new byte[32];
-    }
-
     @Test
     public void testByteOperations() {
         byte[] array = block();
@@ -133,8 +129,7 @@ public class ByteArrayAtomicsTest {
             ByteArrayAtomics.Fallback.setVolatileShort(locked, 2, value);
             ByteArrayAtomics.setVolatileShort(lockFree, 2, value);
             assertThat(ByteArrayAtomics.Fallback.getVolatileShort(locked, 2))
-                    .isEqualTo(ByteArrayAtomics.getVolatileShort(lockFree, 2))
-                    .isEqualTo(value);
+                    .isEqualTo(ByteArrayAtomics.getVolatileShort(lockFree, 2)).isEqualTo(value);
             assertThat(locked).isEqualTo(lockFree);
         }
     }
@@ -185,8 +180,7 @@ public class ByteArrayAtomicsTest {
         } finally {
             executor.shutdownNow();
         }
-        assertThat(ByteArrayAtomics.Fallback.getVolatileInt(array, 0))
-                .isEqualTo(threadCount * incrementsPerThread);
+        assertThat(ByteArrayAtomics.Fallback.getVolatileInt(array, 0)).isEqualTo(threadCount * incrementsPerThread);
     }
 
     @Test
@@ -219,8 +213,7 @@ public class ByteArrayAtomicsTest {
         for (Class<?> viewType : List.of(short[].class, int[].class, long[].class)) {
             VarHandle handle = MethodHandles.byteArrayViewVarHandle(viewType, ByteOrder.LITTLE_ENDIAN);
             for (VarHandle.AccessMode accessMode : ByteArrayAtomics.requiredAccessModes(viewType)) {
-                assertThat(handle.isAccessModeSupported(accessMode))
-                        .as(viewType.getSimpleName() + " " + accessMode)
+                assertThat(handle.isAccessModeSupported(accessMode)).as(viewType.getSimpleName() + " " + accessMode)
                         .isEqualTo(ByteArrayAtomics.isLockFree());
             }
         }
@@ -228,19 +221,18 @@ public class ByteArrayAtomicsTest {
 
     @Test
     public void testRequiredAccessModesNameEveryModeUsedForEachWidth() {
-        assertThat(ByteArrayAtomics.requiredAccessModes(short[].class))
-                .contains(VarHandle.AccessMode.GET_VOLATILE, VarHandle.AccessMode.SET_VOLATILE);
-        assertThat(ByteArrayAtomics.requiredAccessModes(int[].class))
-                .contains(
-                        VarHandle.AccessMode.GET_VOLATILE,
-                        VarHandle.AccessMode.SET_VOLATILE,
-                        VarHandle.AccessMode.COMPARE_AND_EXCHANGE,
-                        VarHandle.AccessMode.GET_AND_SET,
-                        VarHandle.AccessMode.GET_AND_ADD,
-                        VarHandle.AccessMode.GET_AND_BITWISE_AND,
-                        VarHandle.AccessMode.GET_AND_BITWISE_OR,
-                        VarHandle.AccessMode.GET_AND_BITWISE_XOR);
+        assertThat(ByteArrayAtomics.requiredAccessModes(short[].class)).contains(VarHandle.AccessMode.GET_VOLATILE,
+                VarHandle.AccessMode.SET_VOLATILE);
+        assertThat(ByteArrayAtomics.requiredAccessModes(int[].class)).contains(VarHandle.AccessMode.GET_VOLATILE,
+                VarHandle.AccessMode.SET_VOLATILE, VarHandle.AccessMode.COMPARE_AND_EXCHANGE,
+                VarHandle.AccessMode.GET_AND_SET, VarHandle.AccessMode.GET_AND_ADD,
+                VarHandle.AccessMode.GET_AND_BITWISE_AND, VarHandle.AccessMode.GET_AND_BITWISE_OR,
+                VarHandle.AccessMode.GET_AND_BITWISE_XOR);
         assertThat(ByteArrayAtomics.requiredAccessModes(long[].class))
                 .isEqualTo(ByteArrayAtomics.requiredAccessModes(int[].class));
+    }
+
+    private static byte[] block() {
+        return new byte[32];
     }
 }

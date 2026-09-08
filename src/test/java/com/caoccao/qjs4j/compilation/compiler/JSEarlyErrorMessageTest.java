@@ -21,44 +21,34 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * The early errors the bytecode compiler raises are script-observable text, so they are held to the
- * same standard as everything else here: the same message V8 produces, compared in full.
+ * The early errors the bytecode compiler raises are script-observable text, so they are held to the same standard as
+ * everything else here: the same message V8 produces, compared in full.
  * <p>
- * Four of them said something else — a {@code break} outside a loop, a {@code continue} outside a
- * loop, a {@code continue} whose label names a block rather than a loop (which was not even
- * distinguished from a label that does not exist), and an export of a name nothing defines.
+ * Four of them said something else — a {@code break} outside a loop, a {@code continue} outside a loop, a
+ * {@code continue} whose label names a block rather than a loop (which was not even distinguished from a label that
+ * does not exist), and an export of a name nothing defines.
  */
 public class JSEarlyErrorMessageTest extends BaseJavetTest {
     @Test
     public void testContinueToALabelThatIsNotALoop() {
-        assertErrorWithJavet(
-                "foo: { continue foo; }",
-                "outer: { while (false) { continue outer; } }");
+        assertErrorWithJavet("foo: { continue foo; }", "outer: { while (false) { continue outer; } }");
     }
 
     @Test
     public void testIllegalBreak() {
-        assertErrorWithJavet(
-                "break;",
-                "function f() { break; }",
-                "if (true) { break; }",
+        assertErrorWithJavet("break;", "function f() { break; }", "if (true) { break; }",
                 "switch (1) { case 1: (function () { break; })(); }");
     }
 
     @Test
     public void testIllegalContinue() {
-        assertErrorWithJavet(
-                "continue;",
-                "function f() { continue; }",
+        assertErrorWithJavet("continue;", "function f() { continue; }",
                 "while (false) { (function () { continue; })(); }");
     }
 
     @Test
     public void testUndefinedLabel() {
-        assertErrorWithJavet(
-                "outer: { } break inner;",
-                "while (0) {} continue inner;",
-                "break missing;");
+        assertErrorWithJavet("outer: { } break inner;", "while (0) {} continue inner;", "break missing;");
     }
 
     /**

@@ -60,6 +60,9 @@ jobs:
       with:
         gradle-version: '9.4.1'
 
+    - name: Check Java formatting
+      run: gradle spotlessCheck
+
     - name: Build with Gradle
       run: gradle build -PtestJavaVersion=${{ matrix.java }}
 
@@ -86,6 +89,9 @@ jobs:
       uses: gradle/actions/setup-gradle@v3
       with:
         gradle-version: '9.4.1'
+
+    - name: Check Java formatting
+      run: gradle spotlessCheck
 
     # Verification, not just a report: an uploaded artifact is observational and cannot fail a
     # build, so coverage could regress indefinitely without anything noticing.
@@ -139,6 +145,10 @@ jobs:
       uses: gradle/actions/setup-gradle@v3
       with:
         gradle-version: '9.4.1'
+
+    - name: Check Java formatting
+      working-directory: qjs4j
+      run: gradle spotlessCheck
 
     # pipefail, or the step reports tee's exit status and stays green while Gradle fails: a
     # conformance gate that cannot fail is not a gate.

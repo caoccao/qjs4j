@@ -23,9 +23,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Tests for RegExpCompiler escape sequence handling (compileEscape, parseClassEscape).
- * Covers identity escapes, control escapes, hex/unicode escapes, octal escapes,
- * backreferences, and Unicode mode vs non-Unicode mode (Annex B) behavior.
+ * Tests for RegExpCompiler escape sequence handling (compileEscape, parseClassEscape). Covers identity escapes, control
+ * escapes, hex/unicode escapes, octal escapes, backreferences, and Unicode mode vs non-Unicode mode (Annex B) behavior.
  */
 public class RegExpEscapeTest extends BaseJavetTest {
     private boolean matches(String pattern, String flags, String input) {
@@ -58,8 +57,7 @@ public class RegExpEscapeTest extends BaseJavetTest {
     public void testBackreferenceInvalidUnicodeModeFails() {
         // In unicode mode, invalid backreferences throw
         RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        assertThatThrownBy(() -> compiler.compile("\\1", "u"))
-                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class);
+        assertThatThrownBy(() -> compiler.compile("\\1", "u")).isInstanceOf(RegExpCompiler.RegExpSyntaxException.class);
     }
 
     // --- Identity Escapes: Non-Unicode Mode (Annex B) ---
@@ -180,8 +178,7 @@ public class RegExpEscapeTest extends BaseJavetTest {
         RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
         assertThatThrownBy(() -> compiler.compile("\\xGG", "u"))
                 .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class);
-        assertThatThrownBy(() -> compiler.compile("\\x", "u"))
-                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class);
+        assertThatThrownBy(() -> compiler.compile("\\x", "u")).isInstanceOf(RegExpCompiler.RegExpSyntaxException.class);
     }
 
     @Test
@@ -219,8 +216,7 @@ public class RegExpEscapeTest extends BaseJavetTest {
     public void testIdentityEscapeDashUnicodeModeFails() {
         // \- should throw in unicode mode outside character class
         RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        assertThatThrownBy(() -> compiler.compile("\\-", "u"))
-                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+        assertThatThrownBy(() -> compiler.compile("\\-", "u")).isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
                 .hasMessageContaining("invalid escape sequence");
     }
 
@@ -228,20 +224,15 @@ public class RegExpEscapeTest extends BaseJavetTest {
     public void testIdentityEscapeNonSyntaxCharsUnicodeModeFails() {
         // Non-syntax characters should throw in unicode mode
         RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        assertThatThrownBy(() -> compiler.compile("\\a", "u"))
-                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+        assertThatThrownBy(() -> compiler.compile("\\a", "u")).isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
                 .hasMessageContaining("invalid escape sequence");
-        assertThatThrownBy(() -> compiler.compile("\\e", "u"))
-                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+        assertThatThrownBy(() -> compiler.compile("\\e", "u")).isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
                 .hasMessageContaining("invalid escape sequence");
-        assertThatThrownBy(() -> compiler.compile("\\g", "u"))
-                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+        assertThatThrownBy(() -> compiler.compile("\\g", "u")).isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
                 .hasMessageContaining("invalid escape sequence");
-        assertThatThrownBy(() -> compiler.compile("\\i", "u"))
-                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+        assertThatThrownBy(() -> compiler.compile("\\i", "u")).isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
                 .hasMessageContaining("invalid escape sequence");
-        assertThatThrownBy(() -> compiler.compile("\\z", "u"))
-                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+        assertThatThrownBy(() -> compiler.compile("\\z", "u")).isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
                 .hasMessageContaining("invalid escape sequence");
     }
 

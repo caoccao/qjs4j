@@ -23,18 +23,20 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Represents a character class in a regex.
- * Character classes match sets of characters (e.g., [a-z], \d, \w).
- * Based on QuickJS libregexp.c character range implementation.
+ * Represents a character class in a regex. Character classes match sets of characters (e.g., [a-z], \d, \w). Based on
+ * QuickJS libregexp.c character range implementation.
  *
- * @param ranges pairs of [start, end] inclusive
+ * @param ranges
+ *            pairs of [start, end] inclusive
  */
 public record CharacterClass(boolean inverted, int[] ranges) {
     /**
      * Create a character class from ranges.
      *
-     * @param inverted Whether the class is inverted (e.g., [^a-z])
-     * @param ranges   Array of range pairs [start1, end1, start2, end2, ...]
+     * @param inverted
+     *            Whether the class is inverted (e.g., [^a-z])
+     * @param ranges
+     *            Array of range pairs [start1, end1, start2, end2, ...]
      */
     public CharacterClass {
     }
@@ -60,10 +62,9 @@ public record CharacterClass(boolean inverted, int[] ranges) {
      */
     public static CharacterClass dot() {
         // Excludes: \n, \r, \u2028, \u2029
-        return new CharacterClass(true, new int[]{
-                0x000A, 0x000A,  // LF
-                0x000D, 0x000D,  // CR
-                0x2028, 0x2029   // Line separator, paragraph separator
+        return new CharacterClass(true, new int[]{0x000A, 0x000A, // LF
+                0x000D, 0x000D, // CR
+                0x2028, 0x2029 // Line separator, paragraph separator
         });
     }
 
@@ -121,30 +122,15 @@ public record CharacterClass(boolean inverted, int[] ranges) {
      * \S - Non-whitespace character class
      */
     public static CharacterClass notWhitespace() {
-        return new CharacterClass(true, new int[]{
-                0x0009, 0x000D,
-                0x0020, 0x0020,
-                0x00A0, 0x00A0,
-                0x1680, 0x1680,
-                0x2000, 0x200A,
-                0x2028, 0x2029,
-                0x202F, 0x202F,
-                0x205F, 0x205F,
-                0x3000, 0x3000,
-                0xFEFF, 0xFEFF
-        });
+        return new CharacterClass(true, new int[]{0x0009, 0x000D, 0x0020, 0x0020, 0x00A0, 0x00A0, 0x1680, 0x1680,
+                0x2000, 0x200A, 0x2028, 0x2029, 0x202F, 0x202F, 0x205F, 0x205F, 0x3000, 0x3000, 0xFEFF, 0xFEFF});
     }
 
     /**
      * \W - Non-word character class [^a-zA-Z0-9_]
      */
     public static CharacterClass notWord() {
-        return new CharacterClass(true, new int[]{
-                'a', 'z',
-                'A', 'Z',
-                '0', '9',
-                '_', '_'
-        });
+        return new CharacterClass(true, new int[]{'a', 'z', 'A', 'Z', '0', '9', '_', '_'});
     }
 
     /**
@@ -190,17 +176,16 @@ public record CharacterClass(boolean inverted, int[] ranges) {
      */
     public static CharacterClass whitespace() {
         // JavaScript whitespace: space, tab, CR, LF, FF, VT, and Unicode spaces
-        return new CharacterClass(false, new int[]{
-                0x0009, 0x000D,  // \t to \r
-                0x0020, 0x0020,  // space
-                0x00A0, 0x00A0,  // non-breaking space
-                0x1680, 0x1680,  // Ogham space mark
-                0x2000, 0x200A,  // various spaces
-                0x2028, 0x2029,  // line separator, paragraph separator
-                0x202F, 0x202F,  // narrow no-break space
-                0x205F, 0x205F,  // medium mathematical space
-                0x3000, 0x3000,  // ideographic space
-                0xFEFF, 0xFEFF   // zero width no-break space
+        return new CharacterClass(false, new int[]{0x0009, 0x000D, // \t to \r
+                0x0020, 0x0020, // space
+                0x00A0, 0x00A0, // non-breaking space
+                0x1680, 0x1680, // Ogham space mark
+                0x2000, 0x200A, // various spaces
+                0x2028, 0x2029, // line separator, paragraph separator
+                0x202F, 0x202F, // narrow no-break space
+                0x205F, 0x205F, // medium mathematical space
+                0x3000, 0x3000, // ideographic space
+                0xFEFF, 0xFEFF // zero width no-break space
         });
     }
 
@@ -208,12 +193,7 @@ public record CharacterClass(boolean inverted, int[] ranges) {
      * \w - Word character class [a-zA-Z0-9_]
      */
     public static CharacterClass word() {
-        return new CharacterClass(false, new int[]{
-                'a', 'z',
-                'A', 'Z',
-                '0', '9',
-                '_', '_'
-        });
+        return new CharacterClass(false, new int[]{'a', 'z', 'A', 'Z', '0', '9', '_', '_'});
     }
 
     /**

@@ -49,9 +49,7 @@ final class TemplateLiteralCompiler extends AstNodeCompiler<TemplateLiteral> {
         // Start with the first quasi
         String firstQuasi = quasis.get(0);
         if (firstQuasi == null) {
-            throw new JSCompilerException(
-                    "Invalid escape sequence in untagged template literal",
-                    templateLiteral);
+            throw new JSCompilerException("Invalid escape sequence in untagged template literal", templateLiteral);
         }
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(firstQuasi));
 
@@ -70,8 +68,7 @@ final class TemplateLiteralCompiler extends AstNodeCompiler<TemplateLiteral> {
             if (index + 1 < quasis.size()) {
                 String quasi = quasis.get(index + 1);
                 if (quasi == null) {
-                    throw new JSCompilerException(
-                            "Invalid escape sequence in untagged template literal",
+                    throw new JSCompilerException("Invalid escape sequence in untagged template literal",
                             templateLiteral);
                 }
                 if (!quasi.isEmpty()) {

@@ -23,18 +23,6 @@ import com.caoccao.qjs4j.core.*;
  */
 public final class DateConstructor {
 
-    public static JSValue UTC(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double[] fields = {0, 0, 1, 0, 0, 0, 0};
-        int n = Math.min(args.length, 7);
-        for (int i = 0; i < n; i++) {
-            fields[i] = JSTypeConversions.toNumber(context, args[i]).value();
-        }
-        return JSNumber.of(JSDate.setDateFieldsChecked(fields, false));
-    }
-
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         JSDate date = context.createJSDate(JSDate.dateNow());
         return DatePrototype.toStringMethod(context, date, args);
@@ -50,5 +38,17 @@ public final class DateConstructor {
         }
         JSString dateString = JSTypeConversions.toString(context, args[0]);
         return JSNumber.of(JSDate.parseDateString(dateString.value()));
+    }
+
+    public static JSValue UTC(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (args.length == 0) {
+            return JSNumber.of(Double.NaN);
+        }
+        double[] fields = {0, 0, 1, 0, 0, 0, 0};
+        int n = Math.min(args.length, 7);
+        for (int i = 0; i < n; i++) {
+            fields[i] = JSTypeConversions.toNumber(context, args[i]).value();
+        }
+        return JSNumber.of(JSDate.setDateFieldsChecked(fields, false));
     }
 }

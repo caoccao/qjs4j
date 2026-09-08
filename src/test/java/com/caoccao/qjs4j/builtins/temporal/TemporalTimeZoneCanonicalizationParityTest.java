@@ -34,7 +34,8 @@ public class TemporalTimeZoneCanonicalizationParityTest extends BaseJavetTest {
 
     @Test
     public void testInvalidTimeZoneIdentifier() {
-        assertBooleanWithJavet("(() => { try { new Temporal.ZonedDateTime(0n, 'Invalid/Zone'); return false; } catch (e) { return e instanceof RangeError; } })()");
+        assertBooleanWithJavet(
+                "(() => { try { new Temporal.ZonedDateTime(0n, 'Invalid/Zone'); return false; } catch (e) { return e instanceof RangeError; } })()");
     }
 
     @Test

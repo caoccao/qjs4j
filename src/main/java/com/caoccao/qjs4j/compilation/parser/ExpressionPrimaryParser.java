@@ -39,83 +39,15 @@ final class ExpressionPrimaryParser {
         this.expressions = expressions;
     }
 
-    private static boolean isOptionalChainExpression(Expression expression) {
-        if (expression instanceof MemberExpression memberExpression) {
-            return memberExpression.isOptional() || isOptionalChainExpression(memberExpression.getObject());
-        }
-        if (expression instanceof CallExpression callExpression) {
-            return callExpression.isOptional() || isOptionalChainExpression(callExpression.getCallee());
-        }
-        return false;
-    }
-
-    private static boolean isPrivateDeleteTarget(Expression expression) {
-        if (expression instanceof MemberExpression memberExpression) {
-            return memberExpression.getProperty() instanceof PrivateIdentifier;
-        }
-        return false;
-    }
-
-    private static Object parseDecimalOrLegacyOctal(String normalizedValue) {
-        // Check for legacy octal: starts with 0, followed by digits, all digits 0-7
-        if (normalizedValue.length() > 1 && normalizedValue.charAt(0) == '0'
-                && normalizedValue.charAt(1) >= '0' && normalizedValue.charAt(1) <= '9'
-                && normalizedValue.indexOf('.') == -1
-                && normalizedValue.indexOf('e') == -1 && normalizedValue.indexOf('E') == -1) {
-            boolean allOctalDigits = true;
-            for (int i = 1; i < normalizedValue.length(); i++) {
-                if (normalizedValue.charAt(i) > '7') {
-                    allOctalDigits = false;
-                    break;
-                }
-            }
-            if (allOctalDigits) {
-                long longVal = Long.parseLong(normalizedValue, 8);
-                return (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
-                        ? (int) longVal : (double) longVal;
-            }
-        }
-        double doubleVal = Double.parseDouble(normalizedValue);
-        if (doubleVal == Math.floor(doubleVal) && !Double.isInfinite(doubleVal)
-                && doubleVal >= Integer.MIN_VALUE && doubleVal <= Integer.MAX_VALUE) {
-            return (int) doubleVal;
-        }
-        return doubleVal;
-    }
-
-    /**
-     * Check if an ObjectExpression contains CoverInitializedName (shorthand property with default).
-     * Per spec 13.2.5.1: it is a SyntaxError if an ObjectLiteral that is not a destructuring
-     * pattern contains a CoverInitializedName.
-     */
-    private static void validateNoCoverInitializedName(Expression expr) {
-        if (expr instanceof ObjectExpression objectExpression) {
-            for (ObjectExpressionProperty property : objectExpression.getProperties()) {
-                if (property.isShorthand()
-                        && property.getValue() instanceof AssignmentExpression assignmentExpression
-                        && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
-                    throw new JSSyntaxErrorException("Invalid shorthand property initializer");
-                }
-            }
-        }
-    }
-
-    private CallExpression createCallExpression(
-            Expression callee,
-            List<Expression> arguments,
-            boolean optional,
+    private CallExpression createCallExpression(Expression callee, List<Expression> arguments, boolean optional,
             SourceLocation location) {
         boolean partOfOptionalChain = optional
                 || (isOptionalChainExpression(callee) && !parserContext.isParenthesizedExpression(callee));
         return new CallExpression(callee, arguments, optional, partOfOptionalChain, location);
     }
 
-    private MemberExpression createMemberExpression(
-            Expression object,
-            Expression property,
-            boolean computed,
-            boolean optional,
-            SourceLocation location) {
+    private MemberExpression createMemberExpression(Expression object, Expression property, boolean computed,
+            boolean optional, SourceLocation location) {
         boolean partOfOptionalChain = optional
                 || (isOptionalChainExpression(object) && !parserContext.isParenthesizedExpression(object));
         return new MemberExpression(object, property, computed, optional, partOfOptionalChain, location);
@@ -234,8 +166,7 @@ final class ExpressionPrimaryParser {
                 if (parserContext.nextToken.escaped()) {
                     throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
                 }
-                if (parserContext.newTargetNesting == 0
-                        && !parserContext.inClassFieldInitializer
+                if (parserContext.newTargetNesting == 0 && !parserContext.inClassFieldInitializer
                         && !parserContext.inClassStaticInit) {
                     if (parserContext.isEval) {
                         if (!parserContext.allowNewTargetInEval) {
@@ -353,19 +284,49 @@ final class ExpressionPrimaryParser {
                 parserContext.advance();
                 yield new PrivateIdentifier(name.substring(1), location);
             }
-            case AS, ASYNC, AWAIT, BREAK, CASE, CATCH, CLASS, CONST, CONTINUE,
-                 DEFAULT, DELETE, DO, ELSE, EXPORT, EXTENDS, FALSE, FINALLY,
-                 FOR, FROM, FUNCTION, IF, IMPORT, IN, INSTANCEOF, LET, NEW,
-                 NULL, OF, RETURN, SUPER, SWITCH, THIS, THROW, TRUE, TRY,
-                 TYPEOF, VAR, VOID, WHILE, YIELD -> {
+            case AS, ASYNC, AWAIT, BREAK, CASE, CATCH, CLASS, CONST, CONTINUE, DEFAULT, DELETE, DO, ELSE, EXPORT,
+                    EXTENDS, FALSE, FINALLY, FOR, FROM, FUNCTION, IF, IMPORT, IN, INSTANCEOF, LET, NEW, NULL, OF,
+                    RETURN, SUPER, SWITCH, THIS, THROW, TRUE, TRY, TYPEOF, VAR, VOID, WHILE, YIELD -> {
                 String name = parserContext.currentToken.value();
                 parserContext.advance();
                 yield new Identifier(name, location);
             }
             case EOF -> throw new JSSyntaxErrorException("Unexpected end of input");
             default ->
-                    throw new JSSyntaxErrorException("Unexpected token '" + parserContext.currentToken.value() + "'");
+                throw new JSSyntaxErrorException("Unexpected token '" + parserContext.currentToken.value() + "'");
         };
+    }
+
+    Expression parsePostfixExpression() {
+        Expression expr = expressions.parseCallExpression();
+
+        if (!parserContext.hasNewlineBefore()
+                && (parserContext.match(TokenType.INC) || parserContext.match(TokenType.DEC))) {
+            if (expr instanceof Identifier identifier) {
+                String identifierName = identifier.getName();
+                if ("import.meta".equals(identifierName) || "new.target".equals(identifierName)
+                        || JSKeyword.THIS.equals(identifierName)) {
+                    throw new JSSyntaxErrorException("Invalid left-hand side expression in postfix operation");
+                }
+                if (parserContext.strictMode
+                        && (JSKeyword.EVAL.equals(identifierName) || JSKeyword.ARGUMENTS.equals(identifierName))) {
+                    throw new JSSyntaxErrorException("Invalid left-hand side expression in postfix operation");
+                }
+            }
+            // In strict mode, CallExpression as update operand is an early SyntaxError (spec 13.4.1)
+            if (parserContext.strictMode && expr instanceof CallExpression) {
+                throw new JSSyntaxErrorException("Invalid left-hand side expression in postfix operation");
+            }
+            if (isOptionalChainExpression(expr)) {
+                throw new JSSyntaxErrorException("Invalid left-hand side expression in postfix operation");
+            }
+            UnaryOperator op = parserContext.match(TokenType.INC) ? UnaryOperator.INC : UnaryOperator.DEC;
+            SourceLocation location = parserContext.getLocation();
+            parserContext.advance();
+            return new UnaryExpression(op, expr, false, location);
+        }
+
+        return expr;
     }
 
     Expression parsePostPrimaryExpression(Expression expr, SourceLocation location) {
@@ -454,8 +415,7 @@ final class ExpressionPrimaryParser {
 
         if (parserContext.isAssignmentOperator(parserContext.currentToken.type())) {
             // Validate that expr is a valid assignment target
-            if (!(expr instanceof Identifier)
-                    && !(expr instanceof MemberExpression)
+            if (!(expr instanceof Identifier) && !(expr instanceof MemberExpression)
                     && !(expr instanceof CallExpression)) {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
             }
@@ -464,8 +424,7 @@ final class ExpressionPrimaryParser {
             if (parserContext.strictMode && expr instanceof Identifier identifier) {
                 String identifierName = identifier.getName();
                 if (JSKeyword.EVAL.equals(identifierName) || JSKeyword.ARGUMENTS.equals(identifierName)) {
-                    throw new JSSyntaxErrorException(
-                            "Unexpected eval or arguments in strict mode");
+                    throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
                 }
             }
             parserContext.advance();
@@ -495,38 +454,6 @@ final class ExpressionPrimaryParser {
         return expr;
     }
 
-    Expression parsePostfixExpression() {
-        Expression expr = expressions.parseCallExpression();
-
-        if (!parserContext.hasNewlineBefore() && (parserContext.match(TokenType.INC) || parserContext.match(TokenType.DEC))) {
-            if (expr instanceof Identifier identifier) {
-                String identifierName = identifier.getName();
-                if ("import.meta".equals(identifierName)
-                        || "new.target".equals(identifierName)
-                        || JSKeyword.THIS.equals(identifierName)) {
-                    throw new JSSyntaxErrorException("Invalid left-hand side expression in postfix operation");
-                }
-                if (parserContext.strictMode
-                        && (JSKeyword.EVAL.equals(identifierName) || JSKeyword.ARGUMENTS.equals(identifierName))) {
-                    throw new JSSyntaxErrorException("Invalid left-hand side expression in postfix operation");
-                }
-            }
-            // In strict mode, CallExpression as update operand is an early SyntaxError (spec 13.4.1)
-            if (parserContext.strictMode && expr instanceof CallExpression) {
-                throw new JSSyntaxErrorException("Invalid left-hand side expression in postfix operation");
-            }
-            if (isOptionalChainExpression(expr)) {
-                throw new JSSyntaxErrorException("Invalid left-hand side expression in postfix operation");
-            }
-            UnaryOperator op = parserContext.match(TokenType.INC) ? UnaryOperator.INC : UnaryOperator.DEC;
-            SourceLocation location = parserContext.getLocation();
-            parserContext.advance();
-            return new UnaryExpression(op, expr, false, location);
-        }
-
-        return expr;
-    }
-
     Expression parsePrimaryExpression() {
         SourceLocation location = parserContext.getLocation();
 
@@ -547,15 +474,18 @@ final class ExpressionPrimaryParser {
                 if (normalizedValue.startsWith("0x") || normalizedValue.startsWith("0X")) {
                     long longVal = Long.parseLong(normalizedValue.substring(2), 16);
                     numValue = (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
-                            ? (int) longVal : (double) longVal;
+                            ? (int) longVal
+                            : (double) longVal;
                 } else if (normalizedValue.startsWith("0b") || normalizedValue.startsWith("0B")) {
                     long longVal = Long.parseLong(normalizedValue.substring(2), 2);
                     numValue = (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
-                            ? (int) longVal : (double) longVal;
+                            ? (int) longVal
+                            : (double) longVal;
                 } else if (normalizedValue.startsWith("0o") || normalizedValue.startsWith("0O")) {
                     long longVal = Long.parseLong(normalizedValue.substring(2), 8);
                     numValue = (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
-                            ? (int) longVal : (double) longVal;
+                            ? (int) longVal
+                            : (double) longVal;
                 } else {
                     numValue = parseDecimalOrLegacyOctal(normalizedValue);
                 }
@@ -734,7 +664,8 @@ final class ExpressionPrimaryParser {
             case CLASS -> delegates.functions.parseClassExpression();
             case AT -> {
                 // Parse decorator list before class expression
-                // Decorator: @ DecoratorMemberExpression | @ DecoratorCallExpression | @ DecoratorParenthesizedExpression
+                // Decorator: @ DecoratorMemberExpression | @ DecoratorCallExpression | @
+                // DecoratorParenthesizedExpression
                 while (parserContext.match(TokenType.AT)) {
                     parserContext.advance(); // consume @
                     if (parserContext.match(TokenType.LPAREN)) {
@@ -783,8 +714,7 @@ final class ExpressionPrimaryParser {
                 parserContext.advance(); // consume 'import'
                 if (parserContext.match(TokenType.DOT)) {
                     if (parserContext.nextToken.type() == TokenType.IDENTIFIER
-                            && "meta".equals(parserContext.nextToken.value())
-                            && !parserContext.nextToken.escaped()) {
+                            && "meta".equals(parserContext.nextToken.value()) && !parserContext.nextToken.escaped()) {
                         if (!parserContext.moduleMode) {
                             throw new JSSyntaxErrorException("Cannot use 'import.meta' outside a module");
                         }
@@ -793,8 +723,7 @@ final class ExpressionPrimaryParser {
                         parserContext.advance(); // consume 'meta'
                         yield new Identifier("import.meta", location);
                     } else if (parserContext.nextToken.type() == TokenType.IDENTIFIER
-                            && "defer".equals(parserContext.nextToken.value())
-                            && !parserContext.nextToken.escaped()) {
+                            && "defer".equals(parserContext.nextToken.value()) && !parserContext.nextToken.escaped()) {
                         // import.defer(specifier)
                         parserContext.advance(); // consume '.'
                         parserContext.advance(); // consume 'defer'
@@ -838,13 +767,14 @@ final class ExpressionPrimaryParser {
                     }
                     throw new JSSyntaxErrorException("'super' keyword unexpected here");
                 }
-                if (parserContext.superPropertyAllowed && (parserContext.match(TokenType.DOT) || parserContext.match(TokenType.LBRACKET))) {
+                if (parserContext.superPropertyAllowed
+                        && (parserContext.match(TokenType.DOT) || parserContext.match(TokenType.LBRACKET))) {
                     yield new Identifier(JSKeyword.SUPER, location);
                 }
                 throw new JSSyntaxErrorException("'super' keyword unexpected here");
             }
-            default -> throw new JSSyntaxErrorException(
-                    "Unexpected token '" + parserContext.currentToken.value() + "'");
+            default ->
+                throw new JSSyntaxErrorException("Unexpected token '" + parserContext.currentToken.value() + "'");
         };
     }
 
@@ -879,15 +809,18 @@ final class ExpressionPrimaryParser {
                 if (normalizedValue.startsWith("0x") || normalizedValue.startsWith("0X")) {
                     long longVal = Long.parseLong(normalizedValue.substring(2), 16);
                     numValue = (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
-                            ? (int) longVal : (double) longVal;
+                            ? (int) longVal
+                            : (double) longVal;
                 } else if (normalizedValue.startsWith("0b") || normalizedValue.startsWith("0B")) {
                     long longVal = Long.parseLong(normalizedValue.substring(2), 2);
                     numValue = (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
-                            ? (int) longVal : (double) longVal;
+                            ? (int) longVal
+                            : (double) longVal;
                 } else if (normalizedValue.startsWith("0o") || normalizedValue.startsWith("0O")) {
                     long longVal = Long.parseLong(normalizedValue.substring(2), 8);
                     numValue = (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
-                            ? (int) longVal : (double) longVal;
+                            ? (int) longVal
+                            : (double) longVal;
                 } else {
                     numValue = parseDecimalOrLegacyOctal(normalizedValue);
                 }
@@ -923,11 +856,9 @@ final class ExpressionPrimaryParser {
                 parserContext.advance();
                 yield new Literal(null, location);
             }
-            case AS, ASYNC, AWAIT, BREAK, CASE, CATCH, CLASS, CONST, CONTINUE,
-                 DEFAULT, DELETE, DO, ELSE, EXPORT, EXTENDS, FALSE, FINALLY,
-                 FOR, FROM, FUNCTION, IF, IMPORT, IN, INSTANCEOF, LET, NEW,
-                 OF, RETURN, SUPER, SWITCH, THIS, THROW, TRUE, TRY,
-                 TYPEOF, VAR, VOID, WHILE, YIELD -> {
+            case AS, ASYNC, AWAIT, BREAK, CASE, CATCH, CLASS, CONST, CONTINUE, DEFAULT, DELETE, DO, ELSE, EXPORT,
+                    EXTENDS, FALSE, FINALLY, FOR, FROM, FUNCTION, IF, IMPORT, IN, INSTANCEOF, LET, NEW, OF, RETURN,
+                    SUPER, SWITCH, THIS, THROW, TRUE, TRY, TYPEOF, VAR, VOID, WHILE, YIELD -> {
                 String name = parserContext.currentToken.value();
                 parserContext.advance();
                 yield new Identifier(name, location);
@@ -937,8 +868,7 @@ final class ExpressionPrimaryParser {
     }
 
     Expression parseUnaryExpression() {
-        if (parserContext.match(TokenType.ASYNC)
-                && parserContext.nextToken.type() == TokenType.FUNCTION
+        if (parserContext.match(TokenType.ASYNC) && parserContext.nextToken.type() == TokenType.FUNCTION
                 && parserContext.nextToken.line() == parserContext.currentToken.line()) {
             if (parserContext.currentToken.escaped()) {
                 throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
@@ -989,8 +919,7 @@ final class ExpressionPrimaryParser {
             Expression operand = parseUnaryExpression();
             if (operand instanceof Identifier identifier) {
                 String identifierName = identifier.getName();
-                if ("import.meta".equals(identifierName)
-                        || "new.target".equals(identifierName)
+                if ("import.meta".equals(identifierName) || "new.target".equals(identifierName)
                         || JSKeyword.THIS.equals(identifierName)) {
                     throw new JSSyntaxErrorException("Invalid left-hand side expression in prefix operation");
                 }
@@ -1009,9 +938,10 @@ final class ExpressionPrimaryParser {
             return new UnaryExpression(op, operand, true, location);
         }
 
-        if (parserContext.match(TokenType.PLUS) || parserContext.match(TokenType.MINUS) || parserContext.match(TokenType.NOT) ||
-                parserContext.match(TokenType.BIT_NOT) || parserContext.match(TokenType.TYPEOF) ||
-                parserContext.match(TokenType.VOID) || parserContext.match(TokenType.DELETE)) {
+        if (parserContext.match(TokenType.PLUS) || parserContext.match(TokenType.MINUS)
+                || parserContext.match(TokenType.NOT) || parserContext.match(TokenType.BIT_NOT)
+                || parserContext.match(TokenType.TYPEOF) || parserContext.match(TokenType.VOID)
+                || parserContext.match(TokenType.DELETE)) {
             UnaryOperator op = switch (parserContext.currentToken.type()) {
                 case PLUS -> UnaryOperator.PLUS;
                 case MINUS -> UnaryOperator.MINUS;
@@ -1041,5 +971,64 @@ final class ExpressionPrimaryParser {
         }
 
         return parsePostfixExpression();
+    }
+
+    private static boolean isOptionalChainExpression(Expression expression) {
+        if (expression instanceof MemberExpression memberExpression) {
+            return memberExpression.isOptional() || isOptionalChainExpression(memberExpression.getObject());
+        }
+        if (expression instanceof CallExpression callExpression) {
+            return callExpression.isOptional() || isOptionalChainExpression(callExpression.getCallee());
+        }
+        return false;
+    }
+
+    private static boolean isPrivateDeleteTarget(Expression expression) {
+        if (expression instanceof MemberExpression memberExpression) {
+            return memberExpression.getProperty() instanceof PrivateIdentifier;
+        }
+        return false;
+    }
+
+    private static Object parseDecimalOrLegacyOctal(String normalizedValue) {
+        // Check for legacy octal: starts with 0, followed by digits, all digits 0-7
+        if (normalizedValue.length() > 1 && normalizedValue.charAt(0) == '0' && normalizedValue.charAt(1) >= '0'
+                && normalizedValue.charAt(1) <= '9' && normalizedValue.indexOf('.') == -1
+                && normalizedValue.indexOf('e') == -1 && normalizedValue.indexOf('E') == -1) {
+            boolean allOctalDigits = true;
+            for (int i = 1; i < normalizedValue.length(); i++) {
+                if (normalizedValue.charAt(i) > '7') {
+                    allOctalDigits = false;
+                    break;
+                }
+            }
+            if (allOctalDigits) {
+                long longVal = Long.parseLong(normalizedValue, 8);
+                return (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
+                        ? (int) longVal
+                        : (double) longVal;
+            }
+        }
+        double doubleVal = Double.parseDouble(normalizedValue);
+        if (doubleVal == Math.floor(doubleVal) && !Double.isInfinite(doubleVal) && doubleVal >= Integer.MIN_VALUE
+                && doubleVal <= Integer.MAX_VALUE) {
+            return (int) doubleVal;
+        }
+        return doubleVal;
+    }
+
+    /**
+     * Check if an ObjectExpression contains CoverInitializedName (shorthand property with default). Per spec 13.2.5.1:
+     * it is a SyntaxError if an ObjectLiteral that is not a destructuring pattern contains a CoverInitializedName.
+     */
+    private static void validateNoCoverInitializedName(Expression expr) {
+        if (expr instanceof ObjectExpression objectExpression) {
+            for (ObjectExpressionProperty property : objectExpression.getProperties()) {
+                if (property.isShorthand() && property.getValue() instanceof AssignmentExpression assignmentExpression
+                        && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
+                    throw new JSSyntaxErrorException("Invalid shorthand property initializer");
+                }
+            }
+        }
     }
 }

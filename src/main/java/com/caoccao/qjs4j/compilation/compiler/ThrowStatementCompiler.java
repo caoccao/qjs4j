@@ -52,7 +52,8 @@ final class ThrowStatementCompiler extends AstNodeCompiler<ThrowStatement> {
         }
 
         // Legacy path: when no block-level CATCH protects using declarations
-        int throwValueIndex = compilerContext.scopeManager.currentScope().declareLocal("$throw_value_" + compilerContext.emitter.currentOffset());
+        int throwValueIndex = compilerContext.scopeManager.currentScope()
+                .declareLocal("$throw_value_" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, throwValueIndex);
 
         int disposalCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
@@ -64,14 +65,14 @@ final class ThrowStatementCompiler extends AstNodeCompiler<ThrowStatement> {
 
         compilerContext.emitter.patchJump(disposalCatchJump, compilerContext.emitter.currentOffset());
 
-        int disposalErrorIndex = compilerContext.scopeManager.currentScope().declareLocal("$disposal_error_" + compilerContext.emitter.currentOffset());
+        int disposalErrorIndex = compilerContext.scopeManager.currentScope()
+                .declareLocal("$disposal_error_" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, disposalErrorIndex);
 
         compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, "SuppressedError");
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, disposalErrorIndex);
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, throwValueIndex);
-        compilerContext.emitter.emitOpcodeConstant(
-                Opcode.PUSH_CONST,
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST,
                 new JSString("An error was suppressed during disposal"));
         compilerContext.emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, 3);
         compilerContext.emitter.emitOpcode(Opcode.THROW);

@@ -20,11 +20,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Represents a for-of statement: for (variable of iterable) { ... }
- * * or async for-of: for await (variable of iterable) { ... }
- * * <p>
- * * Based on ES2015 for-of loops and ES2018 async iteration.
- * * left can be a VariableDeclaration (e.g., let x) or a Pattern/Expression (e.g., x, obj.prop).
+ * Represents a for-of statement: for (variable of iterable) { ... } * or async for-of: for await (variable of iterable)
+ * { ... } *
+ * <p>
+ * * Based on ES2015 for-of loops and ES2018 async iteration. * left can be a VariableDeclaration (e.g., let x) or a
+ * Pattern/Expression (e.g., x, obj.prop).
  */
 public final class ForOfStatement extends Statement {
     private final Statement body;

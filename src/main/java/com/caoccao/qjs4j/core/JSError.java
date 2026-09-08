@@ -19,30 +19,27 @@ package com.caoccao.qjs4j.core;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 
 /**
- * Represents a JavaScript Error object.
- * Base class for all JavaScript error types.
+ * Represents a JavaScript Error object. Base class for all JavaScript error types.
  * <p>
- * <strong>Identity, not value.</strong> This class deliberately does not override {@code equals} or
- * {@code hashCode}. It used to, over its own guest-visible {@code name} and {@code message}
- * properties, which broke three things at once: two distinct errors with the same message collapsed
- * into one entry in any Java collection holding {@link JSObject}s, an error's hash changed when a
- * script assigned to {@code message}, and computing that hash invoked whatever accessor the script
- * had installed. ECMAScript objects compare by identity; every {@code JSObject} subclass must leave
+ * <strong>Identity, not value.</strong> This class deliberately does not override {@code equals} or {@code hashCode}.
+ * It used to, over its own guest-visible {@code name} and {@code message} properties, which broke three things at once:
+ * two distinct errors with the same message collapsed into one entry in any Java collection holding {@link JSObject}s,
+ * an error's hash changed when a script assigned to {@code message}, and computing that hash invoked whatever accessor
+ * the script had installed. ECMAScript objects compare by identity; every {@code JSObject} subclass must leave
  * {@code equals} and {@code hashCode} alone.
  */
-public sealed class JSError extends JSObject permits
-        JSAggregateError, JSRangeError, JSReferenceError, JSSyntaxError, JSTypeError, JSEvalError, JSURIError, JSSuppressedError {
+public sealed class JSError extends JSObject permits JSAggregateError, JSRangeError, JSReferenceError, JSSyntaxError,
+        JSTypeError, JSEvalError, JSURIError, JSSuppressedError {
     public static final String NAME = "Error";
     protected final JSContext context;
     private final SourceLocation sourceLocation;
     /**
-     * The name of the source {@link #getSourceLocation()} indexes into, when it is not the source
-     * the embedder handed to {@code eval}.
+     * The name of the source {@link #getSourceLocation()} indexes into, when it is not the source the embedder handed
+     * to {@code eval}.
      * <p>
-     * Set after construction rather than taken as a constructor parameter because every error class
-     * in this hierarchy would otherwise need another constructor, and only module linking — which
-     * is the one place that reports a position in a file the caller never passed in — has anything
-     * to put here.
+     * Set after construction rather than taken as a constructor parameter because every error class in this hierarchy
+     * would otherwise need another constructor, and only module linking — which is the one place that reports a
+     * position in a file the caller never passed in — has anything to put here.
      */
     private String sourceName;
     private String vmMessage;
@@ -62,9 +59,83 @@ public sealed class JSError extends JSObject permits
         this.context = context;
         this.sourceLocation = sourceLocation;
         if (message != null && !message.isEmpty()) {
-            defineProperty(PropertyKey.MESSAGE,
-                    PropertyDescriptor.dataDescriptor(new JSString(message), PropertyDescriptor.DataState.ConfigurableWritable));
+            defineProperty(PropertyKey.MESSAGE, PropertyDescriptor.dataDescriptor(new JSString(message),
+                    PropertyDescriptor.DataState.ConfigurableWritable));
         }
+    }
+
+    public String getErrorName() {
+        return NAME;
+    }
+
+    /**
+     * Get the error message.
+     */
+    public JSString getMessage() {
+        JSValue msgValue = get(PropertyKey.MESSAGE);
+        if (msgValue.isUndefined()) {
+            return new JSString("");
+        }
+        return JSTypeConversions.toString(context, msgValue);
+    }
+
+    /**
+     * Get the error name.
+     */
+    public JSString getName() {
+        JSValue nameValue = get(PropertyKey.NAME);
+        if (nameValue.isUndefined()) {
+            return new JSString(getErrorName());
+        }
+        return JSTypeConversions.toString(context, nameValue);
+    }
+
+    /**
+     * Get the source location associated with this error.
+     *
+     * @return the source location, or {@code null} when it is unavailable
+     */
+
+    public SourceLocation getSourceLocation() {
+        return sourceLocation;
+    }
+
+    /**
+     * The name of the source {@link #getSourceLocation()} indexes into.
+     *
+     * @return the source name, or null when the location belongs to the source the embedder supplied, or when there is
+     *         no location
+     */
+    public String getSourceName() {
+        return sourceName;
+    }
+
+    public String getVmMessage() {
+        return vmMessage;
+    }
+
+    /**
+     * Record which source this error's location indexes into.
+     *
+     * @param sourceName
+     *            the source name
+     */
+    void setSourceName(String sourceName) {
+        this.sourceName = sourceName;
+    }
+
+    public void setVmMessage(String vmMessage) {
+        this.vmMessage = vmMessage;
+    }
+
+    @Override
+    public String toString() {
+        String name = getName().value();
+        String message = getMessage().value();
+        if (message == null || message.isEmpty()) {
+            return name;
+        }
+        return name + ": " + message;
     }
 
     public static JSValue create(JSContext context, JSValue... args) {
@@ -91,31 +162,34 @@ public sealed class JSError extends JSObject permits
         context.transferPrototype(errorPrototype, JSObject.NAME);
 
         // All prototype properties: writable, non-enumerable, configurable
-        errorPrototype.defineProperty(PropertyKey.fromString("name"), new JSString(NAME), PropertyDescriptor.DataState.ConfigurableWritable);
-        errorPrototype.defineProperty(PropertyKey.fromString("message"), new JSString(""), PropertyDescriptor.DataState.ConfigurableWritable);
+        errorPrototype.defineProperty(PropertyKey.fromString("name"), new JSString(NAME),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        errorPrototype.defineProperty(PropertyKey.fromString("message"), new JSString(""),
+                PropertyDescriptor.DataState.ConfigurableWritable);
         errorPrototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction(context, "toString", 0, JSError::errorToString), PropertyDescriptor.DataState.ConfigurableWritable);
+                new JSNativeFunction(context, "toString", 0, JSError::errorToString),
+                PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Standard Error(message, options) — length = 1
-        JSNativeFunction errorConstructor = new JSNativeFunction(context, NAME,
-                1,
-                (childContext, thisObj, childArgs) -> create(childContext, childArgs),
-                true);
-        errorConstructor.defineProperty(PropertyKey.fromString("prototype"), errorPrototype, PropertyDescriptor.DataState.None);
+        JSNativeFunction errorConstructor = new JSNativeFunction(context, NAME, 1,
+                (childContext, thisObj, childArgs) -> create(childContext, childArgs), true);
+        errorConstructor.defineProperty(PropertyKey.fromString("prototype"), errorPrototype,
+                PropertyDescriptor.DataState.None);
 
         // Error.isError static method (ES2024)
         errorConstructor.defineProperty(PropertyKey.fromString("isError"),
-                new JSNativeFunction(context, "isError", 1, JSError::isError), PropertyDescriptor.DataState.ConfigurableWritable);
+                new JSNativeFunction(context, "isError", 1, JSError::isError),
+                PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Constructor property on prototype (writable, non-enumerable, configurable)
-        errorPrototype.defineProperty(PropertyKey.fromString("constructor"), errorConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        errorPrototype.defineProperty(PropertyKey.fromString("constructor"), errorConstructor,
+                PropertyDescriptor.DataState.ConfigurableWritable);
 
         return errorConstructor;
     }
 
     /**
-     * Error.prototype.toString() — ES2024 20.5.3.4
-     * Following QuickJS js_error_toString.
+     * Error.prototype.toString() — ES2024 20.5.3.4 Following QuickJS js_error_toString.
      */
     public static JSValue errorToString(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSObject error)) {
@@ -160,10 +234,9 @@ public sealed class JSError extends JSObject permits
     }
 
     /**
-     * InstallErrorCause ( O, options )
-     * ES2022: If options is an object with a "cause" property, install it as a
-     * non-enumerable, writable, configurable own property on the error object.
-     * Returns true on normal completion, false on abrupt completion (exception pending in context).
+     * InstallErrorCause ( O, options ) ES2022: If options is an object with a "cause" property, install it as a
+     * non-enumerable, writable, configurable own property on the error object. Returns true on normal completion, false
+     * on abrupt completion (exception pending in context).
      */
     public static boolean installErrorCause(JSContext context, JSObject obj, JSValue options) {
         if (options instanceof JSObject optionsObj) {
@@ -180,85 +253,11 @@ public sealed class JSError extends JSObject permits
     }
 
     /**
-     * Error.isError(arg) — ES2024.
-     * Returns true if arg is an error object (has [[ErrorData]] internal slot).
-     * Following QuickJS js_error_isError which checks class_id == JS_CLASS_ERROR.
+     * Error.isError(arg) — ES2024. Returns true if arg is an error object (has [[ErrorData]] internal slot). Following
+     * QuickJS js_error_isError which checks class_id == JS_CLASS_ERROR.
      */
     public static JSValue isError(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         return JSBoolean.valueOf(arg instanceof JSError);
-    }
-
-    public String getErrorName() {
-        return NAME;
-    }
-
-    /**
-     * Get the error message.
-     */
-    public JSString getMessage() {
-        JSValue msgValue = get(PropertyKey.MESSAGE);
-        if (msgValue.isUndefined()) {
-            return new JSString("");
-        }
-        return JSTypeConversions.toString(context, msgValue);
-    }
-
-    /**
-     * Get the error name.
-     */
-    public JSString getName() {
-        JSValue nameValue = get(PropertyKey.NAME);
-        if (nameValue.isUndefined()) {
-            return new JSString(getErrorName());
-        }
-        return JSTypeConversions.toString(context, nameValue);
-    }
-
-    /**
-     * Get the source location associated with this error.
-     *
-     * @return the source location, or {@code null} when it is unavailable
-     */
-
-    public SourceLocation getSourceLocation() {
-        return sourceLocation;
-    }
-
-    /**
-     * The name of the source {@link #getSourceLocation()} indexes into.
-     *
-     * @return the source name, or null when the location belongs to the source the embedder
-     * supplied, or when there is no location
-     */
-    public String getSourceName() {
-        return sourceName;
-    }
-
-    public String getVmMessage() {
-        return vmMessage;
-    }
-
-    /**
-     * Record which source this error's location indexes into.
-     *
-     * @param sourceName the source name
-     */
-    void setSourceName(String sourceName) {
-        this.sourceName = sourceName;
-    }
-
-    public void setVmMessage(String vmMessage) {
-        this.vmMessage = vmMessage;
-    }
-
-    @Override
-    public String toString() {
-        String name = getName().value();
-        String message = getMessage().value();
-        if (message == null || message.isEmpty()) {
-            return name;
-        }
-        return name + ": " + message;
     }
 }

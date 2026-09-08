@@ -21,43 +21,37 @@ import org.junit.jupiter.api.Test;
 
 public class UnaryExpressionTest extends BaseJavetTest {
     private void assertBooleanWithJavetWithoutStrict(String code) {
-        assertWithJavet(
-                () -> {
-                    v8Runtime.resetContext();
-                    try (var v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
-                        return (Boolean) v8Runtime.toObject(v8Value);
-                    }
-                },
-                () -> {
-                    var jsValue = resetContext().eval(code, FILE_NAME, moduleMode);
-                    return (Boolean) jsValue.toJavaObject();
-                });
+        assertWithJavet(() -> {
+            v8Runtime.resetContext();
+            try (var v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
+                return (Boolean) v8Runtime.toObject(v8Value);
+            }
+        }, () -> {
+            var jsValue = resetContext().eval(code, FILE_NAME, moduleMode);
+            return (Boolean) jsValue.toJavaObject();
+        });
     }
 
     @Test
     public void testArrayElementPostfixIncrement() {
-        assertIntegerWithJavet(
-                """
-                        let arr = [1, 2, 3];
-                        let old = arr[1]++;
-                        old;""",
-                """
-                        let arr = [1, 2, 3];
-                        arr[1]++;
-                        arr[1];""");
+        assertIntegerWithJavet("""
+                let arr = [1, 2, 3];
+                let old = arr[1]++;
+                old;""", """
+                let arr = [1, 2, 3];
+                arr[1]++;
+                arr[1];""");
     }
 
     @Test
     public void testArrayElementPrefixIncrement() {
-        assertIntegerWithJavet(
-                """
-                        let arr = [1, 2, 3];
-                        let result = ++arr[1];
-                        result;""",
-                """
-                        let arr = [1, 2, 3];
-                        ++arr[1];
-                        arr[1];""");
+        assertIntegerWithJavet("""
+                let arr = [1, 2, 3];
+                let result = ++arr[1];
+                result;""", """
+                let arr = [1, 2, 3];
+                ++arr[1];
+                arr[1];""");
     }
 
     @Test
@@ -72,53 +66,45 @@ public class UnaryExpressionTest extends BaseJavetTest {
 
     @Test
     public void testObjectPropertyPostfixIncrement() {
-        assertIntegerWithJavet(
-                """
-                        let obj = { x: 5 };
-                        let old = obj.x++;
-                        old;""",
-                """
-                        let obj = { x: 5 };
-                        obj.x++;
-                        obj.x;""");
+        assertIntegerWithJavet("""
+                let obj = { x: 5 };
+                let old = obj.x++;
+                old;""", """
+                let obj = { x: 5 };
+                obj.x++;
+                obj.x;""");
     }
 
     @Test
     public void testObjectPropertyPrefixIncrement() {
-        assertIntegerWithJavet(
-                """
-                        let obj = { x: 5 };
-                        let result = ++obj.x;
-                        result;""",
-                """
-                        let obj = { x: 5 };
-                        ++obj.x;
-                        obj.x;""");
+        assertIntegerWithJavet("""
+                let obj = { x: 5 };
+                let result = ++obj.x;
+                result;""", """
+                let obj = { x: 5 };
+                ++obj.x;
+                obj.x;""");
     }
 
     @Test
     public void testPostfixDecrement() {
-        assertIntegerWithJavet(
-                """
-                        let arr = [10, 20, 30];
-                        let old = arr[0]--;
-                        old;""",
-                """
-                        let arr = [10, 20, 30];
-                        arr[0]--;
-                        arr[0];""");
+        assertIntegerWithJavet("""
+                let arr = [10, 20, 30];
+                let old = arr[0]--;
+                old;""", """
+                let arr = [10, 20, 30];
+                arr[0]--;
+                arr[0];""");
     }
 
     @Test
     public void testPrefixDecrement() {
-        assertIntegerWithJavet(
-                """
-                        let obj = { y: 10 };
-                        let result = --obj.y;
-                        result;""",
-                """
-                        let obj = { y: 10 };
-                        --obj.y;
-                        obj.y;""");
+        assertIntegerWithJavet("""
+                let obj = { y: 10 };
+                let result = --obj.y;
+                result;""", """
+                let obj = { y: 10 };
+                --obj.y;
+                obj.y;""");
     }
 }

@@ -26,33 +26,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class MediumPriorityOpcodeTest extends BaseTest {
-    private JSValue execute(
-            BytecodeEmitter emitter,
-            int localCount,
-            JSValue[] closureVars,
-            JSValue thisArg,
+    private JSValue execute(BytecodeEmitter emitter, int localCount, JSValue[] closureVars, JSValue thisArg,
             JSValue... args) {
         return executeWithStrict(true, emitter, localCount, closureVars, thisArg, args);
     }
 
-    private JSValue executeWithStrict(
-            boolean strict,
-            BytecodeEmitter emitter,
-            int localCount,
-            JSValue[] closureVars,
-            JSValue thisArg,
-            JSValue... args) {
-        JSBytecodeFunction function = new JSBytecodeFunction(context, emitter.build(localCount),
-                "test",
-                args.length,
-                closureVars,
-                null,
-                true,
-                false,
-                false,
-                false,
-                strict,
-                "function test() { [bytecode] }");
+    private JSValue executeWithStrict(boolean strict, BytecodeEmitter emitter, int localCount, JSValue[] closureVars,
+            JSValue thisArg, JSValue... args) {
+        JSBytecodeFunction function = new JSBytecodeFunction(context, emitter.build(localCount), "test", args.length,
+                closureVars, null, true, false, false, false, strict, "function test() { [bytecode] }");
         return context.getVirtualMachine().execute(function, thisArg, args);
     }
 
@@ -62,12 +44,10 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         JSObject source = context.createJSObject();
         source.set("a", new JSNumber(1));
         source.set("b", new JSNumber(2));
-        source.defineProperty(
-                PropertyKey.fromString("hidden"),
+        source.defineProperty(PropertyKey.fromString("hidden"),
                 PropertyDescriptor.dataDescriptor(new JSNumber(99), PropertyDescriptor.DataState.ConfigurableWritable));
         JSSymbol symbol = new JSSymbol("sym");
-        source.defineProperty(
-                PropertyKey.fromSymbol(symbol),
+        source.defineProperty(PropertyKey.fromSymbol(symbol),
                 PropertyDescriptor.dataDescriptor(new JSNumber(7), PropertyDescriptor.DataState.All));
 
         JSArray excludeList = context.createJSArray();
@@ -100,13 +80,13 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         typeErrorEmitter.emitOpcode(Opcode.RETURN_UNDEF);
 
         assertThatThrownBy(() -> execute(typeErrorEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE))
-                .isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("copy target must be an object");
+                .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("copy target must be an object");
     }
 
     @Test
     public void testDefineClassComputed() {
-        JSNativeFunction constructor = new JSNativeFunction(context, "old", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
+        JSNativeFunction constructor = new JSNativeFunction(context, "old", 0,
+                (ctx, thisArg, args) -> JSUndefined.INSTANCE);
 
         BytecodeEmitter emitter = new BytecodeEmitter();
         emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("DynamicClass"));
@@ -289,8 +269,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         noCatchEmitter.emitOpcode(Opcode.RETURN);
 
         assertThatThrownBy(() -> execute(noCatchEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE))
-                .isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("nip_catch");
+                .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("nip_catch");
     }
 
     @Test
@@ -329,7 +308,8 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         nonStrictGlobalEmitter.emitOpcodeAtom(Opcode.GET_VAR, "newGlobalRef");
         nonStrictGlobalEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue nonStrictResult = executeWithStrict(false, nonStrictGlobalEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
+        JSValue nonStrictResult = executeWithStrict(false, nonStrictGlobalEmitter, 0, JSValue.NO_ARGS,
+                JSUndefined.INSTANCE);
         assertThat(nonStrictResult).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) nonStrictResult).value()).isEqualTo(11);
 
@@ -340,8 +320,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         strictMissingGetEmitter.emitOpcode(Opcode.RETURN);
 
         assertThatThrownBy(() -> execute(strictMissingGetEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE))
-                .isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("missing is not defined");
+                .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("missing is not defined");
 
         BytecodeEmitter strictMissingPutEmitter = new BytecodeEmitter();
         strictMissingPutEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, context.createJSObject());
@@ -351,8 +330,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         strictMissingPutEmitter.emitOpcode(Opcode.RETURN_UNDEF);
 
         assertThatThrownBy(() -> execute(strictMissingPutEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE))
-                .isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("missing is not defined");
+                .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("missing is not defined");
     }
 
     @Test
@@ -388,17 +366,18 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         deleteMissingVarEmitter.emitOpcodeAtom(Opcode.DELETE_VAR, "missingDeleteVar");
         deleteMissingVarEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue deleteMissingResult = executeWithStrict(false, deleteMissingVarEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
+        JSValue deleteMissingResult = executeWithStrict(false, deleteMissingVarEmitter, 0, JSValue.NO_ARGS,
+                JSUndefined.INSTANCE);
         assertThat(deleteMissingResult).isEqualTo(JSBoolean.TRUE);
 
-        context.getGlobalObject().defineProperty(
-                PropertyKey.fromString("lockedDeleteVar"),
+        context.getGlobalObject().defineProperty(PropertyKey.fromString("lockedDeleteVar"),
                 PropertyDescriptor.dataDescriptor(new JSNumber(2), PropertyDescriptor.DataState.EnumerableWritable));
         BytecodeEmitter deleteLockedVarEmitter = new BytecodeEmitter();
         deleteLockedVarEmitter.emitOpcodeAtom(Opcode.DELETE_VAR, "lockedDeleteVar");
         deleteLockedVarEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue deleteLockedResult = executeWithStrict(false, deleteLockedVarEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
+        JSValue deleteLockedResult = executeWithStrict(false, deleteLockedVarEmitter, 0, JSValue.NO_ARGS,
+                JSUndefined.INSTANCE);
         assertThat(deleteLockedResult).isEqualTo(JSBoolean.FALSE);
         assertThat(context.getGlobalObject().get("lockedDeleteVar")).isInstanceOf(JSNumber.class);
     }
@@ -449,8 +428,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         getLocCheckEmitter.emitOpcode(Opcode.RETURN);
 
         assertThatThrownBy(() -> execute(getLocCheckEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE))
-                .isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("before initialization");
+                .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("before initialization");
 
         BytecodeEmitter getLocCheckThisEmitter = new BytecodeEmitter();
         getLocCheckThisEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
@@ -458,8 +436,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         getLocCheckThisEmitter.emitOpcode(Opcode.RETURN);
 
         assertThatThrownBy(() -> execute(getLocCheckThisEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE))
-                .isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("before initialization");
+                .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("before initialization");
 
         BytecodeEmitter putLocCheckEmitter = new BytecodeEmitter();
         putLocCheckEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
@@ -468,8 +445,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         putLocCheckEmitter.emitOpcode(Opcode.RETURN_UNDEF);
 
         assertThatThrownBy(() -> execute(putLocCheckEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE))
-                .isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("before initialization");
+                .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("before initialization");
 
         BytecodeEmitter setLocCheckEmitter = new BytecodeEmitter();
         setLocCheckEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
@@ -478,8 +454,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         setLocCheckEmitter.emitOpcode(Opcode.RETURN_UNDEF);
 
         assertThatThrownBy(() -> execute(setLocCheckEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE))
-                .isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("before initialization");
+                .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("before initialization");
 
         BytecodeEmitter putLocCheckInitEmitter = new BytecodeEmitter();
         putLocCheckInitEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
@@ -499,9 +474,9 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         varRefCheckEmitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, 0);
         varRefCheckEmitter.emitOpcode(Opcode.RETURN);
 
-        assertThatThrownBy(() -> execute(varRefCheckEmitter, 1, new JSValue[]{JSUndefined.INSTANCE}, JSUndefined.INSTANCE))
-                .isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("before initialization");
+        assertThatThrownBy(
+                () -> execute(varRefCheckEmitter, 1, new JSValue[]{JSUndefined.INSTANCE}, JSUndefined.INSTANCE))
+                .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("before initialization");
 
         BytecodeEmitter putVarRefCheckEmitter = new BytecodeEmitter();
         putVarRefCheckEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
@@ -510,9 +485,9 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         putVarRefCheckEmitter.emitOpcodeU16(Opcode.PUT_VAR_REF_CHECK, 0);
         putVarRefCheckEmitter.emitOpcode(Opcode.RETURN_UNDEF);
 
-        assertThatThrownBy(() -> execute(putVarRefCheckEmitter, 1, new JSValue[]{JSUndefined.INSTANCE}, JSUndefined.INSTANCE))
-                .isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("before initialization");
+        assertThatThrownBy(
+                () -> execute(putVarRefCheckEmitter, 1, new JSValue[]{JSUndefined.INSTANCE}, JSUndefined.INSTANCE))
+                .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("before initialization");
 
         BytecodeEmitter putVarRefCheckInitEmitter = new BytecodeEmitter();
         putVarRefCheckInitEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
@@ -522,8 +497,8 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         putVarRefCheckInitEmitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, 0);
         putVarRefCheckInitEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue putVarRefCheckInitResult = execute(
-                putVarRefCheckInitEmitter, 1, new JSValue[]{JSUndefined.INSTANCE}, JSUndefined.INSTANCE);
+        JSValue putVarRefCheckInitResult = execute(putVarRefCheckInitEmitter, 1, new JSValue[]{JSUndefined.INSTANCE},
+                JSUndefined.INSTANCE);
         assertThat(putVarRefCheckInitResult).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) putVarRefCheckInitResult).value()).isEqualTo(10);
 
@@ -536,9 +511,8 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         putVarRefCheckInitTwiceEmitter.emitOpcodeU16(Opcode.PUT_VAR_REF_CHECK_INIT, 0);
         putVarRefCheckInitTwiceEmitter.emitOpcode(Opcode.RETURN_UNDEF);
 
-        assertThatThrownBy(() -> execute(
-                putVarRefCheckInitTwiceEmitter, 1, new JSValue[]{JSUndefined.INSTANCE}, JSUndefined.INSTANCE))
-                .isInstanceOf(JSVirtualMachineException.class)
+        assertThatThrownBy(() -> execute(putVarRefCheckInitTwiceEmitter, 1, new JSValue[]{JSUndefined.INSTANCE},
+                JSUndefined.INSTANCE)).isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("variable is already initialized");
     }
 }

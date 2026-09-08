@@ -32,21 +32,11 @@ public final class PropertyDefinition extends ClassElement {
     private final Expression key;
     private final Expression value;
 
-    public PropertyDefinition(
-            Expression key,
-            Expression value,
-            boolean computed,
-            boolean isStatic,
-            boolean isPrivate) {
+    public PropertyDefinition(Expression key, Expression value, boolean computed, boolean isStatic, boolean isPrivate) {
         this(key, value, computed, isStatic, isPrivate, false);
     }
 
-    public PropertyDefinition(
-            Expression key,
-            Expression value,
-            boolean computed,
-            boolean isStatic,
-            boolean isPrivate,
+    public PropertyDefinition(Expression key, Expression value, boolean computed, boolean isStatic, boolean isPrivate,
             boolean autoAccessor) {
         super(key != null ? key.getLocation() : (value != null ? value.getLocation() : new SourceLocation(0, 0, 0, 0)));
         this.key = key;
@@ -55,15 +45,6 @@ public final class PropertyDefinition extends ClassElement {
         this.isStatic = isStatic;
         this.isPrivate = isPrivate;
         this.autoAccessor = autoAccessor;
-    }
-
-    public static String createAutoAccessorBackingName(int index, Set<String> existingNames) {
-        String candidateName = "__auto_accessor_" + index;
-        while (existingNames.contains(candidateName)) {
-            index++;
-            candidateName = "__auto_accessor_" + index;
-        }
-        return candidateName;
     }
 
     @Override
@@ -116,52 +97,34 @@ public final class PropertyDefinition extends ClassElement {
         SourceLocation location = getLocation();
         Identifier thisIdentifier = new Identifier("this", location);
         PrivateIdentifier backingPrivateIdentifier = new PrivateIdentifier(backingPrivateName, location);
-        MemberExpression backingMemberExpression = new MemberExpression(
-                thisIdentifier,
-                backingPrivateIdentifier,
-                false,
-                false,
-                location);
+        MemberExpression backingMemberExpression = new MemberExpression(thisIdentifier, backingPrivateIdentifier, false,
+                false, location);
 
         FunctionExpression methodFunctionExpression;
         if (JSKeyword.GET.equals(methodKind)) {
-            BlockStatement body = new BlockStatement(
-                    List.of(new ReturnStatement(backingMemberExpression, location)),
+            BlockStatement body = new BlockStatement(List.of(new ReturnStatement(backingMemberExpression, location)),
                     location);
-            methodFunctionExpression = new FunctionExpression(
-                    null,
-                    new FunctionParams(List.of(), null, null),
-                    body,
-                    false,
-                    false,
-                    false,
-                    location);
+            methodFunctionExpression = new FunctionExpression(null, new FunctionParams(List.of(), null, null), body,
+                    false, false, false, location);
         } else {
             Identifier valueIdentifier = new Identifier("value", location);
-            AssignmentExpression assignmentExpression = new AssignmentExpression(
-                    backingMemberExpression,
-                    AssignmentOperator.ASSIGN,
-                    valueIdentifier,
+            AssignmentExpression assignmentExpression = new AssignmentExpression(backingMemberExpression,
+                    AssignmentOperator.ASSIGN, valueIdentifier, location);
+            BlockStatement body = new BlockStatement(List.of(new ExpressionStatement(assignmentExpression, location)),
                     location);
-            BlockStatement body = new BlockStatement(
-                    List.of(new ExpressionStatement(assignmentExpression, location)),
-                    location);
-            methodFunctionExpression = new FunctionExpression(
-                    null,
-                    new FunctionParams(List.of(valueIdentifier), null, null),
-                    body,
-                    false,
-                    false,
-                    false,
-                    location);
+            methodFunctionExpression = new FunctionExpression(null,
+                    new FunctionParams(List.of(valueIdentifier), null, null), body, false, false, false, location);
         }
 
-        return new MethodDefinition(
-                key,
-                methodFunctionExpression,
-                methodKind,
-                computed,
-                isStatic,
-                false);
+        return new MethodDefinition(key, methodFunctionExpression, methodKind, computed, isStatic, false);
+    }
+
+    public static String createAutoAccessorBackingName(int index, Set<String> existingNames) {
+        String candidateName = "__auto_accessor_" + index;
+        while (existingNames.contains(candidateName)) {
+            index++;
+            candidateName = "__auto_accessor_" + index;
+        }
+        return candidateName;
     }
 }

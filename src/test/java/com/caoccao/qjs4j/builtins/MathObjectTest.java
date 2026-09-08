@@ -64,11 +64,8 @@ public class MathObjectTest extends BaseJavetTest {
 
     @Test
     public void testAdd() {
-        assertIntegerWithJavet(
-                "1 + 1",
-                "var a = 1; var b = 2; a + b");
-        assertDoubleWithJavet(
-                "2**32 + 2**32");
+        assertIntegerWithJavet("1 + 1", "var a = 1; var b = 2; a + b");
+        assertDoubleWithJavet("2**32 + 2**32");
     }
 
     @Test
@@ -126,13 +123,8 @@ public class MathObjectTest extends BaseJavetTest {
 
     @Test
     public void testDivide() {
-        assertIntegerWithJavet(
-                "1 / 1");
-        assertDoubleWithJavet(
-                "var a = 1; var b = 2; a / b",
-                "-2 / -3",
-                "1 / 0",
-                "Infinity / -Infinity");
+        assertIntegerWithJavet("1 / 1");
+        assertDoubleWithJavet("var a = 1; var b = 2; a / b", "-2 / -3", "1 / 0", "Infinity / -Infinity");
     }
 
     @Test
@@ -276,9 +268,8 @@ public class MathObjectTest extends BaseJavetTest {
     @Test
     public void testMax() {
         // Normal case: multiple numbers
-        JSValue result = MathObject.max(context, JSUndefined.INSTANCE, new JSValue[]{
-                new JSNumber(1), new JSNumber(5), new JSNumber(3)
-        });
+        JSValue result = MathObject.max(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSNumber(1), new JSNumber(5), new JSNumber(3)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(5.0);
 
         // Normal case: single number
@@ -286,15 +277,13 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.0);
 
         // Normal case: with NaN
-        result = MathObject.max(context, JSUndefined.INSTANCE, new JSValue[]{
-                new JSNumber(1), new JSNumber(Double.NaN), new JSNumber(3)
-        });
+        result = MathObject.max(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSNumber(1), new JSNumber(Double.NaN), new JSNumber(3)});
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Normal case: negative numbers
-        result = MathObject.max(context, JSUndefined.INSTANCE, new JSValue[]{
-                new JSNumber(-5), new JSNumber(-1), new JSNumber(-10)
-        });
+        result = MathObject.max(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSNumber(-5), new JSNumber(-1), new JSNumber(-10)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(-1.0);
 
         // Edge case: no arguments
@@ -305,9 +294,8 @@ public class MathObjectTest extends BaseJavetTest {
     @Test
     public void testMin() {
         // Normal case: multiple numbers
-        JSValue result = MathObject.min(context, JSUndefined.INSTANCE, new JSValue[]{
-                new JSNumber(1), new JSNumber(5), new JSNumber(3)
-        });
+        JSValue result = MathObject.min(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSNumber(1), new JSNumber(5), new JSNumber(3)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
 
         // Normal case: single number
@@ -315,15 +303,13 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.0);
 
         // Normal case: with NaN
-        result = MathObject.min(context, JSUndefined.INSTANCE, new JSValue[]{
-                new JSNumber(1), new JSNumber(Double.NaN), new JSNumber(3)
-        });
+        result = MathObject.min(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSNumber(1), new JSNumber(Double.NaN), new JSNumber(3)});
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Normal case: negative numbers
-        result = MathObject.min(context, JSUndefined.INSTANCE, new JSValue[]{
-                new JSNumber(-5), new JSNumber(-1), new JSNumber(-10)
-        });
+        result = MathObject.min(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSNumber(-5), new JSNumber(-1), new JSNumber(-10)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(-10.0);
 
         // Edge case: no arguments
@@ -333,10 +319,7 @@ public class MathObjectTest extends BaseJavetTest {
 
     @Test
     public void testMultiply() {
-        assertIntegerWithJavet(
-                "1 * 1",
-                "var a = 1; var b = 2; a * b",
-                "-2 * -3");
+        assertIntegerWithJavet("1 * 1", "var a = 1; var b = 2; a * b", "-2 * -3");
     }
 
     @Test
@@ -488,10 +471,7 @@ public class MathObjectTest extends BaseJavetTest {
 
     @Test
     public void testSubtract() {
-        assertIntegerWithJavet(
-                "1 - 1",
-                "var a = 1; var b = 2; a - b",
-                "2**32 - 2**32");
+        assertIntegerWithJavet("1 - 1", "var a = 1; var b = 2; a - b", "2**32 - 2**32");
     }
 
     @Test

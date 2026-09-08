@@ -29,8 +29,7 @@ public class FinalizationRegistryPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testObjectToString() {
-        assertStringWithJavet(
-                "Object.prototype.toString.call(new FinalizationRegistry(function(){}))");
+        assertStringWithJavet("Object.prototype.toString.call(new FinalizationRegistry(function(){}))");
     }
 
     @Test
@@ -43,8 +42,7 @@ public class FinalizationRegistryPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testRegisterHeldValueCanBeAnything() {
-        assertUndefinedWithJavet(
-                "var fr = new FinalizationRegistry(function(){}); fr.register({}, 42)",
+        assertUndefinedWithJavet("var fr = new FinalizationRegistry(function(){}); fr.register({}, 42)",
                 "var fr = new FinalizationRegistry(function(){}); fr.register({}, 'held')",
                 "var fr = new FinalizationRegistry(function(){}); fr.register({}, null)",
                 "var fr = new FinalizationRegistry(function(){}); fr.register({}, undefined)",
@@ -54,35 +52,30 @@ public class FinalizationRegistryPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testRegisterHeldValueCannotBeTarget() {
-        assertThatThrownBy(() -> context.eval(
-                "var fr = new FinalizationRegistry(function(){}); var obj = {}; fr.register(obj, obj)"))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("TypeError");
+        assertThatThrownBy(() -> context
+                .eval("var fr = new FinalizationRegistry(function(){}); var obj = {}; fr.register(obj, obj)"))
+                .isInstanceOf(JSException.class).hasMessageContaining("TypeError");
     }
 
     @Test
     public void testRegisterInvalidTarget() {
-        for (String code : new String[]{
-                "var fr = new FinalizationRegistry(function(){}); fr.register(42, 'held')",
+        for (String code : new String[]{"var fr = new FinalizationRegistry(function(){}); fr.register(42, 'held')",
                 "var fr = new FinalizationRegistry(function(){}); fr.register('str', 'held')",
                 "var fr = new FinalizationRegistry(function(){}); fr.register(true, 'held')",
                 "var fr = new FinalizationRegistry(function(){}); fr.register(null, 'held')",
                 "var fr = new FinalizationRegistry(function(){}); fr.register(undefined, 'held')"}) {
-            assertThatThrownBy(() -> context.eval(code))
-                    .isInstanceOf(JSException.class)
+            assertThatThrownBy(() -> context.eval(code)).isInstanceOf(JSException.class)
                     .hasMessageContaining("TypeError");
         }
     }
 
     @Test
     public void testRegisterInvalidToken() {
-        for (String code : new String[]{
-                "var fr = new FinalizationRegistry(function(){}); fr.register({}, 'held', 42)",
+        for (String code : new String[]{"var fr = new FinalizationRegistry(function(){}); fr.register({}, 'held', 42)",
                 "var fr = new FinalizationRegistry(function(){}); fr.register({}, 'held', 'str')",
                 "var fr = new FinalizationRegistry(function(){}); fr.register({}, 'held', true)",
                 "var fr = new FinalizationRegistry(function(){}); fr.register({}, 'held', null)"}) {
-            assertThatThrownBy(() -> context.eval(code))
-                    .isInstanceOf(JSException.class)
+            assertThatThrownBy(() -> context.eval(code)).isInstanceOf(JSException.class)
                     .hasMessageContaining("TypeError");
         }
     }
@@ -99,14 +92,12 @@ public class FinalizationRegistryPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testRegisterReturnsUndefined() {
-        assertUndefinedWithJavet(
-                "new FinalizationRegistry(function(){}).register({}, 'held')");
+        assertUndefinedWithJavet("new FinalizationRegistry(function(){}).register({}, 'held')");
     }
 
     @Test
     public void testRegisterWithObjectToken() {
-        assertUndefinedWithJavet(
-                "var fr = new FinalizationRegistry(function(){}); fr.register({}, 'held', {})");
+        assertUndefinedWithJavet("var fr = new FinalizationRegistry(function(){}); fr.register({}, 'held', {})");
     }
 
     @Test
@@ -117,8 +108,7 @@ public class FinalizationRegistryPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testRegisterWithUndefinedToken() {
-        assertUndefinedWithJavet(
-                "var fr = new FinalizationRegistry(function(){}); fr.register({}, 'held', undefined)");
+        assertUndefinedWithJavet("var fr = new FinalizationRegistry(function(){}); fr.register({}, 'held', undefined)");
     }
 
     @Test
@@ -131,8 +121,7 @@ public class FinalizationRegistryPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testToStringTagValue() {
-        assertStringWithJavet(
-                "FinalizationRegistry.prototype[Symbol.toStringTag]");
+        assertStringWithJavet("FinalizationRegistry.prototype[Symbol.toStringTag]");
     }
 
     @Test
@@ -145,14 +134,12 @@ public class FinalizationRegistryPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testUnregisterInvalidToken() {
-        for (String code : new String[]{
-                "var fr = new FinalizationRegistry(function(){}); fr.unregister(42)",
+        for (String code : new String[]{"var fr = new FinalizationRegistry(function(){}); fr.unregister(42)",
                 "var fr = new FinalizationRegistry(function(){}); fr.unregister('str')",
                 "var fr = new FinalizationRegistry(function(){}); fr.unregister(true)",
                 "var fr = new FinalizationRegistry(function(){}); fr.unregister(null)",
                 "var fr = new FinalizationRegistry(function(){}); fr.unregister(undefined)"}) {
-            assertThatThrownBy(() -> context.eval(code))
-                    .isInstanceOf(JSException.class)
+            assertThatThrownBy(() -> context.eval(code)).isInstanceOf(JSException.class)
                     .hasMessageContaining("TypeError");
         }
     }
@@ -169,8 +156,7 @@ public class FinalizationRegistryPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testUnregisterNotFound() {
-        assertBooleanWithJavet(
-                "var fr = new FinalizationRegistry(function(){}); fr.unregister({}) === false");
+        assertBooleanWithJavet("var fr = new FinalizationRegistry(function(){}); fr.unregister({}) === false");
     }
 
     @Test
@@ -181,8 +167,7 @@ public class FinalizationRegistryPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testUnregisterReturnType() {
-        assertStringWithJavet(
-                "var fr = new FinalizationRegistry(function(){}); typeof fr.unregister({})");
+        assertStringWithJavet("var fr = new FinalizationRegistry(function(){}); typeof fr.unregister({})");
     }
 
     @Test

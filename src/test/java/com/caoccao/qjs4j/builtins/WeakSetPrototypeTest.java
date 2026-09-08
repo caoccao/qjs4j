@@ -30,19 +30,17 @@ public class WeakSetPrototypeTest extends BaseJavetTest {
     public void testAdd() {
         // Normal case: add new value
         assertBooleanWithJavet("""
-                        var weakSet = new WeakSet();
-                        var value1 = {};
-                        weakSet.add(value1).constructor === WeakSet""",
-                """
-                        var weakSet = new WeakSet();
-                        var value = {};
-                        weakSet.add(value) === weakSet;""",
-                """
-                        var weakSet = new WeakSet();
-                        var value = {};
-                        weakSet.add(value);
-                        weakSet.add(value);
-                        weakSet.has(value);""");
+                var weakSet = new WeakSet();
+                var value1 = {};
+                weakSet.add(value1).constructor === WeakSet""", """
+                var weakSet = new WeakSet();
+                var value = {};
+                weakSet.add(value) === weakSet;""", """
+                var weakSet = new WeakSet();
+                var value = {};
+                weakSet.add(value);
+                weakSet.add(value);
+                weakSet.has(value);""");
 
         // Edge case: no arguments
         assertErrorWithJavet("""

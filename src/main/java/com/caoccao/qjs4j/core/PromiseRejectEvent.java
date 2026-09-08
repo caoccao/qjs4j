@@ -17,27 +17,27 @@
 package com.caoccao.qjs4j.core;
 
 /**
- * Enumeration of promise rejection events.
- * Used by PromiseRejectCallback to identify the type of promise rejection event.
+ * Enumeration of promise rejection events. Used by PromiseRejectCallback to identify the type of promise rejection
+ * event.
  */
 public enum PromiseRejectEvent {
-    /**
-     * A promise was rejected but has no rejection handler.
-     */
-    PromiseRejectWithNoHandler,
-
     /**
      * A rejection handler was added to a promise after it was already rejected.
      */
     PromiseHandlerAddedAfterReject,
 
     /**
-     * A promise was resolved after it was already resolved.
-     */
-    PromiseResolveAfterResolved,
-
-    /**
      * A promise was rejected after it was already resolved.
      */
-    PromiseRejectAfterResolved
+    PromiseRejectAfterResolved,
+
+    /**
+     * A promise was rejected but has no rejection handler.
+     */
+    PromiseRejectWithNoHandler,
+
+    /**
+     * A promise was resolved after it was already resolved.
+     */
+    PromiseResolveAfterResolved
 }

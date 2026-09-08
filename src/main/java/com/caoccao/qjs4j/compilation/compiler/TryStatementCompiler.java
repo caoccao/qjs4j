@@ -52,8 +52,8 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
     }
 
     /**
-     * Compile the body of a finally block as statements with net-zero stack effect.
-     * Used for the GOSUB/RET path where the return address must remain on top of the stack.
+     * Compile the body of a finally block as statements with net-zero stack effect. Used for the GOSUB/RET path where
+     * the return address must remain on top of the stack.
      */
     private void compileFinallyBlockBody(BlockStatement block) {
         boolean savedIsLastInProgram = compilerContext.isLastInProgram;
@@ -62,8 +62,8 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
         compilerContext.finallySubroutineDepth++;
         int savedEvalReturnLocalIndex = -1;
         if (compilerContext.evalReturnLocalIndex >= 0) {
-            savedEvalReturnLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
-                    "$finally_eval_ret_" + compilerContext.emitter.currentOffset());
+            savedEvalReturnLocalIndex = compilerContext.scopeManager.currentScope()
+                    .declareLocal("$finally_eval_ret_" + compilerContext.emitter.currentOffset());
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, compilerContext.evalReturnLocalIndex);
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, savedEvalReturnLocalIndex);
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
@@ -246,7 +246,8 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
 
             // Exception path: caught exception is on the stack
             compilerContext.emitter.patchJump(usingCatchJump, compilerContext.emitter.currentOffset());
-            compilerContext.emitHelpers.emitScopeUsingDisposalWithException(compilerContext.scopeManager.currentScope());
+            compilerContext.emitHelpers
+                    .emitScopeUsingDisposalWithException(compilerContext.scopeManager.currentScope());
 
             compilerContext.emitter.patchJump(jumpOverCatch, compilerContext.emitter.currentOffset());
         } else {

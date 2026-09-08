@@ -23,9 +23,8 @@ import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.vm.Opcode;
 
 /**
- * Compiles assignment targets (destructuring assignment LHS) into bytecode.
- * Dispatches to dedicated compilers for Identifier, MemberExpression, ArrayExpression,
- * and ObjectExpression targets.
+ * Compiles assignment targets (destructuring assignment LHS) into bytecode. Dispatches to dedicated compilers for
+ * Identifier, MemberExpression, ArrayExpression, and ObjectExpression targets.
  */
 final class ExpressionDestructuringAssignmentCompiler extends AstNodeCompiler<Expression> {
 
@@ -46,8 +45,7 @@ final class ExpressionDestructuringAssignmentCompiler extends AstNodeCompiler<Ex
         } else if (target instanceof ObjectExpression nestedObj) {
             compilerContext.objectExpressionDestructuringAssignmentCompiler.compile(nestedObj);
         } else {
-            throw new JSSyntaxErrorException(
-                    "Invalid destructuring assignment target", target.getLocation());
+            throw new JSSyntaxErrorException("Invalid destructuring assignment target", target.getLocation());
         }
     }
 
@@ -65,8 +63,7 @@ final class ExpressionDestructuringAssignmentCompiler extends AstNodeCompiler<Ex
             int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
             compilerContext.expressionCompiler.compile(assignExpr.getRight());
-            if (assignExpr.getLeft() instanceof Identifier targetId
-                    && assignExpr.getRight().isAnonymousFunction()) {
+            if (assignExpr.getLeft() instanceof Identifier targetId && assignExpr.getRight().isAnonymousFunction()) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
             }
             compilerContext.emitter.patchJump(jumpNotUndefined, compilerContext.emitter.currentOffset());
@@ -89,9 +86,7 @@ final class ExpressionDestructuringAssignmentCompiler extends AstNodeCompiler<Ex
                         ? compilerContext.privateSymbols.get(fieldName)
                         : null;
                 if (privateSymbol == null) {
-                    throw new JSCompilerException(
-                            "undefined private field '#" + fieldName + "'",
-                            privateIdentifier);
+                    throw new JSCompilerException("undefined private field '#" + fieldName + "'", privateIdentifier);
                 }
                 compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, privateSymbol);
                 compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
@@ -115,8 +110,7 @@ final class ExpressionDestructuringAssignmentCompiler extends AstNodeCompiler<Ex
             compilerContext.emitter.emitOpcode(Opcode.DROP);
             compilerContext.expressionCompiler.compile(assignExpr.getRight());
             // Set function name for anonymous function definitions
-            if (assignExpr.getLeft() instanceof Identifier targetId
-                    && assignExpr.getRight().isAnonymousFunction()) {
+            if (assignExpr.getLeft() instanceof Identifier targetId && assignExpr.getRight().isAnonymousFunction()) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
             }
             compilerContext.emitter.patchJump(jumpNotUndefined, compilerContext.emitter.currentOffset());

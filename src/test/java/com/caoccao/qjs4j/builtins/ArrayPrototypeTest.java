@@ -30,9 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class ArrayPrototypeTest extends BaseJavetTest {
     // Helper method to create a simple test function
     private JSFunction createTestFunction(Function<JSValue[], JSValue> impl) {
-        return new JSNativeFunction(context, "test",
-                1,
-                (context, thisArg, args) -> impl.apply(args));
+        return new JSNativeFunction(context, "test", 1, (context, thisArg, args) -> impl.apply(args));
     }
 
     @Test
@@ -127,7 +125,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         arr.push(new JSNumber(4));
         arr.push(new JSNumber(5));
 
-        JSValue result = ArrayPrototype.copyWithin(context, arr, new JSValue[]{new JSNumber(0), new JSNumber(3), new JSNumber(5)});
+        JSValue result = ArrayPrototype.copyWithin(context, arr,
+                new JSValue[]{new JSNumber(0), new JSNumber(3), new JSNumber(5)});
         assertThat(result).isSameAs(arr);
         assertThat(arr.getLength()).isEqualTo(5);
         assertThat(arr.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(4.0);
@@ -144,7 +143,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         arr2.push(new JSNumber(4));
         arr2.push(new JSNumber(5));
 
-        result = ArrayPrototype.copyWithin(context, arr2, new JSValue[]{new JSNumber(-2), new JSNumber(0), new JSNumber(2)});
+        result = ArrayPrototype.copyWithin(context, arr2,
+                new JSValue[]{new JSNumber(-2), new JSNumber(0), new JSNumber(2)});
         assertThat(result).isSameAs(arr2);
         assertThat(arr2.getLength()).isEqualTo(5);
         assertThat(arr2.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
@@ -169,18 +169,13 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertTypeError(ArrayPrototype.copyWithin(context, nonArray, new JSValue[]{new JSNumber(0), new JSNumber(1)}));
         assertPendingException(context);
 
-        assertObjectWithJavet(
-                "[1,2,3,4,5].copyWithin(0,3,5)",
-                "[1,2,3,4,5].copyWithin(-2,0,2)",
+        assertObjectWithJavet("[1,2,3,4,5].copyWithin(0,3,5)", "[1,2,3,4,5].copyWithin(-2,0,2)",
                 "[1,2,3,4,5].copyWithin(2)");
-        assertStringWithJavet(
-                "(() => { const a = [1,2,3,4,5]; a.copyWithin(0,3,5); return a.join(','); })()",
+        assertStringWithJavet("(() => { const a = [1,2,3,4,5]; a.copyWithin(0,3,5); return a.join(','); })()",
                 "(() => { const a = [1,2,3,4,5]; a.copyWithin(-2,0,2); return a.join(','); })()",
                 "(() => { const a = [1,2,3,4,5]; a.copyWithin(2); return a.join(','); })()");
-        assertBooleanWithJavet(
-                "(() => { const a = [1,2,3]; return a.copyWithin(1,2) === a; })()");
-        assertIntegerWithJavet(
-                "(() => { const a = [1,2,3,4,5]; a.copyWithin(1,3,5); return a.length; })()");
+        assertBooleanWithJavet("(() => { const a = [1,2,3]; return a.copyWithin(1,2) === a; })()");
+        assertIntegerWithJavet("(() => { const a = [1,2,3,4,5]; a.copyWithin(1,3,5); return a.length; })()");
     }
 
     @Test
@@ -219,8 +214,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
         // Edge case: every on non-array (generic, works on any object via ToObject)
         JSValue nonArray = new JSString("ab");
-        JSFunction isStringFn = createTestFunction(a ->
-                a[0] instanceof JSString ? JSBoolean.TRUE : JSBoolean.FALSE);
+        JSFunction isStringFn = createTestFunction(a -> a[0] instanceof JSString ? JSBoolean.TRUE : JSBoolean.FALSE);
         result = ArrayPrototype.every(context, nonArray, new JSValue[]{isStringFn});
         assertThat(result).isEqualTo(JSBoolean.TRUE);
     }
@@ -228,22 +222,17 @@ public class ArrayPrototypeTest extends BaseJavetTest {
     @Test
     public void testEveryGeneric() {
         // Generic: called on plain object with length
-        assertBooleanWithJavet(
-                "Array.prototype.every.call({0: 2, 1: 4, length: 2}, v => v % 2 === 0)",
+        assertBooleanWithJavet("Array.prototype.every.call({0: 2, 1: 4, length: 2}, v => v % 2 === 0)",
                 "Array.prototype.every.call({0: 1, 1: 2, length: 2}, v => v > 0)");
         // Generic: not all pass on plain object
-        assertBooleanWithJavet(
-                "Array.prototype.every.call({0: 2, 1: 3, length: 2}, v => v % 2 === 0)");
+        assertBooleanWithJavet("Array.prototype.every.call({0: 2, 1: 3, length: 2}, v => v % 2 === 0)");
         // Generic: called on string primitive (ToObject wraps to String object)
-        assertBooleanWithJavet(
-                "Array.prototype.every.call('abc', v => typeof v === 'string')",
+        assertBooleanWithJavet("Array.prototype.every.call('abc', v => typeof v === 'string')",
                 "Array.prototype.every.call('', v => false)");
         // Generic: called on boolean primitive
-        assertBooleanWithJavet(
-                "Array.prototype.every.call(true, v => false)");
+        assertBooleanWithJavet("Array.prototype.every.call(true, v => false)");
         // Generic: called on number primitive
-        assertBooleanWithJavet(
-                "Array.prototype.every.call(42, v => false)");
+        assertBooleanWithJavet("Array.prototype.every.call(42, v => false)");
         // Generic: callback receives correct arguments (element, index, object)
         assertBooleanWithJavet(
                 "Array.prototype.every.call({0: 'a', length: 1}, function(v, i, o) { return typeof o === 'object' && o.length === 1; })");
@@ -251,17 +240,14 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertBooleanWithJavet(
                 "Array.prototype.every.call({0: 1, length: 1}, function(v) { return this.x === 10; }, {x: 10})");
         // Generic: empty object (length 0) is vacuously true
-        assertBooleanWithJavet(
-                "Array.prototype.every.call({length: 0}, v => false)");
+        assertBooleanWithJavet("Array.prototype.every.call({length: 0}, v => false)");
         // Generic: object with no length property (length coerces to 0)
-        assertBooleanWithJavet(
-                "Array.prototype.every.call({}, v => false)");
+        assertBooleanWithJavet("Array.prototype.every.call({}, v => false)");
         // Generic: Math object
         assertStringWithJavet(
                 "(() => { Math.length = 1; Math[0] = 1; var r = Array.prototype.every.call(Math, function(v, i, o) { return '[object Math]' !== Object.prototype.toString.call(o); }); delete Math[0]; delete Math.length; return String(r); })()");
         // Error: null/undefined throws TypeError
-        assertErrorWithJavet(
-                "Array.prototype.every.call(null, v => true)",
+        assertErrorWithJavet("Array.prototype.every.call(null, v => true)",
                 "Array.prototype.every.call(undefined, v => true)");
     }
 
@@ -346,13 +332,9 @@ public class ArrayPrototypeTest extends BaseJavetTest {
                 // fill on an array-like object
                 "(() => { var obj = {0: 'a', 1: 'b', 2: 'c', length: 3}; Array.prototype.fill.call(obj, 'x'); return obj[0] + obj[1] + obj[2]; })()",
                 // fill with start/end on array-like
-                "(() => { var obj = {0: 'a', 1: 'b', 2: 'c', length: 3}; Array.prototype.fill.call(obj, 'x', 1, 2); return obj[0] + obj[1] + obj[2]; })()"
-        );
+                "(() => { var obj = {0: 'a', 1: 'b', 2: 'c', length: 3}; Array.prototype.fill.call(obj, 'x', 1, 2); return obj[0] + obj[1] + obj[2]; })()");
         // fill on null/undefined should throw TypeError with matching error message
-        assertErrorWithJavet(
-                "Array.prototype.fill.call(null, 0)",
-                "Array.prototype.fill.call(undefined, 0)"
-        );
+        assertErrorWithJavet("Array.prototype.fill.call(null, 0)", "Array.prototype.fill.call(undefined, 0)");
     }
 
     @Test
@@ -406,12 +388,9 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertStringWithJavet(
                 "(() => { var obj = {0: 1, 1: 2, 2: 3, length: 3}; return Array.prototype.filter.call(obj, x => x > 1).join(','); })()",
                 "(() => { var obj = {0: 'a', 1: 'b', 2: 'c', length: 3}; return Array.prototype.filter.call(obj, (v, i) => i > 0).join(','); })()",
-                "(() => { return Array.prototype.filter.call({length: 0}, x => true).length.toString(); })()"
-        );
-        assertErrorWithJavet(
-                "Array.prototype.filter.call(null, x => x)",
-                "Array.prototype.filter.call(undefined, x => x)"
-        );
+                "(() => { return Array.prototype.filter.call({length: 0}, x => true).length.toString(); })()");
+        assertErrorWithJavet("Array.prototype.filter.call(null, x => x)",
+                "Array.prototype.filter.call(undefined, x => x)");
     }
 
     @Test
@@ -739,20 +718,14 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
         // Edge case: getLength on non-array
         JSValue nonArray = new JSString("not an array");
-        assertThat(ArrayPrototype.getLength(context, nonArray, JSValue.NO_ARGS).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(0.0);
+        assertThat(ArrayPrototype.getLength(context, nonArray, JSValue.NO_ARGS).asNumber().map(JSNumber::value)
+                .orElseThrow()).isEqualTo(0.0);
 
-        assertIntegerWithJavet("[].length",
-                "[1,2].length",
-                "['a','b'].length",
-                "[[],].length",
-                "[[1],[2]].length");
+        assertIntegerWithJavet("[].length", "[1,2].length", "['a','b'].length", "[[],].length", "[[1],[2]].length");
 
-        assertErrorWithJavet("Array.prototype.length.call({})",
-                "Array.prototype.length.call(123)",
-                "Array.prototype.length.call(true)",
-                "Array['prototype'].length.call(true)",
-                "Array.prototype.length.call(null)",
-                "Array.prototype.length.call(undefined)");
+        assertErrorWithJavet("Array.prototype.length.call({})", "Array.prototype.length.call(123)",
+                "Array.prototype.length.call(true)", "Array['prototype'].length.call(true)",
+                "Array.prototype.length.call(null)", "Array.prototype.length.call(undefined)");
     }
 
     @Test
@@ -920,15 +893,20 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
         // Edge case: join on non-array
         JSValue nonArray = new JSString("not an array");
-        assertThat(ArrayPrototype.join(context, nonArray, JSValue.NO_ARGS).asString().map(JSString::value).orElseThrow()).isEqualTo("");
+        assertThat(
+                ArrayPrototype.join(context, nonArray, JSValue.NO_ARGS).asString().map(JSString::value).orElseThrow())
+                .isEqualTo("");
 
         // Edge case: join called on array-like object
+        assertThat(context
+                .eval("Array.prototype.join.call({ 0: 'a', 1: null, 2: undefined, 3: 'd', 4: 'e', length: 5 }, ',')")
+                .asString().map(JSString::value).orElseThrow()).isEqualTo("a,,,d,e");
         assertThat(
-                context.eval("Array.prototype.join.call({ 0: 'a', 1: null, 2: undefined, 3: 'd', 4: 'e', length: 5 }, ',')").asString().map(JSString::value).orElseThrow()).isEqualTo("a,,,d,e");
-        assertThat(
-                context.eval("Array.prototype.join.call({ 0: 'a', 1: null, 2: undefined, 3: 'd', 4: 'e', length: 5 })").asString().map(JSString::value).orElseThrow()).isEqualTo("a,,,d,e");
-        assertThat(
-                context.eval("Array.prototype.join.call({ 0: 'a', 0.1: 'b', length: 5 }, '-')").asString().map(JSString::value).orElseThrow()).isEqualTo("a----");
+                context.eval("Array.prototype.join.call({ 0: 'a', 1: null, 2: undefined, 3: 'd', 4: 'e', length: 5 })")
+                        .asString().map(JSString::value).orElseThrow())
+                .isEqualTo("a,,,d,e");
+        assertThat(context.eval("Array.prototype.join.call({ 0: 'a', 0.1: 'b', length: 5 }, '-')").asString()
+                .map(JSString::value).orElseThrow()).isEqualTo("a----");
     }
 
     @Test
@@ -1044,8 +1022,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testPrototype() {
-        assertObjectWithJavet(
-                "Object.getOwnPropertyNames(Array.prototype).sort()");
+        assertObjectWithJavet("Object.getOwnPropertyNames(Array.prototype).sort()");
     }
 
     @Test
@@ -1353,17 +1330,9 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertTypeError(ArrayPrototype.sort(context, JSNull.INSTANCE, JSValue.NO_ARGS));
         assertPendingException(context);
 
-        assertObjectWithJavet(
-                "[].sort()",
-                "[1.1,2.1].sort()",
-                "['b','a'].sort()",
-                "['b','a'].sort(undefined)",
+        assertObjectWithJavet("[].sort()", "[1.1,2.1].sort()", "['b','a'].sort()", "['b','a'].sort(undefined)",
                 "['a',null,undefined,[],'b'].sort()");
-        assertErrorWithJavet(
-                "[1].sort(null)",
-                "[1].sort(true)",
-                "[1].sort(1)",
-                "[1].sort('abc')");
+        assertErrorWithJavet("[1].sort(null)", "[1].sort(true)", "[1].sort(1)", "[1].sort('abc')");
     }
 
     @Test
@@ -1376,7 +1345,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         arr.push(new JSNumber(4));
 
         // Normal case: splice(2, 2, 10, 11)
-        JSValue result = ArrayPrototype.splice(context, arr, new JSValue[]{new JSNumber(2), new JSNumber(2), new JSNumber(10), new JSNumber(11)});
+        JSValue result = ArrayPrototype.splice(context, arr,
+                new JSValue[]{new JSNumber(2), new JSNumber(2), new JSNumber(10), new JSNumber(11)});
         JSArray deleted = result.asArray().orElseThrow();
         assertThat(deleted.getLength()).isEqualTo(2);
         assertThat(deleted.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
@@ -1394,13 +1364,15 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         JSArray arr2 = new JSArray(context);
         arr2.push(new JSNumber(1));
         arr2.push(new JSNumber(2));
-        result = ArrayPrototype.splice(context, arr2, new JSValue[]{new JSNumber(1), new JSNumber(0), new JSNumber(1.5)});
+        result = ArrayPrototype.splice(context, arr2,
+                new JSValue[]{new JSNumber(1), new JSNumber(0), new JSNumber(1.5)});
         deleted = result.asArray().orElseThrow();
         assertThat(deleted.getLength()).isEqualTo(0);
         assertThat(arr2.getLength()).isEqualTo(3);
 
         // Edge case: splice on null/undefined
-        assertTypeError(ArrayPrototype.splice(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(0), new JSNumber(1)}));
+        assertTypeError(
+                ArrayPrototype.splice(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(0), new JSNumber(1)}));
         assertPendingException(context);
     }
 
@@ -1580,11 +1552,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         // Edge case: toSorted on null/undefined
         assertTypeError(ArrayPrototype.toSorted(context, JSNull.INSTANCE, JSValue.NO_ARGS));
         assertPendingException(context);
-        assertErrorWithJavet(
-                "[1].toSorted(null)",
-                "[1].toSorted(true)",
-                "[1].toSorted(1)",
-                "[1].toSorted('abc')");
+        assertErrorWithJavet("[1].toSorted(null)", "[1].toSorted(true)", "[1].toSorted(1)", "[1].toSorted('abc')");
     }
 
     @Test
@@ -1610,7 +1578,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(arr.get(3).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(4.0);
 
         // Insert elements
-        result = ArrayPrototype.toSpliced(context, arr, new JSValue[]{new JSNumber(1), new JSNumber(0), new JSNumber(5), new JSNumber(6)});
+        result = ArrayPrototype.toSpliced(context, arr,
+                new JSValue[]{new JSNumber(1), new JSNumber(0), new JSNumber(5), new JSNumber(6)});
         JSArray inserted = result.asArray().orElseThrow();
         assertThat(inserted.getLength()).isEqualTo(6);
         assertThat(inserted.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
@@ -1621,7 +1590,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(inserted.get(5).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(4.0);
 
         // Replace elements
-        result = ArrayPrototype.toSpliced(context, arr, new JSValue[]{new JSNumber(1), new JSNumber(2), new JSNumber(7), new JSNumber(8)});
+        result = ArrayPrototype.toSpliced(context, arr,
+                new JSValue[]{new JSNumber(1), new JSNumber(2), new JSNumber(7), new JSNumber(8)});
         JSArray replaced = result.asArray().orElseThrow();
         assertThat(replaced.getLength()).isEqualTo(4);
         assertThat(replaced.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
@@ -1639,13 +1609,15 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
         // Edge case: empty array
         JSArray emptyArr = new JSArray(context);
-        result = ArrayPrototype.toSpliced(context, emptyArr, new JSValue[]{new JSNumber(0), new JSNumber(0), new JSNumber(1)});
+        result = ArrayPrototype.toSpliced(context, emptyArr,
+                new JSValue[]{new JSNumber(0), new JSNumber(0), new JSNumber(1)});
         JSArray emptySpliced = result.asArray().orElseThrow();
         assertThat(emptySpliced.getLength()).isEqualTo(1);
         assertThat(emptySpliced.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
 
         // Edge case: toSpliced on null/undefined
-        assertTypeError(ArrayPrototype.toSpliced(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(0), new JSNumber(1)}));
+        assertTypeError(
+                ArrayPrototype.toSpliced(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(0), new JSNumber(1)}));
         assertPendingException(context);
     }
 
@@ -1683,19 +1655,21 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("a,1,c");
 
         // Edge case: toString on string
-        assertThat(
-                ArrayPrototype.toString(context, new JSString("a"), JSValue.NO_ARGS).asString().map(JSString::value).orElseThrow()).isEqualTo("[object String]");
+        assertThat(ArrayPrototype.toString(context, new JSString("a"), JSValue.NO_ARGS).asString().map(JSString::value)
+                .orElseThrow()).isEqualTo("[object String]");
 
         // Edge case: toString on object
-        assertThat(
-                ArrayPrototype.toString(context, new JSObject(context), JSValue.NO_ARGS).asString().map(JSString::value).orElseThrow()).isEqualTo("[object Object]");
+        assertThat(ArrayPrototype.toString(context, new JSObject(context), JSValue.NO_ARGS).asString()
+                .map(JSString::value).orElseThrow()).isEqualTo("[object Object]");
 
         // Edge case: toString on null
-        assertTypeError(ArrayPrototype.toString(context, new JSNull(), JSValue.NO_ARGS), "Cannot convert undefined or null to object");
+        assertTypeError(ArrayPrototype.toString(context, new JSNull(), JSValue.NO_ARGS),
+                "Cannot convert undefined or null to object");
         assertPendingException(context);
 
         // Edge case: toString on undefined
-        assertTypeError(ArrayPrototype.toString(context, new JSUndefined(), JSValue.NO_ARGS), "Cannot convert undefined or null to object");
+        assertTypeError(ArrayPrototype.toString(context, new JSUndefined(), JSValue.NO_ARGS),
+                "Cannot convert undefined or null to object");
         assertPendingException(context);
     }
 

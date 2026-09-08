@@ -22,10 +22,10 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A resizable buffer used to allocate its {@code maxByteLength} at construction, so declaring a
- * growth ceiling cost that much heap immediately, and the four-byte padding was computed in
- * {@code int} — so a length the allocation check explicitly permits wrapped to
- * {@link Integer#MIN_VALUE} and escaped {@code try}/{@code catch} as an internal engine failure.
+ * A resizable buffer used to allocate its {@code maxByteLength} at construction, so declaring a growth ceiling cost
+ * that much heap immediately, and the four-byte padding was computed in {@code int} — so a length the allocation check
+ * explicitly permits wrapped to {@link Integer#MIN_VALUE} and escaped {@code try}/{@code catch} as an internal engine
+ * failure.
  */
 public class JSResizableArrayBufferTest extends BaseJavetTest {
     @Test
@@ -50,11 +50,8 @@ public class JSResizableArrayBufferTest extends BaseJavetTest {
         try (JSRuntime runtime = new JSRuntime()) {
             JSContext context = runtime.createContext();
             for (String length : new String[]{"2147483647", "2147483646", "2147483645", "2147483644"}) {
-                assertThat(context.eval(
-                        "try { new ArrayBuffer(" + length + "); 'allocated'; } catch (e) { e.name; }",
-                        "b.js", false).toString())
-                        .as(length)
-                        .isEqualTo("RangeError");
+                assertThat(context.eval("try { new ArrayBuffer(" + length + "); 'allocated'; } catch (e) { e.name; }",
+                        "b.js", false).toString()).as(length).isEqualTo("RangeError");
             }
         }
     }
@@ -65,8 +62,8 @@ public class JSResizableArrayBufferTest extends BaseJavetTest {
         // allocated for the ceiling until the buffer actually grows.
         try (JSRuntime runtime = new JSRuntime()) {
             JSContext context = runtime.createContext();
-            JSValue result = context.eval(
-                    "new ArrayBuffer(0, { maxByteLength: 2147483647 }).maxByteLength", "b.js", false);
+            JSValue result = context.eval("new ArrayBuffer(0, { maxByteLength: 2147483647 }).maxByteLength", "b.js",
+                    false);
             assertThat(result.toString()).isEqualTo("2147483647");
             assertThat(runtime.getMemoryAccounting().getReservedBytes()).isZero();
         }
@@ -76,8 +73,8 @@ public class JSResizableArrayBufferTest extends BaseJavetTest {
     public void testResizableBufferAllocatesItsCurrentLengthNotItsMaximum() {
         try (JSRuntime runtime = new JSRuntime()) {
             JSContext context = runtime.createContext();
-            JSArrayBuffer buffer = (JSArrayBuffer) context.eval(
-                    "new ArrayBuffer(1, { maxByteLength: 33554432 })", "b.js", false);
+            JSArrayBuffer buffer = (JSArrayBuffer) context.eval("new ArrayBuffer(1, { maxByteLength: 33554432 })",
+                    "b.js", false);
             assertThat(buffer.getByteLength()).isEqualTo(1);
             assertThat(buffer.getMaxByteLength()).isEqualTo(33554432);
             // Padded to a multiple of four for 16-bit atomics, and no further.
@@ -120,14 +117,14 @@ public class JSResizableArrayBufferTest extends BaseJavetTest {
                   const tracking = new Uint16Array(buffer);
                   tracking[0] = 0x1234;
                   if (tracking[0] !== 0x1234) return false;
-                
+
                   buffer.resize(16);
                   tracking[7] = 0x5678;
                   if (tracking.length !== 8 || tracking[7] !== 0x5678) return false;
-                
+
                   buffer.resize(2);
                   if (tracking.length !== 1 || tracking[0] !== 0x1234) return false;
-                
+
                   buffer.resize(64);
                   tracking[31] = 0x9abc;
                   return tracking.length === 32 && tracking[31] === 0x9abc;

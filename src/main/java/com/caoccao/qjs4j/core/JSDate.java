@@ -27,8 +27,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Represents a JavaScript Date object.
- * Stores the clipped epoch milliseconds like QuickJS.
+ * Represents a JavaScript Date object. Stores the clipped epoch milliseconds like QuickJS.
  */
 public final class JSDate extends JSObject {
     public static final int FIELD_DATE = 2;
@@ -41,37 +40,64 @@ public final class JSDate extends JSObject {
     public static final int FIELD_TIMEZONE_OFFSET = 8;
     public static final int FIELD_YEAR = 0;
     public static final double MAX_TIME_VALUE = 8.64e15;
-    public static final String NAME = "Date";
-    public static final DateTimeFormatter TO_STRING_FORMATTER_LONG =
-            DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'Z (zzzz)", Locale.ENGLISH);
-    public static final DateTimeFormatter TO_STRING_FORMATTER_SHORT =
-            DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'Z (z)", Locale.ENGLISH);
     private static final long MILLIS_PER_DAY = 86_400_000L;
     private static final int[] MONTH_DAYS = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-    private static final Pattern NOTE_DATETIME_WITH_SPACE_PATTERN = Pattern.compile(
-            "^(?<year>(?:[+-]\\d{6}|\\d{4}))-(?<month>\\d{1,2})-(?<day>\\d{1,2})\\s+"
+    public static final String NAME = "Date";
+    private static final Pattern NOTE_DATETIME_WITH_SPACE_PATTERN = Pattern
+            .compile("^(?<year>(?:[+-]\\d{6}|\\d{4}))-(?<month>\\d{1,2})-(?<day>\\d{1,2})\\s+"
                     + "(?<hour>\\d{1,2}):(?<minute>\\d{1,2})"
                     + "(?::(?<second>\\d{1,2})(?:[\\.,](?<fraction>\\d{1,9}))?)?"
                     + "(?:(?<z>Z)|(?<tzSign>[+-])(?<tzHour>\\d{2})(?::?(?<tzMinute>\\d{2}))?)?$");
-    private static final DateTimeFormatter PARSE_TO_STRING_FORMATTER =
-            DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'XX", Locale.ENGLISH);
-    private static final DateTimeFormatter PARSE_UTC_STRING_FORMATTER =
-            DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
-                    .withZone(ZoneOffset.UTC);
+    private static final DateTimeFormatter PARSE_TO_STRING_FORMATTER = DateTimeFormatter
+            .ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'XX", Locale.ENGLISH);
+    private static final DateTimeFormatter PARSE_UTC_STRING_FORMATTER = DateTimeFormatter
+            .ofPattern("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH).withZone(ZoneOffset.UTC);
     private static final ZoneRules SYSTEM_ZONE_RULES = ZoneId.systemDefault().getRules();
+    public static final DateTimeFormatter TO_STRING_FORMATTER_LONG = DateTimeFormatter
+            .ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'Z (zzzz)", Locale.ENGLISH);
+    public static final DateTimeFormatter TO_STRING_FORMATTER_SHORT = DateTimeFormatter
+            .ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'Z (z)", Locale.ENGLISH);
     private double timeValue;
 
     public JSDate(JSContext context) {
         this(context, System.currentTimeMillis());
     }
 
+    public JSDate(JSContext context, double timeValue) {
+        super(context);
+        this.timeValue = timeValue;
+    }
+
     public JSDate(JSContext context, long timeValue) {
         this(context, (double) timeValue);
     }
 
-    public JSDate(JSContext context, double timeValue) {
-        super(context);
+    public ZonedDateTime getLocalZonedDateTime() {
+        if (!Double.isFinite(timeValue)) {
+            return null;
+        }
+        return ZonedDateTime.ofInstant(Instant.ofEpochMilli((long) timeValue), ZoneId.systemDefault());
+    }
+
+    public double getTimeValue() {
+        return timeValue;
+    }
+
+    public ZonedDateTime getZonedDateTime() {
+        if (!Double.isFinite(timeValue)) {
+            return null;
+        }
+        return ZonedDateTime.ofInstant(Instant.ofEpochMilli((long) timeValue), ZoneOffset.UTC);
+    }
+
+    public void setTimeValue(double timeValue) {
         this.timeValue = timeValue;
+    }
+
+    @Override
+    public String toString() {
+        ZonedDateTime zonedDateTime = getZonedDateTime();
+        return zonedDateTime == null ? "JSDate[NaN]" : "JSDate[" + zonedDateTime + "]";
     }
 
     private static long clampToLong(double value) {
@@ -95,7 +121,8 @@ public final class JSDate extends JSObject {
             } else if (arg instanceof JSNumber num) {
                 timeValue = timeClip(num.value());
             } else {
-                JSValue primitive = JSTypeConversions.toPrimitive(context, arg, JSTypeConversions.PreferredType.DEFAULT);
+                JSValue primitive = JSTypeConversions.toPrimitive(context, arg,
+                        JSTypeConversions.PreferredType.DEFAULT);
                 if (context.hasPendingException()) {
                     return (JSObject) context.getPendingException();
                 }
@@ -121,9 +148,7 @@ public final class JSDate extends JSObject {
     }
 
     private static long daysFromYear(long y) {
-        return 365L * (y - 1970)
-                + Math.floorDiv(y - 1969, 4)
-                - Math.floorDiv(y - 1901, 100)
+        return 365L * (y - 1970) + Math.floorDiv(y - 1969, 4) - Math.floorDiv(y - 1901, 100)
                 + Math.floorDiv(y - 1601, 400);
     }
 
@@ -290,10 +315,9 @@ public final class JSDate extends JSObject {
     }
 
     /**
-     * Parse ISO 8601 date-time string format following QuickJS js_date_parse_isostring.
-     * Handles partial ISO strings: YYYY, YYYY-MM, YYYY-MM-DD, YYYY-MM-DDTHH:mm[:ss[.sss]][Z|±HH:mm]
-     * Also supports extended years: ±YYYYYY
-     * Date-only forms are treated as UTC; date-time forms without timezone are local.
+     * Parse ISO 8601 date-time string format following QuickJS js_date_parse_isostring. Handles partial ISO strings:
+     * YYYY, YYYY-MM, YYYY-MM-DD, YYYY-MM-DDTHH:mm[:ss[.sss]][Z|±HH:mm] Also supports extended years: ±YYYYYY Date-only
+     * forms are treated as UTC; date-time forms without timezone are local.
      */
     private static double parseISODateString(String str) {
         int len = str.length();
@@ -642,34 +666,6 @@ public final class JSDate extends JSObject {
                 y++;
             }
         }
-    }
-
-    public ZonedDateTime getLocalZonedDateTime() {
-        if (!Double.isFinite(timeValue)) {
-            return null;
-        }
-        return ZonedDateTime.ofInstant(Instant.ofEpochMilli((long) timeValue), ZoneId.systemDefault());
-    }
-
-    public double getTimeValue() {
-        return timeValue;
-    }
-
-    public ZonedDateTime getZonedDateTime() {
-        if (!Double.isFinite(timeValue)) {
-            return null;
-        }
-        return ZonedDateTime.ofInstant(Instant.ofEpochMilli((long) timeValue), ZoneOffset.UTC);
-    }
-
-    public void setTimeValue(double timeValue) {
-        this.timeValue = timeValue;
-    }
-
-    @Override
-    public String toString() {
-        ZonedDateTime zonedDateTime = getZonedDateTime();
-        return zonedDateTime == null ? "JSDate[NaN]" : "JSDate[" + zonedDateTime + "]";
     }
 
     private record YearFromDaysResult(long year, long remainingDays) {

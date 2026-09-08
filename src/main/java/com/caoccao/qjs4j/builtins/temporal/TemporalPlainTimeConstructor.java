@@ -240,11 +240,9 @@ public final class TemporalPlainTimeConstructor {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            return JSTemporalPlainTime.create(
-                    context,
-                    IsoDateTime.createFromEpochNsAndTimeZoneId(
-                            zonedDateTime.getEpochNanoseconds(),
-                            zonedDateTime.getTimeZoneId()).time());
+            return JSTemporalPlainTime.create(context, IsoDateTime
+                    .createFromEpochNsAndTimeZoneId(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId())
+                    .time());
         }
         if (item instanceof JSObject itemObj) {
             return timeFromFields(context, itemObj, options);

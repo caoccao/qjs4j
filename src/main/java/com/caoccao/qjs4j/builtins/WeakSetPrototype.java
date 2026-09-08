@@ -19,15 +19,12 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 /**
- * Implementation of WeakSet.prototype methods.
- * Based on ES2020 WeakSet specification.
+ * Implementation of WeakSet.prototype methods. Based on ES2020 WeakSet specification.
  */
 public final class WeakSetPrototype {
 
     /**
-     * WeakSet.prototype.add(value)
-     * ES2020 23.4.3.1
-     * Adds the value to the WeakSet object. Returns the WeakSet object.
+     * WeakSet.prototype.add(value) ES2020 23.4.3.1 Adds the value to the WeakSet object. Returns the WeakSet object.
      * Value must be an object.
      */
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -43,13 +40,13 @@ public final class WeakSetPrototype {
     }
 
     /**
-     * WeakSet.prototype.delete(value)
-     * ES2020 23.4.3.2
-     * Removes the value from the WeakSet. Returns true if the value existed and was removed.
+     * WeakSet.prototype.delete(value) ES2020 23.4.3.2 Removes the value from the WeakSet. Returns true if the value
+     * existed and was removed.
      */
     public static JSValue delete(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSWeakSet jsWeakSet)) {
-            return context.throwTypeError("Method WeakSet.prototype.delete called on incompatible receiver not weakset");
+            return context
+                    .throwTypeError("Method WeakSet.prototype.delete called on incompatible receiver not weakset");
         }
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         if (!JSWeakSet.isWeakSetValue(value)) {
@@ -59,9 +56,7 @@ public final class WeakSetPrototype {
     }
 
     /**
-     * WeakSet.prototype.has(value)
-     * ES2020 23.4.3.3
-     * Returns a boolean indicating whether a value exists in the WeakSet.
+     * WeakSet.prototype.has(value) ES2020 23.4.3.3 Returns a boolean indicating whether a value exists in the WeakSet.
      */
     public static JSValue has(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSWeakSet jsWeakSet)) {

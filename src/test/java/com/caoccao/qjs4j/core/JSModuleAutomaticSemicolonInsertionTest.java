@@ -21,15 +21,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Module source is put through a line-oriented transformer, and before it gets there every
- * top-level {@code import}/{@code export} declaration is moved onto lines of its own. Inserting a
- * line terminator is not a neutral edit: line terminators are what lets automatic semicolon
- * insertion terminate a statement, so splitting unconditionally handed the parser a semicolon the
- * author never wrote and the engine accepted modules that a conforming parser must reject.
+ * Module source is put through a line-oriented transformer, and before it gets there every top-level
+ * {@code import}/{@code export} declaration is moved onto lines of its own. Inserting a line terminator is not a
+ * neutral edit: line terminators are what lets automatic semicolon insertion terminate a statement, so splitting
+ * unconditionally handed the parser a semicolon the author never wrote and the engine accepted modules that a
+ * conforming parser must reject.
  * <p>
- * The source is now parsed <em>as written</em> before any break is inserted, so the grammar — not a
- * token heuristic — decides whether the split is legal, and source missing a semicolon it needs is
- * rejected with the parser's own diagnostic rather than gaining one.
+ * The source is now parsed <em>as written</em> before any break is inserted, so the grammar — not a token heuristic —
+ * decides whether the split is legal, and source missing a semicolon it needs is rejected with the parser's own
+ * diagnostic rather than gaining one.
  */
 public class JSModuleAutomaticSemicolonInsertionTest extends BaseJavetTest {
     @BeforeEach
@@ -98,18 +98,9 @@ public class JSModuleAutomaticSemicolonInsertionTest extends BaseJavetTest {
         // The rejection comes from the parser, so the token is named by category — reserved word,
         // strict-mode reserved word, identifier, number, string — rather than quoted verbatim.
         // Module code is strict, so `let`, `static` and `yield` are reserved here.
-        assertErrorWithJavet(
-                "export {} static",
-                "export {} yield",
-                "export {} enum",
-                "export {} await",
-                "export {} someIdentifier",
-                "export {} 42",
-                "export {} 'a string'",
-                "export {} null",
-                "export {} function f() {}",
-                "export {} (x)",
-                "export {} from");
+        assertErrorWithJavet("export {} static", "export {} yield", "export {} enum", "export {} await",
+                "export {} someIdentifier", "export {} 42", "export {} 'a string'", "export {} null",
+                "export {} function f() {}", "export {} (x)", "export {} from");
     }
 
     @Test

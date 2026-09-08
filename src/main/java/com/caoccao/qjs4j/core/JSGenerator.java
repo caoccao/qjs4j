@@ -20,29 +20,24 @@ import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import com.caoccao.qjs4j.vm.YieldResult;
 
 /**
- * Represents a JavaScript Generator object.
- * Based on QuickJS JS_CLASS_GENERATOR and JSGeneratorData.
+ * Represents a JavaScript Generator object. Based on QuickJS JS_CLASS_GENERATOR and JSGeneratorData.
  * <p>
- * Supports two modes:
- * - Bytecode generators: created by function* declarations/expressions,
- * execution managed by GeneratorState and the VM
- * - Iterator function generators: simplified mode using an IteratorFunction callback
+ * Supports two modes: - Bytecode generators: created by function* declarations/expressions, execution managed by
+ * GeneratorState and the VM - Iterator function generators: simplified mode using an IteratorFunction callback
  * <p>
- * Prototype methods (next, return, throw) are defined on Generator.prototype
- * in JSGlobalObject, not on each instance.
+ * Prototype methods (next, return, throw) are defined on Generator.prototype in JSGlobalObject, not on each instance.
  */
 public final class JSGenerator extends JSObject {
     public static final String NAME = "Generator";
     private final JSContext context;
+    private boolean done;
     private final JSGeneratorState generatorState;
     private final JSIterator.IteratorFunction iteratorFunction;
-    private boolean done;
     private JSValue returnValue;
     private State state;
 
     /**
-     * Create a generator backed by bytecode execution.
-     * Used by JSBytecodeFunction.call() for function* generators.
+     * Create a generator backed by bytecode execution. Used by JSBytecodeFunction.call() for function* generators.
      */
     public JSGenerator(JSContext context, JSGeneratorState generatorState) {
         super(context);
@@ -55,8 +50,8 @@ public final class JSGenerator extends JSObject {
     }
 
     /**
-     * Create a generator with the given iteration logic.
-     * Used for manually created generators (fromArray, fromIteratorFunction).
+     * Create a generator with the given iteration logic. Used for manually created generators (fromArray,
+     * fromIteratorFunction).
      */
     public JSGenerator(JSContext context, JSIterator.IteratorFunction iteratorFunction) {
         super(context);
@@ -66,27 +61,6 @@ public final class JSGenerator extends JSObject {
         this.done = false;
         this.returnValue = JSUndefined.INSTANCE;
         this.state = State.SUSPENDED_START;
-    }
-
-    /**
-     * Helper to create a generator from an array.
-     */
-    public static JSGenerator fromArray(JSContext context, JSArray array) {
-        final int[] index = {0};
-        return new JSGenerator(context, () -> {
-            if (index[0] < array.getLength()) {
-                JSValue value = array.get(index[0]++);
-                return JSIterator.IteratorResult.of(context, value);
-            }
-            return JSIterator.IteratorResult.done(context);
-        });
-    }
-
-    /**
-     * Helper to create a simple generator from an iterator function.
-     */
-    public static JSGenerator fromIteratorFunction(JSContext context, JSIterator.IteratorFunction iteratorFunction) {
-        return new JSGenerator(context, iteratorFunction);
     }
 
     public JSObject completeReturnWithoutResume(JSValue value) {
@@ -117,8 +91,7 @@ public final class JSGenerator extends JSObject {
     }
 
     /**
-     * Generator.prototype.next(value)
-     * Based on QuickJS js_generator_next with GEN_MAGIC_NEXT.
+     * Generator.prototype.next(value) Based on QuickJS js_generator_next with GEN_MAGIC_NEXT.
      */
     public JSObject next(JSValue value) {
         if (state == State.EXECUTING) {
@@ -223,8 +196,7 @@ public final class JSGenerator extends JSObject {
     }
 
     /**
-     * Generator.prototype.return(value)
-     * Based on QuickJS js_generator_next with GEN_MAGIC_RETURN.
+     * Generator.prototype.return(value) Based on QuickJS js_generator_next with GEN_MAGIC_RETURN.
      */
     public JSObject returnMethod(JSValue value) {
         JSValue returnVal = value != null ? value : JSUndefined.INSTANCE;
@@ -290,8 +262,7 @@ public final class JSGenerator extends JSObject {
     }
 
     /**
-     * Generator.prototype.throw(exception)
-     * Based on QuickJS js_generator_next with GEN_MAGIC_THROW.
+     * Generator.prototype.throw(exception) Based on QuickJS js_generator_next with GEN_MAGIC_THROW.
      */
     public JSObject throwMethod(JSValue exception) {
         if (state == State.EXECUTING) {
@@ -346,8 +317,7 @@ public final class JSGenerator extends JSObject {
                         } else if (virtualMachineException.getJsError() != null) {
                             context.setPendingException(virtualMachineException.getJsError());
                         } else {
-                            context.throwError(
-                                    e.getMessage() == null ? "Generator execution failed" : e.getMessage());
+                            context.throwError(e.getMessage() == null ? "Generator execution failed" : e.getMessage());
                         }
                     } else {
                         context.setPendingException(exception);
@@ -370,12 +340,37 @@ public final class JSGenerator extends JSObject {
     }
 
     /**
+     * Helper to create a generator from an array.
+     */
+    public static JSGenerator fromArray(JSContext context, JSArray array) {
+        final int[] index = {0};
+        return new JSGenerator(context, () -> {
+            if (index[0] < array.getLength()) {
+                JSValue value = array.get(index[0]++);
+                return JSIterator.IteratorResult.of(context, value);
+            }
+            return JSIterator.IteratorResult.done(context);
+        });
+    }
+
+    /**
+     * Helper to create a simple generator from an iterator function.
+     */
+    public static JSGenerator fromIteratorFunction(JSContext context, JSIterator.IteratorFunction iteratorFunction) {
+        return new JSGenerator(context, iteratorFunction);
+    }
+
+    /**
      * Generator state matching QuickJS JSGeneratorStateEnum.
      */
     public enum State {
-        SUSPENDED_START,    // Created but not yet started
-        SUSPENDED_YIELD,    // Suspended at a yield expression
-        EXECUTING,          // Currently running
-        COMPLETED           // Finished execution
+        /** Finished execution */
+        COMPLETED,
+        /** Currently running */
+        EXECUTING,
+        /** Created but not yet started */
+        SUSPENDED_START,
+        /** Suspended at a yield expression */
+        SUSPENDED_YIELD
     }
 }

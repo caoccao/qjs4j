@@ -28,8 +28,7 @@ public final class AsyncIteratorPrototype {
     }
 
     /**
-     * %AsyncIteratorPrototype%[@@asyncDispose]().
-     * Calls `this.return?.(undefined)` and resolves to `undefined`.
+     * %AsyncIteratorPrototype%[@@asyncDispose](). Calls `this.return?.(undefined)` and resolves to `undefined`.
      */
     public static JSValue asyncDispose(JSContext context, JSValue thisArg, JSValue[] args) {
         JSPromise resultPromise = context.createJSPromise();
@@ -108,25 +107,16 @@ public final class AsyncIteratorPrototype {
         }
 
         JSPromise wrapperPromise = createPromiseResolve(context, returnResult);
-        wrapperPromise.addReactions(
-                new JSPromise.ReactionRecord(
-                        new JSNativeFunction(context, "", 1, (childContext, callbackThisArg, callbackArgs) -> {
-                            resultPromise.fulfill(JSUndefined.INSTANCE);
-                            return JSUndefined.INSTANCE;
-                        }),
-                        null,
-                        context
-                ),
-                new JSPromise.ReactionRecord(
+        wrapperPromise.addReactions(new JSPromise.ReactionRecord(
+                new JSNativeFunction(context, "", 1, (childContext, callbackThisArg, callbackArgs) -> {
+                    resultPromise.fulfill(JSUndefined.INSTANCE);
+                    return JSUndefined.INSTANCE;
+                }), null, context), new JSPromise.ReactionRecord(
                         new JSNativeFunction(context, "", 1, (childContext, callbackThisArg, callbackArgs) -> {
                             JSValue error = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
                             resultPromise.reject(error);
                             return JSUndefined.INSTANCE;
-                        }),
-                        null,
-                        context
-                )
-        );
+                        }), null, context));
         return resultPromise;
     }
 

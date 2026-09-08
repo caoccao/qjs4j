@@ -9,12 +9,6 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class JSTypedArrayTest extends BaseJavetTest {
-    private static Stream<String> typedArrayNames() {
-        return Stream.of("Int8Array", "Int16Array", "Int32Array", "Uint8Array", "Uint8ClampedArray",
-                "Uint16Array", "Uint32Array", "Float16Array", "Float32Array", "Float64Array",
-                "BigInt64Array", "BigUint64Array");
-    }
-
     @ParameterizedTest
     @MethodSource("typedArrayNames")
     public void testConstructorBufferConversionOrder(String name) {
@@ -88,8 +82,8 @@ public class JSTypedArrayTest extends BaseJavetTest {
                 })()
                 """.formatted(name));
         // begin, end, expected relative offset, expected length
-        int[][] ranges = {{1, 3, 1, 2}, {-3, -1, 1, 2}, {-99, 99, 0, 4},
-                {3, 1, 3, 0}, {99, 100, 4, 0}, {Integer.MIN_VALUE, 0, 0, 0}};
+        int[][] ranges = {{1, 3, 1, 2}, {-3, -1, 1, 2}, {-99, 99, 0, 4}, {3, 1, 3, 0}, {99, 100, 4, 0},
+                {Integer.MIN_VALUE, 0, 0, 0}};
         for (int[] range : ranges) {
             JSTypedArray view = source.subarray(range[0], range[1]);
             assertThat(view).isExactlyInstanceOf(source.getClass());
@@ -100,5 +94,10 @@ public class JSTypedArrayTest extends BaseJavetTest {
         JSTypedArray view = source.subarray(1, 3);
         view.setElement(0, 7);
         assertThat(source.getElement(1)).isEqualTo(7);
+    }
+
+    private static Stream<String> typedArrayNames() {
+        return Stream.of("Int8Array", "Int16Array", "Int32Array", "Uint8Array", "Uint8ClampedArray", "Uint16Array",
+                "Uint32Array", "Float16Array", "Float32Array", "Float64Array", "BigInt64Array", "BigUint64Array");
     }
 }

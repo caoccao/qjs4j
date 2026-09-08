@@ -19,15 +19,12 @@ package com.caoccao.qjs4j.core;
 import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 
 /**
- * Represents a JavaScript WeakMap object.
- * Keys must be objects and are weakly referenced.
- * WeakMaps are not enumerable.
+ * Represents a JavaScript WeakMap object. Keys must be objects and are weakly referenced. WeakMaps are not enumerable.
  * <p>
  * The map holds no reference to its keys or its values: an entry lives on the key, in that key's
- * {@link JSWeakEntryTable}, and names this map by identity. That is what makes the collection an
- * ephemeron — a value reachable only through its entry cannot keep its own key alive — and what
- * makes lookup use {@code ==} rather than {@code equals}. See {@link JSWeakEntryTable} for why
- * both properties needed the storage inverted.
+ * {@link JSWeakEntryTable}, and names this map by identity. That is what makes the collection an ephemeron — a value
+ * reachable only through its entry cannot keep its own key alive — and what makes lookup use {@code ==} rather than
+ * {@code equals}. See {@link JSWeakEntryTable} for why both properties needed the storage inverted.
  */
 public final class JSWeakMap extends JSObject {
     public static final String NAME = "WeakMap";
@@ -39,62 +36,11 @@ public final class JSWeakMap extends JSObject {
         super(context);
     }
 
-    public static JSObject create(JSContext context, JSValue... args) {
-        JSWeakMap weakMapObj = context.createJSWeakMap();
-        CollectionInitializer.initializePrototypeFromNewTarget(context, weakMapObj, NAME);
-        if (context.hasPendingException()) {
-            return CollectionInitializer.returnAbruptResult(context, weakMapObj);
-        }
-        return CollectionInitializer.initializeFromIterable(context, weakMapObj, args, true);
-    }
-
-    /**
-     * The entry table on a key, or {@code null} when the key holds none and none is wanted.
-     *
-     * @param key    the key
-     * @param create true to create the table
-     * @return the table, or {@code null}
-     */
-    private static JSWeakEntryTable entriesOf(JSValue key, boolean create) {
-        // The same predicate the guest-facing prototype methods use. Testing only the Java type
-        // here let the public Java API create state JavaScript itself is forbidden to create: a
-        // registered symbol is deliberately not a valid weak key, because Symbol.for keeps it
-        // reachable for the life of the realm and it can never be collected.
-        if (!isWeakMapKey(key)) {
-            return null;
-        }
-        if (key instanceof JSObject keyObject) {
-            return keyObject.weakEntries(create);
-        }
-        return ((JSSymbol) key).weakEntries(create);
-    }
-
-    /**
-     * Whether a value may be held weakly as a key.
-     * <p>
-     * Objects and unregistered symbols can, per ES2024 CanBeHeldWeakly. A symbol from
-     * {@code Symbol.for} cannot: the global registry keeps it alive for the realm's lifetime, so an
-     * entry keyed on one could never be collected.
-     *
-     * @param key the candidate key
-     * @return true when the key can be held weakly
-     */
-    public static boolean isWeakMapKey(JSValue key) {
-        if (key instanceof JSObject) {
-            return true;
-        }
-        if (key instanceof JSSymbol s) {
-            return !s.isRegistered();
-        }
-        return false;
-    }
-
     /**
      * Let go of the values held for collections that have themselves been collected.
      * <p>
-     * Any weak-collection operation drains the runtime's queue, so a dead collection's values are
-     * released without anything having to touch the particular keys it used — which is what pruning
-     * on access could never do.
+     * Any weak-collection operation drains the runtime's queue, so a dead collection's values are released without
+     * anything having to touch the particular keys it used — which is what pruning on access could never do.
      */
     private void releaseDeadEntries() {
         context.getRuntime().releaseDeadWeakCollectionEntries();
@@ -136,13 +82,15 @@ public final class JSWeakMap extends JSObject {
     /**
      * Set a key-value pair in the WeakMap.
      * <p>
-     * The key must be an object or an <em>unregistered</em> symbol, exactly as
-     * {@code WeakMap.prototype.set} requires — see {@link #isWeakMapKey(JSValue)}. The value may be
-     * any value, including {@code undefined}.
+     * The key must be an object or an <em>unregistered</em> symbol, exactly as {@code WeakMap.prototype.set} requires —
+     * see {@link #isWeakMapKey(JSValue)}. The value may be any value, including {@code undefined}.
      *
-     * @param key   the key
-     * @param value the value
-     * @throws JSTypeErrorException when the key cannot be held weakly
+     * @param key
+     *            the key
+     * @param value
+     *            the value
+     * @throws JSTypeErrorException
+     *             when the key cannot be held weakly
      */
     public void weakMapSet(JSValue key, JSValue value) {
         releaseDeadEntries();
@@ -153,5 +101,57 @@ public final class JSWeakMap extends JSObject {
         // A WeakMap value of undefined must still register the key as present, so the entry table
         // stores JSUndefined.INSTANCE rather than null and `has` tests for an entry, not a value.
         entries.put(this, value == null ? JSUndefined.INSTANCE : value, context.getRuntime().weakCollectionOwners());
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        JSWeakMap weakMapObj = context.createJSWeakMap();
+        CollectionInitializer.initializePrototypeFromNewTarget(context, weakMapObj, NAME);
+        if (context.hasPendingException()) {
+            return CollectionInitializer.returnAbruptResult(context, weakMapObj);
+        }
+        return CollectionInitializer.initializeFromIterable(context, weakMapObj, args, true);
+    }
+
+    /**
+     * The entry table on a key, or {@code null} when the key holds none and none is wanted.
+     *
+     * @param key
+     *            the key
+     * @param create
+     *            true to create the table
+     * @return the table, or {@code null}
+     */
+    private static JSWeakEntryTable entriesOf(JSValue key, boolean create) {
+        // The same predicate the guest-facing prototype methods use. Testing only the Java type
+        // here let the public Java API create state JavaScript itself is forbidden to create: a
+        // registered symbol is deliberately not a valid weak key, because Symbol.for keeps it
+        // reachable for the life of the realm and it can never be collected.
+        if (!isWeakMapKey(key)) {
+            return null;
+        }
+        if (key instanceof JSObject keyObject) {
+            return keyObject.weakEntries(create);
+        }
+        return ((JSSymbol) key).weakEntries(create);
+    }
+
+    /**
+     * Whether a value may be held weakly as a key.
+     * <p>
+     * Objects and unregistered symbols can, per ES2024 CanBeHeldWeakly. A symbol from {@code Symbol.for} cannot: the
+     * global registry keeps it alive for the realm's lifetime, so an entry keyed on one could never be collected.
+     *
+     * @param key
+     *            the candidate key
+     * @return true when the key can be held weakly
+     */
+    public static boolean isWeakMapKey(JSValue key) {
+        if (key instanceof JSObject) {
+            return true;
+        }
+        if (key instanceof JSSymbol s) {
+            return !s.isRegistered();
+        }
+        return false;
     }
 }

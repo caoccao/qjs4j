@@ -28,10 +28,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * {@link PropertyKey} identity.
  * <p>
- * A canonical array index has two internal encodings — {@code fromIndex(0)} boxes an
- * {@code Integer} while {@code fromString("0")} keeps a {@code String} — but both name the same
- * JavaScript property. They used to be neither {@code equals} nor hash-equal, so any
- * {@code HashSet<PropertyKey>} or {@code HashMap<PropertyKey, ?>} in the engine misbehaved.
+ * A canonical array index has two internal encodings — {@code fromIndex(0)} boxes an {@code Integer} while
+ * {@code fromString("0")} keeps a {@code String} — but both name the same JavaScript property. They used to be neither
+ * {@code equals} nor hash-equal, so any {@code HashSet<PropertyKey>} or {@code HashMap<PropertyKey, ?>} in the engine
+ * misbehaved.
  */
 public class PropertyKeyTest {
 
@@ -43,9 +43,7 @@ public class PropertyKeyTest {
             PropertyKey stringKey = PropertyKey.fromString(Integer.toString(index));
             assertThat(indexKey).as("fromIndex(%d) equals fromString", index).isEqualTo(stringKey);
             assertThat(stringKey).as("fromString equals fromIndex(%d)", index).isEqualTo(indexKey);
-            assertThat(indexKey.hashCode())
-                    .as("hash codes agree for %d", index)
-                    .isEqualTo(stringKey.hashCode());
+            assertThat(indexKey.hashCode()).as("hash codes agree for %d", index).isEqualTo(stringKey.hashCode());
         }
     }
 

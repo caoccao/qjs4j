@@ -26,28 +26,11 @@ import java.util.List;
 public final class CallExpression extends Expression {
     private final List<Expression> arguments;
     private final Expression callee;
+    private Boolean directEvalVarArgumentsInside;
     private final boolean optional;
     private final boolean partOfOptionalChain;
-    private Boolean directEvalVarArgumentsInside;
 
-    public CallExpression(
-            Expression callee,
-            List<Expression> arguments,
-            boolean optional,
-            SourceLocation location) {
-        this(
-                callee,
-                arguments,
-                optional,
-                optional || (callee != null && callee.isPartOfOptionalChain()),
-                location);
-    }
-
-    public CallExpression(
-            Expression callee,
-            List<Expression> arguments,
-            boolean optional,
-            boolean partOfOptionalChain,
+    public CallExpression(Expression callee, List<Expression> arguments, boolean optional, boolean partOfOptionalChain,
             SourceLocation location) {
         super(location);
         this.callee = callee;
@@ -55,6 +38,10 @@ public final class CallExpression extends Expression {
         this.optional = optional;
         this.partOfOptionalChain = partOfOptionalChain;
         directEvalVarArgumentsInside = null;
+    }
+
+    public CallExpression(Expression callee, List<Expression> arguments, boolean optional, SourceLocation location) {
+        this(callee, arguments, optional, optional || (callee != null && callee.isPartOfOptionalChain()), location);
     }
 
     @Override
@@ -78,9 +65,7 @@ public final class CallExpression extends Expression {
     public boolean containsDirectEvalVarArguments() {
         if (directEvalVarArgumentsInside == null) {
             directEvalVarArgumentsInside = callee instanceof Identifier calleeIdentifier
-                    && JSKeyword.EVAL.equals(calleeIdentifier.getName())
-                    && arguments != null
-                    && !arguments.isEmpty()
+                    && JSKeyword.EVAL.equals(calleeIdentifier.getName()) && arguments != null && !arguments.isEmpty()
                     && arguments.get(0) instanceof Literal firstArgumentLiteral
                     && firstArgumentLiteral.getValue() instanceof String evalSourceString
                     && evalSourceString.contains("var arguments");

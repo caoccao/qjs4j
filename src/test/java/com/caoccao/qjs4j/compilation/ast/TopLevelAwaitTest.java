@@ -90,8 +90,7 @@ public class TopLevelAwaitTest extends BaseJavetTest {
 
     @Test
     public void testScriptTopLevelAwaitThrows() {
-        assertThatThrownBy(() -> resetContext().eval("await 1;", FILE_NAME, false))
-                .isInstanceOf(JSException.class);
+        assertThatThrownBy(() -> resetContext().eval("await 1;", FILE_NAME, false)).isInstanceOf(JSException.class);
     }
 
     @Test

@@ -22,15 +22,14 @@ import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import java.util.*;
 
 /**
- * Implementation of JavaScript JSON object.
- * Based on ES2024 JSON specification and QuickJS implementation.
+ * Implementation of JavaScript JSON object. Based on ES2024 JSON specification and QuickJS implementation.
  */
 public final class JSONObject {
     private final JSContext context;
 
     /**
-     * Internal marker for rawJSON objects using weak-key tracking.
-     * This avoids exposing marker properties while allowing GC cleanup.
+     * Internal marker for rawJSON objects using weak-key tracking. This avoids exposing marker properties while
+     * allowing GC cleanup.
      */
     private final Map<JSObject, Boolean> rawJSONObjects = new WeakHashMap<>();
 
@@ -39,12 +38,10 @@ public final class JSONObject {
     }
 
     /**
-     * Build a V8-compatible circular reference error message.
-     * Format: "Converting circular structure to JSON\n    --> starting at object with constructor 'X'\n    --- property 'y' closes the circle"
+     * Build a V8-compatible circular reference error message. Format: "Converting circular structure to JSON\n -->
+     * starting at object with constructor 'X'\n --- property 'y' closes the circle"
      */
-    private String buildCircularReferenceMessage(
-            StringifyContext stringifyContext,
-            JSValue cycleTo,
+    private String buildCircularReferenceMessage(StringifyContext stringifyContext, JSValue cycleTo,
             String closingKey) {
         // Find where the cycle starts in the path
         int cycleStart = -1;
@@ -84,9 +81,8 @@ public final class JSONObject {
     }
 
     /**
-     * Safely call a JS function, catching JSVirtualMachineException and converting
-     * to a pending exception on the context.
-     * Returns null if an exception occurred.
+     * Safely call a JS function, catching JSVirtualMachineException and converting to a pending exception on the
+     * context. Returns null if an exception occurred.
      */
     private JSValue callSafe(JSFunction function, JSValue thisArg, JSValue[] args) {
         try {
@@ -119,8 +115,8 @@ public final class JSONObject {
     }
 
     /**
-     * Get the constructor name for a value (for error messages).
-     * Returns 'Object' for plain objects, 'Array' for arrays.
+     * Get the constructor name for a value (for error messages). Returns 'Object' for plain objects, 'Array' for
+     * arrays.
      */
     private String getConstructorName(JSValue val) {
         if (val instanceof JSArray) {
@@ -130,11 +126,9 @@ public final class JSONObject {
     }
 
     /**
-     * Get enumerable own string property names from an object.
-     * Uses getOwnPropertyKeys() which goes through proxy ownKeys trap,
-     * then filters by enumerability using getOwnPropertyDescriptor() which
-     * goes through proxy getOwnPropertyDescriptor trap.
-     * This follows ES2024 EnumerableOwnPropertyNames.
+     * Get enumerable own string property names from an object. Uses getOwnPropertyKeys() which goes through proxy
+     * ownKeys trap, then filters by enumerability using getOwnPropertyDescriptor() which goes through proxy
+     * getOwnPropertyDescriptor trap. This follows ES2024 EnumerableOwnPropertyNames.
      */
     private List<String> getEnumerableStringKeys(JSObject obj) {
         List<String> keys = new ArrayList<>();
@@ -151,13 +145,12 @@ public final class JSONObject {
         return keys;
     }
 
-    /**
-     * Safely get a property from an object, catching JSVirtualMachineException.
-     * Returns null if an exception occurred (check context.hasPendingException()).
-     */
-    private JSValue getSafe(JSObject obj, String key) {
+    private JSValue getSafe(JSObject obj, long index) {
         try {
-            return obj.get(PropertyKey.fromString(key));
+            if (index >= 0 && index <= Integer.MAX_VALUE) {
+                return obj.get(PropertyKey.fromIndex((int) index));
+            }
+            return obj.get(PropertyKey.fromString(Long.toString(index)));
         } catch (JSVirtualMachineException e) {
             convertVMException(e);
             return null;
@@ -179,12 +172,13 @@ public final class JSONObject {
         }
     }
 
-    private JSValue getSafe(JSObject obj, long index) {
+    /**
+     * Safely get a property from an object, catching JSVirtualMachineException. Returns null if an exception occurred
+     * (check context.hasPendingException()).
+     */
+    private JSValue getSafe(JSObject obj, String key) {
         try {
-            if (index >= 0 && index <= Integer.MAX_VALUE) {
-                return obj.get(PropertyKey.fromIndex((int) index));
-            }
-            return obj.get(PropertyKey.fromString(Long.toString(index)));
+            return obj.get(PropertyKey.fromString(key));
         } catch (JSVirtualMachineException e) {
             convertVMException(e);
             return null;
@@ -195,12 +189,11 @@ public final class JSONObject {
     }
 
     /**
-     * Recursive internalize operation for JSON.parse reviver.
-     * Based on ES2024 25.5.1.1 InternalizeJSONProperty and QuickJS internalize_json_property.
-     * Now supports context.source (json-parse-with-source proposal).
+     * Recursive internalize operation for JSON.parse reviver. Based on ES2024 25.5.1.1 InternalizeJSONProperty and
+     * QuickJS internalize_json_property. Now supports context.source (json-parse-with-source proposal).
      */
-    private JSValue internalizeJSONProperty(JSValue holder, String name,
-                                            JSFunction reviver, ParseContext parseContext) {
+    private JSValue internalizeJSONProperty(JSValue holder, String name, JSFunction reviver,
+            ParseContext parseContext) {
         JSValue val;
         try {
             val = ((JSObject) holder).get(PropertyKey.fromString(name));
@@ -255,8 +248,8 @@ public final class JSONObject {
                             obj.delete(PropertyKey.fromString(Long.toString(i)), false);
                         } else {
                             // Use CreateDataProperty (defineProperty), not [[Set]]
-                            obj.defineProperty(PropertyKey.fromString(Long.toString(i)),
-                                    newElement, PropertyDescriptor.DataState.All);
+                            obj.defineProperty(PropertyKey.fromString(Long.toString(i)), newElement,
+                                    PropertyDescriptor.DataState.All);
                         }
                     } catch (JSVirtualMachineException e) {
                         convertVMException(e);
@@ -291,8 +284,8 @@ public final class JSONObject {
                             obj.delete(PropertyKey.fromString(prop), false);
                         } else {
                             // Use CreateDataProperty, not [[Set]]
-                            obj.defineProperty(PropertyKey.fromString(prop),
-                                    newElement, PropertyDescriptor.DataState.All);
+                            obj.defineProperty(PropertyKey.fromString(prop), newElement,
+                                    PropertyDescriptor.DataState.All);
                         }
                     } catch (JSVirtualMachineException e) {
                         convertVMException(e);
@@ -314,7 +307,8 @@ public final class JSONObject {
         JSValue nameValue = new JSString(name);
         JSObject contextObj = context.createJSObject();
         if (sourceText != null) {
-            contextObj.defineProperty(PropertyKey.fromString("source"), new JSString(sourceText), PropertyDescriptor.DataState.All);
+            contextObj.defineProperty(PropertyKey.fromString("source"), new JSString(sourceText),
+                    PropertyDescriptor.DataState.All);
         }
         JSValue result = callSafe(reviver, holder, new JSValue[]{nameValue, val, contextObj});
         return result;
@@ -344,9 +338,7 @@ public final class JSONObject {
     }
 
     /**
-     * JSON.isRawJSON(O)
-     * ES2024 proposal: json-parse-with-source
-     * Checks if O has [[IsRawJSON]] internal slot.
+     * JSON.isRawJSON(O) ES2024 proposal: json-parse-with-source Checks if O has [[IsRawJSON]] internal slot.
      */
     public JSValue isRawJSON(JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -367,23 +359,17 @@ public final class JSONObject {
     }
 
     /**
-     * Check if a char is a surrogate (0xD800-0xDFFF).
-     * Based on QuickJS is_surrogate macro.
+     * Check if a char is a surrogate (0xD800-0xDFFF). Based on QuickJS is_surrogate macro.
      */
     private boolean isSurrogate(char ch) {
         return (ch >= 0xD800 && ch <= 0xDFFF);
     }
 
     /**
-     * Check and transform value according to toJSON and replacer.
-     * Based on QuickJS js_json_check.
-     * Returns the processed value, or null on exception.
+     * Check and transform value according to toJSON and replacer. Based on QuickJS js_json_check. Returns the processed
+     * value, or null on exception.
      */
-    private JSValue jsonCheck(
-            StringifyContext stringifyContext,
-            JSValue holder,
-            JSValue value,
-            JSValue key) {
+    private JSValue jsonCheck(StringifyContext stringifyContext, JSValue holder, JSValue value, JSValue key) {
         // Check for toJSON method - applies to both Objects and BigInt
         if (value instanceof JSObject || value instanceof JSBigInt) {
             if (value instanceof JSFunction) {
@@ -439,7 +425,8 @@ public final class JSONObject {
             }
             return value;
         }
-        if (value instanceof JSString || value instanceof JSNumber || value instanceof JSBoolean || value instanceof JSNull) {
+        if (value instanceof JSString || value instanceof JSNumber || value instanceof JSBoolean
+                || value instanceof JSNull) {
             return value;
         }
         if (value instanceof JSBigInt) {
@@ -450,16 +437,10 @@ public final class JSONObject {
     }
 
     /**
-     * Convert value to JSON string representation.
-     * Based on QuickJS js_json_to_str.
+     * Convert value to JSON string representation. Based on QuickJS js_json_to_str.
      */
-    private boolean jsonToStr(
-            StringifyContext stringifyContext,
-            StringBuilder sb,
-            JSValue holder,
-            JSValue jsValue,
-            String currentIndent,
-            String keyInParent) {
+    private boolean jsonToStr(StringifyContext stringifyContext, StringBuilder sb, JSValue holder, JSValue jsValue,
+            String currentIndent, String keyInParent) {
 
         // Handle wrapper objects: unwrap using proper ToNumber/ToString/etc.
         if (jsValue instanceof JSObject jsObject && !(jsValue instanceof JSFunction) && !(jsValue instanceof JSArray)) {
@@ -514,7 +495,8 @@ public final class JSONObject {
             double doubleValue = jsNumber.value();
             if (Double.isNaN(doubleValue) || Double.isInfinite(doubleValue)) {
                 sb.append("null");
-            } else if (doubleValue == Math.floor(doubleValue) && !Double.isInfinite(doubleValue) && Math.abs(doubleValue) < (1L << 53)) {
+            } else if (doubleValue == Math.floor(doubleValue) && !Double.isInfinite(doubleValue)
+                    && Math.abs(doubleValue) < (1L << 53)) {
                 sb.append((long) doubleValue);
             } else {
                 sb.append(jsNumber);
@@ -576,10 +558,8 @@ public final class JSONObject {
     }
 
     /**
-     * JSON.parse(text[, reviver])
-     * ES2024 25.5.1
-     * Parses JSON text with optional reviver function support.
-     * Supports json-parse-with-source (context.source).
+     * JSON.parse(text[, reviver]) ES2024 25.5.1 Parses JSON text with optional reviver function support. Supports
+     * json-parse-with-source (context.source).
      */
     public JSValue parse(JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -648,13 +628,15 @@ public final class JSONObject {
             ParseResult valueResult = parseValue(parseContext, i);
             arr.push(valueResult.value);
             // Record source for array elements
-            parseContext.recordElementSource(arr, String.valueOf(elementIndex), valueResult.value, valueResult.sourceStart, valueResult.sourceEnd);
+            parseContext.recordElementSource(arr, String.valueOf(elementIndex), valueResult.value,
+                    valueResult.sourceStart, valueResult.sourceEnd);
             elementIndex++;
             i = skipWhitespace(parseContext.text, valueResult.endIndex);
 
             // Check for comma or end
             if (i >= parseContext.text.length()) {
-                throw new JSONParseException("Expected ',' or ']' after array element in JSON " + parseContext.getPositionInfo(i));
+                throw new JSONParseException(
+                        "Expected ',' or ']' after array element in JSON " + parseContext.getPositionInfo(i));
             }
 
             if (parseContext.text.charAt(i) == ']') {
@@ -663,7 +645,8 @@ public final class JSONObject {
             }
 
             if (parseContext.text.charAt(i) != ',') {
-                throw new JSONParseException("Expected ',' or ']' after array element in JSON " + parseContext.getPositionInfo(i));
+                throw new JSONParseException(
+                        "Expected ',' or ']' after array element in JSON " + parseContext.getPositionInfo(i));
             }
 
             i = skipWhitespace(parseContext.text, i + 1);
@@ -739,9 +722,11 @@ public final class JSONObject {
         }
 
         // Optional exponent
-        if (i < parseContext.text.length() && (parseContext.text.charAt(i) == 'e' || parseContext.text.charAt(i) == 'E')) {
+        if (i < parseContext.text.length()
+                && (parseContext.text.charAt(i) == 'e' || parseContext.text.charAt(i) == 'E')) {
             i++;
-            if (i < parseContext.text.length() && (parseContext.text.charAt(i) == '+' || parseContext.text.charAt(i) == '-')) {
+            if (i < parseContext.text.length()
+                    && (parseContext.text.charAt(i) == '+' || parseContext.text.charAt(i) == '-')) {
                 i++;
             }
             if (i >= parseContext.text.length() || !Character.isDigit(parseContext.text.charAt(i))) {
@@ -779,7 +764,8 @@ public final class JSONObject {
 
             // Expect colon
             if (i >= parseContext.text.length() || parseContext.text.charAt(i) != ':') {
-                throw new JSONParseException("Expected ':' after property name in JSON " + parseContext.getPositionInfo(i));
+                throw new JSONParseException(
+                        "Expected ':' after property name in JSON " + parseContext.getPositionInfo(i));
             }
             i = skipWhitespace(parseContext.text, i + 1);
 
@@ -787,16 +773,17 @@ public final class JSONObject {
             ParseResult valueResult = parseValue(parseContext, i);
             // Use DefineOwnProperty (CreateDataProperty), NOT [[Set]]
             // This ensures __proto__ is treated as a regular property
-            obj.defineProperty(PropertyKey.fromString(key),
-                    valueResult.value, PropertyDescriptor.DataState.All);
+            obj.defineProperty(PropertyKey.fromString(key), valueResult.value, PropertyDescriptor.DataState.All);
             // Record source for object properties
-            parseContext.recordElementSource(obj, key, valueResult.value, valueResult.sourceStart, valueResult.sourceEnd);
+            parseContext.recordElementSource(obj, key, valueResult.value, valueResult.sourceStart,
+                    valueResult.sourceEnd);
             propertyCount++;
             i = skipWhitespace(parseContext.text, valueResult.endIndex);
 
             // Check for comma or end
             if (i >= parseContext.text.length()) {
-                throw new JSONParseException("Expected ',' or '}' after property value in JSON " + parseContext.getPositionInfo(i));
+                throw new JSONParseException(
+                        "Expected ',' or '}' after property value in JSON " + parseContext.getPositionInfo(i));
             }
 
             if (parseContext.text.charAt(i) == '}') {
@@ -805,7 +792,8 @@ public final class JSONObject {
             }
 
             if (parseContext.text.charAt(i) != ',') {
-                throw new JSONParseException("Expected ',' or '}' after property value in JSON " + parseContext.getPositionInfo(i));
+                throw new JSONParseException(
+                        "Expected ',' or '}' after property value in JSON " + parseContext.getPositionInfo(i));
             }
 
             i = skipWhitespace(parseContext.text, i + 1);
@@ -818,9 +806,11 @@ public final class JSONObject {
         char firstChar = parseContext.text.charAt(start);
         if (firstChar != '"') {
             if (propertyCount > 0) {
-                throw new JSONParseException("Expected double-quoted property name in JSON " + parseContext.getPositionInfo(start));
+                throw new JSONParseException(
+                        "Expected double-quoted property name in JSON " + parseContext.getPositionInfo(start));
             } else {
-                throw new JSONParseException("Expected property name or '}' in JSON " + parseContext.getPositionInfo(start));
+                throw new JSONParseException(
+                        "Expected property name or '}' in JSON " + parseContext.getPositionInfo(start));
             }
         }
 
@@ -852,22 +842,25 @@ public final class JSONObject {
                     case 'u' -> {
                         // Unicode escape
                         if (i + 4 >= parseContext.text.length()) {
-                            throw new JSONParseException("Invalid unicode escape in property name " + parseContext.getPositionInfo(i));
+                            throw new JSONParseException(
+                                    "Invalid unicode escape in property name " + parseContext.getPositionInfo(i));
                         }
                         String hex = parseContext.text.substring(i + 1, i + 5);
                         int codePoint = parseHex4(hex);
                         if (codePoint < 0) {
-                            throw new JSONParseException("Invalid unicode escape in property name " + parseContext.getPositionInfo(i));
+                            throw new JSONParseException(
+                                    "Invalid unicode escape in property name " + parseContext.getPositionInfo(i));
                         }
                         sb.append((char) codePoint);
                         i += 4;
                     }
-                    default ->
-                            throw new JSONParseException("Invalid escape in property name: \\" + escaped + parseContext.getPositionInfo(i));
+                    default -> throw new JSONParseException(
+                            "Invalid escape in property name: \\" + escaped + parseContext.getPositionInfo(i));
                 }
             } else {
                 if (isJSONStringControlCharacter(ch)) {
-                    throw new JSONParseException("Bad control character in string literal in JSON " + parseContext.getPositionInfo(i));
+                    throw new JSONParseException(
+                            "Bad control character in string literal in JSON " + parseContext.getPositionInfo(i));
                 }
                 sb.append(ch);
             }
@@ -921,11 +914,12 @@ public final class JSONObject {
                         i += 4;
                     }
                     default ->
-                            throw new JSONParseException("Invalid escape: \\" + escaped + parseContext.getPositionInfo(i));
+                        throw new JSONParseException("Invalid escape: \\" + escaped + parseContext.getPositionInfo(i));
                 }
             } else {
                 if (isJSONStringControlCharacter(ch)) {
-                    throw new JSONParseException("Bad control character in string literal in JSON " + parseContext.getPositionInfo(i));
+                    throw new JSONParseException(
+                            "Bad control character in string literal in JSON " + parseContext.getPositionInfo(i));
                 }
                 sb.append(ch);
             }
@@ -964,9 +958,8 @@ public final class JSONObject {
     }
 
     /**
-     * JSON.rawJSON(text)
-     * ES2024 proposal: json-parse-with-source
-     * Creates a frozen null-prototype object with [[IsRawJSON]] internal slot.
+     * JSON.rawJSON(text) ES2024 proposal: json-parse-with-source Creates a frozen null-prototype object with
+     * [[IsRawJSON]] internal slot.
      */
     public JSValue rawJSON(JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -1050,9 +1043,7 @@ public final class JSONObject {
     }
 
     /**
-     * JSON.stringify(value[, replacer[, space]])
-     * ES2024 25.5.2
-     * Based on QuickJS JS_JSONStringify.
+     * JSON.stringify(value[, replacer[, space]]) ES2024 25.5.2 Based on QuickJS JS_JSONStringify.
      */
     public JSValue stringify(JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -1211,15 +1202,10 @@ public final class JSONObject {
     }
 
     /**
-     * Stringify array with context.
-     * Based on QuickJS array branch in js_json_to_str.
+     * Stringify array with context. Based on QuickJS array branch in js_json_to_str.
      */
-    private boolean stringifyArrayWithContext(
-            StringifyContext stringifyContext,
-            StringBuilder sb,
-            JSObject array,
-            String currentIndent,
-            String newIndent) {
+    private boolean stringifyArrayWithContext(StringifyContext stringifyContext, StringBuilder sb, JSObject array,
+            String currentIndent, String newIndent) {
         sb.append('[');
         long arrayLength;
         try {
@@ -1279,15 +1265,10 @@ public final class JSONObject {
     }
 
     /**
-     * Stringify object with context.
-     * Based on QuickJS object branch in js_json_to_str.
+     * Stringify object with context. Based on QuickJS object branch in js_json_to_str.
      */
-    private boolean stringifyObjectWithContext(
-            StringifyContext stringifyContext,
-            StringBuilder sb,
-            JSObject object,
-            String currentIndent,
-            String newIndent) {
+    private boolean stringifyObjectWithContext(StringifyContext stringifyContext, StringBuilder sb, JSObject object,
+            String currentIndent, String newIndent) {
         sb.append('{');
         boolean hasContent = false;
 
@@ -1357,9 +1338,8 @@ public final class JSONObject {
     }
 
     /**
-     * Escape a string for JSON output.
-     * Based on QuickJS JS_ToQuotedString.
-     * Escapes lone surrogates (0xD800-0xDFFF) as unicode escape sequences.
+     * Escape a string for JSON output. Based on QuickJS JS_ToQuotedString. Escapes lone surrogates (0xD800-0xDFFF) as
+     * unicode escape sequences.
      */
     private String stringifyString(String str) {
         StringBuilder sb = new StringBuilder("\"");
@@ -1379,7 +1359,8 @@ public final class JSONObject {
                         sb.append(String.format("\\u%04x", (int) ch));
                     } else if (isSurrogate(ch)) {
                         // Check if this is a proper surrogate pair
-                        if (Character.isHighSurrogate(ch) && i + 1 < len && Character.isLowSurrogate(str.charAt(i + 1))) {
+                        if (Character.isHighSurrogate(ch) && i + 1 < len
+                                && Character.isLowSurrogate(str.charAt(i + 1))) {
                             // Valid surrogate pair - output both characters as-is
                             sb.append(ch);
                             sb.append(str.charAt(i + 1));
@@ -1411,8 +1392,8 @@ public final class JSONObject {
     }
 
     /**
-     * Entry in the circular reference detection stack, tracking the property key
-     * and object for V8-compatible error messages.
+     * Entry in the circular reference detection stack, tracking the property key and object for V8-compatible error
+     * messages.
      */
     private record CycleEntry(String key, JSValue obj) {
     }
@@ -1431,12 +1412,12 @@ public final class JSONObject {
     }
 
     private static class ParseContext {
-        final String text;
         // Source tracking for primitive values within structured types (arrays/objects)
         // Tracks both the source text and original parsed value per (parent, key) pair
         private final IdentityHashMap<JSValue, Map<String, SourceEntry>> elementSources = new IdentityHashMap<>();
         // Track whether a value is a structured type (object/array)
         private final IdentityHashMap<JSValue, int[]> structuredRanges = new IdentityHashMap<>();
+        final String text;
 
         ParseContext(String text) {
             this.text = text;
@@ -1460,9 +1441,9 @@ public final class JSONObject {
         }
 
         /**
-         * Get the source text for a value at the given key in the holder.
-         * Returns null for structured types (objects/arrays), if source tracking is not available,
-         * or if the value has been modified by the reviver (compared by identity with original parsed value).
+         * Get the source text for a value at the given key in the holder. Returns null for structured types
+         * (objects/arrays), if source tracking is not available, or if the value has been modified by the reviver
+         * (compared by identity with original parsed value).
          */
         String getSourceForValue(String key, JSValue holder, JSValue currentValue) {
             if (holder instanceof JSObject) {
@@ -1540,8 +1521,8 @@ public final class JSONObject {
             if (sourceStart < 0 || sourceEnd < 0) {
                 return;
             }
-            elementSources.computeIfAbsent(parent, k -> new HashMap<>())
-                    .put(key, new SourceEntry(text.substring(sourceStart, sourceEnd), parsedValue));
+            elementSources.computeIfAbsent(parent, k -> new HashMap<>()).put(key,
+                    new SourceEntry(text.substring(sourceStart, sourceEnd), parsedValue));
         }
 
         void recordSourceRange(JSValue structured, int start, int end) {
@@ -1560,8 +1541,8 @@ public final class JSONObject {
     }
 
     /**
-     * Tracks the source text and original parsed value for a property.
-     * Used to detect when a reviver has modified a value (source becomes undefined).
+     * Tracks the source text and original parsed value for a property. Used to detect when a reviver has modified a
+     * value (source becomes undefined).
      */
     private record SourceEntry(String sourceText, JSValue originalValue) {
     }

@@ -102,20 +102,6 @@ public final class SwitchStatement extends Statement {
             this.consequent = consequent;
         }
 
-        private static SourceLocation resolveLocation(Expression test, List<Statement> consequent) {
-            if (test != null) {
-                return test.getLocation();
-            }
-            if (consequent != null) {
-                for (Statement statement : consequent) {
-                    if (statement != null) {
-                        return statement.getLocation();
-                    }
-                }
-            }
-            return new SourceLocation(0, 0, 0, 0);
-        }
-
         @Override
         public boolean containsAwait() {
             if (awaitInside == null) {
@@ -154,6 +140,20 @@ public final class SwitchStatement extends Statement {
 
         public Expression getTest() {
             return test;
+        }
+
+        private static SourceLocation resolveLocation(Expression test, List<Statement> consequent) {
+            if (test != null) {
+                return test.getLocation();
+            }
+            if (consequent != null) {
+                for (Statement statement : consequent) {
+                    if (statement != null) {
+                        return statement.getLocation();
+                    }
+                }
+            }
+            return new SourceLocation(0, 0, 0, 0);
         }
     }
 

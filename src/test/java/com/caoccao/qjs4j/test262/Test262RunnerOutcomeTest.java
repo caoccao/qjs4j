@@ -34,76 +34,61 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * The runner used to report success whatever happened: {@code main} treated only a thrown Java
- * exception as failure, so a missing test root, a filter that matched nothing, and a run in which
- * every test failed all produced {@code BUILD SUCCESSFUL}.
+ * The runner used to report success whatever happened: {@code main} treated only a thrown Java exception as failure, so
+ * a missing test root, a filter that matched nothing, and a run in which every test failed all produced
+ * {@code BUILD SUCCESSFUL}.
  */
 public class Test262RunnerOutcomeTest {
-    /**
-     * A configuration that declares the synthetic file's only feature unsupported.
-     *
-     * @return the configuration
-     */
-    private static Test262Config configSkippingEverything() {
-        Test262Config config = Test262Config.loadDefault();
-        config.addUnsupportedFeatures("no-such-feature-at-all");
-        return config;
-    }
-
-    /**
-     * How many worker threads of one runner are still alive.
-     * <p>
-     * Matched on that runner's own prefix rather than the shared one: these cases deliberately
-     * leave workers running, and they run in the same JVM as each other.
-     *
-     * @param runner the runner whose workers to count
-     * @return the count
-     */
-    private static int liveWorkerThreadCount(Test262Runner runner) {
-        int count = 0;
-        for (Thread thread : Thread.getAllStackTraces().keySet()) {
-            if (thread.isAlive() && thread.getName().startsWith(runner.workerThreadNamePrefix())) {
-                count++;
-            }
+    @Test
+    void testAbandonedWorkersAreReportedRatherThanAssumedToHaveStopped() throws Exception {
+        // Interruption is cooperative, so the wait for the workers can expire with some of them
+        // still running. run() used to print a summary and return a final-looking outcome anyway,
+        // while those workers went on executing files and mutating the reporter behind it.
+        Path root = Files.createTempDirectory("qjs4j-test262-abandon");
+        writeFakeTest262Root(root, "slow-000.js", verySlowTestSource());
+        for (int index = 1; index < 200; index++) {
+            Files.writeString(root.resolve("test").resolve(String.format("slow-%03d.js", index)), verySlowTestSource());
         }
-        return count;
+        Test262Runner runner = new Test262Runner(root, Test262Config.loadDefault(), null, 2)
+                .setWorkerTerminationTimeoutMilliseconds(1);
+        Test262Runner.RunOutcome[] outcome = {null};
+        Thread runnerThread = new Thread(() -> {
+            try {
+                outcome[0] = runner.run();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }, "test262-runner");
+        runnerThread.start();
+        Thread.sleep(500);
+        runnerThread.interrupt();
+        runnerThread.join(120_000);
+
+        assertThat(runnerThread.isAlive()).isFalse();
+        assertThat(outcome[0]).isNotNull();
+        assertThat(outcome[0].abandonedWorkers()).as("workers that had not stopped are counted, not assumed away")
+                .isPositive();
+        assertThat(outcome[0].isSuccessful()).isFalse();
+        assertThat(outcome[0].exitCode()).isEqualTo(1);
+        assertThat(outcome[0].diagnostic()).contains("abandoned");
+
+        int executedAtReturn = outcome[0].executed();
+        assertThat(runner.reporter().isFrozen()).as("the reporter stops accepting results when the run returns")
+                .isTrue();
+        // Give whatever was still running every chance to write, then prove it did not land.
+        for (int attempt = 0; attempt < 100 && liveWorkerThreadCount(runner) > 0; attempt++) {
+            Thread.sleep(100);
+        }
+        assertThat(runner.reporter().getTotalExecuted())
+                .as("nothing a leaked worker does can change the counts already returned").isEqualTo(executedAtReturn);
     }
 
-    /**
-     * A test file that takes long enough for an interruption to land mid-run.
-     *
-     * @return the source
-     */
-    private static String slowTestSource() {
-        return "/*---\nflags: [raw]\n---*/\n"
-                + "var total = 0;\n"
-                + "for (var i = 0; i < 200000; i++) { total += i; }\n";
-    }
-
-    /**
-     * A test file slow enough that a worker running it is still running a moment later.
-     *
-     * @return the source
-     */
-    private static String verySlowTestSource() {
-        return "/*---\nflags: [raw]\n---*/\n"
-                + "var total = 0;\n"
-                + "for (var i = 0; i < 20000000; i++) { total += i; }\n";
-    }
-
-    private static Path writeFakeTest262Root(Path root, String testFileName, String testSource) throws IOException {
-        Path testDirectory = root.resolve("test");
-        Files.createDirectories(testDirectory);
-        Files.writeString(testDirectory.resolve(testFileName), testSource);
-        // Minimal stand-ins for the two harness files every non-raw test loads, so these cases
-        // exercise the runner without needing a Test262 checkout.
-        Path harnessDirectory = root.resolve("harness");
-        Files.createDirectories(harnessDirectory);
-        Files.writeString(harnessDirectory.resolve("assert.js"), "function assert(c, m) { if (!c) throw new Error(m); }\n");
-        Files.writeString(harnessDirectory.resolve("sta.js"),
-                "function Test262Error(message) { this.message = message || ''; }\n"
-                        + "function $DONOTEVALUATE() { throw 'Test262: This statement should not be evaluated.'; }\n");
-        return root;
+    @Test
+    void testAbandonedWorkersMakeAnOtherwisePerfectRunUnsuccessful() {
+        Test262Runner.RunOutcome outcome = new Test262Runner.RunOutcome(0, 0, 10, 0, false, 2, null, false);
+        assertThat(outcome.isSuccessful()).isFalse();
+        assertThat(outcome.exitCode()).isEqualTo(1);
+        assertThat(outcome.diagnostic()).contains("2 test task(s) did not stop");
     }
 
     @Test
@@ -127,98 +112,11 @@ public class Test262RunnerOutcomeTest {
     }
 
     @Test
-    void testARunAgainstASuiteItCannotIdentifyIsRefused() throws IOException {
-        // The other half of the same guarantee: without the override, a root whose revision cannot
-        // be read is refused rather than run and reported. It used to print a warning on standard
-        // error and go on to report success, so a conformance job could report a green count for a
-        // suite nothing could identify.
-        //
-        // The pin is set here rather than left to the file in the project directory, so this states
-        // its own premise instead of depending on where the runner was started from.
-        Path root = writeFakeTest262Root(
-                Files.createTempDirectory("qjs4j-test262-unidentifiable"),
-                "ok.js",
-                "/*---\nflags: [raw]\n---*/\nvar x = 1;\n");
-        String previousRevision = System.getProperty(Test262Environment.REVISION_PROPERTY);
-        System.setProperty(Test262Environment.REVISION_PROPERTY, "0123456789abcdef0123456789abcdef01234567");
-        try {
-            assertThat(Test262Runner.runMain(new String[]{root.toString()}))
-                    .as("a temporary directory is not a checkout of the pinned suite")
-                    .isEqualTo(1);
-        } finally {
-            if (previousRevision == null) {
-                System.clearProperty(Test262Environment.REVISION_PROPERTY);
-            } else {
-                System.setProperty(Test262Environment.REVISION_PROPERTY, previousRevision);
-            }
-        }
-    }
-
-    @Test
-    void testAbandonedWorkersAreReportedRatherThanAssumedToHaveStopped() throws Exception {
-        // Interruption is cooperative, so the wait for the workers can expire with some of them
-        // still running. run() used to print a summary and return a final-looking outcome anyway,
-        // while those workers went on executing files and mutating the reporter behind it.
-        Path root = Files.createTempDirectory("qjs4j-test262-abandon");
-        writeFakeTest262Root(root, "slow-000.js", verySlowTestSource());
-        for (int index = 1; index < 200; index++) {
-            Files.writeString(root.resolve("test").resolve(String.format("slow-%03d.js", index)),
-                    verySlowTestSource());
-        }
-        Test262Runner runner = new Test262Runner(root, Test262Config.loadDefault(), null, 2)
-                .setWorkerTerminationTimeoutMilliseconds(1);
-        Test262Runner.RunOutcome[] outcome = {null};
-        Thread runnerThread = new Thread(() -> {
-            try {
-                outcome[0] = runner.run();
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-        }, "test262-runner");
-        runnerThread.start();
-        Thread.sleep(500);
-        runnerThread.interrupt();
-        runnerThread.join(120_000);
-
-        assertThat(runnerThread.isAlive()).isFalse();
-        assertThat(outcome[0]).isNotNull();
-        assertThat(outcome[0].abandonedWorkers())
-                .as("workers that had not stopped are counted, not assumed away")
-                .isPositive();
-        assertThat(outcome[0].isSuccessful()).isFalse();
-        assertThat(outcome[0].exitCode()).isEqualTo(1);
-        assertThat(outcome[0].diagnostic()).contains("abandoned");
-
-        int executedAtReturn = outcome[0].executed();
-        assertThat(runner.reporter().isFrozen())
-                .as("the reporter stops accepting results when the run returns")
-                .isTrue();
-        // Give whatever was still running every chance to write, then prove it did not land.
-        for (int attempt = 0; attempt < 100 && liveWorkerThreadCount(runner) > 0; attempt++) {
-            Thread.sleep(100);
-        }
-        assertThat(runner.reporter().getTotalExecuted())
-                .as("nothing a leaked worker does can change the counts already returned")
-                .isEqualTo(executedAtReturn);
-    }
-
-    @Test
-    void testAbandonedWorkersMakeAnOtherwisePerfectRunUnsuccessful() {
-        Test262Runner.RunOutcome outcome =
-                new Test262Runner.RunOutcome(0, 0, 10, 0, false, 2, null, false);
-        assertThat(outcome.isSuccessful()).isFalse();
-        assertThat(outcome.exitCode()).isEqualTo(1);
-        assertThat(outcome.diagnostic()).contains("2 test task(s) did not stop");
-    }
-
-    @Test
     void testAllSkippedSelectionFailsUnlessOptedIn() throws IOException {
         // Discovery finds a file, its metadata says the engine cannot run it, and the run executes
         // nothing at all. A green exit here is the same false green as a filter that matched
         // nothing — and it is what asking for one concrete unsupported test produced.
-        Path root = writeFakeTest262Root(
-                Files.createTempDirectory("qjs4j-test262-skipped"),
-                "skipped.js",
+        Path root = writeFakeTest262Root(Files.createTempDirectory("qjs4j-test262-skipped"), "skipped.js",
                 "/*---\nfeatures: [no-such-feature-at-all]\n---*/\nvar x = 1;\n");
         Test262Runner.RunOutcome failing = new Test262Runner(root, configSkippingEverything()).run();
         // Two, not one: an ordinary file has a sloppy and a strict interpretation, and both were
@@ -231,33 +129,52 @@ public class Test262RunnerOutcomeTest {
         assertThat(failing.exitCode()).isEqualTo(1);
 
         Test262Runner.RunOutcome allowed = new Test262Runner(root, configSkippingEverything())
-                .setAllowEmptySelection(true)
-                .run();
+                .setAllowEmptySelection(true).run();
         assertThat(allowed.isSuccessful()).isTrue();
         assertThat(allowed.exitCode()).isZero();
     }
 
     @Test
+    void testARunAgainstASuiteItCannotIdentifyIsRefused() throws IOException {
+        // The other half of the same guarantee: without the override, a root whose revision cannot
+        // be read is refused rather than run and reported. It used to print a warning on standard
+        // error and go on to report success, so a conformance job could report a green count for a
+        // suite nothing could identify.
+        //
+        // The pin is set here rather than left to the file in the project directory, so this states
+        // its own premise instead of depending on where the runner was started from.
+        Path root = writeFakeTest262Root(Files.createTempDirectory("qjs4j-test262-unidentifiable"), "ok.js",
+                "/*---\nflags: [raw]\n---*/\nvar x = 1;\n");
+        String previousRevision = System.getProperty(Test262Environment.REVISION_PROPERTY);
+        System.setProperty(Test262Environment.REVISION_PROPERTY, "0123456789abcdef0123456789abcdef01234567");
+        try {
+            assertThat(Test262Runner.runMain(new String[]{root.toString()}))
+                    .as("a temporary directory is not a checkout of the pinned suite").isEqualTo(1);
+        } finally {
+            if (previousRevision == null) {
+                System.clearProperty(Test262Environment.REVISION_PROPERTY);
+            } else {
+                System.setProperty(Test262Environment.REVISION_PROPERTY, previousRevision);
+            }
+        }
+    }
+
+    @Test
     void testEmptySelectionFailsUnlessOptedIn() throws IOException {
-        Path root = writeFakeTest262Root(
-                Files.createTempDirectory("qjs4j-test262-empty"), "pass.js", "var x = 1;\n");
-        Test262Runner.RunOutcome failing = new Test262Runner(root, Test262Config.loadDefault(), "no-such-file")
-                .run();
+        Path root = writeFakeTest262Root(Files.createTempDirectory("qjs4j-test262-empty"), "pass.js", "var x = 1;\n");
+        Test262Runner.RunOutcome failing = new Test262Runner(root, Test262Config.loadDefault(), "no-such-file").run();
         assertThat(failing.discoveryError()).contains("No test file matched");
         assertThat(failing.exitCode()).isEqualTo(1);
 
         Test262Runner.RunOutcome allowed = new Test262Runner(root, Test262Config.loadDefault(), "no-such-file")
-                .setAllowEmptySelection(true)
-                .run();
+                .setAllowEmptySelection(true).run();
         assertThat(allowed.isSuccessful()).isTrue();
         assertThat(allowed.exitCode()).isZero();
     }
 
     @Test
     void testFailingTestProducesNonZeroExit() throws IOException {
-        Path root = writeFakeTest262Root(
-                Files.createTempDirectory("qjs4j-test262-fail"),
-                "fail.js",
+        Path root = writeFakeTest262Root(Files.createTempDirectory("qjs4j-test262-fail"), "fail.js",
                 "/*---\nflags: [raw]\n---*/\nthrow new Error('boom');\n");
         Test262Runner.RunOutcome outcome = new Test262Runner(root, Test262Config.loadDefault()).run();
         assertThat(outcome.failed()).isEqualTo(1);
@@ -276,8 +193,7 @@ public class Test262RunnerOutcomeTest {
         CountDownLatch started = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         List<Thread> workerThreads = new CopyOnWriteArrayList<>();
-        ThreadPoolExecutor pool = new ThreadPoolExecutor(
-                1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
                 runnable -> {
                     Thread worker = new Thread(runnable, Test262Runner.WORKER_THREAD_NAME_PREFIX + "uninterruptible");
                     worker.setDaemon(true);
@@ -340,29 +256,23 @@ public class Test262RunnerOutcomeTest {
         assertThat(outcome[0].interrupted()).isTrue();
         assertThat(outcome[0].isSuccessful()).isFalse();
         assertThat(outcome[0].exitCode()).isEqualTo(1);
-        assertThat(interruptFlagPreserved[0])
-                .as("the caller's interrupt status survives the cleanup")
-                .isTrue();
-        assertThat(outcome[0].abandonedWorkers())
-                .as("the pool stopped within the timeout, so nothing was abandoned")
+        assertThat(interruptFlagPreserved[0]).as("the caller's interrupt status survives the cleanup").isTrue();
+        assertThat(outcome[0].abandonedWorkers()).as("the pool stopped within the timeout, so nothing was abandoned")
                 .isZero();
         assertThat(liveWorkerThreadCount(runner))
-                .as("no worker of this run may still be running once run() has returned")
-                .isZero();
+                .as("no worker of this run may still be running once run() has returned").isZero();
     }
 
     @Test
     void testInterruptionProducesNonZeroExit() {
-        Test262Runner.RunOutcome outcome =
-                new Test262Runner.RunOutcome(0, 0, 10, 0, true, 0, null, false);
+        Test262Runner.RunOutcome outcome = new Test262Runner.RunOutcome(0, 0, 10, 0, true, 0, null, false);
         assertThat(outcome.isSuccessful()).isFalse();
         assertThat(outcome.exitCode()).isEqualTo(1);
     }
 
     @Test
     void testMissingTestRootProducesNonZeroExit() throws IOException {
-        Test262Runner runner = new Test262Runner(
-                Paths.get("/definitely/missing/test262"), Test262Config.loadDefault());
+        Test262Runner runner = new Test262Runner(Paths.get("/definitely/missing/test262"), Test262Config.loadDefault());
         Test262Runner.RunOutcome outcome = runner.run();
         assertThat(outcome.discoveryError()).contains("test directory not found");
         assertThat(outcome.isSuccessful()).isFalse();
@@ -371,9 +281,7 @@ public class Test262RunnerOutcomeTest {
 
     @Test
     void testPassingTestProducesZeroExit() throws IOException {
-        Path root = writeFakeTest262Root(
-                Files.createTempDirectory("qjs4j-test262-pass"),
-                "pass.js",
+        Path root = writeFakeTest262Root(Files.createTempDirectory("qjs4j-test262-pass"), "pass.js",
                 "/*---\nflags: [raw]\n---*/\nvar x = 1;\n");
         Test262Runner.RunOutcome outcome = new Test262Runner(root, Test262Config.loadDefault()).run();
         assertThat(outcome.passed()).isEqualTo(1);
@@ -388,8 +296,7 @@ public class Test262RunnerOutcomeTest {
         // by file and recording a single skip made the summary add files to interpretations, so
         // neither the file count nor the interpretation count could be reconciled with it.
         Path root = Files.createTempDirectory("qjs4j-test262-skip-units");
-        writeFakeTest262Root(root, "ordinary.js",
-                "/*---\nfeatures: [no-such-feature-at-all]\n---*/\nvar x = 1;\n");
+        writeFakeTest262Root(root, "ordinary.js", "/*---\nfeatures: [no-such-feature-at-all]\n---*/\nvar x = 1;\n");
         Files.writeString(root.resolve("test").resolve("only-strict.js"),
                 "/*---\nfeatures: [no-such-feature-at-all]\nflags: [onlyStrict]\n---*/\nvar x = 1;\n");
         Files.writeString(root.resolve("test").resolve("no-strict.js"),
@@ -400,12 +307,10 @@ public class Test262RunnerOutcomeTest {
                 "/*---\nfeatures: [no-such-feature-at-all]\nflags: [module]\n---*/\nvar x = 1;\n");
 
         Test262Runner.RunOutcome outcome = new Test262Runner(root, configSkippingEverything())
-                .setAllowEmptySelection(true)
-                .run();
+                .setAllowEmptySelection(true).run();
         assertThat(outcome.executed()).isZero();
         // 2 for the ordinary file, 1 each for onlyStrict, noStrict, raw and module.
-        assertThat(outcome.skipped())
-                .as("one skip per interpretation the run would otherwise have executed")
+        assertThat(outcome.skipped()).as("one skip per interpretation the run would otherwise have executed")
                 .isEqualTo(6);
     }
 
@@ -413,8 +318,8 @@ public class Test262RunnerOutcomeTest {
     void testStrictVariantIsExecutedForOrdinaryFiles() throws IOException {
         // No flags: two interpretations. The source is only an error under a strict prologue, so
         // one variant passes and one fails — proving both ran.
-        Path root = writeFakeTest262Root(
-                Files.createTempDirectory("qjs4j-test262-strict"), "strict.js", "var public = 1;\n");
+        Path root = writeFakeTest262Root(Files.createTempDirectory("qjs4j-test262-strict"), "strict.js",
+                "var public = 1;\n");
         Test262Runner.RunOutcome outcome = new Test262Runner(root, Test262Config.loadDefault()).run();
         assertThat(outcome.passed() + outcome.failed()).isEqualTo(2);
         assertThat(outcome.failed()).isEqualTo(1);
@@ -422,8 +327,7 @@ public class Test262RunnerOutcomeTest {
 
     @Test
     void testTimeoutProducesNonZeroExit() {
-        Test262Runner.RunOutcome outcome =
-                new Test262Runner.RunOutcome(0, 1, 10, 0, false, 0, null, false);
+        Test262Runner.RunOutcome outcome = new Test262Runner.RunOutcome(0, 1, 10, 0, false, 0, null, false);
         assertThat(outcome.isSuccessful()).isFalse();
         assertThat(outcome.exitCode()).isEqualTo(1);
     }
@@ -434,33 +338,25 @@ public class Test262RunnerOutcomeTest {
         // default selection. A typo, a stray positional, or a focus argument appended after
         // --quick therefore ran a much larger suite than the one asked for, with no diagnostic —
         // and a mistyped --long-running ran no long-running test while still reporting success.
-        Path root = writeFakeTest262Root(
-                Files.createTempDirectory("qjs4j-test262-args"),
-                "ok.js",
+        Path root = writeFakeTest262Root(Files.createTempDirectory("qjs4j-test262-args"), "ok.js",
                 "/*---\nflags: [raw]\n---*/\nvar x = 1;\n");
         String rootPath = root.toString();
 
         assertThatThrownBy(() -> Test262Runner.runMain(new String[]{rootPath, "--quik"}))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Unknown argument '--quik'")
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Unknown argument '--quik'")
                 .hasMessageContaining("Usage:");
         assertThatThrownBy(() -> Test262Runner.runMain(new String[]{rootPath, "--quick", "language"}))
-                .as("a positional appended after a mode is not a mode")
-                .isInstanceOf(IllegalArgumentException.class)
+                .as("a positional appended after a mode is not a mode").isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unknown argument 'language'");
         assertThatThrownBy(() -> Test262Runner.runMain(new String[]{rootPath, "--quick", "--language"}))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("mutually exclusive");
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("mutually exclusive");
         assertThatThrownBy(() -> Test262Runner.runMain(new String[]{rootPath, "--single"}))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Missing value for --single");
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Missing value for --single");
     }
 
     @Test
     void testValidArgumentOrderingsAreAccepted() throws IOException {
-        Path root = writeFakeTest262Root(
-                Files.createTempDirectory("qjs4j-test262-args-ok"),
-                "ok.js",
+        Path root = writeFakeTest262Root(Files.createTempDirectory("qjs4j-test262-args-ok"), "ok.js",
                 "/*---\nflags: [raw]\n---*/\nvar x = 1;\n");
         String rootPath = root.toString();
         // These roots are one fabricated file in a temporary directory, not a checkout of test262,
@@ -473,8 +369,7 @@ public class Test262RunnerOutcomeTest {
             // Exit status 0 means the selection ran and passed; the point is that none of these throw.
             assertThat(Test262Runner.runMain(new String[]{rootPath})).isZero();
             assertThat(Test262Runner.runMain(new String[]{rootPath, "--threads", "1"})).isZero();
-            assertThat(Test262Runner.runMain(new String[]{rootPath, "--threads", "1", "--single", "ok.js"}))
-                    .isZero();
+            assertThat(Test262Runner.runMain(new String[]{rootPath, "--threads", "1", "--single", "ok.js"})).isZero();
         } finally {
             if (previousOverride == null) {
                 System.clearProperty(Test262Environment.ALLOW_ANY_REVISION_PROPERTY);
@@ -482,5 +377,72 @@ public class Test262RunnerOutcomeTest {
                 System.setProperty(Test262Environment.ALLOW_ANY_REVISION_PROPERTY, previousOverride);
             }
         }
+    }
+
+    /**
+     * A configuration that declares the synthetic file's only feature unsupported.
+     *
+     * @return the configuration
+     */
+    private static Test262Config configSkippingEverything() {
+        Test262Config config = Test262Config.loadDefault();
+        config.addUnsupportedFeatures("no-such-feature-at-all");
+        return config;
+    }
+
+    /**
+     * How many worker threads of one runner are still alive.
+     * <p>
+     * Matched on that runner's own prefix rather than the shared one: these cases deliberately leave workers running,
+     * and they run in the same JVM as each other.
+     *
+     * @param runner
+     *            the runner whose workers to count
+     * @return the count
+     */
+    private static int liveWorkerThreadCount(Test262Runner runner) {
+        int count = 0;
+        for (Thread thread : Thread.getAllStackTraces().keySet()) {
+            if (thread.isAlive() && thread.getName().startsWith(runner.workerThreadNamePrefix())) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * A test file that takes long enough for an interruption to land mid-run.
+     *
+     * @return the source
+     */
+    private static String slowTestSource() {
+        return "/*---\nflags: [raw]\n---*/\n" + "var total = 0;\n"
+                + "for (var i = 0; i < 200000; i++) { total += i; }\n";
+    }
+
+    /**
+     * A test file slow enough that a worker running it is still running a moment later.
+     *
+     * @return the source
+     */
+    private static String verySlowTestSource() {
+        return "/*---\nflags: [raw]\n---*/\n" + "var total = 0;\n"
+                + "for (var i = 0; i < 20000000; i++) { total += i; }\n";
+    }
+
+    private static Path writeFakeTest262Root(Path root, String testFileName, String testSource) throws IOException {
+        Path testDirectory = root.resolve("test");
+        Files.createDirectories(testDirectory);
+        Files.writeString(testDirectory.resolve(testFileName), testSource);
+        // Minimal stand-ins for the two harness files every non-raw test loads, so these cases
+        // exercise the runner without needing a Test262 checkout.
+        Path harnessDirectory = root.resolve("harness");
+        Files.createDirectories(harnessDirectory);
+        Files.writeString(harnessDirectory.resolve("assert.js"),
+                "function assert(c, m) { if (!c) throw new Error(m); }\n");
+        Files.writeString(harnessDirectory.resolve("sta.js"),
+                "function Test262Error(message) { this.message = message || ''; }\n"
+                        + "function $DONOTEVALUATE() { throw 'Test262: This statement should not be evaluated.'; }\n");
+        return root;
     }
 }

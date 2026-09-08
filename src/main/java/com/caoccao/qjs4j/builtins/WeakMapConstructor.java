@@ -21,14 +21,12 @@ import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.core.JSWeakMap;
 
 /**
- * WeakMap constructor implementation.
- * Based on ES2020 WeakMap specification.
+ * WeakMap constructor implementation. Based on ES2020 WeakMap specification.
  */
 public final class WeakMapConstructor {
 
     /**
-     * WeakMap constructor call/new.
-     * Delegates to JSWeakMap.create().
+     * WeakMap constructor call/new. Delegates to JSWeakMap.create().
      * <p>
      * Based on ES2020 23.3.1.1
      */

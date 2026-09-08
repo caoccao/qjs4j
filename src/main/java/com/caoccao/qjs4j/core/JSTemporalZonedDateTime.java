@@ -26,33 +26,12 @@ public final class JSTemporalZonedDateTime extends JSObject {
     private final BigInteger epochNanoseconds;
     private final String timeZoneId;
 
-    public JSTemporalZonedDateTime(JSContext context, BigInteger epochNanoseconds, String timeZoneId, TemporalCalendarId calendarId) {
+    public JSTemporalZonedDateTime(JSContext context, BigInteger epochNanoseconds, String timeZoneId,
+            TemporalCalendarId calendarId) {
         super(context);
         this.epochNanoseconds = epochNanoseconds;
         this.timeZoneId = timeZoneId;
         this.calendarId = calendarId;
-    }
-
-    public static JSTemporalZonedDateTime create(
-            JSContext context,
-            BigInteger epochNanoseconds,
-            String timeZoneId,
-            TemporalCalendarId calendarId) {
-        JSObject prototype = TemporalUtils.getTemporalPrototype(context, "ZonedDateTime");
-        return create(context, epochNanoseconds, timeZoneId, calendarId, prototype);
-    }
-
-    public static JSTemporalZonedDateTime create(
-            JSContext context,
-            BigInteger epochNanoseconds,
-            String timeZoneId,
-            TemporalCalendarId calendarId,
-            JSObject prototype) {
-        JSTemporalZonedDateTime zonedDateTime = new JSTemporalZonedDateTime(context, epochNanoseconds, timeZoneId, calendarId);
-        if (prototype != null) {
-            zonedDateTime.setPrototype(prototype);
-        }
-        return zonedDateTime;
     }
 
     public TemporalCalendarId getCalendarId() {
@@ -65,5 +44,21 @@ public final class JSTemporalZonedDateTime extends JSObject {
 
     public String getTimeZoneId() {
         return timeZoneId;
+    }
+
+    public static JSTemporalZonedDateTime create(JSContext context, BigInteger epochNanoseconds, String timeZoneId,
+            TemporalCalendarId calendarId) {
+        JSObject prototype = TemporalUtils.getTemporalPrototype(context, "ZonedDateTime");
+        return create(context, epochNanoseconds, timeZoneId, calendarId, prototype);
+    }
+
+    public static JSTemporalZonedDateTime create(JSContext context, BigInteger epochNanoseconds, String timeZoneId,
+            TemporalCalendarId calendarId, JSObject prototype) {
+        JSTemporalZonedDateTime zonedDateTime = new JSTemporalZonedDateTime(context, epochNanoseconds, timeZoneId,
+                calendarId);
+        if (prototype != null) {
+            zonedDateTime.setPrototype(prototype);
+        }
+        return zonedDateTime;
     }
 }

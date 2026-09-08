@@ -107,9 +107,7 @@ public final class TypedArrayConstructor {
 
         for (long k = 0; k < itemsLength; k++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(k));
-            JSValue kValue = iterableValues != null
-                    ? iterableValues.get(key)
-                    : arrayLike.get(key);
+            JSValue kValue = iterableValues != null ? iterableValues.get(key) : arrayLike.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -131,7 +129,8 @@ public final class TypedArrayConstructor {
         return thisArg;
     }
 
-    private static JSConstructorType getTypedArrayConstructorType(JSContext context, JSValue thisArg, String methodName) {
+    private static JSConstructorType getTypedArrayConstructorType(JSContext context, JSValue thisArg,
+            String methodName) {
         if (thisArg instanceof JSObject jsObject) {
             JSConstructorType constructorType = jsObject.getConstructorType();
             if (constructorType != null && constructorType.name().startsWith("TYPED_ARRAY_")) {
@@ -165,7 +164,8 @@ public final class TypedArrayConstructor {
         return newObj;
     }
 
-    private static JSTypedArray typedArrayCreate(JSContext context, JSValue constructor, long length, String methodName) {
+    private static JSTypedArray typedArrayCreate(JSContext context, JSValue constructor, long length,
+            String methodName) {
         if (length > Integer.MAX_VALUE) {
             context.throwRangeError("invalid array length");
             return null;

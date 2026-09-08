@@ -20,9 +20,9 @@ import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
 /**
- * EvalDeclarationInstantiation step 5 is conditioned on the strictness of the <em>eval code</em>,
- * not of the caller. An indirect eval is never strict by inheritance, so a strict enclosing script
- * must not suppress the global-lexical collision check.
+ * EvalDeclarationInstantiation step 5 is conditioned on the strictness of the <em>eval code</em>, not of the caller. An
+ * indirect eval is never strict by inheritance, so a strict enclosing script must not suppress the global-lexical
+ * collision check.
  */
 public class JSIndirectEvalStrictnessTest extends BaseJavetTest {
     @Test

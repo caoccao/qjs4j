@@ -21,14 +21,12 @@ import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.core.JSWeakSet;
 
 /**
- * WeakSet constructor implementation.
- * Based on ES2020 WeakSet specification.
+ * WeakSet constructor implementation. Based on ES2020 WeakSet specification.
  */
 public final class WeakSetConstructor {
 
     /**
-     * WeakSet constructor call/new.
-     * Delegates to JSWeakSet.create().
+     * WeakSet constructor call/new. Delegates to JSWeakSet.create().
      * <p>
      * Based on ES2020 23.4.1.1
      */

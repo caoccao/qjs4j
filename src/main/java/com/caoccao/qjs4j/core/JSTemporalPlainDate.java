@@ -21,8 +21,7 @@ import com.caoccao.qjs4j.core.temporal.*;
 import java.time.LocalDate;
 
 /**
- * JSObject subclass representing a Temporal.PlainDate value.
- * Internal slots: [[ISODate]], [[Calendar]]
+ * JSObject subclass representing a Temporal.PlainDate value. Internal slots: [[ISODate]], [[Calendar]]
  */
 public final class JSTemporalPlainDate extends JSObject {
     private final TemporalCalendarId calendarId;
@@ -32,23 +31,6 @@ public final class JSTemporalPlainDate extends JSObject {
         super(context);
         this.isoDate = isoDate;
         this.calendarId = calendarId;
-    }
-
-    public static JSTemporalPlainDate create(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId) {
-        JSObject prototype = TemporalUtils.getTemporalPrototype(context, "PlainDate");
-        return create(context, isoDate, calendarId, prototype);
-    }
-
-    public static JSTemporalPlainDate create(
-            JSContext context,
-            IsoDate isoDate,
-            TemporalCalendarId calendarId,
-            JSObject prototype) {
-        JSTemporalPlainDate plainDate = new JSTemporalPlainDate(context, isoDate, calendarId);
-        if (prototype != null) {
-            plainDate.setPrototype(prototype);
-        }
-        return plainDate;
     }
 
     public TemporalCalendarId getCalendarId() {
@@ -64,8 +46,7 @@ public final class JSTemporalPlainDate extends JSObject {
     }
 
     public TemporalEraYear toTemporalEraYear() {
-        if (calendarId == TemporalCalendarId.ISO8601
-                || calendarId == TemporalCalendarId.CHINESE
+        if (calendarId == TemporalCalendarId.ISO8601 || calendarId == TemporalCalendarId.CHINESE
                 || calendarId == TemporalCalendarId.DANGI) {
             return null;
         }
@@ -132,8 +113,7 @@ public final class JSTemporalPlainDate extends JSObject {
             return new TemporalEraYear(TemporalEra.SHAKA, calendarYear);
         } else if (calendarId == TemporalCalendarId.PERSIAN) {
             return new TemporalEraYear(TemporalEra.AP, calendarYear);
-        } else if (calendarId == TemporalCalendarId.ISLAMIC_CIVIL
-                || calendarId == TemporalCalendarId.ISLAMIC_TBLA
+        } else if (calendarId == TemporalCalendarId.ISLAMIC_CIVIL || calendarId == TemporalCalendarId.ISLAMIC_TBLA
                 || calendarId == TemporalCalendarId.ISLAMIC_UMALQURA) {
             if (calendarYear > 0) {
                 return new TemporalEraYear(TemporalEra.AH, calendarYear);
@@ -143,5 +123,19 @@ public final class JSTemporalPlainDate extends JSObject {
         }
 
         return null;
+    }
+
+    public static JSTemporalPlainDate create(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId) {
+        JSObject prototype = TemporalUtils.getTemporalPrototype(context, "PlainDate");
+        return create(context, isoDate, calendarId, prototype);
+    }
+
+    public static JSTemporalPlainDate create(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId,
+            JSObject prototype) {
+        JSTemporalPlainDate plainDate = new JSTemporalPlainDate(context, isoDate, calendarId);
+        if (prototype != null) {
+            plainDate.setPrototype(prototype);
+        }
+        return plainDate;
     }
 }

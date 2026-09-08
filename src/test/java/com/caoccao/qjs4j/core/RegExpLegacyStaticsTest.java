@@ -22,16 +22,15 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * {@code RegExp.input}, {@code RegExp.lastMatch}, {@code RegExp.lastParen},
- * {@code RegExp.leftContext}, {@code RegExp.rightContext} and {@code RegExp.$1}–{@code $9}: the
- * legacy statics a successful match leaves behind on the constructor.
+ * {@code RegExp.input}, {@code RegExp.lastMatch}, {@code RegExp.lastParen}, {@code RegExp.leftContext},
+ * {@code RegExp.rightContext} and {@code RegExp.$1}–{@code $9}: the legacy statics a successful match leaves behind on
+ * the constructor.
  * <p>
- * Every one of them was uncovered — the accessors existed, the state holder behind them existed, and
- * nothing in the suite had ever asked what any of them answered. The observable half is checked
- * against V8, because these are web-reality semantics rather than anything the specification pins
- * down, and V8 is the reality. The rest of the class is defensive arithmetic that a match cannot
- * reach — a capture list shorter than nine, offsets the engine did not supply — and those go
- * through the holder directly.
+ * Every one of them was uncovered — the accessors existed, the state holder behind them existed, and nothing in the
+ * suite had ever asked what any of them answered. The observable half is checked against V8, because these are
+ * web-reality semantics rather than anything the specification pins down, and V8 is the reality. The rest of the class
+ * is defensive arithmetic that a match cannot reach — a capture list shorter than nine, offsets the engine did not
+ * supply — and those go through the holder directly.
  */
 public class RegExpLegacyStaticsTest extends BaseJavetTest {
     @Test

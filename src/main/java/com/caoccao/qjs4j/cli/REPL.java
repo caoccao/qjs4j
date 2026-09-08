@@ -27,13 +27,13 @@ import java.nio.charset.StandardCharsets;
 /**
  * Read-Eval-Print Loop for interactive JavaScript execution.
  * <p>
- * The loop owns its runtime and its context and is {@link AutoCloseable}, so the interactive mode
- * releases what it created. It used to keep only the context — the {@code JSRuntime} was a local
- * that went out of scope at the end of the constructor — and nothing ever closed either.
+ * The loop owns its runtime and its context and is {@link AutoCloseable}, so the interactive mode releases what it
+ * created. It used to keep only the context — the {@code JSRuntime} was a local that went out of scope at the end of
+ * the constructor — and nothing ever closed either.
  * <p>
- * Results are rendered by the same formatter {@code console.log} uses, which reads objects through
- * physical storage rather than through {@code Get}, so printing a prompt result cannot run a guest
- * accessor. The renderer used to be {@code return null}, so every evaluation printed {@code null}.
+ * Results are rendered by the same formatter {@code console.log} uses, which reads objects through physical storage
+ * rather than through {@code Get}, so printing a prompt result cannot run a guest accessor. The renderer used to be
+ * {@code return null}, so every evaluation printed {@code null}.
  */
 public final class REPL implements AutoCloseable {
     private final JSContext context;
@@ -49,9 +49,12 @@ public final class REPL implements AutoCloseable {
     /**
      * Create a REPL over explicit streams, which is what makes the loop testable.
      *
-     * @param input       the source of lines
-     * @param output      where results are printed
-     * @param errorOutput where errors are printed
+     * @param input
+     *            the source of lines
+     * @param output
+     *            where results are printed
+     * @param errorOutput
+     *            where errors are printed
      */
     public REPL(InputStream input, PrintStream output, PrintStream errorOutput) {
         this.runtime = new JSRuntime();
@@ -99,7 +102,8 @@ public final class REPL implements AutoCloseable {
     /**
      * Render an evaluation result for the prompt.
      *
-     * @param value the result
+     * @param value
+     *            the result
      * @return the text to print
      */
     private String stringify(JSValue value) {

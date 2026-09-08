@@ -33,11 +33,11 @@ final class VariableDeclarationCompiler extends AstNodeCompiler<VariableDeclarat
 
     @Override
     void compile(VariableDeclaration varDecl) {
-        boolean isUsingDeclaration = varDecl.getKind() == VariableKind.USING || varDecl.getKind() == VariableKind.AWAIT_USING;
+        boolean isUsingDeclaration = varDecl.getKind() == VariableKind.USING
+                || varDecl.getKind() == VariableKind.AWAIT_USING;
         boolean isAwaitUsingDeclaration = varDecl.getKind() == VariableKind.AWAIT_USING;
         if ((varDecl.getKind() == VariableKind.CONST || varDecl.getKind() == VariableKind.LET || isUsingDeclaration)
-                && !compilerContext.inGlobalScope
-                && !compilerContext.varInGlobalProgram) {
+                && !compilerContext.inGlobalScope && !compilerContext.varInGlobalProgram) {
             for (VariableDeclarator declarator : varDecl.getDeclarations()) {
                 Set<String> bindingNames = new HashSet<>();
                 compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(), bindingNames);
@@ -57,30 +57,26 @@ final class VariableDeclarationCompiler extends AstNodeCompiler<VariableDeclarat
             compilerContext.varInGlobalProgram = true;
         }
         for (VariableDeclarator declarator : varDecl.getDeclarations()) {
-            if ((compilerContext.inGlobalScope || compilerContext.varInGlobalProgram)
-                    && !compilerContext.evalMode) {
-                compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(), compilerContext.nonDeletableGlobalBindings);
+            if ((compilerContext.inGlobalScope || compilerContext.varInGlobalProgram) && !compilerContext.evalMode) {
+                compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(),
+                        compilerContext.nonDeletableGlobalBindings);
             }
             if (isUsingDeclaration) {
                 if (declarator.getInit() == null) {
-                    throw new JSCompilerException(
-                            varDecl.getKind() + " declaration requires an initializer",
+                    throw new JSCompilerException(varDecl.getKind() + " declaration requires an initializer",
                             declarator);
                 }
 
                 if (declarator.getId() instanceof Identifier targetId
-                        && declarator.getInit() instanceof ClassExpression classExpr
-                        && classExpr.getId() == null) {
+                        && declarator.getInit() instanceof ClassExpression classExpr && classExpr.getId() == null) {
                     compilerContext.inferredClassName = targetId.getName();
                 }
                 compilerContext.expressionCompiler.compile(declarator.getInit());
-                if (declarator.getId() instanceof Identifier targetId
-                        && declarator.getInit().isAnonymousFunction()) {
+                if (declarator.getId() instanceof Identifier targetId && declarator.getInit().isAnonymousFunction()) {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
                 }
                 compilerContext.inferredClassName = null;
-                int usingStackLocalIndex = compilerContext.emitHelpers.ensureUsingStackLocal(
-                        isAwaitUsingDeclaration,
+                int usingStackLocalIndex = compilerContext.emitHelpers.ensureUsingStackLocal(isAwaitUsingDeclaration,
                         declarator);
                 compilerContext.emitHelpers.emitMethodCallWithSingleArgOnLocalObject(usingStackLocalIndex, "use");
                 compilerContext.patternCompiler.compile(declarator.getId());
@@ -100,24 +96,20 @@ final class VariableDeclarationCompiler extends AstNodeCompiler<VariableDeclarat
                     continue;
                 }
                 if (!(declarator.getId() instanceof Identifier)) {
-                    throw new JSCompilerException(
-                            "Missing initializer in destructuring declaration",
-                            declarator);
+                    throw new JSCompilerException("Missing initializer in destructuring declaration", declarator);
                 }
                 continue;
             }
 
-            if (varDecl.getKind() == VariableKind.VAR
-                    && declarator.getId() instanceof Identifier identifier
-                    && declarator.getInit() != null
-                    && compilerContext.withObjectManager.hasActiveWithObject()) {
+            if (varDecl.getKind() == VariableKind.VAR && declarator.getId() instanceof Identifier identifier
+                    && declarator.getInit() != null && compilerContext.withObjectManager.hasActiveWithObject()) {
                 // Resolve binding before evaluating initializer (ES VariableDeclaration semantics).
                 compilerContext.assignmentExpressionCompiler.emitIdentifierReference(identifier.getName());
-                int preResolvedPropertyLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
-                        "$preResolvedVarProperty_" + compilerContext.emitter.currentOffset());
+                int preResolvedPropertyLocalIndex = compilerContext.scopeManager.currentScope()
+                        .declareLocal("$preResolvedVarProperty_" + compilerContext.emitter.currentOffset());
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, preResolvedPropertyLocalIndex);
-                int preResolvedObjectLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
-                        "$preResolvedVarObject_" + compilerContext.emitter.currentOffset());
+                int preResolvedObjectLocalIndex = compilerContext.scopeManager.currentScope()
+                        .declareLocal("$preResolvedVarObject_" + compilerContext.emitter.currentOffset());
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, preResolvedObjectLocalIndex);
 
                 compilerContext.expressionCompiler.compile(declarator.getInit());
@@ -135,13 +127,11 @@ final class VariableDeclarationCompiler extends AstNodeCompiler<VariableDeclarat
             if (declarator.getInit() != null) {
                 // Pass inferred name to anonymous class expressions for NamedEvaluation
                 if (declarator.getId() instanceof Identifier targetId
-                        && declarator.getInit() instanceof ClassExpression classExpr
-                        && classExpr.getId() == null) {
+                        && declarator.getInit() instanceof ClassExpression classExpr && classExpr.getId() == null) {
                     compilerContext.inferredClassName = targetId.getName();
                 }
                 compilerContext.expressionCompiler.compile(declarator.getInit());
-                if (declarator.getId() instanceof Identifier targetId
-                        && declarator.getInit().isAnonymousFunction()) {
+                if (declarator.getId() instanceof Identifier targetId && declarator.getInit().isAnonymousFunction()) {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
                 }
                 compilerContext.inferredClassName = null;

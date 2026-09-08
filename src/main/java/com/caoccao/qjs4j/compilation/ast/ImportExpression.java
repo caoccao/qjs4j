@@ -26,21 +26,14 @@ public final class ImportExpression extends Expression {
     private final Expression options;
     private final Expression source;
 
-    public ImportExpression(
-            Expression source,
-            Expression options,
-            boolean defer,
-            SourceLocation location) {
+    public ImportExpression(Expression source, Expression options, boolean defer, SourceLocation location) {
         super(location);
         this.source = source;
         this.options = options;
         this.defer = defer;
     }
 
-    public ImportExpression(
-            Expression source,
-            Expression options,
-            SourceLocation location) {
+    public ImportExpression(Expression source, Expression options, SourceLocation location) {
         this(source, options, false, location);
     }
 

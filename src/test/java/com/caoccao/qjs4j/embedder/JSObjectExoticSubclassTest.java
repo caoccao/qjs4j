@@ -26,20 +26,19 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * An exotic {@link JSObject} written outside {@code com.caoccao.qjs4j.core} must be honoured by
- * every engine path that looks at properties.
+ * An exotic {@link JSObject} written outside {@code com.caoccao.qjs4j.core} must be honoured by every engine path that
+ * looks at properties.
  * <p>
- * The extension points moved: the engine now dispatches on the protected
- * {@code getOwnPropertyDescriptorRaw} and {@code has(key, depth)} hooks, while the public
- * {@code getOwnPropertyDescriptor(key)}, {@code isOwnPropertyEnumerable(key)} and {@code has(key)}
- * became views over them. A subclass that overrode only the old public methods would still compile
- * and still answer direct calls, but {@code Object.keys}, {@code Object.assign},
- * {@code for}-{@code in} and inherited {@code in} would all bypass it — a behavioural break with no
- * compile-time signal. The public methods are therefore {@code final}, so that mistake is a
- * compiler error, and this test pins the supported hooks to the behaviour they must produce.
+ * The extension points moved: the engine now dispatches on the protected {@code getOwnPropertyDescriptorRaw} and
+ * {@code has(key, depth)} hooks, while the public {@code getOwnPropertyDescriptor(key)},
+ * {@code isOwnPropertyEnumerable(key)} and {@code has(key)} became views over them. A subclass that overrode only the
+ * old public methods would still compile and still answer direct calls, but {@code Object.keys}, {@code Object.assign},
+ * {@code for}-{@code in} and inherited {@code in} would all bypass it — a behavioural break with no compile-time
+ * signal. The public methods are therefore {@code final}, so that mistake is a compiler error, and this test pins the
+ * supported hooks to the behaviour they must produce.
  * <p>
- * This test lives outside the {@code core} package deliberately: {@code protected} access from a
- * different package is exactly the embedder's position.
+ * This test lives outside the {@code core} package deliberately: {@code protected} access from a different package is
+ * exactly the embedder's position.
  */
 public class JSObjectExoticSubclassTest extends BaseTest {
 
@@ -89,9 +88,17 @@ public class JSObjectExoticSubclassTest extends BaseTest {
     public void testForInSeesTheOverride() {
         install("exotic");
         assertThat(context.eval(
-                        "(function () { const seen = []; for (const k in exotic) seen.push(k); return seen.join(',') })()")
-                .toString())
-                .isEqualTo("virtual");
+                "(function () { const seen = []; for (const k in exotic) seen.push(k); return seen.join(',') })()")
+                .toString()).isEqualTo("virtual");
+    }
+
+    @Test
+    public void testInheritedInOperatorSeesTheOverride() {
+        VirtualPropertyObject exotic = install("exotic");
+        JSObject child = context.createJSObject();
+        child.setPrototype(exotic);
+        context.getGlobalObject().set(PropertyKey.fromString("child"), child);
+        assertThat(context.eval("('virtual' in child) + ',' + ('absent' in child)").toString()).isEqualTo("true,false");
     }
 
     @Test
@@ -102,34 +109,21 @@ public class JSObjectExoticSubclassTest extends BaseTest {
     }
 
     @Test
-    public void testInheritedInOperatorSeesTheOverride() {
-        VirtualPropertyObject exotic = install("exotic");
-        JSObject child = context.createJSObject();
-        child.setPrototype(exotic);
-        context.getGlobalObject().set(PropertyKey.fromString("child"), child);
-        assertThat(context.eval("('virtual' in child) + ',' + ('absent' in child)").toString())
-                .isEqualTo("true,false");
-    }
-
-    @Test
     public void testObjectAssignSeesTheOverride() {
         install("exotic");
-        assertThat(context.eval("JSON.stringify(Object.assign({}, exotic))").toString())
-                .isEqualTo("{\"virtual\":42}");
+        assertThat(context.eval("JSON.stringify(Object.assign({}, exotic))").toString()).isEqualTo("{\"virtual\":42}");
     }
 
     @Test
     public void testObjectGetOwnPropertyDescriptorSeesTheOverride() {
         install("exotic");
-        assertThat(context.eval("Object.getOwnPropertyDescriptor(exotic, 'virtual').value").toString())
-                .isEqualTo("42");
+        assertThat(context.eval("Object.getOwnPropertyDescriptor(exotic, 'virtual').value").toString()).isEqualTo("42");
     }
 
     @Test
     public void testObjectKeysSeesTheOverride() {
         install("exotic");
-        assertThat(context.eval("JSON.stringify(Object.keys(exotic))").toString())
-                .isEqualTo("[\"virtual\"]");
+        assertThat(context.eval("JSON.stringify(Object.keys(exotic))").toString()).isEqualTo("[\"virtual\"]");
     }
 
     @Test
@@ -149,9 +143,7 @@ public class JSObjectExoticSubclassTest extends BaseTest {
         @Override
         protected PropertyDescriptor getOwnPropertyDescriptorRaw(PropertyKey key) {
             if (VIRTUAL.equals(key)) {
-                return PropertyDescriptor.dataDescriptor(
-                        VIRTUAL_VALUE,
-                        PropertyDescriptor.DataState.All);
+                return PropertyDescriptor.dataDescriptor(VIRTUAL_VALUE, PropertyDescriptor.DataState.All);
             }
             return super.getOwnPropertyDescriptorRaw(key);
         }

@@ -23,35 +23,30 @@ import com.caoccao.qjs4j.vm.StackFrame;
 import java.util.*;
 
 /**
- * Represents a JavaScript object.
- * Based on QuickJS object implementation with mutable shape system.
+ * Represents a JavaScript object. Based on QuickJS object implementation with mutable shape system.
  * <p>
- * Following QuickJS approach:
- * - Each object has its own mutable shape (no sharing)
- * - Shapes can have properties added and removed
- * - Property deletion compacts shape when threshold is reached
- * - Property values stored in parallel array indexed by offset
- * - Sparse properties (numeric indices) stored separately
+ * Following QuickJS approach: - Each object has its own mutable shape (no sharing) - Shapes can have properties added
+ * and removed - Property deletion compacts shape when threshold is reached - Property values stored in parallel array
+ * indexed by offset - Sparse properties (numeric indices) stored separately
  */
 public non-sealed class JSObject implements JSValue {
-    public static final String NAME = "Object";
     private static final JSShape EMPTY_SHAPE = new JSShape();
     private static final int INITIAL_PROPERTY_VALUE_CAPACITY = 4;
     /**
      * Maximum number of prototype links a chain walk will follow.
      * <p>
-     * The walks are recursive so that a {@link JSProxy} anywhere in the chain still gets its traps
-     * invoked, which means this bound is only meaningful if the Java stack can hold that many
-     * frames. It cannot hold 10,000: measured against this engine, a plain property read overflows
-     * at ~8,000 frames on the default stack and at ~2,000 on a 512 KB stack, so the old value was
-     * never the binding limit and a deep chain died with a {@code StackOverflowError} instead.
-     * 1,000 is comfortably reachable on a 512 KB stack and is far beyond any real prototype chain.
+     * The walks are recursive so that a {@link JSProxy} anywhere in the chain still gets its traps invoked, which means
+     * this bound is only meaningful if the Java stack can hold that many frames. It cannot hold 10,000: measured
+     * against this engine, a plain property read overflows at ~8,000 frames on the default stack and at ~2,000 on a 512
+     * KB stack, so the old value was never the binding limit and a deep chain died with a {@code StackOverflowError}
+     * instead. 1,000 is comfortably reachable on a 512 KB stack and is far beyond any real prototype chain.
      */
     private static final int MAX_PROTOTYPE_DEPTH = 1000;
-    protected final JSContext context;
+    public static final String NAME = "Object";
     protected boolean arrayObject; // Equivalent to QuickJS class_id == JS_CLASS_ARRAY
     protected boolean constantPrototypeInitialized; // Internal slot: realm prototype already transferred
     protected JSConstructorType constructorType; // Internal slot for [[Constructor]] type (not accessible from JS)
+    protected final JSContext context;
     protected boolean extensible = true;
     protected boolean frozen = false;
     protected boolean htmlDDA; // Internal slot for [IsHTMLDDA] (Annex B test262 host object)
@@ -64,16 +59,15 @@ public non-sealed class JSObject implements JSValue {
     protected Map<Integer, JSValue> sparseProperties; // For array indices
     private boolean superConstructorCalled; // Tracks whether super() has been called in derived constructor
     /**
-     * {@code WeakMap}/{@code WeakSet} entries naming this object as their key. Created on first
-     * use, so an object that is never a weak-collection key costs one null reference.
+     * {@code WeakMap}/{@code WeakSet} entries naming this object as their key. Created on first use, so an object that
+     * is never a weak-collection key costs one null reference.
      *
      * @see JSWeakEntryTable
      */
     private JSWeakEntryTable weakEntryTable;
 
     /**
-     * Create an empty object with no prototype.
-     * Each object gets its own shape copy (not shared).
+     * Create an empty object with no prototype. Each object gets its own shape copy (not shared).
      */
     public JSObject(JSContext context) {
         this.context = Objects.requireNonNull(context, "context");
@@ -91,48 +85,8 @@ public non-sealed class JSObject implements JSValue {
         this.prototype = prototype;
     }
 
-    private static boolean sameValue(JSValue x, JSValue y) {
-        if (x == y) {
-            return true;
-        }
-        if (x == null || y == null) {
-            return false;
-        }
-
-        // SameValue compares by ECMAScript type first (not Java class).
-        JSValueType xType = x.type();
-        JSValueType yType = y.type();
-        if (xType != yType) {
-            return false;
-        }
-
-        return switch (xType) {
-            case UNDEFINED, NULL -> true;
-            case NUMBER -> {
-                if (!(x instanceof JSNumber xNum) || !(y instanceof JSNumber yNum)) {
-                    yield false;
-                }
-                double xVal = xNum.value();
-                double yVal = yNum.value();
-                if (Double.isNaN(xVal) && Double.isNaN(yVal)) {
-                    yield true;
-                }
-                yield Double.doubleToRawLongBits(xVal) == Double.doubleToRawLongBits(yVal);
-            }
-            case STRING -> (x instanceof JSString xStr && y instanceof JSString yStr)
-                    && xStr.value().equals(yStr.value());
-            case BOOLEAN -> (x instanceof JSBoolean xBool && y instanceof JSBoolean yBool)
-                    && xBool.value() == yBool.value();
-            case BIGINT -> (x instanceof JSBigInt xBigInt && y instanceof JSBigInt yBigInt)
-                    && xBigInt.value().equals(yBigInt.value());
-            // Symbol, Object, and Function types are same-value only by identity.
-            case SYMBOL, OBJECT, FUNCTION -> false;
-        };
-    }
-
     /**
-     * Compact properties by removing deleted properties.
-     * Following QuickJS compact_properties() logic.
+     * Compact properties by removing deleted properties. Following QuickJS compact_properties() logic.
      */
     protected void compactProperties() {
         if (shape.getDeletedPropCount() == 0) {
@@ -161,9 +115,31 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * [[DefineOwnProperty]] per ES spec.
-     * Returns true if the property was successfully defined, false if the object
-     * is not extensible and the property does not already exist.
+     * Define an accessor property with a getter and a setter.
+     */
+    public boolean defineProperty(PropertyKey key, JSFunction getter, JSFunction setter,
+            PropertyDescriptor.AccessorState state) {
+        return defineProperty(key, PropertyDescriptor.accessorDescriptor(getter, setter, state));
+    }
+
+    /**
+     * Define an accessor property with a getter and no setter.
+     */
+    public boolean defineProperty(PropertyKey key, JSFunction getter, PropertyDescriptor.AccessorState state) {
+        return defineProperty(key, PropertyDescriptor.accessorDescriptor(getter, null, state));
+    }
+
+    /**
+     * [[DefineOwnProperty]] for a data descriptor, delegating to the full spec-compliant overload. Equivalent to
+     * defineProperty(key, PropertyDescriptor.dataDescriptor(value, state)).
+     */
+    public boolean defineProperty(PropertyKey key, JSValue value, PropertyDescriptor.DataState state) {
+        return defineProperty(key, PropertyDescriptor.dataDescriptor(value, state));
+    }
+
+    /**
+     * [[DefineOwnProperty]] per ES spec. Returns true if the property was successfully defined, false if the object is
+     * not extensible and the property does not already exist.
      */
     public boolean defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
         if (!extensible && !hasOwnProperty(key)) {
@@ -187,7 +163,8 @@ public non-sealed class JSObject implements JSValue {
             boolean curIsAccessor = current.isAccessorDescriptor();
             if (descIsAccessor != curIsAccessor) {
                 // Trying to change property type on non-configurable property
-                if (descriptor.hasValue() || descriptor.hasWritable() || descriptor.hasGetter() || descriptor.hasSetter()) {
+                if (descriptor.hasValue() || descriptor.hasWritable() || descriptor.hasGetter()
+                        || descriptor.hasSetter()) {
                     return false;
                 }
             }
@@ -219,8 +196,8 @@ public non-sealed class JSObject implements JSValue {
 
         // ValidateAndApplyPropertyDescriptor step 9: "For each field of Desc that
         // is present, set the corresponding attribute of the property named P of
-        // object O to the value of the field."  Absent fields keep their current
-        // values.  Build a merged descriptor so defineProperty receives the full
+        // object O to the value of the field." Absent fields keep their current
+        // values. Build a merged descriptor so defineProperty receives the full
         // picture (current attributes + overrides from descriptor).
         if (current != null) {
             PropertyDescriptor merged = new PropertyDescriptor();
@@ -230,9 +207,9 @@ public non-sealed class JSObject implements JSValue {
         } else {
             // New property: apply default attribute values per ES2024 10.1.6.3 step 5.
             // "If IsGenericDescriptor(Desc) or IsDataDescriptor(Desc), create an own data
-            //  property [...] with default attribute values."
+            // property [...] with default attribute values."
             // "Else, Desc must be an accessor Property Descriptor so, create an own accessor
-            //  property [...] with default attribute values."
+            // property [...] with default attribute values."
             PropertyDescriptor completed = new PropertyDescriptor();
             completed.mergeFrom(descriptor);
             if (completed.isAccessorDescriptor()) {
@@ -245,33 +222,11 @@ public non-sealed class JSObject implements JSValue {
         return true;
     }
 
-    /**
-     * [[DefineOwnProperty]] for a data descriptor, delegating to the full spec-compliant overload.
-     * Equivalent to defineProperty(key, PropertyDescriptor.dataDescriptor(value, state)).
-     */
-    public boolean defineProperty(PropertyKey key, JSValue value, PropertyDescriptor.DataState state) {
-        return defineProperty(key, PropertyDescriptor.dataDescriptor(value, state));
-    }
-
-    /**
-     * Define an accessor property with a getter and no setter.
-     */
-    public boolean defineProperty(PropertyKey key, JSFunction getter, PropertyDescriptor.AccessorState state) {
-        return defineProperty(key, PropertyDescriptor.accessorDescriptor(getter, null, state));
-    }
-
     // Property operations
 
     /**
-     * Define an accessor property with a getter and a setter.
-     */
-    public boolean defineProperty(PropertyKey key, JSFunction getter, JSFunction setter, PropertyDescriptor.AccessorState state) {
-        return defineProperty(key, PropertyDescriptor.accessorDescriptor(getter, setter, state));
-    }
-
-    /**
-     * Define a new property with a descriptor.
-     * This is the internal method that always succeeds (used by freeze, seal, etc.).
+     * Define a new property with a descriptor. This is the internal method that always succeeds (used by freeze, seal,
+     * etc.).
      */
     protected void definePropertyInternal(PropertyKey key, PropertyDescriptor descriptor) {
         // When defining a property (especially accessor), remove any sparse entry
@@ -311,24 +266,15 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Delete a property.
-     * Returns true if deletion was successful.
-     * Following QuickJS delete_property() logic.
-     */
-    public boolean delete(String propertyName) {
-        return delete(PropertyKey.fromString(propertyName));
-    }
-
-    /**
      * The {@code delete} operator: {@code [[Delete]]} followed by the strict-mode failure throw.
      * <p>
      * Only the operator throws. Specification algorithms that call {@code [[Delete]]} internally —
-     * {@code InternalizeJSONProperty} is one — must not inherit the ambient strict mode, so they
-     * call {@link #delete(PropertyKey, boolean)} with {@code false} instead. Reading
-     * {@code context.isStrictMode()} inside {@code [[Delete]]} made every internal deletion behave
-     * as though the calling script had written {@code delete}.
+     * {@code InternalizeJSONProperty} is one — must not inherit the ambient strict mode, so they call
+     * {@link #delete(PropertyKey, boolean)} with {@code false} instead. Reading {@code context.isStrictMode()} inside
+     * {@code [[Delete]]} made every internal deletion behave as though the calling script had written {@code delete}.
      *
-     * @param key the property key
+     * @param key
+     *            the property key
      * @return true when the property is gone afterwards
      */
     public boolean delete(PropertyKey key) {
@@ -338,8 +284,10 @@ public non-sealed class JSObject implements JSValue {
     /**
      * {@code [[Delete]]}, optionally raising the {@code delete} operator's {@code TypeError}.
      *
-     * @param key            the property key
-     * @param throwOnFailure true to throw a {@code TypeError} when the property cannot be deleted
+     * @param key
+     *            the property key
+     * @param throwOnFailure
+     *            true to throw a {@code TypeError} when the property cannot be deleted
      * @return true when the property is gone afterwards
      */
     public boolean delete(PropertyKey key, boolean throwOnFailure) {
@@ -351,8 +299,8 @@ public non-sealed class JSObject implements JSValue {
             if (sparseProperties.containsKey(sparseIndex)) {
                 if (sealed || frozen) {
                     if (strictMode) {
-                        context.throwTypeError(
-                                "Cannot delete property '" + key.toPropertyString() + "' of " + getObjectDescriptionForError(true));
+                        context.throwTypeError("Cannot delete property '" + key.toPropertyString() + "' of "
+                                + getObjectDescriptionForError(true));
                     }
                     return false;
                 }
@@ -371,8 +319,8 @@ public non-sealed class JSObject implements JSValue {
         // Cannot delete an existing own property from sealed or frozen objects.
         if (sealed || frozen) {
             if (strictMode) {
-                context.throwTypeError(
-                        "Cannot delete property '" + key.toPropertyString() + "' of " + getObjectDescriptionForError(true));
+                context.throwTypeError("Cannot delete property '" + key.toPropertyString() + "' of "
+                        + getObjectDescriptionForError(true));
             }
             return false;
         }
@@ -384,8 +332,8 @@ public non-sealed class JSObject implements JSValue {
         if (!desc.isConfigurable()) {
             // In strict mode, throw TypeError when trying to delete non-configurable property
             if (strictMode) {
-                context.throwTypeError(
-                        "Cannot delete property '" + key.toPropertyString() + "' of " + getObjectDescriptionForError(true));
+                context.throwTypeError("Cannot delete property '" + key.toPropertyString() + "' of "
+                        + getObjectDescriptionForError(true));
             }
             return false;
         }
@@ -405,6 +353,13 @@ public non-sealed class JSObject implements JSValue {
         }
 
         return true;
+    }
+
+    /**
+     * Delete a property. Returns true if deletion was successful. Following QuickJS delete_property() logic.
+     */
+    public boolean delete(String propertyName) {
+        return delete(PropertyKey.fromString(propertyName));
     }
 
     private void ensurePropertyValueCapacity(int requiredCapacity) {
@@ -434,8 +389,8 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Fast path for own enumerable string property names as JS strings.
-     * Returns null when generic property ordering or accessor semantics are required.
+     * Fast path for own enumerable string property names as JS strings. Returns null when generic property ordering or
+     * accessor semantics are required.
      */
     public JSValue[] enumerableStringKeyValuesFastPath() {
         if (getClass() != JSObject.class) {
@@ -473,8 +428,8 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Fast path for own enumerable string property values.
-     * Returns null when generic property ordering or accessor semantics are required.
+     * Fast path for own enumerable string property values. Returns null when generic property ordering or accessor
+     * semantics are required.
      */
     public JSValue[] enumerableStringPropertyValuesFastPath() {
         if (getClass() != JSObject.class) {
@@ -515,15 +470,15 @@ public non-sealed class JSObject implements JSValue {
     /**
      * Java equality on an ECMAScript object is identity, and is {@code final} so it stays that way.
      * <p>
-     * {@link JSError} used to override this over its own guest-visible {@code name} and
-     * {@code message}. Every Java collection in the engine that holds objects — weak collections,
-     * prototype-walk guards, the {@code for}-{@code in} visited set, the VM's exhausted-iterator
-     * set — silently acquired value semantics for that one subclass, so two distinct errors with
-     * the same message became one entry, and computing a hash ran whatever accessor a script had
-     * installed on {@code message}. Sealing the contract here means a future subclass cannot
-     * reintroduce that by accident: an override is a compile error rather than a behaviour change.
+     * {@link JSError} used to override this over its own guest-visible {@code name} and {@code message}. Every Java
+     * collection in the engine that holds objects — weak collections, prototype-walk guards, the {@code for}-{@code in}
+     * visited set, the VM's exhausted-iterator set — silently acquired value semantics for that one subclass, so two
+     * distinct errors with the same message became one entry, and computing a hash ran whatever accessor a script had
+     * installed on {@code message}. Sealing the contract here means a future subclass cannot reintroduce that by
+     * accident: an override is a compile error rather than a behaviour change.
      *
-     * @param other the object to compare with
+     * @param other
+     *            the object to compare with
      * @return true only when {@code other} is this same object
      */
     @Override
@@ -538,28 +493,26 @@ public non-sealed class JSObject implements JSValue {
             // function expression's own name — is a non-writable property while eval runs. Writing
             // to one is an assignment to a binding, not to a property, and reporting it as a
             // property write named an object the script never mentioned.
-            if (context.isInBareVariableAssignment()
-                    && key.isString()
+            if (context.isInBareVariableAssignment() && key.isString()
                     && context.hasEvalOverlayBinding(key.asString())) {
                 context.throwTypeError("Assignment to constant variable.");
                 return false;
             }
-            context.throwTypeError(
-                    "Cannot assign to read only property '" + key.toPropertyString() + "' of " + getObjectDescriptionForError(false));
+            context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString() + "' of "
+                    + getObjectDescriptionForError(false));
         }
         return false;
     }
 
     /**
-     * Read a data property along the prototype chain for diagnostics, guaranteeing that no script
-     * runs.
+     * Read a data property along the prototype chain for diagnostics, guaranteeing that no script runs.
      * <p>
-     * Error objects keep {@code name} on their prototype, so a diagnostic reader has to walk. The
-     * walk stops at a {@link JSProxy} — its properties are only reachable by running a trap — and
-     * is bounded so a cyclic chain installed through the raw {@link #setPrototype(JSObject)} API
-     * cannot hang exception reporting.
+     * Error objects keep {@code name} on their prototype, so a diagnostic reader has to walk. The walk stops at a
+     * {@link JSProxy} — its properties are only reachable by running a trap — and is bounded so a cyclic chain
+     * installed through the raw {@link #setPrototype(JSObject)} API cannot hang exception reporting.
      *
-     * @param key the property key
+     * @param key
+     *            the property key
      * @return the value, or {@code null} when it is absent, is an accessor, or the walk met a Proxy
      * @see #getOwnDataPropertyForDiagnostics(PropertyKey)
      */
@@ -590,20 +543,13 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Freeze this object.
-     * Prevents adding new properties, deleting existing properties, and modifying existing properties.
+     * Freeze this object. Prevents adding new properties, deleting existing properties, and modifying existing
+     * properties.
      */
     public void freeze() {
         this.frozen = true;
         this.sealed = true; // Frozen objects are also sealed
         this.extensible = false; // Frozen objects are not extensible
-    }
-
-    /**
-     * Get a property value by string name.
-     */
-    public JSValue get(String propertyName) {
-        return get(PropertyKey.fromString(propertyName));
     }
 
     /**
@@ -624,19 +570,25 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Get a property with an explicit receiver for getter invocation.
-     * The receiver is used as 'this' when calling property getters,
-     * allowing primitive receivers in strict mode.
+     * Get a property with an explicit receiver for getter invocation. The receiver is used as 'this' when calling
+     * property getters, allowing primitive receivers in strict mode.
      */
     public JSValue get(PropertyKey key, JSValue receiver) {
         return getWithReceiver(key, receiver, 0);
     }
 
     /**
+     * Get a property value by string name.
+     */
+    public JSValue get(String propertyName) {
+        return get(PropertyKey.fromString(propertyName));
+    }
+
+    /**
      * The tag this object would carry in {@code Object.prototype.toString}, without running script.
      * <p>
-     * Mirrors ES2024 20.1.3.6 steps 4-16, except that {@code Symbol.toStringTag} is read as a data
-     * property rather than through {@code Get}.
+     * Mirrors ES2024 20.1.3.6 steps 4-16, except that {@code Symbol.toStringTag} is read as a data property rather than
+     * through {@code Get}.
      *
      * @return the builtin tag, or the {@code Symbol.toStringTag} override when it is a string
      */
@@ -704,14 +656,15 @@ public non-sealed class JSObject implements JSValue {
     /**
      * Build the object description used in a failed-assignment or failed-delete TypeError message.
      * <p>
-     * Own data properties only. This runs while an error is already being constructed, so a
-     * {@code constructor} or {@code name} getter must not execute re-entrantly at an
-     * already-failing moment — it could itself throw and overwrite the exception being reported.
+     * Own data properties only. This runs while an error is already being constructed, so a {@code constructor} or
+     * {@code name} getter must not execute re-entrantly at an already-failing moment — it could itself throw and
+     * overwrite the exception being reported.
      * <p>
-     * Package-private so {@link JSArray} can name the receiver the same way when it reports a
-     * blocked length truncation.
+     * Package-private so {@link JSArray} can name the receiver the same way when it reports a blocked length
+     * truncation.
      *
-     * @param forDelete true for a delete error, which uses a different message shape
+     * @param forDelete
+     *            true for a delete error, which uses a different message shape
      * @return a description built without running any script
      */
     String getObjectDescriptionForError(boolean forDelete) {
@@ -833,21 +786,19 @@ public non-sealed class JSObject implements JSValue {
     /**
      * Read an own data property for diagnostics, guaranteeing that no script runs.
      * <p>
-     * Every other property accessor in the engine is virtual, so "does this read run user code?"
-     * depends on the object's concrete class: {@link #getOwnPropertyDescriptor(PropertyKey)} and
-     * {@link #getOwnPropertyDescriptorRaw(PropertyKey)} are both overridden by {@link JSProxy},
-     * where the override <em>is</em> the {@code getOwnPropertyDescriptor} trap. Formatting a
-     * message for a thrown Proxy therefore re-entered guest code, at the one moment — an exception
-     * already in flight — when that code can displace the error being reported, spoof the output,
-     * or throw again.
+     * Every other property accessor in the engine is virtual, so "does this read run user code?" depends on the
+     * object's concrete class: {@link #getOwnPropertyDescriptor(PropertyKey)} and
+     * {@link #getOwnPropertyDescriptorRaw(PropertyKey)} are both overridden by {@link JSProxy}, where the override
+     * <em>is</em> the {@code getOwnPropertyDescriptor} trap. Formatting a message for a thrown Proxy therefore
+     * re-entered guest code, at the one moment — an exception already in flight — when that code can displace the error
+     * being reported, spoof the output, or throw again.
      * <p>
-     * This method resolves to physical storage and nothing else. A {@link JSProxy} answers
-     * {@code null} rather than consulting its handler; accessors answer {@code null} rather than
-     * running their getter.
+     * This method resolves to physical storage and nothing else. A {@link JSProxy} answers {@code null} rather than
+     * consulting its handler; accessors answer {@code null} rather than running their getter.
      *
-     * @param key the property key
-     * @return the stored value, or {@code null} when the property is absent, is an accessor, or
-     * this object is a Proxy
+     * @param key
+     *            the property key
+     * @return the stored value, or {@code null} when the property is absent, is an accessor, or this object is a Proxy
      */
     public final JSValue getOwnDataPropertyForDiagnostics(PropertyKey key) {
         if (this instanceof JSProxy) {
@@ -860,24 +811,22 @@ public non-sealed class JSObject implements JSValue {
     /**
      * Get the property descriptor for a property.
      * <p>
-     * The returned descriptor is a defensive copy. {@link PropertyDescriptor} is mutable
-     * ({@code setValue}, {@code setWritable}, {@code mergeFrom}, ...), so handing out the object's
-     * own instance let any caller silently rewrite a property's attributes — and made the result
-     * aliased for shape-backed properties but fresh for dense array elements, so callers could not
-     * tell which they had.
+     * The returned descriptor is a defensive copy. {@link PropertyDescriptor} is mutable ({@code setValue},
+     * {@code setWritable}, {@code mergeFrom}, ...), so handing out the object's own instance let any caller silently
+     * rewrite a property's attributes — and made the result aliased for shape-backed properties but fresh for dense
+     * array elements, so callers could not tell which they had.
      * <p>
-     * Engine internals that only read the flags on a hot path use
-     * {@link #getOwnPropertyDescriptorRaw(PropertyKey)} instead. That is the method exotic objects
-     * override; this one is the safe public view over it.
+     * Engine internals that only read the flags on a hot path use {@link #getOwnPropertyDescriptorRaw(PropertyKey)}
+     * instead. That is the method exotic objects override; this one is the safe public view over it.
      * <p>
-     * <strong>Final on purpose.</strong> The engine's own dispatch point moved to
-     * {@code getOwnPropertyDescriptorRaw}, so an override here would still compile and still be
-     * reachable through a direct call, but {@code Object.keys}, {@code Object.assign},
-     * {@code for}-{@code in} and {@code in} would all bypass it. That is a behavioural break with
-     * no compile-time signal. Overriding the raw method instead is the supported extension point;
-     * making this one final turns the silent break into a compiler error that says so.
+     * <strong>Final on purpose.</strong> The engine's own dispatch point moved to {@code getOwnPropertyDescriptorRaw},
+     * so an override here would still compile and still be reachable through a direct call, but {@code Object.keys},
+     * {@code Object.assign}, {@code for}-{@code in} and {@code in} would all bypass it. That is a behavioural break
+     * with no compile-time signal. Overriding the raw method instead is the supported extension point; making this one
+     * final turns the silent break into a compiler error that says so.
      *
-     * @param key the property key
+     * @param key
+     *            the property key
      * @return a copy of the descriptor, or {@code null} when the property does not exist
      * @see #getOwnPropertyDescriptorRaw(PropertyKey)
      */
@@ -889,11 +838,11 @@ public non-sealed class JSObject implements JSValue {
     /**
      * Get the object's own property descriptor instance, without copying.
      * <p>
-     * For internal use only. The returned descriptor may be the object's live instance; mutating it
-     * changes the property. Exotic objects override this method rather than
-     * {@link #getOwnPropertyDescriptor(PropertyKey)}.
+     * For internal use only. The returned descriptor may be the object's live instance; mutating it changes the
+     * property. Exotic objects override this method rather than {@link #getOwnPropertyDescriptor(PropertyKey)}.
      *
-     * @param key the property key
+     * @param key
+     *            the property key
      * @return the descriptor, or {@code null} when the property does not exist
      */
     protected PropertyDescriptor getOwnPropertyDescriptorRaw(PropertyKey key) {
@@ -908,9 +857,9 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Get the offset of an own property in the shape, handling integer/string key equivalence.
-     * Returns -1 if the property is not found. This avoids the redundant scans
-     * of getOwnShapeKey + getPropertyOffset by returning the offset directly.
+     * Get the offset of an own property in the shape, handling integer/string key equivalence. Returns -1 if the
+     * property is not found. This avoids the redundant scans of getOwnShapeKey + getPropertyOffset by returning the
+     * offset directly.
      */
     protected int getOwnPropertyOffset(PropertyKey key) {
         int offset = shape.getPropertyOffset(key);
@@ -939,9 +888,7 @@ public non-sealed class JSObject implements JSValue {
         }
         if (key.isIndex()) {
             String propertyName = key.toPropertyString();
-            return shape.getPropertyOffsetByIndexKey(propertyName) >= 0
-                    ? PropertyKey.fromString(propertyName)
-                    : null;
+            return shape.getPropertyOffsetByIndexKey(propertyName) >= 0 ? PropertyKey.fromString(propertyName) : null;
         }
         int index = key.toIndex();
         if (index < 0) {
@@ -951,8 +898,7 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Get the [[PrimitiveValue]] internal slot.
-     * This is for internal use only - not accessible from JavaScript.
+     * Get the [[PrimitiveValue]] internal slot. This is for internal use only - not accessible from JavaScript.
      */
     public JSValue getPrimitiveValue() {
         return primitiveValue;
@@ -963,12 +909,24 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Internal get method with receiver tracking for prototype chain getter invocation.
-     * Protected to allow JSProxy to override with proper trap handling.
+     * Get a property value with an explicit receiver for getter invocation. Used by Reflect.get and super property
+     * access to pass a different receiver than the target. Accepts JSValue to support primitive receivers (per ES spec,
+     * super property access should not box the receiver).
+     */
+    public JSValue getWithReceiver(PropertyKey key, JSValue receiver) {
+        return getWithReceiver(key, receiver, 0);
+    }
+
+    /**
+     * Internal get method with receiver tracking for prototype chain getter invocation. Protected to allow JSProxy to
+     * override with proper trap handling.
      *
-     * @param key      the property key
-     * @param receiver the receiver to pass to a getter
-     * @param depth    how many <em>exotic</em> prototype links have already been followed
+     * @param key
+     *            the property key
+     * @param receiver
+     *            the receiver to pass to a getter
+     * @param depth
+     *            how many <em>exotic</em> prototype links have already been followed
      * @return the value, or {@code undefined} when the chain has no such property
      */
     protected JSValue getWithReceiver(PropertyKey key, JSValue receiver, int depth) {
@@ -1016,32 +974,15 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Get a property value with an explicit receiver for getter invocation.
-     * Used by Reflect.get and super property access to pass a different receiver
-     * than the target. Accepts JSValue to support primitive receivers (per ES spec,
-     * super property access should not box the receiver).
-     */
-    public JSValue getWithReceiver(PropertyKey key, JSValue receiver) {
-        return getWithReceiver(key, receiver, 0);
-    }
-
-    /**
-     * Check if object has a property (including prototype chain).
-     */
-    public boolean has(String propertyName) {
-        return has(PropertyKey.fromString(propertyName));
-    }
-
-    /**
      * Check if object has a property by key (including prototype chain).
      * <p>
-     * <strong>Final on purpose.</strong> The engine dispatches on {@link #has(PropertyKey, int)},
-     * which carries the prototype-chain depth across proxy and namespace hops. An override here
-     * would compile but be bypassed by every internal {@code in} check — a behavioural break with
-     * no compile-time signal. Subclasses that intercept {@code in} override the depth-carrying
-     * method instead.
+     * <strong>Final on purpose.</strong> The engine dispatches on {@link #has(PropertyKey, int)}, which carries the
+     * prototype-chain depth across proxy and namespace hops. An override here would compile but be bypassed by every
+     * internal {@code in} check — a behavioural break with no compile-time signal. Subclasses that intercept {@code in}
+     * override the depth-carrying method instead.
      *
-     * @param key the property key
+     * @param key
+     *            the property key
      * @return true when this object or its prototype chain has the property
      * @see #has(PropertyKey, int)
      */
@@ -1052,16 +993,17 @@ public non-sealed class JSObject implements JSValue {
     /**
      * Check if object has a property by key, tracking prototype chain depth.
      * <p>
-     * This walk had no bound at all, while {@code getWithReceiver} was bounded: the same prototype
-     * graph was therefore safe to read from and unsafe for {@code in}, and a cyclic chain — which
-     * the raw {@link #setPrototype(JSObject)} embedder API can create — recursed until the Java
-     * stack was exhausted.
+     * This walk had no bound at all, while {@code getWithReceiver} was bounded: the same prototype graph was therefore
+     * safe to read from and unsafe for {@code in}, and a cyclic chain — which the raw {@link #setPrototype(JSObject)}
+     * embedder API can create — recursed until the Java stack was exhausted.
      * <p>
-     * Subclasses that intercept {@code in} override this method rather than {@link
-     * #has(PropertyKey)}, so the depth is carried across proxy and namespace hops.
+     * Subclasses that intercept {@code in} override this method rather than {@link #has(PropertyKey)}, so the depth is
+     * carried across proxy and namespace hops.
      *
-     * @param key   the property key
-     * @param depth how many prototype links have already been followed
+     * @param key
+     *            the property key
+     * @param depth
+     *            how many prototype links have already been followed
      * @return true when this object or its prototype chain has the property
      */
     protected boolean has(PropertyKey key, int depth) {
@@ -1098,10 +1040,20 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Check if object has an own property.
+     * Check if object has a property (including prototype chain).
      */
-    public boolean hasOwnProperty(String propertyName) {
-        return hasOwnProperty(PropertyKey.fromString(propertyName));
+    public boolean has(String propertyName) {
+        return has(PropertyKey.fromString(propertyName));
+    }
+
+    /**
+     * Identity hash, {@code final} for the reason given on {@link #equals(Object)}.
+     *
+     * @return the identity hash code
+     */
+    @Override
+    public final int hashCode() {
+        return System.identityHashCode(this);
     }
 
     /**
@@ -1119,6 +1071,13 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
+     * Check if object has an own property.
+     */
+    public boolean hasOwnProperty(String propertyName) {
+        return hasOwnProperty(PropertyKey.fromString(propertyName));
+    }
+
+    /**
      * Check if a key has a property in the shape (handles integer/string key equivalence).
      */
     protected boolean hasOwnShapeProperty(PropertyKey key) {
@@ -1126,20 +1085,9 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Identity hash, {@code final} for the reason given on {@link #equals(Object)}.
-     *
-     * @return the identity hash code
-     */
-    @Override
-    public final int hashCode() {
-        return System.identityHashCode(this);
-    }
-
-    /**
-     * Initialize properties in bulk on a freshly created object with no existing properties.
-     * This is more efficient than calling defineProperty repeatedly because it avoids
-     * the O(N²) cost of incremental shape growth (linear scans + array copies per property).
-     * The keys, descriptors, and values arrays must all have the same length.
+     * Initialize properties in bulk on a freshly created object with no existing properties. This is more efficient
+     * than calling defineProperty repeatedly because it avoids the O(N²) cost of incremental shape growth (linear scans
+     * + array copies per property). The keys, descriptors, and values arrays must all have the same length.
      */
     public void initProperties(PropertyKey[] keys, PropertyDescriptor[] descriptors, JSValue[] values) {
         this.shape = new JSShape(keys, descriptors);
@@ -1147,17 +1095,17 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Whether this object's {@code [[Get]]}/{@code [[HasProperty]]} replaces the ordinary lookup
-     * for the given key, rather than merely adding own storage to it.
+     * Whether this object's {@code [[Get]]}/{@code [[HasProperty]]} replaces the ordinary lookup for the given key,
+     * rather than merely adding own storage to it.
      * <p>
-     * Only such an object has to be dispatched to virtually when it turns up in someone else's
-     * prototype chain; everything else is walked iteratively, so the chain length a program may
-     * build is bounded by memory rather than by a Java stack frame per link. Gating that walk on
-     * {@code getClass() == JSObject.class} instead made arrays, functions and every other ordinary
-     * built-in subclass recurse, so a thousand-link chain of arrays was a {@code RangeError} while
-     * the same chain of plain objects was not.
+     * Only such an object has to be dispatched to virtually when it turns up in someone else's prototype chain;
+     * everything else is walked iteratively, so the chain length a program may build is bounded by memory rather than
+     * by a Java stack frame per link. Gating that walk on {@code getClass() == JSObject.class} instead made arrays,
+     * functions and every other ordinary built-in subclass recurse, so a thousand-link chain of arrays was a
+     * {@code RangeError} while the same chain of plain objects was not.
      *
-     * @param key the property being looked up
+     * @param key
+     *            the property being looked up
      * @return true when this object decides the whole operation itself
      */
     protected boolean interceptsPropertyLookup(PropertyKey key) {
@@ -1165,21 +1113,20 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Check if this object is extensible.
-     * ES5.1 15.2.3.13
+     * Check if this object is extensible. ES5.1 15.2.3.13
      */
     public boolean isArrayObject() {
         return arrayObject;
     }
 
     /**
-     * Whether the VM has already transferred the realm prototype onto this bytecode constant
-     * object. For internal use only - not accessible from JavaScript.
+     * Whether the VM has already transferred the realm prototype onto this bytecode constant object. For internal use
+     * only - not accessible from JavaScript.
      * <p>
-     * The VM used to track this in a per-VM {@code Set<JSObject>} that was never pruned, so every
-     * array literal, regexp literal and tagged-template object ever evaluated stayed reachable —
-     * along with everything it transitively referenced — for the lifetime of the VM. Keeping the
-     * bit on the object itself removes the side table, and the entry dies with the object.
+     * The VM used to track this in a per-VM {@code Set<JSObject>} that was never pruned, so every array literal, regexp
+     * literal and tagged-template object ever evaluated stayed reachable — along with everything it transitively
+     * referenced — for the lifetime of the VM. Keeping the bit on the object itself removes the side table, and the
+     * entry dies with the object.
      *
      * @return true when the prototype has already been transferred
      */
@@ -1208,17 +1155,17 @@ public non-sealed class JSObject implements JSValue {
     /**
      * Whether this object appears anywhere in the proposed prototype's own chain.
      * <p>
-     * The walk is complete: a depth cutoff here is not a resource guard but a false negative, and
-     * a false negative installs a real cycle. Stopping after 1,000 links let
-     * {@code Object.setPrototypeOf(a, chainOf1002LinksEndingAtA)} succeed, leaving {@code a} in a
-     * circular prototype graph that every later property read had to defend against.
+     * The walk is complete: a depth cutoff here is not a resource guard but a false negative, and a false negative
+     * installs a real cycle. Stopping after 1,000 links let {@code Object.setPrototypeOf(a, chainOf1002LinksEndingAtA)}
+     * succeed, leaving {@code a} in a circular prototype graph that every later property read had to defend against.
      * <p>
-     * Termination without a cutoff comes from Floyd cycle detection instead. That is needed because
-     * the raw {@link #setPrototype(JSObject)} embedder API can install a cycle that does not contain
-     * {@code this}; the specification's walk would follow it forever. Meeting such a cycle proves
-     * {@code this} is not in the chain, so the answer is false.
+     * Termination without a cutoff comes from Floyd cycle detection instead. That is needed because the raw
+     * {@link #setPrototype(JSObject)} embedder API can install a cycle that does not contain {@code this}; the
+     * specification's walk would follow it forever. Meeting such a cycle proves {@code this} is not in the chain, so
+     * the answer is false.
      *
-     * @param proto the proposed prototype; {@code null} is never circular
+     * @param proto
+     *            the proposed prototype; {@code null} is never circular
      * @return true when installing {@code proto} would make this object its own ancestor
      */
     private boolean isInPrototypeChainOf(JSObject proto) {
@@ -1255,11 +1202,8 @@ public non-sealed class JSObject implements JSValue {
 
     private boolean isLegacyFunctionPropertyAccessible(JSFunction currentFunction) {
         if (currentFunction instanceof JSBytecodeFunction bytecodeFunction) {
-            return !bytecodeFunction.isStrict()
-                    && bytecodeFunction.isConstructor()
-                    && !bytecodeFunction.isArrow()
-                    && !bytecodeFunction.isAsync()
-                    && !bytecodeFunction.isGenerator();
+            return !bytecodeFunction.isStrict() && bytecodeFunction.isConstructor() && !bytecodeFunction.isArrow()
+                    && !bytecodeFunction.isAsync() && !bytecodeFunction.isGenerator();
         }
         return false;
     }
@@ -1267,15 +1211,15 @@ public non-sealed class JSObject implements JSValue {
     /**
      * Whether an own property exists and is enumerable.
      * <p>
-     * Enumeration paths — {@code Object.keys}/{@code values}/{@code entries},
-     * {@code Object.assign}, {@code for}-{@code in} — need exactly this one bit per key.
-     * Asking for the descriptor to read it means a defensive copy per key, which is pure overhead
-     * for a caller that lets the descriptor go out of scope immediately.
+     * Enumeration paths — {@code Object.keys}/{@code values}/{@code entries}, {@code Object.assign},
+     * {@code for}-{@code in} — need exactly this one bit per key. Asking for the descriptor to read it means a
+     * defensive copy per key, which is pure overhead for a caller that lets the descriptor go out of scope immediately.
      * <p>
-     * Final for the same reason as {@link #getOwnPropertyDescriptor(PropertyKey)}: exotic objects
-     * customise {@link #getOwnPropertyDescriptorRaw(PropertyKey)}, and this is a view over it.
+     * Final for the same reason as {@link #getOwnPropertyDescriptor(PropertyKey)}: exotic objects customise
+     * {@link #getOwnPropertyDescriptorRaw(PropertyKey)}, and this is a view over it.
      *
-     * @param key the property key
+     * @param key
+     *            the property key
      * @return true when the property exists and is enumerable
      */
     public final boolean isOwnPropertyEnumerable(PropertyKey key) {
@@ -1307,15 +1251,16 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Own-property lookup for {@link #getWithReceiver(PropertyKey, JSValue, int)}, without the
-     * prototype walk.
+     * Own-property lookup for {@link #getWithReceiver(PropertyKey, JSValue, int)}, without the prototype walk.
      * <p>
-     * Split out so the walk can run as a loop over ordinary prototypes rather than one Java frame
-     * per link, while the two callers — this object and each ordinary prototype the loop reaches —
-     * share exactly one implementation of what "own property" means.
+     * Split out so the walk can run as a loop over ordinary prototypes rather than one Java frame per link, while the
+     * two callers — this object and each ordinary prototype the loop reaches — share exactly one implementation of what
+     * "own property" means.
      *
-     * @param key      the property key
-     * @param receiver the receiver to pass to a getter
+     * @param key
+     *            the property key
+     * @param receiver
+     *            the receiver to pass to a getter
      * @return the value, or {@code null} when this object has no own property for the key
      */
     protected JSValue lookupOwnForGet(PropertyKey key, JSValue receiver) {
@@ -1349,11 +1294,9 @@ public non-sealed class JSObject implements JSValue {
                         // Check if getter threw an exception - return the error value or undefined
                         if (propertyAccessContext.hasPendingException()) {
                             // Cross-realm: propagate exception to receiver's context
-                            if (receiver instanceof JSObject receiverObj
-                                    && receiverObj.context != null
+                            if (receiver instanceof JSObject receiverObj && receiverObj.context != null
                                     && receiverObj.context != propertyAccessContext) {
-                                receiverObj.context.setPendingException(
-                                        propertyAccessContext.getPendingException());
+                                receiverObj.context.setPendingException(propertyAccessContext.getPendingException());
                                 propertyAccessContext.clearPendingException();
                             }
                             return result != null ? result : propertyAccessContext.getPendingException();
@@ -1361,13 +1304,14 @@ public non-sealed class JSObject implements JSValue {
                         return result;
                     } catch (JSVirtualMachineException e) {
                         // Getter threw - convert to pending exception so callers can handle it
-                        JSValue exception = e.getJsError() != null ? e.getJsError()
-                                : e.getJsValue() != null ? e.getJsValue()
-                                : propertyAccessContext.throwError(e.getMessage());
+                        JSValue exception = e.getJsError() != null
+                                ? e.getJsError()
+                                : e.getJsValue() != null
+                                        ? e.getJsValue()
+                                        : propertyAccessContext.throwError(e.getMessage());
                         propertyAccessContext.setPendingException(exception);
                         // Cross-realm: propagate exception to receiver's context
-                        if (receiver instanceof JSObject receiverObj
-                                && receiverObj.context != null
+                        if (receiver instanceof JSObject receiverObj && receiverObj.context != null
                                 && receiverObj.context != propertyAccessContext) {
                             receiverObj.context.setPendingException(exception);
                             propertyAccessContext.clearPendingException();
@@ -1387,8 +1331,7 @@ public non-sealed class JSObject implements JSValue {
         // Legacy SpiderMonkey-style function.caller/arguments extension.
         // Function.prototype itself exposes %ThrowTypeError% accessors, but regular
         // non-strict functions still report dynamic caller/arguments information.
-        if (key.isString()
-                && this instanceof JSFunction currentFunction
+        if (key.isString() && this instanceof JSFunction currentFunction
                 && isLegacyFunctionPropertyAccessible(currentFunction)) {
             String propertyName = key.asString();
             if (JSKeyword.ARGUMENTS.equals(propertyName)) {
@@ -1399,7 +1342,8 @@ public non-sealed class JSObject implements JSValue {
                 }
                 JSArguments argumentsObject = currentFunctionFrame.getArgumentsObject(false);
                 if (argumentsObject == null) {
-                    argumentsObject = new JSArguments(propertyAccessContext, currentFunctionFrame.getArguments(), true, null);
+                    argumentsObject = new JSArguments(propertyAccessContext, currentFunctionFrame.getArguments(), true,
+                            null);
                     propertyAccessContext.transferPrototype(argumentsObject, JSObject.NAME);
                     currentFunctionFrame.setArgumentsObject(false, argumentsObject);
                 }
@@ -1430,8 +1374,8 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Record that the realm prototype has been transferred onto this constant object.
-     * For internal use only - not accessible from JavaScript.
+     * Record that the realm prototype has been transferred onto this constant object. For internal use only - not
+     * accessible from JavaScript.
      *
      * @return true when this call performed the transition, false when it was already set
      */
@@ -1455,16 +1399,14 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Prevent new properties from being added to this object.
-     * ES5.1 15.2.3.10
+     * Prevent new properties from being added to this object. ES5.1 15.2.3.10
      */
     public void preventExtensions() {
         extensible = false;
     }
 
     /**
-     * Attempt to prevent extensions and report success.
-     * Ordinary objects always succeed.
+     * Attempt to prevent extensions and report success. Ordinary objects always succeed.
      */
     public boolean preventExtensionsWithResult() {
         preventExtensions();
@@ -1474,10 +1416,11 @@ public non-sealed class JSObject implements JSValue {
     /**
      * Read an own property out of this object's physical storage, with no virtual dispatch.
      * <p>
-     * Private on purpose: a {@code private} call cannot be overridden, so it is the only property
-     * read in the engine that provably runs no script.
+     * Private on purpose: a {@code private} call cannot be overridden, so it is the only property read in the engine
+     * that provably runs no script.
      *
-     * @param key the property key
+     * @param key
+     *            the property key
      * @return the stored descriptor, or {@code null} when the key is not in physical storage
      */
     private PropertyDescriptor readOwnPropertyFromStorage(PropertyKey key) {
@@ -1512,11 +1455,10 @@ public non-sealed class JSObject implements JSValue {
     /**
      * Drop every own property and the prototype link, ignoring configurability and extensibility.
      * <p>
-     * Not a JavaScript operation and not reachable from script: this exists so
-     * {@link JSContext#close()} can release the realm's global object, whose bindings are mostly
-     * non-configurable and so cannot be removed through {@code delete}. An embedder that still
-     * holds the global object of a closed context holds an empty object rather than the whole
-     * realm graph.
+     * Not a JavaScript operation and not reachable from script: this exists so {@link JSContext#close()} can release
+     * the realm's global object, whose bindings are mostly non-configurable and so cannot be removed through
+     * {@code delete}. An embedder that still holds the global object of a closed context holds an empty object rather
+     * than the whole realm graph.
      */
     void releaseProperties() {
         shape = new JSShape();
@@ -1526,9 +1468,8 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Seal this object.
-     * Prevents adding new properties and deleting existing properties.
-     * Existing properties can still be modified.
+     * Seal this object. Prevents adding new properties and deleting existing properties. Existing properties can still
+     * be modified.
      */
     public void seal() {
         sealed = true;
@@ -1536,26 +1477,20 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Set a property value by string name.
-     */
-    public void set(String propertyName, JSValue value) {
-        set(PropertyKey.fromString(propertyName), value);
-    }
-
-    /**
      * Set a property value by integer index.
      * <p>
-     * This goes through the ordinary {@code [[Set]]} path. An earlier fast path wrote indices
-     * {@code >= 100} straight into sparse backing storage, checking nothing — not
-     * {@code extensible}, not frozen or sealed, not an existing descriptor's {@code writable}, not
-     * an accessor's setter, not the prototype chain. A frozen object could therefore be given a new
-     * property and would then report {@code Object.isFrozen(o) === false} from JavaScript.
+     * This goes through the ordinary {@code [[Set]]} path. An earlier fast path wrote indices {@code >= 100} straight
+     * into sparse backing storage, checking nothing — not {@code extensible}, not frozen or sealed, not an existing
+     * descriptor's {@code writable}, not an accessor's setter, not the prototype chain. A frozen object could therefore
+     * be given a new property and would then report {@code Object.isFrozen(o) === false} from JavaScript.
      * <p>
-     * {@link JSArray#set(int, JSValue)} overrides this with a dense-storage fast path that does
-     * perform those checks, so indexed writes to arrays are unaffected.
+     * {@link JSArray#set(int, JSValue)} overrides this with a dense-storage fast path that does perform those checks,
+     * so indexed writes to arrays are unaffected.
      *
-     * @param index the array index
-     * @param value the value to set
+     * @param index
+     *            the array index
+     * @param value
+     *            the value to set
      */
     public void set(int index, JSValue value) {
         set(PropertyKey.fromIndex(index), value);
@@ -1569,14 +1504,18 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Set the constructor type internal slot.
-     * This is for internal use only - not accessible from JavaScript.
+     * Set a property value by string name.
+     */
+    public void set(String propertyName, JSValue value) {
+        set(PropertyKey.fromString(propertyName), value);
+    }
+
+    /**
+     * Set the constructor type internal slot. This is for internal use only - not accessible from JavaScript.
      */
     public void setConstructorType(JSConstructorType type) {
         constructorType = type;
     }
-
-    // Prototype chain
 
     /**
      * Set the [IsHTMLDDA] internal slot.
@@ -1585,17 +1524,15 @@ public non-sealed class JSObject implements JSValue {
         this.htmlDDA = htmlDDA;
     }
 
+    // Prototype chain
+
     /**
-     * Mark this object as an immutable prototype exotic object.
-     * Per ES2024 9.4.7, [[SetPrototypeOf]] always returns false unless
-     * the new prototype is the same as the current one.
-     * Used for Object.prototype.
+     * Mark this object as an immutable prototype exotic object. Per ES2024 9.4.7, [[SetPrototypeOf]] always returns
+     * false unless the new prototype is the same as the current one. Used for Object.prototype.
      */
     public void setImmutablePrototype() {
         immutablePrototype = true;
     }
-
-    // Object integrity levels (ES5)
 
     private boolean setInternal(PropertyKey key, JSValue value, JSObject receiver, boolean throwOnFailure) {
         // Check if property already exists
@@ -1674,6 +1611,8 @@ public non-sealed class JSObject implements JSValue {
         return setOnReceiver(key, value, receiver, throwOnFailure);
     }
 
+    // Object integrity levels (ES5)
+
     private boolean setOnReceiver(PropertyKey key, JSValue value, JSObject receiver, boolean throwOnFailure) {
         if (receiver instanceof JSImportNamespaceObject || receiver instanceof JSDeferredModuleNamespace) {
             return failSet(key, throwOnFailure);
@@ -1727,17 +1666,15 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Set the [[PrimitiveValue]] internal slot.
-     * This is for internal use only - not accessible from JavaScript.
+     * Set the [[PrimitiveValue]] internal slot. This is for internal use only - not accessible from JavaScript.
      */
     public void setPrimitiveValue(JSValue value) {
         this.primitiveValue = value;
     }
 
     /**
-     * Directly set a private field value on this object, bypassing ordinary [[Set]]
-     * extensibility/frozen checks. Private elements are internal slots and are not
-     * affected by Object.freeze()/Object.seal().
+     * Directly set a private field value on this object, bypassing ordinary [[Set]] extensibility/frozen checks.
+     * Private elements are internal slots and are not affected by Object.freeze()/Object.seal().
      */
     public void setPrivatePropertyDirect(PropertyKey key, JSValue value) {
         int offset = getOwnPropertyOffset(key);
@@ -1767,10 +1704,11 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Set the prototype following ES spec invariants (QuickJS JS_SetPrototypeInternal).
-     * Checks: same prototype (no-op), extensibility, and circular chain.
+     * Set the prototype following ES spec invariants (QuickJS JS_SetPrototypeInternal). Checks: same prototype (no-op),
+     * extensibility, and circular chain.
      *
-     * @param proto The new prototype (null for Object.prototype = null)
+     * @param proto
+     *            The new prototype (null for Object.prototype = null)
      * @return SetPrototypeResult indicating success or failure reason
      */
     public SetPrototypeResult setPrototypeChecked(JSObject proto) {
@@ -1857,10 +1795,9 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Set with result, accepting any JSValue as receiver.
-     * Per ES spec, [[Set]](P, V, Receiver) accepts any ECMAScript language value as Receiver.
-     * When receiver is not an object, OrdinarySet returns false (cannot create properties on non-objects).
-     * Subclasses (e.g. TypedArray) may override for spec-specific behavior.
+     * Set with result, accepting any JSValue as receiver. Per ES spec, [[Set]](P, V, Receiver) accepts any ECMAScript
+     * language value as Receiver. When receiver is not an object, OrdinarySet returns false (cannot create properties
+     * on non-objects). Subclasses (e.g. TypedArray) may override for spec-specific behavior.
      */
     public boolean setWithResult(PropertyKey key, JSValue value, JSValue receiver) {
         if (receiver instanceof JSObject objReceiver) {
@@ -1884,8 +1821,7 @@ public non-sealed class JSObject implements JSValue {
                 return true;
             } else {
                 String importMetaFilename = bytecodeFunction.getImportMetaFilename();
-                return importMetaFilename != null
-                        && !importMetaFilename.isEmpty()
+                return importMetaFilename != null && !importMetaFilename.isEmpty()
                         && importMetaFilename.equals(functionName);
             }
         }
@@ -1898,8 +1834,7 @@ public non-sealed class JSObject implements JSValue {
         // Get all own property keys in order (shaped properties first, then sparse)
         List<PropertyKey> keys = getOwnPropertyKeys();
         for (PropertyKey key : keys) {
-            Optional.of(get(key))
-                    .map(JSValue::toJavaObject)
+            Optional.of(get(key)).map(JSValue::toJavaObject)
                     .ifPresent(valueObject -> objMap.put(key.toPropertyString(), valueObject));
         }
         return objMap;
@@ -1910,18 +1845,18 @@ public non-sealed class JSObject implements JSValue {
         return "[object Object]";
     }
 
-    // JSValue implementation
-
     @Override
     public JSValueType type() {
         return JSValueType.OBJECT;
     }
 
+    // JSValue implementation
+
     /**
      * Whether this object's {@code toString} is still the realm's {@code Object.prototype.toString}.
      * <p>
-     * Read as a data property along the prototype chain, so no accessor or Proxy trap runs: this is
-     * called while an error is already being constructed.
+     * Read as a data property along the prototype chain, so no accessor or Proxy trap runs: this is called while an
+     * error is already being constructed.
      *
      * @return true when nothing on the chain replaced {@code Object.prototype.toString}
      */
@@ -1942,7 +1877,8 @@ public non-sealed class JSObject implements JSValue {
     /**
      * The weak-collection entries naming this object as their key.
      *
-     * @param create true to create the table when absent
+     * @param create
+     *            true to create the table when absent
      * @return the table, or {@code null} when absent and {@code create} is false
      * @see JSWeakEntryTable
      */
@@ -1953,9 +1889,46 @@ public non-sealed class JSObject implements JSValue {
         return weakEntryTable;
     }
 
+    private static boolean sameValue(JSValue x, JSValue y) {
+        if (x == y) {
+            return true;
+        }
+        if (x == null || y == null) {
+            return false;
+        }
+
+        // SameValue compares by ECMAScript type first (not Java class).
+        JSValueType xType = x.type();
+        JSValueType yType = y.type();
+        if (xType != yType) {
+            return false;
+        }
+
+        return switch (xType) {
+            case UNDEFINED, NULL -> true;
+            case NUMBER -> {
+                if (!(x instanceof JSNumber xNum) || !(y instanceof JSNumber yNum)) {
+                    yield false;
+                }
+                double xVal = xNum.value();
+                double yVal = yNum.value();
+                if (Double.isNaN(xVal) && Double.isNaN(yVal)) {
+                    yield true;
+                }
+                yield Double.doubleToRawLongBits(xVal) == Double.doubleToRawLongBits(yVal);
+            }
+            case STRING ->
+                (x instanceof JSString xStr && y instanceof JSString yStr) && xStr.value().equals(yStr.value());
+            case BOOLEAN ->
+                (x instanceof JSBoolean xBool && y instanceof JSBoolean yBool) && xBool.value() == yBool.value();
+            case BIGINT -> (x instanceof JSBigInt xBigInt && y instanceof JSBigInt yBigInt)
+                    && xBigInt.value().equals(yBigInt.value());
+            // Symbol, Object, and Function types are same-value only by identity.
+            case SYMBOL, OBJECT, FUNCTION -> false;
+        };
+    }
+
     public enum SetPrototypeResult {
-        SUCCESS,
-        NOT_EXTENSIBLE,
-        CIRCULAR
+        CIRCULAR, NOT_EXTENSIBLE, SUCCESS
     }
 }

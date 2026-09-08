@@ -31,14 +31,8 @@ public final class FunctionExpression extends Expression {
     private final boolean isGenerator;
     private final boolean needsArguments;
 
-    public FunctionExpression(
-            Identifier id,
-            FunctionParams functionParams,
-            BlockStatement body,
-            boolean isAsync,
-            boolean isGenerator,
-            boolean needsArguments,
-            SourceLocation location) {
+    public FunctionExpression(Identifier id, FunctionParams functionParams, BlockStatement body, boolean isAsync,
+            boolean isGenerator, boolean needsArguments, SourceLocation location) {
         super(location);
         this.id = id;
         this.functionParams = functionParams;

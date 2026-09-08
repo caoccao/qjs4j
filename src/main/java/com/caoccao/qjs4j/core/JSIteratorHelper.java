@@ -17,17 +17,18 @@
 package com.caoccao.qjs4j.core;
 
 /**
- * Helper utilities for working with iterators and the iteration protocols.
- * Provides support for for...of loops and other iteration patterns.
+ * Helper utilities for working with iterators and the iteration protocols. Provides support for for...of loops and
+ * other iteration patterns.
  */
 public final class JSIteratorHelper {
 
     /**
-     * IteratorClose (ES2024 7.4.6).
-     * Calls the iterator's return() method if it exists to signal early termination.
+     * IteratorClose (ES2024 7.4.6). Calls the iterator's return() method if it exists to signal early termination.
      *
-     * @param context  The execution context
-     * @param iterator The iterator to close
+     * @param context
+     *            The execution context
+     * @param iterator
+     *            The iterator to close
      */
     public static void closeIterator(JSContext context, JSValue iterator) {
         if (!(iterator instanceof JSObject iteratorObj)) {
@@ -40,12 +41,14 @@ public final class JSIteratorHelper {
     }
 
     /**
-     * Execute a for...of loop over an iterable.
-     * This is a helper for bytecode that implements for...of loops.
+     * Execute a for...of loop over an iterable. This is a helper for bytecode that implements for...of loops.
      *
-     * @param context  The execution context
-     * @param iterable The iterable to loop over
-     * @param callback Function to call for each value
+     * @param context
+     *            The execution context
+     * @param iterable
+     *            The iterable to loop over
+     * @param callback
+     *            Function to call for each value
      */
     public static void forOf(JSContext context, JSValue iterable, IterationCallback callback) {
         // Get the iterator
@@ -105,11 +108,12 @@ public final class JSIteratorHelper {
     }
 
     /**
-     * Get an iterator from an iterable object.
-     * Calls the object's [Symbol.iterator] method to get an iterator.
+     * Get an iterator from an iterable object. Calls the object's [Symbol.iterator] method to get an iterator.
      *
-     * @param context  The execution context
-     * @param iterable The iterable object
+     * @param context
+     *            The execution context
+     * @param iterable
+     *            The iterable object
      * @return An iterator, or null if the object is not iterable
      */
     public static JSValue getIterator(JSContext context, JSValue iterable) {
@@ -171,7 +175,8 @@ public final class JSIteratorHelper {
     /**
      * Check if a value is iterable (has Symbol.iterator).
      *
-     * @param value The value to check
+     * @param value
+     *            The value to check
      * @return true if iterable, false otherwise
      */
     public static boolean isIterable(JSValue value) {
@@ -189,12 +194,13 @@ public final class JSIteratorHelper {
     }
 
     /**
-     * IterableToList ( items ) — ES2024 7.4.7
-     * Strictly follows the spec: calls GetIterator, then repeatedly calls
+     * IterableToList ( items ) — ES2024 7.4.7 Strictly follows the spec: calls GetIterator, then repeatedly calls
      * IteratorStep/IteratorValue, propagating abrupt completions at every step.
      *
-     * @param context The execution context
-     * @param items   The iterable value
+     * @param context
+     *            The execution context
+     * @param items
+     *            The iterable value
      * @return A JSArray of the iterated values, or null if an exception was set
      */
     public static JSArray iterableToList(JSContext context, JSValue items) {
@@ -284,8 +290,10 @@ public final class JSIteratorHelper {
     /**
      * Call next() on an iterator and return the result.
      *
-     * @param iterator The iterator object
-     * @param context  The execution context
+     * @param iterator
+     *            The iterator object
+     * @param context
+     *            The execution context
      * @return The iterator result object with {value, done}
      */
     public static JSObject iteratorNext(JSValue iterator, JSContext context) {
@@ -327,28 +335,12 @@ public final class JSIteratorHelper {
     }
 
     /**
-     * Convert an iterable to an array.
-     *
-     * @param iterable The iterable to convert
-     * @param context  The execution context
-     * @return A JSArray containing all values from the iterable
-     */
-    public static JSArray toArray(JSContext context, JSValue iterable) {
-        JSArray result = context.createJSArray();
-
-        forOf(context, iterable, (value) -> {
-            result.push(value);
-            return true;
-        });
-
-        return result;
-    }
-
-    /**
      * Convert a JSIterator to an array.
      *
-     * @param context  the context
-     * @param iterator The iterator to convert
+     * @param context
+     *            the context
+     * @param iterator
+     *            The iterator to convert
      * @return A JSArray containing all values from the iterator
      */
     public static JSArray toArray(JSContext context, JSIterator iterator) {
@@ -367,6 +359,26 @@ public final class JSIteratorHelper {
     }
 
     /**
+     * Convert an iterable to an array.
+     *
+     * @param iterable
+     *            The iterable to convert
+     * @param context
+     *            The execution context
+     * @return A JSArray containing all values from the iterable
+     */
+    public static JSArray toArray(JSContext context, JSValue iterable) {
+        JSArray result = context.createJSArray();
+
+        forOf(context, iterable, (value) -> {
+            result.push(value);
+            return true;
+        });
+
+        return result;
+    }
+
+    /**
      * Functional interface for iteration callbacks.
      */
     @FunctionalInterface
@@ -374,7 +386,8 @@ public final class JSIteratorHelper {
         /**
          * Called for each iterated value.
          *
-         * @param value The current value
+         * @param value
+         *            The current value
          * @return true to continue iteration, false to break
          */
         boolean iterate(JSValue value);

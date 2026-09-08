@@ -21,14 +21,12 @@ import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.core.JSWeakRef;
 
 /**
- * Implementation of WeakRef.prototype methods.
- * Based on ES2021 WeakRef specification.
+ * Implementation of WeakRef.prototype methods. Based on ES2021 WeakRef specification.
  */
 public final class WeakRefPrototype {
 
     /**
-     * WeakRef.prototype.deref()
-     * ES2021 25.1.3.2
+     * WeakRef.prototype.deref() ES2021 25.1.3.2
      */
     public static JSValue deref(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSWeakRef weakRef)) {

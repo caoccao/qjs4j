@@ -19,8 +19,7 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 /**
- * Implementation of RegExp constructor and static methods.
- * Based on ES2024 RegExp specification.
+ * Implementation of RegExp constructor and static methods. Based on ES2024 RegExp specification.
  */
 public final class RegExpConstructor {
     private static final String OTHER_PUNCTUATORS = ",-=<>#&!%:;@~'`\"";
@@ -32,25 +31,25 @@ public final class RegExpConstructor {
             return;
         }
         switch (codeUnit) {
-            case '\t':
+            case '\t' :
                 escapedBuilder.append("\\t");
                 return;
-            case '\n':
+            case '\n' :
                 escapedBuilder.append("\\n");
                 return;
-            case 0x0B:
+            case 0x0B :
                 escapedBuilder.append("\\v");
                 return;
-            case '\f':
+            case '\f' :
                 escapedBuilder.append("\\f");
                 return;
-            case '\r':
+            case '\r' :
                 escapedBuilder.append("\\r");
                 return;
-            case ' ':
+            case ' ' :
                 escapedBuilder.append("\\x20");
                 return;
-            default:
+            default :
                 break;
         }
 
@@ -92,11 +91,9 @@ public final class RegExpConstructor {
     /**
      * RegExp called as a function (without new).
      * <p>
-     * ES2024 22.2.3.1 RegExp(pattern, flags)
-     * When called as a function (new.target is undefined):
-     * - If pattern is regexp-like and flags is undefined, and pattern.constructor === RegExp,
-     * return pattern unchanged.
-     * - Otherwise, delegate to the constructor path.
+     * ES2024 22.2.3.1 RegExp(pattern, flags) When called as a function (new.target is undefined): - If pattern is
+     * regexp-like and flags is undefined, and pattern.constructor === RegExp, return pattern unchanged. - Otherwise,
+     * delegate to the constructor path.
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue patternArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -130,8 +127,7 @@ public final class RegExpConstructor {
     }
 
     /**
-     * RegExp.escape(string)
-     * ES2024 22.2.5 RegExp.escape
+     * RegExp.escape(string) ES2024 22.2.5 RegExp.escape
      */
     public static JSValue escape(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue stringValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -176,9 +172,7 @@ public final class RegExpConstructor {
     }
 
     /**
-     * get RegExp[@@species]
-     * ES2024 22.2.4.2
-     * Returns the this value.
+     * get RegExp[@@species] ES2024 22.2.4.2 Returns the this value.
      */
     public static JSValue getSpecies(JSContext context, JSValue thisArg, JSValue[] args) {
         return thisArg;
@@ -198,16 +192,16 @@ public final class RegExpConstructor {
         if (value == '\n' || value == '\r' || value == '\t' || value == '\f' || value == 0x0B || value == ' ') {
             return true;
         }
-        if (value == 0x00A0 || value == 0x1680 || value == 0x2028 || value == 0x2029
-                || value == 0x202F || value == 0x205F || value == 0x3000 || value == 0xFEFF) {
+        if (value == 0x00A0 || value == 0x1680 || value == 0x2028 || value == 0x2029 || value == 0x202F
+                || value == 0x205F || value == 0x3000 || value == 0xFEFF) {
             return true;
         }
         return value >= 0x2000 && value <= 0x200A;
     }
 
     /**
-     * Check if a value is regexp-like per ES2024 IsRegExp.
-     * Checks Symbol.match first, then falls back to instanceof JSRegExp.
+     * Check if a value is regexp-like per ES2024 IsRegExp. Checks Symbol.match first, then falls back to instanceof
+     * JSRegExp.
      */
     private static boolean isRegExp(JSContext context, JSValue value) {
         if (!(value instanceof JSObject obj)) {

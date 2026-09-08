@@ -21,8 +21,7 @@ import com.caoccao.qjs4j.core.*;
 import java.util.function.BiFunction;
 
 /**
- * Implementation of DataView.prototype methods.
- * Based on QuickJS DataView semantics.
+ * Implementation of DataView.prototype methods. Based on QuickJS DataView semantics.
  */
 public final class DataViewPrototype {
     private DataViewPrototype() {
@@ -70,7 +69,8 @@ public final class DataViewPrototype {
      * get DataView.prototype.byteLength
      */
     public static JSValue getByteLength(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "get DataView.prototype.byteLength called on non-DataView");
+        JSDataView dataView = requireDataView(context, thisArg,
+                "get DataView.prototype.byteLength called on non-DataView");
         if (dataView == null) {
             return context.getPendingException();
         }
@@ -84,7 +84,8 @@ public final class DataViewPrototype {
      * get DataView.prototype.byteOffset
      */
     public static JSValue getByteOffset(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "get DataView.prototype.byteOffset called on non-DataView");
+        JSDataView dataView = requireDataView(context, thisArg,
+                "get DataView.prototype.byteOffset called on non-DataView");
         if (dataView == null) {
             return context.getPendingException();
         }
@@ -148,9 +149,8 @@ public final class DataViewPrototype {
     /**
      * GetViewValue: validate the receiver, convert the offset, then check the current buffer state.
      */
-    private static JSValue getValue(
-            JSContext context, JSValue thisArg, JSValue[] args, String receiverError,
-            int size, DataViewReader reader) {
+    private static JSValue getValue(JSContext context, JSValue thisArg, JSValue[] args, String receiverError, int size,
+            DataViewReader reader) {
         JSDataView dataView = requireDataView(context, thisArg, receiverError);
         if (dataView == null) {
             return context.getPendingException();
@@ -159,8 +159,7 @@ public final class DataViewPrototype {
         if (byteOffset == null) {
             return context.getPendingException();
         }
-        boolean littleEndian = size > 1 && args.length > 1
-                && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
+        boolean littleEndian = size > 1 && args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
         JSValue error = checkAccess(context, dataView, byteOffset, size);
         if (error != null) {
             return error;
@@ -223,8 +222,8 @@ public final class DataViewPrototype {
 
     public static JSValue setInt32(JSContext context, JSValue thisArg, JSValue[] args) {
         return setValue(context, thisArg, args, "DataView.prototype.setInt32 called on non-DataView", 4,
-                DataViewPrototype::toUint32,
-                (view, offset, value, littleEndian) -> view.setInt32(offset, (int) (value & 0xFFFFFFFFL), littleEndian));
+                DataViewPrototype::toUint32, (view, offset, value, littleEndian) -> view.setInt32(offset,
+                        (int) (value & 0xFFFFFFFFL), littleEndian));
     }
 
     public static JSValue setInt8(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -252,12 +251,11 @@ public final class DataViewPrototype {
     }
 
     /**
-     * SetViewValue: offset and value conversion precede buffer bounds checks, since either
-     * conversion can resize or detach the buffer. The writer receives the converted value.
+     * SetViewValue: offset and value conversion precede buffer bounds checks, since either conversion can resize or
+     * detach the buffer. The writer receives the converted value.
      */
-    private static <T> JSValue setValue(
-            JSContext context, JSValue thisArg, JSValue[] args, String receiverError, int size,
-            BiFunction<JSContext, JSValue, T> converter, DataViewWriter<T> writer) {
+    private static <T> JSValue setValue(JSContext context, JSValue thisArg, JSValue[] args, String receiverError,
+            int size, BiFunction<JSContext, JSValue, T> converter, DataViewWriter<T> writer) {
         JSDataView dataView = requireDataView(context, thisArg, receiverError);
         if (dataView == null) {
             return context.getPendingException();
@@ -273,8 +271,7 @@ public final class DataViewPrototype {
         if (value == null || context.hasPendingException()) {
             return context.getPendingException();
         }
-        boolean littleEndian = size > 1 && args.length > 2
-                && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
+        boolean littleEndian = size > 1 && args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
         JSValue error = checkAccess(context, dataView, byteOffset, size);
         if (error != null) {
             return error;
@@ -297,7 +294,8 @@ public final class DataViewPrototype {
             return parseBigInt(context, stringValue.value());
         }
         if (value instanceof JSObject objectValue) {
-            JSValue primitive = JSTypeConversions.toPrimitive(context, objectValue, JSTypeConversions.PreferredType.NUMBER);
+            JSValue primitive = JSTypeConversions.toPrimitive(context, objectValue,
+                    JSTypeConversions.PreferredType.NUMBER);
             if (context.hasPendingException()) {
                 return null;
             }

@@ -35,8 +35,7 @@ public record JSNumber(double value) implements JSValue {
     }
 
     /**
-     * Returns a JSNumber for the given double value.
-     * Uses a cache for small integer values to reduce allocation.
+     * Returns a JSNumber for the given double value. Uses a cache for small integer values to reduce allocation.
      */
     public static JSNumber of(double value) {
         int intVal = (int) value;
@@ -51,8 +50,7 @@ public record JSNumber(double value) implements JSValue {
     }
 
     /**
-     * Returns a JSNumber for the given int value.
-     * Uses a cache for small integer values to reduce allocation.
+     * Returns a JSNumber for the given int value. Uses a cache for small integer values to reduce allocation.
      */
     public static JSNumber of(int value) {
         if (value >= CACHE_LOW && value <= CACHE_HIGH) {
@@ -62,8 +60,7 @@ public record JSNumber(double value) implements JSValue {
     }
 
     /**
-     * Returns a JSNumber for the given long value.
-     * Uses a cache for small integer values to reduce allocation.
+     * Returns a JSNumber for the given long value. Uses a cache for small integer values to reduce allocation.
      */
     public static JSNumber of(long value) {
         if (value >= CACHE_LOW && value <= CACHE_HIGH) {

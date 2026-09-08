@@ -28,8 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class GeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testBasicYield() {
-        assertIntegerWithJavet(
-                "function* gen() { yield 1; yield 2; yield 3; } var g = gen(); g.next().value");
+        assertIntegerWithJavet("function* gen() { yield 1; yield 2; yield 3; } var g = gen(); g.next().value");
     }
 
     @Test
@@ -50,12 +49,14 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         // Test the custom generator
         JSValue result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
         JSObject iteratorResult = result.asObject().orElseThrow();
-        assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("first"));
+        assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSString.class,
+                str -> assertThat(str.value()).isEqualTo("first"));
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
 
         result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
         iteratorResult = result.asObject().orElseThrow();
-        assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("second"));
+        assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSString.class,
+                str -> assertThat(str.value()).isEqualTo("second"));
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
 
         result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
@@ -66,8 +67,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testDoneAfterCompletion() {
-        assertBooleanWithJavet(
-                "function* gen() { yield 1; } var g = gen(); g.next(); g.next().done === true");
+        assertBooleanWithJavet("function* gen() { yield 1; } var g = gen(); g.next(); g.next().done === true");
     }
 
     @Test
@@ -86,20 +86,19 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         JSGenerator generator2 = JSGenerator.fromArray(context, emptyArray);
         result = GeneratorPrototype.returnMethod(context, generator2, new JSValue[]{new JSString("done")});
         iteratorResult = result.asObject().orElseThrow();
-        assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("done"));
+        assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSString.class,
+                str -> assertThat(str.value()).isEqualTo("done"));
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
     }
 
     @Test
     public void testEmptyGeneratorEval() {
-        assertBooleanWithJavet(
-                "function* gen() {} var g = gen(); g.next().done === true");
+        assertBooleanWithJavet("function* gen() {} var g = gen(); g.next().done === true");
     }
 
     @Test
     public void testEmptyGeneratorValueIsUndefined() {
-        assertBooleanWithJavet(
-                "function* gen() {} var g = gen(); g.next().value === undefined");
+        assertBooleanWithJavet("function* gen() {} var g = gen(); g.next().value === undefined");
     }
 
     @Test
@@ -110,8 +109,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testGeneratorIsIterable() {
-        assertBooleanWithJavet(
-                "function* gen() { yield 1; } var g = gen(); g[Symbol.iterator]() === g");
+        assertBooleanWithJavet("function* gen() { yield 1; } var g = gen(); g[Symbol.iterator]() === g");
     }
 
     @Test
@@ -122,8 +120,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testGeneratorWithReturn() {
-        assertIntegerWithJavet(
-                "function* gen() { yield 1; return 99; } var g = gen(); g.next(); g.next().value");
+        assertIntegerWithJavet("function* gen() { yield 1; return 99; } var g = gen(); g.next(); g.next().value");
     }
 
     @Test
@@ -144,19 +141,22 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         // Normal case: first next() call
         JSValue result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
         JSObject iteratorResult = result.asObject().orElseThrow();
-        assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(1.0));
+        assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSNumber.class,
+                num -> assertThat(num.value()).isEqualTo(1.0));
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: second next() call
         result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
         iteratorResult = result.asObject().orElseThrow();
-        assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(2.0));
+        assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSNumber.class,
+                num -> assertThat(num.value()).isEqualTo(2.0));
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: third next() call
         result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
         iteratorResult = result.asObject().orElseThrow();
-        assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(3.0));
+        assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSNumber.class,
+                num -> assertThat(num.value()).isEqualTo(3.0));
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: fourth next() call (done)
@@ -180,16 +180,16 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         // Edge case: called on non-generator
         result = GeneratorPrototype.next(context, new JSString("not a generator"), JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
-            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
-                    assertThat(name.value()).isEqualTo("TypeError"));
+            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class,
+                    name -> assertThat(name.value()).isEqualTo("TypeError"));
         });
         assertThat(context.getPendingException()).isNotNull();
 
         // Edge case: called on null
         result = GeneratorPrototype.next(context, JSNull.INSTANCE, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
-            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
-                    assertThat(name.value()).isEqualTo("TypeError"));
+            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class,
+                    name -> assertThat(name.value()).isEqualTo("TypeError"));
         });
         assertThat(context.getPendingException()).isNotNull();
     }
@@ -202,8 +202,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testNextValueUndefinedWhenDone() {
-        assertBooleanWithJavet(
-                "function* gen() { yield 1; } var g = gen(); g.next(); g.next().value === undefined");
+        assertBooleanWithJavet("function* gen() { yield 1; } var g = gen(); g.next(); g.next().value === undefined");
     }
 
     @Test
@@ -218,7 +217,8 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         // Normal case: return with value
         JSValue result = GeneratorPrototype.returnMethod(context, generator, new JSValue[]{new JSString("returned")});
         JSObject iteratorResult = result.asObject().orElseThrow();
-        assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("returned"));
+        assertThat(iteratorResult.get("value")).isInstanceOfSatisfying(JSString.class,
+                str -> assertThat(str.value()).isEqualTo("returned"));
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: subsequent next() calls after return
@@ -238,16 +238,16 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         // Edge case: called on non-generator
         result = GeneratorPrototype.returnMethod(context, new JSObject(context), new JSValue[]{new JSNumber(42)});
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
-            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
-                    assertThat(name.value()).isEqualTo("TypeError"));
+            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class,
+                    name -> assertThat(name.value()).isEqualTo("TypeError"));
         });
         assertThat(context.getPendingException()).isNotNull();
 
         // Edge case: called on undefined
         result = GeneratorPrototype.returnMethod(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42)});
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
-            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
-                    assertThat(name.value()).isEqualTo("TypeError"));
+            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class,
+                    name -> assertThat(name.value()).isEqualTo("TypeError"));
         });
         assertThat(context.getPendingException()).isNotNull();
     }
@@ -260,14 +260,12 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testReturnValue() {
-        assertIntegerWithJavet(
-                "function* gen() { yield 1; yield 2; } var g = gen(); g.next(); g.return(42).value");
+        assertIntegerWithJavet("function* gen() { yield 1; yield 2; } var g = gen(); g.next(); g.return(42).value");
     }
 
     @Test
     public void testReturnWithoutValue() {
-        assertBooleanWithJavet(
-                "function* gen() { yield 1; } var g = gen(); g.return().value === undefined");
+        assertBooleanWithJavet("function* gen() { yield 1; } var g = gen(); g.return().value === undefined");
     }
 
     @Test
@@ -278,8 +276,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testSpreadOperator() {
-        assertIntegerWithJavet(
-                "function* gen() { yield 1; yield 2; yield 3; } var arr = [...gen()]; arr.length");
+        assertIntegerWithJavet("function* gen() { yield 1; yield 2; yield 3; } var arr = [...gen()]; arr.length");
     }
 
     @Test
@@ -291,7 +288,8 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         JSGenerator generator = JSGenerator.fromArray(context, array);
 
         // Normal case: throw with exception
-        JSValue result = GeneratorPrototype.throwMethod(context, generator, new JSValue[]{new JSString("test exception")});
+        JSValue result = GeneratorPrototype.throwMethod(context, generator,
+                new JSValue[]{new JSString("test exception")});
         // In this simplified implementation, throw completes the generator and returns an error
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
             assertThat(error.get("name")).isNotNull();
@@ -311,16 +309,16 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         // Edge case: called on non-generator
         result = GeneratorPrototype.throwMethod(context, new JSNumber(123), new JSValue[]{new JSString("error")});
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
-            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
-                    assertThat(name.value()).isEqualTo("TypeError"));
+            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class,
+                    name -> assertThat(name.value()).isEqualTo("TypeError"));
         });
         assertThat(context.getPendingException()).isNotNull();
 
         // Edge case: called on null
         result = GeneratorPrototype.throwMethod(context, JSNull.INSTANCE, new JSValue[]{new JSString("error")});
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
-            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
-                    assertThat(name.value()).isEqualTo("TypeError"));
+            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class,
+                    name -> assertThat(name.value()).isEqualTo("TypeError"));
         });
         assertThat(context.getPendingException()).isNotNull();
     }
@@ -339,10 +337,9 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testThrowOnSuspendedStartThrowsRawValueAndClosesGenerator() {
-        assertBooleanWithJavet(
-                "function* gen() { yield 1; } var g = gen(); " +
-                        "var ok; try { g.throw('s'); ok = false; } catch (e) { ok = (e === 's'); } " +
-                        "ok && g.next().done === true");
+        assertBooleanWithJavet("function* gen() { yield 1; } var g = gen(); "
+                + "var ok; try { g.throw('s'); ok = false; } catch (e) { ok = (e === 's'); } "
+                + "ok && g.next().done === true");
     }
 
     @Test
@@ -380,26 +377,27 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testThrowWithCustomErrorAndFinallyYield() {
-        assertStringWithJavet("""
-                function Test262Error(msg) { this.message = msg || ''; }
-                Test262Error.prototype = Object.create(Error.prototype);
-                function* g() {
-                  yield 1;
-                  try {
-                    yield 2;
-                  } finally {
-                    yield 3;
-                  }
-                  yield 4;
-                }
-                var iter = g();
-                var results = [];
-                results.push(JSON.stringify(iter.next()));
-                results.push(JSON.stringify(iter.next()));
-                results.push(JSON.stringify(iter.throw(new Test262Error('hello'))));
-                try { iter.next(); results.push('NO_THROW'); } catch(e) { results.push('THREW:' + (e instanceof Test262Error)); }
-                results.push(JSON.stringify(iter.next()));
-                results.join('|')""");
+        assertStringWithJavet(
+                """
+                        function Test262Error(msg) { this.message = msg || ''; }
+                        Test262Error.prototype = Object.create(Error.prototype);
+                        function* g() {
+                          yield 1;
+                          try {
+                            yield 2;
+                          } finally {
+                            yield 3;
+                          }
+                          yield 4;
+                        }
+                        var iter = g();
+                        var results = [];
+                        results.push(JSON.stringify(iter.next()));
+                        results.push(JSON.stringify(iter.next()));
+                        results.push(JSON.stringify(iter.throw(new Test262Error('hello'))));
+                        try { iter.next(); results.push('NO_THROW'); } catch(e) { results.push('THREW:' + (e instanceof Test262Error)); }
+                        results.push(JSON.stringify(iter.next()));
+                        results.join('|')""");
     }
 
     @Test
@@ -426,8 +424,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testYieldExpression() {
-        assertIntegerWithJavet(
-                "function* gen() { var x = yield 1; yield x + 10; } var g = gen(); g.next().value");
+        assertIntegerWithJavet("function* gen() { var x = yield 1; yield x + 10; } var g = gen(); g.next().value");
     }
 
     @Test
@@ -438,15 +435,14 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testYieldStarDelegatedIteratorMissingReturnMethodDoesNotAffectNext() {
-        assertStringWithJavet(
-                """
-                        var IsHTMLDDA = {}.IsHTMLDDA;
-                        var iter = {
-                          [Symbol.iterator]() { return this; },
-                          next() { return { a: 1 }; },
-                          return: IsHTMLDDA,
-                        };
-                        var outer = (function* () { yield* iter; })();
-                        JSON.stringify(outer.next());""");
+        assertStringWithJavet("""
+                var IsHTMLDDA = {}.IsHTMLDDA;
+                var iter = {
+                  [Symbol.iterator]() { return this; },
+                  next() { return { a: 1 }; },
+                  return: IsHTMLDDA,
+                };
+                var outer = (function* () { yield* iter; })();
+                JSON.stringify(outer.next());""");
     }
 }

@@ -25,12 +25,12 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A negative test carries two claims: the phase the error occurs in, and the constructor it is an
- * instance of. Checking neither is what let a program that parses cleanly and throws at run time
- * pass a parse-phase test, and let {@code throw "SyntaxError"} pass a typed one.
+ * A negative test carries two claims: the phase the error occurs in, and the constructor it is an instance of. Checking
+ * neither is what let a program that parses cleanly and throws at run time pass a parse-phase test, and let
+ * {@code throw "SyntaxError"} pass a typed one.
  * <p>
- * The cases here use the {@code raw} flag so no harness file is read; they run against the engine
- * alone and do not need a Test262 checkout.
+ * The cases here use the {@code raw} flag so no harness file is read; they run against the engine alone and do not need
+ * a Test262 checkout.
  */
 public class Test262ExecutorNegativeTest {
     private final Test262Executor executor = new Test262Executor(new HarnessLoader(Paths.get("../test262")), 500, 5000);
@@ -49,14 +49,13 @@ public class Test262ExecutorNegativeTest {
     @Test
     void testAsyncDoneErrorMatchesOnConstructorNotMessage() {
         // The message names another error class; the constructor is what counts.
-        Test262TestCase misleading = negativeCase(
-                "$DONE(new TypeError('this mentions SyntaxError'));", "runtime", "SyntaxError", "async");
+        Test262TestCase misleading = negativeCase("$DONE(new TypeError('this mentions SyntaxError'));", "runtime",
+                "SyntaxError", "async");
         TestResult misleadingResult = executor.execute(misleading);
         assertThat(misleadingResult.isPassed()).isFalse();
         assertThat(misleadingResult.message()).contains("Expected SyntaxError but got TypeError");
 
-        Test262TestCase matching = negativeCase(
-                "$DONE(new TypeError('boom'));", "runtime", "TypeError", "async");
+        Test262TestCase matching = negativeCase("$DONE(new TypeError('boom'));", "runtime", "TypeError", "async");
         assertThat(executor.execute(matching).isPassed()).isTrue();
     }
 
@@ -70,8 +69,7 @@ public class Test262ExecutorNegativeTest {
 
     @Test
     void testAsyncNegativeRejectsNonRuntimePhase() {
-        Test262TestCase testCase = negativeCase(
-                "$DONE(new SyntaxError('late'));", "parse", "SyntaxError", "async");
+        Test262TestCase testCase = negativeCase("$DONE(new SyntaxError('late'));", "parse", "SyntaxError", "async");
         TestResult result = executor.execute(testCase);
         assertThat(result.isPassed()).isFalse();
     }
@@ -84,8 +82,7 @@ public class Test262ExecutorNegativeTest {
     @Test
     void testParsePhaseRejectsRuntimeThrow() {
         // The exact false pass the review reproduced: a program that parses and throws later.
-        Test262TestCase testCase = negativeCase(
-                "throw new SyntaxError('runtime, not parse');", "parse", "SyntaxError");
+        Test262TestCase testCase = negativeCase("throw new SyntaxError('runtime, not parse');", "parse", "SyntaxError");
         TestResult result = executor.execute(testCase);
         assertThat(result.isPassed()).isFalse();
         assertThat(result.message()).contains("the source compiled successfully");
@@ -101,10 +98,10 @@ public class Test262ExecutorNegativeTest {
 
     @Test
     void testRuntimePhaseAcceptsMatchingConstructor() {
-        assertThat(executor.execute(
-                negativeCase("null.x;", "runtime", "TypeError")).isPassed()).isTrue();
-        assertThat(executor.execute(
-                negativeCase("throw new SyntaxError('boom');", "runtime", "SyntaxError")).isPassed()).isTrue();
+        assertThat(executor.execute(negativeCase("null.x;", "runtime", "TypeError")).isPassed()).isTrue();
+        assertThat(
+                executor.execute(negativeCase("throw new SyntaxError('boom');", "runtime", "SyntaxError")).isPassed())
+                .isTrue();
     }
 
     @Test

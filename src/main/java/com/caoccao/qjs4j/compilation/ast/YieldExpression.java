@@ -17,12 +17,9 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 /**
- * Represents a yield expression in JavaScript.
- * Used in generator functions to produce values.
+ * Represents a yield expression in JavaScript. Used in generator functions to produce values.
  * <p>
- * Examples:
- * yield value;
- * yield* iterable;
+ * Examples: yield value; yield* iterable;
  */
 public final class YieldExpression extends Expression {
     private final Expression argument;

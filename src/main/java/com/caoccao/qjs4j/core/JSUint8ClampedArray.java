@@ -19,20 +19,12 @@ package com.caoccao.qjs4j.core;
 import java.nio.ByteBuffer;
 
 /**
- * Represents a JavaScript Uint8ClampedArray.
- * 8-bit unsigned integer array with clamping (used for canvas pixel data).
+ * Represents a JavaScript Uint8ClampedArray. 8-bit unsigned integer array with clamping (used for canvas pixel data).
  * Values are clamped to [0, 255] range instead of wrapping.
  */
 public final class JSUint8ClampedArray extends JSTypedArray {
     public static final int BYTES_PER_ELEMENT = 1;
     public static final String NAME = "Uint8ClampedArray";
-
-    /**
-     * Create a Uint8ClampedArray with a new buffer.
-     */
-    public JSUint8ClampedArray(JSContext context, int length) {
-        super(context, length, BYTES_PER_ELEMENT);
-    }
 
     /**
      * Create a Uint8ClampedArray view on an existing buffer.
@@ -41,9 +33,11 @@ public final class JSUint8ClampedArray extends JSTypedArray {
         super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 
-    public static JSObject create(JSContext context, JSValue... args) {
-        return createFromArguments(context, BYTES_PER_ELEMENT,
-                context::createJSUint8ClampedArray, context::createJSUint8ClampedArray, args);
+    /**
+     * Create a Uint8ClampedArray with a new buffer.
+     */
+    public JSUint8ClampedArray(JSContext context, int length) {
+        super(context, length, BYTES_PER_ELEMENT);
     }
 
     @Override
@@ -84,5 +78,10 @@ public final class JSUint8ClampedArray extends JSTypedArray {
         ByteBuffer buf = getByteBuffer();
         int clampedValue = JSTypeConversions.toUint8Clamp(value);
         buf.put(index, (byte) clampedValue);
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        return createFromArguments(context, BYTES_PER_ELEMENT, context::createJSUint8ClampedArray,
+                context::createJSUint8ClampedArray, args);
     }
 }

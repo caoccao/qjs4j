@@ -67,13 +67,13 @@ public class ClassParserTest {
                     #private = 1;
                     public = 2;
                     static shared = 3;
-                
+
                     constructor() {}
-                
+
                     #privateMethod() {}
-                
+
                     static staticMethod() {}
-                
+
                     static {
                         console.log('init');
                     }

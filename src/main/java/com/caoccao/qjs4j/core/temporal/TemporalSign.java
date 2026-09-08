@@ -20,16 +20,7 @@ package com.caoccao.qjs4j.core.temporal;
  * Temporal sign marker used by rounding and sign-sensitive operations.
  */
 public enum TemporalSign {
-    POSITIVE,
-    NEGATIVE;
-
-    public static TemporalSign fromSignum(long signum) {
-        if (signum < 0L) {
-            return NEGATIVE;
-        } else {
-            return POSITIVE;
-        }
-    }
+    NEGATIVE, POSITIVE;
 
     public boolean isNegative() {
         return this == NEGATIVE;
@@ -38,5 +29,12 @@ public enum TemporalSign {
     public boolean isPositive() {
         return this == POSITIVE;
     }
-}
 
+    public static TemporalSign fromSignum(long signum) {
+        if (signum < 0L) {
+            return NEGATIVE;
+        } else {
+            return POSITIVE;
+        }
+    }
+}

@@ -38,15 +38,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Fail.fail;
 
 /**
- * Performance test comparing V8 and qjs4j execution of prime number calculation.
- * Run with: ./gradlew performanceTest
+ * Performance test comparing V8 and qjs4j execution of prime number calculation. Run with: ./gradlew performanceTest
  * <p>
- * The two JUnit methods below are wrappers that launch JMH, so they are tagged {@code benchmark} as
- * well as {@code performance}. They measure rather than assert: what they report is only meaningful
- * on a quiet machine, which is why {@code performanceTest} runs in a single fork with no coverage
- * agent, and why {@code slowRegressionTest} — the selection meant for continuous integration —
- * leaves them out. The other performance-tagged cases assert an outcome and are worth running on a
- * shared runner; these are not.
+ * The two JUnit methods below are wrappers that launch JMH, so they are tagged {@code benchmark} as well as
+ * {@code performance}. They measure rather than assert: what they report is only meaningful on a quiet machine, which
+ * is why {@code performanceTest} runs in a single fork with no coverage agent, and why {@code slowRegressionTest} — the
+ * selection meant for continuous integration — leaves them out. The other performance-tagged cases assert an outcome
+ * and are worth running on a shared runner; these are not.
  */
 @State(Scope.Thread)
 @BenchmarkMode(Mode.AverageTime)
@@ -62,8 +60,8 @@ public class PrimeNumberTest extends BaseJavetTest {
     public void benchmarkQjs4j() {
         resetContext();
         JSValue jsValue = context.eval(code);
-        assertThat(jsValue).isInstanceOfSatisfying(JSArray.class, jsArray ->
-                assertThat(jsArray.getLength()).isEqualTo(5133));
+        assertThat(jsValue).isInstanceOfSatisfying(JSArray.class,
+                jsArray -> assertThat(jsArray.getLength()).isEqualTo(5133));
     }
 
     @Benchmark
@@ -91,8 +89,7 @@ public class PrimeNumberTest extends BaseJavetTest {
     }
 
     private void loadPrimeNumberCode() throws IOException {
-        code = loadCode("performance/prime-number.js")
-                .replace("upperLimit = 100", "upperLimit = 50000");
+        code = loadCode("performance/prime-number.js").replace("upperLimit = 100", "upperLimit = 50000");
     }
 
     @BeforeEach
@@ -109,9 +106,7 @@ public class PrimeNumberTest extends BaseJavetTest {
     @Tag("performance")
     @Tag("benchmark")
     public void testQjs4jPerformance() throws RunnerException {
-        Options opt = new OptionsBuilder()
-                .include(this.getClass().getSimpleName() + ".benchmarkQjs4j")
-                .build();
+        Options opt = new OptionsBuilder().include(this.getClass().getSimpleName() + ".benchmarkQjs4j").build();
         new Runner(opt).run();
     }
 
@@ -122,9 +117,7 @@ public class PrimeNumberTest extends BaseJavetTest {
     @Tag("performance")
     @Tag("benchmark")
     public void testV8Performance() throws RunnerException {
-        Options opt = new OptionsBuilder()
-                .include(this.getClass().getSimpleName() + ".benchmarkV8")
-                .build();
+        Options opt = new OptionsBuilder().include(this.getClass().getSimpleName() + ".benchmarkV8").build();
         new Runner(opt).run();
     }
 }

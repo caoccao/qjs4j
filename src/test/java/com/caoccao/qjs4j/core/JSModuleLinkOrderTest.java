@@ -29,21 +29,18 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.*;
 
 /**
- * ECMAScript links a whole module graph before evaluating any of it. This engine loaded a
- * dependency and evaluated it in the same step, so an import naming an export nothing provides was
- * discovered <em>after</em> the module it imports from had already run: side effects landed for a
- * graph that must never have begun evaluating, and the counters a host reads reported the sequence
- * as if nothing had been evaluated.
+ * ECMAScript links a whole module graph before evaluating any of it. This engine loaded a dependency and evaluated it
+ * in the same step, so an import naming an export nothing provides was discovered <em>after</em> the module it imports
+ * from had already run: side effects landed for a graph that must never have begun evaluating, and the counters a host
+ * reads reported the sequence as if nothing had been evaluated.
  * <p>
- * The cases here assert the ordering the way the defect is observed — a host-visible counter the
- * dependency increments, which must still read {@code undefined} — and the engine's own module-body
- * count, which must be exactly zero.
+ * The cases here assert the ordering the way the defect is observed — a host-visible counter the dependency increments,
+ * which must still read {@code undefined} — and the engine's own module-body count, which must be exactly zero.
  * <p>
- * Which names a declaration asks for is read from the engine's own tokens rather than matched out
- * of the source text, so the shapes that used to slip past the check — a tab around {@code as}, a
- * clause spread over lines, a comment between the tokens, a string import name,
- * {@code import d, * as ns from '…'} — are held to the same ordering as the plainest one. So are
- * the two the pass used to decline outright: a name two {@code export *} routes provide with
+ * Which names a declaration asks for is read from the engine's own tokens rather than matched out of the source text,
+ * so the shapes that used to slip past the check — a tab around {@code as}, a clause spread over lines, a comment
+ * between the tokens, a string import name, {@code import d, * as ns from '…'} — are held to the same ordering as the
+ * plainest one. So are the two the pass used to decline outright: a name two {@code export *} routes provide with
  * different bindings, and a name that does not resolve across a cycle.
  */
 public class JSModuleLinkOrderTest extends BaseTest {
@@ -51,14 +48,14 @@ public class JSModuleLinkOrderTest extends BaseTest {
     Path moduleDirectory;
 
     /**
-     * Evaluate an entry module that imports a name {@code ./dep.mjs} does not export, and assert
-     * that nothing ran.
+     * Evaluate an entry module that imports a name {@code ./dep.mjs} does not export, and assert that nothing ran.
      *
-     * @param entryName   the entry module's file name
-     * @param entrySource the entry module's source
+     * @param entryName
+     *            the entry module's file name
+     * @param entrySource
+     *            the entry module's source
      */
-    private void assertImportOfAMissingNameRunsNothing(String entryName, String entrySource)
-            throws IOException {
+    private void assertImportOfAMissingNameRunsNothing(String entryName, String entrySource) throws IOException {
         writeModule("dep.mjs", "globalThis.dependencyBodyRan = true;\nexport const other = 1;\n");
         assertLinkFailsBeforeAnythingRuns(entrySource, entryName, "does not provide an export named");
     }
@@ -66,26 +63,24 @@ public class JSModuleLinkOrderTest extends BaseTest {
     /**
      * Evaluate an entry module and assert that the graph failed to link without running anything.
      *
-     * @param entrySource         the entry module's source
-     * @param entryName           the entry module's file name
-     * @param expectedMessagePart text the reported error must contain
+     * @param entrySource
+     *            the entry module's source
+     * @param entryName
+     *            the entry module's file name
+     * @param expectedMessagePart
+     *            text the reported error must contain
      */
-    private void assertLinkFailsBeforeAnythingRuns(
-            String entrySource, String entryName, String expectedMessagePart) throws IOException {
+    private void assertLinkFailsBeforeAnythingRuns(String entrySource, String entryName, String expectedMessagePart)
+            throws IOException {
         Path entry = writeModule(entryName, entrySource);
-        try (JSRuntime runtime = new JSRuntime();
-             JSContext context = runtime.createContext()) {
-            assertThatThrownBy(() -> context.eval(entrySource, entry.toString(), true))
-                    .isInstanceOf(JSException.class)
+        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
+            assertThatThrownBy(() -> context.eval(entrySource, entry.toString(), true)).isInstanceOf(JSException.class)
                     .hasMessageContaining(expectedMessagePart);
             assertThat(context.eval("String(globalThis.dependencyBodyRan)", "probe.js", false).toString())
-                    .as("no dependency body may run for a graph that fails to link")
-                    .isEqualTo("undefined");
+                    .as("no dependency body may run for a graph that fails to link").isEqualTo("undefined");
             assertThat(context.eval("String(globalThis.rootBodyRan)", "probe.js", false).toString())
-                    .as("nor the entry module's own body")
-                    .isEqualTo("undefined");
-            assertThat(context.getModuleBodyEvaluationCount())
-                    .as("the engine agrees that nothing was evaluated")
+                    .as("nor the entry module's own body").isEqualTo("undefined");
+            assertThat(context.getModuleBodyEvaluationCount()).as("the engine agrees that nothing was evaluated")
                     .isZero();
         }
     }
@@ -103,15 +98,11 @@ public class JSModuleLinkOrderTest extends BaseTest {
         // the pass has to answer that across the cycle rather than decline — declining is what let
         // the graph run first.
         writeModule("cyc-a.mjs",
-                "import { b } from './cyc-b.mjs';\n"
-                        + "globalThis.dependencyBodyRan = true;\nexport const a = 1;\n");
-        writeModule("cyc-b.mjs",
-                "import { missing } from './cyc-a.mjs';\n"
-                        + "globalThis.dependencyBodyRan = true;\nexport const b = 1;\n");
-        assertLinkFailsBeforeAnythingRuns(
-                "import { a } from './cyc-a.mjs';\nglobalThis.rootBodyRan = true;\n",
-                "main-cycle-missing.mjs",
-                "does not provide an export named 'missing'");
+                "import { b } from './cyc-b.mjs';\n" + "globalThis.dependencyBodyRan = true;\nexport const a = 1;\n");
+        writeModule("cyc-b.mjs", "import { missing } from './cyc-a.mjs';\n"
+                + "globalThis.dependencyBodyRan = true;\nexport const b = 1;\n");
+        assertLinkFailsBeforeAnythingRuns("import { a } from './cyc-a.mjs';\nglobalThis.rootBodyRan = true;\n",
+                "main-cycle-missing.mjs", "does not provide an export named 'missing'");
     }
 
     @Test
@@ -122,17 +113,15 @@ public class JSModuleLinkOrderTest extends BaseTest {
                 "import { a } from './cycle-a.mjs';\nexport const b = 'b';\nglobalThis.sawA = typeof a;\n");
         Path entry = writeModule("cycle-a.mjs",
                 "import { b } from './cycle-b.mjs';\nexport const a = 'a';\nglobalThis.result = b;\n");
-        try (JSRuntime runtime = new JSRuntime();
-             JSContext context = runtime.createContext()) {
+        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
             context.eval(Files.readString(entry), entry.toString(), true);
-            assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString())
-                    .isEqualTo("b");
+            assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString()).isEqualTo("b");
         }
     }
 
     @Test
     public void testADefaultAndNamespaceImportOfAModuleWithNoDefaultRunsNothing() throws IOException {
-        // `import d, * as ns from '…'` was read as the identifier text `d  * as ns`, which is not
+        // `import d, * as ns from '…'` was read as the identifier text `d * as ns`, which is not
         // an identifier, so the request for `default` was dropped and the dependency ran.
         assertImportOfAMissingNameRunsNothing("main-default-namespace.mjs",
                 "import d, * as ns from './dep.mjs';\nglobalThis.rootBodyRan = true;\n");
@@ -142,8 +131,7 @@ public class JSModuleLinkOrderTest extends BaseTest {
     public void testADefaultImportOfAModuleWithNoDefaultRunsNothing() throws IOException {
         writeModule("dep-no-default.mjs", "globalThis.dependencyBodyRan = true;\nexport const other = 1;\n");
         assertLinkFailsBeforeAnythingRuns(
-                "import theDefault from './dep-no-default.mjs';\nglobalThis.rootBodyRan = true;\n",
-                "main-default.mjs",
+                "import theDefault from './dep-no-default.mjs';\nglobalThis.rootBodyRan = true;\n", "main-default.mjs",
                 "does not provide an export named 'default'");
     }
 
@@ -156,8 +144,7 @@ public class JSModuleLinkOrderTest extends BaseTest {
         writeModule("broken.mjs", "break;\n");
         assertLinkFailsBeforeAnythingRuns(
                 "import './parses.mjs';\nimport './broken.mjs';\nglobalThis.rootBodyRan = true;\n",
-                "main-parse-order.mjs",
-                "SyntaxError");
+                "main-parse-order.mjs", "SyntaxError");
     }
 
     @Test
@@ -166,16 +153,12 @@ public class JSModuleLinkOrderTest extends BaseTest {
         // comes out. The link pass must not turn this into a link error.
         writeModule("throwing.mjs",
                 "globalThis.dependencyBodyRan = true;\nthrow new TypeError('dependency body ran');\n");
-        Path entry = writeModule("main-throwing.mjs",
-                "import './throwing.mjs';\nglobalThis.rootBodyRan = true;\n");
-        try (JSRuntime runtime = new JSRuntime();
-             JSContext context = runtime.createContext()) {
+        Path entry = writeModule("main-throwing.mjs", "import './throwing.mjs';\nglobalThis.rootBodyRan = true;\n");
+        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
             assertThatThrownBy(() -> context.eval(Files.readString(entry), entry.toString(), true))
-                    .isInstanceOf(JSException.class)
-                    .hasMessageContaining("dependency body ran");
+                    .isInstanceOf(JSException.class).hasMessageContaining("dependency body ran");
             assertThat(context.eval("String(globalThis.dependencyBodyRan)", "probe.js", false).toString())
-                    .as("the dependency did run — that is what a runtime failure means")
-                    .isEqualTo("true");
+                    .as("the dependency did run — that is what a runtime failure means").isEqualTo("true");
             assertThat(context.getModuleBodyEvaluationCount()).isPositive();
         }
     }
@@ -192,17 +175,14 @@ public class JSModuleLinkOrderTest extends BaseTest {
                 "import { missing } from './dep-transitive.mjs';\nexport const m = 1;\n");
         String entrySource = "import { m } from './mid-transitive.mjs';\n";
         Path entry = writeModule("main-transitive.mjs", entrySource);
-        try (JSRuntime runtime = new JSRuntime();
-             JSContext context = runtime.createContext()) {
-            JSException failure = catchThrowableOfType(
-                    JSException.class, () -> context.eval(entrySource, entry.toString(), true));
+        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
+            JSException failure = catchThrowableOfType(JSException.class,
+                    () -> context.eval(entrySource, entry.toString(), true));
             assertThat(failure).isNotNull();
-            assertThat(failure.getMessage())
-                    .contains("The requested module './dep-transitive.mjs' "
-                            + "does not provide an export named 'missing'")
+            assertThat(failure.getMessage()).contains(
+                    "The requested module './dep-transitive.mjs' " + "does not provide an export named 'missing'")
                     .contains("mid-transitive.mjs:1:10");
-            assertThat(failure.getSourceName())
-                    .as("the offsets index the dependency, and the diagnostic says so")
+            assertThat(failure.getSourceName()).as("the offsets index the dependency, and the diagnostic says so")
                     .isEqualTo(mid.toString());
             SourceLocation location = failure.getSourceLocation();
             assertThat(location).isNotNull();
@@ -210,27 +190,23 @@ public class JSModuleLinkOrderTest extends BaseTest {
             assertThat(location.column()).isEqualTo(10);
             String dependencySource = Files.readString(mid);
             assertThat(dependencySource.substring(location.offset(), location.endOffset()))
-                    .as("the offsets select the imported name in the dependency's own source")
-                    .isEqualTo("missing");
+                    .as("the offsets select the imported name in the dependency's own source").isEqualTo("missing");
         }
     }
 
     @Test
-    public void testALinkFailureInTheEntryModuleCarriesItsPositionInTheCallersSource()
-            throws IOException {
+    public void testALinkFailureInTheEntryModuleCarriesItsPositionInTheCallersSource() throws IOException {
         // The pass has the declaration that made the request, so the error can say where it is.
         // It used to be built through the location-free overload, and a caller got a message with
         // no line, column or offset at all.
         writeModule("dep-located.mjs", "export const other = 1;\n");
         String entrySource = "const before = 1;\nimport { missing as here } from './dep-located.mjs';\n";
         Path entry = writeModule("main-located.mjs", entrySource);
-        try (JSRuntime runtime = new JSRuntime();
-             JSContext context = runtime.createContext()) {
-            JSException failure = catchThrowableOfType(
-                    JSException.class, () -> context.eval(entrySource, entry.toString(), true));
+        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
+            JSException failure = catchThrowableOfType(JSException.class,
+                    () -> context.eval(entrySource, entry.toString(), true));
             assertThat(failure).isNotNull();
-            assertThat(failure.getMessage())
-                    .as("the message names the module that was asked, as Node's does")
+            assertThat(failure.getMessage()).as("the message names the module that was asked, as Node's does")
                     .isEqualTo("SyntaxError: The requested module './dep-located.mjs' "
                             + "does not provide an export named 'missing'");
             SourceLocation location = failure.getSourceLocation();
@@ -238,19 +214,16 @@ public class JSModuleLinkOrderTest extends BaseTest {
             assertThat(location.line()).isEqualTo(2);
             assertThat(location.column()).isEqualTo(10);
             assertThat(entrySource.substring(location.offset(), location.endOffset()))
-                    .as("the span covers the name that was asked for, in the caller's own source")
-                    .isEqualTo("missing");
+                    .as("the span covers the name that was asked for, in the caller's own source").isEqualTo("missing");
         }
     }
 
     @Test
     public void testAMissingExportBehindAStarReExportRunsNothing() throws IOException {
         writeModule("star-leaf.mjs", "globalThis.dependencyBodyRan = true;\nexport const other = 1;\n");
-        writeModule("star-middle.mjs",
-                "globalThis.dependencyBodyRan = true;\nexport * from './star-leaf.mjs';\n");
+        writeModule("star-middle.mjs", "globalThis.dependencyBodyRan = true;\nexport * from './star-leaf.mjs';\n");
         assertLinkFailsBeforeAnythingRuns(
-                "import { missing } from './star-middle.mjs';\nglobalThis.rootBodyRan = true;\n",
-                "main-star.mjs",
+                "import { missing } from './star-middle.mjs';\nglobalThis.rootBodyRan = true;\n", "main-star.mjs",
                 "does not provide an export named 'missing'");
     }
 
@@ -258,13 +231,9 @@ public class JSModuleLinkOrderTest extends BaseTest {
     public void testAMissingExportBehindATopLevelAwaitDependencyRunsNothing() throws IOException {
         // A graph whose dependency uses top-level await is still linked before it is evaluated, and
         // the await must not be an excuse to start running it.
-        writeModule("tla-dep.mjs",
-                "globalThis.dependencyBodyRan = true;\n"
-                        + "export const ready = await 1;\n");
-        assertLinkFailsBeforeAnythingRuns(
-                "import { missing } from './tla-dep.mjs';\nglobalThis.rootBodyRan = true;\n",
-                "main-tla.mjs",
-                "does not provide an export named 'missing'");
+        writeModule("tla-dep.mjs", "globalThis.dependencyBodyRan = true;\n" + "export const ready = await 1;\n");
+        assertLinkFailsBeforeAnythingRuns("import { missing } from './tla-dep.mjs';\nglobalThis.rootBodyRan = true;\n",
+                "main-tla.mjs", "does not provide an export named 'missing'");
     }
 
     @Test
@@ -272,14 +241,18 @@ public class JSModuleLinkOrderTest extends BaseTest {
         // The failure is neither the entry's nor its direct import's, so nothing in the graph may
         // have started — including the level that links cleanly.
         writeModule("leaf.mjs", "globalThis.dependencyBodyRan = true;\nexport const other = 1;\n");
-        writeModule("middle.mjs",
-                "globalThis.dependencyBodyRan = true;\n"
-                        + "import { missing } from './leaf.mjs';\n"
-                        + "export const middle = 1;\n");
-        assertLinkFailsBeforeAnythingRuns(
-                "import { middle } from './middle.mjs';\nglobalThis.rootBodyRan = true;\n",
-                "main-deep.mjs",
-                "does not provide an export named 'missing'");
+        writeModule("middle.mjs", "globalThis.dependencyBodyRan = true;\n" + "import { missing } from './leaf.mjs';\n"
+                + "export const middle = 1;\n");
+        assertLinkFailsBeforeAnythingRuns("import { middle } from './middle.mjs';\nglobalThis.rootBodyRan = true;\n",
+                "main-deep.mjs", "does not provide an export named 'missing'");
+    }
+
+    @Test
+    public void testANamedImportOfAMissingExportRunsNothing() throws IOException {
+        // The review's reproduction.
+        writeModule("dep.mjs", "globalThis.dependencyBodyRan = true;\nexport const other = 1;\n");
+        assertLinkFailsBeforeAnythingRuns("import { missing } from './dep.mjs';\nglobalThis.rootBodyRan = true;\n",
+                "main.mjs", "does not provide an export named 'missing'");
     }
 
     @Test
@@ -288,17 +261,13 @@ public class JSModuleLinkOrderTest extends BaseTest {
         // both middles re-export the same namespace object of the same leaf.
         writeModule("shared-leaf.mjs", "export const reached = 'leaf';\n");
         writeModule("shared-one.mjs", "export * as shared from './shared-leaf.mjs';\n");
-        writeModule("shared-two.mjs",
-                "import * as shared from './shared-leaf.mjs';\nexport { shared };\n");
-        writeModule("shared-middle.mjs",
-                "export * from './shared-one.mjs';\nexport * from './shared-two.mjs';\n");
+        writeModule("shared-two.mjs", "import * as shared from './shared-leaf.mjs';\nexport { shared };\n");
+        writeModule("shared-middle.mjs", "export * from './shared-one.mjs';\nexport * from './shared-two.mjs';\n");
         Path entry = writeModule("main-shared.mjs",
                 "import { shared } from './shared-middle.mjs';\nglobalThis.result = shared.reached;\n");
-        try (JSRuntime runtime = new JSRuntime();
-             JSContext context = runtime.createContext()) {
+        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
             context.eval(Files.readString(entry), entry.toString(), true);
-            assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString())
-                    .isEqualTo("leaf");
+            assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString()).isEqualTo("leaf");
         }
     }
 
@@ -309,40 +278,10 @@ public class JSModuleLinkOrderTest extends BaseTest {
         writeModule("ok-middle.mjs", "export * from './ok-leaf.mjs';\n");
         Path entry = writeModule("main-ok-star.mjs",
                 "import { reached } from './ok-middle.mjs';\nglobalThis.result = reached;\n");
-        try (JSRuntime runtime = new JSRuntime();
-             JSContext context = runtime.createContext()) {
+        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
             context.eval(Files.readString(entry), entry.toString(), true);
-            assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString())
-                    .isEqualTo("leaf");
+            assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString()).isEqualTo("leaf");
         }
-    }
-
-    @Test
-    public void testANameTwoStarExportsProvideDifferentlyRunsNothing() throws IOException {
-        // The review's reproduction. Two `export *` targets provide `x` from different bindings, so
-        // the import is ambiguous — and the whole graph must be rejected before any of it runs.
-        writeModule("ambiguous-a.mjs",
-                "globalThis.dependencyBodyRan = true;\nexport const x = 1;\n");
-        writeModule("ambiguous-b.mjs",
-                "globalThis.dependencyBodyRan = true;\nexport const x = 2;\n");
-        writeModule("ambiguous-middle.mjs",
-                "globalThis.dependencyBodyRan = true;\n"
-                        + "export * from './ambiguous-a.mjs';\n"
-                        + "export * from './ambiguous-b.mjs';\n");
-        assertLinkFailsBeforeAnythingRuns(
-                "import { x } from './ambiguous-middle.mjs';\nglobalThis.rootBodyRan = true;\n",
-                "main-ambiguous.mjs",
-                "contains conflicting star exports for the name 'x'");
-    }
-
-    @Test
-    public void testANamedImportOfAMissingExportRunsNothing() throws IOException {
-        // The review's reproduction.
-        writeModule("dep.mjs", "globalThis.dependencyBodyRan = true;\nexport const other = 1;\n");
-        assertLinkFailsBeforeAnythingRuns(
-                "import { missing } from './dep.mjs';\nglobalThis.rootBodyRan = true;\n",
-                "main.mjs",
-                "does not provide an export named 'missing'");
     }
 
     @Test
@@ -355,11 +294,60 @@ public class JSModuleLinkOrderTest extends BaseTest {
         writeModule("ns-middle.mjs", "export * from './ns-a.mjs';\nexport * from './ns-b.mjs';\n");
         Path entry = writeModule("main-namespace.mjs",
                 "import * as ns from './ns-middle.mjs';\nglobalThis.result = ns.only;\n");
-        try (JSRuntime runtime = new JSRuntime();
-             JSContext context = runtime.createContext()) {
+        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
             context.eval(Files.readString(entry), entry.toString(), true);
-            assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString())
-                    .isEqualTo("a");
+            assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString()).isEqualTo("a");
+        }
+    }
+
+    @Test
+    public void testANameTwoStarExportsProvideDifferentlyRunsNothing() throws IOException {
+        // The review's reproduction. Two `export *` targets provide `x` from different bindings, so
+        // the import is ambiguous — and the whole graph must be rejected before any of it runs.
+        writeModule("ambiguous-a.mjs", "globalThis.dependencyBodyRan = true;\nexport const x = 1;\n");
+        writeModule("ambiguous-b.mjs", "globalThis.dependencyBodyRan = true;\nexport const x = 2;\n");
+        writeModule("ambiguous-middle.mjs", "globalThis.dependencyBodyRan = true;\n"
+                + "export * from './ambiguous-a.mjs';\n" + "export * from './ambiguous-b.mjs';\n");
+        assertLinkFailsBeforeAnythingRuns(
+                "import { x } from './ambiguous-middle.mjs';\nglobalThis.rootBodyRan = true;\n", "main-ambiguous.mjs",
+                "contains conflicting star exports for the name 'x'");
+    }
+
+    @Test
+    public void testAnImportClauseSpreadOverLinesRunsNothing() throws IOException {
+        assertImportOfAMissingNameRunsNothing("main-multiline.mjs",
+                "import {\n  other,\n  missing\n    as\n    here,\n} from './dep.mjs';\n"
+                        + "globalThis.rootBodyRan = true;\n");
+    }
+
+    @Test
+    public void testAnImportWithAnAttributeThatChoosesNoTypeIsStillChecked() throws IOException {
+        // Attributes were skipped wholesale because `with { type: 'text' }` names a synthetic
+        // module. An attribute that does not choose a module type says nothing about the target,
+        // and the target is still ordinary JavaScript.
+        assertImportOfAMissingNameRunsNothing("main-attributes.mjs",
+                "import { missing } from './dep.mjs' with { unknownAttribute: 'x' };\n"
+                        + "globalThis.rootBodyRan = true;\n");
+    }
+
+    @Test
+    public void testAnIndirectExportOfAMissingNameRunsNothing() throws IOException {
+        // `export { x } from './dep.mjs'` asks for a name exactly as an import does.
+        writeModule("dep-indirect.mjs", "globalThis.dependencyBodyRan = true;\nexport const other = 1;\n");
+        assertLinkFailsBeforeAnythingRuns(
+                "export { missing } from './dep-indirect.mjs';\nglobalThis.rootBodyRan = true;\n", "main-indirect.mjs",
+                "does not provide an export named 'missing'");
+    }
+
+    @Test
+    public void testAnUnresolvableSpecifierIsStillReportedByEvaluation() throws IOException {
+        // The link pass declines to judge a module it cannot read, so the error and its type stay
+        // exactly what evaluation produces.
+        Path entry = writeModule("main-absent.mjs",
+                "import { anything } from './not-here.mjs';\nglobalThis.rootBodyRan = true;\n");
+        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
+            assertThatThrownBy(() -> context.eval(Files.readString(entry), entry.toString(), true))
+                    .isInstanceOf(JSException.class).hasMessageContaining("Cannot find module");
         }
     }
 
@@ -368,8 +356,7 @@ public class JSModuleLinkOrderTest extends BaseTest {
         writeModule("dep-renamed.mjs", "globalThis.dependencyBodyRan = true;\nexport const other = 1;\n");
         assertLinkFailsBeforeAnythingRuns(
                 "import { missing as here } from './dep-renamed.mjs';\nglobalThis.rootBodyRan = true;\n",
-                "main-renamed.mjs",
-                "does not provide an export named 'missing'");
+                "main-renamed.mjs", "does not provide an export named 'missing'");
     }
 
     @Test
@@ -379,10 +366,9 @@ public class JSModuleLinkOrderTest extends BaseTest {
         writeModule("dep-root-named.mjs", "export const other = 1;\n");
         String entrySource = "import { missing } from './dep-root-named.mjs';\n";
         Path entry = writeModule("main-root-named.mjs", entrySource);
-        try (JSRuntime runtime = new JSRuntime();
-             JSContext context = runtime.createContext()) {
-            JSException failure = catchThrowableOfType(
-                    JSException.class, () -> context.eval(entrySource, entry.toString(), true));
+        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
+            JSException failure = catchThrowableOfType(JSException.class,
+                    () -> context.eval(entrySource, entry.toString(), true));
             assertThat(failure).isNotNull();
             assertThat(failure.getMessage()).doesNotContain("imported by");
             assertThat(failure.getSourceName()).isEqualTo(entry.toString());
@@ -431,59 +417,13 @@ public class JSModuleLinkOrderTest extends BaseTest {
                 "import { leaf } from './count-leaf.mjs';\n"
                         + "globalThis.order = (globalThis.order || []).concat('middle');\n"
                         + "export const middle = leaf + 1;\n");
-        Path entry = writeModule("main-count.mjs",
-                "import { middle } from './count-middle.mjs';\n"
-                        + "globalThis.order = (globalThis.order || []).concat('entry');\n"
-                        + "globalThis.result = middle;\n");
-        try (JSRuntime runtime = new JSRuntime();
-             JSContext context = runtime.createContext()) {
+        Path entry = writeModule("main-count.mjs", "import { middle } from './count-middle.mjs';\n"
+                + "globalThis.order = (globalThis.order || []).concat('entry');\n" + "globalThis.result = middle;\n");
+        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
             context.eval(Files.readString(entry), entry.toString(), true);
-            assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString())
-                    .isEqualTo("2");
+            assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString()).isEqualTo("2");
             assertThat(context.eval("globalThis.order.join(',')", "probe.js", false).toString())
-                    .as("dependencies still evaluate before their importers, once")
-                    .isEqualTo("leaf,middle,entry");
-        }
-    }
-
-    @Test
-    public void testAnImportClauseSpreadOverLinesRunsNothing() throws IOException {
-        assertImportOfAMissingNameRunsNothing("main-multiline.mjs",
-                "import {\n  other,\n  missing\n    as\n    here,\n} from './dep.mjs';\n"
-                        + "globalThis.rootBodyRan = true;\n");
-    }
-
-    @Test
-    public void testAnImportWithAnAttributeThatChoosesNoTypeIsStillChecked() throws IOException {
-        // Attributes were skipped wholesale because `with { type: 'text' }` names a synthetic
-        // module. An attribute that does not choose a module type says nothing about the target,
-        // and the target is still ordinary JavaScript.
-        assertImportOfAMissingNameRunsNothing("main-attributes.mjs",
-                "import { missing } from './dep.mjs' with { unknownAttribute: 'x' };\n"
-                        + "globalThis.rootBodyRan = true;\n");
-    }
-
-    @Test
-    public void testAnIndirectExportOfAMissingNameRunsNothing() throws IOException {
-        // `export { x } from './dep.mjs'` asks for a name exactly as an import does.
-        writeModule("dep-indirect.mjs", "globalThis.dependencyBodyRan = true;\nexport const other = 1;\n");
-        assertLinkFailsBeforeAnythingRuns(
-                "export { missing } from './dep-indirect.mjs';\nglobalThis.rootBodyRan = true;\n",
-                "main-indirect.mjs",
-                "does not provide an export named 'missing'");
-    }
-
-    @Test
-    public void testAnUnresolvableSpecifierIsStillReportedByEvaluation() throws IOException {
-        // The link pass declines to judge a module it cannot read, so the error and its type stay
-        // exactly what evaluation produces.
-        Path entry = writeModule("main-absent.mjs",
-                "import { anything } from './not-here.mjs';\nglobalThis.rootBodyRan = true;\n");
-        try (JSRuntime runtime = new JSRuntime();
-             JSContext context = runtime.createContext()) {
-            assertThatThrownBy(() -> context.eval(Files.readString(entry), entry.toString(), true))
-                    .isInstanceOf(JSException.class)
-                    .hasMessageContaining("Cannot find module");
+                    .as("dependencies still evaluate before their importers, once").isEqualTo("leaf,middle,entry");
         }
     }
 

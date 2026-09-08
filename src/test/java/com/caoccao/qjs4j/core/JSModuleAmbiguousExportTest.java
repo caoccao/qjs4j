@@ -29,13 +29,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * ResolveExport returns "ambiguous" when two {@code export *} declarations supply the same name
- * from different modules. An ambiguous name is absent from the namespace object and is a
- * resolution-time {@code SyntaxError} when imported by name.
+ * ResolveExport returns "ambiguous" when two {@code export *} declarations supply the same name from different modules.
+ * An ambiguous name is absent from the namespace object and is a resolution-time {@code SyntaxError} when imported by
+ * name.
  * <p>
- * The withdrawal of an ambiguous binding goes through a {@code super.delete} call that must bypass
- * the namespace object's own {@code [[Delete]]}, which refuses export properties — so these cases
- * also pin that the internal delete stays non-virtual.
+ * The withdrawal of an ambiguous binding goes through a {@code super.delete} call that must bypass the namespace
+ * object's own {@code [[Delete]]}, which refuses export properties — so these cases also pin that the internal delete
+ * stays non-virtual.
  */
 public class JSModuleAmbiguousExportTest extends BaseTest {
     @TempDir
@@ -53,8 +53,7 @@ public class JSModuleAmbiguousExportTest extends BaseTest {
         Path mainPath = writeAmbiguousStarModule();
         assertThat(evalMain(mainPath, """
                 import * as ns from './star.mjs';
-                globalThis.__out = JSON.stringify(Object.keys(ns));"""))
-                .isEqualTo("[\"first\",\"second\"]");
+                globalThis.__out = JSON.stringify(Object.keys(ns));""")).isEqualTo("[\"first\",\"second\"]");
     }
 
     @Test
@@ -62,8 +61,7 @@ public class JSModuleAmbiguousExportTest extends BaseTest {
         Path mainPath = writeAmbiguousStarModule();
         assertThat(evalMain(mainPath, """
                 import * as ns from './star.mjs';
-                globalThis.__out = ('both' in ns) + ',' + String(ns.both);"""))
-                .isEqualTo("false,undefined");
+                globalThis.__out = ('both' in ns) + ',' + String(ns.both);""")).isEqualTo("false,undefined");
     }
 
     @Test
@@ -73,8 +71,7 @@ public class JSModuleAmbiguousExportTest extends BaseTest {
                 import { both } from './star.mjs';
                 globalThis.__out = both;""";
         Files.writeString(mainPath, source);
-        assertThatThrownBy(() -> context.eval(source, mainPath.toString(), true))
-                .isInstanceOf(JSException.class)
+        assertThatThrownBy(() -> context.eval(source, mainPath.toString(), true)).isInstanceOf(JSException.class)
                 .hasMessageContaining("both");
     }
 
@@ -83,8 +80,7 @@ public class JSModuleAmbiguousExportTest extends BaseTest {
         Path mainPath = writeAmbiguousStarModule();
         assertThat(evalMain(mainPath, """
                 import { first, second } from './star.mjs';
-                globalThis.__out = first + ',' + second;"""))
-                .isEqualTo("a,b");
+                globalThis.__out = first + ',' + second;""")).isEqualTo("a,b");
     }
 
     private Path writeAmbiguousStarModule() throws IOException {

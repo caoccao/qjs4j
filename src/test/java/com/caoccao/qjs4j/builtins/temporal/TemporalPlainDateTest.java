@@ -92,13 +92,14 @@ public class TemporalPlainDateTest extends BaseJavetTest {
     }
 
     @Test
-    public void testConstructorWithSubclass() {
-        assertBooleanWithJavet("(() => { class CustomPlainDate extends Temporal.PlainDate {} const value = new CustomPlainDate(2024, 1, 15); return value instanceof CustomPlainDate && value instanceof Temporal.PlainDate; })()");
+    public void testConstructorWithoutNew() {
+        assertErrorWithJavet("Temporal.PlainDate(2024, 1, 15)");
     }
 
     @Test
-    public void testConstructorWithoutNew() {
-        assertErrorWithJavet("Temporal.PlainDate(2024, 1, 15)");
+    public void testConstructorWithSubclass() {
+        assertBooleanWithJavet(
+                "(() => { class CustomPlainDate extends Temporal.PlainDate {} const value = new CustomPlainDate(2024, 1, 15); return value instanceof CustomPlainDate && value instanceof Temporal.PlainDate; })()");
     }
 
     @Test
@@ -218,7 +219,8 @@ public class TemporalPlainDateTest extends BaseJavetTest {
 
     @Test
     public void testToLocaleString() {
-        assertBooleanWithJavet("(() => { const value = new Temporal.PlainDate(2024, 1, 15); const locales = 'en-US'; const options = { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }; return value.toLocaleString(locales, options) === new Intl.DateTimeFormat(locales, options).format(value); })()");
+        assertBooleanWithJavet(
+                "(() => { const value = new Temporal.PlainDate(2024, 1, 15); const locales = 'en-US'; const options = { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }; return value.toLocaleString(locales, options) === new Intl.DateTimeFormat(locales, options).format(value); })()");
     }
 
     @Test

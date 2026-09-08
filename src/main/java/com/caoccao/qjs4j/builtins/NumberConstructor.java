@@ -19,17 +19,13 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 /**
- * Implementation of Number constructor.
- * Based on ES2020 Number specification.
+ * Implementation of Number constructor. Based on ES2020 Number specification.
  */
 public final class NumberConstructor {
 
     /**
-     * Number(value)
-     * ES2020 20.1.1.1
-     * Converts the argument to a number primitive value.
-     * When called as a function (not with new), returns a number primitive.
-     * When called with new, creates a Number object wrapper.
+     * Number(value) ES2020 20.1.1.1 Converts the argument to a number primitive value. When called as a function (not
+     * with new), returns a number primitive. When called with new, creates a Number object wrapper.
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         // ES2020: If no argument is passed, return +0

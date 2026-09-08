@@ -25,17 +25,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class StatementContainsAwaitYieldTest {
     private static final SourceLocation LOCATION = new SourceLocation(1, 1, 0);
 
-    private static BlockStatement emptyBlock() {
-        return new BlockStatement(List.of(), LOCATION);
-    }
-
     @Test
     public void testClassDeclarationContainsAwaitFromSuperClass() {
-        ClassDeclaration classDeclaration = new ClassDeclaration(
-                new Identifier("C", LOCATION),
-                new AwaitExpression(new Identifier("Base", LOCATION), LOCATION),
-                List.of(),
-                LOCATION);
+        ClassDeclaration classDeclaration = new ClassDeclaration(new Identifier("C", LOCATION),
+                new AwaitExpression(new Identifier("Base", LOCATION), LOCATION), List.of(), LOCATION);
 
         assertThat(classDeclaration.containsAwait()).isTrue();
         assertThat(classDeclaration.containsYield()).isFalse();
@@ -44,13 +37,9 @@ public class StatementContainsAwaitYieldTest {
     @Test
     public void testClassDeclarationContainsYieldFromStaticBlock() {
         ExpressionStatement yieldStatement = new ExpressionStatement(
-                new YieldExpression(new Literal(1, LOCATION), false, LOCATION),
-                LOCATION);
-        ClassDeclaration classDeclaration = new ClassDeclaration(
-                new Identifier("C", LOCATION),
-                null,
-                List.of(new StaticBlock(List.of(yieldStatement))),
-                LOCATION);
+                new YieldExpression(new Literal(1, LOCATION), false, LOCATION), LOCATION);
+        ClassDeclaration classDeclaration = new ClassDeclaration(new Identifier("C", LOCATION), null,
+                List.of(new StaticBlock(List.of(yieldStatement))), LOCATION);
 
         assertThat(classDeclaration.containsYield()).isTrue();
         assertThat(classDeclaration.containsAwait()).isFalse();
@@ -59,19 +48,12 @@ public class StatementContainsAwaitYieldTest {
     @Test
     public void testFunctionDeclarationContainsInnerAwaitAndYield() {
         ExpressionStatement awaitStatement = new ExpressionStatement(
-                new AwaitExpression(new Literal(1, LOCATION), LOCATION),
-                LOCATION);
+                new AwaitExpression(new Literal(1, LOCATION), LOCATION), LOCATION);
         ExpressionStatement yieldStatement = new ExpressionStatement(
-                new YieldExpression(new Literal(1, LOCATION), false, LOCATION),
-                LOCATION);
-        FunctionDeclaration functionDeclaration = new FunctionDeclaration(
-                new Identifier("f", LOCATION),
+                new YieldExpression(new Literal(1, LOCATION), false, LOCATION), LOCATION);
+        FunctionDeclaration functionDeclaration = new FunctionDeclaration(new Identifier("f", LOCATION),
                 new FunctionParams(List.of(), List.of(), null),
-                new BlockStatement(List.of(awaitStatement, yieldStatement), LOCATION),
-                false,
-                false,
-                false,
-                LOCATION);
+                new BlockStatement(List.of(awaitStatement, yieldStatement), LOCATION), false, false, false, LOCATION);
 
         // ES2024 8.1.4: Contains always returns false for function boundaries.
         assertThat(functionDeclaration.containsAwait()).isFalse();
@@ -81,10 +63,8 @@ public class StatementContainsAwaitYieldTest {
     @Test
     public void testTryStatementContainsAwaitInCatchPatternDefault() {
         TryStatement.CatchClause catchClause = new TryStatement.CatchClause(
-                new AssignmentPattern(
-                        new Identifier("error", LOCATION),
-                        new AwaitExpression(new Literal(1, LOCATION), LOCATION),
-                        LOCATION),
+                new AssignmentPattern(new Identifier("error", LOCATION),
+                        new AwaitExpression(new Literal(1, LOCATION), LOCATION), LOCATION),
                 emptyBlock());
         TryStatement tryStatement = new TryStatement(emptyBlock(), catchClause, null, LOCATION);
 
@@ -94,10 +74,8 @@ public class StatementContainsAwaitYieldTest {
     @Test
     public void testTryStatementContainsYieldInCatchPatternDefault() {
         TryStatement.CatchClause catchClause = new TryStatement.CatchClause(
-                new AssignmentPattern(
-                        new Identifier("error", LOCATION),
-                        new YieldExpression(new Literal(1, LOCATION), false, LOCATION),
-                        LOCATION),
+                new AssignmentPattern(new Identifier("error", LOCATION),
+                        new YieldExpression(new Literal(1, LOCATION), false, LOCATION), LOCATION),
                 emptyBlock());
         TryStatement tryStatement = new TryStatement(emptyBlock(), catchClause, null, LOCATION);
 
@@ -107,25 +85,19 @@ public class StatementContainsAwaitYieldTest {
     @Test
     public void testVariableDeclarationContainsAwaitAndYieldFromPatternDefaults() {
         VariableDeclaration awaitDeclaration = new VariableDeclaration(
-                List.of(new VariableDeclarator(
-                        new AssignmentPattern(
-                                new Identifier("value", LOCATION),
-                                new AwaitExpression(new Literal(1, LOCATION), LOCATION),
-                                LOCATION),
-                        null)),
-                VariableKind.CONST,
-                LOCATION);
+                List.of(new VariableDeclarator(new AssignmentPattern(new Identifier("value", LOCATION),
+                        new AwaitExpression(new Literal(1, LOCATION), LOCATION), LOCATION), null)),
+                VariableKind.CONST, LOCATION);
         VariableDeclaration yieldDeclaration = new VariableDeclaration(
-                List.of(new VariableDeclarator(
-                        new AssignmentPattern(
-                                new Identifier("value", LOCATION),
-                                new YieldExpression(new Literal(1, LOCATION), false, LOCATION),
-                                LOCATION),
-                        null)),
-                VariableKind.CONST,
-                LOCATION);
+                List.of(new VariableDeclarator(new AssignmentPattern(new Identifier("value", LOCATION),
+                        new YieldExpression(new Literal(1, LOCATION), false, LOCATION), LOCATION), null)),
+                VariableKind.CONST, LOCATION);
 
         assertThat(awaitDeclaration.containsAwait()).isTrue();
         assertThat(yieldDeclaration.containsYield()).isTrue();
+    }
+
+    private static BlockStatement emptyBlock() {
+        return new BlockStatement(List.of(), LOCATION);
     }
 }

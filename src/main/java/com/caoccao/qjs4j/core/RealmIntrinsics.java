@@ -23,22 +23,18 @@ import java.util.Map;
 /**
  * One realm's intrinsic objects, and the rules for finding the right prototype for a new object.
  * <p>
- * QuickJS keeps these on {@code struct JSContext} as {@code class_proto[]} plus a handful of named
- * fields; this is the same set, held together rather than scattered through the context. It holds
- * the prototypes that are looked up often enough to be worth caching ({@code Object},
- * {@code Date}, {@code Promise}, {@code RegExp}), the ones that are deliberately not reachable from
- * the global object at all (the generator and async-function chains, {@code %ThrowTypeError%}), and
- * the shared iterator prototypes keyed by their {@code Symbol.toStringTag}.
+ * QuickJS keeps these on {@code struct JSContext} as {@code class_proto[]} plus a handful of named fields; this is the
+ * same set, held together rather than scattered through the context. It holds the prototypes that are looked up often
+ * enough to be worth caching ({@code Object}, {@code Date}, {@code Promise}, {@code RegExp}), the ones that are
+ * deliberately not reachable from the global object at all (the generator and async-function chains,
+ * {@code %ThrowTypeError%}), and the shared iterator prototypes keyed by their {@code Symbol.toStringTag}.
  * <p>
- * It also implements OrdinaryCreateFromConstructor's prototype lookup —
- * {@code getPrototypeFromConstructor} and the {@code getIntrinsicDefaultPrototypeName} mapping
- * behind it — and GetFunctionRealm, both of which have to be able to ask a <em>different</em> realm
- * for its intrinsics, which is why those take a {@link JSContext} rather than reading this one.
+ * It also implements OrdinaryCreateFromConstructor's prototype lookup — {@code getPrototypeFromConstructor} and the
+ * {@code getIntrinsicDefaultPrototypeName} mapping behind it — and GetFunctionRealm, both of which have to be able to
+ * ask a <em>different</em> realm for its intrinsics, which is why those take a {@link JSContext} rather than reading
+ * this one.
  */
 final class RealmIntrinsics {
-    private final JSContext context;
-    // Shared iterator prototypes by toStringTag (e.g., "Array Iterator" → %ArrayIteratorPrototype%)
-    private final Map<String, JSObject> iteratorPrototypes = new HashMap<>();
     // Internal constructor references (not exposed in global scope)
     private JSObject asyncFunctionConstructor;
     private JSObject asyncGeneratorFunctionPrototype;
@@ -50,8 +46,11 @@ final class RealmIntrinsics {
     private JSObject cachedPromisePrototype;
     private JSObject cachedRegExpConstructor;
     private JSObject cachedRegExpPrototype;
+    private final JSContext context;
     // Generator prototype chain (not exposed in global scope)
     private JSObject generatorFunctionPrototype;
+    // Shared iterator prototypes by toStringTag (e.g., "Array Iterator" → %ArrayIteratorPrototype%)
+    private final Map<String, JSObject> iteratorPrototypes = new HashMap<>();
     // The %ThrowTypeError% intrinsic (shared across Function.prototype and strict arguments)
     private JSNativeFunction throwTypeErrorIntrinsic;
 
@@ -62,10 +61,11 @@ final class RealmIntrinsics {
     /**
      * Cache the prototypes that are looked up often enough to be worth it.
      * <p>
-     * Called once the global object has been populated: each of these is reachable through
-     * {@code globalThis} and would otherwise cost two property lookups per allocation.
+     * Called once the global object has been populated: each of these is reachable through {@code globalThis} and would
+     * otherwise cost two property lookups per allocation.
      *
-     * @param globalObject the realm's global object
+     * @param globalObject
+     *            the realm's global object
      */
     void cacheFromGlobalObject(JSObject globalObject) {
         JSValue objectCtor = globalObject.get(JSObject.NAME);
@@ -100,8 +100,7 @@ final class RealmIntrinsics {
     }
 
     /**
-     * Get the AsyncFunction constructor (internal use only).
-     * Used for setting up prototype chains for async functions.
+     * Get the AsyncFunction constructor (internal use only). Used for setting up prototype chains for async functions.
      */
     JSObject getAsyncFunctionConstructor() {
         return asyncFunctionConstructor;
@@ -160,8 +159,8 @@ final class RealmIntrinsics {
     }
 
     /**
-     * Get the GeneratorFunction prototype (internal use only).
-     * Used for setting up prototype chains for generator functions.
+     * Get the GeneratorFunction prototype (internal use only). Used for setting up prototype chains for generator
+     * functions.
      */
     JSObject getGeneratorFunctionPrototype() {
         return generatorFunctionPrototype;
@@ -312,9 +311,8 @@ final class RealmIntrinsics {
     }
 
     /**
-     * Get the %ThrowTypeError% intrinsic function.
-     * This is the single shared function used for Function.prototype caller/arguments
-     * and strict mode arguments.callee per ES spec.
+     * Get the %ThrowTypeError% intrinsic function. This is the single shared function used for Function.prototype
+     * caller/arguments and strict mode arguments.callee per ES spec.
      */
     JSNativeFunction getThrowTypeErrorIntrinsic() {
         return throwTypeErrorIntrinsic;
@@ -347,8 +345,7 @@ final class RealmIntrinsics {
     }
 
     /**
-     * Set the AsyncFunction constructor (internal use only).
-     * Called during global object initialization.
+     * Set the AsyncFunction constructor (internal use only). Called during global object initialization.
      */
     void setAsyncFunctionConstructor(JSObject asyncFunctionConstructor) {
         this.asyncFunctionConstructor = asyncFunctionConstructor;
@@ -363,27 +360,17 @@ final class RealmIntrinsics {
     }
 
     /**
-     * Set the GeneratorFunction prototype (internal use only).
-     * Called during global object initialization.
+     * Set the GeneratorFunction prototype (internal use only). Called during global object initialization.
      */
     void setGeneratorFunctionPrototype(JSObject generatorFunctionPrototype) {
         this.generatorFunctionPrototype = generatorFunctionPrototype;
     }
 
     /**
-     * Set the %ThrowTypeError% intrinsic function.
-     * Called during global object initialization.
+     * Set the %ThrowTypeError% intrinsic function. Called during global object initialization.
      */
     void setThrowTypeErrorIntrinsic(JSNativeFunction throwTypeError) {
         this.throwTypeErrorIntrinsic = throwTypeError;
-    }
-
-    boolean transferPrototype(JSObject receiver, String constructorName) {
-        JSValue constructor = context.getGlobalObject().get(constructorName);
-        if (constructor instanceof JSObject jsObject) {
-            return transferPrototype(receiver, jsObject);
-        }
-        return false;
     }
 
     boolean transferPrototype(JSObject receiver, JSObject constructor) {
@@ -395,9 +382,17 @@ final class RealmIntrinsics {
         return false;
     }
 
+    boolean transferPrototype(JSObject receiver, String constructorName) {
+        JSValue constructor = context.getGlobalObject().get(constructorName);
+        if (constructor instanceof JSObject jsObject) {
+            return transferPrototype(receiver, jsObject);
+        }
+        return false;
+    }
+
     /**
-     * Transfer prototype using Get(constructor, "prototype") with full JS semantics.
-     * This is used by constructor paths that must observe accessors and propagate abrupt completions.
+     * Transfer prototype using Get(constructor, "prototype") with full JS semantics. This is used by constructor paths
+     * that must observe accessors and propagate abrupt completions.
      */
     boolean transferPrototypeFromConstructor(JSObject receiver, JSObject constructor) {
         JSObject prototype = getPrototypeFromConstructor(constructor, JSObject.NAME);

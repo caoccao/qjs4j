@@ -40,9 +40,7 @@ public class IteratorConstructorTest extends BaseJavetTest {
 
     @Test
     void testIteratorCannotBeConstructedDirectly() {
-        assertErrorWithJavet(
-                "new Iterator()",
-                "Iterator()");
+        assertErrorWithJavet("new Iterator()", "Iterator()");
     }
 
     @Test
@@ -64,8 +62,7 @@ public class IteratorConstructorTest extends BaseJavetTest {
 
     @Test
     void testIteratorName() throws Exception {
-        assertStringWithJavet(
-                "Iterator.name");
+        assertStringWithJavet("Iterator.name");
     }
 
     @Test
@@ -76,8 +73,7 @@ public class IteratorConstructorTest extends BaseJavetTest {
 
     @Test
     void testIteratorRegistrationSemantics() {
-        assertStringWithJavet(
-                "Object.prototype.toString.call(Iterator.prototype);",
+        assertStringWithJavet("Object.prototype.toString.call(Iterator.prototype);",
                 "Object.prototype.toString.call(Iterator.from([1]).map(v => v));");
         assertBooleanWithJavet(
                 "(() => { try { Iterator.prototype.constructor = 1; return false; } catch (e) { return e instanceof TypeError; } })();");
@@ -85,22 +81,19 @@ public class IteratorConstructorTest extends BaseJavetTest {
 
     @Test
     void testIteratorToStringTagSemantics() {
-        assertThat(context.eval("(() => { try { Iterator.prototype[Symbol.toStringTag] = 'X'; return 'OK'; } catch (e) { return e.name; } })();").toJavaObject())
-                .isEqualTo("TypeError");
-        assertThat(context.eval("(() => { const it = Iterator.from([1]).map(v => v); it[Symbol.toStringTag] = 'X'; return Object.prototype.toString.call(it); })();").toJavaObject())
-                .isEqualTo("[object Iterator Helper]");
+        assertThat(context.eval(
+                "(() => { try { Iterator.prototype[Symbol.toStringTag] = 'X'; return 'OK'; } catch (e) { return e.name; } })();")
+                .toJavaObject()).isEqualTo("TypeError");
+        assertThat(context.eval(
+                "(() => { const it = Iterator.from([1]).map(v => v); it[Symbol.toStringTag] = 'X'; return Object.prototype.toString.call(it); })();")
+                .toJavaObject()).isEqualTo("[object Iterator Helper]");
     }
 
     @Test
     public void testTypeof() {
-        assertStringWithJavet(
-                "typeof Iterator;",
-                "typeof Iterator.from",
-                "typeof Iterator.prototype",
-                "typeof Iterator.prototype.map",
-                "typeof Iterator.prototype.filter",
+        assertStringWithJavet("typeof Iterator;", "typeof Iterator.from", "typeof Iterator.prototype",
+                "typeof Iterator.prototype.map", "typeof Iterator.prototype.filter",
                 "typeof Iterator.prototype.toArray");
-        assertIntegerWithJavet(
-                "Iterator.length;");
+        assertIntegerWithJavet("Iterator.length;");
     }
 }

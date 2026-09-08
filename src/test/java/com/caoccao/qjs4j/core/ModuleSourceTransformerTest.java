@@ -29,24 +29,22 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * Direct tests for {@link ModuleSourceTransformer}, the textual half of module support.
  * <p>
- * Every one of these used to be reachable only through {@code eval}, which is a large part of why
- * the same defects kept coming back: a scanner that mis-reads an escape or a comment produces a
- * module that fails somewhere else entirely, and the failure names generated source rather than the
- * text an author wrote. The transformer is almost all string-in/string-out, so once it is a class
- * of its own the seams that keep breaking can simply be asked what they answer.
+ * Every one of these used to be reachable only through {@code eval}, which is a large part of why the same defects kept
+ * coming back: a scanner that mis-reads an escape or a comment produces a module that fails somewhere else entirely,
+ * and the failure names generated source rather than the text an author wrote. The transformer is almost all
+ * string-in/string-out, so once it is a class of its own the seams that keep breaking can simply be asked what they
+ * answer.
  * <p>
- * The cases below are the ones the review series kept hitting: escaped module specifiers, Unicode
- * and escaped identifiers, where an {@code export default} expression really ends, and what comment
- * masking does and does not blank out.
+ * The cases below are the ones the review series kept hitting: escaped module specifiers, Unicode and escaped
+ * identifiers, where an {@code export default} expression really ends, and what comment masking does and does not blank
+ * out.
  */
 public class ModuleSourceTransformerTest extends BaseTest {
     @Test
     public void testCollectingImportBindingsReadsNamesAsValues() {
         Set<String> bindingNames = new java.util.HashSet<>();
         Map<String, ModuleSourceTransformer.ImportBinding> importedBindings = new java.util.HashMap<>();
-        transformer().collectImportBindings(
-                "import { x as \\u0079 } from './d\\u0065p.mjs';",
-                bindingNames,
+        transformer().collectImportBindings("import { x as \\u0079 } from './d\\u0065p.mjs';", bindingNames,
                 importedBindings);
         // The local binding is called `y`, because that is the name module code writes to reach it.
         assertThat(bindingNames).containsExactly("y");
@@ -60,8 +58,7 @@ public class ModuleSourceTransformerTest extends BaseTest {
     public void testCollectingImportBindingsRecordsANamespaceBinding() {
         Set<String> bindingNames = new java.util.HashSet<>();
         Map<String, ModuleSourceTransformer.ImportBinding> importedBindings = new java.util.HashMap<>();
-        transformer().collectImportBindings(
-                "import * as ns from './dep.mjs';", bindingNames, importedBindings);
+        transformer().collectImportBindings("import * as ns from './dep.mjs';", bindingNames, importedBindings);
         assertThat(bindingNames).containsExactly("ns");
         assertThat(importedBindings.get("ns").importedName())
                 .isEqualTo(ModuleSourceTransformer.MODULE_NAMESPACE_EXPORT_NAME);
@@ -137,12 +134,21 @@ public class ModuleSourceTransformerTest extends BaseTest {
     }
 
     @Test
+    public void testDefaultExportedDeclarationsHaveNoExpressionExtent() {
+        // A default-exported function or class ends at its body, which the transformer finds by
+        // matching braces. Only expressions need the parser.
+        assertThat(transformer().defaultExportExtents("export default function f() {}\n")).isEmpty();
+        assertThat(transformer().defaultExportExtents("export default class C {}\n")).isEmpty();
+        assertThat(transformer().defaultExportExtents("export default async function g() {}\n")).isEmpty();
+    }
+
+    @Test
     public void testDefaultExportExtentEndsAtTheGrammarNotAtABracketCount() {
         // `export default /\(/;` is balanced only if you know the parenthesis is inside a regular
         // expression literal. Counting delimiters swallowed the statement after it.
         String sourceCode = "export default /\\(/;\nglobalThis.after = 1;\n";
-        Map<Integer, ModuleSourceTransformer.DefaultExportExtent> extents =
-                transformer().defaultExportExtents(sourceCode);
+        Map<Integer, ModuleSourceTransformer.DefaultExportExtent> extents = transformer()
+                .defaultExportExtents(sourceCode);
         assertThat(extents).containsKey(0);
         assertThat(extents.get(0).expression()).isEqualTo("/\\(/");
         assertThat(extents.get(0).endLineIndex()).isZero();
@@ -154,8 +160,8 @@ public class ModuleSourceTransformerTest extends BaseTest {
         // Masking turns a comment into whitespace, so the expression must not absorb it — the
         // generated `let X = (0, e);` would otherwise close its parenthesis inside a line comment.
         String sourceCode = "export default 0; // trailing\n";
-        Map<Integer, ModuleSourceTransformer.DefaultExportExtent> extents =
-                transformer().defaultExportExtents(sourceCode);
+        Map<Integer, ModuleSourceTransformer.DefaultExportExtent> extents = transformer()
+                .defaultExportExtents(sourceCode);
         assertThat(extents).containsKey(0);
         assertThat(extents.get(0).expression()).isEqualTo("0");
         assertThat(extents.get(0).trailingText()).isEqualTo("// trailing");
@@ -164,20 +170,11 @@ public class ModuleSourceTransformerTest extends BaseTest {
     @Test
     public void testDefaultExportExtentSpansMoreThanItsOwnLine() {
         String sourceCode = "export default 1 +\n    2;\nglobalThis.after = 1;\n";
-        Map<Integer, ModuleSourceTransformer.DefaultExportExtent> extents =
-                transformer().defaultExportExtents(sourceCode);
+        Map<Integer, ModuleSourceTransformer.DefaultExportExtent> extents = transformer()
+                .defaultExportExtents(sourceCode);
         assertThat(extents).containsKey(0);
         assertThat(extents.get(0).expression()).isEqualTo("1 +\n    2");
         assertThat(extents.get(0).endLineIndex()).isOne();
-    }
-
-    @Test
-    public void testDefaultExportedDeclarationsHaveNoExpressionExtent() {
-        // A default-exported function or class ends at its body, which the transformer finds by
-        // matching braces. Only expressions need the parser.
-        assertThat(transformer().defaultExportExtents("export default function f() {}\n")).isEmpty();
-        assertThat(transformer().defaultExportExtents("export default class C {}\n")).isEmpty();
-        assertThat(transformer().defaultExportExtents("export default async function g() {}\n")).isEmpty();
     }
 
     @Test
@@ -244,8 +241,7 @@ public class ModuleSourceTransformerTest extends BaseTest {
     @Test
     public void testNormalizeModuleDeclarationLinesGivesEachDeclarationItsOwnLine() {
         // A declaration sharing a line with other code was invisible to the line-oriented scan.
-        String normalized = transformer().normalizeModuleDeclarationLines(
-                "const t = 1; export const v = 15;\n");
+        String normalized = transformer().normalizeModuleDeclarationLines("const t = 1; export const v = 15;\n");
         assertThat(normalized).isEqualTo("const t = 1; \nexport const v = 15;\n");
     }
 
@@ -258,8 +254,8 @@ public class ModuleSourceTransformerTest extends BaseTest {
     @Test
     public void testScanTopLevelModuleDeclarationsIgnoresDeclarationsInsideATemplate() {
         // Comment masking leaves template bodies verbatim, so this used to read as an export.
-        ModuleSourceTransformer.ModuleDeclarationScan scan =
-                transformer().scanTopLevelModuleDeclarations("const t = `\nexport const fake = 1;\n`;\n");
+        ModuleSourceTransformer.ModuleDeclarationScan scan = transformer()
+                .scanTopLevelModuleDeclarations("const t = `\nexport const fake = 1;\n`;\n");
         assertThat(scan).isNotNull();
         assertThat(scan.hasExportDeclaration()).isFalse();
         assertThat(scan.hasImportDeclaration()).isFalse();
@@ -267,27 +263,25 @@ public class ModuleSourceTransformerTest extends BaseTest {
 
     @Test
     public void testScanTopLevelModuleDeclarationsSeparatesImportsFromImportExpressions() {
-        ModuleSourceTransformer.ModuleDeclarationScan declarationScan =
-                transformer().scanTopLevelModuleDeclarations("import { a } from './m.mjs';\n");
+        ModuleSourceTransformer.ModuleDeclarationScan declarationScan = transformer()
+                .scanTopLevelModuleDeclarations("import { a } from './m.mjs';\n");
         assertThat(declarationScan).isNotNull();
         assertThat(declarationScan.hasImportDeclaration()).isTrue();
         // `import(...)` and `import.meta` are expressions, not declarations.
-        ModuleSourceTransformer.ModuleDeclarationScan expressionScan =
-                transformer().scanTopLevelModuleDeclarations("const p = import('./m.mjs');\n");
+        ModuleSourceTransformer.ModuleDeclarationScan expressionScan = transformer()
+                .scanTopLevelModuleDeclarations("const p = import('./m.mjs');\n");
         assertThat(expressionScan).isNotNull();
         assertThat(expressionScan.hasImportDeclaration()).isFalse();
-        ModuleSourceTransformer.ModuleDeclarationScan metaScan =
-                transformer().scanTopLevelModuleDeclarations("const u = import.meta.url;\n");
+        ModuleSourceTransformer.ModuleDeclarationScan metaScan = transformer()
+                .scanTopLevelModuleDeclarations("const u = import.meta.url;\n");
         assertThat(metaScan).isNotNull();
         assertThat(metaScan.hasImportDeclaration()).isFalse();
     }
 
     @Test
     public void testSplitOnTopLevelCommasIgnoresCommasInsideQuotes() {
-        assertThat(transformer().splitOnTopLevelCommas("a, b as c"))
-                .containsExactly("a", " b as c");
-        assertThat(transformer().splitOnTopLevelCommas("\"a,b\" as c, d"))
-                .containsExactly("\"a,b\" as c", " d");
+        assertThat(transformer().splitOnTopLevelCommas("a, b as c")).containsExactly("a", " b as c");
+        assertThat(transformer().splitOnTopLevelCommas("\"a,b\" as c, d")).containsExactly("\"a,b\" as c", " d");
     }
 
     @Test
@@ -298,24 +292,20 @@ public class ModuleSourceTransformerTest extends BaseTest {
         // necessarily the closing one.
         assertThat(transformer().stripQuotedSpecifier("'./a\\'b.mjs'")).isEqualTo("./a'b.mjs");
         // Everything after the closing quote belongs to the attributes clause, not the specifier.
-        assertThat(transformer().stripQuotedSpecifier("'./d.json' with { type: 'json' }"))
-                .isEqualTo("./d.json");
+        assertThat(transformer().stripQuotedSpecifier("'./d.json' with { type: 'json' }")).isEqualTo("./d.json");
     }
 
     @Test
     public void testStripQuotedSpecifierRejectsTextThatIsNotALiteral() {
-        assertThatThrownBy(() -> transformer().stripQuotedSpecifier("./dep.mjs"))
-                .isInstanceOf(JSException.class);
+        assertThatThrownBy(() -> transformer().stripQuotedSpecifier("./dep.mjs")).isInstanceOf(JSException.class);
         context.clearPendingException();
-        assertThatThrownBy(() -> transformer().stripQuotedSpecifier("'unterminated"))
-                .isInstanceOf(JSException.class);
+        assertThatThrownBy(() -> transformer().stripQuotedSpecifier("'unterminated")).isInstanceOf(JSException.class);
         context.clearPendingException();
     }
 
     @Test
     public void testTokenizingModuleSourceDropsTheTerminatingEof() {
-        assertThat(ModuleSourceTransformer.tokenizeModuleSource("const a = 1;"))
-                .isNotEmpty()
+        assertThat(ModuleSourceTransformer.tokenizeModuleSource("const a = 1;")).isNotEmpty()
                 .noneMatch(token -> token.type().name().equals("EOF"));
     }
 
@@ -323,22 +313,19 @@ public class ModuleSourceTransformerTest extends BaseTest {
     public void testValidatingAGeneratedIdentifierRejectsWhatWouldSpliceSource() {
         // Names extracted by the scanner reach identifier position in generated source unescaped,
         // so anything that is not an identifier has to be refused rather than interpolated.
-        assertThat(transformer().requireGeneratedIdentifier("café", "binding", "./m.mjs"))
-                .isEqualTo("café");
-        assertThatThrownBy(() -> transformer().requireGeneratedIdentifier(
-                "x; globalThis.pwned = 1; let y", "binding", "./m.mjs"))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("not a valid identifier");
+        assertThat(transformer().requireGeneratedIdentifier("café", "binding", "./m.mjs")).isEqualTo("café");
+        assertThatThrownBy(
+                () -> transformer().requireGeneratedIdentifier("x; globalThis.pwned = 1; let y", "binding", "./m.mjs"))
+                .isInstanceOf(JSException.class).hasMessageContaining("not a valid identifier");
         context.clearPendingException();
     }
 
     /**
      * A transformer of this test's own, rather than the realm's.
      * <p>
-     * The transformer holds no state beyond the context it reports syntax errors through, so one
-     * built here answers exactly what the realm's does — and the context does not have to carry an
-     * accessor that only a test would ever call. This test is in the transformer's own package,
-     * which is the whole reason its constructor can be reached.
+     * The transformer holds no state beyond the context it reports syntax errors through, so one built here answers
+     * exactly what the realm's does — and the context does not have to carry an accessor that only a test would ever
+     * call. This test is in the transformer's own package, which is the whole reason its constructor can be reached.
      *
      * @return a transformer bound to this test's context
      */

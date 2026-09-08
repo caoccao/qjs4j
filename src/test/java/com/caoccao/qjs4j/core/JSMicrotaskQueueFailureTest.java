@@ -31,16 +31,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * A failure escaping a microtask must never disappear silently.
  * <p>
- * The drain used to {@code catch (Exception e)} and, with no promise reject callback installed —
- * the default — discard it entirely: a throwing {@code .then()} handler, a
- * {@code JSVirtualMachineException}, an engine {@link NullPointerException}. The drain was also
- * unbounded, so a microtask that re-enqueued itself looped forever with no interrupt check.
+ * The drain used to {@code catch (Exception e)} and, with no promise reject callback installed — the default — discard
+ * it entirely: a throwing {@code .then()} handler, a {@code JSVirtualMachineException}, an engine
+ * {@link NullPointerException}. The drain was also unbounded, so a microtask that re-enqueued itself looped forever
+ * with no interrupt check.
  */
 public class JSMicrotaskQueueFailureTest extends BaseTest {
-
-    private static void enqueueForever(JSContext loopingContext) {
-        loopingContext.enqueueMicrotask(() -> enqueueForever(loopingContext));
-    }
 
     @Test
     public void testAJSExceptionFromAMicrotaskReachesThePromiseRejectCallback() {
@@ -115,11 +111,9 @@ public class JSMicrotaskQueueFailureTest extends BaseTest {
         });
         context.processMicrotasks();
 
-        assertThat(context.getMicrotaskFailures())
-                .as("a failure must be observable even with no callback installed")
+        assertThat(context.getMicrotaskFailures()).as("a failure must be observable even with no callback installed")
                 .hasSize(1);
-        assertThat(context.getMicrotaskFailures().get(0))
-                .hasMessage("vm failure with no callback");
+        assertThat(context.getMicrotaskFailures().get(0)).hasMessage("vm failure with no callback");
     }
 
     @Test
@@ -137,8 +131,7 @@ public class JSMicrotaskQueueFailureTest extends BaseTest {
         context.processMicrotasks();
 
         List<Throwable> failures = context.getMicrotaskFailures();
-        assertThat(failures)
-                .as("the record must be bounded, not grow with the number of failures")
+        assertThat(failures).as("the record must be bounded, not grow with the number of failures")
                 .hasSizeLessThan(failureCount);
         // The oldest entries are dropped, so the most recent failure is always retained.
         assertThat(failures.get(failures.size() - 1)).hasMessage("failure " + (failureCount - 1));
@@ -188,9 +181,7 @@ public class JSMicrotaskQueueFailureTest extends BaseTest {
                 assertThatThrownBy(() -> {
                     enqueueForever(loopingContext);
                     loopingContext.processMicrotasks();
-                })
-                        .isInstanceOf(JSTerminationException.class)
-                        .hasMessage("execution interrupted");
+                }).isInstanceOf(JSTerminationException.class).hasMessage("execution interrupted");
             } finally {
                 interrupter.join();
             }
@@ -204,13 +195,16 @@ public class JSMicrotaskQueueFailureTest extends BaseTest {
         List<Throwable> observed = new ArrayList<>();
         context.setMicrotaskFailureCallback(observed::add);
         context.clearMicrotaskFailures();
-        JSValue derived = context.eval(
-                "Promise.resolve(1).then(() => { throw new TypeError('from then') })");
+        JSValue derived = context.eval("Promise.resolve(1).then(() => { throw new TypeError('from then') })");
         assertThat(derived).isInstanceOf(JSPromise.class);
         assertThat(awaitPromise((JSPromise) derived)).isTrue();
 
         assertThat(((JSPromise) derived).getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
         assertThat(observed).isEmpty();
         assertThat(context.getMicrotaskFailures()).isEmpty();
+    }
+
+    private static void enqueueForever(JSContext loopingContext) {
+        loopingContext.enqueueMicrotask(() -> enqueueForever(loopingContext));
     }
 }

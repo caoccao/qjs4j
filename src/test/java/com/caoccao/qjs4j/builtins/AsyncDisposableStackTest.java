@@ -117,8 +117,7 @@ public class AsyncDisposableStackTest extends BaseTest {
                 globalThis.__log = log;
                 globalThis.__stack = stack;""");
         settle(evalPromise("__stack[Symbol.asyncDispose]();"));
-        assertThat(evalToString("JSON.stringify(__log) + '|' + String(__stack.disposed);"))
-                .isEqualTo("[\"x\"]|true");
+        assertThat(evalToString("JSON.stringify(__log) + '|' + String(__stack.disposed);")).isEqualTo("[\"x\"]|true");
     }
 
     @Test

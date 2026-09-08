@@ -29,18 +29,14 @@ import java.util.concurrent.TimeUnit;
 
 final class Test262Agent implements AutoCloseable {
     private final BlockingQueue<JSValue> broadcasts;
+    private volatile boolean closed;
     private final Test262AgentHost host;
+    private volatile JSRuntime runtime;
     private final String script;
     private final Test262Executor test262Executor;
     private final Thread thread;
-    private volatile boolean closed;
-    private volatile JSRuntime runtime;
 
-    Test262Agent(
-            Test262Executor test262Executor,
-            String script,
-            List<JSRuntime> realmRuntimes,
-            Test262AgentHost host) {
+    Test262Agent(Test262Executor test262Executor, String script, List<JSRuntime> realmRuntimes, Test262AgentHost host) {
         this.test262Executor = test262Executor;
         this.script = script;
         this.host = host;
@@ -94,10 +90,9 @@ final class Test262Agent implements AutoCloseable {
 
     private void run() {
         List<JSRuntime> agentRealmRuntimes = new ArrayList<>();
-        try (JSRuntime agentRuntime = new JSRuntime(new JSRuntimeOptions()
-                .setAtomicsObject(host.getSharedAtomicsObject())
-                .setTemporalEnabled(true));
-             JSContext agentContext = agentRuntime.createContext()) {
+        try (JSRuntime agentRuntime = new JSRuntime(
+                new JSRuntimeOptions().setAtomicsObject(host.getSharedAtomicsObject()).setTemporalEnabled(true));
+                JSContext agentContext = agentRuntime.createContext()) {
             runtime = agentRuntime;
             test262Executor.install262Object(agentContext, agentRealmRuntimes, host, this);
             agentContext.eval(script, "<test262-agent>", false);

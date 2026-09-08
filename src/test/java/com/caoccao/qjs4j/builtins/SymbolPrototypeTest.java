@@ -25,17 +25,14 @@ import org.junit.jupiter.api.Test;
 public class SymbolPrototypeTest extends BaseJavetTest {
     @Test
     public void testGetDescription() {
-        assertStringWithJavet(
-                "Symbol('testDescription').description;",
-                "String(Symbol().description);",
+        assertStringWithJavet("Symbol('testDescription').description;", "String(Symbol().description);",
                 "Symbol.iterator.description;");
     }
 
     @Test
     public void testToPrimitive() {
         // Test Symbol[@@toPrimitive] - returns the symbol itself
-        assertBooleanWithJavet(
-                "var sym1 = Symbol('test'); sym1[Symbol.toPrimitive]() === sym1",
+        assertBooleanWithJavet("var sym1 = Symbol('test'); sym1[Symbol.toPrimitive]() === sym1",
                 "var sym2 = Symbol.iterator; sym2[Symbol.toPrimitive]() === sym2");
 
         // Edge case: called on non-symbol should throw TypeError
@@ -52,44 +49,35 @@ public class SymbolPrototypeTest extends BaseJavetTest {
                 // Normal case: via call for well-known symbol
                 "Symbol.prototype.toString.call(Symbol.iterator);",
                 // Symbol with empty string description
-                "Symbol('').toString();",
-                "var a = Symbol(''); escape(a);",
+                "Symbol('').toString();", "var a = Symbol(''); escape(a);",
                 // Well-known symbols
-                "Symbol.asyncIterator.toString();",
-                "Symbol.hasInstance.toString();");
+                "Symbol.asyncIterator.toString();", "Symbol.hasInstance.toString();");
 
         // Edge case: called on non-symbol should throw TypeError
-        assertErrorWithJavet(
-                "Symbol.prototype.toString.call('not a symbol');",
-                "const a = '' + Symbol.iterator;");
+        assertErrorWithJavet("Symbol.prototype.toString.call('not a symbol');", "const a = '' + Symbol.iterator;");
     }
 
     @Test
     public void testToStringTag() {
         // Symbol.prototype[@@toStringTag] should return "Symbol"
-        assertStringWithJavet(
-                "Symbol.prototype[Symbol.toStringTag];",
-                "Object.prototype.toString.call(Symbol('test'));",
-                "Object.prototype.toString.call(Symbol.iterator);");
+        assertStringWithJavet("Symbol.prototype[Symbol.toStringTag];",
+                "Object.prototype.toString.call(Symbol('test'));", "Object.prototype.toString.call(Symbol.iterator);");
 
-        assertBooleanWithJavet(
-                """
-                        (() => {
-                          const d = Object.getOwnPropertyDescriptor(Symbol.prototype, Symbol.toStringTag);
-                          return d.value === "Symbol"
-                            && d.writable === false
-                            && d.enumerable === false
-                            && d.configurable === true;
-                        })()
-                        """);
+        assertBooleanWithJavet("""
+                (() => {
+                  const d = Object.getOwnPropertyDescriptor(Symbol.prototype, Symbol.toStringTag);
+                  return d.value === "Symbol"
+                    && d.writable === false
+                    && d.enumerable === false
+                    && d.configurable === true;
+                })()
+                """);
     }
 
     @Test
     public void testValueOf() {
-        assertBooleanWithJavet(
-                "var sym = Symbol('test'); sym.valueOf() === sym;",
-                "var sym = Symbol('test'); sym.valueOf() === sym;",
-                "var sym = Symbol.iterator; sym.valueOf() === sym;",
+        assertBooleanWithJavet("var sym = Symbol('test'); sym.valueOf() === sym;",
+                "var sym = Symbol('test'); sym.valueOf() === sym;", "var sym = Symbol.iterator; sym.valueOf() === sym;",
                 "var symObj = Object(Symbol('test')); typeof symObj.valueOf() === 'symbol';",
                 "var symObj = Object(Symbol('test')); symObj.valueOf() !== symObj");
 
@@ -99,31 +87,28 @@ public class SymbolPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testWellKnownPrototypeProperties() {
-        assertBooleanWithJavet(
-                """
-                        (() => {
-                          const d = Object.getOwnPropertyDescriptor(Symbol.prototype, Symbol.toPrimitive);
-                          return typeof d.value === "function"
-                            && d.enumerable === false;
-                        })()
-                        """,
-                """
-                        (() => {
-                          const d = Object.getOwnPropertyDescriptor(Symbol.prototype, "toString");
-                          return typeof d.value === "function"
-                            && d.writable === true
-                            && d.enumerable === false
-                            && d.configurable === true;
-                        })()
-                        """,
-                """
-                        (() => {
-                          const d = Object.getOwnPropertyDescriptor(Symbol.prototype, "constructor");
-                          return d.value === Symbol
-                            && d.writable === true
-                            && d.enumerable === false
-                            && d.configurable === true;
-                        })()
-                        """);
+        assertBooleanWithJavet("""
+                (() => {
+                  const d = Object.getOwnPropertyDescriptor(Symbol.prototype, Symbol.toPrimitive);
+                  return typeof d.value === "function"
+                    && d.enumerable === false;
+                })()
+                """, """
+                (() => {
+                  const d = Object.getOwnPropertyDescriptor(Symbol.prototype, "toString");
+                  return typeof d.value === "function"
+                    && d.writable === true
+                    && d.enumerable === false
+                    && d.configurable === true;
+                })()
+                """, """
+                (() => {
+                  const d = Object.getOwnPropertyDescriptor(Symbol.prototype, "constructor");
+                  return d.value === Symbol
+                    && d.writable === true
+                    && d.enumerable === false
+                    && d.configurable === true;
+                })()
+                """);
     }
 }

@@ -43,24 +43,25 @@ public class TemporalHotPathPerformanceTest extends BaseTest {
                   return total;
                 })()
                 """);
-        assertThat(value).isInstanceOfSatisfying(JSNumber.class, jsNumber ->
-                assertThat(jsNumber.value()).isEqualTo(61725000D));
+        assertThat(value).isInstanceOfSatisfying(JSNumber.class,
+                jsNumber -> assertThat(jsNumber.value()).isEqualTo(61725000D));
     }
 
     @Test
     public void testPlainMonthDayFromHotPath() {
-        JSValue value = context.eval("""
-                (() => {
-                  let count = 0;
-                  for (let i = 0; i < 1000; i++) {
-                    const value = Temporal.PlainMonthDay.from({ calendar: 'iso8601', monthCode: 'M02', day: 28, year: 2023 });
-                    count += value.day;
-                  }
-                  return count;
-                })()
-                """);
-        assertThat(value).isInstanceOfSatisfying(JSNumber.class, jsNumber ->
-                assertThat(jsNumber.value()).isEqualTo(28000D));
+        JSValue value = context
+                .eval("""
+                        (() => {
+                          let count = 0;
+                          for (let i = 0; i < 1000; i++) {
+                            const value = Temporal.PlainMonthDay.from({ calendar: 'iso8601', monthCode: 'M02', day: 28, year: 2023 });
+                            count += value.day;
+                          }
+                          return count;
+                        })()
+                        """);
+        assertThat(value).isInstanceOfSatisfying(JSNumber.class,
+                jsNumber -> assertThat(jsNumber.value()).isEqualTo(28000D));
     }
 
     @Test
@@ -78,7 +79,7 @@ public class TemporalHotPathPerformanceTest extends BaseTest {
                   return count;
                 })()
                 """);
-        assertThat(value).isInstanceOfSatisfying(JSNumber.class, jsNumber ->
-                assertThat(jsNumber.value()).isEqualTo(10000D));
+        assertThat(value).isInstanceOfSatisfying(JSNumber.class,
+                jsNumber -> assertThat(jsNumber.value()).isEqualTo(10000D));
     }
 }

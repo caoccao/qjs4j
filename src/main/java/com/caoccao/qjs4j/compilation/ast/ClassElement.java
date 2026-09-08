@@ -19,8 +19,7 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Base class for class elements (methods, fields, static blocks).
  */
-public abstract sealed class ClassElement extends ASTNode
-        permits MethodDefinition, PropertyDefinition, StaticBlock {
+public abstract sealed class ClassElement extends ASTNode permits MethodDefinition, PropertyDefinition, StaticBlock {
     protected ClassElement(SourceLocation location) {
         super(location);
     }

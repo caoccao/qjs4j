@@ -19,15 +19,14 @@ package com.caoccao.qjs4j.core;
 import java.util.Objects;
 
 /**
- * Represents a property key (can be string, symbol, or integer index).
- * Based on ECMAScript property keys and QuickJS atom system.
+ * Represents a property key (can be string, symbol, or integer index). Based on ECMAScript property keys and QuickJS
+ * atom system.
  * <p>
- * In JavaScript, property keys can be:
- * - Strings (most common)
- * - Symbols (for unique properties)
- * - Integer indices (for array-like objects)
+ * In JavaScript, property keys can be: - Strings (most common) - Symbols (for unique properties) - Integer indices (for
+ * array-like objects)
  */
 public final class PropertyKey {
+    private static final long ARRAY_INDEX_NOT_COMPUTED = Long.MIN_VALUE;
     public static final PropertyKey ASYNC = fromString(JSKeyword.ASYNC);
     public static final PropertyKey CALLEE = fromString("callee");
     public static final PropertyKey CAUSE = fromString("cause");
@@ -42,6 +41,9 @@ public final class PropertyKey {
     public static final PropertyKey GROUPS = fromString("groups");
     public static final PropertyKey HAS = fromString("has");
     public static final PropertyKey INDEX = fromString("index");
+    private static final int INDEX_CACHE_SIZE = 1024;
+    private static final int INDEX_NOT_COMPUTED = Integer.MIN_VALUE;
+    private static final PropertyKey[] INDEX_PROPERTY_KEYS = createIndexPropertyKeys();
     public static final PropertyKey INDICES = fromString("indices");
     public static final PropertyKey INPUT = fromString("input");
     public static final PropertyKey ITERATOR = fromString("iterator");
@@ -49,6 +51,7 @@ public final class PropertyKey {
     public static final PropertyKey KEYS = fromString("keys");
     public static final PropertyKey LAST_INDEX = fromString("lastIndex");
     public static final PropertyKey LENGTH = fromString("length");
+    private static final long MAX_ARRAY_INDEX = 0xFFFF_FFFEL;
     public static final PropertyKey MESSAGE = fromString("message");
     public static final PropertyKey NAME = fromString("name");
     public static final PropertyKey NEXT = fromString("next");
@@ -88,16 +91,11 @@ public final class PropertyKey {
     public static final PropertyKey VALUE = fromString("value");
     public static final PropertyKey WRITABLE = fromString("writable");
     public static final PropertyKey ZERO = fromString("0");
-    private static final long ARRAY_INDEX_NOT_COMPUTED = Long.MIN_VALUE;
-    private static final int INDEX_CACHE_SIZE = 1024;
-    private static final int INDEX_NOT_COMPUTED = Integer.MIN_VALUE;
-    private static final PropertyKey[] INDEX_PROPERTY_KEYS = createIndexPropertyKeys();
-    private static final long MAX_ARRAY_INDEX = 0xFFFF_FFFEL;
     private final int atomIndex; // -1 if not interned
-    private final Object value; // String, Integer, or JSSymbol
     private long cachedArrayIndex;
     private int cachedIndex;
     private String cachedPropertyString;
+    private final Object value; // String, Integer, or JSSymbol
 
     private PropertyKey(Object value, int atomIndex) {
         this.value = value;
@@ -115,92 +113,6 @@ public final class PropertyKey {
             cachedArrayIndex = -1;
             cachedPropertyString = null;
         }
-    }
-
-    private static PropertyKey[] createIndexPropertyKeys() {
-        PropertyKey[] cachedPropertyKeys = new PropertyKey[INDEX_CACHE_SIZE];
-        for (int index = 0; index < INDEX_CACHE_SIZE; index++) {
-            cachedPropertyKeys[index] = new PropertyKey(index, -1);
-        }
-        return cachedPropertyKeys;
-    }
-
-    /**
-     * Create a property key from an interned string (atom).
-     * <p>
-     * The atom index is metadata only: {@link #equals(Object)} and {@link #hashCode()} derive from
-     * the canonical property string, never from the index. Deriving the hash from the index would
-     * break the {@code equals}/{@code hashCode} contract, because an interned key and a plain one
-     * naming the same property are equal. Nothing in the engine interns keys yet; this is the entry
-     * point for when it does.
-     *
-     * @param str       the property name
-     * @param atomIndex the atom table index
-     * @return an interned property key
-     */
-    public static PropertyKey fromAtom(String str, int atomIndex) {
-        return new PropertyKey(str, atomIndex);
-    }
-
-    /**
-     * Create a property key from an integer index.
-     */
-    public static PropertyKey fromIndex(int index) {
-        if (index >= 0 && index < INDEX_CACHE_SIZE) {
-            return INDEX_PROPERTY_KEYS[index];
-        }
-        return new PropertyKey(index, -1);
-    }
-
-    /**
-     * Create a property key from a string.
-     */
-    public static PropertyKey fromString(String str) {
-        return new PropertyKey(str, -1);
-    }
-
-    /**
-     * Create a property key from a symbol.
-     */
-    public static PropertyKey fromSymbol(JSSymbol symbol) {
-        return new PropertyKey(symbol, -1);
-    }
-
-    /**
-     * Create a property key from a JSValue.
-     * Converts the value to an appropriate key.
-     */
-    public static PropertyKey fromValue(JSContext context, JSValue value) {
-        if (value instanceof JSString s) {
-            return fromString(s.value());
-        }
-        if (value instanceof JSSymbol s) {
-            return fromSymbol(s);
-        }
-        if (value instanceof JSNumber n) {
-            // Check if it's an array index
-            double doubleValue = n.value();
-            if (doubleValue >= 0 && doubleValue <= Integer.MAX_VALUE && doubleValue == Math.floor(doubleValue)) {
-                return fromIndex((int) doubleValue);
-            }
-        }
-        // ES2024 ToPropertyKey: step 1 - ToPrimitive(argument, string)
-        // If result is a symbol, use it directly as property key
-        if (value instanceof JSObject) {
-            JSValue primitive = JSTypeConversions.toPrimitive(context, value, JSTypeConversions.PreferredType.STRING);
-            if (primitive instanceof JSSymbol sym) {
-                return fromSymbol(sym);
-            }
-            if (primitive instanceof JSString s) {
-                return fromString(s.value());
-            }
-            // Continue with toString for other primitive results
-            JSString str = JSTypeConversions.toString(context, primitive);
-            return fromString(str.value());
-        }
-        // Convert to string for other types
-        JSString str = JSTypeConversions.toString(context, value);
-        return fromString(str.value());
     }
 
     /**
@@ -227,15 +139,14 @@ public final class PropertyKey {
     /**
      * Two keys are equal when they name the same JavaScript property.
      * <p>
-     * A canonical array index has two internal encodings — {@link #fromIndex(int)} stores an
-     * {@link Integer} while {@link #fromString(String)} stores a {@link String} — yet
-     * {@code fromIndex(0)} and {@code fromString("0")} name the same property. Comparing the raw
-     * {@code value} objects would report them unequal (and hash them differently), which silently
-     * breaks every {@code HashSet<PropertyKey>} and {@code HashMap<PropertyKey, ?>} in the engine.
-     * The canonical property string is therefore the identity for string and index keys.
+     * A canonical array index has two internal encodings — {@link #fromIndex(int)} stores an {@link Integer} while
+     * {@link #fromString(String)} stores a {@link String} — yet {@code fromIndex(0)} and {@code fromString("0")} name
+     * the same property. Comparing the raw {@code value} objects would report them unequal (and hash them differently),
+     * which silently breaks every {@code HashSet<PropertyKey>} and {@code HashMap<PropertyKey, ?>} in the engine. The
+     * canonical property string is therefore the identity for string and index keys.
      * <p>
-     * Symbols are compared by identity, and never equal a string key, because a symbol's property
-     * string ({@code "Symbol(x)"}) is not a property name.
+     * Symbols are compared by identity, and never equal a string key, because a symbol's property string
+     * ({@code "Symbol(x)"}) is not a property name.
      */
     @Override
     public boolean equals(Object obj) {
@@ -263,8 +174,8 @@ public final class PropertyKey {
     }
 
     /**
-     * Hashes the canonical property string so index and string encodings of the same property
-     * agree. Deriving the hash from {@code atomIndex} would break the {@code equals}/{@code
+     * Hashes the canonical property string so index and string encodings of the same property agree. Deriving the hash
+     * from {@code atomIndex} would break the {@code equals}/{@code
      * hashCode} contract, because an interned and a non-interned key can be equal.
      */
     @Override
@@ -306,8 +217,8 @@ public final class PropertyKey {
     }
 
     /**
-     * Convert this key to a canonical array index (0..2^32-2) if possible.
-     * Returns -1 when this key is not a canonical array index.
+     * Convert this key to a canonical array index (0..2^32-2) if possible. Returns -1 when this key is not a canonical
+     * array index.
      */
     public long toArrayIndex() {
         if (cachedArrayIndex != ARRAY_INDEX_NOT_COMPUTED) {
@@ -351,8 +262,8 @@ public final class PropertyKey {
     }
 
     /**
-     * Convert this key to an integer index if possible.
-     * Returns -1 when this key does not represent a non-negative int index.
+     * Convert this key to an integer index if possible. Returns -1 when this key does not represent a non-negative int
+     * index.
      */
     public int toIndex() {
         if (cachedIndex != INDEX_NOT_COMPUTED) {
@@ -404,8 +315,92 @@ public final class PropertyKey {
 
     @Override
     public String toString() {
-        return "PropertyKey{" + toPropertyString() +
-                (atomIndex >= 0 ? ", atom=" + atomIndex : "") +
-                "}";
+        return "PropertyKey{" + toPropertyString() + (atomIndex >= 0 ? ", atom=" + atomIndex : "") + "}";
+    }
+
+    private static PropertyKey[] createIndexPropertyKeys() {
+        PropertyKey[] cachedPropertyKeys = new PropertyKey[INDEX_CACHE_SIZE];
+        for (int index = 0; index < INDEX_CACHE_SIZE; index++) {
+            cachedPropertyKeys[index] = new PropertyKey(index, -1);
+        }
+        return cachedPropertyKeys;
+    }
+
+    /**
+     * Create a property key from an interned string (atom).
+     * <p>
+     * The atom index is metadata only: {@link #equals(Object)} and {@link #hashCode()} derive from the canonical
+     * property string, never from the index. Deriving the hash from the index would break the
+     * {@code equals}/{@code hashCode} contract, because an interned key and a plain one naming the same property are
+     * equal. Nothing in the engine interns keys yet; this is the entry point for when it does.
+     *
+     * @param str
+     *            the property name
+     * @param atomIndex
+     *            the atom table index
+     * @return an interned property key
+     */
+    public static PropertyKey fromAtom(String str, int atomIndex) {
+        return new PropertyKey(str, atomIndex);
+    }
+
+    /**
+     * Create a property key from an integer index.
+     */
+    public static PropertyKey fromIndex(int index) {
+        if (index >= 0 && index < INDEX_CACHE_SIZE) {
+            return INDEX_PROPERTY_KEYS[index];
+        }
+        return new PropertyKey(index, -1);
+    }
+
+    /**
+     * Create a property key from a string.
+     */
+    public static PropertyKey fromString(String str) {
+        return new PropertyKey(str, -1);
+    }
+
+    /**
+     * Create a property key from a symbol.
+     */
+    public static PropertyKey fromSymbol(JSSymbol symbol) {
+        return new PropertyKey(symbol, -1);
+    }
+
+    /**
+     * Create a property key from a JSValue. Converts the value to an appropriate key.
+     */
+    public static PropertyKey fromValue(JSContext context, JSValue value) {
+        if (value instanceof JSString s) {
+            return fromString(s.value());
+        }
+        if (value instanceof JSSymbol s) {
+            return fromSymbol(s);
+        }
+        if (value instanceof JSNumber n) {
+            // Check if it's an array index
+            double doubleValue = n.value();
+            if (doubleValue >= 0 && doubleValue <= Integer.MAX_VALUE && doubleValue == Math.floor(doubleValue)) {
+                return fromIndex((int) doubleValue);
+            }
+        }
+        // ES2024 ToPropertyKey: step 1 - ToPrimitive(argument, string)
+        // If result is a symbol, use it directly as property key
+        if (value instanceof JSObject) {
+            JSValue primitive = JSTypeConversions.toPrimitive(context, value, JSTypeConversions.PreferredType.STRING);
+            if (primitive instanceof JSSymbol sym) {
+                return fromSymbol(sym);
+            }
+            if (primitive instanceof JSString s) {
+                return fromString(s.value());
+            }
+            // Continue with toString for other primitive results
+            JSString str = JSTypeConversions.toString(context, primitive);
+            return fromString(str.value());
+        }
+        // Convert to string for other types
+        JSString str = JSTypeConversions.toString(context, value);
+        return fromString(str.value());
     }
 }

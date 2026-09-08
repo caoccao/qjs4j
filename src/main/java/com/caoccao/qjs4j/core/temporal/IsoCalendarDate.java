@@ -16,11 +16,7 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
-public record IsoCalendarDate(
-        int year,
-        int month,
-        String monthCode,
-        int day) {
+public record IsoCalendarDate(int year, int month, String monthCode, int day) {
     public IsoDate toIsoDate() {
         return new IsoDate(year, month, day);
     }

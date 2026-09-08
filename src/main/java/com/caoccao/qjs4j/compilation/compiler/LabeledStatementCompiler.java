@@ -28,9 +28,8 @@ final class LabeledStatementCompiler extends AstNodeCompiler<LabeledStatement> {
     }
 
     /**
-     * Compile a labeled statement following QuickJS js_parse_statement_or_decl.
-     * Creates a break entry so that 'break label;' jumps past the labeled body.
-     * For labeled loops (while/for/for-in/for-of), the label is attached to the
+     * Compile a labeled statement following QuickJS js_parse_statement_or_decl. Creates a break entry so that 'break
+     * label;' jumps past the labeled body. For labeled loops (while/for/for-in/for-of), the label is attached to the
      * loop's LoopContext so labeled break/continue work on the loop.
      */
     @Override
@@ -54,7 +53,9 @@ final class LabeledStatementCompiler extends AstNodeCompiler<LabeledStatement> {
             compileLabeledLoop(labelName, body);
         } else {
             // Regular labeled statement: only 'break label;' is valid (not continue)
-            LoopContext labelContext = new LoopContext(compilerContext.emitter.currentOffset(), compilerContext.scopeManager.getScopeDepth(), compilerContext.scopeManager.getScopeDepth(), labelName);
+            LoopContext labelContext = new LoopContext(compilerContext.emitter.currentOffset(),
+                    compilerContext.scopeManager.getScopeDepth(), compilerContext.scopeManager.getScopeDepth(),
+                    labelName);
             labelContext.isRegularStmt = true;
             compilerContext.loopManager.pushLoop(labelContext);
 
@@ -76,8 +77,8 @@ final class LabeledStatementCompiler extends AstNodeCompiler<LabeledStatement> {
     }
 
     /**
-     * Compile a labeled loop: the label is attached to the loop's LoopContext.
-     * This is needed so that 'break label;' and 'continue label;' work on the loop.
+     * Compile a labeled loop: the label is attached to the loop's LoopContext. This is needed so that 'break label;'
+     * and 'continue label;' work on the loop.
      */
     private void compileLabeledLoop(String labelName, Statement loopStmt) {
         // We temporarily store the label name so the loop compilation methods can pick it up

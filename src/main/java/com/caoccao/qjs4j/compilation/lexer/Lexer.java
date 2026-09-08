@@ -25,16 +25,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Lexical analyzer for JavaScript source code.
- * Converts source text into a stream of tokens.
+ * Lexical analyzer for JavaScript source code. Converts source text into a stream of tokens.
  * <p>
- * Implements ECMAScript lexical grammar including:
- * - Number literals (decimal, hex, binary, octal, scientific)
- * - String literals with escape sequences
- * - Identifiers and keywords
- * - Operators and punctuation
- * - Comments (single-line, multi-line)
- * - Template literals (basic support)
+ * Implements ECMAScript lexical grammar including: - Number literals (decimal, hex, binary, octal, scientific) - String
+ * literals with escape sequences - Identifiers and keywords - Operators and punctuation - Comments (single-line,
+ * multi-line) - Template literals (basic support)
  */
 public final class Lexer {
     private static final Map<String, TokenType> KEYWORDS = new HashMap<>();
@@ -82,20 +77,20 @@ public final class Lexer {
         KEYWORDS.put(JSKeyword.YIELD, TokenType.YIELD);
     }
 
-    final String source;
-    private final LexerTemplateScanner templateScanner;
     int column;
-    int line;
-    int position;
     /**
-     * Whether the {@code default} keyword just produced was a property name — {@code x.default} —
-     * rather than the {@code default} of {@code export default}. See {@link #expectRegex()}.
+     * Whether the {@code default} keyword just produced was a property name — {@code x.default} — rather than the
+     * {@code default} of {@code export default}. See {@link #expectRegex()}.
      */
     private boolean defaultFollowsPropertyAccess;
     private TokenType lastTokenType;
+    int line;
     private Token lookahead;
     private boolean moduleMode;
+    int position;
+    final String source;
     private boolean strictMode;
+    private final LexerTemplateScanner templateScanner;
 
     public Lexer(String source) {
         this.source = source;
@@ -110,10 +105,6 @@ public final class Lexer {
         this.strictMode = false;
     }
 
-    private static boolean isLineTerminator(char c) {
-        return c == '\n' || c == '\r' || c == '\u2028' || c == '\u2029';
-    }
-
     char advance() {
         char c = source.charAt(position);
         position++;
@@ -122,8 +113,8 @@ public final class Lexer {
     }
 
     /**
-     * Determine if the current context expects a regex literal.
-     * Regex can appear after operators, keywords, or at the start of an expression.
+     * Determine if the current context expects a regex literal. Regex can appear after operators, keywords, or at the
+     * start of an expression.
      */
     private boolean expectRegex() {
         if (lastTokenType == null) {
@@ -132,27 +123,21 @@ public final class Lexer {
 
         return switch (lastTokenType) {
             // After operators
-            case ASSIGN, EQ, NE, STRICT_EQ, STRICT_NE, LT, LE, GT, GE,
-                 PLUS, MINUS, MUL, DIV, MOD, EXP,
-                 BIT_AND, BIT_OR, BIT_XOR, BIT_NOT,
-                 LOGICAL_AND, LOGICAL_OR, NOT,
-                 LSHIFT, RSHIFT, URSHIFT,
-                 PLUS_ASSIGN, MINUS_ASSIGN, MUL_ASSIGN, DIV_ASSIGN, MOD_ASSIGN,
-                 EXP_ASSIGN, AND_ASSIGN, OR_ASSIGN, XOR_ASSIGN,
-                 LSHIFT_ASSIGN, RSHIFT_ASSIGN, URSHIFT_ASSIGN,
-                 NULLISH_COALESCING,
-                 // After punctuation
-                 LPAREN, LBRACKET, LBRACE, COMMA, SEMICOLON, COLON, QUESTION,
-                 ARROW,
-                 // After keywords that start expressions
-                 // Note: AWAIT is intentionally excluded — in non-async context await is
-                 // an identifier and '/' is division. In async context, the parser's
-                 // rescanAsRegex() path in parsePrimaryExpression handles the DIV→REGEX rescan.
-                 // Note: YIELD is intentionally excluded for the same reason in non-generator
-                 // sloppy code (`yield` may be an identifier, so '/' can be division).
-                 // Generator contexts that need a regex after yield use parser rescan.
-                 RETURN, THROW, TYPEOF, VOID, DELETE, NEW,
-                 IF, WHILE, FOR, CASE -> true;
+            case ASSIGN, EQ, NE, STRICT_EQ, STRICT_NE, LT, LE, GT, GE, PLUS, MINUS, MUL, DIV, MOD, EXP, BIT_AND, BIT_OR,
+                    BIT_XOR, BIT_NOT, LOGICAL_AND, LOGICAL_OR, NOT, LSHIFT, RSHIFT, URSHIFT, PLUS_ASSIGN, MINUS_ASSIGN,
+                    MUL_ASSIGN, DIV_ASSIGN, MOD_ASSIGN, EXP_ASSIGN, AND_ASSIGN, OR_ASSIGN, XOR_ASSIGN, LSHIFT_ASSIGN,
+                    RSHIFT_ASSIGN, URSHIFT_ASSIGN, NULLISH_COALESCING,
+                    // After punctuation
+                    LPAREN, LBRACKET, LBRACE, COMMA, SEMICOLON, COLON, QUESTION, ARROW,
+                    // After keywords that start expressions
+                    // Note: AWAIT is intentionally excluded — in non-async context await is
+                    // an identifier and '/' is division. In async context, the parser's
+                    // rescanAsRegex() path in parsePrimaryExpression handles the DIV→REGEX rescan.
+                    // Note: YIELD is intentionally excluded for the same reason in non-generator
+                    // sloppy code (`yield` may be an identifier, so '/' can be division).
+                    // Generator contexts that need a regex after yield use parser rescan.
+                    RETURN, THROW, TYPEOF, VOID, DELETE, NEW, IF, WHILE, FOR, CASE ->
+                true;
             // `export default /re/` is a regular expression: `default` is followed by an
             // AssignmentExpression there, and it was read as division, so `export default /\(/;`
             // failed to lex at all. `case` was already here; `default` is its other half in a
@@ -191,8 +176,7 @@ public final class Lexer {
 
     boolean isIdentifierPart(char c) {
         if (c < 128) {
-            return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-                    (c >= '0' && c <= '9') || c == '_' || c == '$';
+            return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '$';
         }
         return UnicodeData.isIdentifierPart(c);
     }
@@ -201,14 +185,14 @@ public final class Lexer {
         return UnicodeData.isIdentifierPart(codePoint);
     }
 
-    // Core scanning logic
-
     boolean isIdentifierStart(char c) {
         if (c < 128) {
             return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '$';
         }
         return UnicodeData.isIdentifierStart(c);
     }
+
+    // Core scanning logic
 
     private boolean isIdentifierStartCodePoint(int codePoint) {
         return UnicodeData.isIdentifierStart(codePoint);
@@ -318,10 +302,9 @@ public final class Lexer {
     }
 
     /**
-     * Re-scan a DIV or DIV_ASSIGN token as a regex literal.
-     * Called by the parser when it encounters '/' or '/=' in expression position
-     * (e.g. after a block statement's closing brace) where the lexer incorrectly
-     * tokenized it as division. Mirrors QuickJS's js_parse_regexp() re-scan.
+     * Re-scan a DIV or DIV_ASSIGN token as a regex literal. Called by the parser when it encounters '/' or '/=' in
+     * expression position (e.g. after a block statement's closing brace) where the lexer incorrectly tokenized it as
+     * division. Mirrors QuickJS's js_parse_regexp() re-scan.
      */
     public Token rescanAsRegex(Token divToken) {
         int startPos = divToken.offset();
@@ -336,8 +319,6 @@ public final class Lexer {
         return regexToken;
     }
 
-    // Character utilities
-
     /**
      * Reset the lexer to the beginning of the source.
      */
@@ -350,6 +331,8 @@ public final class Lexer {
         defaultFollowsPropertyAccess = false;
     }
 
+    // Character utilities
+
     public void restoreState(LexerState state) {
         this.position = state.position();
         this.line = state.line();
@@ -361,8 +344,8 @@ public final class Lexer {
     }
 
     public LexerState saveState() {
-        return new LexerState(
-                position, line, column, lastTokenType, defaultFollowsPropertyAccess, lookahead, strictMode);
+        return new LexerState(position, line, column, lastTokenType, defaultFollowsPropertyAccess, lookahead,
+                strictMode);
     }
 
     private Token scanBinaryNumber(int startPos, int startLine, int startColumn) {
@@ -371,7 +354,8 @@ public final class Lexer {
         return finalizeNumberOrBigIntToken(startPos, startLine, startColumn);
     }
 
-    private void scanDigitsWithNumericSeparators(int radix, boolean firstDigitAlreadyConsumed, boolean firstDigitIsZero) {
+    private void scanDigitsWithNumericSeparators(int radix, boolean firstDigitAlreadyConsumed,
+            boolean firstDigitIsZero) {
         if (!firstDigitAlreadyConsumed) {
             if (isAtEnd() || !isDigitForRadix(peek(), radix)) {
                 throw new JSSyntaxErrorException("Invalid or unexpected token");
@@ -389,10 +373,8 @@ public final class Lexer {
                 digitCount++;
                 lastWasSeparator = false;
             } else if (c == '_') {
-                if (lastWasSeparator ||
-                        (radix == 10 && firstDigitIsZero && digitCount == 1) ||
-                        position + 1 >= source.length() ||
-                        !isDigitForRadix(source.charAt(position + 1), radix)) {
+                if (lastWasSeparator || (radix == 10 && firstDigitIsZero && digitCount == 1)
+                        || position + 1 >= source.length() || !isDigitForRadix(source.charAt(position + 1), radix)) {
                     throw new JSSyntaxErrorException("Invalid or unexpected token");
                 }
                 advance();
@@ -414,7 +396,7 @@ public final class Lexer {
     }
 
     private Token scanIdentifier(int startPos, int startLine, int startColumn, int firstCodePoint,
-                                 boolean startsWithEscape) {
+            boolean startsWithEscape) {
         boolean hasEscape = startsWithEscape;
         StringBuilder valueBuilder = new StringBuilder();
         valueBuilder.appendCodePoint(firstCodePoint);
@@ -439,8 +421,7 @@ public final class Lexer {
             }
 
             char nextChar = peek();
-            if (Character.isHighSurrogate(nextChar)
-                    && position + 1 < source.length()
+            if (Character.isHighSurrogate(nextChar) && position + 1 < source.length()
                     && Character.isLowSurrogate(source.charAt(position + 1))) {
                 int codePoint = Character.toCodePoint(nextChar, source.charAt(position + 1));
                 if (!isIdentifierPartCodePoint(codePoint)) {
@@ -865,7 +846,8 @@ public final class Lexer {
                     case '0' -> {
                         if (!isAtEnd() && peek() >= '0' && peek() <= '9') {
                             if (strictMode) {
-                                throw new JSSyntaxErrorException("Octal escape sequences are not allowed in strict mode");
+                                throw new JSSyntaxErrorException(
+                                        "Octal escape sequences are not allowed in strict mode");
                             }
                             hasOctalEscape = true;
                             if (peek() <= '7') {
@@ -917,7 +899,8 @@ public final class Lexer {
                     default -> {
                         if (escaped >= '1' && escaped <= '7') {
                             if (strictMode) {
-                                throw new JSSyntaxErrorException("Octal escape sequences are not allowed in strict mode");
+                                throw new JSSyntaxErrorException(
+                                        "Octal escape sequences are not allowed in strict mode");
                             }
                             hasOctalEscape = true;
                             value.append(parseLegacyOctalEscape(escaped));
@@ -942,8 +925,7 @@ public final class Lexer {
         }
         advance(); // consume closing quote
 
-        return new Token(TokenType.STRING, value.toString(), startLine, startColumn, startPos,
-                false, hasOctalEscape);
+        return new Token(TokenType.STRING, value.toString(), startLine, startColumn, startPos, false, hasOctalEscape);
     }
 
     private Token scanTemplate(int startPos, int startLine, int startColumn) {
@@ -1036,8 +1018,7 @@ public final class Lexer {
                 char nextChar = peek();
                 if (isIdentifierStart(nextChar) || nextChar == '\\') {
                     hasIdentifierStart = true;
-                } else if (Character.isHighSurrogate(nextChar)
-                        && position + 1 < source.length()
+                } else if (Character.isHighSurrogate(nextChar) && position + 1 < source.length()
                         && Character.isLowSurrogate(source.charAt(position + 1))) {
                     int codePoint = Character.toCodePoint(nextChar, source.charAt(position + 1));
                     hasIdentifierStart = isIdentifierStartCodePoint(codePoint);
@@ -1055,9 +1036,7 @@ public final class Lexer {
                     name.appendCodePoint(codePoint);
                 } else {
                     char first = advance();
-                    if (Character.isHighSurrogate(first)
-                            && !isAtEnd()
-                            && Character.isLowSurrogate(peek())) {
+                    if (Character.isHighSurrogate(first) && !isAtEnd() && Character.isLowSurrogate(peek())) {
                         char trailingSurrogate = advance();
                         int codePoint = Character.toCodePoint(first, trailingSurrogate);
                         if (!isIdentifierStartCodePoint(codePoint)) {
@@ -1086,8 +1065,7 @@ public final class Lexer {
                             throw new JSSyntaxErrorException("Invalid or unexpected token");
                         }
                         name.appendCodePoint(codePoint);
-                    } else if (Character.isHighSurrogate(peek())
-                            && position + 1 < source.length()
+                    } else if (Character.isHighSurrogate(peek()) && position + 1 < source.length()
                             && Character.isLowSurrogate(source.charAt(position + 1))) {
                         char highSurrogate = advance();
                         char lowSurrogate = advance();
@@ -1155,12 +1133,8 @@ public final class Lexer {
             }
 
             // Annex B SingleLineHTMLCloseComment in first line before any token.
-            if (lastTokenType == null
-                    && line == 1
-                    && c == '-'
-                    && position + 2 < source.length()
-                    && source.charAt(position + 1) == '-'
-                    && source.charAt(position + 2) == '>') {
+            if (lastTokenType == null && line == 1 && c == '-' && position + 2 < source.length()
+                    && source.charAt(position + 1) == '-' && source.charAt(position + 2) == '>') {
                 advance(); // consume '-'
                 advance(); // consume '-'
                 advance(); // consume '>'
@@ -1230,10 +1204,8 @@ public final class Lexer {
 
             // Annex B: HTML-like comment <!-- (treated as single-line comment)
             // Not allowed in module code per ES spec B.1.1
-            if (c == '<' && position + 3 < source.length()
-                    && source.charAt(position + 1) == '!'
-                    && source.charAt(position + 2) == '-'
-                    && source.charAt(position + 3) == '-') {
+            if (c == '<' && position + 3 < source.length() && source.charAt(position + 1) == '!'
+                    && source.charAt(position + 2) == '-' && source.charAt(position + 3) == '-') {
                 if (moduleMode) {
                     throw new JSSyntaxErrorException("HTML comments are not allowed in modules");
                 }
@@ -1250,9 +1222,7 @@ public final class Lexer {
             // Annex B: HTML-like close comment --> (treated as single-line comment
             // only when preceded by a line terminator per ES spec)
             // Not allowed in module code per ES spec B.1.1
-            if (seenLineTerminator
-                    && c == '-' && position + 2 < source.length()
-                    && source.charAt(position + 1) == '-'
+            if (seenLineTerminator && c == '-' && position + 2 < source.length() && source.charAt(position + 1) == '-'
                     && source.charAt(position + 2) == '>') {
                 if (moduleMode) {
                     throw new JSSyntaxErrorException("HTML comments are not allowed in modules");
@@ -1282,6 +1252,10 @@ public final class Lexer {
         if (isIdentifierStart(next) && next != 'n') {
             throw new JSSyntaxErrorException("Invalid or unexpected token");
         }
+    }
+
+    private static boolean isLineTerminator(char c) {
+        return c == '\n' || c == '\r' || c == '\u2028' || c == '\u2029';
     }
 
 }

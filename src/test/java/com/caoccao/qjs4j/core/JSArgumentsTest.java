@@ -20,8 +20,7 @@ import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests for the ECMAScript arguments object.
- * The arguments object is an array-like object accessible inside functions
+ * Tests for the ECMAScript arguments object. The arguments object is an array-like object accessible inside functions
  * that contains the values of the arguments passed to that function.
  */
 public class JSArgumentsTest extends BaseJavetTest {

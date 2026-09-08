@@ -29,9 +29,9 @@ final class CompilerScope {
     private final Set<String> functionNameLocals = new HashSet<>();
     private final Map<Integer, String> localNamesByIndex = new HashMap<>();
     private final Map<String, Integer> locals = new HashMap<>();
+    private int nextLocalIndex;
     private final int scopeDepth;
     private final Set<String> simpleCatchParams = new HashSet<>();
-    private int nextLocalIndex;
     private int usingCatchJumpPosition = -1;
     private boolean usingStackAsync;
     private Integer usingStackLocalIndex;
@@ -64,10 +64,9 @@ final class CompilerScope {
     }
 
     /**
-     * Declare a function parameter. Unlike declareLocal, always allocates a new
-     * local slot even for duplicate names (allowed in sloppy mode). The name
-     * mapping points to the last occurrence, matching QuickJS semantics where
-     * each formal parameter occupies its own slot.
+     * Declare a function parameter. Unlike declareLocal, always allocates a new local slot even for duplicate names
+     * (allowed in sloppy mode). The name mapping points to the last occurrence, matching QuickJS semantics where each
+     * formal parameter occupies its own slot.
      */
     int declareParameter(String name) {
         int index = nextLocalIndex++;
@@ -171,14 +170,15 @@ final class CompilerScope {
     /**
      * Rebind {@code name} to a brand new slot and hide the slot it used to name.
      * <p>
-     * This models one environment shadowing another inside a single compiled scope: code emitted
-     * before the call keeps referring to the old slot by index, while everything compiled
-     * afterwards resolves the name to the new slot. The old slot is renamed to {@code hiddenName},
-     * which by convention starts with {@code $} so no source identifier and no name-driven lookup
-     * (direct {@code eval} overlays, capture resolution) can reach it again.
+     * This models one environment shadowing another inside a single compiled scope: code emitted before the call keeps
+     * referring to the old slot by index, while everything compiled afterwards resolves the name to the new slot. The
+     * old slot is renamed to {@code hiddenName}, which by convention starts with {@code $} so no source identifier and
+     * no name-driven lookup (direct {@code eval} overlays, capture resolution) can reach it again.
      *
-     * @param name       the binding to rebind
-     * @param hiddenName the name the previous slot keeps for debugging
+     * @param name
+     *            the binding to rebind
+     * @param hiddenName
+     *            the name the previous slot keeps for debugging
      * @return the index of the new slot
      */
     int shadowLocalWithFreshSlot(String name, String hiddenName) {

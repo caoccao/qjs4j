@@ -36,24 +36,14 @@ public class BigIntPrototypeTest extends BaseJavetTest {
     public void testEquals() {
         assertBooleanWithJavet(
                 // Verify that loose equality passes between primitive and primitive
-                "123n == 123n",
-                "123n == 321n",
-                "123n == BigInt(123)",
-                "123n == BigInt(321)",
+                "123n == 123n", "123n == 321n", "123n == BigInt(123)", "123n == BigInt(321)",
                 // Verify that strict equality passes between primitive and primitive
-                "123n === 123n",
-                "123n === 321n",
-                "123n === BigInt(123)",
-                "123n === BigInt(321)",
+                "123n === 123n", "123n === 321n", "123n === BigInt(123)", "123n === BigInt(321)",
                 // Verify that loose equality passes between primitive and primitive
-                "BigInt(123) == BigInt(123)",
-                "BigInt(123) == BigInt(321)",
-                "BigInt(123) == 123n",
+                "BigInt(123) == BigInt(123)", "BigInt(123) == BigInt(321)", "BigInt(123) == 123n",
                 "BigInt(123) == 321n",
                 // Verify that loose equality passes between primitive and object
-                "123n == Object(BigInt(123))",
-                "123n == Object(BigInt(321))",
-                "BigInt(123) == Object(BigInt(123))",
+                "123n == Object(BigInt(123))", "123n == Object(BigInt(321))", "BigInt(123) == Object(BigInt(123))",
                 "BigInt(123) == Object(BigInt(321))",
                 // Verify that loose equality fails between object and object
                 "Object(BigInt(123)) == Object(BigInt(123))",

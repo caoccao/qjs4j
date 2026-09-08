@@ -21,16 +21,14 @@ import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.core.JSWeakRef;
 
 /**
- * WeakRef constructor implementation.
- * Based on ES2021 WeakRef specification.
+ * WeakRef constructor implementation. Based on ES2021 WeakRef specification.
  * <p>
  * WeakRef(target) creates a weak reference to an object or symbol.
  */
 public final class WeakRefConstructor {
 
     /**
-     * WeakRef constructor call/new.
-     * Delegates to JSWeakRef.create().
+     * WeakRef constructor call/new. Delegates to JSWeakRef.create().
      * <p>
      * Based on ES2021 25.1.3.1
      */
@@ -39,12 +37,14 @@ public final class WeakRefConstructor {
     }
 
     /**
-     * WeakRef constructor function.
-     * Cannot be called without 'new'.
+     * WeakRef constructor function. Cannot be called without 'new'.
      *
-     * @param context The execution context
-     * @param thisArg The this value
-     * @param args    Constructor arguments [target]
+     * @param context
+     *            The execution context
+     * @param thisArg
+     *            The this value
+     * @param args
+     *            Constructor arguments [target]
      * @return TypeError (WeakRef must be called with 'new')
      * @deprecated Use call() method instead, which properly handles both new and direct calls
      */

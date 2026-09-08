@@ -26,16 +26,8 @@ import java.util.Optional;
  * Temporal unit enum, ordered from largest (YEAR) to smallest (NANOSECOND).
  */
 public enum TemporalUnit {
-    YEAR("year", 0),
-    MONTH("month", 1),
-    WEEK("week", 2),
-    DAY("day", 3),
-    HOUR("hour", 4),
-    MINUTE("minute", 5),
-    SECOND("second", 6),
-    MILLISECOND("millisecond", 7),
-    MICROSECOND("microsecond", 8),
-    NANOSECOND("nanosecond", 9);
+    DAY("day", 3), HOUR("hour", 4), MICROSECOND("microsecond", 8), MILLISECOND("millisecond", 7), MINUTE("minute",
+            5), MONTH("month", 1), NANOSECOND("nanosecond", 9), SECOND("second", 6), WEEK("week", 2), YEAR("year", 0);
 
     private static final int UNKNOWN_RANK = 10;
     private final String jsName;
@@ -44,63 +36,6 @@ public enum TemporalUnit {
     TemporalUnit(String jsName, int rank) {
         this.jsName = jsName;
         this.rank = rank;
-    }
-
-    /**
-     * Parses a JS unit string (singular or plural) to a TemporalUnit.
-     * Returns {@code null} if the string is not a recognized unit.
-     */
-    public static Optional<TemporalUnit> fromString(String text) {
-        if (text == null) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(switch (text) {
-            case "year", "years" -> YEAR;
-            case "month", "months" -> MONTH;
-            case "week", "weeks" -> WEEK;
-            case "day", "days" -> DAY;
-            case "hour", "hours" -> HOUR;
-            case "minute", "minutes" -> MINUTE;
-            case "second", "seconds" -> SECOND;
-            case "millisecond", "milliseconds" -> MILLISECOND;
-            case "microsecond", "microseconds" -> MICROSECOND;
-            case "nanosecond", "nanoseconds" -> NANOSECOND;
-            default -> null;
-        });
-    }
-
-    private static BigInteger nanosecondsBetween(
-            JSContext context,
-            LocalDateTime startDateTime,
-            LocalDateTime endDateTime,
-            TemporalRelativeToOption relativeToOption) {
-        if (relativeToOption == null || !relativeToOption.zoned()) {
-            return TemporalUtils.nanosecondsBetween(startDateTime, endDateTime);
-        }
-
-        BigInteger startEpochNanoseconds;
-        if (startDateTime.equals(relativeToOption.startDateTime())) {
-            startEpochNanoseconds = relativeToOption.epochNanoseconds();
-        } else {
-            startEpochNanoseconds =
-                    IsoDateTime.zonedLocalDateTimeToEpochNanoseconds(context, relativeToOption, startDateTime);
-        }
-        if (context.hasPendingException() || startEpochNanoseconds == null) {
-            return BigInteger.ZERO;
-        }
-
-        BigInteger endEpochNanoseconds;
-        if (endDateTime.equals(relativeToOption.startDateTime())) {
-            endEpochNanoseconds = relativeToOption.epochNanoseconds();
-        } else {
-            endEpochNanoseconds =
-                    IsoDateTime.zonedLocalDateTimeToEpochNanoseconds(context, relativeToOption, endDateTime);
-        }
-        if (context.hasPendingException() || endEpochNanoseconds == null) {
-            return BigInteger.ZERO;
-        }
-
-        return endEpochNanoseconds.subtract(startEpochNanoseconds);
     }
 
     public LocalDateTime addCalendarUnits(LocalDateTime startDateTime, long amount) {
@@ -152,9 +87,8 @@ public enum TemporalUnit {
     }
 
     /**
-     * Returns the maximum valid rounding increment for sub-day difference rounding.
-     * hour -> 24, minute/second -> 60, millisecond/microsecond/nanosecond -> 1000.
-     * Returns -1 for non-sub-day units.
+     * Returns the maximum valid rounding increment for sub-day difference rounding. hour -> 24, minute/second -> 60,
+     * millisecond/microsecond/nanosecond -> 1000. Returns -1 for non-sub-day units.
      */
     public long getMaximumSubDayIncrement() {
         return switch (this) {
@@ -166,8 +100,8 @@ public enum TemporalUnit {
     }
 
     /**
-     * Returns the nanosecond factor as a long for time units (HOUR through NANOSECOND) and DAY.
-     * Returns 0 for YEAR, MONTH, WEEK.
+     * Returns the nanosecond factor as a long for time units (HOUR through NANOSECOND) and DAY. Returns 0 for YEAR,
+     * MONTH, WEEK.
      */
     public long getNanosecondFactor() {
         return switch (this) {
@@ -183,8 +117,8 @@ public enum TemporalUnit {
     }
 
     /**
-     * Returns the number of this unit per solar day (for Instant rounding).
-     * Only valid for DAY through NANOSECOND. Returns -1 for YEAR, MONTH, WEEK.
+     * Returns the number of this unit per solar day (for Instant rounding). Only valid for DAY through NANOSECOND.
+     * Returns -1 for YEAR, MONTH, WEEK.
      */
     public long getSolarDayDivisor() {
         return switch (this) {
@@ -200,8 +134,8 @@ public enum TemporalUnit {
     }
 
     /**
-     * Returns fractional second digits implied by this smallestUnit in Temporal toString.
-     * second -> 0, millisecond -> 3, microsecond -> 6, nanosecond -> 9, others -> 0.
+     * Returns fractional second digits implied by this smallestUnit in Temporal toString. second -> 0, millisecond ->
+     * 3, microsecond -> 6, nanosecond -> 9, others -> 0.
      */
     public int getStringFractionalSecondDigits() {
         return switch (this) {
@@ -214,9 +148,8 @@ public enum TemporalUnit {
     }
 
     /**
-     * Returns nanoseconds for one increment of this smallestUnit in Temporal toString.
-     * minute -> 60e9, second -> 1e9, millisecond -> 1e6, microsecond -> 1e3, nanosecond -> 1.
-     * Returns 1 for other units.
+     * Returns nanoseconds for one increment of this smallestUnit in Temporal toString. minute -> 60e9, second -> 1e9,
+     * millisecond -> 1e6, microsecond -> 1e3, nanosecond -> 1. Returns 1 for other units.
      */
     public long getStringRoundingIncrementNanoseconds() {
         return switch (this) {
@@ -258,8 +191,8 @@ public enum TemporalUnit {
     }
 
     /**
-     * Validates rounding increment constraints for a unit-specific Temporal rounding operation.
-     * Non-time units do not impose an increment bound here.
+     * Validates rounding increment constraints for a unit-specific Temporal rounding operation. Non-time units do not
+     * impose an increment bound here.
      */
     public boolean isValidIncrement(long roundingIncrement) {
         if (!isTimeUnit()) {
@@ -308,11 +241,8 @@ public enum TemporalUnit {
         return unitCount;
     }
 
-    public long moveByWholeCalendarUnitsWithRelativeTo(
-            JSContext context,
-            LocalDateTime startDateTime,
-            LocalDateTime endDateTime,
-            TemporalRelativeToOption relativeToOption) {
+    public long moveByWholeCalendarUnitsWithRelativeTo(JSContext context, LocalDateTime startDateTime,
+            LocalDateTime endDateTime, TemporalRelativeToOption relativeToOption) {
         if (relativeToOption == null || !relativeToOption.zoned()) {
             return moveByWholeCalendarUnits(startDateTime, endDateTime);
         }
@@ -327,8 +257,8 @@ public enum TemporalUnit {
         LocalDateTime boundaryDateTime = addCalendarUnits(startDateTime, unitCount);
         if (direction >= 0) {
             while (true) {
-                BigInteger boundaryToEndNanoseconds =
-                        nanosecondsBetween(context, boundaryDateTime, endDateTime, relativeToOption);
+                BigInteger boundaryToEndNanoseconds = nanosecondsBetween(context, boundaryDateTime, endDateTime,
+                        relativeToOption);
                 if (context.hasPendingException()) {
                     return unitCount;
                 }
@@ -341,7 +271,8 @@ public enum TemporalUnit {
             while (true) {
                 long nextUnitCount = unitCount + 1L;
                 LocalDateTime nextDateTime = addCalendarUnits(startDateTime, nextUnitCount);
-                BigInteger nextToEndNanoseconds = nanosecondsBetween(context, nextDateTime, endDateTime, relativeToOption);
+                BigInteger nextToEndNanoseconds = nanosecondsBetween(context, nextDateTime, endDateTime,
+                        relativeToOption);
                 if (context.hasPendingException()) {
                     return unitCount;
                 }
@@ -353,8 +284,8 @@ public enum TemporalUnit {
             }
         } else {
             while (true) {
-                BigInteger boundaryToEndNanoseconds =
-                        nanosecondsBetween(context, boundaryDateTime, endDateTime, relativeToOption);
+                BigInteger boundaryToEndNanoseconds = nanosecondsBetween(context, boundaryDateTime, endDateTime,
+                        relativeToOption);
                 if (context.hasPendingException()) {
                     return unitCount;
                 }
@@ -368,7 +299,8 @@ public enum TemporalUnit {
             while (true) {
                 long nextUnitCount = unitCount - 1L;
                 LocalDateTime nextDateTime = addCalendarUnits(startDateTime, nextUnitCount);
-                BigInteger nextToEndNanoseconds = nanosecondsBetween(context, nextDateTime, endDateTime, relativeToOption);
+                BigInteger nextToEndNanoseconds = nanosecondsBetween(context, nextDateTime, endDateTime,
+                        relativeToOption);
                 if (context.hasPendingException()) {
                     return unitCount;
                 }
@@ -406,5 +338,59 @@ public enum TemporalUnit {
      */
     public boolean requiresRelativeTo() {
         return rank <= WEEK.rank;
+    }
+
+    /**
+     * Parses a JS unit string (singular or plural) to a TemporalUnit. Returns {@code null} if the string is not a
+     * recognized unit.
+     */
+    public static Optional<TemporalUnit> fromString(String text) {
+        if (text == null) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(switch (text) {
+            case "year", "years" -> YEAR;
+            case "month", "months" -> MONTH;
+            case "week", "weeks" -> WEEK;
+            case "day", "days" -> DAY;
+            case "hour", "hours" -> HOUR;
+            case "minute", "minutes" -> MINUTE;
+            case "second", "seconds" -> SECOND;
+            case "millisecond", "milliseconds" -> MILLISECOND;
+            case "microsecond", "microseconds" -> MICROSECOND;
+            case "nanosecond", "nanoseconds" -> NANOSECOND;
+            default -> null;
+        });
+    }
+
+    private static BigInteger nanosecondsBetween(JSContext context, LocalDateTime startDateTime,
+            LocalDateTime endDateTime, TemporalRelativeToOption relativeToOption) {
+        if (relativeToOption == null || !relativeToOption.zoned()) {
+            return TemporalUtils.nanosecondsBetween(startDateTime, endDateTime);
+        }
+
+        BigInteger startEpochNanoseconds;
+        if (startDateTime.equals(relativeToOption.startDateTime())) {
+            startEpochNanoseconds = relativeToOption.epochNanoseconds();
+        } else {
+            startEpochNanoseconds = IsoDateTime.zonedLocalDateTimeToEpochNanoseconds(context, relativeToOption,
+                    startDateTime);
+        }
+        if (context.hasPendingException() || startEpochNanoseconds == null) {
+            return BigInteger.ZERO;
+        }
+
+        BigInteger endEpochNanoseconds;
+        if (endDateTime.equals(relativeToOption.startDateTime())) {
+            endEpochNanoseconds = relativeToOption.epochNanoseconds();
+        } else {
+            endEpochNanoseconds = IsoDateTime.zonedLocalDateTimeToEpochNanoseconds(context, relativeToOption,
+                    endDateTime);
+        }
+        if (context.hasPendingException() || endEpochNanoseconds == null) {
+            return BigInteger.ZERO;
+        }
+
+        return endEpochNanoseconds.subtract(startEpochNanoseconds);
     }
 }

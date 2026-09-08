@@ -29,30 +29,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * {@link BytecodeEmitter} writes and patches its code buffer in place.
  * <p>
- * It used to be backed by a {@code ByteArrayOutputStream}, which cannot overwrite a byte already
- * written: every jump patch copied the whole buffer out, edited it, reset the stream and copied it
- * back, so compiling a function with <em>J</em> jumps over <em>N</em> bytes cost O(J&middot;N).
- * Atom emission separately did a linear pool scan per atom, costing O(A&sup2;).
+ * It used to be backed by a {@code ByteArrayOutputStream}, which cannot overwrite a byte already written: every jump
+ * patch copied the whole buffer out, edited it, reset the stream and copied it back, so compiling a function with
+ * <em>J</em> jumps over <em>N</em> bytes cost O(J&middot;N). Atom emission separately did a linear pool scan per atom,
+ * costing O(A&sup2;).
  */
 public class BytecodeEmitterTest extends BaseTest {
-
-    private static String buildLargeFunctionSource(int branchCount) {
-        StringBuilder source = new StringBuilder("function big(x) {\n  let r = 0;\n");
-        for (int index = 0; index < branchCount; index++) {
-            source.append("  if (x === ").append(index).append(") { r += ").append(index)
-                    .append("; } else { r -= 1; }\n");
-            source.append("  for (let i").append(index).append(" = 0; i").append(index)
-                    .append(" < 1; i").append(index).append("++) { r += 0; }\n");
-            source.append("  r = r && 1 || 0;\n");
-            source.append("  var v").append(index).append(" = { p").append(index).append(": ")
-                    .append(index).append(" };\n");
-        }
-        // Reference the first and last object literal so the returned value proves every branch
-        // body compiled and every per-branch atom resolved.
-        source.append("  return r + v0.p0 + v").append(branchCount - 1)
-                .append(".p").append(branchCount - 1).append(";\n}\n");
-        return source.toString();
-    }
 
     @Test
     public void testAtomPoolDeduplicatesRepeatedAtoms() {
@@ -74,10 +56,8 @@ public class BytecodeEmitterTest extends BaseTest {
         assertThat(emitter.getCodeSize()).isEqualTo(7);
 
         Bytecode bytecode = emitter.build(0);
-        assertThat(bytecode.getInstructions()).containsExactly(
-                (byte) 0x11,
-                (byte) 0x22, (byte) 0x33,
-                (byte) 0x44, (byte) 0x55, (byte) 0x66, (byte) 0x77);
+        assertThat(bytecode.getInstructions()).containsExactly((byte) 0x11, (byte) 0x22, (byte) 0x33, (byte) 0x44,
+                (byte) 0x55, (byte) 0x66, (byte) 0x77);
     }
 
     @Test
@@ -130,9 +110,8 @@ public class BytecodeEmitterTest extends BaseTest {
         emitter.emitU32(0x01020304);
         emitter.emitU32(0x0A0B0C0D);
         emitter.markCatchAsFinally(4);
-        assertThat(emitter.getCode()).containsExactly(
-                (byte) 0x01, (byte) 0x02, (byte) 0x03, (byte) 0x04,
-                (byte) 0x8A, (byte) 0x0B, (byte) 0x0C, (byte) 0x0D);
+        assertThat(emitter.getCode()).containsExactly((byte) 0x01, (byte) 0x02, (byte) 0x03, (byte) 0x04, (byte) 0x8A,
+                (byte) 0x0B, (byte) 0x0C, (byte) 0x0D);
     }
 
     @Test
@@ -144,10 +123,8 @@ public class BytecodeEmitterTest extends BaseTest {
         emitter.patchJump(jumpPosition, loopStart);
 
         byte[] code = emitter.getCode();
-        int patched = ((code[jumpPosition] & 0xFF) << 24)
-                | ((code[jumpPosition + 1] & 0xFF) << 16)
-                | ((code[jumpPosition + 2] & 0xFF) << 8)
-                | (code[jumpPosition + 3] & 0xFF);
+        int patched = ((code[jumpPosition] & 0xFF) << 24) | ((code[jumpPosition + 1] & 0xFF) << 16)
+                | ((code[jumpPosition + 2] & 0xFF) << 8) | (code[jumpPosition + 3] & 0xFF);
         assertThat(patched).isEqualTo(loopStart - (jumpPosition + 4)).isNegative();
     }
 
@@ -161,17 +138,13 @@ public class BytecodeEmitterTest extends BaseTest {
 
         emitter.patchJump(jumpPosition, emitter.currentOffset());
 
-        assertThat(emitter.getCodeSize()).as("patching must not change the code size")
-                .isEqualTo(sizeBeforePatch);
+        assertThat(emitter.getCodeSize()).as("patching must not change the code size").isEqualTo(sizeBeforePatch);
         byte[] code = emitter.getCode();
-        int patched = ((code[jumpPosition] & 0xFF) << 24)
-                | ((code[jumpPosition + 1] & 0xFF) << 16)
-                | ((code[jumpPosition + 2] & 0xFF) << 8)
-                | (code[jumpPosition + 3] & 0xFF);
+        int patched = ((code[jumpPosition] & 0xFF) << 24) | ((code[jumpPosition + 1] & 0xFF) << 16)
+                | ((code[jumpPosition + 2] & 0xFF) << 8) | (code[jumpPosition + 3] & 0xFF);
         assertThat(patched).isEqualTo(sizeBeforePatch - (jumpPosition + 4));
         assertThat(code[0]).as("bytes before the patch are untouched").isEqualTo((byte) 0x01);
-        assertThat(code[sizeBeforePatch - 1]).as("bytes after the patch are untouched")
-                .isEqualTo((byte) 0x02);
+        assertThat(code[sizeBeforePatch - 1]).as("bytes after the patch are untouched").isEqualTo((byte) 0x02);
     }
 
     @Test
@@ -182,5 +155,23 @@ public class BytecodeEmitterTest extends BaseTest {
         // not to be timing-sensitive while still failing if quadratic behaviour returns.
         context.eval(buildLargeFunctionSource(8000));
         assertThat(context.eval("big(1)")).isEqualTo(JSNumber.of(8000));
+    }
+
+    private static String buildLargeFunctionSource(int branchCount) {
+        StringBuilder source = new StringBuilder("function big(x) {\n  let r = 0;\n");
+        for (int index = 0; index < branchCount; index++) {
+            source.append("  if (x === ").append(index).append(") { r += ").append(index)
+                    .append("; } else { r -= 1; }\n");
+            source.append("  for (let i").append(index).append(" = 0; i").append(index).append(" < 1; i").append(index)
+                    .append("++) { r += 0; }\n");
+            source.append("  r = r && 1 || 0;\n");
+            source.append("  var v").append(index).append(" = { p").append(index).append(": ").append(index)
+                    .append(" };\n");
+        }
+        // Reference the first and last object literal so the returned value proves every branch
+        // body compiled and every per-branch atom resolved.
+        source.append("  return r + v0.p0 + v").append(branchCount - 1).append(".p").append(branchCount - 1)
+                .append(";\n}\n");
+        return source.toString();
     }
 }

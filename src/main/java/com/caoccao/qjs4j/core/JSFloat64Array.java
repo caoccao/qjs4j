@@ -19,19 +19,11 @@ package com.caoccao.qjs4j.core;
 import java.nio.ByteBuffer;
 
 /**
- * Represents a JavaScript Float64Array.
- * 64-bit floating point array.
+ * Represents a JavaScript Float64Array. 64-bit floating point array.
  */
 public final class JSFloat64Array extends JSTypedArray {
     public static final int BYTES_PER_ELEMENT = 8;
     public static final String NAME = "Float64Array";
-
-    /**
-     * Create a Float64Array with a new buffer.
-     */
-    public JSFloat64Array(JSContext context, int length) {
-        super(context, length, BYTES_PER_ELEMENT);
-    }
 
     /**
      * Create a Float64Array view on an existing buffer.
@@ -40,9 +32,11 @@ public final class JSFloat64Array extends JSTypedArray {
         super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 
-    public static JSObject create(JSContext context, JSValue... args) {
-        return createFromArguments(context, BYTES_PER_ELEMENT,
-                context::createJSFloat64Array, context::createJSFloat64Array, args);
+    /**
+     * Create a Float64Array with a new buffer.
+     */
+    public JSFloat64Array(JSContext context, int length) {
+        super(context, length, BYTES_PER_ELEMENT);
     }
 
     @Override
@@ -82,5 +76,10 @@ public final class JSFloat64Array extends JSTypedArray {
         checkIndex(index);
         ByteBuffer buf = getByteBuffer();
         buf.putDouble(index * BYTES_PER_ELEMENT, value);
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        return createFromArguments(context, BYTES_PER_ELEMENT, context::createJSFloat64Array,
+                context::createJSFloat64Array, args);
     }
 }

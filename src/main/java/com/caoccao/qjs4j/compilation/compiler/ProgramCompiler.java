@@ -28,7 +28,6 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
         super(compilerContext);
     }
 
-
     @Override
     void compile(Program program) {
         if (program.isModule()) {
@@ -63,7 +62,8 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
             if (statement instanceof VariableDeclaration variableDeclaration) {
                 if (variableDeclaration.getKind() == VariableKind.VAR) {
                     for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                        compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(), hoistedVarNames);
+                        compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(),
+                                hoistedVarNames);
                     }
                 } else {
                     Set<String> lexicalNames = new HashSet<>();
@@ -132,8 +132,8 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
 
-        int programResultLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
-                "$program_result_" + compilerContext.emitter.currentOffset());
+        int programResultLocalIndex = compilerContext.scopeManager.currentScope()
+                .declareLocal("$program_result_" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, programResultLocalIndex);
         compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, programResultLocalIndex);
@@ -145,9 +145,8 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
     }
 
     private void compileScript(Program program) {
-        compilerContext.strictMode = program.isStrict();  // Set strict mode from program directive
-        boolean useLocalProgramScope =
-                compilerContext.predeclareProgramLexicalsAsLocals && compilerContext.strictMode;
+        compilerContext.strictMode = program.isStrict(); // Set strict mode from program directive
+        boolean useLocalProgramScope = compilerContext.predeclareProgramLexicalsAsLocals && compilerContext.strictMode;
         compilerContext.inGlobalScope = !useLocalProgramScope;
         compilerContext.isGlobalProgram = !useLocalProgramScope;
         compilerContext.scopeManager.enterScope();
@@ -188,8 +187,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
                 // bindings are handled dynamically in JSGlobalObject.eval().
                 if (!compilerContext.evalMode) {
                     for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                        compilerContext.compilerAnalysis.collectPatternBindingNames(
-                                declarator.getId(),
+                        compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(),
                                 compilerContext.nonDeletableGlobalBindings);
                     }
                 }
@@ -271,7 +269,8 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
             compilerContext.evalReturnLocalIndex = -1;
 
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, evalRetLocalIndex);
-            int programResultLocalIndex = compilerContext.scopeManager.currentScope().declareLocal("$program_result_" + compilerContext.emitter.currentOffset());
+            int programResultLocalIndex = compilerContext.scopeManager.currentScope()
+                    .declareLocal("$program_result_" + compilerContext.emitter.currentOffset());
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, programResultLocalIndex);
             compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, programResultLocalIndex);
@@ -309,7 +308,8 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
                 compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
             }
 
-            int programResultLocalIndex = compilerContext.scopeManager.currentScope().declareLocal("$program_result_" + compilerContext.emitter.currentOffset());
+            int programResultLocalIndex = compilerContext.scopeManager.currentScope()
+                    .declareLocal("$program_result_" + compilerContext.emitter.currentOffset());
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, programResultLocalIndex);
             compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, programResultLocalIndex);

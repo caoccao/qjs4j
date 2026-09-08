@@ -22,18 +22,9 @@ import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 public record TemporalFractionalSecondDigitsOption(boolean auto, int digits) {
     public static final TemporalFractionalSecondDigitsOption AUTO = new TemporalFractionalSecondDigitsOption(true, -1);
     private static final TemporalFractionalSecondDigitsOption[] DIGIT_OPTIONS;
-    private static final long[] DIGIT_ROUNDING_INCREMENT_NANOSECONDS = {
-            TemporalConstants.SECOND_NANOSECONDS,
-            100_000_000L,
-            10_000_000L,
-            TemporalConstants.MILLISECOND_NANOSECONDS,
-            100_000L,
-            10_000L,
-            TemporalConstants.MICROSECOND_NANOSECONDS,
-            100L,
-            10L,
-            1L,
-    };
+    private static final long[] DIGIT_ROUNDING_INCREMENT_NANOSECONDS = {TemporalConstants.SECOND_NANOSECONDS,
+            100_000_000L, 10_000_000L, TemporalConstants.MILLISECOND_NANOSECONDS, 100_000L, 10_000L,
+            TemporalConstants.MICROSECOND_NANOSECONDS, 100L, 10L, 1L,};
 
     static {
         DIGIT_OPTIONS = new TemporalFractionalSecondDigitsOption[10];
@@ -53,9 +44,7 @@ public record TemporalFractionalSecondDigitsOption(boolean auto, int digits) {
         return DIGIT_OPTIONS[digits];
     }
 
-    public static TemporalFractionalSecondDigitsOption parse(
-            JSContext context,
-            JSValue fractionalSecondDigitsValue,
+    public static TemporalFractionalSecondDigitsOption parse(JSContext context, JSValue fractionalSecondDigitsValue,
             String invalidOptionMessage) {
         if (fractionalSecondDigitsValue instanceof JSUndefined || fractionalSecondDigitsValue == null) {
             return autoOption();

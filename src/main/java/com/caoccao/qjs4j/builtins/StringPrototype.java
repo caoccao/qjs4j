@@ -24,28 +24,19 @@ import com.caoccao.qjs4j.unicode.UnicodePropertyResolver;
 import java.util.Locale;
 
 /**
- * Implementation of JavaScript String.prototype methods.
- * Based on ES2020 String.prototype specification.
+ * Implementation of JavaScript String.prototype methods. Based on ES2020 String.prototype specification.
  */
 public final class StringPrototype {
 
     /**
-     * String.prototype.anchor(name)
-     * Creates an HTML anchor element with a name attribute.
+     * String.prototype.anchor(name) Creates an HTML anchor element with a name attribute.
      */
     public static JSValue anchor(JSContext context, JSValue thisArg, JSValue[] args) {
         return createHTML(context, thisArg, args, "a", "name");
     }
 
-    private static String applyRegExpReplacement(
-            JSContext context,
-            JSValue replaceValue,
-            String input,
-            int matchStart,
-            int matchEnd,
-            String[] captures,
-            String[] groupNames
-    ) {
+    private static String applyRegExpReplacement(JSContext context, JSValue replaceValue, String input, int matchStart,
+            int matchEnd, String[] captures, String[] groupNames) {
         if (replaceValue instanceof JSFunction replaceFunction) {
             JSValue[] callbackArgs = buildRegExpReplaceCallbackArgs(context, input, matchStart, captures, groupNames);
             if (context.hasPendingException()) {
@@ -61,29 +52,20 @@ public final class StringPrototype {
         if (context.hasPendingException()) {
             return null;
         }
-        return applyRegExpReplacementPattern(context, replacementTemplate, input, matchStart, matchEnd,
-                captures, groupNames, null);
+        return applyRegExpReplacementPattern(context, replacementTemplate, input, matchStart, matchEnd, captures,
+                groupNames, null);
     }
 
     /**
-     * Scan replacement tokens for both internal capture arrays and observable groups objects.
-     * Named-group property access and conversion stay lazy and in template order.
+     * Scan replacement tokens for both internal capture arrays and observable groups objects. Named-group property
+     * access and conversion stay lazy and in template order.
      */
-    private static String applyRegExpReplacementPattern(
-            JSContext context,
-            String replacementTemplate,
-            String input,
-            int matchStart,
-            int matchEnd,
-            String[] captures,
-            String[] groupNames,
-            JSValue namedCapturesValue
-    ) {
+    private static String applyRegExpReplacementPattern(JSContext context, String replacementTemplate, String input,
+            int matchStart, int matchEnd, String[] captures, String[] groupNames, JSValue namedCapturesValue) {
         boolean hasNamedCaptures = groupNames != null
                 ? hasNamedCaptures(groupNames)
-                : namedCapturesValue != null
-                && !(namedCapturesValue instanceof JSUndefined)
-                && !(namedCapturesValue instanceof JSNull);
+                : namedCapturesValue != null && !(namedCapturesValue instanceof JSUndefined)
+                        && !(namedCapturesValue instanceof JSNull);
         StringBuilder resultBuilder = new StringBuilder(replacementTemplate.length() + 16);
         int replacementIndex = 0;
         while (replacementIndex < replacementTemplate.length()) {
@@ -190,17 +172,11 @@ public final class StringPrototype {
         return resultBuilder.toString();
     }
 
-    static String applyRegExpReplacementWithNamedCapturesObject(
-            JSContext context,
-            JSValue replaceValue,
-            String input,
-            int matchStart,
-            int matchEnd,
-            String[] captures,
-            JSValue namedCapturesValue
-    ) {
+    static String applyRegExpReplacementWithNamedCapturesObject(JSContext context, JSValue replaceValue, String input,
+            int matchStart, int matchEnd, String[] captures, JSValue namedCapturesValue) {
         if (replaceValue instanceof JSFunction replaceFunction) {
-            JSValue[] callbackArgs = buildRegExpReplaceCallbackArgs(context, input, matchStart, captures, namedCapturesValue);
+            JSValue[] callbackArgs = buildRegExpReplaceCallbackArgs(context, input, matchStart, captures,
+                    namedCapturesValue);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -214,21 +190,13 @@ public final class StringPrototype {
         if (context.hasPendingException()) {
             return null;
         }
-        return applyRegExpReplacementPattern(
-                context,
-                replacementTemplate,
-                input,
-                matchStart,
-                matchEnd,
-                captures,
-                null,
+        return applyRegExpReplacementPattern(context, replacementTemplate, input, matchStart, matchEnd, captures, null,
                 namedCapturesValue);
     }
 
     /**
-     * String.prototype.at(index)
-     * ES2022 22.1.3.1
-     * Returns the character at the specified index, supporting negative indices.
+     * String.prototype.at(index) ES2022 22.1.3.1 Returns the character at the specified index, supporting negative
+     * indices.
      */
     public static JSValue at(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -255,59 +223,28 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.big()
-     * Wraps string in <big> element.
+     * String.prototype.big() Wraps string in <big> element.
      */
     public static JSValue big(JSContext context, JSValue thisArg, JSValue[] args) {
         return createHTML(context, thisArg, args, "big", null);
     }
 
     /**
-     * String.prototype.blink()
-     * Wraps string in <blink> element.
+     * String.prototype.blink() Wraps string in <blink> element.
      */
     public static JSValue blink(JSContext context, JSValue thisArg, JSValue[] args) {
         return createHTML(context, thisArg, args, "blink", null);
     }
 
     /**
-     * String.prototype.bold()
-     * Wraps string in <b> element.
+     * String.prototype.bold() Wraps string in <b> element.
      */
     public static JSValue bold(JSContext context, JSValue thisArg, JSValue[] args) {
         return createHTML(context, thisArg, args, "b", null);
     }
 
-    private static JSValue[] buildRegExpReplaceCallbackArgs(
-            JSContext context,
-            String input,
-            int matchStart,
-            String[] captures,
-            String[] groupNames
-    ) {
-        String[] matchCaptures = captures != null ? captures : new String[]{""};
-        boolean hasNamedCaptures = hasNamedCaptures(groupNames);
-        int callbackArgCount = matchCaptures.length + 2 + (hasNamedCaptures ? 1 : 0);
-        JSValue[] callbackArgs = new JSValue[callbackArgCount];
-        for (int captureIndex = 0; captureIndex < matchCaptures.length; captureIndex++) {
-            String captureValue = matchCaptures[captureIndex];
-            callbackArgs[captureIndex] = captureValue != null ? new JSString(captureValue) : JSUndefined.INSTANCE;
-        }
-        callbackArgs[matchCaptures.length] = JSNumber.of(matchStart);
-        callbackArgs[matchCaptures.length + 1] = new JSString(input);
-        if (hasNamedCaptures) {
-            callbackArgs[matchCaptures.length + 2] = createNamedGroupsObject(context, captures, groupNames);
-        }
-        return callbackArgs;
-    }
-
-    private static JSValue[] buildRegExpReplaceCallbackArgs(
-            JSContext context,
-            String input,
-            int matchStart,
-            String[] captures,
-            JSValue namedCapturesValue
-    ) {
+    private static JSValue[] buildRegExpReplaceCallbackArgs(JSContext context, String input, int matchStart,
+            String[] captures, JSValue namedCapturesValue) {
         String[] matchCaptures = captures != null ? captures : new String[]{""};
         boolean hasNamedCaptures = !(namedCapturesValue instanceof JSUndefined);
         int callbackArgCount = matchCaptures.length + 2 + (hasNamedCaptures ? 1 : 0);
@@ -324,9 +261,26 @@ public final class StringPrototype {
         return callbackArgs;
     }
 
+    private static JSValue[] buildRegExpReplaceCallbackArgs(JSContext context, String input, int matchStart,
+            String[] captures, String[] groupNames) {
+        String[] matchCaptures = captures != null ? captures : new String[]{""};
+        boolean hasNamedCaptures = hasNamedCaptures(groupNames);
+        int callbackArgCount = matchCaptures.length + 2 + (hasNamedCaptures ? 1 : 0);
+        JSValue[] callbackArgs = new JSValue[callbackArgCount];
+        for (int captureIndex = 0; captureIndex < matchCaptures.length; captureIndex++) {
+            String captureValue = matchCaptures[captureIndex];
+            callbackArgs[captureIndex] = captureValue != null ? new JSString(captureValue) : JSUndefined.INSTANCE;
+        }
+        callbackArgs[matchCaptures.length] = JSNumber.of(matchStart);
+        callbackArgs[matchCaptures.length + 1] = new JSString(input);
+        if (hasNamedCaptures) {
+            callbackArgs[matchCaptures.length + 2] = createNamedGroupsObject(context, captures, groupNames);
+        }
+        return callbackArgs;
+    }
+
     /**
-     * String.prototype.charAt(index)
-     * ES2020 21.1.3.1
+     * String.prototype.charAt(index) ES2020 21.1.3.1
      */
     public static JSValue charAt(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -341,8 +295,7 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.charCodeAt(index)
-     * ES2020 21.1.3.2
+     * String.prototype.charCodeAt(index) ES2020 21.1.3.2
      */
     public static JSValue charCodeAt(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -357,8 +310,7 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.codePointAt(index)
-     * ES2020 21.1.3.3
+     * String.prototype.codePointAt(index) ES2020 21.1.3.3
      */
     public static JSValue codePointAt(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -389,8 +341,7 @@ public final class StringPrototype {
             case 0xA7D4 -> 0xA7D5; // LATIN CAPITAL LETTER HALF H -> small (Unicode 15.0)
             default -> {
                 // Vithkuqi capital -> small (Unicode 15.0, offset 0x27)
-                if (codePoint >= 0x10570 && codePoint <= 0x10595
-                        && codePoint != 0x1057B && codePoint != 0x1058B) {
+                if (codePoint >= 0x10570 && codePoint <= 0x10595 && codePoint != 0x1057B && codePoint != 0x1058B) {
                     yield codePoint + 0x27;
                 }
                 // Garay uppercase -> lowercase (Unicode 16.0, offset 0x20)
@@ -419,8 +370,7 @@ public final class StringPrototype {
             case 0xA7D5 -> 0xA7D4; // LATIN SMALL LETTER HALF H -> CAPITAL (Unicode 15.0)
             default -> {
                 // Vithkuqi small -> capital (Unicode 15.0, offset 0x27)
-                if (codePoint >= 0x10597 && codePoint <= 0x105BC
-                        && codePoint != 0x105A2 && codePoint != 0x105B2) {
+                if (codePoint >= 0x10597 && codePoint <= 0x105BC && codePoint != 0x105A2 && codePoint != 0x105B2) {
                     yield codePoint - 0x27;
                 }
                 // Garay lowercase -> uppercase (Unicode 16.0, offset 0x20)
@@ -433,8 +383,7 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.concat(...strings)
-     * ES2020 21.1.3.4
+     * String.prototype.concat(...strings) ES2020 21.1.3.4
      */
     public static JSValue concat(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -452,11 +401,9 @@ public final class StringPrototype {
     }
 
     /**
-     * Helper method to create HTML wrapper strings.
-     * Used by anchor(), big(), blink(), bold(), etc.
+     * Helper method to create HTML wrapper strings. Used by anchor(), big(), blink(), bold(), etc.
      */
-    private static JSValue createHTML(JSContext context, JSValue thisArg, JSValue[] args,
-                                      String tag, String attr) {
+    private static JSValue createHTML(JSContext context, JSValue thisArg, JSValue[] args, String tag, String attr) {
         JSString str = toStringCheckObject(context, thisArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -504,8 +451,11 @@ public final class StringPrototype {
             if (groupName == null) {
                 continue;
             }
-            JSValue captureValue = captures[captureIndex] != null ? new JSString(captures[captureIndex]) : JSUndefined.INSTANCE;
-            groupsObject.defineProperty(PropertyKey.fromString(groupName), captureValue, PropertyDescriptor.DataState.All);
+            JSValue captureValue = captures[captureIndex] != null
+                    ? new JSString(captures[captureIndex])
+                    : JSUndefined.INSTANCE;
+            groupsObject.defineProperty(PropertyKey.fromString(groupName), captureValue,
+                    PropertyDescriptor.DataState.All);
         }
         return groupsObject;
     }
@@ -533,8 +483,7 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.endsWith(searchString[, endPosition])
-     * ES2020 21.1.3.6
+     * String.prototype.endsWith(searchString[, endPosition]) ES2020 21.1.3.6
      */
     public static JSValue endsWith(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -566,8 +515,8 @@ public final class StringPrototype {
     }
 
     /**
-     * Helper method to find the first invalid code point in a string.
-     * Returns the index of the first unpaired surrogate, or -1 if the string is well-formed.
+     * Helper method to find the first invalid code point in a string. Returns the index of the first unpaired
+     * surrogate, or -1 if the string is well-formed.
      */
     private static int findInvalidCodePoint(String str) {
         for (int i = 0; i < str.length(); i++) {
@@ -592,32 +541,28 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.fixed()
-     * Wraps string in <tt> element.
+     * String.prototype.fixed() Wraps string in <tt> element.
      */
     public static JSValue fixed(JSContext context, JSValue thisArg, JSValue[] args) {
         return createHTML(context, thisArg, args, "tt", null);
     }
 
     /**
-     * String.prototype.fontcolor(color)
-     * Wraps string in <font> element with color attribute.
+     * String.prototype.fontcolor(color) Wraps string in <font> element with color attribute.
      */
     public static JSValue fontcolor(JSContext context, JSValue thisArg, JSValue[] args) {
         return createHTML(context, thisArg, args, "font", "color");
     }
 
     /**
-     * String.prototype.fontsize(size)
-     * Wraps string in <font> element with size attribute.
+     * String.prototype.fontsize(size) Wraps string in <font> element with size attribute.
      */
     public static JSValue fontsize(JSContext context, JSValue thisArg, JSValue[] args) {
         return createHTML(context, thisArg, args, "font", "size");
     }
 
     /**
-     * get String.prototype.length
-     * ES2020 21.1.3.10
+     * get String.prototype.length ES2020 21.1.3.10
      */
     public static JSValue getLength(JSContext context, JSValue thisArg, JSValue[] args) {
         long length = 0;
@@ -664,7 +609,7 @@ public final class StringPrototype {
      * ES2024 GetSubstitution for string replace/replaceAll.
      */
     private static String getSubstitution(JSContext context, String matched, String str, int position,
-                                          String[] captures, String[] groupNames, String replacement) {
+            String[] captures, String[] groupNames, String replacement) {
         return applyRegExpReplacementPattern(context, replacement, str, position, position + matched.length(),
                 captures != null ? captures : new String[]{matched}, groupNames, null);
     }
@@ -682,8 +627,7 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.includes(searchString[, position])
-     * ES2020 21.1.3.7
+     * String.prototype.includes(searchString[, position]) ES2020 21.1.3.7
      */
     public static JSValue includes(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -708,8 +652,7 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.indexOf(searchString[, position])
-     * ES2020 21.1.3.8
+     * String.prototype.indexOf(searchString[, position]) ES2020 21.1.3.8
      */
     public static JSValue indexOf(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -728,16 +671,25 @@ public final class StringPrototype {
     }
 
     /**
-     * Check if a code point is "Case_Ignorable" per Unicode property.
-     * Uses the full Unicode Case_Ignorable property table.
+     * Check if a code point is "Cased" per Unicode property. Uses the full Unicode Cased property table.
+     */
+    private static boolean isCasedUnicode(UnicodePropertyResolver resolver, int codePoint) {
+        int[] ranges = resolver.resolveBinaryProperty("Cased");
+        if (ranges == null) {
+            return Character.isUpperCase(codePoint) || Character.isLowerCase(codePoint)
+                    || Character.isTitleCase(codePoint);
+        }
+        return isInRanges(codePoint, ranges);
+    }
+
+    /**
+     * Check if a code point is "Case_Ignorable" per Unicode property. Uses the full Unicode Case_Ignorable property
+     * table.
      */
     private static boolean isCaseIgnorableUnicode(UnicodePropertyResolver resolver, int codePoint) {
         int type = Character.getType(codePoint);
-        boolean fallbackCaseIgnorable = type == Character.NON_SPACING_MARK ||
-                type == Character.ENCLOSING_MARK ||
-                type == Character.FORMAT ||
-                type == Character.MODIFIER_LETTER ||
-                type == Character.MODIFIER_SYMBOL;
+        boolean fallbackCaseIgnorable = type == Character.NON_SPACING_MARK || type == Character.ENCLOSING_MARK
+                || type == Character.FORMAT || type == Character.MODIFIER_LETTER || type == Character.MODIFIER_SYMBOL;
         int[] ranges = resolver.resolveBinaryProperty("Case_Ignorable");
         if (ranges == null) {
             return fallbackCaseIgnorable;
@@ -746,46 +698,27 @@ public final class StringPrototype {
     }
 
     /**
-     * Check if a code point is "Cased" per Unicode property.
-     * Uses the full Unicode Cased property table.
-     */
-    private static boolean isCasedUnicode(UnicodePropertyResolver resolver, int codePoint) {
-        int[] ranges = resolver.resolveBinaryProperty("Cased");
-        if (ranges == null) {
-            return Character.isUpperCase(codePoint) ||
-                    Character.isLowerCase(codePoint) ||
-                    Character.isTitleCase(codePoint);
-        }
-        return isInRanges(codePoint, ranges);
-    }
-
-    /**
      * Check if a code point is a combining mark.
      */
     private static boolean isCombiningMark(int codePoint) {
         int type = Character.getType(codePoint);
-        return type == Character.NON_SPACING_MARK ||
-                type == Character.COMBINING_SPACING_MARK ||
-                type == Character.ENCLOSING_MARK;
+        return type == Character.NON_SPACING_MARK || type == Character.COMBINING_SPACING_MARK
+                || type == Character.ENCLOSING_MARK;
     }
 
     /**
-     * ES2024 WhiteSpace + LineTerminator predicate.
-     * Matches: TAB, VT, FF, SP, NBSP, BOM/ZWNBSP, USP (Unicode Space_Separator), LF, CR, LS, PS.
+     * ES2024 WhiteSpace + LineTerminator predicate. Matches: TAB, VT, FF, SP, NBSP, BOM/ZWNBSP, USP (Unicode
+     * Space_Separator), LF, CR, LS, PS.
      */
     private static boolean isEcmaWhitespace(char ch) {
-        return ch == '\t' || ch == '\n' || ch == '\u000B' || ch == '\f' || ch == '\r'
-                || ch == ' ' || ch == '\u00A0' || ch == '\uFEFF'
-                || ch == '\u1680'
-                || (ch >= '\u2000' && ch <= '\u200A')
-                || ch == '\u2028' || ch == '\u2029'
-                || ch == '\u202F' || ch == '\u205F' || ch == '\u3000';
+        return ch == '\t' || ch == '\n' || ch == '\u000B' || ch == '\f' || ch == '\r' || ch == ' ' || ch == '\u00A0'
+                || ch == '\uFEFF' || ch == '\u1680' || (ch >= '\u2000' && ch <= '\u200A') || ch == '\u2028'
+                || ch == '\u2029' || ch == '\u202F' || ch == '\u205F' || ch == '\u3000';
     }
 
     /**
-     * Test if sigma at position sigmaPos is in a "final" context.
-     * Final sigma: preceded by a cased letter (skipping case-ignorable) and
-     * NOT followed by a cased letter (skipping case-ignorable).
+     * Test if sigma at position sigmaPos is in a "final" context. Final sigma: preceded by a cased letter (skipping
+     * case-ignorable) and NOT followed by a cased letter (skipping case-ignorable).
      */
     private static boolean isFinalSigma(UnicodePropertyResolver resolver, String s, int sigmaPos) {
         // Look backward: skip case-ignorable, check for cased
@@ -816,8 +749,8 @@ public final class StringPrototype {
     }
 
     /**
-     * Binary search to check if a code point is in any of the given ranges.
-     * Ranges are stored as [start1, end1, start2, end2, ...] (inclusive).
+     * Binary search to check if a code point is in any of the given ranges. Ranges are stored as [start1, end1, start2,
+     * end2, ...] (inclusive).
      */
     private static boolean isInRanges(int codePoint, int[] ranges) {
         int low = 0;
@@ -863,8 +796,7 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.isWellFormed()
-     * Returns true if the string contains no unpaired surrogates.
+     * String.prototype.isWellFormed() Returns true if the string contains no unpaired surrogates.
      */
     public static JSValue isWellFormed(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -873,16 +805,14 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.italics()
-     * Wraps string in <i> element.
+     * String.prototype.italics() Wraps string in <i> element.
      */
     public static JSValue italics(JSContext context, JSValue thisArg, JSValue[] args) {
         return createHTML(context, thisArg, args, "i", null);
     }
 
     /**
-     * String.prototype.lastIndexOf(searchString[, position])
-     * ES2020 21.1.3.9
+     * String.prototype.lastIndexOf(searchString[, position]) ES2020 21.1.3.9
      */
     public static JSValue lastIndexOf(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -912,31 +842,26 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.link(url)
-     * Creates an HTML anchor element with an href attribute.
+     * String.prototype.link(url) Creates an HTML anchor element with an href attribute.
      */
     public static JSValue link(JSContext context, JSValue thisArg, JSValue[] args) {
         return createHTML(context, thisArg, args, "a", "href");
     }
 
     /**
-     * String.prototype.localeCompare(that [, locales [, options]])
-     * ES2020 21.1.3.11
-     * Compares two strings in the current locale.
+     * String.prototype.localeCompare(that [, locales [, options]]) ES2020 21.1.3.11 Compares two strings in the current
+     * locale.
      */
     public static JSValue localeCompare(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
         String thisStr = str.value();
 
-        JSString thatStr = JSTypeConversions.toString(
-                context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        JSString thatStr = JSTypeConversions.toString(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         String that = thatStr.value();
 
         JSValue localeValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
         JSValue optionsValue = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
-        JSValue collatorValue = JSIntlObject.createCollator(
-                context,
-                context.createJSObject(),
+        JSValue collatorValue = JSIntlObject.createCollator(context, context.createJSObject(),
                 new JSValue[]{localeValue, optionsValue});
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -949,9 +874,8 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.match(regexp)
-     * ES2020 21.1.3.10
-     * Returns an array of matches when matching a string against a regular expression.
+     * String.prototype.match(regexp) ES2020 21.1.3.10 Returns an array of matches when matching a string against a
+     * regular expression.
      */
     public static JSValue match(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg == null || thisArg.isNullOrUndefined()) {
@@ -994,10 +918,8 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.matchAll(regexp)
-     * ES2020 21.1.3.11
-     * Returns an iterator of all results matching a string against a regular expression,
-     * including capturing groups.
+     * String.prototype.matchAll(regexp) ES2020 21.1.3.11 Returns an iterator of all results matching a string against a
+     * regular expression, including capturing groups.
      */
     public static JSValue matchAll(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg == null || thisArg.isNullOrUndefined()) {
@@ -1023,7 +945,8 @@ public final class StringPrototype {
                     }
                     String flagsStr = JSTypeConversions.toString(context, flags).value();
                     if (!flagsStr.contains("g")) {
-                        return context.throwTypeError("String.prototype.matchAll called with a non-global RegExp argument");
+                        return context
+                                .throwTypeError("String.prototype.matchAll called with a non-global RegExp argument");
                     }
                 }
             }
@@ -1077,9 +1000,8 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.normalize([form])
-     * Returns the Unicode Normalization Form of the string.
-     * Valid forms: "NFC" (default), "NFD", "NFKC", "NFKD"
+     * String.prototype.normalize([form]) Returns the Unicode Normalization Form of the string. Valid forms: "NFC"
+     * (default), "NFD", "NFKC", "NFKD"
      */
     public static JSValue normalize(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -1099,19 +1021,19 @@ public final class StringPrototype {
 
             // Parse normalization form
             switch (formName) {
-                case "NFC":
+                case "NFC" :
                     form = UnicodeNormalization.Form.NFC;
                     break;
-                case "NFD":
+                case "NFD" :
                     form = UnicodeNormalization.Form.NFD;
                     break;
-                case "NFKC":
+                case "NFKC" :
                     form = UnicodeNormalization.Form.NFKC;
                     break;
-                case "NFKD":
+                case "NFKD" :
                     form = UnicodeNormalization.Form.NFKD;
                     break;
-                default:
+                default :
                     return context.throwRangeError("The normalization form should be one of NFC, NFD, NFKC, NFKD.");
             }
         }
@@ -1121,8 +1043,7 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.padEnd(targetLength[, padString])
-     * ES2020 21.1.3.11
+     * String.prototype.padEnd(targetLength[, padString]) ES2020 21.1.3.11
      */
     public static JSValue padEnd(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -1155,8 +1076,7 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.padStart(targetLength[, padString])
-     * ES2020 21.1.3.12
+     * String.prototype.padStart(targetLength[, padString]) ES2020 21.1.3.12
      */
     public static JSValue padStart(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -1191,8 +1111,8 @@ public final class StringPrototype {
     }
 
     /**
-     * Lithuanian uppercasing removes U+0307 when it follows a Soft_Dotted code point
-     * with only combining marks in between.
+     * Lithuanian uppercasing removes U+0307 when it follows a Soft_Dotted code point with only combining marks in
+     * between.
      */
     private static String removeLithuanianSoftDottedDots(UnicodePropertyResolver resolver, String input) {
         StringBuilder result = new StringBuilder(input.length());
@@ -1222,8 +1142,7 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.repeat(count)
-     * ES2020 21.1.3.13
+     * String.prototype.repeat(count) ES2020 21.1.3.13
      */
     public static JSValue repeat(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -1263,9 +1182,8 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.replace(searchValue, replaceValue)
-     * ES2020 21.1.3.14
-     * Accepts a string or regular expression as the first argument.
+     * String.prototype.replace(searchValue, replaceValue) ES2020 21.1.3.14 Accepts a string or regular expression as
+     * the first argument.
      */
     public static JSValue replace(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg == null || thisArg.isNullOrUndefined()) {
@@ -1323,10 +1241,8 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.replaceAll(searchValue, replaceValue)
-     * ES2020 21.1.3.15
-     * Accepts a string or regular expression as the first argument.
-     * If a RegExp is provided, it must have the global (g) flag.
+     * String.prototype.replaceAll(searchValue, replaceValue) ES2020 21.1.3.15 Accepts a string or regular expression as
+     * the first argument. If a RegExp is provided, it must have the global (g) flag.
      */
     public static JSValue replaceAll(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg == null || thisArg.isNullOrUndefined()) {
@@ -1353,7 +1269,8 @@ public final class StringPrototype {
                         return JSUndefined.INSTANCE;
                     }
                     if (!flagsStr.contains("g")) {
-                        return context.throwTypeError("String.prototype.replaceAll called with a non-global RegExp argument");
+                        return context
+                                .throwTypeError("String.prototype.replaceAll called with a non-global RegExp argument");
                     }
                 }
             }
@@ -1426,7 +1343,8 @@ public final class StringPrototype {
         return new JSString(result.toString());
     }
 
-    private static JSValue replaceRegExpSubclassOnce(JSContext context, JSRegExp regexp, JSValue replaceValue, JSString inputString) {
+    private static JSValue replaceRegExpSubclassOnce(JSContext context, JSRegExp regexp, JSValue replaceValue,
+            JSString inputString) {
         JSValue execValue = regexp.get(PropertyKey.EXEC);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -1496,14 +1414,8 @@ public final class StringPrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        String replacement = applyRegExpReplacementWithNamedCapturesObject(
-                context,
-                replaceValue,
-                input,
-                matchStart,
-                matchEnd,
-                captures,
-                namedCapturesValue);
+        String replacement = applyRegExpReplacementWithNamedCapturesObject(context, replaceValue, input, matchStart,
+                matchEnd, captures, namedCapturesValue);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1511,10 +1423,8 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.search(regexp)
-     * ES2020 21.1.3.15
-     * Accepts a regular expression or string.
-     * Returns the index of the first match, or -1.
+     * String.prototype.search(regexp) ES2020 21.1.3.15 Accepts a regular expression or string. Returns the index of the
+     * first match, or -1.
      */
     public static JSValue search(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg == null || thisArg.isNullOrUndefined()) {
@@ -1557,8 +1467,7 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.slice(beginIndex[, endIndex])
-     * ES2020 21.1.3.16
+     * String.prototype.slice(beginIndex[, endIndex]) ES2020 21.1.3.16
      */
     public static JSValue slice(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -1591,16 +1500,14 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.small()
-     * Wraps string in <small> element.
+     * String.prototype.small() Wraps string in <small> element.
      */
     public static JSValue small(JSContext context, JSValue thisArg, JSValue[] args) {
         return createHTML(context, thisArg, args, "small", null);
     }
 
     /**
-     * String.prototype.split(separator[, limit])
-     * ES2020 21.1.3.17
+     * String.prototype.split(separator[, limit]) ES2020 21.1.3.17
      */
     public static JSValue split(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg == null || thisArg.isNullOrUndefined()) {
@@ -1630,9 +1537,7 @@ public final class StringPrototype {
 
         JSArray arr = context.createJSArray();
         // Per ES2024 spec ordering: ToUint32(limit) before ToString(separator)
-        long limit = !(limitArg instanceof JSUndefined)
-                ? JSTypeConversions.toUint32(context, limitArg)
-                : 0xFFFFFFFFL;
+        long limit = !(limitArg instanceof JSUndefined) ? JSTypeConversions.toUint32(context, limitArg) : 0xFFFFFFFFL;
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1732,8 +1637,7 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.startsWith(searchString[, position])
-     * ES2020 21.1.3.21
+     * String.prototype.startsWith(searchString[, position]) ES2020 21.1.3.21
      */
     public static JSValue startsWith(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -1760,24 +1664,21 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.strike()
-     * Wraps string in <strike> element.
+     * String.prototype.strike() Wraps string in <strike> element.
      */
     public static JSValue strike(JSContext context, JSValue thisArg, JSValue[] args) {
         return createHTML(context, thisArg, args, "strike", null);
     }
 
     /**
-     * String.prototype.sub()
-     * Wraps string in <sub> element.
+     * String.prototype.sub() Wraps string in <sub> element.
      */
     public static JSValue sub(JSContext context, JSValue thisArg, JSValue[] args) {
         return createHTML(context, thisArg, args, "sub", null);
     }
 
     /**
-     * String.prototype.substr(start[, length])
-     * ES2020 B.2.3.1 (Deprecated, but still widely used)
+     * String.prototype.substr(start[, length]) ES2020 B.2.3.1 (Deprecated, but still widely used)
      */
     public static JSValue substr(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -1808,8 +1709,7 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.substring(indexStart[, indexEnd])
-     * ES2020 21.1.3.19
+     * String.prototype.substring(indexStart[, indexEnd]) ES2020 21.1.3.19
      */
     public static JSValue substring(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -1836,17 +1736,15 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.sup()
-     * Wraps string in <sup> element.
+     * String.prototype.sup() Wraps string in <sup> element.
      */
     public static JSValue sup(JSContext context, JSValue thisArg, JSValue[] args) {
         return createHTML(context, thisArg, args, "sup", null);
     }
 
     /**
-     * String.prototype.toLocaleLowerCase([locale])
-     * Converts string to lowercase according to locale-specific rules.
-     * For now, this is the same as toLowerCase() (locale parameter is ignored).
+     * String.prototype.toLocaleLowerCase([locale]) Converts string to lowercase according to locale-specific rules. For
+     * now, this is the same as toLowerCase() (locale parameter is ignored).
      */
     public static JSValue toLocaleLowerCase(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -1862,9 +1760,8 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.toLocaleUpperCase([locale])
-     * Converts string to uppercase according to locale-specific rules.
-     * For now, this is the same as toUpperCase() (locale parameter is ignored).
+     * String.prototype.toLocaleUpperCase([locale]) Converts string to uppercase according to locale-specific rules. For
+     * now, this is the same as toUpperCase() (locale parameter is ignored).
      */
     public static JSValue toLocaleUpperCase(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -1880,9 +1777,7 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.toLowerCase()
-     * ES2020 21.1.3.22
-     * Handles Greek final sigma per Unicode SpecialCasing.
+     * String.prototype.toLowerCase() ES2020 21.1.3.22 Handles Greek final sigma per Unicode SpecialCasing.
      */
     public static JSValue toLowerCase(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -1890,14 +1785,13 @@ public final class StringPrototype {
     }
 
     /**
-     * Custom toLowerCase that handles the Greek final sigma rule.
-     * When U+03A3 (SIGMA) is at a "final" position (preceded by a cased letter
-     * with possible case-ignorable characters in between, and NOT followed by
-     * a cased letter), it maps to U+03C2 (final sigma) instead of U+03C3.
+     * Custom toLowerCase that handles the Greek final sigma rule. When U+03A3 (SIGMA) is at a "final" position
+     * (preceded by a cased letter with possible case-ignorable characters in between, and NOT followed by a cased
+     * letter), it maps to U+03C2 (final sigma) instead of U+03C3.
      */
     private static String toLowerCaseWithSigma(UnicodePropertyResolver resolver, String s) {
         boolean needsCustom = false;
-        for (int i = 0; i < s.length(); ) {
+        for (int i = 0; i < s.length();) {
             int codePoint = s.codePointAt(i);
             if (codePoint == 0x03A3 || codePointToLower16(codePoint) != codePoint) {
                 needsCustom = true;
@@ -1933,6 +1827,14 @@ public final class StringPrototype {
     }
 
     /**
+     * String.prototype.toString() ES2020 21.1.3.23
+     */
+    public static JSValue toString_(JSContext context, JSValue thisArg, JSValue[] args) {
+        return thisArg.asStringWithDownCast().map(jsString -> (JSValue) jsString)
+                .orElseGet(() -> context.throwTypeError("String.prototype.toString requires that 'this' be a String"));
+    }
+
+    /**
      * ES2024 7.2.8 IsRegExp(argument).
      */
     private static JSString toStringCheckObject(JSContext context, JSValue value) {
@@ -1944,18 +1846,7 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.toString()
-     * ES2020 21.1.3.23
-     */
-    public static JSValue toString_(JSContext context, JSValue thisArg, JSValue[] args) {
-        return thisArg.asStringWithDownCast()
-                .map(jsString -> (JSValue) jsString)
-                .orElseGet(() -> context.throwTypeError("String.prototype.toString requires that 'this' be a String"));
-    }
-
-    /**
-     * String.prototype.toUpperCase()
-     * ES2020 21.1.3.24
+     * String.prototype.toUpperCase() ES2020 21.1.3.24
      */
     public static JSValue toUpperCase(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -1969,7 +1860,7 @@ public final class StringPrototype {
         String result = s.toUpperCase();
         // Apply Unicode 16.0 additions
         boolean needsPatch = false;
-        for (int i = 0; i < result.length(); ) {
+        for (int i = 0; i < result.length();) {
             int codePoint = result.codePointAt(i);
             if (codePointToUpper16(codePoint) != codePoint) {
                 needsPatch = true;
@@ -1981,7 +1872,7 @@ public final class StringPrototype {
             return result;
         }
         StringBuilder sb = new StringBuilder(result.length());
-        for (int i = 0; i < result.length(); ) {
+        for (int i = 0; i < result.length();) {
             int codePoint = result.codePointAt(i);
             sb.appendCodePoint(codePointToUpper16(codePoint));
             i += Character.charCount(codePoint);
@@ -1990,8 +1881,8 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.toWellFormed()
-     * Returns a string where all unpaired surrogates are replaced with U+FFFD (replacement character).
+     * String.prototype.toWellFormed() Returns a string where all unpaired surrogates are replaced with U+FFFD
+     * (replacement character).
      */
     public static JSValue toWellFormed(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -2028,8 +1919,7 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.trim()
-     * ES2020 21.1.3.26
+     * String.prototype.trim() ES2020 21.1.3.26
      */
     public static JSValue trim(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -2046,8 +1936,7 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.trimEnd() / trimRight()
-     * ES2020 21.1.3.28
+     * String.prototype.trimEnd() / trimRight() ES2020 21.1.3.28
      */
     public static JSValue trimEnd(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -2060,8 +1949,7 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.trimStart() / trimLeft()
-     * ES2020 21.1.3.27
+     * String.prototype.trimStart() / trimLeft() ES2020 21.1.3.27
      */
     public static JSValue trimStart(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
@@ -2074,12 +1962,10 @@ public final class StringPrototype {
     }
 
     /**
-     * String.prototype.valueOf()
-     * ES2020 21.1.3.29
+     * String.prototype.valueOf() ES2020 21.1.3.29
      */
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        return thisArg.asStringWithDownCast()
-                .map(jsString -> (JSValue) jsString)
+        return thisArg.asStringWithDownCast().map(jsString -> (JSValue) jsString)
                 .orElseGet(() -> context.throwTypeError("String.prototype.valueOf requires that 'this' be a String"));
     }
 }

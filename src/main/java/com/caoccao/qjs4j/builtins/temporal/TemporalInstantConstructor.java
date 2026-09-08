@@ -166,9 +166,7 @@ public final class TemporalInstantConstructor {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        BigInteger epochNs = TemporalTimeZone.utcDateTimeToEpochNs(
-                parsed.date(),
-                parsed.time(),
+        BigInteger epochNs = TemporalTimeZone.utcDateTimeToEpochNs(parsed.date(), parsed.time(),
                 parsed.offset().totalNanoseconds());
         if (!TemporalUtils.isValidEpochNanoseconds(epochNs)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");

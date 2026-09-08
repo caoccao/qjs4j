@@ -55,7 +55,8 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
 
         // Create a new compiler for the function body
         // Nested functions inherit strict mode from parent (QuickJS behavior)
-        BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode, compilerContext.captureResolver, compilerContext.context);
+        BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode,
+                compilerContext.captureResolver, compilerContext.context);
         CompilerContext functionContext = functionCompiler.context();
 
         functionContext.sourceCode = compilerContext.sourceCode;
@@ -66,16 +67,14 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
         // Enter function scope and add parameters as locals
         functionContext.scopeManager.enterScope();
         functionContext.inGlobalScope = false;
-        functionContext.isInAsyncFunction = funcDecl.isAsync();  // Track if this is an async function
+        functionContext.isInAsyncFunction = funcDecl.isAsync(); // Track if this is an async function
         functionContext.isInGeneratorFunction = funcDecl.isGenerator();
         // Inherit class inner name so eval() inside nested functions can resolve it.
         compilerContext.functionExpressionCompiler.inheritClassInnerNameCapture(functionContext);
-        Set<String> enclosingParameterScopeFunctionNames =
-                compilerContext.functionExpressionCompiler.inheritParameterScopeFunctionNameCapture(functionContext);
-        compilerContext.functionExpressionCompiler.inheritVisibleLexicalCapturesForDirectEvalInBody(
-                functionContext,
-                funcDecl.getBody(),
-                funcDecl.getFunctionParams().hasNonSimpleParameters());
+        Set<String> enclosingParameterScopeFunctionNames = compilerContext.functionExpressionCompiler
+                .inheritParameterScopeFunctionNameCapture(functionContext);
+        compilerContext.functionExpressionCompiler.inheritVisibleLexicalCapturesForDirectEvalInBody(functionContext,
+                funcDecl.getBody(), funcDecl.getFunctionParams().hasNonSimpleParameters());
 
         // Check for "use strict" directive early and update strict mode
         // This ensures nested functions inherit the correct strict mode
@@ -84,21 +83,16 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
         }
 
         List<Integer> parameterSlotIndexes = new ArrayList<>();
-        List<int[]> destructuringParams = compilerContext.functionExpressionCompiler.declareParameters(
-                funcDecl.getParams(),
-                functionContext,
-                parameterSlotIndexes);
+        List<int[]> destructuringParams = compilerContext.functionExpressionCompiler
+                .declareParameters(funcDecl.getParams(), functionContext, parameterSlotIndexes);
         if (funcDecl.needsArguments()) {
             compilerContext.functionExpressionCompiler.declareAndInitializeImplicitArgumentsBinding(functionContext);
         }
 
         // Emit default parameter initialization following QuickJS pattern
         if (funcDecl.getDefaults() != null) {
-            compilerContext.emitHelpers.emitDefaultParameterInit(
-                    functionCompiler,
-                    funcDecl.getFunctionParams(),
-                    parameterSlotIndexes,
-                    funcDecl);
+            compilerContext.emitHelpers.emitDefaultParameterInit(functionCompiler, funcDecl.getFunctionParams(),
+                    parameterSlotIndexes, funcDecl);
         }
 
         // Handle rest parameter if present
@@ -111,11 +105,13 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
             functionContext.emitter.emitOpcode(Opcode.REST);
             functionContext.emitter.emitU16(firstRestIndex);
 
-            compilerContext.functionExpressionCompiler.emitRestParameterBinding(funcDecl.getRestParameter(), functionContext);
+            compilerContext.functionExpressionCompiler.emitRestParameterBinding(funcDecl.getRestParameter(),
+                    functionContext);
         }
 
         // Emit destructuring for pattern parameters after defaults and rest
-        compilerContext.functionExpressionCompiler.emitParameterDestructuring(funcDecl.getParams(), destructuringParams, functionContext);
+        compilerContext.functionExpressionCompiler.emitParameterDestructuring(funcDecl.getParams(), destructuringParams,
+                functionContext);
 
         // If this is a generator function, emit INITIAL_YIELD at the start
         if (funcDecl.isGenerator()) {
@@ -140,7 +136,8 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
         // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
         // to the function scope as var bindings (initialized to undefined).
         Set<String> declParamNames = funcDecl.getParameterNames();
-        functionContext.compilerAnalysis.hoistFunctionBodyAnnexBDeclarations(funcDecl.getBody().getBody(), declParamNames);
+        functionContext.compilerAnalysis.hoistFunctionBodyAnnexBDeclarations(funcDecl.getBody().getBody(),
+                declParamNames);
 
         // Set up CATCH for exception-safe using disposal in function body
         boolean bodyHasUsing = EmitHelpers.hasUsingDeclarations(funcDecl.getBody().getBody());
@@ -167,7 +164,8 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
                 functionContext.emitter.emitOpcode(Opcode.DROP);
             }
             functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            int returnValueIndex = functionContext.scopeManager.currentScope().declareLocal("$function_return_" + functionContext.emitter.currentOffset());
+            int returnValueIndex = functionContext.scopeManager.currentScope()
+                    .declareLocal("$function_return_" + functionContext.emitter.currentOffset());
             functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
             functionContext.emitHelpers.emitCurrentScopeUsingDisposal();
             functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
@@ -178,7 +176,8 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
         if (bodyHasUsing) {
             int jumpOverCatch = functionContext.emitter.emitJump(Opcode.GOTO);
             functionContext.emitter.patchJump(functionUsingCatchJump, functionContext.emitter.currentOffset());
-            functionContext.emitHelpers.emitScopeUsingDisposalWithException(functionContext.scopeManager.currentScope());
+            functionContext.emitHelpers
+                    .emitScopeUsingDisposalWithException(functionContext.scopeManager.currentScope());
             functionContext.emitter.patchJump(jumpOverCatch, functionContext.emitter.currentOffset());
         }
 
@@ -193,8 +192,7 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
 
         // Detect "use strict" directive in function body
         // Combine inherited strict mode with local "use strict" directive
-        boolean isStrict = functionContext.strictMode
-                || funcDecl.getBody().hasUseStrictDirective();
+        boolean isStrict = functionContext.strictMode || funcDecl.getBody().hasUseStrictDirective();
 
         // Extract function source code from original source
         String functionSource = compilerContext.extractSourceCode(funcDecl.getLocation());
@@ -245,19 +243,12 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
         // Per ES spec FunctionAllocate: async functions, generator functions,
         // async generators are NOT constructable
         boolean isFuncConstructor = !funcDecl.isAsync() && !funcDecl.isGenerator();
-        JSBytecodeFunction function = new JSBytecodeFunction(
-                compilerContext.context,
-                functionBytecode,
-                functionName,
-                definedArgCount,
-                JSValue.NO_ARGS,
-                null,            // prototype - will be set by VM
-                isFuncConstructor,
-                funcDecl.isAsync(),
-                funcDecl.isGenerator(),
-                false,           // isArrow - regular function, not arrow
-                isStrict,        // strict - detected from "use strict" directive in function body
-                functionSource,  // source code for toString()
+        JSBytecodeFunction function = new JSBytecodeFunction(compilerContext.context, functionBytecode, functionName,
+                definedArgCount, JSValue.NO_ARGS, null, // prototype - will be set by VM
+                isFuncConstructor, funcDecl.isAsync(), funcDecl.isGenerator(), false, // isArrow - regular function, not
+                                                                                      // arrow
+                isStrict, // strict - detected from "use strict" directive in function body
+                functionSource, // source code for toString()
                 selfCaptureIndex // closure self-reference index (-1 if none)
         );
         function.setHasParameterExpressions(funcDecl.getFunctionParams().hasNonSimpleParameters());
@@ -273,10 +264,8 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
         // Per B.3.3.1: the Annex B runtime hook only fires if no enclosing block
         // scope has a lexical binding for the same name (otherwise replacing this
         // function with var F would produce an Early Error).
-        boolean isAnnexB = compilerContext.annexBFunctionNames.contains(functionName)
-                && !funcDecl.isAsync()
-                && !funcDecl.isGenerator()
-                && !compilerContext.scopeManager.hasEnclosingBlockScopeLocal(functionName);
+        boolean isAnnexB = compilerContext.annexBFunctionNames.contains(functionName) && !funcDecl.isAsync()
+                && !funcDecl.isGenerator() && !compilerContext.scopeManager.hasEnclosingBlockScopeLocal(functionName);
         if (isAnnexB && JSArguments.NAME.equals(functionName)) {
             function.setDisplaysAsArgumentsObjectInToString(true);
         }

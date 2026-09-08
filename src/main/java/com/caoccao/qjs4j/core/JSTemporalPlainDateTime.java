@@ -30,31 +30,26 @@ public final class JSTemporalPlainDateTime extends JSObject {
         this.calendarId = calendarId;
     }
 
-    public static JSTemporalPlainDateTime create(
-            JSContext context,
-            IsoDateTime isoDateTime,
-            TemporalCalendarId calendarId) {
-        JSObject prototype = TemporalUtils.getTemporalPrototype(context, "PlainDateTime");
-        return create(context, isoDateTime, calendarId, prototype);
-    }
-
-    public static JSTemporalPlainDateTime create(
-            JSContext context,
-            IsoDateTime isoDateTime,
-            TemporalCalendarId calendarId,
-            JSObject prototype) {
-        JSTemporalPlainDateTime plainDateTime = new JSTemporalPlainDateTime(context, isoDateTime, calendarId);
-        if (prototype != null) {
-            plainDateTime.setPrototype(prototype);
-        }
-        return plainDateTime;
-    }
-
     public TemporalCalendarId getCalendarId() {
         return calendarId;
     }
 
     public IsoDateTime getIsoDateTime() {
         return isoDateTime;
+    }
+
+    public static JSTemporalPlainDateTime create(JSContext context, IsoDateTime isoDateTime,
+            TemporalCalendarId calendarId) {
+        JSObject prototype = TemporalUtils.getTemporalPrototype(context, "PlainDateTime");
+        return create(context, isoDateTime, calendarId, prototype);
+    }
+
+    public static JSTemporalPlainDateTime create(JSContext context, IsoDateTime isoDateTime,
+            TemporalCalendarId calendarId, JSObject prototype) {
+        JSTemporalPlainDateTime plainDateTime = new JSTemporalPlainDateTime(context, isoDateTime, calendarId);
+        if (prototype != null) {
+            plainDateTime.setPrototype(prototype);
+        }
+        return plainDateTime;
     }
 }

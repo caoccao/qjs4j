@@ -19,8 +19,7 @@ package com.caoccao.qjs4j.core;
 import java.util.*;
 
 /**
- * Represents a JavaScript Set object.
- * Sets maintain insertion order and use SameValueZero equality for values.
+ * Represents a JavaScript Set object. Sets maintain insertion order and use SameValueZero equality for values.
  */
 public final class JSSet extends JSObject {
     public static final String NAME = "Set";
@@ -36,15 +35,6 @@ public final class JSSet extends JSObject {
         this.data = new LinkedHashMap<>();
         this.entriesById = new HashMap<>();
         this.nextEntryId = 1;
-    }
-
-    public static JSObject create(JSContext context, JSValue... args) {
-        JSSet setObj = context.createJSSet();
-        CollectionInitializer.initializePrototypeFromNewTarget(context, setObj, NAME);
-        if (context.hasPendingException()) {
-            return CollectionInitializer.returnAbruptResult(context, setObj);
-        }
-        return CollectionInitializer.initializeFromIterable(context, setObj, args, false);
     }
 
     public IterationCursor createIterationCursor() {
@@ -149,13 +139,22 @@ public final class JSSet extends JSObject {
         return values;
     }
 
+    public static JSObject create(JSContext context, JSValue... args) {
+        JSSet setObj = context.createJSSet();
+        CollectionInitializer.initializePrototypeFromNewTarget(context, setObj, NAME);
+        if (context.hasPendingException()) {
+            return CollectionInitializer.returnAbruptResult(context, setObj);
+        }
+        return CollectionInitializer.initializeFromIterable(context, setObj, args, false);
+    }
+
     private record EntryRecord(long id, JSMap.KeyWrapper keyWrapper) {
     }
 
     public static final class IterationCursor {
+        private int index;
         private final List<Long> orderedIds;
         private final Set<Long> seenIds;
-        private int index;
 
         private IterationCursor() {
             this.orderedIds = new ArrayList<>();

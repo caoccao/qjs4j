@@ -22,17 +22,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Represents an ES6 class in JavaScript.
- * Based on ES2020 class syntax specification.
+ * Represents an ES6 class in JavaScript. Based on ES2020 class syntax specification.
  * <p>
- * In JavaScript, classes are special functions:
- * - typeof MyClass === 'function'
- * - Classes can only be called with 'new'
- * - Classes are always in strict mode
- * - Classes have a prototype property
- * - Constructor initializes instances
- * - Methods are added to prototype
- * - Static methods are added to the class itself
+ * In JavaScript, classes are special functions: - typeof MyClass === 'function' - Classes can only be called with 'new'
+ * - Classes are always in strict mode - Classes have a prototype property - Constructor initializes instances - Methods
+ * are added to prototype - Static methods are added to the class itself
  */
 public final class JSClass extends JSFunction {
     public static final String NAME = JSFunction.NAME;
@@ -48,9 +42,12 @@ public final class JSClass extends JSFunction {
     /**
      * Create a new class.
      *
-     * @param name        Class name
-     * @param constructor Constructor function
-     * @param superClass  Parent class (null for no inheritance)
+     * @param name
+     *            Class name
+     * @param constructor
+     *            Constructor function
+     * @param superClass
+     *            Parent class (null for no inheritance)
      */
     public JSClass(JSContext context, String name, JSFunction constructor, JSClass superClass) {
         super(context);
@@ -81,22 +78,24 @@ public final class JSClass extends JSFunction {
     }
 
     /**
-     * Add an instance field initializer.
-     * Instance fields are initialized in the constructor.
+     * Add an instance field initializer. Instance fields are initialized in the constructor.
      *
-     * @param fieldName  Field name
-     * @param descriptor Property descriptor
+     * @param fieldName
+     *            Field name
+     * @param descriptor
+     *            Property descriptor
      */
     public void addInstanceField(String fieldName, PropertyDescriptor descriptor) {
         instanceFields.put(fieldName, descriptor);
     }
 
     /**
-     * Add an instance method to the class.
-     * Instance methods are added to the prototype.
+     * Add an instance method to the class. Instance methods are added to the prototype.
      *
-     * @param methodName Method name
-     * @param method     Method function
+     * @param methodName
+     *            Method name
+     * @param method
+     *            Method function
      */
     public void addInstanceMethod(String methodName, JSFunction method) {
         instanceMethods.put(methodName, method);
@@ -104,11 +103,12 @@ public final class JSClass extends JSFunction {
     }
 
     /**
-     * Add a static field to the class.
-     * Static fields are added to the class itself.
+     * Add a static field to the class. Static fields are added to the class itself.
      *
-     * @param fieldName  Field name
-     * @param descriptor Property descriptor
+     * @param fieldName
+     *            Field name
+     * @param descriptor
+     *            Property descriptor
      */
     public void addStaticField(String fieldName, PropertyDescriptor descriptor) {
         staticFields.put(fieldName, descriptor);
@@ -116,11 +116,12 @@ public final class JSClass extends JSFunction {
     }
 
     /**
-     * Add a static method to the class.
-     * Static methods are added to the class itself.
+     * Add a static method to the class. Static methods are added to the class itself.
      *
-     * @param methodName Method name
-     * @param method     Method function
+     * @param methodName
+     *            Method name
+     * @param method
+     *            Method function
      */
     public void addStaticMethod(String methodName, JSFunction method) {
         staticMethods.put(methodName, method);
@@ -139,8 +140,10 @@ public final class JSClass extends JSFunction {
     /**
      * Construct a new instance of the class.
      *
-     * @param context The execution context
-     * @param args    Constructor arguments
+     * @param context
+     *            The execution context
+     * @param args
+     *            Constructor arguments
      * @return The new instance
      */
     public JSObject construct(JSContext context, JSValue[] args) {

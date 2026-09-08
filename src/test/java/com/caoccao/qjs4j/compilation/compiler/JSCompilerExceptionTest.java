@@ -34,8 +34,7 @@ class JSCompilerExceptionTest {
         BreakStatement breakStatement = new BreakStatement(null, sourceLocation);
         Program program = new Program(List.of(breakStatement), false, false, new SourceLocation(1, 1, 0, 22));
 
-        JSCompilerException exception = catchThrowableOfType(
-                JSCompilerException.class,
+        JSCompilerException exception = catchThrowableOfType(JSCompilerException.class,
                 () -> new BytecodeCompiler().compile(program));
 
         assertThat(exception.getMessage()).isEqualTo("Illegal break statement");
@@ -52,8 +51,7 @@ class JSCompilerExceptionTest {
 
     @Test
     void testBytecodeCompilerSupportsNullInvalidAst() {
-        JSCompilerException exception = catchThrowableOfType(
-                JSCompilerException.class,
+        JSCompilerException exception = catchThrowableOfType(JSCompilerException.class,
                 () -> new BytecodeCompiler().compile(null));
 
         assertThat(exception.getMessage()).isEqualTo("Expected Program node");
@@ -64,8 +62,7 @@ class JSCompilerExceptionTest {
     void testBytecodeCompilerUsesInvalidAst() {
         Literal invalidAst = new Literal(1, new SourceLocation(4, 9, 28, 34));
 
-        JSCompilerException exception = catchThrowableOfType(
-                JSCompilerException.class,
+        JSCompilerException exception = catchThrowableOfType(JSCompilerException.class,
                 () -> new BytecodeCompiler().compile(invalidAst));
 
         assertThat(exception.getMessage()).isEqualTo("Expected Program node");
@@ -74,37 +71,25 @@ class JSCompilerExceptionTest {
 
     @Test
     void testCompileNestedScriptExceptionCarriesSourceLocation() {
-        String source = "function build() {\n"
-                + "  return {\n"
-                + "    __proto__: null,\n"
-                + "    __proto__: {}\n"
-                + "  };\n"
-                + "}";
+        String source = "function build() {\n" + "  return {\n" + "    __proto__: null,\n" + "    __proto__: {}\n"
+                + "  };\n" + "}";
 
-        JSCompilerException exception = catchThrowableOfType(
-                JSCompilerException.class,
+        JSCompilerException exception = catchThrowableOfType(JSCompilerException.class,
                 () -> new Compiler(source, "nested.js").compile(false));
 
-        assertThat(exception.getMessage()).isEqualTo(
-                "Duplicate __proto__ fields are not allowed in object literals");
+        assertThat(exception.getMessage()).isEqualTo("Duplicate __proto__ fields are not allowed in object literals");
         assertThat(exception.getAst()).isInstanceOf(ObjectExpressionProperty.class);
         assertThat(exception.getAst().getLocation()).isEqualTo(new SourceLocation(4, 5, 55, 55));
     }
 
     @Test
     void testCompileScriptExceptionCarriesSourceLocation() {
-        String source = "const value = {\n"
-                + "  first: 1,\n"
-                + "  __proto__: null,\n"
-                + "  __proto__: {}\n"
-                + "};";
+        String source = "const value = {\n" + "  first: 1,\n" + "  __proto__: null,\n" + "  __proto__: {}\n" + "};";
 
-        JSCompilerException exception = catchThrowableOfType(
-                JSCompilerException.class,
+        JSCompilerException exception = catchThrowableOfType(JSCompilerException.class,
                 () -> new Compiler(source, "script.js").compile(false));
 
-        assertThat(exception.getMessage()).isEqualTo(
-                "Duplicate __proto__ fields are not allowed in object literals");
+        assertThat(exception.getMessage()).isEqualTo("Duplicate __proto__ fields are not allowed in object literals");
         assertThat(exception.getAst()).isInstanceOf(ObjectExpressionProperty.class);
         assertThat(exception.getAst().getLocation()).isEqualTo(new SourceLocation(4, 3, 49, 49));
     }
@@ -145,8 +130,7 @@ class JSCompilerExceptionTest {
         ExpressionStatement statement = new ExpressionStatement(unsupportedLiteral, sourceLocation);
         Program program = new Program(List.of(statement), false, false, new SourceLocation(1, 1, 0, 34));
 
-        JSCompilerException exception = catchThrowableOfType(
-                JSCompilerException.class,
+        JSCompilerException exception = catchThrowableOfType(JSCompilerException.class,
                 () -> new BytecodeCompiler().compile(program));
 
         assertThat(exception.getAst()).isSameAs(unsupportedLiteral);

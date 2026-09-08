@@ -19,17 +19,26 @@ package com.caoccao.qjs4j.core.temporal;
 /**
  * Temporal overflow handling mode enum.
  * <p>
- * Replaces scattered {@code "reject".equals(overflow)} and
- * {@code "constrain".equals(overflow)} string comparisons.
+ * Replaces scattered {@code "reject".equals(overflow)} and {@code "constrain".equals(overflow)} string comparisons.
  */
 public enum TemporalOverflow {
-    CONSTRAIN("constrain"),
-    REJECT("reject");
+    CONSTRAIN("constrain"), REJECT("reject");
 
     private final String jsName;
 
     TemporalOverflow(String jsName) {
         this.jsName = jsName;
+    }
+
+    /**
+     * Returns the JS-canonical name (e.g. "constrain").
+     */
+    public String jsName() {
+        return jsName;
+    }
+
+    public boolean matches(String text) {
+        return jsName.equals(text);
     }
 
     /**
@@ -44,16 +53,5 @@ public enum TemporalOverflow {
             case "reject" -> REJECT;
             default -> null;
         };
-    }
-
-    /**
-     * Returns the JS-canonical name (e.g. "constrain").
-     */
-    public String jsName() {
-        return jsName;
-    }
-
-    public boolean matches(String text) {
-        return jsName.equals(text);
     }
 }

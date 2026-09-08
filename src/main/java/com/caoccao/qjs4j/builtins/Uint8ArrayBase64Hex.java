@@ -23,14 +23,13 @@ import java.util.Arrays;
 /**
  * Implements Uint8Array base64 and hex encoding/decoding methods.
  * <p>
- * Static methods: fromBase64, fromHex
- * Prototype methods: toBase64, toHex, setFromBase64, setFromHex
+ * Static methods: fromBase64, fromHex Prototype methods: toBase64, toHex, setFromBase64, setFromHex
  */
 public final class Uint8ArrayBase64Hex {
-    private static final String BASE64URL_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    private static final int[] BASE64URL_DECODE = new int[128];
     private static final String BASE64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     private static final int[] BASE64_DECODE = new int[128];
+    private static final String BASE64URL_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    private static final int[] BASE64URL_DECODE = new int[128];
 
     static {
         Arrays.fill(BASE64_DECODE, -1);
@@ -96,18 +95,22 @@ public final class Uint8ArrayBase64Hex {
     }
 
     /**
-     * Core base64 decoding algorithm (FromBase64 in the spec).
-     * Returns a DecodeResult with read position, decoded bytes, and optional error message.
-     * The error is returned separately to allow callers to write partial data before throwing.
+     * Core base64 decoding algorithm (FromBase64 in the spec). Returns a DecodeResult with read position, decoded
+     * bytes, and optional error message. The error is returned separately to allow callers to write partial data before
+     * throwing.
      *
-     * @param input             the base64 string
-     * @param decodeTable       the decode lookup table for the chosen alphabet
-     * @param lastChunkHandling the lastChunkHandling option
-     * @param maxLength         maximum number of bytes to decode (Integer.MAX_VALUE for unlimited)
+     * @param input
+     *            the base64 string
+     * @param decodeTable
+     *            the decode lookup table for the chosen alphabet
+     * @param lastChunkHandling
+     *            the lastChunkHandling option
+     * @param maxLength
+     *            maximum number of bytes to decode (Integer.MAX_VALUE for unlimited)
      * @return a DecodeResult with read, bytes, and optional error
      */
-    private static DecodeResult fromBase64Core(String input, int[] decodeTable,
-                                               String lastChunkHandling, int maxLength) {
+    private static DecodeResult fromBase64Core(String input, int[] decodeTable, String lastChunkHandling,
+            int maxLength) {
         if (maxLength == 0) {
             return new DecodeResult(0, new byte[0], null);
         }
@@ -224,9 +227,7 @@ public final class Uint8ArrayBase64Hex {
                 if ("stop-before-partial".equals(lastChunkHandling)) {
                     return new DecodeResult(read, copyBytes(output, outputIndex), null);
                 }
-                return new DecodeResult(
-                        read,
-                        copyBytes(output, outputIndex),
+                return new DecodeResult(read, copyBytes(output, outputIndex),
                         "The base64 input terminates with a single character, excluding padding (=).");
             }
 
@@ -280,11 +281,13 @@ public final class Uint8ArrayBase64Hex {
     }
 
     /**
-     * Core hex decoding algorithm (FromHex in the spec).
-     * Returns a DecodeResult with read position, decoded bytes, and optional error message.
+     * Core hex decoding algorithm (FromHex in the spec). Returns a DecodeResult with read position, decoded bytes, and
+     * optional error message.
      *
-     * @param input     the hex string
-     * @param maxLength maximum number of bytes to decode
+     * @param input
+     *            the hex string
+     * @param maxLength
+     *            maximum number of bytes to decode
      * @return a DecodeResult with read, bytes, and optional error
      */
     private static DecodeResult fromHexCore(String input, int maxLength) {
@@ -302,7 +305,8 @@ public final class Uint8ArrayBase64Hex {
             int high = hexCharValue(input.charAt(index));
             int low = hexCharValue(input.charAt(index + 1));
             if (high == -1 || low == -1) {
-                return new DecodeResult(index, copyBytes(output, written), "Input string must contain hex characters in even length");
+                return new DecodeResult(index, copyBytes(output, written),
+                        "Input string must contain hex characters in even length");
             }
             output[written++] = (byte) ((high << 4) | low);
             index += 2;
@@ -312,8 +316,8 @@ public final class Uint8ArrayBase64Hex {
     }
 
     /**
-     * Parse the "alphabet" option from the options argument.
-     * Returns "base64" or "base64url", or null if an error was thrown.
+     * Parse the "alphabet" option from the options argument. Returns "base64" or "base64url", or null if an error was
+     * thrown.
      */
     private static String getAlphabetOption(JSContext context, JSValue options) {
         if (options instanceof JSUndefined || options == null) {
@@ -343,8 +347,8 @@ public final class Uint8ArrayBase64Hex {
     }
 
     /**
-     * Parse the "lastChunkHandling" option from the options argument.
-     * Returns "loose", "strict", or "stop-before-partial", or null if an error was thrown.
+     * Parse the "lastChunkHandling" option from the options argument. Returns "loose", "strict", or
+     * "stop-before-partial", or null if an error was thrown.
      */
     private static String getLastChunkHandlingOption(JSContext context, JSValue options) {
         if (options instanceof JSUndefined || options == null) {
@@ -366,7 +370,8 @@ public final class Uint8ArrayBase64Hex {
             return null;
         }
         String lastChunkHandling = lastChunkString.value();
-        if (!"loose".equals(lastChunkHandling) && !"strict".equals(lastChunkHandling) && !"stop-before-partial".equals(lastChunkHandling)) {
+        if (!"loose".equals(lastChunkHandling) && !"strict".equals(lastChunkHandling)
+                && !"stop-before-partial".equals(lastChunkHandling)) {
             context.throwTypeError("invalid option " + lastChunkHandling);
             return null;
         }
@@ -497,8 +502,8 @@ public final class Uint8ArrayBase64Hex {
     }
 
     /**
-     * Skip ASCII whitespace starting from position index.
-     * Returns the index of the first non-whitespace character, or length if end of string.
+     * Skip ASCII whitespace starting from position index. Returns the index of the first non-whitespace character, or
+     * length if end of string.
      */
     private static int skipAsciiWhitespace(String input, int index) {
         while (index < input.length() && isAsciiWhitespace(input.charAt(index))) {
@@ -595,9 +600,8 @@ public final class Uint8ArrayBase64Hex {
     }
 
     /**
-     * Result of base64/hex decoding.
-     * The error field is non-null when a SyntaxError should be thrown.
-     * Bytes may still contain valid partial data even when error is set.
+     * Result of base64/hex decoding. The error field is non-null when a SyntaxError should be thrown. Bytes may still
+     * contain valid partial data even when error is set.
      */
     private record DecodeResult(int read, byte[] bytes, String error) {
     }

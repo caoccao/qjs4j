@@ -4,8 +4,8 @@ import com.caoccao.qjs4j.builtins.StringPrototype;
 import com.caoccao.qjs4j.core.*;
 
 /**
- * Demonstration of String.prototype RegExp methods.
- * Shows how match(), matchAll(), replace(), replaceAll(), search(), and split() work.
+ * Demonstration of String.prototype RegExp methods. Shows how match(), matchAll(), replace(), replaceAll(), search(),
+ * and split() work.
  */
 public class StringPrototypeDemo {
 

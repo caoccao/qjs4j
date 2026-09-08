@@ -24,14 +24,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Embedder-facing APIs must not corrupt engine invariants or raise raw {@code java.lang}
- * exceptions.
+ * Embedder-facing APIs must not corrupt engine invariants or raise raw {@code java.lang} exceptions.
  * <p>
- * {@code JSObject.set(int, JSValue)} used to write indices {@code >= 100} straight into sparse
- * backing storage, checking nothing, so a frozen object silently stopped being frozen.
- * {@code createJSArray(long)}, {@code JSArray.toArray()} and {@code JSArray.setLength(long)} all
- * threw {@code NegativeArraySizeException} or {@code IllegalArgumentException} for ordinary uint32
- * array lengths.
+ * {@code JSObject.set(int, JSValue)} used to write indices {@code >= 100} straight into sparse backing storage,
+ * checking nothing, so a frozen object silently stopped being frozen. {@code createJSArray(long)},
+ * {@code JSArray.toArray()} and {@code JSArray.setLength(long)} all threw {@code NegativeArraySizeException} or
+ * {@code IllegalArgumentException} for ordinary uint32 array lengths.
  */
 public class JSEmbedderApiSafetyTest extends BaseTest {
 
@@ -55,11 +53,9 @@ public class JSEmbedderApiSafetyTest extends BaseTest {
 
     @Test
     public void testCreateArrayWithInvalidLengthAndCapacityRaisesRangeError() {
-        assertThatThrownBy(() -> context.createJSArray(-1, 16))
-                .isInstanceOf(JSRangeErrorException.class)
+        assertThatThrownBy(() -> context.createJSArray(-1, 16)).isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("Invalid array length");
-        assertThatThrownBy(() -> new JSArray(context, 4294967296L, 16))
-                .isInstanceOf(JSRangeErrorException.class)
+        assertThatThrownBy(() -> new JSArray(context, 4294967296L, 16)).isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("Invalid array length");
     }
 
@@ -68,17 +64,13 @@ public class JSEmbedderApiSafetyTest extends BaseTest {
         // Clamping only the capacity hint stopped the NegativeArraySizeException but left the
         // invalid length in place: createJSArray(-1) produced an array reporting length -1 and
         // createJSArray(2^32) one reporting 4294967296, neither of which is an array length.
-        assertThatThrownBy(() -> context.createJSArray(-1))
-                .isInstanceOf(JSRangeErrorException.class)
+        assertThatThrownBy(() -> context.createJSArray(-1)).isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("Invalid array length");
-        assertThatThrownBy(() -> context.createJSArray(4294967296L))
-                .isInstanceOf(JSRangeErrorException.class)
+        assertThatThrownBy(() -> context.createJSArray(4294967296L)).isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("Invalid array length");
-        assertThatThrownBy(() -> context.createJSArray(Long.MAX_VALUE))
-                .isInstanceOf(JSRangeErrorException.class)
+        assertThatThrownBy(() -> context.createJSArray(Long.MAX_VALUE)).isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("Invalid array length");
-        assertThatThrownBy(() -> context.createJSArray(Long.MIN_VALUE))
-                .isInstanceOf(JSRangeErrorException.class)
+        assertThatThrownBy(() -> context.createJSArray(Long.MIN_VALUE)).isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("Invalid array length");
     }
 
@@ -154,9 +146,7 @@ public class JSEmbedderApiSafetyTest extends BaseTest {
     @Test
     public void testSetIndexRespectsAnExistingNonWritableProperty() {
         JSObject object = context.createJSObject();
-        object.defineProperty(
-                PropertyKey.fromIndex(500),
-                new JSString("original"),
+        object.defineProperty(PropertyKey.fromIndex(500), new JSString("original"),
                 PropertyDescriptor.DataState.Enumerable);
         object.set(500, new JSString("overwritten"));
         assertThat(object.get(PropertyKey.fromIndex(500)).toString()).isEqualTo("original");
@@ -165,11 +155,9 @@ public class JSEmbedderApiSafetyTest extends BaseTest {
     @Test
     public void testSetLengthOutOfRangeRaisesRangeError() {
         JSArray array = context.createJSArray();
-        assertThatThrownBy(() -> array.setLength(-1))
-                .isInstanceOf(JSRangeErrorException.class)
+        assertThatThrownBy(() -> array.setLength(-1)).isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("Invalid array length");
-        assertThatThrownBy(() -> array.setLength(4294967296L))
-                .isInstanceOf(JSRangeErrorException.class)
+        assertThatThrownBy(() -> array.setLength(4294967296L)).isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("Invalid array length");
     }
 
@@ -186,8 +174,7 @@ public class JSEmbedderApiSafetyTest extends BaseTest {
     public void testToArrayAboveJavaArrayLimitRaisesRangeError() {
         JSArray array = context.createJSArray();
         array.setLength(3000000000L);
-        assertThatThrownBy(array::toArray)
-                .isInstanceOf(JSRangeErrorException.class)
+        assertThatThrownBy(array::toArray).isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("exceeds the maximum Java array size");
     }
 

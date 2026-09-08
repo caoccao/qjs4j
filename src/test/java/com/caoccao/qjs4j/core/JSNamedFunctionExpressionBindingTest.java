@@ -20,16 +20,15 @@ import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
 /**
- * ES2024 15.2.5: a named function expression's own name is bound in an environment that
- * <em>wraps</em> the function's variable environment. A declaration of the same name inside the
- * body therefore creates a different binding that shadows it, and that binding starts out
- * undefined rather than holding the function.
+ * ES2024 15.2.5: a named function expression's own name is bound in an environment that <em>wraps</em> the function's
+ * variable environment. A declaration of the same name inside the body therefore creates a different binding that
+ * shadows it, and that binding starts out undefined rather than holding the function.
  * <p>
- * The compiler used to give both bindings one local slot, which the frame pre-loaded with the
- * function object, so the shadowing declaration observed the function instead. Suppressing the
- * self-name slot entirely fixed that half and broke the other: default-parameter initializers are
- * evaluated in the parameter environment, which sits <em>inside</em> the function-name environment
- * and outside the body's variable environment, so they must still see the function.
+ * The compiler used to give both bindings one local slot, which the frame pre-loaded with the function object, so the
+ * shadowing declaration observed the function instead. Suppressing the self-name slot entirely fixed that half and
+ * broke the other: default-parameter initializers are evaluated in the parameter environment, which sits
+ * <em>inside</em> the function-name environment and outside the body's variable environment, so they must still see the
+ * function.
  */
 public class JSNamedFunctionExpressionBindingTest extends BaseJavetTest {
     @Test
@@ -201,21 +200,6 @@ public class JSNamedFunctionExpressionBindingTest extends BaseJavetTest {
     }
 
     @Test
-    void testAPlainFunctionClosureInsideNestedInitializersSeesBothBindings() {
-        assertStringWithJavet("""
-                var f = function n(a = function q(b = function () { return [eval('n'), eval('q')]; }) {
-                  var q;
-                  return b;
-                }) {
-                  var n;
-                  return a;
-                };
-                var a = f();
-                var v = a()();
-                String([v[0] === f, v[1] === a]);""");
-    }
-
-    @Test
     void testAnInnerInitializerCanReadTheOuterBindingDirectly() {
         assertStringWithJavet("""
                 var f = function n(a = function q(b = eval('n')) { var q; return b; }) {
@@ -233,6 +217,21 @@ public class JSNamedFunctionExpressionBindingTest extends BaseJavetTest {
                   return a();
                 };
                 f();""");
+    }
+
+    @Test
+    void testAPlainFunctionClosureInsideNestedInitializersSeesBothBindings() {
+        assertStringWithJavet("""
+                var f = function n(a = function q(b = function () { return [eval('n'), eval('q')]; }) {
+                  var q;
+                  return b;
+                }) {
+                  var n;
+                  return a;
+                };
+                var a = f();
+                var v = a()();
+                String([v[0] === f, v[1] === a]);""");
     }
 
     @Test

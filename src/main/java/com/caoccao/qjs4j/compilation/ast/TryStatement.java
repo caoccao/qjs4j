@@ -97,7 +97,9 @@ public final class TryStatement extends Statement {
         private final Pattern param;
 
         public CatchClause(Pattern param, BlockStatement body) {
-            super(param != null ? param.getLocation() : (body != null ? body.getLocation() : new SourceLocation(0, 0, 0, 0)));
+            super(param != null
+                    ? param.getLocation()
+                    : (body != null ? body.getLocation() : new SourceLocation(0, 0, 0, 0)));
             this.param = param;
             this.body = body;
         }

@@ -19,15 +19,12 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 /**
- * Implementation of Map.prototype methods.
- * Based on ES2020 Map specification.
+ * Implementation of Map.prototype methods. Based on ES2020 Map specification.
  */
 public final class MapPrototype {
 
     /**
-     * Map.prototype.clear()
-     * ES2020 23.1.3.1
-     * Removes all elements from the Map.
+     * Map.prototype.clear() ES2020 23.1.3.1 Removes all elements from the Map.
      */
     public static JSValue clear(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
@@ -39,9 +36,8 @@ public final class MapPrototype {
     }
 
     /**
-     * Map.prototype.delete(key)
-     * ES2020 23.1.3.3
-     * Removes the element with the specified key. Returns true if an element existed and was removed.
+     * Map.prototype.delete(key) ES2020 23.1.3.3 Removes the element with the specified key. Returns true if an element
+     * existed and was removed.
      */
     public static JSValue delete(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
@@ -53,9 +49,7 @@ public final class MapPrototype {
     }
 
     /**
-     * Map.prototype.entries()
-     * ES2020 23.1.3.4
-     * Returns an iterator over [key, value] pairs.
+     * Map.prototype.entries() ES2020 23.1.3.4 Returns an iterator over [key, value] pairs.
      */
     public static JSValue entries(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
@@ -66,10 +60,8 @@ public final class MapPrototype {
     }
 
     /**
-     * Map.prototype.forEach(callbackFn, thisArg)
-     * ES2020 23.1.3.4
-     * Executes a provided function once per each key/value pair in the Map, in insertion order.
-     * Note: The map can be modified while traversing it. Newly added entries
+     * Map.prototype.forEach(callbackFn, thisArg) ES2020 23.1.3.4 Executes a provided function once per each key/value
+     * pair in the Map, in insertion order. Note: The map can be modified while traversing it. Newly added entries
      * during iteration will be visited (matching QuickJS behavior).
      */
     public static JSValue forEach(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -104,9 +96,7 @@ public final class MapPrototype {
     }
 
     /**
-     * Map.prototype.get(key)
-     * ES2020 23.1.3.5
-     * Returns the value associated with the key, or undefined if none exists.
+     * Map.prototype.get(key) ES2020 23.1.3.5 Returns the value associated with the key, or undefined if none exists.
      */
     public static JSValue get(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
@@ -118,8 +108,7 @@ public final class MapPrototype {
     }
 
     /**
-     * Map.prototype.getOrInsert(key, defaultValue)
-     * QuickJS extension.
+     * Map.prototype.getOrInsert(key, defaultValue) QuickJS extension.
      */
     public static JSValue getOrInsert(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
@@ -135,8 +124,7 @@ public final class MapPrototype {
     }
 
     /**
-     * Map.prototype.getOrInsertComputed(key, callback)
-     * QuickJS extension.
+     * Map.prototype.getOrInsertComputed(key, callback) QuickJS extension.
      */
     public static JSValue getOrInsertComputed(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
@@ -165,9 +153,7 @@ public final class MapPrototype {
     }
 
     /**
-     * get Map.prototype.size
-     * ES2020 23.1.3.10
-     * Returns the number of entries in the Map.
+     * get Map.prototype.size ES2020 23.1.3.10 Returns the number of entries in the Map.
      */
     public static JSValue getSize(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
@@ -185,9 +171,8 @@ public final class MapPrototype {
     }
 
     /**
-     * Map.prototype.has(key)
-     * ES2020 23.1.3.6
-     * Returns a boolean indicating whether an element with the specified key exists.
+     * Map.prototype.has(key) ES2020 23.1.3.6 Returns a boolean indicating whether an element with the specified key
+     * exists.
      */
     public static JSValue has(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
@@ -199,9 +184,7 @@ public final class MapPrototype {
     }
 
     /**
-     * Map.prototype.keys()
-     * ES2020 23.1.3.7
-     * Returns an iterator over keys.
+     * Map.prototype.keys() ES2020 23.1.3.7 Returns an iterator over keys.
      */
     public static JSValue keys(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
@@ -212,9 +195,8 @@ public final class MapPrototype {
     }
 
     /**
-     * Map.prototype.set(key, value)
-     * ES2020 23.1.3.9
-     * Sets the value for the key in the Map object. Returns the Map object.
+     * Map.prototype.set(key, value) ES2020 23.1.3.9 Sets the value for the key in the Map object. Returns the Map
+     * object.
      */
     public static JSValue set(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {
@@ -229,9 +211,7 @@ public final class MapPrototype {
     }
 
     /**
-     * Map.prototype.values()
-     * ES2020 23.1.3.11
-     * Returns an iterator over values.
+     * Map.prototype.values() ES2020 23.1.3.11 Returns an iterator over values.
      */
     public static JSValue values(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSMap map)) {

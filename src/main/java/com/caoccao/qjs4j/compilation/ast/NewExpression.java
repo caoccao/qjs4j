@@ -25,10 +25,7 @@ public final class NewExpression extends Expression {
     private final List<Expression> arguments;
     private final Expression callee;
 
-    public NewExpression(
-            Expression callee,
-            List<Expression> arguments,
-            SourceLocation location) {
+    public NewExpression(Expression callee, List<Expression> arguments, SourceLocation location) {
         super(location);
         this.callee = callee;
         this.arguments = arguments;

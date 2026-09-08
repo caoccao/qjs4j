@@ -47,13 +47,14 @@ public class TemporalPlainMonthDayTest extends BaseJavetTest {
     }
 
     @Test
-    public void testConstructorWithSubclass() {
-        assertBooleanWithJavet("(() => { class CustomPlainMonthDay extends Temporal.PlainMonthDay {} const value = new CustomPlainMonthDay(3, 15); return value instanceof CustomPlainMonthDay && value instanceof Temporal.PlainMonthDay; })()");
+    public void testConstructorWithoutNew() {
+        assertErrorWithJavet("Temporal.PlainMonthDay(3, 15)");
     }
 
     @Test
-    public void testConstructorWithoutNew() {
-        assertErrorWithJavet("Temporal.PlainMonthDay(3, 15)");
+    public void testConstructorWithSubclass() {
+        assertBooleanWithJavet(
+                "(() => { class CustomPlainMonthDay extends Temporal.PlainMonthDay {} const value = new CustomPlainMonthDay(3, 15); return value instanceof CustomPlainMonthDay && value instanceof Temporal.PlainMonthDay; })()");
     }
 
     @Test
@@ -78,27 +79,32 @@ public class TemporalPlainMonthDayTest extends BaseJavetTest {
 
     @Test
     public void testFromWithChineseLeapMonthCode() {
-        assertStringWithJavet("Temporal.PlainMonthDay.from({ calendar: 'chinese', monthCode: 'M03L', day: 1 }).toString()");
+        assertStringWithJavet(
+                "Temporal.PlainMonthDay.from({ calendar: 'chinese', monthCode: 'M03L', day: 1 }).toString()");
     }
 
     @Test
     public void testFromWithDangiLeapMonthCodeConstrainOverflow() {
-        assertStringWithJavet("Temporal.PlainMonthDay.from({ calendar: 'dangi', monthCode: 'M03L', day: 31 }).toString()");
+        assertStringWithJavet(
+                "Temporal.PlainMonthDay.from({ calendar: 'dangi', monthCode: 'M03L', day: 31 }).toString()");
     }
 
     @Test
     public void testFromWithDangiLeapMonthCodeRejectOverflow() {
-        assertBooleanWithJavet("(() => { try { Temporal.PlainMonthDay.from({ calendar: 'dangi', monthCode: 'M03L', day: 31 }, { overflow: 'reject' }); return false; } catch (e) { return e instanceof RangeError; } })()");
+        assertBooleanWithJavet(
+                "(() => { try { Temporal.PlainMonthDay.from({ calendar: 'dangi', monthCode: 'M03L', day: 31 }, { overflow: 'reject' }); return false; } catch (e) { return e instanceof RangeError; } })()");
     }
 
     @Test
     public void testFromWithEraYearWithoutYear() {
-        assertStringWithJavet("Temporal.PlainMonthDay.from({ calendar: 'gregory', era: 'ce', eraYear: 2024, monthCode: 'M02', day: 29 }).toString()");
+        assertStringWithJavet(
+                "Temporal.PlainMonthDay.from({ calendar: 'gregory', era: 'ce', eraYear: 2024, monthCode: 'M02', day: 29 }).toString()");
     }
 
     @Test
     public void testFromWithInconsistentYearAndEraYear() {
-        assertBooleanWithJavet("(() => { try { Temporal.PlainMonthDay.from({ calendar: 'gregory', year: 2024, era: 'ce', eraYear: 2023, monthCode: 'M02', day: 29 }); return false; } catch (e) { return e instanceof RangeError; } })()");
+        assertBooleanWithJavet(
+                "(() => { try { Temporal.PlainMonthDay.from({ calendar: 'gregory', year: 2024, era: 'ce', eraYear: 2023, monthCode: 'M02', day: 29 }); return false; } catch (e) { return e instanceof RangeError; } })()");
     }
 
     @Test
@@ -113,7 +119,8 @@ public class TemporalPlainMonthDayTest extends BaseJavetTest {
 
     @Test
     public void testToLocaleString() {
-        assertBooleanWithJavet("(() => { const value = new Temporal.PlainMonthDay(3, 15); const result = value.toLocaleString('en-US', { calendar: 'iso8601', timeZone: 'UTC', month: '2-digit', day: '2-digit' }); return typeof result === 'string' && result.length > 0; })()");
+        assertBooleanWithJavet(
+                "(() => { const value = new Temporal.PlainMonthDay(3, 15); const result = value.toLocaleString('en-US', { calendar: 'iso8601', timeZone: 'UTC', month: '2-digit', day: '2-digit' }); return typeof result === 'string' && result.length > 0; })()");
     }
 
     @Test

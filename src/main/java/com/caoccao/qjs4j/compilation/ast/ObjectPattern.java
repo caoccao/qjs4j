@@ -20,8 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Represents an object destructuring pattern.
- * Example: { proxy, revoke } or { x: a, y: b }.
+ * Represents an object destructuring pattern. Example: { proxy, revoke } or { x: a, y: b }.
  */
 public final class ObjectPattern extends Pattern {
     private final List<ObjectPatternProperty> properties;

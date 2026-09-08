@@ -17,6 +17,5 @@
 package com.caoccao.qjs4j.compilation.lexer;
 
 public record LexerState(int position, int line, int column, TokenType lastTokenType,
-                         boolean defaultFollowsPropertyAccess, Token lookahead,
-                         boolean strictMode) {
+        boolean defaultFollowsPropertyAccess, Token lookahead, boolean strictMode) {
 }

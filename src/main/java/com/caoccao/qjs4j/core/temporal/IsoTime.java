@@ -23,8 +23,8 @@ import java.util.Locale;
 /**
  * Represents an ISO 8601 time with hour, minute, second, millisecond, microsecond, and nanosecond components.
  */
-public record IsoTime(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond)
-        implements Comparable<IsoTime> {
+public record IsoTime(int hour, int minute, int second, int millisecond, int microsecond,
+        int nanosecond) implements Comparable<IsoTime> {
 
     public static final IsoTime MIDNIGHT = new IsoTime(0, 0, 0, 0, 0, 0);
 
@@ -46,7 +46,8 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
         return new IsoTime(hourValue, minuteValue, secondValue, millisecondValue, microsecondValue, nanosecondValue);
     }
 
-    public static IsoTime createNormalized(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond) {
+    public static IsoTime createNormalized(int hour, int minute, int second, int millisecond, int microsecond,
+            int nanosecond) {
         hour = Math.max(0, Math.min(23, hour));
         minute = Math.max(0, Math.min(59, minute));
         second = Math.max(0, Math.min(59, second));
@@ -155,27 +156,30 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
     }
 
     /**
-     * Formats the fractional seconds part (ms, us, ns) to the given number of digits.
-     * Returns empty string if {@code digits <= 0}.
+     * Formats the fractional seconds part (ms, us, ns) to the given number of digits. Returns empty string if
+     * {@code digits <= 0}.
      */
     public String formatFractionalPart(int digits) {
         if (digits <= 0) {
             return "";
         }
-        String nineDigits = String.format(Locale.ROOT, "%03d%03d%03d",
-                millisecond, microsecond, nanosecond);
+        String nineDigits = String.format(Locale.ROOT, "%03d%03d%03d", millisecond, microsecond, nanosecond);
         return nineDigits.substring(0, digits);
     }
 
     /**
-     * Formats this time as a string with configurable precision.
-     * Shared by PlainTime, PlainDateTime, and ZonedDateTime toString operations.
+     * Formats this time as a string with configurable precision. Shared by PlainTime, PlainDateTime, and ZonedDateTime
+     * toString operations.
      *
-     * @param smallestUnit               the smallest unit to include (e.g. minute truncates seconds)
-     * @param autoFractionalSecondDigits if true, auto-trim trailing zeros from fractional part
-     * @param fractionalSecondDigits     number of fractional digits (0-9), ignored if auto
+     * @param smallestUnit
+     *            the smallest unit to include (e.g. minute truncates seconds)
+     * @param autoFractionalSecondDigits
+     *            if true, auto-trim trailing zeros from fractional part
+     * @param fractionalSecondDigits
+     *            number of fractional digits (0-9), ignored if auto
      */
-    public String formatTimeString(TemporalUnit smallestUnit, boolean autoFractionalSecondDigits, int fractionalSecondDigits) {
+    public String formatTimeString(TemporalUnit smallestUnit, boolean autoFractionalSecondDigits,
+            int fractionalSecondDigits) {
         String hourMinute = String.format(Locale.ROOT, "%02d:%02d", hour, minute);
         if (smallestUnit == TemporalUnit.MINUTE) {
             return hourMinute;
@@ -183,8 +187,7 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
 
         String hourMinuteSecond = String.format(Locale.ROOT, "%s:%02d", hourMinute, second);
         if (autoFractionalSecondDigits) {
-            String fullFraction = String.format(Locale.ROOT, "%03d%03d%03d",
-                    millisecond, microsecond, nanosecond);
+            String fullFraction = String.format(Locale.ROOT, "%03d%03d%03d", millisecond, microsecond, nanosecond);
             int fractionEndIndex = fullFraction.length();
             while (fractionEndIndex > 0 && fullFraction.charAt(fractionEndIndex - 1) == '0') {
                 fractionEndIndex--;
@@ -222,14 +225,8 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
 
     public String toString(Integer fractionalSecondDigits) {
         StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append(String.format(
-                Locale.ROOT,
-                "%02d:%02d:%02d",
-                hour(),
-                minute(),
-                second()));
-        int totalFractionalNanoseconds =
-                millisecond() * 1_000_000 + microsecond() * 1_000 + nanosecond();
+        stringBuilder.append(String.format(Locale.ROOT, "%02d:%02d:%02d", hour(), minute(), second()));
+        int totalFractionalNanoseconds = millisecond() * 1_000_000 + microsecond() * 1_000 + nanosecond();
         if (fractionalSecondDigits == null) {
             if (totalFractionalNanoseconds != 0) {
                 String fraction = String.format(Locale.ROOT, "%09d", totalFractionalNanoseconds);
@@ -259,8 +256,7 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
                 + ((long) minute * TemporalConstants.MINUTE_NANOSECONDS)
                 + ((long) second * TemporalConstants.SECOND_NANOSECONDS)
                 + ((long) millisecond * TemporalConstants.MILLISECOND_NANOSECONDS)
-                + ((long) microsecond * TemporalConstants.MICROSECOND_NANOSECONDS)
-                + nanosecond;
+                + ((long) microsecond * TemporalConstants.MICROSECOND_NANOSECONDS) + nanosecond;
     }
 
     public int totalNanosecondsWithinSecond() {

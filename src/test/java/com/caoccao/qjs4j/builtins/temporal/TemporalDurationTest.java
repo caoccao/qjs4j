@@ -87,13 +87,14 @@ public class TemporalDurationTest extends BaseJavetTest {
     }
 
     @Test
-    public void testConstructorWithSubclass() {
-        assertBooleanWithJavet("(() => { class CustomDuration extends Temporal.Duration {} const value = new CustomDuration(1, 2, 3); return value instanceof CustomDuration && value instanceof Temporal.Duration; })()");
+    public void testConstructorWithoutNew() {
+        assertErrorWithJavet("Temporal.Duration(1)");
     }
 
     @Test
-    public void testConstructorWithoutNew() {
-        assertErrorWithJavet("Temporal.Duration(1)");
+    public void testConstructorWithSubclass() {
+        assertBooleanWithJavet(
+                "(() => { class CustomDuration extends Temporal.Duration {} const value = new CustomDuration(1, 2, 3); return value instanceof CustomDuration && value instanceof Temporal.Duration; })()");
     }
 
     @Test
@@ -198,7 +199,8 @@ public class TemporalDurationTest extends BaseJavetTest {
 
     @Test
     public void testToLocaleString() {
-        assertBooleanWithJavet("(() => { const value = new Temporal.Duration(1, 2, 0, 3, 4, 5, 6); const locales = 'en-US'; const options = { style: 'short' }; return value.toLocaleString(locales, options) === new Intl.DurationFormat(locales, options).format(value); })()");
+        assertBooleanWithJavet(
+                "(() => { const value = new Temporal.Duration(1, 2, 0, 3, 4, 5, 6); const locales = 'en-US'; const options = { style: 'short' }; return value.toLocaleString(locales, options) === new Intl.DurationFormat(locales, options).format(value); })()");
     }
 
     @Test

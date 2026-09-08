@@ -31,10 +31,8 @@ final class ArrayExpressionCompiler extends AstNodeCompiler<ArrayExpression> {
         compilerContext.emitter.emitOpcodeU16(Opcode.ARRAY_FROM, 0);
 
         // Check if we have any spread elements or holes
-        boolean hasSpread = arrayExpr.getElements().stream()
-                .anyMatch(e -> e instanceof SpreadElement);
-        boolean hasHoles = arrayExpr.getElements().stream()
-                .anyMatch(e -> e == null);
+        boolean hasSpread = arrayExpr.getElements().stream().anyMatch(e -> e instanceof SpreadElement);
+        boolean hasHoles = arrayExpr.getElements().stream().anyMatch(e -> e == null);
 
         if (!hasSpread && !hasHoles) {
             // Simple case: no spread elements, no holes
@@ -103,17 +101,18 @@ final class ArrayExpressionCompiler extends AstNodeCompiler<ArrayExpression> {
                     // Stack: array idx
                     // QuickJS pattern: dup1 (duplicate array), put_field "length"
                     // dup1: array idx -> array array idx
-                    compilerContext.emitter.emitOpcode(Opcode.DUP1);  // array array idx
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, "length");  // array idx (PUT_FIELD leaves value)
-                    compilerContext.emitter.emitOpcode(Opcode.DROP);  // array
+                    compilerContext.emitter.emitOpcode(Opcode.DUP1); // array array idx
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, "length"); // array idx (PUT_FIELD leaves
+                                                                                        // value)
+                    compilerContext.emitter.emitOpcode(Opcode.DROP); // array
                 } else {
                     // Stack: array (idx is compile-time constant)
                     // QuickJS pattern: dup, push idx, swap, put_field "length", drop
-                    compilerContext.emitter.emitOpcode(Opcode.DUP);  // array array
-                    compilerContext.emitter.emitOpcodeU32(Opcode.PUSH_I32, idx);  // array array idx
-                    compilerContext.emitter.emitOpcode(Opcode.SWAP);  // array idx array
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, "length");  // array idx
-                    compilerContext.emitter.emitOpcode(Opcode.DROP);  // array
+                    compilerContext.emitter.emitOpcode(Opcode.DUP); // array array
+                    compilerContext.emitter.emitOpcodeU32(Opcode.PUSH_I32, idx); // array array idx
+                    compilerContext.emitter.emitOpcode(Opcode.SWAP); // array idx array
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, "length"); // array idx
+                    compilerContext.emitter.emitOpcode(Opcode.DROP); // array
                 }
             } else if (needsIndex) {
                 // No trailing hole, just drop the index

@@ -51,12 +51,9 @@ final class ContinueStatementCompiler extends AstNodeCompiler<ContinueStatement>
                 }
             }
             if (target == null) {
-                throw new JSCompilerException(
-                        labelExists
-                                ? "Illegal continue statement: '" + labelName
-                                + "' does not denote an iteration statement"
-                                : "Undefined label '" + labelName + "'",
-                        contStmt);
+                throw new JSCompilerException(labelExists
+                        ? "Illegal continue statement: '" + labelName + "' does not denote an iteration statement"
+                        : "Undefined label '" + labelName + "'", contStmt);
             }
             compilerContext.emitHelpers.emitIteratorCloseForLoopsUntil(target);
             compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(target.continueTargetScopeDepth);
@@ -72,9 +69,11 @@ final class ContinueStatementCompiler extends AstNodeCompiler<ContinueStatement>
                 }
             }
             if (loopContext == null) {
-                throw new JSCompilerException("Illegal continue statement: no surrounding iteration statement", contStmt);
+                throw new JSCompilerException("Illegal continue statement: no surrounding iteration statement",
+                        contStmt);
             }
-            compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(loopContext.continueTargetScopeDepth);
+            compilerContext.emitHelpers
+                    .emitUsingDisposalsForScopeDepthGreaterThan(loopContext.continueTargetScopeDepth);
             emitActiveFinallyGosubs();
             int jumpPos = compilerContext.emitter.emitJump(Opcode.GOTO);
             loopContext.continuePositions.add(jumpPos);

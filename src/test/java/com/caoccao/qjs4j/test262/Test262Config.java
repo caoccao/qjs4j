@@ -29,89 +29,26 @@ public class Test262Config {
     /**
      * Default ceiling on worker threads.
      * <p>
-     * The full suite holds a runtime and a context per thread and includes tests that build strings
-     * and backtrack stacks in the tens of megabytes, so running it as wide as the machine allows
-     * puts the JVM under memory pressure rather than making it faster. Subsets that are short or
-     * light override this with {@link #UNLIMITED_THREAD_COUNT}.
+     * The full suite holds a runtime and a context per thread and includes tests that build strings and backtrack
+     * stacks in the tens of megabytes, so running it as wide as the machine allows puts the JVM under memory pressure
+     * rather than making it faster. Subsets that are short or light override this with {@link #UNLIMITED_THREAD_COUNT}.
      */
     public static final int DEFAULT_MAX_THREAD_COUNT = 4;
     /**
      * Sentinel for "no ceiling": the runner picks a thread count from the CPU core count.
      */
     public static final int UNLIMITED_THREAD_COUNT = 0;
+    private long asyncTimeoutMs;
     private final Set<Pattern> excludePatterns;
     private final Set<Pattern> includePatterns;
-    private final Set<String> unsupportedFeatures;
-    private long asyncTimeoutMs;
     private int maxTests;
     private int maxThreadCount;
+    private final Set<String> unsupportedFeatures;
 
     private Test262Config() {
         excludePatterns = new HashSet<>();
         includePatterns = new HashSet<>();
         unsupportedFeatures = new HashSet<>();
-    }
-
-    public static Test262Config forLanguageTests() {
-        Test262Config config = loadDefault();
-        config.includePatterns.clear();
-        config.addIncludePatterns(Pattern.compile(".*/test/language/.*\\.js$"));
-        config.maxTests = 200;
-        // Unlimited: this subset is short enough that the whole machine is the right amount of it.
-        config.maxThreadCount = UNLIMITED_THREAD_COUNT;
-        return config;
-    }
-
-    public static Test262Config forLongRunningTest() {
-        Test262Config config = loadDefault();
-        config.includePatterns.clear();
-        config.addIncludePatterns(
-                Pattern.compile(".*/test/annexB/built-ins/RegExp/.*\\.js$"),
-                Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"),
-                Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$"),
-                Pattern.compile(".*/test/staging/sm/Date/.*\\.js$"),
-                Pattern.compile(".*/test/built-ins/RegExp/.*\\.js$"));
-        // config.maxTests = 600;
-        return config;
-    }
-
-    public static Test262Config forQuickTest() {
-        Test262Config config = loadDefault();
-        // Run a subset of tests for quick validation
-        config.addExcludePatterns(
-                Pattern.compile(".*/test/annexB/built-ins/RegExp/.*\\.js$"),
-                Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"),
-                Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$"),
-                Pattern.compile(".*/test/staging/sm/Date/.*\\.js$"),
-                Pattern.compile(".*/test/built-ins/RegExp/.*\\.js$"));
-        // config.maxTests = 400 * 100;
-        // Unlimited: the quick subset is the one that gates CI, so it runs as wide as the machine
-        // allows.
-        config.maxThreadCount = UNLIMITED_THREAD_COUNT;
-        return config;
-    }
-
-    public static Test262Config loadDefault() {
-        Test262Config config = new Test262Config();
-
-        // Define unsupported features
-        config.addUnsupportedFeatures("source-phase-imports");
-
-        // Default: run all tests
-        config.addIncludePatterns(Pattern.compile(".*\\.js$"));
-
-        // Exclude fixture files
-        config.addExcludePatterns(Pattern.compile(".*_FIXTURE\\.js$"));
-
-        // 5 second timeout for async tests
-        config.asyncTimeoutMs = 5000;
-
-        // No limit on number of tests
-        config.maxTests = Integer.MAX_VALUE;
-
-        config.maxThreadCount = DEFAULT_MAX_THREAD_COUNT;
-
-        return config;
     }
 
     public void addExcludePatterns(Pattern... patterns) {
@@ -182,8 +119,9 @@ public class Test262Config {
     /**
      * Set the ceiling on worker threads.
      *
-     * @param maxThreadCount the maximum, or {@link #UNLIMITED_THREAD_COUNT} for no ceiling;
-     *                       negative values are treated as no ceiling
+     * @param maxThreadCount
+     *            the maximum, or {@link #UNLIMITED_THREAD_COUNT} for no ceiling; negative values are treated as no
+     *            ceiling
      */
     public void setMaxThreadCount(int maxThreadCount) {
         this.maxThreadCount = Math.max(UNLIMITED_THREAD_COUNT, maxThreadCount);
@@ -217,5 +155,65 @@ public class Test262Config {
         }
 
         return !matchesInclude;
+    }
+
+    public static Test262Config forLanguageTests() {
+        Test262Config config = loadDefault();
+        config.includePatterns.clear();
+        config.addIncludePatterns(Pattern.compile(".*/test/language/.*\\.js$"));
+        config.maxTests = 200;
+        // Unlimited: this subset is short enough that the whole machine is the right amount of it.
+        config.maxThreadCount = UNLIMITED_THREAD_COUNT;
+        return config;
+    }
+
+    public static Test262Config forLongRunningTest() {
+        Test262Config config = loadDefault();
+        config.includePatterns.clear();
+        config.addIncludePatterns(Pattern.compile(".*/test/annexB/built-ins/RegExp/.*\\.js$"),
+                Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"),
+                Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$"),
+                Pattern.compile(".*/test/staging/sm/Date/.*\\.js$"),
+                Pattern.compile(".*/test/built-ins/RegExp/.*\\.js$"));
+        // config.maxTests = 600;
+        return config;
+    }
+
+    public static Test262Config forQuickTest() {
+        Test262Config config = loadDefault();
+        // Run a subset of tests for quick validation
+        config.addExcludePatterns(Pattern.compile(".*/test/annexB/built-ins/RegExp/.*\\.js$"),
+                Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"),
+                Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$"),
+                Pattern.compile(".*/test/staging/sm/Date/.*\\.js$"),
+                Pattern.compile(".*/test/built-ins/RegExp/.*\\.js$"));
+        // config.maxTests = 400 * 100;
+        // Unlimited: the quick subset is the one that gates CI, so it runs as wide as the machine
+        // allows.
+        config.maxThreadCount = UNLIMITED_THREAD_COUNT;
+        return config;
+    }
+
+    public static Test262Config loadDefault() {
+        Test262Config config = new Test262Config();
+
+        // Define unsupported features
+        config.addUnsupportedFeatures("source-phase-imports");
+
+        // Default: run all tests
+        config.addIncludePatterns(Pattern.compile(".*\\.js$"));
+
+        // Exclude fixture files
+        config.addExcludePatterns(Pattern.compile(".*_FIXTURE\\.js$"));
+
+        // 5 second timeout for async tests
+        config.asyncTimeoutMs = 5000;
+
+        // No limit on number of tests
+        config.maxTests = Integer.MAX_VALUE;
+
+        config.maxThreadCount = DEFAULT_MAX_THREAD_COUNT;
+
+        return config;
     }
 }

@@ -23,8 +23,7 @@ public class NewTargetTest extends BaseJavetTest {
 
     @Test
     public void testNewTargetInDefaultParameter() {
-        assertBooleanWithJavet(
-                "function F(x = new.target) { this.x = x; } new F().x === F");
+        assertBooleanWithJavet("function F(x = new.target) { this.x = x; } new F().x === F");
     }
 
     @Test
@@ -34,43 +33,36 @@ public class NewTargetTest extends BaseJavetTest {
 
     @Test
     public void testNewTargetInEvalFunctionExpressionDefaults() {
-        assertBooleanWithJavet(
-                "var f = eval('(function(x = new.target) { this.x = x; })'); new f().x === f");
+        assertBooleanWithJavet("var f = eval('(function(x = new.target) { this.x = x; })'); new f().x === f");
     }
 
     @Test
     public void testNewTargetInEvalInsideArrowInsideFunction() {
-        assertBooleanWithJavet(
-                "function F() { this.nt = (() => eval('new.target'))(); } new F().nt === F");
+        assertBooleanWithJavet("function F() { this.nt = (() => eval('new.target'))(); } new F().nt === F");
     }
 
     @Test
     public void testNewTargetInEvalInsideFunction() {
-        assertBooleanWithJavet(
-                "function F() { this.nt = eval('new.target'); } new F().nt === F");
+        assertBooleanWithJavet("function F() { this.nt = eval('new.target'); } new F().nt === F");
     }
 
     @Test
     public void testNewTargetInEvalInsideFunctionWithoutNew() {
-        assertUndefinedWithJavet(
-                "function F() { return eval('new.target'); } F()");
+        assertUndefinedWithJavet("function F() { return eval('new.target'); } F()");
     }
 
     @Test
     public void testNewTargetInFunction() {
-        assertBooleanWithJavet(
-                "function F() { this.nt = new.target; } new F().nt === F");
+        assertBooleanWithJavet("function F() { this.nt = new.target; } new F().nt === F");
     }
 
     @Test
     public void testNewTargetInNestedEval() {
-        assertBooleanWithJavet(
-                "function F() { this.nt = eval(\"eval('new.target')\"); } new F().nt === F");
+        assertBooleanWithJavet("function F() { this.nt = eval(\"eval('new.target')\"); } new F().nt === F");
     }
 
     @Test
     public void testNewTargetUndefinedWithoutNew() {
-        assertBooleanWithJavet(
-                "function F() { return new.target === undefined; } F()");
+        assertBooleanWithJavet("function F() { return new.target === undefined; } F()");
     }
 }

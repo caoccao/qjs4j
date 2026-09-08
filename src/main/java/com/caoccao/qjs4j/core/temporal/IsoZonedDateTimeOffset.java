@@ -19,11 +19,7 @@ package com.caoccao.qjs4j.core.temporal;
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSString;
 
-public record IsoZonedDateTimeOffset(
-        IsoDate date,
-        IsoTime time,
-        int offsetSeconds,
-        String timeZoneId,
+public record IsoZonedDateTimeOffset(IsoDate date, IsoTime time, int offsetSeconds, String timeZoneId,
         TemporalCalendarId calendarId) {
     public static IsoZonedDateTimeOffset parseZonedDateTimeString(JSContext context, String input) {
         if (input == null || input.isEmpty()) {

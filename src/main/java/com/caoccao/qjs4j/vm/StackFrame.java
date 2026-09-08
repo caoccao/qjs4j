@@ -29,33 +29,35 @@ public final class StackFrame {
 
     private final JSValue[] arguments;
     private final StackFrame caller;
-    private final JSValue[] closureVars;
-    private final int frameDepth;
-    private final JSFunction function;
-    private final JSValue[] locals;
-    private final JSValue newTarget;
-    private final int stackBase;
-    private final VarRef[] varRefs;
     private VarRef[] closedVarRefs;
+    private final JSValue[] closureVars;
     private VarRef derivedThisRef;
     private Map<String, Integer> dynamicVarBindingLocalIndexes;
     private Map<String, JSValue> dynamicVarBindings;
     private Map<String, VarRef> evalScopeVarRefs;
+    private final int frameDepth;
+    private final JSFunction function;
+    private final JSValue[] locals;
     private VarRef[] localVarRefs;
     private JSArguments mappedArgumentsObject;
+    private final JSValue newTarget;
     private int programCounter;
+    private final int stackBase;
     private JSValue thisArg;
     private JSArguments unmappedArgumentsObject;
+    private final VarRef[] varRefs;
 
     /**
      * Create a stack frame for a function call.
      *
-     * @param args     argument values — may be a reusable buffer; values are copied
-     *                 into arguments and locals, so the caller can reuse the array after this returns.
-     * @param argCount the actual number of arguments (may be &lt; args.length when
-     *                 a shared buffer is used)
+     * @param args
+     *            argument values — may be a reusable buffer; values are copied into arguments and locals, so the caller
+     *            can reuse the array after this returns.
+     * @param argCount
+     *            the actual number of arguments (may be &lt; args.length when a shared buffer is used)
      */
-    public StackFrame(JSFunction function, JSValue thisArg, JSValue[] args, int argCount, StackFrame caller, JSValue newTarget, int stackBase) {
+    public StackFrame(JSFunction function, JSValue thisArg, JSValue[] args, int argCount, StackFrame caller,
+            JSValue newTarget, int stackBase) {
         this.function = function;
         this.thisArg = thisArg;
         this.newTarget = newTarget;
@@ -133,11 +135,10 @@ public final class StackFrame {
     }
 
     /**
-     * Close a local variable, following QuickJS close_var_refs pattern.
-     * Detaches any VarRef for this local from the locals array, freezing its
-     * current value. This enables per-iteration binding in for loops:
-     * closures from different iterations each get their own frozen value.
-     * Also makes the local accessible via getVarRef() for TDZ checks.
+     * Close a local variable, following QuickJS close_var_refs pattern. Detaches any VarRef for this local from the
+     * locals array, freezing its current value. This enables per-iteration binding in for loops: closures from
+     * different iterations each get their own frozen value. Also makes the local accessible via getVarRef() for TDZ
+     * checks.
      */
     public void closeLocal(int index) {
         if (index < 0 || index >= locals.length) {
@@ -166,8 +167,7 @@ public final class StackFrame {
     }
 
     /**
-     * Read a single argument value by index.
-     * Reads from the arguments array (not locals), so TDZ markers set by
+     * Read a single argument value by index. Reads from the arguments array (not locals), so TDZ markers set by
      * SET_LOC_UNINITIALIZED do not affect the result.
      */
     public JSValue getArgument(int index) {
@@ -186,8 +186,7 @@ public final class StackFrame {
     }
 
     /**
-     * Return the original arguments array.
-     * For bytecode functions this is a separate owned copy that is never modified
+     * Return the original arguments array. For bytecode functions this is a separate owned copy that is never modified
      * by LOC opcodes, preserving pre-default-parameter values.
      */
     public JSValue[] getArguments() {
@@ -209,9 +208,7 @@ public final class StackFrame {
     public JSValue getDynamicVarBinding(String name) {
         if (dynamicVarBindingLocalIndexes != null) {
             Integer localIndex = dynamicVarBindingLocalIndexes.get(name);
-            if (localIndex != null
-                    && localIndex >= 0
-                    && localIndex < locals.length) {
+            if (localIndex != null && localIndex >= 0 && localIndex < locals.length) {
                 return locals[localIndex];
             }
         }
@@ -242,9 +239,8 @@ public final class StackFrame {
     }
 
     /**
-     * Get or create a VarRef for a local variable at the given index.
-     * Used during FCLOSURE to create shared references for captured locals.
-     * Multiple closures capturing the same local will share the same VarRef.
+     * Get or create a VarRef for a local variable at the given index. Used during FCLOSURE to create shared references
+     * for captured locals. Multiple closures capturing the same local will share the same VarRef.
      */
     public VarRef getOrCreateLocalVarRef(int localIndex) {
         if (localVarRefs == null) {
@@ -269,11 +265,9 @@ public final class StackFrame {
     }
 
     /**
-     * Get a closure variable by index.
-     * Checks VarRefs (from FCLOSURE) first, then closed VarRefs (from CLOSE_LOC),
-     * then falls back to direct JSValue access (class methods, legacy).
-     * VarRefs must be checked before closedVarRefs because they use different
-     * index spaces (VarRef indices vs local indices) that can collide.
+     * Get a closure variable by index. Checks VarRefs (from FCLOSURE) first, then closed VarRefs (from CLOSE_LOC), then
+     * falls back to direct JSValue access (class methods, legacy). VarRefs must be checked before closedVarRefs because
+     * they use different index spaces (VarRef indices vs local indices) that can collide.
      */
     public JSValue getVarRef(int index) {
         // Use VarRef if available (reference-based capture from FCLOSURE)
@@ -296,8 +290,8 @@ public final class StackFrame {
     }
 
     /**
-     * Get the VarRef at the given closure variable index.
-     * Used during FCLOSURE to share VarRef objects with child closures.
+     * Get the VarRef at the given closure variable index. Used during FCLOSURE to share VarRef objects with child
+     * closures.
      */
     public VarRef getVarRefCell(int index) {
         if (index >= 0 && index < varRefs.length) {
@@ -328,8 +322,7 @@ public final class StackFrame {
     }
 
     /**
-     * Write a single argument value by index.
-     * Writes to both arguments and locals to keep them in sync for PUT_ARG.
+     * Write a single argument value by index. Writes to both arguments and locals to keep them in sync for PUT_ARG.
      */
     public void setArgument(int index, JSValue value) {
         if (index >= 0 && index < arguments.length) {
@@ -355,9 +348,7 @@ public final class StackFrame {
     public void setDynamicVarBinding(String name, JSValue value) {
         if (dynamicVarBindingLocalIndexes != null) {
             Integer localIndex = dynamicVarBindingLocalIndexes.get(name);
-            if (localIndex != null
-                    && localIndex >= 0
-                    && localIndex < locals.length) {
+            if (localIndex != null && localIndex >= 0 && localIndex < locals.length) {
                 locals[localIndex] = value;
                 return;
             }
@@ -387,10 +378,9 @@ public final class StackFrame {
     }
 
     /**
-     * Set a closure variable by index.
-     * Checks VarRefs first, then closed VarRefs, then falls back to direct access.
-     * VarRefs must be checked before closedVarRefs because they use different
-     * index spaces (VarRef indices vs local indices) that can collide.
+     * Set a closure variable by index. Checks VarRefs first, then closed VarRefs, then falls back to direct access.
+     * VarRefs must be checked before closedVarRefs because they use different index spaces (VarRef indices vs local
+     * indices) that can collide.
      */
     public void setVarRef(int index, JSValue value) {
         // Use VarRef if available (reference-based capture)

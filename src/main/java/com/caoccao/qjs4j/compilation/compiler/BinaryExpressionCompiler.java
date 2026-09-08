@@ -31,8 +31,8 @@ final class BinaryExpressionCompiler extends AstNodeCompiler<BinaryExpression> {
 
     @Override
     void compile(BinaryExpression binExpr) {
-        if (binExpr.getOperator() == BinaryOperator.IN &&
-                binExpr.getLeft() instanceof PrivateIdentifier privateIdentifier) {
+        if (binExpr.getOperator() == BinaryOperator.IN
+                && binExpr.getLeft() instanceof PrivateIdentifier privateIdentifier) {
             compilePrivateInExpression(privateIdentifier, binExpr.getRight());
             return;
         }
@@ -113,9 +113,7 @@ final class BinaryExpressionCompiler extends AstNodeCompiler<BinaryExpression> {
             case SUB -> Opcode.SUB;
             case URSHIFT -> Opcode.SHR;
             // LOGICAL_AND, LOGICAL_OR, NULLISH_COALESCING handled above with short-circuit evaluation
-            default -> throw new JSCompilerException(
-                    "Unknown binary operator: " + binExpr.getOperator(),
-                    binExpr);
+            default -> throw new JSCompilerException("Unknown binary operator: " + binExpr.getOperator(), binExpr);
         };
 
         compilerContext.emitter.emitOpcode(op);
@@ -124,10 +122,11 @@ final class BinaryExpressionCompiler extends AstNodeCompiler<BinaryExpression> {
     private void compilePrivateInExpression(PrivateIdentifier privateIdentifier, Expression right) {
         compilerContext.expressionCompiler.compile(right);
 
-        JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(privateIdentifier.getName()) : null;
+        JSSymbol symbol = compilerContext.privateSymbols != null
+                ? compilerContext.privateSymbols.get(privateIdentifier.getName())
+                : null;
         if (symbol == null) {
-            throw new JSCompilerException(
-                    "undefined private field '#" + privateIdentifier.getName() + "'",
+            throw new JSCompilerException("undefined private field '#" + privateIdentifier.getName() + "'",
                     privateIdentifier);
         }
 

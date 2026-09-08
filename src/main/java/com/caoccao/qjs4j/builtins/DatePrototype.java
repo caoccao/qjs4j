@@ -52,12 +52,12 @@ public final class DatePrototype {
     }
 
     /**
-     * Delegate to Intl.DateTimeFormat for locale-aware formatting.
-     * Per ECMA-402, Date.prototype.toLocale*String methods use DateTimeFormat internally.
-     * The required/defaults parameters follow ToDateTimeOptions(options, required, defaults).
+     * Delegate to Intl.DateTimeFormat for locale-aware formatting. Per ECMA-402, Date.prototype.toLocale*String methods
+     * use DateTimeFormat internally. The required/defaults parameters follow ToDateTimeOptions(options, required,
+     * defaults).
      */
     private static JSValue formatWithDateTimeFormat(JSContext context, JSValue thisArg, JSValue[] args,
-                                                    String methodName, String required, String defaults) {
+            String methodName, String required, String defaults) {
         JSDate date = requireDate(context, thisArg, methodName);
         if (date == null) {
             return context.getPendingException();
@@ -84,11 +84,7 @@ public final class DatePrototype {
         return getDateField(context, thisArg, FIELD_DATE, true, false);
     }
 
-    private static JSValue getDateField(
-            JSContext context,
-            JSValue thisArg,
-            int fieldIndex,
-            boolean isLocal,
+    private static JSValue getDateField(JSContext context, JSValue thisArg, int fieldIndex, boolean isLocal,
             boolean getYearLegacy) {
         JSDate date = requireDate(context, thisArg, "get");
         if (date == null) {
@@ -137,21 +133,12 @@ public final class DatePrototype {
 
         if ((part & PART_DATE) != 0) {
             switch (format) {
-                case FORMAT_UTC -> builder.append(String.format(
-                        Locale.ENGLISH,
-                        "%s, %02d %s %0" + (4 + (year < 0 ? 1 : 0)) + "d ",
-                        dayName(weekDay),
-                        day,
-                        monthName(month),
-                        year));
+                case FORMAT_UTC ->
+                    builder.append(String.format(Locale.ENGLISH, "%s, %02d %s %0" + (4 + (year < 0 ? 1 : 0)) + "d ",
+                            dayName(weekDay), day, monthName(month), year));
                 case FORMAT_TO_STRING -> {
-                    builder.append(String.format(
-                            Locale.ENGLISH,
-                            "%s %s %02d %0" + (4 + (year < 0 ? 1 : 0)) + "d",
-                            dayName(weekDay),
-                            monthName(month),
-                            day,
-                            year));
+                    builder.append(String.format(Locale.ENGLISH, "%s %s %02d %0" + (4 + (year < 0 ? 1 : 0)) + "d",
+                            dayName(weekDay), monthName(month), day, year));
                     if (part == PART_ALL) {
                         builder.append(' ');
                     }
@@ -165,12 +152,8 @@ public final class DatePrototype {
                     builder.append(String.format(Locale.ENGLISH, "-%02d-%02dT", month + 1, day));
                 }
                 case FORMAT_LOCALE -> {
-                    builder.append(String.format(
-                            Locale.ENGLISH,
-                            "%02d/%02d/%0" + (4 + (year < 0 ? 1 : 0)) + "d",
-                            month + 1,
-                            day,
-                            year));
+                    builder.append(String.format(Locale.ENGLISH, "%02d/%02d/%0" + (4 + (year < 0 ? 1 : 0)) + "d",
+                            month + 1, day, year));
                     if (part == PART_ALL) {
                         builder.append(", ");
                     }
@@ -183,7 +166,7 @@ public final class DatePrototype {
         if ((part & PART_TIME) != 0) {
             switch (format) {
                 case FORMAT_UTC ->
-                        builder.append(String.format(Locale.ENGLISH, "%02d:%02d:%02d GMT", hour, minute, second));
+                    builder.append(String.format(Locale.ENGLISH, "%02d:%02d:%02d GMT", hour, minute, second));
                 case FORMAT_TO_STRING -> {
                     builder.append(String.format(Locale.ENGLISH, "%02d:%02d:%02d GMT", hour, minute, second));
                     int tz = timezoneOffset;
@@ -195,20 +178,10 @@ public final class DatePrototype {
                     }
                     builder.append(String.format(Locale.ENGLISH, "%02d%02d", tz / 60, tz % 60));
                 }
-                case FORMAT_ISO -> builder.append(String.format(
-                        Locale.ENGLISH,
-                        "%02d:%02d:%02d.%03dZ",
-                        hour,
-                        minute,
-                        second,
-                        millisecond));
-                case FORMAT_LOCALE -> builder.append(String.format(
-                        Locale.ENGLISH,
-                        "%02d:%02d:%02d %cM",
-                        (hour + 11) % 12 + 1,
-                        minute,
-                        second,
-                        hour < 12 ? 'A' : 'P'));
+                case FORMAT_ISO -> builder.append(
+                        String.format(Locale.ENGLISH, "%02d:%02d:%02d.%03dZ", hour, minute, second, millisecond));
+                case FORMAT_LOCALE -> builder.append(String.format(Locale.ENGLISH, "%02d:%02d:%02d %cM",
+                        (hour + 11) % 12 + 1, minute, second, hour < 12 ? 'A' : 'P'));
                 default -> {
                 }
             }
@@ -308,9 +281,7 @@ public final class DatePrototype {
     }
 
     private static JSValue ordinaryToPrimitive(JSContext context, JSObject object, boolean stringHint) {
-        String[] methodNames = stringHint
-                ? new String[]{"toString", "valueOf"}
-                : new String[]{"valueOf", "toString"};
+        String[] methodNames = stringHint ? new String[]{"toString", "valueOf"} : new String[]{"valueOf", "toString"};
         for (String methodName : methodNames) {
             JSValue method = object.get(PropertyKey.fromString(methodName));
             if (context.hasPendingException()) {
@@ -341,26 +312,7 @@ public final class DatePrototype {
         return setDateField(context, thisArg, args, FIELD_DATE, FIELD_HOURS, true);
     }
 
-    private static JSValue setDateField(
-            JSContext context,
-            JSValue thisArg,
-            JSValue[] args,
-            int firstField,
-            int endField,
-            boolean isLocal) {
-        JSDate date = requireDate(context, thisArg, "set");
-        if (date == null) {
-            return context.getPendingException();
-        }
-        return setDateField(context, date, args, firstField, endField, isLocal);
-    }
-
-    private static JSValue setDateField(
-            JSContext context,
-            JSDate date,
-            JSValue[] args,
-            int firstField,
-            int endField,
+    private static JSValue setDateField(JSContext context, JSDate date, JSValue[] args, int firstField, int endField,
             boolean isLocal) {
         double[] fields = new double[9];
         int result = JSDate.getDateFields(date.getTimeValue(), fields, isLocal, firstField == FIELD_YEAR);
@@ -389,6 +341,15 @@ public final class DatePrototype {
         }
         date.setTimeValue(newTime);
         return JSNumber.of(newTime);
+    }
+
+    private static JSValue setDateField(JSContext context, JSValue thisArg, JSValue[] args, int firstField,
+            int endField, boolean isLocal) {
+        JSDate date = requireDate(context, thisArg, "set");
+        if (date == null) {
+            return context.getPendingException();
+        }
+        return setDateField(context, date, args, firstField, endField, isLocal);
     }
 
     public static JSValue setFullYear(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -609,10 +570,9 @@ public final class DatePrototype {
         int timezoneOffset = (int) fields[FIELD_TIMEZONE_OFFSET];
 
         StringBuilder builder = new StringBuilder(64);
-        builder.append(String.format(
-                Locale.ENGLISH,
-                "%s %s %02d %0" + (4 + (year < 0 ? 1 : 0)) + "d %02d:%02d:%02d GMT",
-                dayName(weekDay), monthName(month), day, year, hour, minute, second));
+        builder.append(
+                String.format(Locale.ENGLISH, "%s %s %02d %0" + (4 + (year < 0 ? 1 : 0)) + "d %02d:%02d:%02d GMT",
+                        dayName(weekDay), monthName(month), day, year, hour, minute, second));
         int tz = timezoneOffset;
         if (tz < 0) {
             builder.append('-');

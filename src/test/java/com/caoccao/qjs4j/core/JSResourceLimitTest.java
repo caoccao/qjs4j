@@ -28,23 +28,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * The engine must not let a script consume unbounded time or memory.
  * <p>
- * Three limits are covered: a backtracking budget for the regular expression engine, a maximum
- * string length, and a host interrupt path for a running evaluation. Before these existed,
- * {@code /(a+)+$/} against 40 characters hung the calling thread, {@code 'a'.repeat(1e9)} raised
- * {@code OutOfMemoryError} instead of {@code RangeError}, and {@code while (true) {}} could only be
- * stopped by killing the process.
+ * Three limits are covered: a backtracking budget for the regular expression engine, a maximum string length, and a
+ * host interrupt path for a running evaluation. Before these existed, {@code /(a+)+$/} against 40 characters hung the
+ * calling thread, {@code 'a'.repeat(1e9)} raised {@code OutOfMemoryError} instead of {@code RangeError}, and
+ * {@code while (true) {}} could only be stopped by killing the process.
  * <p>
- * Everything a limit does <em>not</em> change is asserted against V8, so the guards cannot quietly
- * alter ordinary behaviour, and so is every oversized input both engines reject. Three groups are
- * deliberately not compared, each because the divergence is the feature:
+ * Everything a limit does <em>not</em> change is asserted against V8, so the guards cannot quietly alter ordinary
+ * behaviour, and so is every oversized input both engines reject. Three groups are deliberately not compared, each
+ * because the divergence is the feature:
  * <ul>
- * <li>The ReDoS step budget. V8 runs {@code /(a+)+$/} against 64 characters to completion; qjs4j
- * stops it. Bounding it is the whole point.</li>
- * <li>The exact string-length boundary. V8's {@code String::kMaxLength} is
- * {@code (1 << 29) - 24}; qjs4j's is {@code (1 << 27) - 1}, four times lower, because a Java
- * {@code String} is two bytes per character unconditionally — V8's ceiling would put a single
- * string over a gigabyte of heap. Both engines reject anything past their own ceiling, and that
- * shared behaviour is what the compared assertions check.</li>
+ * <li>The ReDoS step budget. V8 runs {@code /(a+)+$/} against 64 characters to completion; qjs4j stops it. Bounding it
+ * is the whole point.</li>
+ * <li>The exact string-length boundary. V8's {@code String::kMaxLength} is {@code (1 << 29) - 24}; qjs4j's is
+ * {@code (1 << 27) - 1}, four times lower, because a Java {@code String} is two bytes per character unconditionally —
+ * V8's ceiling would put a single string over a gigabyte of heap. Both engines reject anything past their own ceiling,
+ * and that shared behaviour is what the compared assertions check.</li>
  * <li>The host interrupt and execution deadline, which are Java API with no JavaScript surface.</li>
  * </ul>
  */
@@ -58,18 +56,16 @@ public class JSResourceLimitTest extends BaseJavetTest {
     @Timeout(60)
     public void testBacktrackingLimitIsConfigurable() {
         try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setRegExpBacktrackLimit(0));
-             JSContext unlimitedContext = runtime.createContext()) {
+                JSContext unlimitedContext = runtime.createContext()) {
             // 0 disables the limit, restoring the previous unbounded behaviour. A 20-character
             // input is small enough to still finish quickly.
-            JSValue result = unlimitedContext.eval(
-                    "/(a+)+$/.test('a'.repeat(20) + '!')");
+            JSValue result = unlimitedContext.eval("/(a+)+$/.test('a'.repeat(20) + '!')");
             assertThat(result).isEqualTo(JSBoolean.FALSE);
         }
         try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setRegExpBacktrackLimit(1000));
-             JSContext strictContext = runtime.createContext()) {
+                JSContext strictContext = runtime.createContext()) {
             assertThatThrownBy(() -> strictContext.eval("/(a+)+$/.test('a'.repeat(20) + '!')"))
-                    .isInstanceOf(JSException.class)
-                    .hasMessageContaining("backtracking limit");
+                    .isInstanceOf(JSException.class).hasMessageContaining("backtracking limit");
         }
     }
 
@@ -78,10 +74,9 @@ public class JSResourceLimitTest extends BaseJavetTest {
     public void testCatastrophicBacktrackingInsideLookaheadIsBounded() {
         // A lookaround runs on a nested context. It must inherit the remaining budget rather than
         // start a fresh one, or a lookaround in a loop resets the budget on every iteration.
-        assertThat(evalToString(
-                """
-                        const subject = 'a'.repeat(64) + '!';
-                        try { /(?=(a+)+$)a/.test(subject); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"""))
+        assertThat(evalToString("""
+                const subject = 'a'.repeat(64) + '!';
+                try { /(?=(a+)+$)a/.test(subject); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"""))
                 .isEqualTo("CAUGHT RangeError");
     }
 
@@ -90,24 +85,21 @@ public class JSResourceLimitTest extends BaseJavetTest {
     public void testCatastrophicBacktrackingIsBounded() {
         // Without a budget this grows exponentially: 0.20s / 0.28s / 0.58s / 1.65s for 16 / 20 /
         // 22 / 24 characters, and a 40-character input never returns.
-        assertThat(evalToString(
-                """
-                        const subject = 'a'.repeat(64) + '!';
-                        try { /(a+)+$/.test(subject); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"""))
+        assertThat(evalToString("""
+                const subject = 'a'.repeat(64) + '!';
+                try { /(a+)+$/.test(subject); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"""))
                 .isEqualTo("CAUGHT RangeError");
     }
 
     @Test
     @Timeout(60)
     public void testConcatBeyondMaximumLengthRaisesRangeError() {
-        assertThat(evalToString(
-                """
-                        try {
-                            let s = 'a'.repeat(1000);
-                            for (let i = 0; i < 40; i++) { s = s.concat(s) }
-                            'NO ERROR';
-                        } catch (e) { 'CAUGHT ' + e.name }"""))
-                .isEqualTo("CAUGHT RangeError");
+        assertThat(evalToString("""
+                try {
+                    let s = 'a'.repeat(1000);
+                    for (let i = 0; i < 40; i++) { s = s.concat(s) }
+                    'NO ERROR';
+                } catch (e) { 'CAUGHT ' + e.name }""")).isEqualTo("CAUGHT RangeError");
     }
 
     @Test
@@ -117,8 +109,7 @@ public class JSResourceLimitTest extends BaseJavetTest {
             deadlineContext.getVirtualMachine().setExecutionDeadline(System.currentTimeMillis() + 200);
             // The script wraps its own loop in try/catch. The deadline must not be interceptable.
             assertThatThrownBy(() -> deadlineContext.eval("try { while (true) {} } catch (e) { 'SWALLOWED' }"))
-                    .isInstanceOf(JSTerminationException.class)
-                    .hasMessage("execution timeout");
+                    .isInstanceOf(JSTerminationException.class).hasMessage("execution timeout");
         }
     }
 
@@ -137,8 +128,7 @@ public class JSResourceLimitTest extends BaseJavetTest {
             interrupter.start();
             try {
                 assertThatThrownBy(() -> interruptedContext.eval("try { while (true) {} } catch (e) { 'SWALLOWED' }"))
-                        .isInstanceOf(JSTerminationException.class)
-                        .hasMessage("execution interrupted");
+                        .isInstanceOf(JSTerminationException.class).hasMessage("execution interrupted");
             } finally {
                 interrupter.join();
             }
@@ -152,8 +142,7 @@ public class JSResourceLimitTest extends BaseJavetTest {
             String sum = "(function () { let total = 0; for (let i = 0; i < 200000; i++) { total += i } return total })()";
             runtime.requestInterrupt();
             assertThat(runtime.shouldInterrupt()).isTrue();
-            assertThatThrownBy(() -> resumableContext.eval(sum))
-                    .isInstanceOf(JSTerminationException.class);
+            assertThatThrownBy(() -> resumableContext.eval(sum)).isInstanceOf(JSTerminationException.class);
             runtime.clearInterrupt();
             assertThat(runtime.shouldInterrupt()).isFalse();
             assertThat(resumableContext.eval(sum)).isEqualTo(JSNumber.of(19999900000L));
@@ -163,13 +152,11 @@ public class JSResourceLimitTest extends BaseJavetTest {
     @Test
     @Timeout(60)
     public void testJoinBeyondMaximumLengthRaisesRangeError() {
-        assertThat(evalToString(
-                """
-                        try {
-                            new Array(1000000).fill('a'.repeat(1000)).join('');
-                            'NO ERROR';
-                        } catch (e) { 'CAUGHT ' + e.name }"""))
-                .isEqualTo("CAUGHT RangeError");
+        assertThat(evalToString("""
+                try {
+                    new Array(1000000).fill('a'.repeat(1000)).join('');
+                    'NO ERROR';
+                } catch (e) { 'CAUGHT ' + e.name }""")).isEqualTo("CAUGHT RangeError");
     }
 
     @Test
@@ -235,11 +222,9 @@ public class JSResourceLimitTest extends BaseJavetTest {
         // NegativeArraySizeException — a Java failure that escaped the script's own catch. The
         // multiplication is now a division, so nothing overflows before the check.
         assertStringWithJavet("try { 'xx'.repeat(1e20); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
-        assertStringWithJavet(
-                "try { 'xx'.repeat(9223372036854775807); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
+        assertStringWithJavet("try { 'xx'.repeat(9223372036854775807); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
         assertStringWithJavet("try { 'abc'.repeat(1e30); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
-        assertStringWithJavet(
-                "try { 'x'.repeat(Number.MAX_VALUE); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
+        assertStringWithJavet("try { 'x'.repeat(Number.MAX_VALUE); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
     }
 
     @Test
@@ -260,13 +245,11 @@ public class JSResourceLimitTest extends BaseJavetTest {
     @Test
     @Timeout(60)
     public void testStringAdditionBeyondMaximumLengthRaisesRangeError() {
-        assertThat(evalToString(
-                """
-                        try {
-                            let s = 'a';
-                            for (let i = 0; i < 40; i++) { s = s + s }
-                            'NO ERROR';
-                        } catch (e) { 'CAUGHT ' + e.name }"""))
-                .isEqualTo("CAUGHT RangeError");
+        assertThat(evalToString("""
+                try {
+                    let s = 'a';
+                    for (let i = 0; i < 40; i++) { s = s + s }
+                    'NO ERROR';
+                } catch (e) { 'CAUGHT ' + e.name }""")).isEqualTo("CAUGHT RangeError");
     }
 }

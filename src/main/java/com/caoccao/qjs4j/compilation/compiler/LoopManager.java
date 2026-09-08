@@ -21,8 +21,7 @@ import java.util.Deque;
 import java.util.Iterator;
 
 /**
- * Manages loop contexts for break/continue compilation.
- * Tracks the loop stack and pending loop labels.
+ * Manages loop contexts for break/continue compilation. Tracks the loop stack and pending loop labels.
  */
 final class LoopManager implements Iterable<LoopContext> {
     private final Deque<LoopContext> loopStack;

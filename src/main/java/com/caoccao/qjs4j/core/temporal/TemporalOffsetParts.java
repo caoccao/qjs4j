@@ -16,10 +16,5 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
-public record TemporalOffsetParts(
-        String signText,
-        int hours,
-        int minutes,
-        String secondsText,
-        String fractionText) {
+public record TemporalOffsetParts(String signText, int hours, int minutes, String secondsText, String fractionText) {
 }

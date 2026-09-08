@@ -33,19 +33,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * The CLI is the project's {@code mainClass}, so its behaviour is part of the shipped surface.
  * <p>
- * It used to close neither the runtime nor the context despite both being {@code AutoCloseable},
- * drop the filename so stack traces had no source name and module detection never triggered, offer
- * no {@code --module}, {@code --eval} or {@code scriptArgs}, and exit 0 after printing a Java stack
- * trace for an uncaught error.
+ * It used to close neither the runtime nor the context despite both being {@code AutoCloseable}, drop the filename so
+ * stack traces had no source name and module detection never triggered, offer no {@code --module}, {@code --eval} or
+ * {@code scriptArgs}, and exit 0 after printing a Java stack trace for an uncaught error.
  */
 public class QuickJSInterpreterTest {
-    @TempDir
-    Path workingDirectory;
-
     private ByteArrayOutputStream capturedErr;
+
     private ByteArrayOutputStream capturedOut;
     private PrintStream originalErr;
     private PrintStream originalOut;
+    @TempDir
+    Path workingDirectory;
 
     private String err() {
         return capturedErr.toString(StandardCharsets.UTF_8);
@@ -107,8 +106,7 @@ public class QuickJSInterpreterTest {
     @Test
     public void testModuleModeResolvesImports() throws IOException {
         writeFile("dep.mjs", "export const value = 5;\n");
-        Path main = writeFile("main.mjs",
-                "import { value } from './dep.mjs';\nconsole.log('value', value);\n");
+        Path main = writeFile("main.mjs", "import { value } from './dep.mjs';\nconsole.log('value', value);\n");
         assertThat(QuickJSInterpreter.run(new String[]{"-m", main.toString()})).isZero();
         assertThat(out()).contains("value 5");
     }
@@ -141,12 +139,10 @@ public class QuickJSInterpreterTest {
         // Reporting the crash used to perform Get(error, "stack"), so the failing script chose
         // what the interpreter printed about its own failure: it could spoof the trace, work
         // indefinitely, or throw a second error out of the reporting path.
-        assertThat(QuickJSInterpreter.run(new String[]{"-e",
-                """
-                        throw Object.defineProperty({ message: 'real failure' }, 'stack', {
-                          get() { console.log('STACK GETTER RAN'); return 'spoofed stack' },
-                        });"""}))
-                .isEqualTo(1);
+        assertThat(QuickJSInterpreter.run(new String[]{"-e", """
+                throw Object.defineProperty({ message: 'real failure' }, 'stack', {
+                  get() { console.log('STACK GETTER RAN'); return 'spoofed stack' },
+                });"""})).isEqualTo(1);
         assertThat(out()).doesNotContain("STACK GETTER RAN");
         assertThat(err()).doesNotContain("spoofed stack");
         assertThat(err()).contains("real failure");
@@ -156,9 +152,7 @@ public class QuickJSInterpreterTest {
     public void testStackTraceCarriesTheSourceName() throws IOException {
         Path script = writeFile("named.js", "function boom() { throw new Error('inside') }\nboom();\n");
         assertThat(QuickJSInterpreter.run(new String[]{script.toString()})).isEqualTo(1);
-        assertThat(err())
-                .as("the filename must reach eval so stack traces can name the source")
-                .contains("named.js");
+        assertThat(err()).as("the filename must reach eval so stack traces can name the source").contains("named.js");
     }
 
     @Test
@@ -169,20 +163,17 @@ public class QuickJSInterpreterTest {
 
     @Test
     public void testThrownProxyDoesNotRunItsTrapsDuringReporting() {
-        assertThat(QuickJSInterpreter.run(new String[]{"-e",
-                """
-                        throw new Proxy({}, {
-                          get() { console.log('GET TRAP RAN'); return 'trapped' },
-                          getOwnPropertyDescriptor() { console.log('DESCRIPTOR TRAP RAN'); return undefined },
-                        });"""}))
-                .isEqualTo(1);
+        assertThat(QuickJSInterpreter.run(new String[]{"-e", """
+                throw new Proxy({}, {
+                  get() { console.log('GET TRAP RAN'); return 'trapped' },
+                  getOwnPropertyDescriptor() { console.log('DESCRIPTOR TRAP RAN'); return undefined },
+                });"""})).isEqualTo(1);
         assertThat(out()).doesNotContain("GET TRAP RAN").doesNotContain("DESCRIPTOR TRAP RAN");
     }
 
     @Test
     public void testUncaughtErrorExitsNonZeroWithADiagnosticMessage() {
-        assertThat(QuickJSInterpreter.run(new String[]{"-e", "throw new TypeError('boom')"}))
-                .isEqualTo(1);
+        assertThat(QuickJSInterpreter.run(new String[]{"-e", "throw new TypeError('boom')"})).isEqualTo(1);
         assertThat(err()).contains("TypeError: boom");
     }
 
@@ -194,8 +185,8 @@ public class QuickJSInterpreterTest {
 
     @Test
     public void testUnreadableFileExitsNonZero() {
-        assertThat(QuickJSInterpreter.run(new String[]{
-                workingDirectory.resolve("does-not-exist.js").toString()})).isEqualTo(1);
+        assertThat(QuickJSInterpreter.run(new String[]{workingDirectory.resolve("does-not-exist.js").toString()}))
+                .isEqualTo(1);
         assertThat(err()).contains("cannot read");
     }
 

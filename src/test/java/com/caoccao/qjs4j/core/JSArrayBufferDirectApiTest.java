@@ -24,19 +24,17 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 /**
- * The direct {@code JSArrayBuffer} Java API must raise the same error kinds the specification
- * assigns, not whichever one happened to be reachable.
+ * The direct {@code JSArrayBuffer} Java API must raise the same error kinds the specification assigns, not whichever
+ * one happened to be reachable.
  * <p>
- * The public API reported a detached or non-resizable {@code resize()} as {@code RangeError} —
- * ES2024 25.1.6.7 makes both receiver-state conditions, so both are {@code TypeError}s — while
- * {@code transfer()} reported an invalid negative length as {@code TypeError}, which is a range
- * condition. The JavaScript built-ins precheck every case, so the wrong types were invisible from
- * script and only embedders calling the Java methods saw them. The Javadoc separately declared
- * {@code IllegalStateException} and {@code IllegalArgumentException}, neither of which is thrown.
+ * The public API reported a detached or non-resizable {@code resize()} as {@code RangeError} — ES2024 25.1.6.7 makes
+ * both receiver-state conditions, so both are {@code TypeError}s — while {@code transfer()} reported an invalid
+ * negative length as {@code TypeError}, which is a range condition. The JavaScript built-ins precheck every case, so
+ * the wrong types were invisible from script and only embedders calling the Java methods saw them. The Javadoc
+ * separately declared {@code IllegalStateException} and {@code IllegalArgumentException}, neither of which is thrown.
  * <p>
- * The {@code testScriptVisible*} tests are the counterweight: because the built-ins precheck every
- * case, correcting the direct API's types must not move what JavaScript observes, so those go
- * through V8.
+ * The {@code testScriptVisible*} tests are the counterweight: because the built-ins precheck every case, correcting the
+ * direct API's types must not move what JavaScript observes, so those go through V8.
  */
 public class JSArrayBufferDirectApiTest extends BaseJavetTest {
 
@@ -52,26 +50,15 @@ public class JSArrayBufferDirectApiTest extends BaseJavetTest {
     public void testResizeOnDetachedBufferRaisesTypeError() {
         JSArrayBuffer buffer = resizableBuffer(8, 16);
         buffer.detach();
-        assertThatThrownBy(() -> buffer.resize(4))
-                .isInstanceOf(JSTypeErrorException.class)
+        assertThatThrownBy(() -> buffer.resize(4)).isInstanceOf(JSTypeErrorException.class)
                 .hasMessageContaining("detached");
     }
 
     @Test
     public void testResizeOnNonResizableBufferRaisesTypeError() {
         JSArrayBuffer buffer = fixedBuffer(8);
-        assertThatThrownBy(() -> buffer.resize(4))
-                .isInstanceOf(JSTypeErrorException.class)
+        assertThatThrownBy(() -> buffer.resize(4)).isInstanceOf(JSTypeErrorException.class)
                 .hasMessageContaining("non-resizable");
-    }
-
-    @Test
-    public void testResizeWithOutOfRangeLengthRaisesRangeError() {
-        JSArrayBuffer buffer = resizableBuffer(8, 16);
-        assertThatThrownBy(() -> buffer.resize(-1))
-                .isInstanceOf(JSRangeErrorException.class);
-        assertThatThrownBy(() -> buffer.resize(17))
-                .isInstanceOf(JSRangeErrorException.class);
     }
 
     @Test
@@ -82,30 +69,34 @@ public class JSArrayBufferDirectApiTest extends BaseJavetTest {
     }
 
     @Test
+    public void testResizeWithOutOfRangeLengthRaisesRangeError() {
+        JSArrayBuffer buffer = resizableBuffer(8, 16);
+        assertThatThrownBy(() -> buffer.resize(-1)).isInstanceOf(JSRangeErrorException.class);
+        assertThatThrownBy(() -> buffer.resize(17)).isInstanceOf(JSRangeErrorException.class);
+    }
+
+    @Test
     public void testScriptVisibleResizeErrorsAreUnchanged() {
-        assertStringWithJavet(
-                """
-                        (function () {
-                          const b = new ArrayBuffer(8);
-                          try { b.resize(4); return 'NO ERROR' } catch (e) { return e.name }
-                        })()""");
-        assertStringWithJavet(
-                """
-                        (function () {
-                          const r = new ArrayBuffer(8, { maxByteLength: 16 });
-                          try { r.resize(32); return 'NO ERROR' } catch (e) { return e.name }
-                        })()""");
+        assertStringWithJavet("""
+                (function () {
+                  const b = new ArrayBuffer(8);
+                  try { b.resize(4); return 'NO ERROR' } catch (e) { return e.name }
+                })()""");
+        assertStringWithJavet("""
+                (function () {
+                  const r = new ArrayBuffer(8, { maxByteLength: 16 });
+                  try { r.resize(32); return 'NO ERROR' } catch (e) { return e.name }
+                })()""");
     }
 
     @Test
     public void testScriptVisibleTransferErrorsAreUnchanged() {
-        assertStringWithJavet(
-                """
-                        (function () {
-                          const b = new ArrayBuffer(8);
-                          b.transfer();
-                          try { b.transfer(); return 'NO ERROR' } catch (e) { return e.name }
-                        })()""");
+        assertStringWithJavet("""
+                (function () {
+                  const b = new ArrayBuffer(8);
+                  b.transfer();
+                  try { b.transfer(); return 'NO ERROR' } catch (e) { return e.name }
+                })()""");
     }
 
     @Test
@@ -137,8 +128,7 @@ public class JSArrayBufferDirectApiTest extends BaseJavetTest {
     public void testSliceOnDetachedBufferRaisesTypeError() {
         JSArrayBuffer buffer = fixedBuffer(8);
         buffer.detach();
-        assertThatThrownBy(() -> buffer.slice(context, 0, 4))
-                .isInstanceOf(JSTypeErrorException.class)
+        assertThatThrownBy(() -> buffer.slice(context, 0, 4)).isInstanceOf(JSTypeErrorException.class)
                 .hasMessageContaining("detached");
     }
 
@@ -153,8 +143,7 @@ public class JSArrayBufferDirectApiTest extends BaseJavetTest {
     public void testTransferOnDetachedBufferRaisesTypeError() {
         JSArrayBuffer buffer = fixedBuffer(8);
         buffer.detach();
-        assertThatThrownBy(() -> buffer.transfer(context, 4))
-                .isInstanceOf(JSTypeErrorException.class)
+        assertThatThrownBy(() -> buffer.transfer(context, 4)).isInstanceOf(JSTypeErrorException.class)
                 .hasMessageContaining("detached");
     }
 
@@ -170,16 +159,14 @@ public class JSArrayBufferDirectApiTest extends BaseJavetTest {
     public void testTransferToFixedLengthOnDetachedBufferRaisesTypeError() {
         JSArrayBuffer buffer = fixedBuffer(8);
         buffer.detach();
-        assertThatThrownBy(() -> buffer.transferToFixedLength(context, 4))
-                .isInstanceOf(JSTypeErrorException.class)
+        assertThatThrownBy(() -> buffer.transferToFixedLength(context, 4)).isInstanceOf(JSTypeErrorException.class)
                 .hasMessageContaining("detached");
     }
 
     @Test
     public void testTransferToFixedLengthWithNegativeLengthRaisesRangeError() {
         JSArrayBuffer buffer = fixedBuffer(8);
-        assertThatThrownBy(() -> buffer.transferToFixedLength(context, -2))
-                .isInstanceOf(JSRangeErrorException.class)
+        assertThatThrownBy(() -> buffer.transferToFixedLength(context, -2)).isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("non-negative");
     }
 
@@ -195,8 +182,7 @@ public class JSArrayBufferDirectApiTest extends BaseJavetTest {
     @Test
     public void testTransferWithNegativeLengthRaisesRangeError() {
         JSArrayBuffer buffer = fixedBuffer(8);
-        assertThatThrownBy(() -> buffer.transfer(context, -2))
-                .isInstanceOf(JSRangeErrorException.class)
+        assertThatThrownBy(() -> buffer.transfer(context, -2)).isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("non-negative");
     }
 

@@ -20,19 +20,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Tracks loop context for break/continue statements.
- * Also used for labeled statements (where isRegularStmt is true).
+ * Tracks loop context for break/continue statements. Also used for labeled statements (where isRegularStmt is true).
  */
 final class LoopContext {
     final List<Integer> breakPositions = new ArrayList<>();
     final int breakTargetScopeDepth;
     final List<Integer> continuePositions = new ArrayList<>();
     final int continueTargetScopeDepth;
-    final String label;
-    final int startOffset;
     boolean hasIterator;
     boolean isRegularStmt; // true for labeled non-loop statements (break allowed, continue not)
     boolean isSwitchStatement;
+    final String label;
+    final int startOffset;
 
     LoopContext(int startOffset, int breakTargetScopeDepth, int continueTargetScopeDepth) {
         this(startOffset, breakTargetScopeDepth, continueTargetScopeDepth, null);

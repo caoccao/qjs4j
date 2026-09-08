@@ -19,17 +19,13 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 /**
- * Implementation of Boolean constructor.
- * Based on ES2020 Boolean specification.
+ * Implementation of Boolean constructor. Based on ES2020 Boolean specification.
  */
 public final class BooleanConstructor {
 
     /**
-     * Boolean(value)
-     * ES2020 19.3.1.1
-     * Converts the argument to a boolean primitive value.
-     * When called as a function (not with new), returns a boolean primitive.
-     * When called with new, creates a Boolean object wrapper.
+     * Boolean(value) ES2020 19.3.1.1 Converts the argument to a boolean primitive value. When called as a function (not
+     * with new), returns a boolean primitive. When called with new, creates a Boolean object wrapper.
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         // Get the value to convert to boolean

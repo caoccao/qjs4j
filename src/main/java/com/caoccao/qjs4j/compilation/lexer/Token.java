@@ -19,31 +19,13 @@ package com.caoccao.qjs4j.compilation.lexer;
 /**
  * Represents a lexical token.
  */
-public record Token(
-        TokenType type,
-        String value,
-        int line,
-        int column,
-        int offset,
-        boolean escaped,
-        boolean hasOctalEscape
-) {
-    public Token(
-            TokenType type,
-            String value,
-            int line,
-            int column,
-            int offset) {
+public record Token(TokenType type, String value, int line, int column, int offset, boolean escaped,
+        boolean hasOctalEscape) {
+    public Token(TokenType type, String value, int line, int column, int offset) {
         this(type, value, line, column, offset, false, false);
     }
 
-    public Token(
-            TokenType type,
-            String value,
-            int line,
-            int column,
-            int offset,
-            boolean escaped) {
+    public Token(TokenType type, String value, int line, int column, int offset, boolean escaped) {
         this(type, value, line, column, offset, escaped, false);
     }
 }

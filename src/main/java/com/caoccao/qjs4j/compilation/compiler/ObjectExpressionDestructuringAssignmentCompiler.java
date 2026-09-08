@@ -64,16 +64,16 @@ final class ObjectExpressionDestructuringAssignmentCompiler extends AstNodeCompi
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
 
-        int sourceLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
-                "$objectAssignSource" + compilerContext.emitter.currentOffset());
+        int sourceLocalIndex = compilerContext.scopeManager.currentScope()
+                .declareLocal("$objectAssignSource" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, sourceLocalIndex);
 
         // If there's a rest element with regular properties, create an exclude list
         int excludeListLocalIndex = -1;
         if (restTarget != null && !regularProperties.isEmpty()) {
             compilerContext.emitter.emitOpcode(Opcode.OBJECT);
-            excludeListLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
-                    "$excludeList" + compilerContext.emitter.currentOffset());
+            excludeListLocalIndex = compilerContext.scopeManager.currentScope()
+                    .declareLocal("$excludeList" + compilerContext.emitter.currentOffset());
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, excludeListLocalIndex);
         }
 
@@ -82,8 +82,8 @@ final class ObjectExpressionDestructuringAssignmentCompiler extends AstNodeCompi
             if (property.isComputed()) {
                 compilerContext.expressionCompiler.compile(property.getKey());
                 compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
-                propertyKeyLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
-                        "$objectAssignKey" + compilerContext.emitter.currentOffset());
+                propertyKeyLocalIndex = compilerContext.scopeManager.currentScope()
+                        .declareLocal("$objectAssignKey" + compilerContext.emitter.currentOffset());
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, propertyKeyLocalIndex);
             }
 
@@ -95,7 +95,8 @@ final class ObjectExpressionDestructuringAssignmentCompiler extends AstNodeCompi
                 compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             } else if (property.getKey() instanceof Identifier identifier) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, identifier.getName());
-            } else if (property.getKey() instanceof Literal literal && literal.getValue() instanceof String propertyName) {
+            } else if (property.getKey() instanceof Literal literal
+                    && literal.getValue() instanceof String propertyName) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propertyName);
             } else if (property.getKey() instanceof Literal literal
                     && (literal.getValue() instanceof Integer || literal.getValue() instanceof Long)) {
@@ -116,7 +117,8 @@ final class ObjectExpressionDestructuringAssignmentCompiler extends AstNodeCompi
                 compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             }
 
-            compilerContext.expressionDestructuringAssignmentCompiler.compileFromPreEvaluated(property.getValue(), targetDepth);
+            compilerContext.expressionDestructuringAssignmentCompiler.compileFromPreEvaluated(property.getValue(),
+                    targetDepth);
 
             // If rest, add property key to exclude list
             if (restTarget != null) {
@@ -133,7 +135,8 @@ final class ObjectExpressionDestructuringAssignmentCompiler extends AstNodeCompi
                     compilerContext.emitter.emitOpcode(Opcode.NULL);
                     if (property.getKey() instanceof Identifier identifier) {
                         compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, identifier.getName());
-                    } else if (property.getKey() instanceof Literal literal && literal.getValue() instanceof String propertyName) {
+                    } else if (property.getKey() instanceof Literal literal
+                            && literal.getValue() instanceof String propertyName) {
                         compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, propertyName);
                     } else if (property.getKey() instanceof Literal literal
                             && (literal.getValue() instanceof Integer || literal.getValue() instanceof Long)) {

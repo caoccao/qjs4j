@@ -11,23 +11,17 @@ final class ExecutionContext {
     final byte[] instructions;
     final JSValue[] locals;
     final byte[] opcodeRebaseOffsets;
-    final StackFrame previousFrame;
-    final int restoreStackTop;
-    final boolean savedStrictMode;
-    final VirtualMachine virtualMachine;
     boolean opcodeRequestedReturn;
     int pc;
+    final StackFrame previousFrame;
+    final int restoreStackTop;
     JSValue returnValue;
+    final boolean savedStrictMode;
     int sp;
+    final VirtualMachine virtualMachine;
 
-    ExecutionContext(
-            VirtualMachine virtualMachine,
-            Bytecode bytecode,
-            StackFrame frame,
-            StackFrame previousFrame,
-            int frameStackBase,
-            int restoreStackTop,
-            boolean savedStrictMode) {
+    ExecutionContext(VirtualMachine virtualMachine, Bytecode bytecode, StackFrame frame, StackFrame previousFrame,
+            int frameStackBase, int restoreStackTop, boolean savedStrictMode) {
         this.virtualMachine = virtualMachine;
         this.bytecode = bytecode;
         this.instructions = bytecode.getInstructions();

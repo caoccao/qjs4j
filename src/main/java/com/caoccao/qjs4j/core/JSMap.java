@@ -19,8 +19,7 @@ package com.caoccao.qjs4j.core;
 import java.util.*;
 
 /**
- * Represents a JavaScript Map object.
- * Maps maintain insertion order and use SameValueZero equality for keys.
+ * Represents a JavaScript Map object. Maps maintain insertion order and use SameValueZero equality for keys.
  */
 public final class JSMap extends JSObject {
     public static final String NAME = "Map";
@@ -36,15 +35,6 @@ public final class JSMap extends JSObject {
         this.data = new LinkedHashMap<>();
         this.entriesById = new HashMap<>();
         this.nextEntryId = 1;
-    }
-
-    public static JSObject create(JSContext context, JSValue... args) {
-        JSMap mapObj = context.createJSMap();
-        CollectionInitializer.initializePrototypeFromNewTarget(context, mapObj, NAME);
-        if (context.hasPendingException()) {
-            return mapObj;
-        }
-        return CollectionInitializer.initializeFromIterable(context, mapObj, args, true);
     }
 
     public IterationCursor createIterationCursor() {
@@ -182,6 +172,15 @@ public final class JSMap extends JSObject {
         return values;
     }
 
+    public static JSObject create(JSContext context, JSValue... args) {
+        JSMap mapObj = context.createJSMap();
+        CollectionInitializer.initializePrototypeFromNewTarget(context, mapObj, NAME);
+        if (context.hasPendingException()) {
+            return mapObj;
+        }
+        return CollectionInitializer.initializeFromIterable(context, mapObj, args, true);
+    }
+
     private static final class EntryRecord {
         private final long id;
         private final KeyWrapper keyWrapper;
@@ -195,9 +194,9 @@ public final class JSMap extends JSObject {
     }
 
     public static final class IterationCursor {
+        private int index;
         private final List<Long> orderedIds;
         private final Set<Long> seenIds;
-        private int index;
 
         private IterationCursor() {
             this.orderedIds = new ArrayList<>();
@@ -210,8 +209,8 @@ public final class JSMap extends JSObject {
     }
 
     /**
-     * Wrapper class for Map keys to handle JSValue equality using SameValueZero.
-     * SameValueZero is like === except NaN equals NaN.
+     * Wrapper class for Map keys to handle JSValue equality using SameValueZero. SameValueZero is like === except NaN
+     * equals NaN.
      */
     public record KeyWrapper(JSValue value) {
 
@@ -265,8 +264,7 @@ public final class JSMap extends JSObject {
         }
 
         /**
-         * SameValueZero comparison.
-         * Like === but NaN equals NaN, and +0 equals -0.
+         * SameValueZero comparison. Like === but NaN equals NaN, and +0 equals -0.
          */
         private boolean sameValueZero(JSValue x, JSValue y) {
             // Same reference

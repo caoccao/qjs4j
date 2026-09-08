@@ -31,7 +31,8 @@ class ImportExpressionTest extends BaseJavetTest {
         JSPromise promise = (JSPromise) jsValue;
         assertThat(awaitPromise(promise)).as(code).isTrue();
         assertThat(promise.getState()).as(code).isEqualTo(JSPromise.PromiseState.REJECTED);
-        assertThat(JSTypeConversions.toString(context, promise.getResult()).toString()).as(code).isEqualTo(expectedReason);
+        assertThat(JSTypeConversions.toString(context, promise.getResult()).toString()).as(code)
+                .isEqualTo(expectedReason);
     }
 
     @Test
@@ -47,34 +48,29 @@ class ImportExpressionTest extends BaseJavetTest {
 
     @Test
     void testDynamicImportInAsyncFunctionReturnsPromise() {
-        assertStringWithJavet(
-                """
-                        async function load() {
-                            return typeof import('missing-dynamic-import-module.js').then;
-                        }
-                        load();
-                        """
-        );
+        assertStringWithJavet("""
+                async function load() {
+                    return typeof import('missing-dynamic-import-module.js').then;
+                }
+                load();
+                """);
     }
 
     @Test
     void testDynamicImportInvalidOptionsTypeError() {
-        assertRejectedPromiseReason(
-                "import('missing-dynamic-import-module.js', 1);",
+        assertRejectedPromiseReason("import('missing-dynamic-import-module.js', 1);",
                 "TypeError: options must be an object");
     }
 
     @Test
     void testDynamicImportInvalidWithTypeError() {
-        assertRejectedPromiseReason(
-                "import('missing-dynamic-import-module.js', { with: 1 });",
+        assertRejectedPromiseReason("import('missing-dynamic-import-module.js', { with: 1 });",
                 "TypeError: options.with must be an object");
     }
 
     @Test
     void testDynamicImportMissingModuleError() {
-        assertRejectedPromiseReason(
-                "import('missing-dynamic-import-module.js');",
+        assertRejectedPromiseReason("import('missing-dynamic-import-module.js');",
                 "TypeError: Cannot find module 'missing-dynamic-import-module.js'");
     }
 

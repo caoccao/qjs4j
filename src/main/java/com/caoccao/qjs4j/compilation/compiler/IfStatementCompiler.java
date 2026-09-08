@@ -78,10 +78,9 @@ final class IfStatementCompiler extends AstNodeCompiler<IfStatement> {
     }
 
     /**
-     * Compile a statement that may be a bare function declaration in sloppy mode.
-     * Per ES2024 B.3.3, function declarations in if-statement positions are treated
-     * as if wrapped in a block. This ensures the function binding is block-scoped
-     * and does not overwrite outer let/const bindings when Annex B is skipped.
+     * Compile a statement that may be a bare function declaration in sloppy mode. Per ES2024 B.3.3, function
+     * declarations in if-statement positions are treated as if wrapped in a block. This ensures the function binding is
+     * block-scoped and does not overwrite outer let/const bindings when Annex B is skipped.
      */
     private void compileImplicitBlockStatement(Statement stmt) {
         if (stmt instanceof FunctionDeclaration funcDecl && funcDecl.getId() != null) {

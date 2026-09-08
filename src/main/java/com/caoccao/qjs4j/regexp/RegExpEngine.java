@@ -23,27 +23,25 @@ import com.caoccao.qjs4j.unicode.CharacterProperties;
 import java.util.Arrays;
 
 /**
- * Regular expression bytecode executor.
- * Implements ES2020 regex semantics using a stack-based interpreter.
- * Based on QuickJS libregexp.c execution engine.
+ * Regular expression bytecode executor. Implements ES2020 regex semantics using a stack-based interpreter. Based on
+ * QuickJS libregexp.c execution engine.
  */
 public final class RegExpEngine {
     /**
-     * Hard cap on the backtracking stack, in bytes — V8's
-     * {@code RegExpStack::kMaximumStackSize}, {@code 64 * MB} in {@code src/regexp/regexp-stack.h}.
+     * Hard cap on the backtracking stack, in bytes — V8's {@code RegExpStack::kMaximumStackSize}, {@code 64 * MB} in
+     * {@code src/regexp/regexp-stack.h}.
      * <p>
-     * A cap in <em>entries</em> is not a memory bound and does not correspond to anything V8 has:
-     * V8 bounds the bytes and lets the entry count fall out of the frame size. Counting entries
-     * instead made the budget mean different things for different patterns — at 2<sup>20</sup>
-     * entries a one-group pattern reserved 21 ints each and a 100,000-group pattern 200,019 — and
-     * it silently set the real ceiling far below V8's for ordinary patterns.
+     * A cap in <em>entries</em> is not a memory bound and does not correspond to anything V8 has: V8 bounds the bytes
+     * and lets the entry count fall out of the frame size. Counting entries instead made the budget mean different
+     * things for different patterns — at 2<sup>20</sup> entries a one-group pattern reserved 21 ints each and a
+     * 100,000-group pattern 200,019 — and it silently set the real ceiling far below V8's for ordinary patterns.
      *
      * @see #MAX_BACKTRACK_INTS
      */
     private static final int MAX_BACKTRACK_BYTES = 64 * 1024 * 1024;
     /**
-     * {@link #MAX_BACKTRACK_BYTES} expressed in {@code int} slots, which is what the two stacks are
-     * measured in. The entry stack and the saved-state store share this one budget.
+     * {@link #MAX_BACKTRACK_BYTES} expressed in {@code int} slots, which is what the two stacks are measured in. The
+     * entry stack and the saved-state store share this one budget.
      */
     private static final int MAX_BACKTRACK_INTS = MAX_BACKTRACK_BYTES / Integer.BYTES;
     private final long backtrackLimit;
@@ -56,9 +54,10 @@ public final class RegExpEngine {
     /**
      * Create an engine with an explicit backtracking budget.
      *
-     * @param bytecode       the compiled pattern
-     * @param backtrackLimit the maximum number of backtracking steps for one match attempt;
-     *                       0 or negative means unbounded
+     * @param bytecode
+     *            the compiled pattern
+     * @param backtrackLimit
+     *            the maximum number of backtracking steps for one match attempt; 0 or negative means unbounded
      */
     public RegExpEngine(RegExpBytecode bytecode, long backtrackLimit) {
         this.bytecode = bytecode;
@@ -78,8 +77,10 @@ public final class RegExpEngine {
     /**
      * Execute the regex against the input string starting at the given index.
      *
-     * @param input      The string to match against
-     * @param startIndex The index to start matching from
+     * @param input
+     *            The string to match against
+     * @param startIndex
+     *            The index to start matching from
      * @return The match result, or null if no match
      */
     public MatchResult exec(String input, int startIndex) {
@@ -89,27 +90,16 @@ public final class RegExpEngine {
 
         boolean isUnicode = bytecode.isUnicode() || bytecode.hasUnicodeSets();
 
-        ExecutionContext executionContext = new ExecutionContext(
-                input,
-                bytecode.instructions(),
-                bytecode.captureCount(),
-                bytecode.groupNames(),
-                bytecode.isIgnoreCase(),
-                bytecode.isMultiline(),
-                bytecode.isDotAll(),
-                isUnicode,
-                bytecode.registerCount(),
-                backtrackLimit
-        );
+        ExecutionContext executionContext = new ExecutionContext(input, bytecode.instructions(),
+                bytecode.captureCount(), bytecode.groupNames(), bytecode.isIgnoreCase(), bytecode.isMultiline(),
+                bytecode.isDotAll(), isUnicode, bytecode.registerCount(), backtrackLimit);
 
         // Try matching at each position
         if (isUnicode) {
             // In unicode mode, the engine works with code point indices internally.
             // Convert startIndex from UTF-16 units to code point index.
             int codePointStart = input.codePointCount(0, startIndex);
-            int codePointEnd = bytecode.isSticky()
-                    ? codePointStart + 1
-                    : executionContext.codePoints.length + 1;
+            int codePointEnd = bytecode.isSticky() ? codePointStart + 1 : executionContext.codePoints.length + 1;
             for (int pos = codePointStart; pos < codePointEnd; pos++) {
                 executionContext.reset(pos);
                 if (execute(executionContext)) {
@@ -303,8 +293,7 @@ public final class RegExpEngine {
                     pc += 5 + len;
                 }
 
-                case LOOKAHEAD_MATCH, NEGATIVE_LOOKAHEAD_MATCH, LOOKBEHIND_MATCH,
-                     NEGATIVE_LOOKBEHIND_MATCH -> {
+                case LOOKAHEAD_MATCH, NEGATIVE_LOOKAHEAD_MATCH, LOOKBEHIND_MATCH, NEGATIVE_LOOKBEHIND_MATCH -> {
                     return true;
                 }
 
@@ -548,28 +537,17 @@ public final class RegExpEngine {
         return executeStandalone(outerContext, outerContext.input, assertionBytecode, outerContext.pos);
     }
 
-    private ExecutionContext executeStandalone(
-            ExecutionContext outerContext,
-            String input,
-            byte[] bytecode,
+    private ExecutionContext executeStandalone(ExecutionContext outerContext, String input, byte[] bytecode,
             int startPos) {
         // A lookaround runs on its own context. It inherits the outer context's *remaining* budget
         // and charges what it spends back, so a lookaround inside a loop cannot reset the budget
         // on every iteration and reintroduce unbounded backtracking.
-        ExecutionContext tempContext = new ExecutionContext(
-                input,
-                bytecode,
-                outerContext.captureCount,
-                outerContext.groupNames,
-                outerContext.ignoreCase,
-                outerContext.multiline,
-                outerContext.dotAll,
+        ExecutionContext tempContext = new ExecutionContext(input, bytecode, outerContext.captureCount,
+                outerContext.groupNames, outerContext.ignoreCase, outerContext.multiline, outerContext.dotAll,
                 outerContext.unicode,
                 // Lookaround bodies are compiled in the same CompileContext as the pattern, so they
                 // draw on the same register counter and the outer count bounds them.
-                outerContext.registerCount,
-                outerContext.remainingBacktrackBudget()
-        );
+                outerContext.registerCount, outerContext.remainingBacktrackBudget());
         tempContext.pos = startPos;
         System.arraycopy(outerContext.captureStarts, 0, tempContext.captureStarts, 0, outerContext.captureCount);
         System.arraycopy(outerContext.captureEnds, 0, tempContext.captureEnds, 0, outerContext.captureCount);
@@ -591,10 +569,8 @@ public final class RegExpEngine {
      * Read a 32-bit unsigned value from bytecode (little-endian).
      */
     private int readU32(byte[] bc, int offset) {
-        return (bc[offset] & 0xFF) |
-                ((bc[offset + 1] & 0xFF) << 8) |
-                ((bc[offset + 2] & 0xFF) << 16) |
-                ((bc[offset + 3] & 0xFF) << 24);
+        return (bc[offset] & 0xFF) | ((bc[offset + 1] & 0xFF) << 8) | ((bc[offset + 2] & 0xFF) << 16)
+                | ((bc[offset + 3] & 0xFF) << 24);
     }
 
     /**
@@ -608,81 +584,70 @@ public final class RegExpEngine {
      * Execution context for a single match attempt.
      */
     private static class ExecutionContext {
-        static final int MAX_REGISTERS = RegExpBytecode.ExecutionLimits.MAX_REGISTERS;
         /**
          * Ints per entry on the backtrack stack: {@code pc}, {@code pos}, {@code stateOffset}.
          * <p>
-         * The captures and registers used to live inline in every entry, so one backtrack point
-         * cost {@code 3 + 2 * captureCount + 16} ints — 84 bytes for a group-less pattern, against
-         * the 4 bytes of a V8 slot. Test262's {@code property-escapes} tests match a greedy
-         * {@code +} against every code point in Unicode, ~1.11 million backtrack points, which at
-         * 84 bytes each is ~93 MiB: above V8's whole 64 MiB budget, for a pattern V8 matches
-         * comfortably. Saved state now lives in {@link #stateData} and is written only when it
-         * actually changes, so an entry is 12 bytes and the budget buys a comparable amount of
-         * backtracking to V8's.
+         * The captures and registers used to live inline in every entry, so one backtrack point cost
+         * {@code 3 + 2 * captureCount + 16} ints — 84 bytes for a group-less pattern, against the 4 bytes of a V8 slot.
+         * Test262's {@code property-escapes} tests match a greedy {@code +} against every code point in Unicode, ~1.11
+         * million backtrack points, which at 84 bytes each is ~93 MiB: above V8's whole 64 MiB budget, for a pattern V8
+         * matches comfortably. Saved state now lives in {@link #stateData} and is written only when it actually
+         * changes, so an entry is 12 bytes and the budget buys a comparable amount of backtracking to V8's.
          * <p>
-         * The state itself was also always sized for 16 registers. Almost no pattern allocates any
-         * — only the zero-advance check does — so the compiler now reports the real count and a
-         * state is {@code 2 * captureCount + registerCount} ints. Together the two changes are what
-         * let {@code /^([\s\S])+$/u}, which dirties state on every iteration and so cannot share
-         * a saved copy, match the same subject V8 matches.
+         * The state itself was also always sized for 16 registers. Almost no pattern allocates any — only the
+         * zero-advance check does — so the compiler now reports the real count and a state is
+         * {@code 2 * captureCount + registerCount} ints. Together the two changes are what let {@code /^([\s\S])+$/u},
+         * which dirties state on every iteration and so cannot share a saved copy, match the same subject V8 matches.
          */
         private static final int BACKTRACK_ENTRY_SIZE = 3;
         private static final int INITIAL_BACKTRACK_ENTRIES = 64;
         private static final int INITIAL_SAVED_STATES = 4;
-        final byte[] bytecode;
-        final int captureCount;
-        final int[] codePoints;
-        final boolean dotAll;
-        final String[] groupNames;
-        final boolean ignoreCase;
-        final String input;
-        final boolean multiline;
-        /**
-         * Registers this pattern allocated, from the compiler. Sized to what the pattern uses
-         * rather than to {@link #MAX_REGISTERS}: the saved state is copied on every backtrack point
-         * where state changed, and 16 registers is 64 bytes per point that almost no pattern needs.
-         */
-        final int registerCount;
-        final int[] registers;  // Registers for loop counters and position tracking (QuickJS capture[2*captureCount+...])
-        final boolean unicode;
+        static final int MAX_REGISTERS = RegExpBytecode.ExecutionLimits.MAX_REGISTERS;
+        // The backtrack stack proper: BACKTRACK_ENTRY_SIZE ints per entry, [pc, pos, stateOffset].
+        private int[] backtrackData;
         /**
          * Budget of backtracking steps for this match attempt; 0 means unbounded.
          */
         private final long backtrackLimit;
         /**
-         * Ints per saved state: {@code captureCount * 2 + registerCount}.
-         */
-        private final int stateSize;
-        int backtrackTop;
-        int[] captureEnds;
-        int[] captureStarts;
-        int pos;  // Current position in code points
-        // The backtrack stack proper: BACKTRACK_ENTRY_SIZE ints per entry, [pc, pos, stateOffset].
-        private int[] backtrackData;
-        /**
          * Backtracking steps consumed so far.
          */
         private long backtrackSteps;
+        int backtrackTop;
+        final byte[] bytecode;
+        final int captureCount;
+        int[] captureEnds;
+        int[] captureStarts;
+        final int[] codePoints;
+        final boolean dotAll;
+        final String[] groupNames;
+        final boolean ignoreCase;
+        final String input;
         private int lastStateOffset;
+        final boolean multiline;
+        int pos; // Current position in code points
+        /**
+         * Registers this pattern allocated, from the compiler. Sized to what the pattern uses rather than to
+         * {@link #MAX_REGISTERS}: the saved state is copied on every backtrack point where state changed, and 16
+         * registers is 64 bytes per point that almost no pattern needs.
+         */
+        final int registerCount;
+        final int[] registers; // Registers for loop counters and position tracking (QuickJS
+                               // capture[2*captureCount+...])
         // Saved captures and registers, appended only when they have actually changed since the
         // last save. Consecutive entries with unmodified state share one copy by pointing at the
         // same offset, which is what keeps a greedy loop's backtrack points at 12 bytes each.
         private int[] stateData;
-        private boolean stateDirty;  // true if captures/registers modified since last state save
+        private boolean stateDirty; // true if captures/registers modified since last state save
+        /**
+         * Ints per saved state: {@code captureCount * 2 + registerCount}.
+         */
+        private final int stateSize;
         private int stateTop;
+        final boolean unicode;
 
-        ExecutionContext(
-                String input,
-                byte[] bytecode,
-                int captureCount,
-                String[] groupNames,
-                boolean ignoreCase,
-                boolean multiline,
-                boolean dotAll,
-                boolean unicode,
-                int registerCount,
-                long backtrackLimit) {
+        ExecutionContext(String input, byte[] bytecode, int captureCount, String[] groupNames, boolean ignoreCase,
+                boolean multiline, boolean dotAll, boolean unicode, int registerCount, long backtrackLimit) {
             this.backtrackLimit = backtrackLimit;
             this.registerCount = Math.max(0, Math.min(registerCount, MAX_REGISTERS));
             this.input = input;
@@ -709,9 +674,8 @@ public final class RegExpEngine {
         }
 
         /**
-         * ES spec Canonicalize for case-insensitive matching.
-         * Non-Unicode mode: toUpperCase, but if ch >= 128 and result < 128, return ch unchanged.
-         * Unicode mode: simple case fold.
+         * ES spec Canonicalize for case-insensitive matching. Non-Unicode mode: toUpperCase, but if ch >= 128 and
+         * result < 128, return ch unchanged. Unicode mode: simple case fold.
          */
         private int canonicalize(int ch) {
             if (unicode) {
@@ -794,25 +758,27 @@ public final class RegExpEngine {
         }
 
         /**
-         * Double an int stack, refusing to let the two stacks together exceed
-         * {@link #MAX_BACKTRACK_INTS}.
+         * Double an int stack, refusing to let the two stacks together exceed {@link #MAX_BACKTRACK_INTS}.
          * <p>
-         * The two share one budget because they are two halves of the same structure; bounding them
-         * separately would let the pair reach twice V8's ceiling.
+         * The two share one budget because they are two halves of the same structure; bounding them separately would
+         * let the pair reach twice V8's ceiling.
          *
-         * @param array       the stack to grow
-         * @param required    the length it must reach
-         * @param otherLength the length of the other stack, which shares the budget
+         * @param array
+         *            the stack to grow
+         * @param required
+         *            the length it must reach
+         * @param otherLength
+         *            the length of the other stack, which shares the budget
          * @return the grown array
-         * @throws JSRangeErrorException when the budget cannot accommodate {@code required}
+         * @throws JSRangeErrorException
+         *             when the budget cannot accommodate {@code required}
          */
         private int[] growWithinBudget(int[] array, int required, int otherLength) {
             // Computed in long: required and otherLength are both ints, but their sum is not
             // guaranteed to be, and a wrapped sum would silently pass the check.
             long budget = MAX_BACKTRACK_INTS - (long) otherLength;
             if ((long) required > budget) {
-                throw new JSRangeErrorException(
-                        "regular expression execution exceeded the backtracking stack limit");
+                throw new JSRangeErrorException("regular expression execution exceeded the backtracking stack limit");
             }
             long grown = Math.max((long) array.length * 2, required);
             return Arrays.copyOf(array, (int) Math.min(budget, grown));
@@ -849,10 +815,7 @@ public final class RegExpEngine {
         private boolean isWordChar(int ch, boolean ignoreCase) {
             // Word characters: [a-zA-Z0-9_]
             if (ch < 256) {
-                return (ch >= 'a' && ch <= 'z') ||
-                        (ch >= 'A' && ch <= 'Z') ||
-                        (ch >= '0' && ch <= '9') ||
-                        ch == '_';
+                return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_';
             }
             // For Unicode mode with ignore case, handle special characters
             // 0x017f: Latin Small Letter Long S
@@ -1061,9 +1024,9 @@ public final class RegExpEngine {
             }
             int ch = codePoints[pos];
             // JavaScript whitespace: space, tab, line terminators, Unicode Zs category
-            if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' ||
-                    ch == 0x0B || ch == 0x00A0 || ch == 0xFEFF || ch == 0x2028 || ch == 0x2029 ||
-                    Character.getType(ch) == Character.SPACE_SEPARATOR) {
+            if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == 0x0B || ch == 0x00A0
+                    || ch == 0xFEFF || ch == 0x2028 || ch == 0x2029
+                    || Character.getType(ch) == Character.SPACE_SEPARATOR) {
                 return false;
             }
             pos++;
@@ -1116,9 +1079,9 @@ public final class RegExpEngine {
             }
             int ch = codePoints[pos];
             // JavaScript whitespace: space, tab, line terminators, Unicode Zs category
-            if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' ||
-                    ch == 0x0B || ch == 0x00A0 || ch == 0xFEFF || ch == 0x2028 || ch == 0x2029 ||
-                    Character.getType(ch) == Character.SPACE_SEPARATOR) {
+            if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == 0x0B || ch == 0x00A0
+                    || ch == 0xFEFF || ch == 0x2028 || ch == 0x2029
+                    || Character.getType(ch) == Character.SPACE_SEPARATOR) {
                 pos++;
                 return true;
             }
@@ -1162,8 +1125,7 @@ public final class RegExpEngine {
             // exponential in the input length. Counting pops bounds that: the stack depth stays
             // small during exponential blow-up, so a depth limit alone would not catch it.
             if (backtrackLimit > 0 && ++backtrackSteps > backtrackLimit) {
-                throw new JSRangeErrorException(
-                        "regular expression execution exceeded the backtracking limit");
+                throw new JSRangeErrorException("regular expression execution exceeded the backtracking limit");
             }
             backtrackTop -= BACKTRACK_ENTRY_SIZE;
             int base = backtrackTop;
@@ -1202,8 +1164,7 @@ public final class RegExpEngine {
                 stateDirty = false;
             }
             if (backtrackTop + BACKTRACK_ENTRY_SIZE > backtrackData.length) {
-                backtrackData = growWithinBudget(
-                        backtrackData, backtrackTop + BACKTRACK_ENTRY_SIZE, stateData.length);
+                backtrackData = growWithinBudget(backtrackData, backtrackTop + BACKTRACK_ENTRY_SIZE, stateData.length);
             }
             int base = backtrackTop;
             backtrackData[base] = pc;
@@ -1217,17 +1178,16 @@ public final class RegExpEngine {
         }
 
         private int readU32(byte[] bc, int offset) {
-            return (bc[offset] & 0xFF) |
-                    ((bc[offset + 1] & 0xFF) << 8) |
-                    ((bc[offset + 2] & 0xFF) << 16) |
-                    ((bc[offset + 3] & 0xFF) << 24);
+            return (bc[offset] & 0xFF) | ((bc[offset + 1] & 0xFF) << 8) | ((bc[offset + 2] & 0xFF) << 16)
+                    | ((bc[offset + 3] & 0xFF) << 24);
         }
 
         /**
          * Budget available to a nested match (a lookaround).
          *
          * @return the unspent part of this context's budget, or 0 when unbounded
-         * @throws JSRangeErrorException when this context has already exhausted its budget
+         * @throws JSRangeErrorException
+         *             when this context has already exhausted its budget
          */
         long remainingBacktrackBudget() {
             if (backtrackLimit <= 0) {
@@ -1235,8 +1195,7 @@ public final class RegExpEngine {
             }
             long remaining = backtrackLimit - backtrackSteps;
             if (remaining <= 0) {
-                throw new JSRangeErrorException(
-                        "regular expression execution exceeded the backtracking limit");
+                throw new JSRangeErrorException("regular expression execution exceeded the backtracking limit");
             }
             return remaining;
         }
@@ -1254,9 +1213,8 @@ public final class RegExpEngine {
         /**
          * Discard both stacks before a match attempt.
          * <p>
-         * The saved-state store has to be reset alongside the entry stack: leaving {@code stateTop}
-         * where the previous attempt left it would make the next attempt append states above stale
-         * data and count them against the budget.
+         * The saved-state store has to be reset alongside the entry stack: leaving {@code stateTop} where the previous
+         * attempt left it would make the next attempt append states above stale data and count them against the budget.
          */
         void resetBacktrack() {
             backtrackTop = 0;
@@ -1274,7 +1232,8 @@ public final class RegExpEngine {
                 return groupNum;
             }
             int resolvedGroupNum = groupNum;
-            for (int captureIndex = groupNum + 1; captureIndex < captureCount && captureIndex < groupNames.length; captureIndex++) {
+            for (int captureIndex = groupNum + 1; captureIndex < captureCount
+                    && captureIndex < groupNames.length; captureIndex++) {
                 if (!groupName.equals(groupNames[captureIndex])) {
                     continue;
                 }
@@ -1285,7 +1244,8 @@ public final class RegExpEngine {
             if (captureStarts[resolvedGroupNum] >= 0 && captureEnds[resolvedGroupNum] >= 0) {
                 return resolvedGroupNum;
             }
-            for (int captureIndex = groupNum - 1; captureIndex > 0 && captureIndex < groupNames.length; captureIndex--) {
+            for (int captureIndex = groupNum - 1; captureIndex > 0
+                    && captureIndex < groupNames.length; captureIndex--) {
                 if (!groupName.equals(groupNames[captureIndex])) {
                     continue;
                 }
@@ -1326,26 +1286,23 @@ public final class RegExpEngine {
     /**
      * Result of a regex match operation.
      *
-     * @param matched    Whether the pattern matched
-     * @param startIndex Starting position of the match (in code points)
-     * @param endIndex   Ending position of the match (in code points)
-     * @param captures   Array of captured groups (including group 0 - the full match)
-     * @param indices    Array of [start, end] indices for each capture group
+     * @param matched
+     *            Whether the pattern matched
+     * @param startIndex
+     *            Starting position of the match (in code points)
+     * @param endIndex
+     *            Ending position of the match (in code points)
+     * @param captures
+     *            Array of captured groups (including group 0 - the full match)
+     * @param indices
+     *            Array of [start, end] indices for each capture group
      */
-    public record MatchResult(
-            boolean matched,
-            int startIndex,
-            int endIndex,
-            String[] captures,
-            int[][] indices
-    ) {
+    public record MatchResult(boolean matched, int startIndex, int endIndex, String[] captures, int[][] indices) {
         /**
          * Get a specific capture group.
          */
         public String getCapture(int index) {
-            return matched && captures != null && index >= 0 && index < captures.length
-                    ? captures[index]
-                    : null;
+            return matched && captures != null && index >= 0 && index < captures.length ? captures[index] : null;
         }
 
         /**

@@ -24,22 +24,17 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Represents the execution state of a generator function.
- * Based on QuickJS JSAsyncFunctionState and JSGeneratorData structures.
+ * Represents the execution state of a generator function. Based on QuickJS JSAsyncFunctionState and JSGeneratorData
+ * structures.
  * <p>
- * Generators can be suspended at yield points and resumed later.
- * This class stores all the necessary state to resume execution:
- * - Program counter (where to resume)
- * - Value stack (operands)
- * - Local variables
- * - Generator state (SUSPENDED_START, SUSPENDED_YIELD, EXECUTING, COMPLETED)
+ * Generators can be suspended at yield points and resumed later. This class stores all the necessary state to resume
+ * execution: - Program counter (where to resume) - Value stack (operands) - Local variables - Generator state
+ * (SUSPENDED_START, SUSPENDED_YIELD, EXECUTING, COMPLETED)
  */
 public final class JSGeneratorState {
     private final JSValue[] args;
-    private final JSBytecodeFunction function;
-    private final List<ResumeRecord> resumeRecords;
-    private final JSValue thisArg;
     private boolean awaitSuspended;
+    private final JSBytecodeFunction function;
     // Execution state preserved across yields. Full preservation (program counter, operand stack,
     // locals) is implemented — see saveSuspendedExecutionState / getSuspendedProgramCounter, which
     // VirtualMachine.createExecutionContext restores from. The stale TODO that used to sit here
@@ -48,11 +43,13 @@ public final class JSGeneratorState {
     private YieldResult lastYieldResult;
     private ResumeKind pendingResumeKind;
     private JSValue pendingResumeValue;
+    private final List<ResumeRecord> resumeRecords;
     private State state;
     private StackFrame suspendedFrame;
     private int suspendedProgramCounter;
     private JSStackValue[] suspendedStackValues;
-    private int yieldCount;  // Track how many times we've yielded (workaround for no PC saving)
+    private final JSValue thisArg;
+    private int yieldCount; // Track how many times we've yielded (workaround for no PC saving)
     // yield* delegation completion: set when a delegated next/throw/return completes with done=true
     // The generator should resume past yield* with this value
     private JSValue yieldStarCompletionValue;
@@ -208,21 +205,23 @@ public final class JSGeneratorState {
     }
 
     public enum ResumeKind {
-        NEXT,
-        RETURN,
-        THROW
+        NEXT, RETURN, THROW
+    }
+
+    public record ResumeRecord(ResumeKind kind, JSValue value) {
     }
 
     /**
      * Generator state constants matching QuickJS JS_GENERATOR_STATE_*
      */
     public enum State {
-        SUSPENDED_START,    // Created but not yet executed (before OP_initial_yield)
-        SUSPENDED_YIELD,    // Suspended at a yield point
-        EXECUTING,          // Currently executing
-        COMPLETED           // Execution finished
-    }
-
-    public record ResumeRecord(ResumeKind kind, JSValue value) {
+        /** Execution finished */
+        COMPLETED,
+        /** Currently executing */
+        EXECUTING,
+        /** Created but not yet executed (before OP_initial_yield) */
+        SUSPENDED_START,
+        /** Suspended at a yield point */
+        SUSPENDED_YIELD
     }
 }

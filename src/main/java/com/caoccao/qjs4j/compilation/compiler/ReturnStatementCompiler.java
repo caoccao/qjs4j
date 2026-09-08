@@ -37,10 +37,8 @@ final class ReturnStatementCompiler extends AstNodeCompiler<ReturnStatement> {
         // in strict mode, with no active finally blocks, iterators, or async context,
         // emit TAIL_CALL instead of CALL + RETURN (ES2015 14.6.1 HasCallInTailPosition).
         // Exclude spread calls (which use APPLY, not CALL) and super calls from TCO.
-        if (retStmt.getArgument() instanceof CallExpression
-                && retStmt.getArgument().hasTailCallInTailPosition()
-                && compilerContext.strictMode
-                && !compilerContext.isInAsyncFunction
+        if (retStmt.getArgument() instanceof CallExpression && retStmt.getArgument().hasTailCallInTailPosition()
+                && compilerContext.strictMode && !compilerContext.isInAsyncFunction
                 && compilerContext.activeFinallyGosubPatches.isEmpty()
                 && !compilerContext.loopManager.hasActiveIteratorLoops()) {
             // Direct call in tail position: TAIL_CALL handles the return entirely
@@ -53,10 +51,8 @@ final class ReturnStatementCompiler extends AstNodeCompiler<ReturnStatement> {
         // For non-direct-call expressions with tail calls in sub-positions
         // (e.g., return a ?? f(), return 0, f(), return a ? f() : g()),
         // set emitTailCalls and fall through to emit RETURN for non-tail paths.
-        boolean enableTco = retStmt.getArgument() != null
-                && retStmt.getArgument().hasTailCallInTailPosition()
-                && compilerContext.strictMode
-                && !compilerContext.isInAsyncFunction
+        boolean enableTco = retStmt.getArgument() != null && retStmt.getArgument().hasTailCallInTailPosition()
+                && compilerContext.strictMode && !compilerContext.isInAsyncFunction
                 && compilerContext.activeFinallyGosubPatches.isEmpty()
                 && !compilerContext.loopManager.hasActiveIteratorLoops();
 
@@ -70,7 +66,8 @@ final class ReturnStatementCompiler extends AstNodeCompiler<ReturnStatement> {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
 
-        int returnValueIndex = compilerContext.scopeManager.currentScope().declareLocal("$return_value_" + compilerContext.emitter.currentOffset());
+        int returnValueIndex = compilerContext.scopeManager.currentScope()
+                .declareLocal("$return_value_" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
 
         compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(0);
@@ -109,7 +106,8 @@ final class ReturnStatementCompiler extends AstNodeCompiler<ReturnStatement> {
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
         // ES2024 ReturnStatement step 3: If GetGeneratorKind() is async, set exprValue to Await(exprValue)
         // This only applies to explicit return expressions in async generators, not implicit returns
-        if (compilerContext.isInAsyncFunction && compilerContext.isInGeneratorFunction && retStmt.getArgument() != null) {
+        if (compilerContext.isInAsyncFunction && compilerContext.isInGeneratorFunction
+                && retStmt.getArgument() != null) {
             compilerContext.emitter.emitOpcode(Opcode.AWAIT);
         }
         // Emit RETURN_ASYNC for async functions, RETURN for sync functions

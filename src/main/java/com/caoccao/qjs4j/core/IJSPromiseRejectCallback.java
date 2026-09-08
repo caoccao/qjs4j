@@ -17,18 +17,21 @@
 package com.caoccao.qjs4j.core;
 
 /**
- * Functional interface for handling promise rejections in await expressions.
- * If this callback is set, it will be invoked when a promise rejection occurs,
- * allowing custom handling of the rejection before the exception is propagated.
+ * Functional interface for handling promise rejections in await expressions. If this callback is set, it will be
+ * invoked when a promise rejection occurs, allowing custom handling of the rejection before the exception is
+ * propagated.
  */
 @FunctionalInterface
 public interface IJSPromiseRejectCallback {
     /**
      * Called when a promise rejection event occurs.
      *
-     * @param event   The type of promise rejection event
-     * @param promise The promise that triggered the event
-     * @param result  The result value (rejection reason or resolution value)
+     * @param event
+     *            The type of promise rejection event
+     * @param promise
+     *            The promise that triggered the event
+     * @param result
+     *            The result value (rejection reason or resolution value)
      */
     void callback(PromiseRejectEvent event, JSPromise promise, JSValue result);
 }

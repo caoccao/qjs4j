@@ -22,8 +22,8 @@ import java.util.Deque;
 import java.util.List;
 
 /**
- * Manages with-object scope tracking during compilation.
- * Tracks active with-statement locals and inherited with-object binding names.
+ * Manages with-object scope tracking during compilation. Tracks active with-statement locals and inherited with-object
+ * binding names.
  */
 final class WithObjectManager {
     private final List<String> inheritedBindingNames;

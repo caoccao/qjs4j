@@ -19,8 +19,7 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Base sealed class for all declaration nodes.
  */
-public abstract sealed class Declaration extends Statement permits
-        FunctionDeclaration, ClassDeclaration {
+public abstract sealed class Declaration extends Statement permits FunctionDeclaration, ClassDeclaration {
 
     protected Declaration(SourceLocation location) {
         super(location);

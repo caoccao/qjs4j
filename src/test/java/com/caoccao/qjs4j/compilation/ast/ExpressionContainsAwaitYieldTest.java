@@ -29,8 +29,7 @@ public class ExpressionContainsAwaitYieldTest {
     public void testArrayExpressionShortCircuitsWhenContainmentResolved() {
         AwaitExpression awaitExpression = new AwaitExpression(new Literal(1, LOCATION), LOCATION);
         Identifier identifierForAwait = new Identifier("x", LOCATION);
-        ArrayExpression awaitArrayExpression = new ArrayExpression(
-                List.of(awaitExpression, identifierForAwait),
+        ArrayExpression awaitArrayExpression = new ArrayExpression(List.of(awaitExpression, identifierForAwait),
                 LOCATION);
 
         assertThat(awaitArrayExpression.containsAwait()).isTrue();
@@ -38,8 +37,7 @@ public class ExpressionContainsAwaitYieldTest {
 
         YieldExpression yieldExpression = new YieldExpression(new Literal(1, LOCATION), false, LOCATION);
         Identifier identifierForYield = new Identifier("x", LOCATION);
-        ArrayExpression yieldArrayExpression = new ArrayExpression(
-                List.of(yieldExpression, identifierForYield),
+        ArrayExpression yieldArrayExpression = new ArrayExpression(List.of(yieldExpression, identifierForYield),
                 LOCATION);
 
         assertThat(yieldArrayExpression.containsYield()).isTrue();
@@ -48,18 +46,10 @@ public class ExpressionContainsAwaitYieldTest {
 
     @Test
     public void testClassExpressionContainsAwaitAndYield() {
-        ClassExpression awaitClassExpression = new ClassExpression(
-                null,
-                new AwaitExpression(new Identifier("Base", LOCATION), LOCATION),
-                List.of(),
-                LOCATION);
-        ClassExpression yieldClassExpression = new ClassExpression(
-                null,
-                null,
-                List.of(new StaticBlock(List.of(
-                        new ExpressionStatement(
-                                new YieldExpression(new Literal(1, LOCATION), false, LOCATION),
-                                LOCATION)))),
+        ClassExpression awaitClassExpression = new ClassExpression(null,
+                new AwaitExpression(new Identifier("Base", LOCATION), LOCATION), List.of(), LOCATION);
+        ClassExpression yieldClassExpression = new ClassExpression(null, null, List.of(new StaticBlock(List.of(
+                new ExpressionStatement(new YieldExpression(new Literal(1, LOCATION), false, LOCATION), LOCATION)))),
                 LOCATION);
 
         assertThat(awaitClassExpression.containsAwait()).isTrue();
@@ -68,29 +58,19 @@ public class ExpressionContainsAwaitYieldTest {
 
     @Test
     public void testFunctionAndArrowExpressionContainmentFromBody() {
-        FunctionExpression functionExpression = new FunctionExpression(
-                null,
+        FunctionExpression functionExpression = new FunctionExpression(null,
                 new FunctionParams(List.of(), List.of(), null),
                 new BlockStatement(List.of(
-                        new ExpressionStatement(
-                                new AwaitExpression(new Literal(1, LOCATION), LOCATION),
-                                LOCATION),
-                        new ExpressionStatement(
-                                new YieldExpression(new Literal(1, LOCATION), false, LOCATION),
+                        new ExpressionStatement(new AwaitExpression(new Literal(1, LOCATION), LOCATION), LOCATION),
+                        new ExpressionStatement(new YieldExpression(new Literal(1, LOCATION), false, LOCATION),
                                 LOCATION)),
                         LOCATION),
-                false,
-                false,
-                false,
-                LOCATION);
+                false, false, false, LOCATION);
         ArrowFunctionExpression arrowFunctionExpression = new ArrowFunctionExpression(
                 new FunctionParams(List.of(), List.of(), null),
-                new SequenceExpression(List.of(
-                        new AwaitExpression(new Literal(1, LOCATION), LOCATION),
-                        new YieldExpression(new Literal(1, LOCATION), false, LOCATION)),
-                        LOCATION),
-                false,
-                LOCATION);
+                new SequenceExpression(List.of(new AwaitExpression(new Literal(1, LOCATION), LOCATION),
+                        new YieldExpression(new Literal(1, LOCATION), false, LOCATION)), LOCATION),
+                false, LOCATION);
 
         // ES2024 8.1.4: Contains always returns false for function boundaries.
         assertThat(functionExpression.containsAwait()).isFalse();
@@ -101,35 +81,16 @@ public class ExpressionContainsAwaitYieldTest {
 
     @Test
     public void testFunctionAndArrowExpressionContainmentFromDefaultsAndRest() {
-        FunctionExpression functionExpression = new FunctionExpression(
-                null,
-                new FunctionParams(
-                        List.of(),
-                        List.of(new AwaitExpression(new Literal(1, LOCATION), LOCATION)),
-                        new RestParameter(
-                                new AssignmentPattern(
-                                        new Identifier("a", LOCATION),
-                                        new YieldExpression(new Literal(1, LOCATION), false, LOCATION),
-                                        LOCATION),
-                                LOCATION)),
-                new BlockStatement(List.of(), LOCATION),
-                false,
-                false,
-                false,
-                LOCATION);
+        FunctionExpression functionExpression = new FunctionExpression(null, new FunctionParams(List.of(),
+                List.of(new AwaitExpression(new Literal(1, LOCATION), LOCATION)),
+                new RestParameter(new AssignmentPattern(new Identifier("a", LOCATION),
+                        new YieldExpression(new Literal(1, LOCATION), false, LOCATION), LOCATION), LOCATION)),
+                new BlockStatement(List.of(), LOCATION), false, false, false, LOCATION);
         ArrowFunctionExpression arrowFunctionExpression = new ArrowFunctionExpression(
-                new FunctionParams(
-                        List.of(),
-                        List.of(new YieldExpression(new Literal(1, LOCATION), false, LOCATION)),
-                        new RestParameter(
-                                new AssignmentPattern(
-                                        new Identifier("a", LOCATION),
-                                        new AwaitExpression(new Literal(1, LOCATION), LOCATION),
-                                        LOCATION),
-                                LOCATION)),
-                new Identifier("body", LOCATION),
-                false,
-                LOCATION);
+                new FunctionParams(List.of(), List.of(new YieldExpression(new Literal(1, LOCATION), false, LOCATION)),
+                        new RestParameter(new AssignmentPattern(new Identifier("a", LOCATION),
+                                new AwaitExpression(new Literal(1, LOCATION), LOCATION), LOCATION), LOCATION)),
+                new Identifier("body", LOCATION), false, LOCATION);
 
         // ES2024 8.1.4: Contains always returns false for function boundaries.
         assertThat(functionExpression.containsAwait()).isFalse();

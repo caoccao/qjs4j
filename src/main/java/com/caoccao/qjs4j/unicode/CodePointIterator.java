@@ -20,8 +20,8 @@ package com.caoccao.qjs4j.unicode;
  * Iterator for Unicode code points in a string.
  */
 public final class CodePointIterator {
-    private final String string;
     private int index;
+    private final String string;
 
     public CodePointIterator(String string) {
         this.string = string;

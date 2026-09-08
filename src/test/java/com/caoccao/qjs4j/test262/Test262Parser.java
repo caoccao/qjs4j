@@ -28,8 +28,7 @@ import java.util.regex.Pattern;
  * Parses test262 test files extracting YAML frontmatter and JavaScript code.
  */
 public class Test262Parser {
-    private static final Pattern FRONTMATTER_PATTERN =
-            Pattern.compile("/\\*---\\s*(.+?)\\s*---\\*/", Pattern.DOTALL);
+    private static final Pattern FRONTMATTER_PATTERN = Pattern.compile("/\\*---\\s*(.+?)\\s*---\\*/", Pattern.DOTALL);
 
     private String extractValue(String line, String prefix) {
         String value = line.substring(prefix.length()).trim();
@@ -140,8 +139,7 @@ public class Test262Parser {
 
     private String removeQuotes(String str) {
         str = str.trim();
-        if ((str.startsWith("\"") && str.endsWith("\"")) ||
-                (str.startsWith("'") && str.endsWith("'"))) {
+        if ((str.startsWith("\"") && str.endsWith("\"")) || (str.startsWith("'") && str.endsWith("'"))) {
             return str.substring(1, str.length() - 1);
         }
         return str;

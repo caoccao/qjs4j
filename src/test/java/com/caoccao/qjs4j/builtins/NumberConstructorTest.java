@@ -38,91 +38,91 @@ public class NumberConstructorTest extends BaseTest {
         assertThat(result1).isInstanceOf(JSNumberObject.class);
         assertThat(result1.isNumberObject()).isTrue();
 
-        assertThat(result1).isInstanceOfSatisfying(JSNumberObject.class, numObj1 ->
-                assertThat(numObj1.getValue().value()).isEqualTo(42.0));
+        assertThat(result1).isInstanceOfSatisfying(JSNumberObject.class,
+                numObj1 -> assertThat(numObj1.getValue().value()).isEqualTo(42.0));
 
         // Test new Number(3.14) creates JSNumberObject
         JSValue result2 = context.eval("new Number(3.14);");
         assertThat(result2).isInstanceOf(JSNumberObject.class);
         assertThat(result2.isNumberObject()).isTrue();
 
-        assertThat(result2).isInstanceOfSatisfying(JSNumberObject.class, numObj2 ->
-                assertThat(numObj2.getValue().value()).isCloseTo(3.14, offset(0.001)));
+        assertThat(result2).isInstanceOfSatisfying(JSNumberObject.class,
+                numObj2 -> assertThat(numObj2.getValue().value()).isCloseTo(3.14, offset(0.001)));
     }
 
     @Test
     public void testNumberConstructorWithDifferentValues() {
         // Test with integer
         JSValue result1 = context.eval("new Number(100);");
-        assertThat(result1).isInstanceOfSatisfying(JSNumberObject.class, numObj ->
-                assertThat(numObj.getValue().value()).isEqualTo(100.0));
+        assertThat(result1).isInstanceOfSatisfying(JSNumberObject.class,
+                numObj -> assertThat(numObj.getValue().value()).isEqualTo(100.0));
 
         // Test with negative number
         JSValue result2 = context.eval("new Number(-42);");
-        assertThat(result2).isInstanceOfSatisfying(JSNumberObject.class, numObj ->
-                assertThat(numObj.getValue().value()).isEqualTo(-42.0));
+        assertThat(result2).isInstanceOfSatisfying(JSNumberObject.class,
+                numObj -> assertThat(numObj.getValue().value()).isEqualTo(-42.0));
 
         // Test with zero
         JSValue result3 = context.eval("new Number(0);");
-        assertThat(result3).isInstanceOfSatisfying(JSNumberObject.class, numObj ->
-                assertThat(numObj.getValue().value()).isEqualTo(0.0));
+        assertThat(result3).isInstanceOfSatisfying(JSNumberObject.class,
+                numObj -> assertThat(numObj.getValue().value()).isEqualTo(0.0));
 
         // Test with string to number conversion
         JSValue result4 = context.eval("new Number('123');");
-        assertThat(result4).isInstanceOfSatisfying(JSNumberObject.class, numObj ->
-                assertThat(numObj.getValue().value()).isEqualTo(123.0));
+        assertThat(result4).isInstanceOfSatisfying(JSNumberObject.class,
+                numObj -> assertThat(numObj.getValue().value()).isEqualTo(123.0));
 
         // Test with boolean to number conversion
         JSValue result5 = context.eval("new Number(true);");
-        assertThat(result5).isInstanceOfSatisfying(JSNumberObject.class, numObj ->
-                assertThat(numObj.getValue().value()).isEqualTo(1.0));
+        assertThat(result5).isInstanceOfSatisfying(JSNumberObject.class,
+                numObj -> assertThat(numObj.getValue().value()).isEqualTo(1.0));
 
         JSValue result6 = context.eval("new Number(false);");
-        assertThat(result6).isInstanceOfSatisfying(JSNumberObject.class, numObj ->
-                assertThat(numObj.getValue().value()).isEqualTo(0.0));
+        assertThat(result6).isInstanceOfSatisfying(JSNumberObject.class,
+                numObj -> assertThat(numObj.getValue().value()).isEqualTo(0.0));
 
         // Test with undefined (should be NaN)
         JSValue result7 = context.eval("new Number(undefined);");
-        assertThat(result7).isInstanceOfSatisfying(JSNumberObject.class, numObj ->
-                assertThat(Double.isNaN(numObj.getValue().value())).isTrue());
+        assertThat(result7).isInstanceOfSatisfying(JSNumberObject.class,
+                numObj -> assertThat(Double.isNaN(numObj.getValue().value())).isTrue());
 
         // Test with null (should be 0)
         JSValue result8 = context.eval("new Number(null);");
-        assertThat(result8).isInstanceOfSatisfying(JSNumberObject.class, numObj ->
-                assertThat(numObj.getValue().value()).isEqualTo(0.0));
+        assertThat(result8).isInstanceOfSatisfying(JSNumberObject.class,
+                numObj -> assertThat(numObj.getValue().value()).isEqualTo(0.0));
     }
 
     @Test
     public void testNumberConstructorWithNoArguments() {
         // Test new Number() without arguments (should be 0)
         JSValue result = context.eval("new Number();");
-        assertThat(result).isInstanceOfSatisfying(JSNumberObject.class, numObj ->
-                assertThat(numObj.getValue().value()).isEqualTo(0.0));
+        assertThat(result).isInstanceOfSatisfying(JSNumberObject.class,
+                numObj -> assertThat(numObj.getValue().value()).isEqualTo(0.0));
     }
 
     @Test
     public void testNumberObjectSpecialValues() {
         // Test NaN
         JSValue resultNaN = context.eval("new Number(NaN);");
-        assertThat(resultNaN).isInstanceOfSatisfying(JSNumberObject.class, numObj ->
-                assertThat(Double.isNaN(numObj.getValue().value())).isTrue());
+        assertThat(resultNaN).isInstanceOfSatisfying(JSNumberObject.class,
+                numObj -> assertThat(Double.isNaN(numObj.getValue().value())).isTrue());
 
         // Test Infinity
         JSValue resultInf = context.eval("new Number(Infinity);");
-        assertThat(resultInf).isInstanceOfSatisfying(JSNumberObject.class, numObj ->
-                assertThat(numObj.getValue().value()).isEqualTo(Double.POSITIVE_INFINITY));
+        assertThat(resultInf).isInstanceOfSatisfying(JSNumberObject.class,
+                numObj -> assertThat(numObj.getValue().value()).isEqualTo(Double.POSITIVE_INFINITY));
 
         // Test -Infinity
         JSValue resultNegInf = context.eval("new Number(-Infinity);");
-        assertThat(resultNegInf).isInstanceOfSatisfying(JSNumberObject.class, numObj ->
-                assertThat(numObj.getValue().value()).isEqualTo(Double.NEGATIVE_INFINITY));
+        assertThat(resultNegInf).isInstanceOfSatisfying(JSNumberObject.class,
+                numObj -> assertThat(numObj.getValue().value()).isEqualTo(Double.NEGATIVE_INFINITY));
     }
 
     @Test
     public void testNumberObjectToExponential() {
         JSValue result = context.eval("(new Number(12345)).toExponential(2);");
-        assertThat(result.asString().map(JSString::value).orElseThrow())
-                .satisfies(resultStr -> assertThat(resultStr.startsWith("1.23e+4") || resultStr.startsWith("1.23E+4")).isTrue());
+        assertThat(result.asString().map(JSString::value).orElseThrow()).satisfies(
+                resultStr -> assertThat(resultStr.startsWith("1.23e+4") || resultStr.startsWith("1.23E+4")).isTrue());
     }
 
     @Test
@@ -160,8 +160,7 @@ public class NumberConstructorTest extends BaseTest {
         JSValue result = context.eval("(new Number(42)).valueOf();");
         assertThat(result).isInstanceOf(JSNumber.class);
         assertThat(result).isNotInstanceOf(JSNumberObject.class);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, num ->
-                assertThat(num.value()).isEqualTo(42.0));
+        assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(42.0));
     }
 
     @Test
@@ -170,14 +169,13 @@ public class NumberConstructorTest extends BaseTest {
         JSValue result1 = context.eval("Number(42);");
         assertThat(result1).isInstanceOf(JSNumber.class);
         assertThat(result1).isNotInstanceOf(JSNumberObject.class);
-        assertThat(result1).isInstanceOfSatisfying(JSNumber.class, num ->
-                assertThat(num.value()).isEqualTo(42.0));
+        assertThat(result1).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(42.0));
 
         // Test Number(3.14) without new returns primitive
         JSValue result2 = context.eval("Number(3.14);");
         assertThat(result2).isInstanceOf(JSNumber.class);
         assertThat(result2).isNotInstanceOf(JSNumberObject.class);
-        assertThat(result2).isInstanceOfSatisfying(JSNumber.class, num ->
-                assertThat(num.value()).isCloseTo(3.14, offset(0.001)));
+        assertThat(result2).isInstanceOfSatisfying(JSNumber.class,
+                num -> assertThat(num.value()).isCloseTo(3.14, offset(0.001)));
     }
 }

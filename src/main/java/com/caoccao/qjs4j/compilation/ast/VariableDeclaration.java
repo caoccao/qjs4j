@@ -74,9 +74,7 @@ public final class VariableDeclaration extends Statement {
     @Override
     public List<VariableDeclarator> getVarDeclarators() {
         if (varDeclarators == null) {
-            varDeclarators = kind == VariableKind.VAR && declarations != null
-                    ? declarations
-                    : List.of();
+            varDeclarators = kind == VariableKind.VAR && declarations != null ? declarations : List.of();
         }
         return varDeclarators;
     }

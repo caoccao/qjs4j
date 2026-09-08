@@ -31,6 +31,9 @@ jobs:
         with:
           deno-version: v2.x
 
+      - name: Check Java formatting
+        run: ./gradlew --no-daemon spotlessCheck
+
       - name: Run test, javadoc, sourceJar
         run: ./gradlew --no-daemon test javadoc sourceJar
 

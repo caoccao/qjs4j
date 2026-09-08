@@ -24,34 +24,27 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Advanced tests for async/await functionality, focusing on proper asynchronous behavior,
- * promise chaining, and execution suspension/resumption.
+ * Advanced tests for async/await functionality, focusing on proper asynchronous behavior, promise chaining, and
+ * execution suspension/resumption.
  */
 public class AsyncTest extends BaseJavetTest {
     @Test
     void testAsyncArrowAwaitParameterRejected() {
         // 'await' is always rejected as an async arrow parameter (sloppy and strict)
-        assertErrorWithJavet(
-                "async await => 1",
-                "async aw\\u0061it => 1",
-                "'use strict'; async await => 1",
+        assertErrorWithJavet("async await => 1", "async aw\\u0061it => 1", "'use strict'; async await => 1",
                 "'use strict'; async aw\\u0061it => 1");
     }
 
     @Test
     void testAsyncArrowEvalArgumentsAllowedInSloppyMode() {
         // eval and arguments are allowed as async arrow params in sloppy mode
-        assertIntegerWithJavet(
-                "(async eval => 1)()",
-                "(async arguments => 1)()");
+        assertIntegerWithJavet("(async eval => 1)()", "(async arguments => 1)()");
     }
 
     @Test
     void testAsyncArrowEvalArgumentsRejectedInStrictMode() {
         // eval and arguments are rejected as async arrow params in strict mode
-        assertErrorWithJavet(
-                "'use strict'; async eval => 1",
-                "'use strict'; async arguments => 1");
+        assertErrorWithJavet("'use strict'; async eval => 1", "'use strict'; async arguments => 1");
     }
 
     @Test
@@ -66,69 +59,30 @@ public class AsyncTest extends BaseJavetTest {
     @Test
     void testAsyncArrowReservedWordParametersRejected() {
         // Reserved words are always rejected as async arrow parameters
-        assertErrorWithJavet(
-                "async break => 1",
-                "async case => 1",
-                "async class => 1",
-                "async const => 1",
-                "async continue => 1",
-                "async delete => 1",
-                "async do => 1",
-                "async else => 1",
-                "async enum => 1",
-                "async export => 1",
-                "async extends => 1",
-                "async false => 1",
-                "async finally => 1",
-                "async for => 1",
-                "async function => 1",
-                "async if => 1",
-                "async import => 1",
-                "async in => 1",
-                "async instanceof => 1",
-                "async new => 1",
-                "async null => 1",
-                "async return => 1",
-                "async super => 1",
-                "async switch => 1",
-                "async this => 1",
-                "async throw => 1",
-                "async true => 1",
-                "async try => 1",
-                "async typeof => 1",
-                "async var => 1",
-                "async void => 1",
-                "async while => 1",
-                "async with => 1");
+        assertErrorWithJavet("async break => 1", "async case => 1", "async class => 1", "async const => 1",
+                "async continue => 1", "async delete => 1", "async do => 1", "async else => 1", "async enum => 1",
+                "async export => 1", "async extends => 1", "async false => 1", "async finally => 1", "async for => 1",
+                "async function => 1", "async if => 1", "async import => 1", "async in => 1", "async instanceof => 1",
+                "async new => 1", "async null => 1", "async return => 1", "async super => 1", "async switch => 1",
+                "async this => 1", "async throw => 1", "async true => 1", "async try => 1", "async typeof => 1",
+                "async var => 1", "async void => 1", "async while => 1", "async with => 1");
     }
 
     @Test
     void testAsyncArrowStrictReservedParametersAllowedInSloppyMode() {
         // Strict reserved words are allowed as async arrow params in sloppy mode
-        assertIntegerWithJavet(
-                "(async yield => 1)()",
-                "(async let => 1)()",
-                "(async implements => 1)()",
-                "(async interface => 1)()",
-                "(async package => 1)()",
-                "(async private => 1)()",
-                "(async protected => 1)()",
-                "(async public => 1)()",
-                "(async static => 1)()");
+        assertIntegerWithJavet("(async yield => 1)()", "(async let => 1)()", "(async implements => 1)()",
+                "(async interface => 1)()", "(async package => 1)()", "(async private => 1)()",
+                "(async protected => 1)()", "(async public => 1)()", "(async static => 1)()");
     }
 
     @Test
     void testAsyncArrowStrictReservedParametersRejectedInStrictMode() {
         // Strict reserved words are rejected as async arrow params in strict mode
-        assertErrorWithJavet(
-                "'use strict'; async yield => 1",
-                "'use strict'; async let => 1",
-                "'use strict'; async implements => 1",
-                "'use strict'; async interface => 1",
-                "'use strict'; async package => 1",
-                "'use strict'; async private => 1",
-                "'use strict'; async protected => 1",
-                "'use strict'; async public => 1",
+        assertErrorWithJavet("'use strict'; async yield => 1", "'use strict'; async let => 1",
+                "'use strict'; async implements => 1", "'use strict'; async interface => 1",
+                "'use strict'; async package => 1", "'use strict'; async private => 1",
+                "'use strict'; async protected => 1", "'use strict'; async public => 1",
                 "'use strict'; async static => 1");
     }
 
@@ -150,8 +104,7 @@ public class AsyncTest extends BaseJavetTest {
     @Test
     void testAsyncEscapedNotKeyword() {
         // ES2024 12.7.1: `async` with Unicode escapes is an identifier, not a keyword.
-        assertErrorWithJavet(
-                "\\u0061sync function f(){}");
+        assertErrorWithJavet("\\u0061sync function f(){}");
     }
 
     @Test
@@ -206,6 +159,15 @@ public class AsyncTest extends BaseJavetTest {
     }
 
     @Test
+    void testAsyncFunctionWithoutReturn() {
+        assertBooleanWithJavet("""
+                async function test() {
+                    const x = 42;
+                }
+                test() === undefined;""");
+    }
+
+    @Test
     void testAsyncFunctionWithPromiseResolution() {
         // Test that async functions properly work with promises that resolve asynchronously
         assertObjectWithJavet("""
@@ -220,15 +182,6 @@ public class AsyncTest extends BaseJavetTest {
                 }
                 const result = test();
                 [resolved, result];""");
-    }
-
-    @Test
-    void testAsyncFunctionWithoutReturn() {
-        assertBooleanWithJavet("""
-                async function test() {
-                    const x = 42;
-                }
-                test() === undefined;""");
     }
 
     @Test
@@ -248,45 +201,36 @@ public class AsyncTest extends BaseJavetTest {
     void testAsyncLineTerminatorNotAsyncFunction() {
         // ES2024: [no LineTerminator here] between `async` and `function`.
         // A line terminator makes `async` an identifier, not a keyword modifier.
-        assertErrorWithJavet(
-                "async\nfunction foo() {}");
+        assertErrorWithJavet("async\nfunction foo() {}");
     }
 
     @Test
     void testAsyncUnicodeEscapeIdentifierUsage() {
-        assertStringWithJavet(
-                "var async = 42; \\u0061sync.toString()");
+        assertStringWithJavet("var async = 42; \\u0061sync.toString()");
     }
 
     @Test
     void testAwaitIdentifierInNonAsyncNestedInAsyncBody() {
         // await as identifier inside non-async function nested in async function body
-        assertBooleanWithJavet(
-                "async function f() { let a = function(a = await) {}; } typeof f === 'function'",
+        assertBooleanWithJavet("async function f() { let a = function(a = await) {}; } typeof f === 'function'",
                 "async function* f() { let a = function(a = await) {}; } typeof f === 'function'");
     }
 
     @Test
     void testAwaitIdentifierWithDivision() {
         // In non-async context, await is an identifier and / is division
-        assertIntegerWithJavet(
-                "var await = 10; await / 2",
-                "var await = 10; await / 5 + await / 2");
+        assertIntegerWithJavet("var await = 10; await / 2", "var await = 10; await / 5 + await / 2");
     }
 
     @Test
     void testAwaitIdentifierWithDivisionInFunction() {
-        assertIntegerWithJavet(
-                "function f() { var await = 6; return await / 3; } f()");
+        assertIntegerWithJavet("function f() { var await = 6; return await / 3; } f()");
     }
 
     @Test
     void testAwaitInAsyncFunctionParameterDefaultsRejected() {
-        assertErrorWithJavet(
-                "async function f(a = await) {}",
-                "async function* f(a = await) {}",
-                "let f = async function(a = await) {}",
-                "let f = async function*(a = await) {}");
+        assertErrorWithJavet("async function f(a = await) {}", "async function* f(a = await) {}",
+                "let f = async function(a = await) {}", "let f = async function*(a = await) {}");
     }
 
     @Test
@@ -301,22 +245,19 @@ public class AsyncTest extends BaseJavetTest {
     @Test
     void testAwaitInNestedAsyncArrowBodyAllowed() {
         // await in nested async arrow body within async arrow parameter defaults is allowed
-        assertBooleanWithJavet(
-                "typeof (async (a = async () => { await 1; }) => {}) === 'function'");
+        assertBooleanWithJavet("typeof (async (a = async () => { await 1; }) => {}) === 'function'");
     }
 
     @Test
     void testAwaitInNestedAsyncFunctionBodyAllowed() {
         // await in nested async function body within async parameter defaults is allowed
-        assertBooleanWithJavet(
-                "async function f(a = async function() { await 1; }) {} typeof f === 'function'",
+        assertBooleanWithJavet("async function f(a = async function() { await 1; }) {} typeof f === 'function'",
                 "async function* f(a = async function*() { await 1; }) {} typeof f === 'function'");
     }
 
     @Test
     void testAwaitInNestedAsyncFunctionParameterDefaultsRejected() {
-        assertErrorWithJavet(
-                "function f(a = async function(a = await) {}) {}",
+        assertErrorWithJavet("function f(a = async function(a = await) {}) {}",
                 "function f() { a = async function(a = await) {}; }",
                 "async function f() { a = async function(a = await) {}; }",
                 "async function* f() { a = async function*(a = await) {}; }");
@@ -376,8 +317,7 @@ public class AsyncTest extends BaseJavetTest {
     @Test
     void testAwaitWithRegexInAsyncContext() {
         // In async context, await /regex/ correctly rescans / as regex
-        assertStringWithJavet(
-                "async function f() { return typeof (await /test/g); } f()");
+        assertStringWithJavet("async function f() { return typeof (await /test/g); } f()");
     }
 
     @Test
@@ -536,36 +476,34 @@ public class AsyncTest extends BaseJavetTest {
 
     @Test
     public void testSyncForOfLoopWithEmptyArray() {
-        assertIntegerWithJavet(
-                """
-                        function test() {
-                          let count = 0;
-                          const arr = [];
-                          for (const item of arr) {
-                            count++;
-                          }
-                          return count;
-                        }
-                        test()""");
+        assertIntegerWithJavet("""
+                function test() {
+                  let count = 0;
+                  const arr = [];
+                  for (const item of arr) {
+                    count++;
+                  }
+                  return count;
+                }
+                test()""");
     }
 
     @Test
     public void testSyncForOfLoopWithLetAndConst() {
-        assertIntegerWithJavet(
-                """
-                        function test() {
-                          let sum1 = 0;
-                          let sum2 = 0;
-                          const arr = [1, 2, 3];
-                          for (let item of arr) {
-                            sum1 += item;
-                          }
-                          for (const item of arr) {
-                            sum2 += item;
-                          }
-                          return sum1 + sum2;
-                        }
-                        test()""");
+        assertIntegerWithJavet("""
+                function test() {
+                  let sum1 = 0;
+                  let sum2 = 0;
+                  const arr = [1, 2, 3];
+                  for (let item of arr) {
+                    sum1 += item;
+                  }
+                  for (const item of arr) {
+                    sum2 += item;
+                  }
+                  return sum1 + sum2;
+                }
+                test()""");
     }
 
     @Test

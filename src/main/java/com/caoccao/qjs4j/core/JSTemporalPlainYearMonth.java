@@ -30,31 +30,25 @@ public final class JSTemporalPlainYearMonth extends JSObject {
         this.calendarId = calendarId;
     }
 
-    public static JSTemporalPlainYearMonth create(
-            JSContext context,
-            IsoDate isoDate,
-            TemporalCalendarId calendarId) {
-        JSObject prototype = TemporalUtils.getTemporalPrototype(context, "PlainYearMonth");
-        return create(context, isoDate, calendarId, prototype);
-    }
-
-    public static JSTemporalPlainYearMonth create(
-            JSContext context,
-            IsoDate isoDate,
-            TemporalCalendarId calendarId,
-            JSObject prototype) {
-        JSTemporalPlainYearMonth plainYearMonth = new JSTemporalPlainYearMonth(context, isoDate, calendarId);
-        if (prototype != null) {
-            plainYearMonth.setPrototype(prototype);
-        }
-        return plainYearMonth;
-    }
-
     public TemporalCalendarId getCalendarId() {
         return calendarId;
     }
 
     public IsoDate getIsoDate() {
         return isoDate;
+    }
+
+    public static JSTemporalPlainYearMonth create(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId) {
+        JSObject prototype = TemporalUtils.getTemporalPrototype(context, "PlainYearMonth");
+        return create(context, isoDate, calendarId, prototype);
+    }
+
+    public static JSTemporalPlainYearMonth create(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId,
+            JSObject prototype) {
+        JSTemporalPlainYearMonth plainYearMonth = new JSTemporalPlainYearMonth(context, isoDate, calendarId);
+        if (prototype != null) {
+            plainYearMonth.setPrototype(prototype);
+        }
+        return plainYearMonth;
     }
 }

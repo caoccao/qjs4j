@@ -35,27 +35,17 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @Tag("performance")
 public class OctaneV7Issue7PerformanceTest extends BaseTest {
-    private static final List<String> EXPECTED_SUITE_NAMES = List.of(
-            "Richards",
-            "DeltaBlue",
-            "Crypto",
-            "RayTrace",
-            "EarleyBoyer",
-            "RegExp",
-            "Splay",
-            "NavierStokes");
+    private static final List<String> EXPECTED_SUITE_NAMES = List.of("Richards", "DeltaBlue", "Crypto", "RayTrace",
+            "EarleyBoyer", "RegExp", "Splay", "NavierStokes");
 
     @Test
     public void testOctaneV7Issue7ThroughContextEval() throws IOException {
         String code = loadCode("performance/octane-v7-issue-7.js")
                 // Keep the issue's complete workloads while limiting the timing harness
                 // to one warm-up and one measured batch per benchmark.
-                .replace("elapsed < 1000", "elapsed < 1")
-                .replace("data.runs < 32", "data.runs < 1")
-                .replace(
-                        "var print = (...args) => new Foo().print([...args]);",
-                        "var __octaneResults = [];\n"
-                                + "var print = (...args) => __octaneResults.push(args.join(''));")
+                .replace("elapsed < 1000", "elapsed < 1").replace("data.runs < 32", "data.runs < 1")
+                .replace("var print = (...args) => new Foo().print([...args]);",
+                        "var __octaneResults = [];\n" + "var print = (...args) => __octaneResults.push(args.join(''));")
                 + "\n[success, __octaneResults];";
 
         JSValue value = context.eval(code);
@@ -73,8 +63,7 @@ public class OctaneV7Issue7PerformanceTest extends BaseTest {
                     assertThat(outputLines.get(index)).startsWith(EXPECTED_SUITE_NAMES.get(index) + ": ");
                 }
                 assertThat(outputLines.get(EXPECTED_SUITE_NAMES.size())).isEqualTo("----");
-                assertThat(outputLines.get(EXPECTED_SUITE_NAMES.size() + 1))
-                        .startsWith("Score (version 7): ");
+                assertThat(outputLines.get(EXPECTED_SUITE_NAMES.size() + 1)).startsWith("Score (version 7): ");
             });
         });
     }

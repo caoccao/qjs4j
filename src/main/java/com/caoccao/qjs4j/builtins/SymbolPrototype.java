@@ -21,14 +21,11 @@ import com.caoccao.qjs4j.core.*;
 import java.util.Optional;
 
 /**
- * Implementation of Symbol.prototype methods.
- * Based on ES2020 Symbol specification.
+ * Implementation of Symbol.prototype methods. Based on ES2020 Symbol specification.
  */
 public final class SymbolPrototype {
     /**
-     * Symbol.prototype.description
-     * ES2020 19.4.3.1
-     * Getter for the Symbol's description.
+     * Symbol.prototype.description ES2020 19.4.3.1 Getter for the Symbol's description.
      */
     public static JSValue getDescription(JSContext context, JSValue thisArg, JSValue[] args) {
         var symbolOpt = thisArg.asSymbolWithDownCast();
@@ -44,47 +41,35 @@ public final class SymbolPrototype {
     }
 
     /**
-     * Symbol.prototype[@@toPrimitive](hint)
-     * ES2020 19.4.3.4
-     * Returns the primitive value.
+     * Symbol.prototype[@@toPrimitive](hint) ES2020 19.4.3.4 Returns the primitive value.
      */
     public static JSValue toPrimitive(JSContext context, JSValue thisArg, JSValue[] args) {
-        return thisArg.asSymbolWithDownCast()
-                .map(jsSymbol -> (JSValue) jsSymbol)
-                .orElseGet(() -> context.throwTypeError("Symbol.prototype [ @@toPrimitive ] requires that 'this' be a Symbol"));
+        return thisArg.asSymbolWithDownCast().map(jsSymbol -> (JSValue) jsSymbol).orElseGet(
+                () -> context.throwTypeError("Symbol.prototype [ @@toPrimitive ] requires that 'this' be a Symbol"));
     }
 
     /**
-     * Symbol.prototype.toString()
-     * ES2020 19.4.3.2
-     * Returns a string representation of the Symbol.
+     * Symbol.prototype.toString() ES2020 19.4.3.2 Returns a string representation of the Symbol.
      */
     public static JSValue toString(JSContext context, JSValue thisArg, JSValue[] args) {
-        return thisArg.asSymbolWithDownCast()
-                .map(jsSymbol -> Optional.ofNullable(jsSymbol.getDescription()))
-                .map(optionalDescription -> (JSValue) new JSString(optionalDescription
-                        .map(description -> "Symbol(" + description + ")")
-                        .orElse("Symbol()")))
+        return thisArg.asSymbolWithDownCast().map(jsSymbol -> Optional.ofNullable(jsSymbol.getDescription()))
+                .map(optionalDescription -> (JSValue) new JSString(
+                        optionalDescription.map(description -> "Symbol(" + description + ")").orElse("Symbol()")))
                 .orElseGet(() -> context.throwTypeError("Symbol.prototype.toString requires that 'this' be a Symbol"));
     }
 
     /**
-     * Symbol.prototype[@@toStringTag]
-     * ES2020 19.4.3.5
-     * Returns "Symbol".
+     * Symbol.prototype[@@toStringTag] ES2020 19.4.3.5 Returns "Symbol".
      */
     public static JSValue toStringTag(JSContext context, JSValue thisArg, JSValue[] args) {
         return new JSString(JSSymbol.NAME);
     }
 
     /**
-     * Symbol.prototype.valueOf()
-     * ES2020 19.4.3.3
-     * Returns the primitive value of the Symbol.
+     * Symbol.prototype.valueOf() ES2020 19.4.3.3 Returns the primitive value of the Symbol.
      */
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        return thisArg.asSymbolWithDownCast()
-                .map(jsSymbol -> (JSValue) jsSymbol)
+        return thisArg.asSymbolWithDownCast().map(jsSymbol -> (JSValue) jsSymbol)
                 .orElseGet(() -> context.throwTypeError("Symbol.prototype.valueOf requires that 'this' be a Symbol"));
     }
 }

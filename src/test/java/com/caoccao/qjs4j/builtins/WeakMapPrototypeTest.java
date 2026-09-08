@@ -30,22 +30,19 @@ public class WeakMapPrototypeTest extends BaseJavetTest {
     public void testDelete() {
         // Normal case: delete existing key
         assertBooleanWithJavet("""
-                        var weakMap = new WeakMap();
-                        var key1 = {};
-                        var key2 = {};
-                        weakMap.set(key1, 'value1');
-                        weakMap.set(key2, 'value2');
-                        weakMap.delete(key1);""",
-                """
-                        var weakMap = new WeakMap();
-                        var key = {};
-                        weakMap.delete(key);""",
-                """
-                        var weakMap = new WeakMap();
-                        weakMap.delete();""",
-                """
-                        var weakMap = new WeakMap();
-                        weakMap.delete('string');""");
+                var weakMap = new WeakMap();
+                var key1 = {};
+                var key2 = {};
+                weakMap.set(key1, 'value1');
+                weakMap.set(key2, 'value2');
+                weakMap.delete(key1);""", """
+                var weakMap = new WeakMap();
+                var key = {};
+                weakMap.delete(key);""", """
+                var weakMap = new WeakMap();
+                weakMap.delete();""", """
+                var weakMap = new WeakMap();
+                weakMap.delete('string');""");
 
         // Edge case: called on non-WeakMap
         assertErrorWithJavet("WeakMap.prototype.delete.call('not weakmap', {});");
@@ -61,8 +58,7 @@ public class WeakMapPrototypeTest extends BaseJavetTest {
                 weakMap.get(key1);""");
 
         // Normal case: get non-existing key
-        assertBooleanWithJavet(
-                "var weakMap = new WeakMap(); var key = {}; weakMap.get(key) === undefined;",
+        assertBooleanWithJavet("var weakMap = new WeakMap(); var key = {}; weakMap.get(key) === undefined;",
                 "var weakMap = new WeakMap(); weakMap.get() === undefined;",
                 "var weakMap = new WeakMap(); weakMap.get('string') === undefined;");
 
@@ -100,18 +96,17 @@ public class WeakMapPrototypeTest extends BaseJavetTest {
     @Test
     public void testSet() {
         // Normal case: set new key-value
-        assertBooleanWithJavet(
-                """
-                        var weakMap = new WeakMap();
-                        var key1 = {};
-                        weakMap.set(key1, 'value1').constructor === WeakMap""", """
-                        var weakMap = new WeakMap();
-                        var key = {};
-                        weakMap.set(key, 'value') === weakMap;""", """
-                        var weakMap = new WeakMap();
-                        var key = {};
-                        weakMap.set(key);
-                        weakMap.get(key) === undefined;""");
+        assertBooleanWithJavet("""
+                var weakMap = new WeakMap();
+                var key1 = {};
+                weakMap.set(key1, 'value1').constructor === WeakMap""", """
+                var weakMap = new WeakMap();
+                var key = {};
+                weakMap.set(key, 'value') === weakMap;""", """
+                var weakMap = new WeakMap();
+                var key = {};
+                weakMap.set(key);
+                weakMap.get(key) === undefined;""");
 
         // Edge case: no arguments
         assertErrorWithJavet("""

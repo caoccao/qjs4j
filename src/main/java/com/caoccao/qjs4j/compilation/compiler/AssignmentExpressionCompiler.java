@@ -38,8 +38,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         Expression left = assignExpr.getLeft();
         AssignmentOperator operator = assignExpr.getOperator();
 
-        if (operator == AssignmentOperator.LOGICAL_AND_ASSIGN
-                || operator == AssignmentOperator.LOGICAL_OR_ASSIGN
+        if (operator == AssignmentOperator.LOGICAL_AND_ASSIGN || operator == AssignmentOperator.LOGICAL_OR_ASSIGN
                 || operator == AssignmentOperator.NULLISH_ASSIGN) {
             compileLogicalAssignment(assignExpr);
             return;
@@ -85,7 +84,9 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                         compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL3);
                     } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
                         String fieldName = privateId.getName();
-                        JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
+                        JSSymbol symbol = compilerContext.privateSymbols != null
+                                ? compilerContext.privateSymbols.get(fieldName)
+                                : null;
                         if (symbol != null) {
                             compilerContext.emitter.emitOpcode(Opcode.DUP);
                             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
@@ -114,9 +115,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                 case AND_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.AND);
                 case OR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.OR);
                 case XOR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.XOR);
-                default -> throw new JSCompilerException(
-                        "Unknown assignment operator: " + operator,
-                        assignExpr);
+                default -> throw new JSCompilerException("Unknown assignment operator: " + operator, assignExpr);
             }
         } else {
             if (left instanceof MemberExpression memberExpr) {
@@ -155,7 +154,9 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                 compilerContext.expressionCompiler.compile(memberExpr.getObject());
                 if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
                     String fieldName = privateId.getName();
-                    JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
+                    JSSymbol symbol = compilerContext.privateSymbols != null
+                            ? compilerContext.privateSymbols.get(fieldName)
+                            : null;
                     if (symbol != null) {
                         compilerContext.emitter.emitOpcode(Opcode.SWAP);
                         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
@@ -173,7 +174,9 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                     compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                 } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
                     String fieldName = privateId.getName();
-                    JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
+                    JSSymbol symbol = compilerContext.privateSymbols != null
+                            ? compilerContext.privateSymbols.get(fieldName)
+                            : null;
                     if (symbol != null) {
                         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                         compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
@@ -198,12 +201,17 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         String name = identifier.getName();
         AssignmentOperator operator = assignExpr.getOperator();
         Integer localIndex = compilerContext.scopeManager.findLocalInScopes(name);
-        Integer capturedIndex = localIndex == null ? compilerContext.captureResolver.resolveCapturedBindingIndex(name) : null;
+        Integer capturedIndex = localIndex == null
+                ? compilerContext.captureResolver.resolveCapturedBindingIndex(name)
+                : null;
         boolean isConstLocalBinding = localIndex != null && compilerContext.scopeManager.isLocalBindingConst(name);
-        boolean isConstCapturedBinding = capturedIndex != null && compilerContext.captureResolver.isCapturedBindingImmutable(name);
+        boolean isConstCapturedBinding = capturedIndex != null
+                && compilerContext.captureResolver.isCapturedBindingImmutable(name);
 
-        boolean isFunctionNameLocal = localIndex != null && compilerContext.scopeManager.isLocalBindingFunctionName(name);
-        boolean isFunctionNameCaptured = capturedIndex != null && compilerContext.captureResolver.isCapturedBindingFunctionName(name);
+        boolean isFunctionNameLocal = localIndex != null
+                && compilerContext.scopeManager.isLocalBindingFunctionName(name);
+        boolean isFunctionNameCaptured = capturedIndex != null
+                && compilerContext.captureResolver.isCapturedBindingFunctionName(name);
         if (isFunctionNameLocal || isFunctionNameCaptured) {
             if (operator != AssignmentOperator.ASSIGN) {
                 if (isFunctionNameLocal) {
@@ -213,8 +221,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                 }
             }
             compilerContext.expressionCompiler.compile(assignExpr.getRight());
-            if (operator == AssignmentOperator.ASSIGN
-                    && assignExpr.isLhsIdentifierRef()
+            if (operator == AssignmentOperator.ASSIGN && assignExpr.isLhsIdentifierRef()
                     && assignExpr.getRight().isAnonymousFunction()) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, name);
             }
@@ -232,9 +239,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                     case AND_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.AND);
                     case OR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.OR);
                     case XOR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.XOR);
-                    default -> throw new JSCompilerException(
-                            "Unknown assignment operator: " + operator,
-                            assignExpr);
+                    default -> throw new JSCompilerException("Unknown assignment operator: " + operator, assignExpr);
                 }
             }
             return;
@@ -265,9 +270,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                     case AND_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.AND);
                     case OR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.OR);
                     case XOR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.XOR);
-                    default -> throw new JSCompilerException(
-                            "Unknown assignment operator: " + operator,
-                            assignExpr);
+                    default -> throw new JSCompilerException("Unknown assignment operator: " + operator, assignExpr);
                 }
             }
 
@@ -284,17 +287,14 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
             compilerContext.emitter.emitOpcode(Opcode.GET_REF_VALUE);
         }
 
-        if (operator == AssignmentOperator.ASSIGN
-                && assignExpr.isLhsIdentifierRef()
-                && assignExpr.getRight() instanceof ClassExpression classExpr
-                && classExpr.getId() == null) {
+        if (operator == AssignmentOperator.ASSIGN && assignExpr.isLhsIdentifierRef()
+                && assignExpr.getRight() instanceof ClassExpression classExpr && classExpr.getId() == null) {
             compilerContext.inferredClassName = name;
         }
         compilerContext.expressionCompiler.compile(assignExpr.getRight());
         compilerContext.inferredClassName = null;
 
-        if (operator == AssignmentOperator.ASSIGN
-                && assignExpr.isLhsIdentifierRef()
+        if (operator == AssignmentOperator.ASSIGN && assignExpr.isLhsIdentifierRef()
                 && assignExpr.getRight().isAnonymousFunction()) {
             compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, name);
         }
@@ -313,9 +313,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                 case AND_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.AND);
                 case OR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.OR);
                 case XOR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.XOR);
-                default -> throw new JSCompilerException(
-                        "Unknown assignment operator: " + operator,
-                        assignExpr);
+                default -> throw new JSCompilerException("Unknown assignment operator: " + operator, assignExpr);
             }
         }
 
@@ -343,9 +341,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                 depthLvalue = 1;
             }
         } else {
-            throw new JSCompilerException(
-                    "Invalid left-hand side in logical assignment",
-                    assignExpr);
+            throw new JSCompilerException("Invalid left-hand side in logical assignment", assignExpr);
         }
 
         if (left instanceof Identifier id) {
@@ -393,10 +389,11 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                     compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
                 } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateIdentifier) {
                     String fieldName = privateIdentifier.getName();
-                    JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
+                    JSSymbol symbol = compilerContext.privateSymbols != null
+                            ? compilerContext.privateSymbols.get(fieldName)
+                            : null;
                     if (symbol == null) {
-                        throw new JSCompilerException(
-                                "undefined private field '#" + fieldName + "'",
+                        throw new JSCompilerException("undefined private field '#" + fieldName + "'",
                                 privateIdentifier);
                     }
                     compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
@@ -422,8 +419,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
 
         compilerContext.emitter.emitOpcode(Opcode.DROP);
         compilerContext.expressionCompiler.compile(assignExpr.getRight());
-        if (left instanceof Identifier identifier
-                && assignExpr.isLhsIdentifierRef()
+        if (left instanceof Identifier identifier && assignExpr.isLhsIdentifierRef()
                 && assignExpr.getRight().isAnonymousFunction()) {
             compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
         }
@@ -436,9 +432,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
             }
             case 3 -> {
             }
-            default -> throw new JSCompilerException(
-                    "Invalid depth for logical assignment",
-                    assignExpr);
+            default -> throw new JSCompilerException("Invalid depth for logical assignment", assignExpr);
         }
         if (privateMemberAssignment) {
             compilerContext.emitter.emitOpcode(Opcode.SWAP);

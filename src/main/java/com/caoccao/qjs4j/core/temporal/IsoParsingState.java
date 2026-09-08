@@ -35,108 +35,6 @@ final class IsoParsingState {
         this.position = 0;
     }
 
-    private static long[] decomposeTimeFraction(long fractionalNanoseconds) {
-        long minutePortion = fractionalNanoseconds / NANOSECONDS_PER_MINUTE;
-        long remainingAfterMinutes = fractionalNanoseconds % NANOSECONDS_PER_MINUTE;
-        long secondPortion = remainingAfterMinutes / NANOSECONDS_PER_SECOND;
-        long remainingAfterSeconds = remainingAfterMinutes % NANOSECONDS_PER_SECOND;
-        long millisecondPortion = remainingAfterSeconds / NANOSECONDS_PER_MILLISECOND;
-        long remainingAfterMilliseconds = remainingAfterSeconds % NANOSECONDS_PER_MILLISECOND;
-        long microsecondPortion = remainingAfterMilliseconds / NANOSECONDS_PER_MICROSECOND;
-        long nanosecondPortion = remainingAfterMilliseconds % NANOSECONDS_PER_MICROSECOND;
-        return new long[]{
-                minutePortion,
-                secondPortion,
-                millisecondPortion,
-                microsecondPortion,
-                nanosecondPortion
-        };
-    }
-
-    private static boolean isAmbiguousFourDigitTime(String value) {
-        if (value.length() != 4
-                || !isAsciiDigit(value.charAt(0))
-                || !isAsciiDigit(value.charAt(1))
-                || !isAsciiDigit(value.charAt(2))
-                || !isAsciiDigit(value.charAt(3))) {
-            return false;
-        }
-        int month = parseFixedTwoDigits(value, 0);
-        int dayOfMonth = parseFixedTwoDigits(value, 2);
-        return new IsoDate(1972, month, dayOfMonth).isValid();
-    }
-
-    private static boolean isAmbiguousSixDigitTime(String value) {
-        if (value.length() != 6
-                || !isAsciiDigit(value.charAt(0))
-                || !isAsciiDigit(value.charAt(1))
-                || !isAsciiDigit(value.charAt(2))
-                || !isAsciiDigit(value.charAt(3))
-                || !isAsciiDigit(value.charAt(4))
-                || !isAsciiDigit(value.charAt(5))) {
-            return false;
-        }
-        int month = parseFixedTwoDigits(value, 4);
-        return month >= 1 && month <= 12;
-    }
-
-    static boolean isAmbiguousTimeStringWithoutDesignator(String input) {
-        String candidate = input;
-        int annotationStart = candidate.indexOf('[');
-        if (annotationStart >= 0) {
-            candidate = candidate.substring(0, annotationStart);
-        }
-        if (isAmbiguousFourDigitTime(candidate) || isAmbiguousSixDigitTime(candidate)) {
-            return true;
-        }
-        if (candidate.length() == 5
-                && isAsciiDigit(candidate.charAt(0))
-                && isAsciiDigit(candidate.charAt(1))
-                && candidate.charAt(2) == '-'
-                && isAsciiDigit(candidate.charAt(3))
-                && isAsciiDigit(candidate.charAt(4))) {
-            int month = parseFixedTwoDigits(candidate, 0);
-            int dayOfMonth = parseFixedTwoDigits(candidate, 3);
-            return new IsoDate(1972, month, dayOfMonth).isValid();
-        }
-        if (candidate.length() == 7
-                && isAsciiDigit(candidate.charAt(0))
-                && isAsciiDigit(candidate.charAt(1))
-                && isAsciiDigit(candidate.charAt(2))
-                && isAsciiDigit(candidate.charAt(3))
-                && candidate.charAt(4) == '-'
-                && isAsciiDigit(candidate.charAt(5))
-                && isAsciiDigit(candidate.charAt(6))) {
-            int month = parseFixedTwoDigits(candidate, 5);
-            return month >= 1 && month <= 12;
-        }
-        return false;
-    }
-
-    static boolean isAsciiDigit(char character) {
-        return character >= '0' && character <= '9';
-    }
-
-    static boolean isValidIsoYearMonthDateForParsing(int year, int month, int dayOfMonth) {
-        if (month < 1 || month > 12) {
-            return false;
-        }
-        if (dayOfMonth < 1 || dayOfMonth > IsoDate.daysInMonth(year, month)) {
-            return false;
-        }
-        if (year < -271821 || year > 275760) {
-            return false;
-        }
-        if (year == -271821 && month < 4) {
-            return false;
-        }
-        return year != 275760 || month <= 9;
-    }
-
-    static int parseFixedTwoDigits(String value, int index) {
-        return (value.charAt(index) - '0') * 10 + (value.charAt(index + 1) - '0');
-    }
-
     void advanceOne() {
         position++;
     }
@@ -146,8 +44,7 @@ final class IsoParsingState {
     }
 
     private boolean hasTwoDigits(String value, int index) {
-        return index + 2 <= value.length()
-                && isAsciiDigit(value.charAt(index))
+        return index + 2 <= value.length() && isAsciiDigit(value.charAt(index))
                 && isAsciiDigit(value.charAt(index + 1));
     }
 
@@ -206,8 +103,7 @@ final class IsoParsingState {
             return false;
         }
 
-        if (index + 2 > value.length()
-                || !isAsciiDigit(value.charAt(index))
+        if (index + 2 > value.length() || !isAsciiDigit(value.charAt(index))
                 || !isAsciiDigit(value.charAt(index + 1))) {
             return false;
         }
@@ -231,8 +127,7 @@ final class IsoParsingState {
     }
 
     private boolean isOffsetTimeZoneAnnotation(String annotationValue) {
-        return !annotationValue.isEmpty()
-                && (annotationValue.charAt(0) == '+' || annotationValue.charAt(0) == '-');
+        return !annotationValue.isEmpty() && (annotationValue.charAt(0) == '+' || annotationValue.charAt(0) == '-');
     }
 
     private boolean isValidIsoDateForParsing(int year, int month, int dayOfMonth, boolean enforceIsoDateRange) {
@@ -349,11 +244,8 @@ final class IsoParsingState {
             if (position < input.length() && (input.charAt(position) == '.' || input.charAt(position) == ',')) {
                 hasFraction = true;
                 position++;
-                fractionalNanoseconds = parseFractionalNanoseconds(
-                        context,
-                        true,
-                        "Temporal error: Invalid duration string.",
-                        "Temporal error: Invalid duration string.");
+                fractionalNanoseconds = parseFractionalNanoseconds(context, true,
+                        "Temporal error: Invalid duration string.", "Temporal error: Invalid duration string.");
                 if (context.hasPendingException()) {
                     return null;
                 }
@@ -401,7 +293,8 @@ final class IsoParsingState {
                     case 'S', 's' -> 2;
                     default -> -1;
                 };
-                if (currentTimeUnitOrder < 0 || currentTimeUnitOrder <= lastTimeUnitOrder || hasFractionalTimeComponent) {
+                if (currentTimeUnitOrder < 0 || currentTimeUnitOrder <= lastTimeUnitOrder
+                        || hasFractionalTimeComponent) {
                     context.throwRangeError("Temporal error: Invalid duration string.");
                     return null;
                 }
@@ -438,7 +331,8 @@ final class IsoParsingState {
                         if (hasFraction) {
                             hasFractionalTimeComponent = true;
                             milliseconds = fractionalNanoseconds / NANOSECONDS_PER_MILLISECOND;
-                            int remainingFractionalNanoseconds = (int) (fractionalNanoseconds % NANOSECONDS_PER_MILLISECOND);
+                            int remainingFractionalNanoseconds = (int) (fractionalNanoseconds
+                                    % NANOSECONDS_PER_MILLISECOND);
                             microseconds = remainingFractionalNanoseconds / NANOSECONDS_PER_MICROSECOND;
                             nanoseconds = remainingFractionalNanoseconds % NANOSECONDS_PER_MICROSECOND;
                         }
@@ -471,17 +365,12 @@ final class IsoParsingState {
         } else {
             sign = 1;
         }
-        return new TemporalDuration(
-                years * sign, months * sign, weeks * sign, days * sign,
-                hours * sign, minutes * sign, seconds * sign,
-                milliseconds * sign, microseconds * sign, nanoseconds * sign);
+        return new TemporalDuration(years * sign, months * sign, weeks * sign, days * sign, hours * sign,
+                minutes * sign, seconds * sign, milliseconds * sign, microseconds * sign, nanoseconds * sign);
     }
 
-    private int parseFractionalNanoseconds(
-            JSContext context,
-            boolean rejectMoreThanNineDigits,
-            String emptyFractionErrorMessage,
-            String overflowFractionErrorMessage) {
+    private int parseFractionalNanoseconds(JSContext context, boolean rejectMoreThanNineDigits,
+            String emptyFractionErrorMessage, String overflowFractionErrorMessage) {
         int fractionStart = position;
         while (position < input.length() && isAsciiDigit(input.charAt(position))) {
             position++;
@@ -555,8 +444,7 @@ final class IsoParsingState {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
                     return null;
                 }
-                if (isOffsetTimeZoneAnnotation(content)
-                        && !isMinutePrecisionOffsetTimeZoneAnnotation(content)) {
+                if (isOffsetTimeZoneAnnotation(content) && !isMinutePrecisionOffsetTimeZoneAnnotation(content)) {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
                     return null;
                 }
@@ -665,9 +553,7 @@ final class IsoParsingState {
             }
             if (position < input.length() && (input.charAt(position) == '.' || input.charAt(position) == ',')) {
                 position++;
-                fractionalNanoseconds = parseFractionalNanoseconds(
-                        context,
-                        true,
+                fractionalNanoseconds = parseFractionalNanoseconds(context, true,
                         "Temporal error: Instant argument must be Instant or string.",
                         "Temporal error: Invalid ISO date.");
                 if (context.hasPendingException()) {
@@ -680,10 +566,8 @@ final class IsoParsingState {
         }
 
         int offsetSeconds = sign * (offsetHour * 3600 + offsetMinute * 60 + offsetSecond);
-        long offsetNanoseconds = offsetHour * NANOSECONDS_PER_HOUR
-                + offsetMinute * NANOSECONDS_PER_MINUTE
-                + offsetSecond * NANOSECONDS_PER_SECOND
-                + fractionalNanoseconds;
+        long offsetNanoseconds = offsetHour * NANOSECONDS_PER_HOUR + offsetMinute * NANOSECONDS_PER_MINUTE
+                + offsetSecond * NANOSECONDS_PER_SECOND + fractionalNanoseconds;
         if (sign < 0) {
             offsetNanoseconds = -offsetNanoseconds;
         }
@@ -738,13 +622,11 @@ final class IsoParsingState {
             }
         }
 
-        if (hasSecond && position < input.length() && (input.charAt(position) == '.' || input.charAt(position) == ',')) {
+        if (hasSecond && position < input.length()
+                && (input.charAt(position) == '.' || input.charAt(position) == ',')) {
             position++;
-            int fractionalNanoseconds = parseFractionalNanoseconds(
-                    context,
-                    true,
-                    "Temporal error: Instant argument must be Instant or string.",
-                    "Temporal error: Invalid ISO date.");
+            int fractionalNanoseconds = parseFractionalNanoseconds(context, true,
+                    "Temporal error: Instant argument must be Instant or string.", "Temporal error: Invalid ISO date.");
             if (context.hasPendingException()) {
                 return null;
             }
@@ -752,7 +634,8 @@ final class IsoParsingState {
             int remainingAfterMilliseconds = (int) (fractionalNanoseconds % NANOSECONDS_PER_MILLISECOND);
             microsecond = (int) (remainingAfterMilliseconds / NANOSECONDS_PER_MICROSECOND);
             nanosecond = (int) (remainingAfterMilliseconds % NANOSECONDS_PER_MICROSECOND);
-        } else if (!hasSecond && position < input.length() && (input.charAt(position) == '.' || input.charAt(position) == ',')) {
+        } else if (!hasSecond && position < input.length()
+                && (input.charAt(position) == '.' || input.charAt(position) == ',')) {
             context.throwRangeError("Temporal error: Invalid time");
             return null;
         }
@@ -869,6 +752,87 @@ final class IsoParsingState {
             return Long.MIN_VALUE;
         }
         return value.longValue();
+    }
+
+    private static long[] decomposeTimeFraction(long fractionalNanoseconds) {
+        long minutePortion = fractionalNanoseconds / NANOSECONDS_PER_MINUTE;
+        long remainingAfterMinutes = fractionalNanoseconds % NANOSECONDS_PER_MINUTE;
+        long secondPortion = remainingAfterMinutes / NANOSECONDS_PER_SECOND;
+        long remainingAfterSeconds = remainingAfterMinutes % NANOSECONDS_PER_SECOND;
+        long millisecondPortion = remainingAfterSeconds / NANOSECONDS_PER_MILLISECOND;
+        long remainingAfterMilliseconds = remainingAfterSeconds % NANOSECONDS_PER_MILLISECOND;
+        long microsecondPortion = remainingAfterMilliseconds / NANOSECONDS_PER_MICROSECOND;
+        long nanosecondPortion = remainingAfterMilliseconds % NANOSECONDS_PER_MICROSECOND;
+        return new long[]{minutePortion, secondPortion, millisecondPortion, microsecondPortion, nanosecondPortion};
+    }
+
+    private static boolean isAmbiguousFourDigitTime(String value) {
+        if (value.length() != 4 || !isAsciiDigit(value.charAt(0)) || !isAsciiDigit(value.charAt(1))
+                || !isAsciiDigit(value.charAt(2)) || !isAsciiDigit(value.charAt(3))) {
+            return false;
+        }
+        int month = parseFixedTwoDigits(value, 0);
+        int dayOfMonth = parseFixedTwoDigits(value, 2);
+        return new IsoDate(1972, month, dayOfMonth).isValid();
+    }
+
+    private static boolean isAmbiguousSixDigitTime(String value) {
+        if (value.length() != 6 || !isAsciiDigit(value.charAt(0)) || !isAsciiDigit(value.charAt(1))
+                || !isAsciiDigit(value.charAt(2)) || !isAsciiDigit(value.charAt(3)) || !isAsciiDigit(value.charAt(4))
+                || !isAsciiDigit(value.charAt(5))) {
+            return false;
+        }
+        int month = parseFixedTwoDigits(value, 4);
+        return month >= 1 && month <= 12;
+    }
+
+    static boolean isAmbiguousTimeStringWithoutDesignator(String input) {
+        String candidate = input;
+        int annotationStart = candidate.indexOf('[');
+        if (annotationStart >= 0) {
+            candidate = candidate.substring(0, annotationStart);
+        }
+        if (isAmbiguousFourDigitTime(candidate) || isAmbiguousSixDigitTime(candidate)) {
+            return true;
+        }
+        if (candidate.length() == 5 && isAsciiDigit(candidate.charAt(0)) && isAsciiDigit(candidate.charAt(1))
+                && candidate.charAt(2) == '-' && isAsciiDigit(candidate.charAt(3))
+                && isAsciiDigit(candidate.charAt(4))) {
+            int month = parseFixedTwoDigits(candidate, 0);
+            int dayOfMonth = parseFixedTwoDigits(candidate, 3);
+            return new IsoDate(1972, month, dayOfMonth).isValid();
+        }
+        if (candidate.length() == 7 && isAsciiDigit(candidate.charAt(0)) && isAsciiDigit(candidate.charAt(1))
+                && isAsciiDigit(candidate.charAt(2)) && isAsciiDigit(candidate.charAt(3)) && candidate.charAt(4) == '-'
+                && isAsciiDigit(candidate.charAt(5)) && isAsciiDigit(candidate.charAt(6))) {
+            int month = parseFixedTwoDigits(candidate, 5);
+            return month >= 1 && month <= 12;
+        }
+        return false;
+    }
+
+    static boolean isAsciiDigit(char character) {
+        return character >= '0' && character <= '9';
+    }
+
+    static boolean isValidIsoYearMonthDateForParsing(int year, int month, int dayOfMonth) {
+        if (month < 1 || month > 12) {
+            return false;
+        }
+        if (dayOfMonth < 1 || dayOfMonth > IsoDate.daysInMonth(year, month)) {
+            return false;
+        }
+        if (year < -271821 || year > 275760) {
+            return false;
+        }
+        if (year == -271821 && month < 4) {
+            return false;
+        }
+        return year != 275760 || month <= 9;
+    }
+
+    static int parseFixedTwoDigits(String value, int index) {
+        return (value.charAt(index) - '0') * 10 + (value.charAt(index + 1) - '0');
     }
 
     static final class ParsedAnnotations {

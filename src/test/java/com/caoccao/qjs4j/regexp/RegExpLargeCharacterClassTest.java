@@ -23,14 +23,13 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * A {@code RANGE} instruction used to declare its payload size and its range count in unsigned
- * 16-bit fields, and {@link DynamicBuffer#appendU16(int)} wrote the low two bytes of whatever it
- * was handed. At 8,192 disjoint ranges the payload is 65,538 bytes, which was encoded as 2: the
- * matcher resumed decoding opcodes in the middle of the range data, so a valid pattern compiled
- * without complaint and then matched the wrong thing.
+ * A {@code RANGE} instruction used to declare its payload size and its range count in unsigned 16-bit fields, and
+ * {@link DynamicBuffer#appendU16(int)} wrote the low two bytes of whatever it was handed. At 8,192 disjoint ranges the
+ * payload is 65,538 bytes, which was encoded as 2: the matcher resumed decoding opcodes in the middle of the range
+ * data, so a valid pattern compiled without complaint and then matched the wrong thing.
  * <p>
- * 8,191 ranges is the last size that fit and 8,192 the first that did not, so both are pinned,
- * along with a size well past the old ceiling.
+ * 8,191 ranges is the last size that fit and 8,192 the first that did not, so both are pinned, along with a size well
+ * past the old ceiling.
  */
 public class RegExpLargeCharacterClassTest extends BaseJavetTest {
     private static final String BUILD_PATTERN = """
@@ -53,30 +52,28 @@ public class RegExpLargeCharacterClassTest extends BaseJavetTest {
     @Test
     public void testLargeClassMatchesAndRejectsCorrectly() {
         for (int count : new int[]{8191, 8192, 20000}) {
-            assertBooleanWithJavet(BUILD_PATTERN
-                    + "new RegExp(classOf(" + count + ", false), 'u').test(String.fromCodePoint(0));");
-            assertBooleanWithJavet(BUILD_PATTERN
-                    + "new RegExp(classOf(" + count + ", false), 'u').test(String.fromCodePoint(1));");
-            assertBooleanWithJavet(BUILD_PATTERN
-                    + "new RegExp(classOf(" + count + ", false), 'u').test(String.fromCodePoint((" + count + " - 1) * 2));");
+            assertBooleanWithJavet(
+                    BUILD_PATTERN + "new RegExp(classOf(" + count + ", false), 'u').test(String.fromCodePoint(0));");
+            assertBooleanWithJavet(
+                    BUILD_PATTERN + "new RegExp(classOf(" + count + ", false), 'u').test(String.fromCodePoint(1));");
+            assertBooleanWithJavet(BUILD_PATTERN + "new RegExp(classOf(" + count
+                    + ", false), 'u').test(String.fromCodePoint((" + count + " - 1) * 2));");
         }
     }
 
     @Test
     public void testLargeClassWithIgnoreCase() {
-        assertBooleanWithJavet(BUILD_PATTERN
-                + "new RegExp(classOf(8192, false), 'ui').test(String.fromCodePoint(0));");
-        assertBooleanWithJavet(BUILD_PATTERN
-                + "new RegExp(classOf(8192, false), 'ui').test(String.fromCodePoint(1));");
+        assertBooleanWithJavet(BUILD_PATTERN + "new RegExp(classOf(8192, false), 'ui').test(String.fromCodePoint(0));");
+        assertBooleanWithJavet(BUILD_PATTERN + "new RegExp(classOf(8192, false), 'ui').test(String.fromCodePoint(1));");
     }
 
     @Test
     public void testLargeInvertedClass() {
         for (int count : new int[]{8191, 8192}) {
-            assertBooleanWithJavet(BUILD_PATTERN
-                    + "new RegExp(classOf(" + count + ", true), 'u').test(String.fromCodePoint(0));");
-            assertBooleanWithJavet(BUILD_PATTERN
-                    + "new RegExp(classOf(" + count + ", true), 'u').test(String.fromCodePoint(1));");
+            assertBooleanWithJavet(
+                    BUILD_PATTERN + "new RegExp(classOf(" + count + ", true), 'u').test(String.fromCodePoint(0));");
+            assertBooleanWithJavet(
+                    BUILD_PATTERN + "new RegExp(classOf(" + count + ", true), 'u').test(String.fromCodePoint(1));");
         }
     }
 
@@ -94,9 +91,7 @@ public class RegExpLargeCharacterClassTest extends BaseJavetTest {
 
     @Test
     public void testUnicodeSetsClassWithManyRanges() {
-        assertBooleanWithJavet(BUILD_PATTERN
-                + "new RegExp(classOf(9000, false), 'v').test(String.fromCodePoint(0));");
-        assertBooleanWithJavet(BUILD_PATTERN
-                + "new RegExp(classOf(9000, false), 'v').test(String.fromCodePoint(1));");
+        assertBooleanWithJavet(BUILD_PATTERN + "new RegExp(classOf(9000, false), 'v').test(String.fromCodePoint(0));");
+        assertBooleanWithJavet(BUILD_PATTERN + "new RegExp(classOf(9000, false), 'v').test(String.fromCodePoint(1));");
     }
 }

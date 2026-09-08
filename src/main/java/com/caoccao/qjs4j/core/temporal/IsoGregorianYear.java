@@ -17,11 +17,8 @@
 package com.caoccao.qjs4j.core.temporal;
 
 public record IsoGregorianYear(int gregorianYear, int marchDay, boolean leapYear) {
-    private static final int[] PERSIAN_BREAKS = {
-            -61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181,
-            1210, 1635, 2060, 2097, 2192, 2262, 2324, 2394,
-            2456, 3178
-    };
+    private static final int[] PERSIAN_BREAKS = {-61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181, 1210, 1635, 2060,
+            2097, 2192, 2262, 2324, 2394, 2456, 3178};
     public static final int MAX_SUPPORTED_PERSIAN_YEAR = PERSIAN_BREAKS[PERSIAN_BREAKS.length - 1] - 1;
     public static final int MIN_SUPPORTED_PERSIAN_YEAR = PERSIAN_BREAKS[0] + 1;
     private static final int PERSIAN_FALLBACK_MAX_CORRECTION_DAYS = 62;
@@ -84,17 +81,13 @@ public record IsoGregorianYear(int gregorianYear, int marchDay, boolean leapYear
         long dayOfYear = persianMonth <= 7
                 ? (persianMonth - 1L) * 31L + dayOfMonth
                 : (persianMonth - 1L) * 30L + dayOfMonth + 6L;
-        long julianDay = dayOfYear
-                + Math.floorDiv(cycleYear * 682L - 110L, 2816L)
-                + (cycleYear - 1L) * 365L
-                + Math.floorDiv(yearsSinceEpochCycle, 2820L) * 1_029_983L
-                + 1_948_320L;
+        long julianDay = dayOfYear + Math.floorDiv(cycleYear * 682L - 110L, 2816L) + (cycleYear - 1L) * 365L
+                + Math.floorDiv(yearsSinceEpochCycle, 2820L) * 1_029_983L + 1_948_320L;
         return julianDay - 2_440_588L;
     }
 
     public static long persianCorrectedEpochDay(int persianYear, int persianMonth, int dayOfMonth) {
-        return persianEpochDay(persianYear, persianMonth, dayOfMonth)
-                + persianFallbackEpochDayCorrection(persianYear);
+        return persianEpochDay(persianYear, persianMonth, dayOfMonth) + persianFallbackEpochDayCorrection(persianYear);
     }
 
     public static long persianEpochDay(int persianYear, int persianMonth, int dayOfMonth) {

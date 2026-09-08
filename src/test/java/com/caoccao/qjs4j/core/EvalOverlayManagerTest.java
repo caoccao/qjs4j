@@ -27,27 +27,20 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Direct tests for {@link EvalOverlayManager}, the stack of temporary global-object overlays a
- * module's imports are installed as.
+ * Direct tests for {@link EvalOverlayManager}, the stack of temporary global-object overlays a module's imports are
+ * installed as.
  * <p>
- * Everything here used to be reachable only by evaluating a module that imports another module,
- * which is why the half of this class that matters most — suspend, resume, and the deferred restore
- * a top-level-await module needs — was the least covered code in the realm package. A frame that is
- * put back wrongly does not fail here; it fails much later, in some unrelated script that finds a
- * global it never declared, or has lost one it did.
+ * Everything here used to be reachable only by evaluating a module that imports another module, which is why the half
+ * of this class that matters most — suspend, resume, and the deferred restore a top-level-await module needs — was the
+ * least covered code in the realm package. A frame that is put back wrongly does not fail here; it fails much later, in
+ * some unrelated script that finds a global it never declared, or has lost one it did.
  * <p>
- * The manager is package-private state with no source of its own, so these cases drive it directly
- * and read the answers off the realm's global object.
+ * The manager is package-private state with no source of its own, so these cases drive it directly and read the answers
+ * off the realm's global object.
  */
 public class EvalOverlayManagerTest extends BaseTest {
     private static final PropertyKey X = PropertyKey.fromString("x");
     private static final PropertyKey Y = PropertyKey.fromString("y");
-
-    private static Map<String, JSValue> savedGlobals(String name, JSValue value) {
-        Map<String, JSValue> savedGlobals = new LinkedHashMap<>();
-        savedGlobals.put(name, value);
-        return savedGlobals;
-    }
 
     private String globalText(PropertyKey key) {
         JSObject globalObject = context.getGlobalObject();
@@ -79,8 +72,8 @@ public class EvalOverlayManagerTest extends BaseTest {
         // A module body that throws still has to give the realm back, or a failed import leaves its
         // bindings installed for whatever runs next.
         setGlobal(X, "overlay");
-        EvalOverlayManager.Frame frame =
-                new EvalOverlayManager.Frame(savedGlobals("x", new JSString("outer")), Set.of());
+        EvalOverlayManager.Frame frame = new EvalOverlayManager.Frame(savedGlobals("x", new JSString("outer")),
+                Set.of());
         JSPromise asyncModulePromise = context.createJSPromise();
         manager().registerDeferredRestore(asyncModulePromise, frame);
 
@@ -95,8 +88,8 @@ public class EvalOverlayManagerTest extends BaseTest {
         // overlay has to outlive the call: taking it away at return would remove the module's own
         // imports from underneath it.
         setGlobal(X, "outer");
-        EvalOverlayManager.Frame frame = new EvalOverlayManager.Frame(
-                savedGlobals("x", new JSString("outer")), new LinkedHashSet<>(Set.of("y")));
+        EvalOverlayManager.Frame frame = new EvalOverlayManager.Frame(savedGlobals("x", new JSString("outer")),
+                new LinkedHashSet<>(Set.of("y")));
         setGlobal(X, "overlay");
         setGlobal(Y, "overlay");
         JSPromise asyncModulePromise = context.createJSPromise();
@@ -115,8 +108,8 @@ public class EvalOverlayManagerTest extends BaseTest {
     public void testDeferredRestoreWithNothingToRestoreIsANoOp() {
         // Both arguments are optional at the call site: a module without imports has no frame, and
         // a body that finished synchronously has no promise.
-        EvalOverlayManager.Frame frame =
-                new EvalOverlayManager.Frame(savedGlobals("x", new JSString("outer")), Set.of());
+        EvalOverlayManager.Frame frame = new EvalOverlayManager.Frame(savedGlobals("x", new JSString("outer")),
+                Set.of());
         manager().registerDeferredRestore(null, frame);
         JSPromise asyncModulePromise = context.createJSPromise();
         manager().registerDeferredRestore(asyncModulePromise, null);
@@ -181,14 +174,13 @@ public class EvalOverlayManagerTest extends BaseTest {
         // An import binding is installed as an accessor so it can follow the exporting module's
         // value. Restoring has to define over it; assigning would call the setter instead, and the
         // realm would keep the accessor.
-        JSNativeFunction getter = new JSNativeFunction(
-                context, "x", 0, (ctx, thisArg, args) -> new JSString("overlay"));
+        JSNativeFunction getter = new JSNativeFunction(context, "x", 0,
+                (ctx, thisArg, args) -> new JSString("overlay"));
         getter.initializePrototypeChain(context);
         context.getGlobalObject().defineProperty(X, getter, null, PropertyDescriptor.AccessorState.All);
         assertThat(globalText(X)).isEqualTo("overlay");
 
-        manager().restoreFrame(
-                new EvalOverlayManager.Frame(savedGlobals("x", new JSString("outer")), Set.of()));
+        manager().restoreFrame(new EvalOverlayManager.Frame(savedGlobals("x", new JSString("outer")), Set.of()));
         assertThat(globalText(X)).isEqualTo("outer");
         assertThat(context.getGlobalObject().getOwnPropertyDescriptor(X).isDataDescriptor()).isTrue();
     }
@@ -196,15 +188,14 @@ public class EvalOverlayManagerTest extends BaseTest {
     @Test
     public void testRestoreFramePutsTheRealmBackExactlyAsItWas() {
         setGlobal(X, "outer");
-        EvalOverlayManager.Frame frame = new EvalOverlayManager.Frame(
-                savedGlobals("x", new JSString("outer")), new LinkedHashSet<>(Set.of("y")));
+        EvalOverlayManager.Frame frame = new EvalOverlayManager.Frame(savedGlobals("x", new JSString("outer")),
+                new LinkedHashSet<>(Set.of("y")));
         setGlobal(X, "overlay");
         setGlobal(Y, "overlay");
 
         manager().restoreFrame(frame);
         assertThat(globalText(X)).as("a displaced value comes back").isEqualTo("outer");
-        assertThat(context.getGlobalObject().has(Y))
-                .as("a name that was not there is deleted, not set to undefined")
+        assertThat(context.getGlobalObject().has(Y)).as("a name that was not there is deleted, not set to undefined")
                 .isFalse();
     }
 
@@ -251,13 +242,28 @@ public class EvalOverlayManagerTest extends BaseTest {
         // value installed for the nested evaluation. Configurable, because a property that is
         // neither writable nor configurable cannot be redefined either, and no overlay can put that
         // one back by any means.
-        context.getGlobalObject().defineProperty(
-                X, new JSString("overlay"), PropertyDescriptor.DataState.Configurable);
+        context.getGlobalObject().defineProperty(X, new JSString("overlay"), PropertyDescriptor.DataState.Configurable);
         manager().push(savedGlobals("x", new JSString("outer")), Set.of());
 
         JSGlobalObject.EvalOverlaySnapshot snapshot = manager().suspend();
         assertThat(globalText(X)).isEqualTo("outer");
         assertThat(snapshot.values().get("x")).hasToString("overlay");
+    }
+
+    @Test
+    public void testSuspendedNamesThatAreAbsentComeBackAbsent() {
+        // A name the overlay deleted rather than set has to be recorded as absent, or resuming
+        // would reinstate it as undefined and a `typeof` check would answer differently.
+        manager().push(new LinkedHashMap<>(), new LinkedHashSet<>(Set.of("y")));
+        assertThat(context.getGlobalObject().has(Y)).isFalse();
+
+        JSGlobalObject.EvalOverlaySnapshot snapshot = manager().suspend();
+        assertThat(snapshot.absentKeys()).containsExactly("y");
+        assertThat(snapshot.values()).isEmpty();
+
+        setGlobal(Y, "leaked");
+        manager().resume(snapshot);
+        assertThat(context.getGlobalObject().has(Y)).isFalse();
     }
 
     @Test
@@ -282,19 +288,9 @@ public class EvalOverlayManagerTest extends BaseTest {
         assertThat(manager().suspend()).isNull();
     }
 
-    @Test
-    public void testSuspendedNamesThatAreAbsentComeBackAbsent() {
-        // A name the overlay deleted rather than set has to be recorded as absent, or resuming
-        // would reinstate it as undefined and a `typeof` check would answer differently.
-        manager().push(new LinkedHashMap<>(), new LinkedHashSet<>(Set.of("y")));
-        assertThat(context.getGlobalObject().has(Y)).isFalse();
-
-        JSGlobalObject.EvalOverlaySnapshot snapshot = manager().suspend();
-        assertThat(snapshot.absentKeys()).containsExactly("y");
-        assertThat(snapshot.values()).isEmpty();
-
-        setGlobal(Y, "leaked");
-        manager().resume(snapshot);
-        assertThat(context.getGlobalObject().has(Y)).isFalse();
+    private static Map<String, JSValue> savedGlobals(String name, JSValue value) {
+        Map<String, JSValue> savedGlobals = new LinkedHashMap<>();
+        savedGlobals.put(name, value);
+        return savedGlobals;
     }
 }

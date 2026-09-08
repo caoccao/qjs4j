@@ -72,11 +72,13 @@ public class MapConstructorTest extends BaseJavetTest {
         assertPendingException(context);
 
         // Edge case: non-iterable items
-        assertTypeError(MapConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(1), callback}));
+        assertTypeError(
+                MapConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(1), callback}));
         assertPendingException(context);
 
         // Edge case: non-function callback
-        assertTypeError(MapConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{items, new JSString("not function")}));
+        assertTypeError(MapConstructor.groupBy(context, JSUndefined.INSTANCE,
+                new JSValue[]{items, new JSString("not function")}));
         assertPendingException(context);
     }
 
@@ -98,14 +100,11 @@ public class MapConstructorTest extends BaseJavetTest {
                 var map = new Map(new Map([['a', 1], ['b', 2]]));
                 map.size === 2 && map.get('a') === 1 && map.get('b') === 2""");
 
-        assertThatThrownBy(() -> context.eval("new Map({})"))
-                .isInstanceOf(JSException.class)
+        assertThatThrownBy(() -> context.eval("new Map({})")).isInstanceOf(JSException.class)
                 .hasMessageContaining("TypeError");
-        assertThatThrownBy(() -> context.eval("new Map(1)"))
-                .isInstanceOf(JSException.class)
+        assertThatThrownBy(() -> context.eval("new Map(1)")).isInstanceOf(JSException.class)
                 .hasMessageContaining("TypeError");
-        assertThatThrownBy(() -> context.eval("new Map('ab')"))
-                .isInstanceOf(JSException.class)
+        assertThatThrownBy(() -> context.eval("new Map('ab')")).isInstanceOf(JSException.class)
                 .hasMessageContaining("TypeError");
 
     }

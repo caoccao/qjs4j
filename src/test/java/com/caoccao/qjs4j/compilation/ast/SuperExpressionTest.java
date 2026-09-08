@@ -20,9 +20,8 @@ import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
 /**
- * Test cases for the 'super' keyword in invalid contexts.
- * Super property access and super calls are only valid inside methods
- * and derived class constructors respectively.
+ * Test cases for the 'super' keyword in invalid contexts. Super property access and super calls are only valid inside
+ * methods and derived class constructors respectively.
  */
 public class SuperExpressionTest extends BaseJavetTest {
     @Test

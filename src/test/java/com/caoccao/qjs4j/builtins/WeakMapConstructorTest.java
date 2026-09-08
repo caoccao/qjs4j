@@ -47,11 +47,9 @@ public class WeakMapConstructorTest extends BaseJavetTest {
                 var wm = new WeakMap(source);
                 wm.get(k1) === 1 && wm.get(k2) === 2""");
 
-        assertThatThrownBy(() -> context.eval("new WeakMap({})"))
-                .isInstanceOf(JSException.class)
+        assertThatThrownBy(() -> context.eval("new WeakMap({})")).isInstanceOf(JSException.class)
                 .hasMessageContaining("TypeError");
-        assertThatThrownBy(() -> context.eval("new WeakMap([[1, 'a']])"))
-                .isInstanceOf(JSException.class)
+        assertThatThrownBy(() -> context.eval("new WeakMap([[1, 'a']])")).isInstanceOf(JSException.class)
                 .hasMessageContaining("TypeError");
     }
 

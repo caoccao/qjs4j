@@ -34,18 +34,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Direct tests for {@link ModuleLoader}: the realm's module cache, how a specifier becomes a file,
- * the three payload kinds it reads, and the ordering rules that decide when a module body may run.
+ * Direct tests for {@link ModuleLoader}: the realm's module cache, how a specifier becomes a file, the three payload
+ * kinds it reads, and the ordering rules that decide when a module body may run.
  * <p>
- * All of it used to be reachable only by evaluating one module that imports another, so the parts
- * that are hardest to arrange from source — a cache entry evicted after a failed load, a JSON
- * payload without its type attribute, GatherAvailableAncestors over a graph that is half arrived —
- * were also the least covered. Those are exactly the transitions that break quietly: a record left
- * behind after a failure makes the next import of the same specifier answer with a half-built
- * module rather than trying again.
+ * All of it used to be reachable only by evaluating one module that imports another, so the parts that are hardest to
+ * arrange from source — a cache entry evicted after a failed load, a JSON payload without its type attribute,
+ * GatherAvailableAncestors over a graph that is half arrived — were also the least covered. Those are exactly the
+ * transitions that break quietly: a record left behind after a failure makes the next import of the same specifier
+ * answer with a half-built module rather than trying again.
  * <p>
- * The cases below drive the loader through its own package-private surface and read the answers off
- * module records, so a failure names the transition rather than the module that tripped over it.
+ * The cases below drive the loader through its own package-private surface and read the answers off module records, so
+ * a failure names the transition rather than the module that tripped over it.
  */
 public class ModuleLoaderTest extends BaseTest {
     @TempDir
@@ -65,9 +64,8 @@ public class ModuleLoaderTest extends BaseTest {
 
     @Test
     public void testAMissingModuleIsATypeErrorThatNamesTheSpecifier() {
-        assertThatThrownBy(() -> loader().resolveDynamicImportSpecifier(
-                "./nope.mjs", moduleDirectory.resolve("main.mjs").toString(), "./nope.mjs"))
-                .isInstanceOf(JSException.class);
+        assertThatThrownBy(() -> loader().resolveDynamicImportSpecifier("./nope.mjs",
+                moduleDirectory.resolve("main.mjs").toString(), "./nope.mjs")).isInstanceOf(JSException.class);
         assertThat(context.getPendingException().toString()).contains("Cannot find module './nope.mjs'");
         context.clearPendingException();
         assertThat(loader().moduleCacheSize()).as("a specifier that resolves to nothing caches nothing").isZero();
@@ -84,12 +82,10 @@ public class ModuleLoaderTest extends BaseTest {
         String resolvedSpecifier = directory.toString();
 
         assertThatThrownBy(() -> loader().loadJSDynamicImportModule(resolvedSpecifier, new HashSet<>(), null))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("Cannot find module");
+                .isInstanceOf(JSException.class).hasMessageContaining("Cannot find module");
         context.clearPendingException();
         assertThat(loader().cachedModule(resolvedSpecifier))
-                .as("a load that never read a byte must not leave a record behind")
-                .isNull();
+                .as("a load that never read a byte must not leave a record behind").isNull();
 
         assertThatThrownBy(() -> loader().loadJSDynamicImportModule(resolvedSpecifier, new HashSet<>(), null))
                 .as("so the second import fails the same way rather than succeeding emptily")
@@ -111,26 +107,25 @@ public class ModuleLoaderTest extends BaseTest {
     @Test
     public void testBytesImportProducesAnImmutableUint8Array() throws IOException {
         String resolvedSpecifier = write("payload.bin", "AB");
-        JSDynamicImportModule moduleRecord = loader().loadJSDynamicImportModule(
-                resolvedSpecifier, new HashSet<>(), Map.of("type", "bytes"));
+        JSDynamicImportModule moduleRecord = loader().loadJSDynamicImportModule(resolvedSpecifier, new HashSet<>(),
+                Map.of("type", "bytes"));
 
         assertThat(moduleRecord.status()).isEqualTo(JSDynamicImportModule.Status.EVALUATED);
         JSValue defaultExport = moduleRecord.namespace().get(PropertyKey.fromString("default"));
         assertThat(defaultExport).isInstanceOfSatisfying(JSUint8Array.class, uint8Array -> {
             assertThat(uint8Array.getLength()).isEqualTo(2);
             assertThat(uint8Array.getBuffer().isImmutable())
-                    .as("a bytes payload is read-only, so a module cannot rewrite what it imported")
-                    .isTrue();
+                    .as("a bytes payload is read-only, so a module cannot rewrite what it imported").isTrue();
         });
         assertThat(moduleRecord.rawSource()).as("bytes are not source").isEmpty();
     }
 
     @Test
     public void testCacheHoldsRecordsUntilTheyAreEvictedOrTheRealmIsCleared() {
-        JSDynamicImportModule first =
-                new JSDynamicImportModule("/modules/a.mjs", loader().createModuleNamespaceObject());
-        JSDynamicImportModule second =
-                new JSDynamicImportModule("/modules/b.mjs", loader().createModuleNamespaceObject());
+        JSDynamicImportModule first = new JSDynamicImportModule("/modules/a.mjs",
+                loader().createModuleNamespaceObject());
+        JSDynamicImportModule second = new JSDynamicImportModule("/modules/b.mjs",
+                loader().createModuleNamespaceObject());
         assertThat(loader().moduleCacheSize()).isZero();
         assertThat(loader().cachedModule("/modules/a.mjs")).isNull();
 
@@ -155,8 +150,7 @@ public class ModuleLoaderTest extends BaseTest {
         assertThat(loader().getDynamicImportCacheKey(specifier, null)).isEqualTo(specifier);
         assertThat(loader().getDynamicImportCacheKey(specifier, Map.of())).isEqualTo(specifier);
         assertThat(loader().getDynamicImportCacheKey(specifier, Map.of("type", "json"))).isEqualTo(specifier);
-        assertThat(loader().getDynamicImportCacheKey(specifier, Map.of("type", "text")))
-                .isNotEqualTo(specifier)
+        assertThat(loader().getDynamicImportCacheKey(specifier, Map.of("type", "text"))).isNotEqualTo(specifier)
                 .isNotEqualTo(loader().getDynamicImportCacheKey(specifier, Map.of("type", "bytes")));
     }
 
@@ -189,8 +183,7 @@ public class ModuleLoaderTest extends BaseTest {
 
         assertThat(execList).containsExactly(ready);
         assertThat(stillWaiting.pendingAsyncDependencyCount())
-                .as("the dependency that arrived is counted off even when the module is not ready")
-                .isEqualTo(1);
+                .as("the dependency that arrived is counted off even when the module is not ready").isEqualTo(1);
         assertThat(finished.pendingDependents()).as("each dependent is gathered once").isEmpty();
     }
 
@@ -226,24 +219,6 @@ public class ModuleLoaderTest extends BaseTest {
     }
 
     @Test
-    public void testImportMetaIsOneObjectPerModuleAndCarriesItsUrl() {
-        JSObject first = loader().createImportMetaObject("/modules/a.mjs");
-        assertThat(loader().createImportMetaObject("/modules/a.mjs"))
-                .as("import.meta is the same object every time a module asks for it")
-                .isSameAs(first);
-        assertThat(first.get(PropertyKey.fromString("url"))).hasToString("/modules/a.mjs");
-        assertThat(first.getPrototype()).as("import.meta has a null prototype").isNull();
-        assertThat(loader().createImportMetaObject("/modules/b.mjs")).isNotSameAs(first);
-
-        // A synthetic name is not a URL, and neither is no name at all.
-        assertThat(loader().createImportMetaObject("<eval>").has(PropertyKey.fromString("url"))).isFalse();
-        assertThat(loader().createImportMetaObject("").has(PropertyKey.fromString("url"))).isFalse();
-        assertThat(loader().createImportMetaObject(null))
-                .as("a module with no name still gets exactly one import.meta")
-                .isSameAs(loader().createImportMetaObject(""));
-    }
-
-    @Test
     public void testImportingAnUnreadableSpecifierRejectsEveryTime() throws IOException {
         // The same defect as the case above, seen from the language: the second `import()` used to
         // resolve with an empty namespace because the failed first one left its record cached.
@@ -267,16 +242,32 @@ public class ModuleLoaderTest extends BaseTest {
     }
 
     @Test
+    public void testImportMetaIsOneObjectPerModuleAndCarriesItsUrl() {
+        JSObject first = loader().createImportMetaObject("/modules/a.mjs");
+        assertThat(loader().createImportMetaObject("/modules/a.mjs"))
+                .as("import.meta is the same object every time a module asks for it").isSameAs(first);
+        assertThat(first.get(PropertyKey.fromString("url"))).hasToString("/modules/a.mjs");
+        assertThat(first.getPrototype()).as("import.meta has a null prototype").isNull();
+        assertThat(loader().createImportMetaObject("/modules/b.mjs")).isNotSameAs(first);
+
+        // A synthetic name is not a URL, and neither is no name at all.
+        assertThat(loader().createImportMetaObject("<eval>").has(PropertyKey.fromString("url"))).isFalse();
+        assertThat(loader().createImportMetaObject("").has(PropertyKey.fromString("url"))).isFalse();
+        assertThat(loader().createImportMetaObject(null)).as("a module with no name still gets exactly one import.meta")
+                .isSameAs(loader().createImportMetaObject(""));
+    }
+
+    @Test
     public void testJsonImportParsesThroughTheRealmsJson() throws IOException {
         String resolvedSpecifier = write("data.json", "{\"answer\": 42}");
-        JSDynamicImportModule moduleRecord = loader().loadJSDynamicImportModule(
-                resolvedSpecifier, new HashSet<>(), Map.of("type", "json"));
+        JSDynamicImportModule moduleRecord = loader().loadJSDynamicImportModule(resolvedSpecifier, new HashSet<>(),
+                Map.of("type", "json"));
 
         assertThat(moduleRecord.status()).isEqualTo(JSDynamicImportModule.Status.EVALUATED);
         assertThat(moduleRecord.explicitExportNames()).containsExactly("default");
         JSValue defaultExport = moduleRecord.namespace().get(PropertyKey.fromString("default"));
-        assertThat(defaultExport).isInstanceOfSatisfying(JSObject.class, jsObject ->
-                assertThat(jsObject.get(PropertyKey.fromString("answer"))).hasToString("42"));
+        assertThat(defaultExport).isInstanceOfSatisfying(JSObject.class,
+                jsObject -> assertThat(jsObject.get(PropertyKey.fromString("answer"))).hasToString("42"));
     }
 
     @Test
@@ -286,25 +277,21 @@ public class ModuleLoaderTest extends BaseTest {
         // module that failed evaluation rethrows the same error object every time it is imported.
         String resolvedSpecifier = write("data.json", "{\"answer\": 42}");
         assertThatThrownBy(() -> loader().loadJSDynamicImportModule(resolvedSpecifier, new HashSet<>(), null))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("Import attribute type must be 'json'");
+                .isInstanceOf(JSException.class).hasMessageContaining("Import attribute type must be 'json'");
         context.clearPendingException();
 
         JSDynamicImportModule cachedRecord = loader().cachedModule(resolvedSpecifier);
         assertThat(cachedRecord).isNotNull();
         assertThat(cachedRecord.status()).isEqualTo(JSDynamicImportModule.Status.EVALUATED_ERROR);
         assertThatThrownBy(() -> loader().loadJSDynamicImportModule(resolvedSpecifier, new HashSet<>(), null))
-                .isInstanceOf(JSException.class)
-                .extracting(thrown -> ((JSException) thrown).getErrorValue())
-                .as("the same error object, not a new one")
-                .isSameAs(cachedRecord.evaluationError());
+                .isInstanceOf(JSException.class).extracting(thrown -> ((JSException) thrown).getErrorValue())
+                .as("the same error object, not a new one").isSameAs(cachedRecord.evaluationError());
         context.clearPendingException();
     }
 
     @Test
     public void testMalformedJsonFailsAsASyntaxErrorRatherThanAJavaException() {
-        assertThatThrownBy(() -> loader().parseJsonModuleSource("{ not json }"))
-                .isInstanceOf(JSException.class);
+        assertThatThrownBy(() -> loader().parseJsonModuleSource("{ not json }")).isInstanceOf(JSException.class);
         context.clearPendingException();
         assertThat(loader().parseJsonModuleSource("[1, 2]")).isInstanceOf(JSArray.class);
     }
@@ -332,16 +319,15 @@ public class ModuleLoaderTest extends BaseTest {
         assertThat(loader().readyForSyncExecution(importer, new HashSet<>())).isFalse();
         // A file that is not there cannot be shown to need awaiting, and the error belongs to
         // whoever tries to load it rather than to this predicate.
-        assertThat(loader().readyForSyncExecution(
-                moduleDirectory.resolve("absent.mjs").toString(), new HashSet<>())).isTrue();
+        assertThat(loader().readyForSyncExecution(moduleDirectory.resolve("absent.mjs").toString(), new HashSet<>()))
+                .isTrue();
     }
 
     @Test
     public void testReadyForSyncExecutionTerminatesOnACycleAndBelievesAnEvaluatedRecord() throws IOException {
         String first = write("cycle-a.mjs", "import './cycle-b.mjs';\n");
         write("cycle-b.mjs", "import './cycle-a.mjs';\n");
-        assertThat(loader().readyForSyncExecution(first, new HashSet<>()))
-                .as("a cycle is walked once, not forever")
+        assertThat(loader().readyForSyncExecution(first, new HashSet<>())).as("a cycle is walked once, not forever")
                 .isTrue();
 
         // A record that has already finished is ready whatever its source says, and one that is
@@ -361,11 +347,9 @@ public class ModuleLoaderTest extends BaseTest {
         String dependency = write("dep.mjs", "export const value = 1;\n");
         String referrer = write("main.mjs", "import './dep.mjs';\n");
 
-        assertThat(loader().resolveDynamicImportSpecifier("./dep.mjs", referrer, "./dep.mjs"))
-                .isEqualTo(dependency);
+        assertThat(loader().resolveDynamicImportSpecifier("./dep.mjs", referrer, "./dep.mjs")).isEqualTo(dependency);
         assertThat(loader().resolveDynamicImportSpecifier(dependency, null, dependency))
-                .as("an absolute specifier needs no referrer")
-                .isEqualTo(dependency);
+                .as("an absolute specifier needs no referrer").isEqualTo(dependency);
         // A synthetic referrer name is not a directory, so it contributes nothing.
         assertThatThrownBy(() -> loader().resolveDynamicImportSpecifier("./dep.mjs", "<eval>", "./dep.mjs"))
                 .isInstanceOf(JSException.class);
@@ -378,16 +362,16 @@ public class ModuleLoaderTest extends BaseTest {
         // to look like a declaration was tokenised and compiled as JavaScript.
         String content = "export {}; this is arbitrary text";
         String resolvedSpecifier = write("payload.txt", content);
-        JSDynamicImportModule moduleRecord = loader().loadJSDynamicImportModule(
-                resolvedSpecifier, new HashSet<>(), Map.of("type", "text"));
+        JSDynamicImportModule moduleRecord = loader().loadJSDynamicImportModule(resolvedSpecifier, new HashSet<>(),
+                Map.of("type", "text"));
 
         assertThat(moduleRecord.status()).isEqualTo(JSDynamicImportModule.Status.EVALUATED);
         assertThat(namespaceText(moduleRecord, "default")).isEqualTo(content);
         assertThat(moduleRecord.exportOrigins()).containsEntry("default", resolvedSpecifier);
         // And the record is cached under the type-qualified key, so importing the same file as
         // source afterwards is a different module.
-        assertThat(loader().cachedModule(loader().getDynamicImportCacheKey(
-                resolvedSpecifier, Map.of("type", "text")))).isSameAs(moduleRecord);
+        assertThat(loader().cachedModule(loader().getDynamicImportCacheKey(resolvedSpecifier, Map.of("type", "text"))))
+                .isSameAs(moduleRecord);
     }
 
     @Test
@@ -403,15 +387,13 @@ public class ModuleLoaderTest extends BaseTest {
 
         assertThat(loader().isTransformedModuleSource("const value = 1;\n", resolvedSpecifier)).isTrue();
         assertThat(loader().isTransformedModuleSource("export const value = 1;\n", resolvedSpecifier))
-                .as("the author's own text is not the generated text")
-                .isFalse();
+                .as("the author's own text is not the generated text").isFalse();
         // A synthetic file name never names a module, and neither does one nothing has cached.
         assertThat(loader().isTransformedModuleSource("const value = 1;\n", "<eval>")).isFalse();
         assertThat(loader().isTransformedModuleSource("const value = 1;\n", null)).isFalse();
         assertThat(loader().isTransformedModuleSource("const value = 1;\n", "unresolvable.mjs")).isFalse();
         assertThat(context.hasPendingException())
-                .as("an unresolvable name is answered, not thrown, and leaves no exception behind")
-                .isFalse();
+                .as("an unresolvable name is answered, not thrown, and leaves no exception behind").isFalse();
     }
 
     private String write(String fileName, String content) throws IOException {

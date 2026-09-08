@@ -21,15 +21,13 @@ import com.caoccao.qjs4j.core.*;
 import java.util.List;
 
 /**
- * Object prototype methods and constructors.
- * Implements ECMAScript Object built-in methods.
+ * Object prototype methods and constructors. Implements ECMAScript Object built-in methods.
  *
  * @see <a href="https://tc39.es/ecma262/#sec-object-objects">ECMAScript Object Objects</a>
  */
 public final class ObjectPrototype {
     /**
-     * Object.prototype.__defineGetter__(prop, func)
-     * Legacy method for defining getter
+     * Object.prototype.__defineGetter__(prop, func) Legacy method for defining getter
      */
     public static JSValue __defineGetter__(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 2) {
@@ -81,8 +79,7 @@ public final class ObjectPrototype {
     }
 
     /**
-     * Object.prototype.__defineSetter__(prop, func)
-     * Legacy method for defining setter
+     * Object.prototype.__defineSetter__(prop, func) Legacy method for defining setter
      */
     public static JSValue __defineSetter__(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 2) {
@@ -134,8 +131,7 @@ public final class ObjectPrototype {
     }
 
     /**
-     * Object.prototype.__lookupGetter__(prop)
-     * Legacy method for looking up getter
+     * Object.prototype.__lookupGetter__(prop) Legacy method for looking up getter
      */
     public static JSValue __lookupGetter__(JSContext context, JSValue thisArg, JSValue[] args) {
         // ES B.2.2.4: Step 1: Let O be ? ToObject(this)
@@ -178,8 +174,7 @@ public final class ObjectPrototype {
     }
 
     /**
-     * Object.prototype.__lookupSetter__(prop)
-     * Legacy method for looking up setter
+     * Object.prototype.__lookupSetter__(prop) Legacy method for looking up setter
      */
     public static JSValue __lookupSetter__(JSContext context, JSValue thisArg, JSValue[] args) {
         // ES B.2.2.5: Step 1: Let O be ? ToObject(this)
@@ -327,8 +322,7 @@ public final class ObjectPrototype {
     }
 
     /**
-     * Object.create(proto[, propertiesObject])
-     * Creates a new object with the specified prototype.
+     * Object.create(proto[, propertiesObject]) Creates a new object with the specified prototype.
      *
      * @see <a href="https://tc39.es/ecma262/#sec-object.create">ECMAScript Object.create</a>
      */
@@ -501,7 +495,8 @@ public final class ObjectPrototype {
                     return blockedTruncationError;
                 }
             }
-            return context.throwTypeError("Cannot define property " + key.toPropertyString() + ", object is not extensible");
+            return context
+                    .throwTypeError("Cannot define property " + key.toPropertyString() + ", object is not extensible");
         }
         return obj;
     }
@@ -534,9 +529,8 @@ public final class ObjectPrototype {
     }
 
     /**
-     * Object.freeze(obj)
-     * ES2020 19.1.2.6
-     * Freezes an object, preventing new properties and making existing properties non-configurable.
+     * Object.freeze(obj) ES2020 19.1.2.6 Freezes an object, preventing new properties and making existing properties
+     * non-configurable.
      */
     public static JSValue freeze(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -715,9 +709,8 @@ public final class ObjectPrototype {
     }
 
     /**
-     * Object.prototype.toString()
-     * ES2020 19.1.3.6
-     * Returns a string representing the object with Symbol.toStringTag support.
+     * Object.prototype.toString() ES2020 19.1.3.6 Returns a string representing the object with Symbol.toStringTag
+     * support.
      */
     public static JSValue toString(JSContext context, JSValue thisArg, JSValue[] args) {
         // ES2024 20.1.3.6 Object.prototype.toString()

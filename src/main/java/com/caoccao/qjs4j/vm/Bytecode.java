@@ -25,10 +25,10 @@ import com.caoccao.qjs4j.core.PropertyKey;
 public final class Bytecode {
     private final String[] atomPool;
     private final JSValue[] constantPool;
+    private Opcode[] decodedOpcodes;
     private final byte[] instructions;
     private final int localCount;
     private final String[] localVarNames;
-    private Opcode[] decodedOpcodes;
     private byte[] opcodeRebaseOffsets;
     private PropertyKey[] propertyKeyCache;
 
@@ -36,7 +36,8 @@ public final class Bytecode {
         this(instructions, constantPool, atomPool, localCount, null);
     }
 
-    public Bytecode(byte[] instructions, JSValue[] constantPool, String[] atomPool, int localCount, String[] localVarNames) {
+    public Bytecode(byte[] instructions, JSValue[] constantPool, String[] atomPool, int localCount,
+            String[] localVarNames) {
         this.instructions = instructions;
         this.constantPool = constantPool;
         this.atomPool = atomPool;
@@ -80,8 +81,8 @@ public final class Bytecode {
     }
 
     /**
-     * Get a cached PropertyKey for the given atom index.
-     * Avoids allocating a new PropertyKey on every GET_FIELD/PUT_FIELD opcode.
+     * Get a cached PropertyKey for the given atom index. Avoids allocating a new PropertyKey on every
+     * GET_FIELD/PUT_FIELD opcode.
      */
     public PropertyKey getCachedPropertyKey(int atomIndex) {
         if (propertyKeyCache == null) {
@@ -142,10 +143,8 @@ public final class Bytecode {
     }
 
     public int readU32(int offset) {
-        return ((instructions[offset] & 0xFF) << 24) |
-                ((instructions[offset + 1] & 0xFF) << 16) |
-                ((instructions[offset + 2] & 0xFF) << 8) |
-                (instructions[offset + 3] & 0xFF);
+        return ((instructions[offset] & 0xFF) << 24) | ((instructions[offset + 1] & 0xFF) << 16)
+                | ((instructions[offset + 2] & 0xFF) << 8) | (instructions[offset + 3] & 0xFF);
     }
 
     public int readU8(int offset) {

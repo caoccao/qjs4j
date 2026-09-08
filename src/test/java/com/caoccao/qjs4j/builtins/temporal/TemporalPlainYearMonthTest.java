@@ -52,13 +52,14 @@ public class TemporalPlainYearMonthTest extends BaseJavetTest {
     }
 
     @Test
-    public void testConstructorWithSubclass() {
-        assertBooleanWithJavet("(() => { class CustomPlainYearMonth extends Temporal.PlainYearMonth {} const value = new CustomPlainYearMonth(2024, 3); return value instanceof CustomPlainYearMonth && value instanceof Temporal.PlainYearMonth; })()");
+    public void testConstructorWithoutNew() {
+        assertErrorWithJavet("Temporal.PlainYearMonth(2024, 3)");
     }
 
     @Test
-    public void testConstructorWithoutNew() {
-        assertErrorWithJavet("Temporal.PlainYearMonth(2024, 3)");
+    public void testConstructorWithSubclass() {
+        assertBooleanWithJavet(
+                "(() => { class CustomPlainYearMonth extends Temporal.PlainYearMonth {} const value = new CustomPlainYearMonth(2024, 3); return value instanceof CustomPlainYearMonth && value instanceof Temporal.PlainYearMonth; })()");
     }
 
     @Test
@@ -98,12 +99,14 @@ public class TemporalPlainYearMonthTest extends BaseJavetTest {
 
     @Test
     public void testFromWithHebrewMissingLeapMonthCodeConstrain() {
-        assertStringWithJavet("Temporal.PlainYearMonth.from({ year: 5783, monthCode: 'M05L', calendar: 'hebrew' }, { overflow: 'constrain' }).monthCode");
+        assertStringWithJavet(
+                "Temporal.PlainYearMonth.from({ year: 5783, monthCode: 'M05L', calendar: 'hebrew' }, { overflow: 'constrain' }).monthCode");
     }
 
     @Test
     public void testFromWithHebrewMissingLeapMonthCodeReject() {
-        assertBooleanWithJavet("(() => { try { Temporal.PlainYearMonth.from({ year: 5783, monthCode: 'M05L', calendar: 'hebrew' }, { overflow: 'reject' }); return false; } catch (e) { return e instanceof RangeError; } })()");
+        assertBooleanWithJavet(
+                "(() => { try { Temporal.PlainYearMonth.from({ year: 5783, monthCode: 'M05L', calendar: 'hebrew' }, { overflow: 'reject' }); return false; } catch (e) { return e instanceof RangeError; } })()");
     }
 
     @Test
@@ -143,7 +146,8 @@ public class TemporalPlainYearMonthTest extends BaseJavetTest {
 
     @Test
     public void testToLocaleString() {
-        assertBooleanWithJavet("(() => { const value = new Temporal.PlainYearMonth(2024, 3); const result = value.toLocaleString('en-US', { calendar: 'iso8601', timeZone: 'UTC', year: 'numeric', month: 'long' }); return typeof result === 'string' && result.length > 0; })()");
+        assertBooleanWithJavet(
+                "(() => { const value = new Temporal.PlainYearMonth(2024, 3); const result = value.toLocaleString('en-US', { calendar: 'iso8601', timeZone: 'UTC', year: 'numeric', month: 'long' }); return typeof result === 'string' && result.length > 0; })()");
     }
 
     @Test

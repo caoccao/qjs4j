@@ -257,7 +257,8 @@ public class DateConstructorTest extends BaseJavetTest {
         JSDate date = new JSDate(context, timestamp);
 
         JSValue result = DatePrototype.getTime(context, date, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(timestamp));
+        assertThat(result).isInstanceOfSatisfying(JSNumber.class,
+                jsNum -> assertThat(jsNum.value()).isEqualTo(timestamp));
 
         // Edge case: called on non-Date
         assertTypeError(DatePrototype.getTime(context, new JSString("not date"), JSValue.NO_ARGS));
@@ -309,7 +310,9 @@ public class DateConstructorTest extends BaseJavetTest {
         JSDate date = new JSDate(context, 1735689600000L);
 
         JSValue result = DatePrototype.getUTCMonth(context, date, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(0.0)); // January = 0
+        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(0.0)); // January
+                                                                                                                      // =
+                                                                                                                      // 0
 
         // Edge case: called on non-Date
         assertTypeError(DatePrototype.getUTCMonth(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
@@ -332,9 +335,8 @@ public class DateConstructorTest extends BaseJavetTest {
     @Test
     public void testParse() {
         // Normal case: ISO 8601 format
-        JSValue result = DateConstructor.parse(context, JSUndefined.INSTANCE, new JSValue[]{
-                new JSString("2025-01-01T00:00:00.000Z")
-        });
+        JSValue result = DateConstructor.parse(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSString("2025-01-01T00:00:00.000Z")});
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
             double timestamp = jsNum.value();
             assertThat(timestamp).isGreaterThan(0.0);
@@ -348,9 +350,7 @@ public class DateConstructorTest extends BaseJavetTest {
         });
 
         // Edge case: invalid date string
-        result = DateConstructor.parse(context, JSUndefined.INSTANCE, new JSValue[]{
-                new JSString("not a date")
-        });
+        result = DateConstructor.parse(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("not a date")});
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
             double invalidValue = jsNum.value();
             assertThat(invalidValue).isNaN();
@@ -392,23 +392,16 @@ public class DateConstructorTest extends BaseJavetTest {
 
     @Test
     public void testTypeof() {
-        assertStringWithJavet(
-                "typeof Date;");
-        assertIntegerWithJavet(
-                "Date.length;");
+        assertStringWithJavet("typeof Date;");
+        assertIntegerWithJavet("Date.length;");
     }
 
     @Test
     public void testUTC() {
         // Normal case: Date.UTC(2025, 0, 1, 0, 0, 0)
-        JSValue result = DateConstructor.UTC(context, JSUndefined.INSTANCE, new JSValue[]{
-                new JSNumber(2025),
-                new JSNumber(0), // January
-                new JSNumber(1),
-                new JSNumber(0),
-                new JSNumber(0),
-                new JSNumber(0)
-        });
+        JSValue result = DateConstructor.UTC(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSNumber(2025), new JSNumber(0), // January
+                        new JSNumber(1), new JSNumber(0), new JSNumber(0), new JSNumber(0)});
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
             double timestamp = jsNum.value();
             assertThat(timestamp).isGreaterThan(0.0);
@@ -419,9 +412,7 @@ public class DateConstructorTest extends BaseJavetTest {
         assertThat(result).isInstanceOf(JSNumber.class);
 
         // Edge case: year and month
-        result = DateConstructor.UTC(context, JSUndefined.INSTANCE, new JSValue[]{
-                new JSNumber(2025),
-                new JSNumber(5) // June
+        result = DateConstructor.UTC(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(2025), new JSNumber(5) // June
         });
         assertThat(result).isInstanceOf(JSNumber.class);
 
@@ -433,11 +424,8 @@ public class DateConstructorTest extends BaseJavetTest {
         });
 
         // Edge case: overflow fields should normalize instead of returning NaN.
-        result = DateConstructor.UTC(context, JSUndefined.INSTANCE, new JSValue[]{
-                new JSNumber(2025),
-                new JSNumber(12),
-                new JSNumber(32)
-        });
+        result = DateConstructor.UTC(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSNumber(2025), new JSNumber(12), new JSNumber(32)});
         assertThat(result).isInstanceOf(JSNumber.class);
         assertDoubleWithJavet("Date.UTC(2025, 12, 32);");
     }
@@ -448,7 +436,8 @@ public class DateConstructorTest extends BaseJavetTest {
         JSDate date = new JSDate(context, timestamp);
 
         JSValue result = DatePrototype.valueOf(context, date, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(timestamp));
+        assertThat(result).isInstanceOfSatisfying(JSNumber.class,
+                jsNum -> assertThat(jsNum.value()).isEqualTo(timestamp));
 
         // Edge case: called on non-Date
         assertTypeError(DatePrototype.valueOf(context, new JSObject(context), JSValue.NO_ARGS));

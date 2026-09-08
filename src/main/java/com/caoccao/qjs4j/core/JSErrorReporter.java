@@ -25,13 +25,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Builds the realm's error values and the stack traces attached to them — QuickJS's
- * {@code JS_ThrowError2} family, as a class.
+ * Builds the realm's error values and the stack traces attached to them — QuickJS's {@code JS_ThrowError2} family, as a
+ * class.
  * <p>
- * Every {@code throwXxx} constructs the error, gives it the realm's prototype for its type, attaches
- * a stack trace, and records it as the context's pending exception. Setting that exception stays a
- * {@link JSContext} method this class calls: the pending-exception state belongs to the realm, not
- * to the reporter.
+ * Every {@code throwXxx} constructs the error, gives it the realm's prototype for its type, attaches a stack trace, and
+ * records it as the context's pending exception. Setting that exception stays a {@link JSContext} method this class
+ * calls: the pending-exception state belongs to the realm, not to the reporter.
  * <p>
  * {@link JSContext} keeps every {@code throwXxx} as a public delegation, so the roughly two thousand
  * {@code context.throwTypeError(...)} call sites in builtins and the VM are untouched.
@@ -52,12 +51,8 @@ final class JSErrorReporter {
     void captureErrorStackTrace() {
         clearErrorStackTrace();
         for (JSStackFrame frame : context.callStackFrames()) {
-            errorStackTrace.add(new StackTraceElement(
-                    "JavaScript",
-                    frame.functionName(),
-                    frame.filename(),
-                    frame.lineNumber()
-            ));
+            errorStackTrace.add(
+                    new StackTraceElement("JavaScript", frame.functionName(), frame.filename(), frame.lineNumber()));
         }
     }
 
@@ -82,31 +77,18 @@ final class JSErrorReporter {
             if (filename == null || filename.isEmpty()) {
                 filename = "<eval>";
             }
-            stackTrace.append("    at ")
-                    .append(functionName)
-                    .append(" (")
-                    .append(filename)
-                    .append(":")
-                    .append(1)
+            stackTrace.append("    at ").append(functionName).append(" (").append(filename).append(":").append(1)
                     .append(")\n");
             vmStackFrame = vmStackFrame.getCaller();
         }
 
         for (JSStackFrame frame : context.callStackFrames()) {
-            stackTrace.append("    at ")
-                    .append(frame.functionName())
-                    .append(" (")
-                    .append(frame.filename())
-                    .append(":")
-                    .append(frame.lineNumber())
-                    .append(")\n");
+            stackTrace.append("    at ").append(frame.functionName()).append(" (").append(frame.filename()).append(":")
+                    .append(frame.lineNumber()).append(")\n");
         }
 
-        error.defineProperty(
-                PropertyKey.STACK,
-                PropertyDescriptor.dataDescriptor(
-                        new JSString(stackTrace.toString()),
-                        PropertyDescriptor.DataState.ConfigurableWritable));
+        error.defineProperty(PropertyKey.STACK, PropertyDescriptor.dataDescriptor(new JSString(stackTrace.toString()),
+                PropertyDescriptor.DataState.ConfigurableWritable));
     }
 
     void clearErrorStackTrace() {
@@ -123,18 +105,36 @@ final class JSErrorReporter {
     /**
      * Throw a AggregateError.
      *
-     * @param message Error message
+     * @param message
+     *            Error message
      * @return The error value
      */
     JSError throwAggregateError(String message) {
         return throwError(JSAggregateError.NAME, message);
     }
 
+    JSError throwError(JSError jsError) {
+        context.transferPrototype(jsError, jsError.getErrorName());
+        // Capture stack trace
+        captureStackTrace(jsError);
+        // Set as pending exception
+        context.setPendingException(jsError);
+        return jsError;
+    }
+
+    JSError throwError(JSErrorException jsErrorException) {
+        if (jsErrorException == null) {
+            return throwError("Unknown error");
+        }
+        return throwError(jsErrorException.getErrorType().name(), jsErrorException.getMessage(),
+                jsErrorException.getSourceLocation());
+    }
+
     /**
-     * Throw a JavaScript error.
-     * Creates an Error object and sets it as the pending exception.
+     * Throw a JavaScript error. Creates an Error object and sets it as the pending exception.
      *
-     * @param message Error message
+     * @param message
+     *            Error message
      * @return The error value (for convenience in return statements)
      */
     JSError throwError(String message) {
@@ -144,8 +144,10 @@ final class JSErrorReporter {
     /**
      * Throw a JavaScript error of a specific type.
      *
-     * @param errorType Error constructor name (Error, TypeError, RangeError, etc.)
-     * @param message   Error message
+     * @param errorType
+     *            Error constructor name (Error, TypeError, RangeError, etc.)
+     * @param message
+     *            Error message
      * @return The error value
      */
     JSError throwError(String errorType, String message) {
@@ -155,9 +157,12 @@ final class JSErrorReporter {
     /**
      * Throw a JavaScript error of a specific type at a source location.
      *
-     * @param errorType      Error constructor name (Error, TypeError, RangeError, etc.)
-     * @param message        Error message
-     * @param sourceLocation Source location, or {@code null} when unavailable
+     * @param errorType
+     *            Error constructor name (Error, TypeError, RangeError, etc.)
+     * @param message
+     *            Error message
+     * @param sourceLocation
+     *            Source location, or {@code null} when unavailable
      * @return The error value
      */
     JSError throwError(String errorType, String message, SourceLocation sourceLocation) {
@@ -175,29 +180,11 @@ final class JSErrorReporter {
         return throwError(jsError);
     }
 
-    JSError throwError(JSError jsError) {
-        context.transferPrototype(jsError, jsError.getErrorName());
-        // Capture stack trace
-        captureStackTrace(jsError);
-        // Set as pending exception
-        context.setPendingException(jsError);
-        return jsError;
-    }
-
-    JSError throwError(JSErrorException jsErrorException) {
-        if (jsErrorException == null) {
-            return throwError("Unknown error");
-        }
-        return throwError(
-                jsErrorException.getErrorType().name(),
-                jsErrorException.getMessage(),
-                jsErrorException.getSourceLocation());
-    }
-
     /**
      * Throw a EvalError.
      *
-     * @param message Error message
+     * @param message
+     *            Error message
      * @return The error value
      */
     JSError throwEvalError(String message) {
@@ -207,7 +194,8 @@ final class JSErrorReporter {
     /**
      * Throw a RangeError.
      *
-     * @param message Error message
+     * @param message
+     *            Error message
      * @return The error value
      */
     JSError throwRangeError(String message) {
@@ -217,7 +205,8 @@ final class JSErrorReporter {
     /**
      * Throw a ReferenceError.
      *
-     * @param message Error message
+     * @param message
+     *            Error message
      * @return The error value
      */
     JSError throwReferenceError(String message) {
@@ -227,7 +216,8 @@ final class JSErrorReporter {
     /**
      * Throw a SyntaxError.
      *
-     * @param message Error message
+     * @param message
+     *            Error message
      * @return The error value
      */
     JSError throwSyntaxError(String message) {
@@ -241,7 +231,8 @@ final class JSErrorReporter {
     /**
      * Throw a TypeError.
      *
-     * @param message Error message
+     * @param message
+     *            Error message
      * @return The error value
      */
     JSError throwTypeError(String message) {
@@ -255,7 +246,8 @@ final class JSErrorReporter {
     /**
      * Throw a URIError.
      *
-     * @param message Error message
+     * @param message
+     *            Error message
      * @return The error value
      */
     JSError throwURIError(String message) {

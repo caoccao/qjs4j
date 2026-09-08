@@ -22,26 +22,22 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Represents the shape (structure) of a JavaScript object.
- * Based on QuickJS shape system with mutable property lists.
+ * Represents the shape (structure) of a JavaScript object. Based on QuickJS shape system with mutable property lists.
  * <p>
- * Following QuickJS implementation:
- * - Shapes are mutable and can have properties removed
- * - Deleted properties are tracked and shape is compacted when threshold is reached
- * - Each object has its own shape instance (no sharing)
- * - Supports property addition, removal, and compaction
+ * Following QuickJS implementation: - Shapes are mutable and can have properties removed - Deleted properties are
+ * tracked and shape is compacted when threshold is reached - Each object has its own shape instance (no sharing) -
+ * Supports property addition, removal, and compaction
  * <p>
- * For shapes with more than INDEX_THRESHOLD properties, a HashMap index is maintained
- * for O(1) property offset lookups instead of O(N) linear scans.
+ * For shapes with more than INDEX_THRESHOLD properties, a HashMap index is maintained for O(1) property offset lookups
+ * instead of O(N) linear scans.
  */
 public final class JSShape {
     private static final PropertyDescriptor[] EMPTY_DESCRIPTORS = new PropertyDescriptor[0];
     private static final PropertyKey[] EMPTY_KEYS = new PropertyKey[0];
     /**
-     * Property count above which a shape maintains a {@code HashMap} index instead of scanning its
-     * key array linearly. Below it, a linear scan over a handful of keys beats hashing, and the
-     * map's own footprint would dominate: most objects in a real program never reach this many
-     * properties.
+     * Property count above which a shape maintains a {@code HashMap} index instead of scanning its key array linearly.
+     * Below it, a linear scan over a handful of keys beats hashing, and the map's own footprint would dominate: most
+     * objects in a real program never reach this many properties.
      */
     private static final int INDEX_THRESHOLD = 6;
     private static final int INITIAL_CAPACITY = 4;
@@ -90,8 +86,8 @@ public final class JSShape {
     }
 
     /**
-     * Create a shape with pre-defined properties in bulk.
-     * Avoids the O(N²) cost of calling addProperty repeatedly on a fresh shape.
+     * Create a shape with pre-defined properties in bulk. Avoids the O(N²) cost of calling addProperty repeatedly on a
+     * fresh shape.
      */
     JSShape(PropertyKey[] keys, PropertyDescriptor[] descriptors) {
         this.propertyKeys = keys;
@@ -108,8 +104,7 @@ public final class JSShape {
     }
 
     /**
-     * Add a property to this shape.
-     * Modifies the shape in-place.
+     * Add a property to this shape. Modifies the shape in-place.
      */
     public void addProperty(PropertyKey key, PropertyDescriptor descriptor) {
         // Check if property already exists (might be deleted)
@@ -144,9 +139,8 @@ public final class JSShape {
     }
 
     /**
-     * Compact the shape by removing deleted properties.
-     * Creates new arrays without deleted properties.
-     * Following QuickJS compact_properties() logic.
+     * Compact the shape by removing deleted properties. Creates new arrays without deleted properties. Following
+     * QuickJS compact_properties() logic.
      */
     public void compact() {
         if (deletedPropCount == 0) {
@@ -221,8 +215,7 @@ public final class JSShape {
     }
 
     /**
-     * Get the descriptor for a property.
-     * Returns null if property not found or deleted.
+     * Get the descriptor for a property. Returns null if property not found or deleted.
      */
     public PropertyDescriptor getDescriptor(PropertyKey key) {
         int offset = getPropertyOffset(key);
@@ -230,8 +223,7 @@ public final class JSShape {
     }
 
     /**
-     * Get the descriptor at a specific offset.
-     * Returns null if offset is invalid or property is deleted.
+     * Get the descriptor at a specific offset. Returns null if offset is invalid or property is deleted.
      */
     public PropertyDescriptor getDescriptorAt(int offset) {
         if (offset < 0 || offset >= propertyCount) {
@@ -265,8 +257,7 @@ public final class JSShape {
     }
 
     /**
-     * Get the property key at a specific offset.
-     * Returns null if offset is invalid or property is deleted.
+     * Get the property key at a specific offset. Returns null if offset is invalid or property is deleted.
      */
     public PropertyKey getPropertyKeyAt(int offset) {
         if (offset < 0 || offset >= propertyCount) {
@@ -289,9 +280,8 @@ public final class JSShape {
     }
 
     /**
-     * Get the offset of a property in the property array.
-     * Returns -1 if property not found or deleted.
-     * Uses HashMap index for shapes with more than INDEX_THRESHOLD properties.
+     * Get the offset of a property in the property array. Returns -1 if property not found or deleted. Uses HashMap
+     * index for shapes with more than INDEX_THRESHOLD properties.
      */
     public int getPropertyOffset(PropertyKey key) {
         if (key == null) {
@@ -301,8 +291,8 @@ public final class JSShape {
     }
 
     /**
-     * Get the offset of a property by raw index key (String / Integer / JSSymbol).
-     * Returns -1 if property not found or deleted.
+     * Get the offset of a property by raw index key (String / Integer / JSSymbol). Returns -1 if property not found or
+     * deleted.
      */
     public int getPropertyOffsetByIndexKey(Object indexKey) {
         if (indexKey == null) {
@@ -350,9 +340,8 @@ public final class JSShape {
     }
 
     /**
-     * Remove a property from this shape.
-     * Marks the property as deleted (sets key to null).
-     * Following QuickJS delete_property() logic.
+     * Remove a property from this shape. Marks the property as deleted (sets key to null). Following QuickJS
+     * delete_property() logic.
      *
      * @return true if property was removed, false if not found or not configurable
      */
@@ -383,12 +372,11 @@ public final class JSShape {
     }
 
     /**
-     * Check if compaction should be performed.
-     * Following QuickJS logic: compact if deleted >= 8 AND deleted >= prop_count/2
+     * Check if compaction should be performed. Following QuickJS logic: compact if deleted >= 8 AND deleted >=
+     * prop_count/2
      */
     public boolean shouldCompact() {
-        return deletedPropCount >= 8 &&
-                deletedPropCount >= propertyCount / 2;
+        return deletedPropCount >= 8 && deletedPropCount >= propertyCount / 2;
     }
 
     @Override

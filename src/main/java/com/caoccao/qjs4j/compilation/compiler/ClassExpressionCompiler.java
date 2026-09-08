@@ -34,7 +34,8 @@ final class ClassExpressionCompiler extends AstNodeCompiler<ClassExpression> {
 
     @Override
     void compile(ClassExpression classExpr) {
-        String className = classExpr.getId() != null ? classExpr.getId().getName()
+        String className = classExpr.getId() != null
+                ? classExpr.getId().getName()
                 : (compilerContext.inferredClassName != null ? compilerContext.inferredClassName : "");
 
         int classNameLocalIndex = -1;
@@ -78,11 +79,8 @@ final class ClassExpressionCompiler extends AstNodeCompiler<ClassExpression> {
                         privateInstanceMethods.add(method);
                     }
                     if (method.getKey() instanceof PrivateIdentifier privateId) {
-                        compilerContext.classDeclarationCompiler.registerPrivateName(
-                                privateNameKinds,
-                                privateId.getName(),
-                                method.getKind(),
-                                privateId);
+                        compilerContext.classDeclarationCompiler.registerPrivateName(privateNameKinds,
+                                privateId.getName(), method.getKind(), privateId);
                     }
                 } else {
                     methods.add(method);
@@ -95,22 +93,15 @@ final class ClassExpressionCompiler extends AstNodeCompiler<ClassExpression> {
                 }
 
                 if (field.isPrivate() && field.getKey() instanceof PrivateIdentifier privateId) {
-                    compilerContext.classDeclarationCompiler.registerPrivateName(
-                            privateNameKinds,
-                            privateId.getName(),
-                            "field",
-                            privateId);
+                    compilerContext.classDeclarationCompiler.registerPrivateName(privateNameKinds, privateId.getName(),
+                            "field", privateId);
                 }
 
                 if (field.isAutoAccessor() && !field.isPrivate()) {
                     String backingName = PropertyDefinition.createAutoAccessorBackingName(
-                            autoAccessorBackingNames.size() + 1,
-                            privateNameKinds.keySet());
+                            autoAccessorBackingNames.size() + 1, privateNameKinds.keySet());
                     autoAccessorBackingNames.put(field, backingName);
-                    compilerContext.classDeclarationCompiler.registerPrivateName(
-                            privateNameKinds,
-                            backingName,
-                            "field",
+                    compilerContext.classDeclarationCompiler.registerPrivateName(privateNameKinds, backingName, "field",
                             field);
                     methods.add(field.toAutoAccessorMethod(JSKeyword.GET, backingName));
                     methods.add(field.toAutoAccessorMethod(JSKeyword.SET, backingName));
@@ -118,10 +109,8 @@ final class ClassExpressionCompiler extends AstNodeCompiler<ClassExpression> {
 
                 if (field.isComputed() && !field.isPrivate()) {
                     computedFieldsInDefinitionOrder.add(field);
-                    computedFieldSymbols.put(
-                            field,
-                            new JSSymbol("__computed_field_" + computedFieldsInDefinitionOrder.size())
-                    );
+                    computedFieldSymbols.put(field,
+                            new JSSymbol("__computed_field_" + computedFieldsInDefinitionOrder.size()));
                 }
             } else if (element instanceof StaticBlock block) {
                 staticInitializers.add(block);
@@ -141,36 +130,20 @@ final class ClassExpressionCompiler extends AstNodeCompiler<ClassExpression> {
                 autoAccessorBackingSymbols.put(entry.getKey(), backingSymbol);
             }
         }
-        List<ClassDeclarationCompiler.PrivateMethodEntry> privateInstanceMethodFunctions =
-                compilerContext.classDeclarationCompiler.compilePrivateMethodFunctions(
-                        privateInstanceMethods, privateSymbols, computedFieldSymbols);
-        List<ClassDeclarationCompiler.PrivateMethodEntry> privateStaticMethodFunctions =
-                compilerContext.classDeclarationCompiler.compilePrivateMethodFunctions(
-                        privateStaticMethods, privateSymbols, computedFieldSymbols);
+        List<ClassDeclarationCompiler.PrivateMethodEntry> privateInstanceMethodFunctions = compilerContext.classDeclarationCompiler
+                .compilePrivateMethodFunctions(privateInstanceMethods, privateSymbols, computedFieldSymbols);
+        List<ClassDeclarationCompiler.PrivateMethodEntry> privateStaticMethodFunctions = compilerContext.classDeclarationCompiler
+                .compilePrivateMethodFunctions(privateStaticMethods, privateSymbols, computedFieldSymbols);
 
         JSBytecodeFunction constructorFunc;
         if (constructor != null) {
-            constructorFunc = compilerContext.classDeclarationCompiler.compileMethodAsFunction(
-                    constructor,
-                    className,
-                    classExpr.getSuperClass() != null,
-                    instanceFields,
-                    privateSymbols,
-                    computedFieldSymbols,
-                    autoAccessorBackingSymbols,
-                    privateInstanceMethodFunctions,
-                    true
-            );
+            constructorFunc = compilerContext.classDeclarationCompiler.compileMethodAsFunction(constructor, className,
+                    classExpr.getSuperClass() != null, instanceFields, privateSymbols, computedFieldSymbols,
+                    autoAccessorBackingSymbols, privateInstanceMethodFunctions, true);
         } else {
-            constructorFunc = compilerContext.classDeclarationCompiler.createDefaultConstructor(
-                    className,
-                    classExpr.getSuperClass() != null,
-                    instanceFields,
-                    privateSymbols,
-                    computedFieldSymbols,
-                    autoAccessorBackingSymbols,
-                    privateInstanceMethodFunctions
-            );
+            constructorFunc = compilerContext.classDeclarationCompiler.createDefaultConstructor(className,
+                    classExpr.getSuperClass() != null, instanceFields, privateSymbols, computedFieldSymbols,
+                    autoAccessorBackingSymbols, privateInstanceMethodFunctions);
         }
 
         if (compilerContext.sourceCode != null && classExpr.getLocation() != null) {
@@ -192,43 +165,29 @@ final class ClassExpressionCompiler extends AstNodeCompiler<ClassExpression> {
             if (method.isStatic()) {
                 compilerContext.emitter.emitOpcode(Opcode.SWAP);
 
-                JSBytecodeFunction methodFunc = compilerContext.classDeclarationCompiler.compileMethodAsFunction(
-                        method,
-                        method.getSimpleName(),
-                        false,
-                        List.of(),
-                        privateSymbols,
-                        computedFieldSymbols,
-                        autoAccessorBackingSymbols,
-                        List.of(),
-                        false
-                );
+                JSBytecodeFunction methodFunc = compilerContext.classDeclarationCompiler.compileMethodAsFunction(method,
+                        method.getSimpleName(), false, List.of(), privateSymbols, computedFieldSymbols,
+                        autoAccessorBackingSymbols, List.of(), false);
 
                 String methodName = method.getSimpleName();
                 compilerContext.emitHelpers.emitClassMethodDefinition(method, methodFunc, methodName);
                 compilerContext.emitter.emitOpcode(Opcode.SWAP);
             } else {
-                JSBytecodeFunction methodFunc = compilerContext.classDeclarationCompiler.compileMethodAsFunction(
-                        method,
-                        method.getSimpleName(),
-                        false,
-                        List.of(),
-                        privateSymbols,
-                        computedFieldSymbols,
-                        autoAccessorBackingSymbols,
-                        List.of(),
-                        false
-                );
+                JSBytecodeFunction methodFunc = compilerContext.classDeclarationCompiler.compileMethodAsFunction(method,
+                        method.getSimpleName(), false, List.of(), privateSymbols, computedFieldSymbols,
+                        autoAccessorBackingSymbols, List.of(), false);
 
                 String methodName = method.getSimpleName();
                 compilerContext.emitHelpers.emitClassMethodDefinition(method, methodFunc, methodName);
             }
         }
 
-        compilerContext.classDeclarationCompiler.installPrivateStaticMethods(privateStaticMethodFunctions, privateSymbols);
+        compilerContext.classDeclarationCompiler.installPrivateStaticMethods(privateStaticMethodFunctions,
+                privateSymbols);
 
         for (PropertyDefinition field : computedFieldsInDefinitionOrder) {
-            compilerContext.classDeclarationCompiler.compileComputedFieldNameCache(field, computedFieldSymbols, privateSymbols);
+            compilerContext.classDeclarationCompiler.compileComputedFieldNameCache(field, computedFieldSymbols,
+                    privateSymbols);
         }
 
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
@@ -245,7 +204,8 @@ final class ClassExpressionCompiler extends AstNodeCompiler<ClassExpression> {
                 staticInitializerFunc = compilerContext.classDeclarationCompiler.compileStaticFieldInitializer(
                         staticField, computedFieldSymbols, privateSymbols, autoAccessorBackingSymbols, className);
             } else if (staticInitializer instanceof StaticBlock staticBlock) {
-                staticInitializerFunc = compilerContext.classDeclarationCompiler.compileStaticBlock(staticBlock, className, privateSymbols);
+                staticInitializerFunc = compilerContext.classDeclarationCompiler.compileStaticBlock(staticBlock,
+                        className, privateSymbols);
             } else {
                 continue;
             }

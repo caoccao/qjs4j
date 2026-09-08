@@ -19,13 +19,12 @@ package com.caoccao.qjs4j.core;
 import java.util.*;
 
 /**
- * Enumerator for for-in loops.
- * Iterates over enumerable properties of an object.
+ * Enumerator for for-in loops. Iterates over enumerable properties of an object.
  */
 public class JSForInEnumerator {
+    private int index;
     private final List<String> keys;
     private final JSObject rootObject;
-    private int index;
 
     public JSForInEnumerator(JSValue obj) {
         this.keys = new ArrayList<>();

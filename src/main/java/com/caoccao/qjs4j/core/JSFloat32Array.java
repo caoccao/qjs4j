@@ -19,19 +19,11 @@ package com.caoccao.qjs4j.core;
 import java.nio.ByteBuffer;
 
 /**
- * Represents a JavaScript Float32Array.
- * 32-bit floating point array.
+ * Represents a JavaScript Float32Array. 32-bit floating point array.
  */
 public final class JSFloat32Array extends JSTypedArray {
     public static final int BYTES_PER_ELEMENT = 4;
     public static final String NAME = "Float32Array";
-
-    /**
-     * Create a Float32Array with a new buffer.
-     */
-    public JSFloat32Array(JSContext context, int length) {
-        super(context, length, BYTES_PER_ELEMENT);
-    }
 
     /**
      * Create a Float32Array view on an existing buffer.
@@ -40,9 +32,11 @@ public final class JSFloat32Array extends JSTypedArray {
         super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 
-    public static JSObject create(JSContext context, JSValue... args) {
-        return createFromArguments(context, BYTES_PER_ELEMENT,
-                context::createJSFloat32Array, context::createJSFloat32Array, args);
+    /**
+     * Create a Float32Array with a new buffer.
+     */
+    public JSFloat32Array(JSContext context, int length) {
+        super(context, length, BYTES_PER_ELEMENT);
     }
 
     @Override
@@ -82,5 +76,10 @@ public final class JSFloat32Array extends JSTypedArray {
         checkIndex(index);
         ByteBuffer buf = getByteBuffer();
         buf.putFloat(index * BYTES_PER_ELEMENT, (float) value);
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        return createFromArguments(context, BYTES_PER_ELEMENT, context::createJSFloat32Array,
+                context::createJSFloat32Array, args);
     }
 }

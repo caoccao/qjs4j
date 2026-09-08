@@ -23,14 +23,13 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Represents a FinalizationRegistry object in JavaScript.
- * Based on QuickJS JS_CLASS_FINALIZATION_REGISTRY implementation.
+ * Represents a FinalizationRegistry object in JavaScript. Based on QuickJS JS_CLASS_FINALIZATION_REGISTRY
+ * implementation.
  * <p>
- * FinalizationRegistry allows you to register cleanup callbacks that are
- * called when registered objects are garbage collected.
+ * FinalizationRegistry allows you to register cleanup callbacks that are called when registered objects are garbage
+ * collected.
  * <p>
- * Prototype methods (register, unregister) are defined on the prototype
- * in JSGlobalObject, not on each instance.
+ * Prototype methods (register, unregister) are defined on the prototype in JSGlobalObject, not on each instance.
  */
 public final class JSFinalizationRegistry extends JSObject {
     public static final String NAME = "FinalizationRegistry";
@@ -42,8 +41,10 @@ public final class JSFinalizationRegistry extends JSObject {
     /**
      * Create a new FinalizationRegistry.
      *
-     * @param context         The execution context
-     * @param cleanupCallback Callback function called with held values
+     * @param context
+     *            The execution context
+     * @param cleanupCallback
+     *            Callback function called with held values
      */
     public JSFinalizationRegistry(JSContext context, JSFunction cleanupCallback) {
         super(context);
@@ -54,19 +55,8 @@ public final class JSFinalizationRegistry extends JSObject {
         context.registerFinalizationRegistry(this);
     }
 
-    public static JSObject create(JSContext context, JSValue... args) {
-        JSValue cbArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        if (!(cbArg instanceof JSFunction callback)) {
-            return context.throwTypeError("argument must be a function");
-        }
-        JSObject jsObject = new JSFinalizationRegistry(context, callback);
-        context.transferPrototype(jsObject, NAME);
-        return jsObject;
-    }
-
     /**
-     * Get the number of active registrations.
-     * For debugging/testing purposes.
+     * Get the number of active registrations. For debugging/testing purposes.
      *
      * @return The number of registered objects
      */
@@ -75,8 +65,8 @@ public final class JSFinalizationRegistry extends JSObject {
     }
 
     /**
-     * Poll the reference queue for collected targets and invoke cleanup callbacks.
-     * Called lazily from processMicrotasks() and runtime.gc() — no background thread needed.
+     * Poll the reference queue for collected targets and invoke cleanup callbacks. Called lazily from
+     * processMicrotasks() and runtime.gc() — no background thread needed.
      */
     public void pollCleanups() {
         Reference<?> ref;
@@ -84,8 +74,7 @@ public final class JSFinalizationRegistry extends JSObject {
             RegistrationRecord record = registrations.remove(ref);
             if (record != null) {
                 try {
-                    cleanupCallback.call(context, JSUndefined.INSTANCE,
-                            new JSValue[]{record.heldValue});
+                    cleanupCallback.call(context, JSUndefined.INSTANCE, new JSValue[]{record.heldValue});
                 } catch (Exception e) {
                     // Cleanup callback errors should not crash the program
                 }
@@ -95,13 +84,15 @@ public final class JSFinalizationRegistry extends JSObject {
     }
 
     /**
-     * Register a target for finalization.
-     * Called by FinalizationRegistryPrototype.register() after validation.
-     * Target can be a JSObject or a non-registered JSSymbol (CanBeHeldWeakly).
+     * Register a target for finalization. Called by FinalizationRegistryPrototype.register() after validation. Target
+     * can be a JSObject or a non-registered JSSymbol (CanBeHeldWeakly).
      *
-     * @param target          The value to monitor (JSObject or JSSymbol)
-     * @param heldValue       Value passed to cleanup callback
-     * @param unregisterToken Optional token for manual unregistration (null if none)
+     * @param target
+     *            The value to monitor (JSObject or JSSymbol)
+     * @param heldValue
+     *            Value passed to cleanup callback
+     * @param unregisterToken
+     *            Optional token for manual unregistration (null if none)
      */
     public void register(JSValue target, JSValue heldValue, JSValue unregisterToken) {
         // Create phantom reference to track when target is collected
@@ -119,12 +110,11 @@ public final class JSFinalizationRegistry extends JSObject {
     }
 
     /**
-     * Unregister all entries matching the given token.
-     * Following QuickJS behavior, removes ALL entries with matching token,
-     * not just the first one.
-     * Called by FinalizationRegistryPrototype.unregister() after validation.
+     * Unregister all entries matching the given token. Following QuickJS behavior, removes ALL entries with matching
+     * token, not just the first one. Called by FinalizationRegistryPrototype.unregister() after validation.
      *
-     * @param unregisterToken The token provided during registration
+     * @param unregisterToken
+     *            The token provided during registration
      * @return True if at least one registration was removed
      */
     public boolean unregister(JSValue unregisterToken) {
@@ -140,6 +130,16 @@ public final class JSFinalizationRegistry extends JSObject {
             }
         }
         return removed;
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        JSValue cbArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        if (!(cbArg instanceof JSFunction callback)) {
+            return context.throwTypeError("argument must be a function");
+        }
+        JSObject jsObject = new JSFinalizationRegistry(context, callback);
+        context.transferPrototype(jsObject, NAME);
+        return jsObject;
     }
 
     /**

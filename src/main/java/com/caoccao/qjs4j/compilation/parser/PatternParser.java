@@ -49,8 +49,8 @@ record PatternParser(ParserContext parserContext, ParserDelegates delegates) {
                 Pattern argument = parsePattern();
                 elements.add(new RestElement(argument, restLocation));
                 if (parserContext.match(TokenType.COMMA)) {
-                    throw new RuntimeException("Rest element must be last in array pattern at line " +
-                            parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
+                    throw new RuntimeException("Rest element must be last in array pattern at line "
+                            + parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
                 }
                 break;
             } else {

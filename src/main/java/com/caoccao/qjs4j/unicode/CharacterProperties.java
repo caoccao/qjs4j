@@ -17,15 +17,13 @@
 package com.caoccao.qjs4j.unicode;
 
 /**
- * Unicode character properties and case conversion.
- * Based on QuickJS libunicode.c implementation.
+ * Unicode character properties and case conversion. Based on QuickJS libunicode.c implementation.
  */
 public final class CharacterProperties {
 
     /**
-     * Convert code point using case folding.
-     * Case folding is used for case-insensitive matching.
-     * For most characters, it's the same as toLowerCase, but there are exceptions.
+     * Convert code point using case folding. Case folding is used for case-insensitive matching. For most characters,
+     * it's the same as toLowerCase, but there are exceptions.
      */
     public static int caseFold(int codePoint) {
         // Unicode CaseFolding.txt "C" (Common) and special entries.
@@ -76,8 +74,7 @@ public final class CharacterProperties {
             case 0xFB05, 0xFB06 -> 0xFB06; // Latin ligatures long-s-t / st
             default -> {
                 // Vithkuqi capital → small (Unicode 15.0, offset 0x27)
-                if (codePoint >= 0x10570 && codePoint <= 0x10595
-                        && codePoint != 0x1057B && codePoint != 0x1058B) {
+                if (codePoint >= 0x10570 && codePoint <= 0x10595 && codePoint != 0x1057B && codePoint != 0x1058B) {
                     yield codePoint + 0x27;
                 }
                 // Garay script uppercase → lowercase (Unicode 16.0)
@@ -90,8 +87,7 @@ public final class CharacterProperties {
     }
 
     /**
-     * Get the Unicode general category of a code point.
-     * Returns a two-letter string like "Lu", "Ll", "Nd", etc.
+     * Get the Unicode general category of a code point. Returns a two-letter string like "Lu", "Ll", "Nd", etc.
      */
     public static String getCategory(int codePoint) {
         int type = Character.getType(codePoint);
@@ -131,25 +127,20 @@ public final class CharacterProperties {
     }
 
     /**
-     * Check if character is case ignorable.
-     * Case ignorable characters don't affect case-insensitive matching.
-     */
-    public static boolean isCaseIgnorable(int codePoint) {
-        int type = Character.getType(codePoint);
-        return type == Character.NON_SPACING_MARK ||
-                type == Character.ENCLOSING_MARK ||
-                type == Character.FORMAT ||
-                codePoint == 0x0027 || // APOSTROPHE
-                codePoint == 0x002E;   // FULL STOP
-    }
-
-    /**
      * Check if character is cased (has uppercase or lowercase variants).
      */
     public static boolean isCased(int codePoint) {
-        return Character.isUpperCase(codePoint) ||
-                Character.isLowerCase(codePoint) ||
-                Character.isTitleCase(codePoint);
+        return Character.isUpperCase(codePoint) || Character.isLowerCase(codePoint) || Character.isTitleCase(codePoint);
+    }
+
+    /**
+     * Check if character is case ignorable. Case ignorable characters don't affect case-insensitive matching.
+     */
+    public static boolean isCaseIgnorable(int codePoint) {
+        int type = Character.getType(codePoint);
+        return type == Character.NON_SPACING_MARK || type == Character.ENCLOSING_MARK || type == Character.FORMAT
+                || codePoint == 0x0027 || // APOSTROPHE
+                codePoint == 0x002E; // FULL STOP
     }
 
     /**
@@ -160,8 +151,7 @@ public final class CharacterProperties {
     }
 
     /**
-     * Convert code point to lowercase.
-     * Returns the lowercase variant or the same codepoint if no mapping exists.
+     * Convert code point to lowercase. Returns the lowercase variant or the same codepoint if no mapping exists.
      */
     public static int toLowerCase(int codePoint) {
         return Character.toLowerCase(codePoint);
@@ -175,8 +165,7 @@ public final class CharacterProperties {
     }
 
     /**
-     * Convert code point to uppercase.
-     * Returns the uppercase variant or the same codepoint if no mapping exists.
+     * Convert code point to uppercase. Returns the uppercase variant or the same codepoint if no mapping exists.
      */
     public static int toUpperCase(int codePoint) {
         return Character.toUpperCase(codePoint);

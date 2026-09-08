@@ -19,13 +19,11 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Base sealed class for all AST nodes.
  */
-public abstract sealed class ASTNode permits
-        Pattern, Statement, ModuleItem, Program, RestParameter,
-        VariableDeclarator, TryStatement.CatchClause,
-        SwitchStatement.SwitchCase, ClassElement, ObjectPatternProperty,
+public abstract sealed class ASTNode permits Pattern, Statement, ModuleItem, Program, RestParameter, VariableDeclarator,
+        TryStatement.CatchClause, SwitchStatement.SwitchCase, ClassElement, ObjectPatternProperty,
         ObjectExpressionProperty, ImportSpecifier, ExportSpecifier {
-    private final SourceLocation location;
     protected Boolean awaitInside;
+    private final SourceLocation location;
     protected Boolean yieldInside;
 
     protected ASTNode(SourceLocation location) {

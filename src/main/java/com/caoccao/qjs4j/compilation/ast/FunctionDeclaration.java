@@ -31,7 +31,8 @@ public final class FunctionDeclaration extends Declaration {
     private final boolean isGenerator;
     private final boolean needsArguments;
 
-    public FunctionDeclaration(Identifier id, FunctionParams functionParams, BlockStatement body, boolean isAsync, boolean isGenerator, boolean needsArguments, SourceLocation location) {
+    public FunctionDeclaration(Identifier id, FunctionParams functionParams, BlockStatement body, boolean isAsync,
+            boolean isGenerator, boolean needsArguments, SourceLocation location) {
         super(location);
         this.id = id;
         this.functionParams = functionParams;

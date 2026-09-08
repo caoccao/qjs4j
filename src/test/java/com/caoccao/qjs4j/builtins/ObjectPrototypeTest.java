@@ -67,8 +67,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testConstructor() {
-        assertStringWithJavet(
-                "Object.constructor.name");
+        assertStringWithJavet("Object.constructor.name");
     }
 
     @Test
@@ -101,7 +100,8 @@ public class ObjectPrototypeTest extends BaseJavetTest {
     @Test
     public void testDefineGetter() {
         JSObject obj = new JSObject(context);
-        JSNativeFunction getter = new JSNativeFunction(context, "testGetter", 0, (ctx, thisArg, args) -> new JSString("getter value"));
+        JSNativeFunction getter = new JSNativeFunction(context, "testGetter", 0,
+                (ctx, thisArg, args) -> new JSString("getter value"));
 
         // Normal case: define getter
         JSValue result = ObjectPrototype.__defineGetter__(context, obj, new JSValue[]{new JSString("prop"), getter});
@@ -113,12 +113,14 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         assertThat(desc.getGetter()).isEqualTo(getter);
 
         // Edge case: non-function getter
-        result = ObjectPrototype.__defineGetter__(context, obj, new JSValue[]{new JSString("badProp"), new JSString("not a function")});
+        result = ObjectPrototype.__defineGetter__(context, obj,
+                new JSValue[]{new JSString("badProp"), new JSString("not a function")});
         assertTypeError(result);
         assertPendingException(context);
 
         // Edge case: null thisArg
-        result = ObjectPrototype.__defineGetter__(context, JSNull.INSTANCE, new JSValue[]{new JSString("prop"), getter});
+        result = ObjectPrototype.__defineGetter__(context, JSNull.INSTANCE,
+                new JSValue[]{new JSString("prop"), getter});
         assertTypeError(result);
         assertPendingException(context);
 
@@ -139,21 +141,20 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         descriptor.set("enumerable", JSBoolean.TRUE);
         descriptor.set("configurable", JSBoolean.TRUE);
 
-        JSValue result = ObjectPrototype.defineProperty(context, JSUndefined.INSTANCE, new JSValue[]{
-                obj, new JSString("testProp"), descriptor
-        });
+        JSValue result = ObjectPrototype.defineProperty(context, JSUndefined.INSTANCE,
+                new JSValue[]{obj, new JSString("testProp"), descriptor});
         assertThat(result).isEqualTo(obj);
         assertThat(obj.get("testProp").asString().map(JSString::value).orElseThrow()).isEqualTo("test");
 
         // Edge case: not enough arguments
-        result = ObjectPrototype.defineProperty(context, JSUndefined.INSTANCE, new JSValue[]{obj, new JSString("prop")});
+        result = ObjectPrototype.defineProperty(context, JSUndefined.INSTANCE,
+                new JSValue[]{obj, new JSString("prop")});
         assertTypeError(result);
         assertPendingException(context);
 
         // Edge case: first argument not object
-        result = ObjectPrototype.defineProperty(context, JSUndefined.INSTANCE, new JSValue[]{
-                new JSString("not object"), new JSString("prop"), descriptor
-        });
+        result = ObjectPrototype.defineProperty(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSString("not object"), new JSString("prop"), descriptor});
         assertTypeError(result);
         assertPendingException(context);
     }
@@ -161,7 +162,8 @@ public class ObjectPrototypeTest extends BaseJavetTest {
     @Test
     public void testDefineSetter() {
         JSObject obj = new JSObject(context);
-        JSNativeFunction setter = new JSNativeFunction(context, "testSetter", 1, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
+        JSNativeFunction setter = new JSNativeFunction(context, "testSetter", 1,
+                (ctx, thisArg, args) -> JSUndefined.INSTANCE);
 
         // Normal case: define setter
         JSValue result = ObjectPrototype.__defineSetter__(context, obj, new JSValue[]{new JSString("prop"), setter});
@@ -173,12 +175,14 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         assertThat(desc.getSetter()).isEqualTo(setter);
 
         // Edge case: non-function setter
-        result = ObjectPrototype.__defineSetter__(context, obj, new JSValue[]{new JSString("badProp"), new JSNumber(42)});
+        result = ObjectPrototype.__defineSetter__(context, obj,
+                new JSValue[]{new JSString("badProp"), new JSNumber(42)});
         assertTypeError(result);
         assertPendingException(context);
 
         // Edge case: null thisArg
-        result = ObjectPrototype.__defineSetter__(context, JSNull.INSTANCE, new JSValue[]{new JSString("prop"), setter});
+        result = ObjectPrototype.__defineSetter__(context, JSNull.INSTANCE,
+                new JSValue[]{new JSString("prop"), setter});
         assertTypeError(result);
         assertPendingException(context);
 
@@ -196,12 +200,14 @@ public class ObjectPrototypeTest extends BaseJavetTest {
 
         // Normal case: object with properties
         JSValue result = ObjectPrototype.entries(context, JSUndefined.INSTANCE, new JSValue[]{obj});
-        assertThat(result).isInstanceOfSatisfying(JSArray.class, entries -> assertThat(entries.getLength()).isGreaterThanOrEqualTo(2));
+        assertThat(result).isInstanceOfSatisfying(JSArray.class,
+                entries -> assertThat(entries.getLength()).isGreaterThanOrEqualTo(2));
 
         // Normal case: empty object
         JSObject emptyObj = new JSObject(context);
         result = ObjectPrototype.entries(context, JSUndefined.INSTANCE, new JSValue[]{emptyObj});
-        assertThat(result).isInstanceOfSatisfying(JSArray.class, emptyEntries -> assertThat(emptyEntries.getLength()).isEqualTo(0));
+        assertThat(result).isInstanceOfSatisfying(JSArray.class,
+                emptyEntries -> assertThat(emptyEntries.getLength()).isEqualTo(0));
 
         // Edge case: null
         result = ObjectPrototype.entries(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE});
@@ -210,7 +216,8 @@ public class ObjectPrototypeTest extends BaseJavetTest {
 
         // Edge case: primitive
         result = ObjectPrototype.entries(context, JSUndefined.INSTANCE, new JSValue[]{JSBoolean.FALSE});
-        assertThat(result).isInstanceOfSatisfying(JSArray.class, primitiveEntries -> assertThat(primitiveEntries.getLength()).isEqualTo(0));
+        assertThat(result).isInstanceOfSatisfying(JSArray.class,
+                primitiveEntries -> assertThat(primitiveEntries.getLength()).isEqualTo(0));
     }
 
     @Test
@@ -239,32 +246,28 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         result = ObjectPrototype.hasOwnProperty(context, new JSString("string"), new JSValue[]{new JSString("length")});
         assertThat(result).isEqualTo(JSBoolean.TRUE); // String wrapper has "length" own property
 
-        assertBooleanWithJavet(
-                "var obj = {foo: 'bar'}; obj.hasOwnProperty('foo')",
-                "var obj = {a: 1}; Object.getPrototypeOf(obj) === Object.prototype;",
-                """
+        assertBooleanWithJavet("var obj = {foo: 'bar'}; obj.hasOwnProperty('foo')",
+                "var obj = {a: 1}; Object.getPrototypeOf(obj) === Object.prototype;", """
                         var outer = {
                             inner: {
                                 value: 42
                             }
                         };
                         outer.hasOwnProperty('inner') && outer.inner.hasOwnProperty('value');
-                        """,
-                """
+                        """, """
                         var obj = {};
                         Object.getPrototypeOf(obj) === Object.prototype;
                         """);
-        assertStringWithJavet(
-                """
-                        var obj = {x: 10};
-                        var results = {
-                            hasOwnProperty: obj.hasOwnProperty('x'),
-                            toString: typeof obj.toString === 'function',
-                            valueOf: typeof obj.valueOf === 'function',
-                            isPrototypeOf: typeof obj.isPrototypeOf === 'function'
-                        };
-                        JSON.stringify(results);
-                        """);
+        assertStringWithJavet("""
+                var obj = {x: 10};
+                var results = {
+                    hasOwnProperty: obj.hasOwnProperty('x'),
+                    toString: typeof obj.toString === 'function',
+                    valueOf: typeof obj.valueOf === 'function',
+                    isPrototypeOf: typeof obj.isPrototypeOf === 'function'
+                };
+                JSON.stringify(results);
+                """);
     }
 
     @Test
@@ -309,12 +312,14 @@ public class ObjectPrototypeTest extends BaseJavetTest {
 
         // Normal case: object with properties
         JSValue result = ObjectPrototype.keys(context, JSUndefined.INSTANCE, new JSValue[]{obj});
-        assertThat(result).isInstanceOfSatisfying(JSArray.class, keys -> assertThat(keys.getLength()).isGreaterThanOrEqualTo(3)); // May include prototype properties
+        assertThat(result).isInstanceOfSatisfying(JSArray.class,
+                keys -> assertThat(keys.getLength()).isGreaterThanOrEqualTo(3)); // May include prototype properties
 
         // Normal case: empty object
         JSObject emptyObj = new JSObject(context);
         result = ObjectPrototype.keys(context, JSUndefined.INSTANCE, new JSValue[]{emptyObj});
-        assertThat(result).isInstanceOfSatisfying(JSArray.class, emptyKeys -> assertThat(emptyKeys.getLength()).isEqualTo(0));
+        assertThat(result).isInstanceOfSatisfying(JSArray.class,
+                emptyKeys -> assertThat(emptyKeys.getLength()).isEqualTo(0));
 
         // Edge case: null
         result = ObjectPrototype.keys(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE});
@@ -328,17 +333,20 @@ public class ObjectPrototypeTest extends BaseJavetTest {
 
         // Edge case: primitive
         result = ObjectPrototype.keys(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("string")});
-        assertThat(result).isInstanceOfSatisfying(JSArray.class, primitiveKeys -> assertThat(primitiveKeys.getLength()).isEqualTo(0));
+        assertThat(result).isInstanceOfSatisfying(JSArray.class,
+                primitiveKeys -> assertThat(primitiveKeys.getLength()).isEqualTo(0));
     }
 
     @Test
     public void testLookupGetter() {
         JSObject proto = new JSObject(context);
-        JSNativeFunction protoGetter = new JSNativeFunction(context, "protoGetter", 0, (ctx, thisArg, args) -> new JSString("proto value"));
+        JSNativeFunction protoGetter = new JSNativeFunction(context, "protoGetter", 0,
+                (ctx, thisArg, args) -> new JSString("proto value"));
         ObjectPrototype.__defineGetter__(context, proto, new JSValue[]{new JSString("protoProp"), protoGetter});
 
         JSObject obj = new JSObject(context, proto);
-        JSNativeFunction objGetter = new JSNativeFunction(context, "objGetter", 0, (ctx, thisArg, args) -> new JSString("obj value"));
+        JSNativeFunction objGetter = new JSNativeFunction(context, "objGetter", 0,
+                (ctx, thisArg, args) -> new JSString("obj value"));
         ObjectPrototype.__defineGetter__(context, obj, new JSValue[]{new JSString("objProp"), objGetter});
 
         // Normal case: lookup own getter
@@ -371,11 +379,13 @@ public class ObjectPrototypeTest extends BaseJavetTest {
     @Test
     public void testLookupSetter() {
         JSObject proto = new JSObject(context);
-        JSNativeFunction protoSetter = new JSNativeFunction(context, "protoSetter", 1, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
+        JSNativeFunction protoSetter = new JSNativeFunction(context, "protoSetter", 1,
+                (ctx, thisArg, args) -> JSUndefined.INSTANCE);
         ObjectPrototype.__defineSetter__(context, proto, new JSValue[]{new JSString("protoProp"), protoSetter});
 
         JSObject obj = new JSObject(context, proto);
-        JSNativeFunction objSetter = new JSNativeFunction(context, "objSetter", 1, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
+        JSNativeFunction objSetter = new JSNativeFunction(context, "objSetter", 1,
+                (ctx, thisArg, args) -> JSUndefined.INSTANCE);
         ObjectPrototype.__defineSetter__(context, obj, new JSValue[]{new JSString("objProp"), objSetter});
 
         // Normal case: lookup own setter
@@ -463,8 +473,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testPrototype() {
-        assertObjectWithJavet(
-                "Object.getOwnPropertyNames(Object.prototype).sort()");
+        assertObjectWithJavet("Object.getOwnPropertyNames(Object.prototype).sort()");
     }
 
     @Test
@@ -474,8 +483,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
                 "(() => { const d = Object.getOwnPropertyDescriptor(Object.prototype, '__proto__'); return [d.enumerable, d.configurable, typeof d.get, typeof d.set].join(','); })()",
                 "(() => { const d = Object.getOwnPropertyDescriptor(Object, 'keys'); return [d.enumerable, d.writable, d.configurable, typeof d.value].join(','); })()",
                 "(() => { const d = Object.getOwnPropertyDescriptor(Object, 'prototype'); return [d.writable, d.enumerable, d.configurable].join(','); })()",
-                "(() => { const d = Object.getOwnPropertyDescriptor(Object.prototype, 'constructor'); return [d.writable, d.enumerable, d.configurable].join(','); })()"
-        );
+                "(() => { const d = Object.getOwnPropertyDescriptor(Object.prototype, 'constructor'); return [d.writable, d.enumerable, d.configurable].join(','); })()");
     }
 
     @Test
@@ -492,7 +500,8 @@ public class ObjectPrototypeTest extends BaseJavetTest {
 
         // Normal case: object without custom toString
         JSValue result = ObjectPrototype.toLocaleString(context, obj, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("[object Object]"));
+        assertThat(result).isInstanceOfSatisfying(JSString.class,
+                str -> assertThat(str.value()).isEqualTo("[object Object]"));
 
         // Edge case: null thisArg
         result = ObjectPrototype.toLocaleString(context, JSNull.INSTANCE, JSValue.NO_ARGS);
@@ -504,38 +513,47 @@ public class ObjectPrototypeTest extends BaseJavetTest {
     public void testToString() {
         // Normal case: undefined
         JSValue result = ObjectPrototype.toString(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("[object Undefined]"));
+        assertThat(result).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("[object Undefined]"));
 
         // Normal case: null
         result = ObjectPrototype.toString(context, JSNull.INSTANCE, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("[object Null]"));
+        assertThat(result).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("[object Null]"));
 
         // Normal case: object
         JSObject obj = new JSObject(context);
         result = ObjectPrototype.toString(context, obj, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("[object Object]"));
+        assertThat(result).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("[object Object]"));
 
         // Normal case: array
         JSArray arr = new JSArray(context);
         result = ObjectPrototype.toString(context, arr, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("[object Array]"));
+        assertThat(result).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("[object Array]"));
 
         // Normal case: function
-        JSFunction func = new JSNativeFunction(context, "test", 0, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
+        JSFunction func = new JSNativeFunction(context, "test", 0,
+                (childContext, thisArg, args) -> JSUndefined.INSTANCE);
         result = ObjectPrototype.toString(context, func, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("[object Function]"));
+        assertThat(result).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("[object Function]"));
 
         // Normal case: string
         result = ObjectPrototype.toString(context, new JSString("test"), JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("[object String]"));
+        assertThat(result).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("[object String]"));
 
         // Normal case: number
         result = ObjectPrototype.toString(context, new JSNumber(42), JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("[object Number]"));
+        assertThat(result).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("[object Number]"));
 
         // Normal case: boolean
         result = ObjectPrototype.toString(context, JSBoolean.TRUE, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("[object Boolean]"));
+        assertThat(result).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("[object Boolean]"));
     }
 
     @Test
@@ -566,12 +584,14 @@ public class ObjectPrototypeTest extends BaseJavetTest {
 
         // Normal case: object with properties
         JSValue result = ObjectPrototype.values(context, JSUndefined.INSTANCE, new JSValue[]{obj});
-        assertThat(result).isInstanceOfSatisfying(JSArray.class, values -> assertThat(values.getLength()).isGreaterThanOrEqualTo(3));
+        assertThat(result).isInstanceOfSatisfying(JSArray.class,
+                values -> assertThat(values.getLength()).isGreaterThanOrEqualTo(3));
 
         // Normal case: empty object
         JSObject emptyObj = new JSObject(context);
         result = ObjectPrototype.values(context, JSUndefined.INSTANCE, new JSValue[]{emptyObj});
-        assertThat(result).isInstanceOfSatisfying(JSArray.class, emptyValues -> assertThat(emptyValues.getLength()).isEqualTo(0));
+        assertThat(result).isInstanceOfSatisfying(JSArray.class,
+                emptyValues -> assertThat(emptyValues.getLength()).isEqualTo(0));
 
         // Edge case: null
         result = ObjectPrototype.values(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE});
@@ -580,6 +600,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
 
         // Edge case: primitive
         result = ObjectPrototype.values(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42)});
-        assertThat(result).isInstanceOfSatisfying(JSArray.class, primitiveValues -> assertThat(primitiveValues.getLength()).isEqualTo(0));
+        assertThat(result).isInstanceOfSatisfying(JSArray.class,
+                primitiveValues -> assertThat(primitiveValues.getLength()).isEqualTo(0));
     }
 }

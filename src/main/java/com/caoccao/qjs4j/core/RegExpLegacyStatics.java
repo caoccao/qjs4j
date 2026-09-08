@@ -19,14 +19,12 @@ package com.caoccao.qjs4j.core;
 import java.util.Arrays;
 
 /**
- * One realm's RegExp legacy static state: {@code RegExp.input}, {@code RegExp.lastMatch},
- * {@code RegExp.lastParen}, {@code RegExp.leftContext}, {@code RegExp.rightContext} and
- * {@code RegExp.$1} through {@code RegExp.$9}.
+ * One realm's RegExp legacy static state: {@code RegExp.input}, {@code RegExp.lastMatch}, {@code RegExp.lastParen},
+ * {@code RegExp.leftContext}, {@code RegExp.rightContext} and {@code RegExp.$1} through {@code RegExp.$9}.
  * <p>
- * A plain state holder with no reference back to the context: nothing here needs the realm, and
- * every write goes through {@link #update} after a successful match. {@link JSContext} keeps the
- * public accessors and delegates to this class, so {@code RegExpConstructor} and
- * {@code RegExpPrototype} are unaffected.
+ * A plain state holder with no reference back to the context: nothing here needs the realm, and every write goes
+ * through {@link #update} after a successful match. {@link JSContext} keeps the public accessors and delegates to this
+ * class, so {@code RegExpConstructor} and {@code RegExpPrototype} are unaffected.
  */
 final class RegExpLegacyStatics {
     /**
@@ -52,7 +50,8 @@ final class RegExpLegacyStatics {
     /**
      * The value of {@code RegExp.$n}.
      *
-     * @param captureIndex the one-based capture index
+     * @param captureIndex
+     *            the one-based capture index
      * @return the capture, or the empty string when there is none
      */
     String getCapture(int captureIndex) {
@@ -90,8 +89,8 @@ final class RegExpLegacyStatics {
     /**
      * Drop everything this holds.
      * <p>
-     * Called from {@link JSContext#close()}: the last subject string can be arbitrarily large, and a
-     * closed context must own nothing.
+     * Called from {@link JSContext#close()}: the last subject string can be arbitrarily large, and a closed context
+     * must own nothing.
      */
     void release() {
         Arrays.fill(captures, "");
@@ -113,16 +112,16 @@ final class RegExpLegacyStatics {
     /**
      * Record the result of a successful match.
      *
-     * @param inputValue         the subject string
-     * @param captureValues      the match and its captures, index 0 being the whole match
-     * @param captureIndices     the start/end offsets of each capture, or null when unavailable
-     * @param fallbackStartIndex where to start searching for the match when offsets are unavailable
+     * @param inputValue
+     *            the subject string
+     * @param captureValues
+     *            the match and its captures, index 0 being the whole match
+     * @param captureIndices
+     *            the start/end offsets of each capture, or null when unavailable
+     * @param fallbackStartIndex
+     *            where to start searching for the match when offsets are unavailable
      */
-    void update(
-            String inputValue,
-            String[] captureValues,
-            int[][] captureIndices,
-            int fallbackStartIndex) {
+    void update(String inputValue, String[] captureValues, int[][] captureIndices, int fallbackStartIndex) {
         String normalizedInput = inputValue != null ? inputValue : "";
         input = normalizedInput;
 
@@ -134,9 +133,7 @@ final class RegExpLegacyStatics {
         int inputLength = normalizedInput.length();
         int matchStart = 0;
         int matchEnd = 0;
-        if (captureIndices != null
-                && captureIndices.length > 0
-                && captureIndices[0] != null
+        if (captureIndices != null && captureIndices.length > 0 && captureIndices[0] != null
                 && captureIndices[0].length >= 2) {
             matchStart = Math.max(0, Math.min(inputLength, captureIndices[0][0]));
             matchEnd = Math.max(matchStart, Math.min(inputLength, captureIndices[0][1]));
@@ -162,8 +159,7 @@ final class RegExpLegacyStatics {
         for (int captureIndex = 0; captureIndex < captures.length; captureIndex++) {
             String captureValue = "";
             int captureValueIndex = captureIndex + 1;
-            if (captureValues != null
-                    && captureValueIndex < captureValues.length
+            if (captureValues != null && captureValueIndex < captureValues.length
                     && captureValues[captureValueIndex] != null) {
                 captureValue = captureValues[captureValueIndex];
             }

@@ -35,16 +35,18 @@ public abstract class BaseTest {
 
     protected void assertError(JSValue value, String expectedType, String expectedMessage) {
         assertThat(value).as("Value must be an error object").isInstanceOfSatisfying(JSObject.class, jsObject -> {
-            assertThat(jsObject.get("name")).as("An error object must have a name").isInstanceOfSatisfying(JSString.class, name -> {
-                assertThat(name.value()).isEqualTo(expectedType);
-            });
-            assertThat(jsObject.get("message")).as("An error object must have a message").isInstanceOfSatisfying(JSString.class, message -> {
-                if (expectedMessage == null) {
-                    assertThat(message.value()).isNotNull();
-                } else {
-                    assertThat(message.value()).isEqualTo(expectedMessage);
-                }
-            });
+            assertThat(jsObject.get("name")).as("An error object must have a name")
+                    .isInstanceOfSatisfying(JSString.class, name -> {
+                        assertThat(name.value()).isEqualTo(expectedType);
+                    });
+            assertThat(jsObject.get("message")).as("An error object must have a message")
+                    .isInstanceOfSatisfying(JSString.class, message -> {
+                        if (expectedMessage == null) {
+                            assertThat(message.value()).isNotNull();
+                        } else {
+                            assertThat(message.value()).isEqualTo(expectedMessage);
+                        }
+                    });
         });
     }
 

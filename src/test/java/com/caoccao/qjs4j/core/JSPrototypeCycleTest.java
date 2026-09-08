@@ -26,23 +26,22 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code OrdinarySetPrototypeOf} must never install a cycle, at any chain depth.
  * <p>
  * The circularity check used to stop after 1,000 links and then install the prototype anyway, so
- * {@code Object.setPrototypeOf(a, chainEndingAtA)} succeeded whenever the chain was longer than
- * that. A resource cutoff is a false negative here, and a false negative installs a real cycle:
- * afterwards every property read on {@code a} either raised an artificial {@code RangeError} or ran
- * into other cycle-sensitive code.
+ * {@code Object.setPrototypeOf(a, chainEndingAtA)} succeeded whenever the chain was longer than that. A resource cutoff
+ * is a false negative here, and a false negative installs a real cycle: afterwards every property read on {@code a}
+ * either raised an artificial {@code RangeError} or ran into other cycle-sensitive code.
  * <p>
- * The script-visible behaviour is asserted against V8; {@code ../quickjs/qjs} agrees, raising
- * {@code TypeError} at every depth. The three tests that reach for {@code JSObject} directly cannot
- * be: they use the raw {@code setPrototype} embedder API to build a cycle no JavaScript program can
- * construct, which is exactly the case the bounded walk was there to survive.
+ * The script-visible behaviour is asserted against V8; {@code ../quickjs/qjs} agrees, raising {@code TypeError} at
+ * every depth. The three tests that reach for {@code JSObject} directly cannot be: they use the raw
+ * {@code setPrototype} embedder API to build a cycle no JavaScript program can construct, which is exactly the case the
+ * bounded walk was there to survive.
  */
 public class JSPrototypeCycleTest extends BaseJavetTest {
 
     /**
-     * Build source that proposes a prototype chain of {@code depth} links ending back at the
-     * target.
+     * Build source that proposes a prototype chain of {@code depth} links ending back at the target.
      *
-     * @param depth links between the target and the proposed prototype
+     * @param depth
+     *            links between the target and the proposed prototype
      * @return source evaluating to {@code 'ALLOWED'} or the error name
      */
     private String cycleAttempt(int depth) {
@@ -125,37 +124,34 @@ public class JSPrototypeCycleTest extends BaseJavetTest {
     @Timeout(60)
     public void testDeepAcyclicChainIsStillAccepted() {
         // The complement: removing the cutoff must not start rejecting legitimate deep chains.
-        assertStringWithJavet(
-                """
-                        (function () {
-                          let a = {};
-                          let proposed = {};
-                          for (let i = 0; i < 5000; i++) proposed = Object.create(proposed);
-                          try { Object.setPrototypeOf(a, proposed); return 'ALLOWED' } catch (e) { return e.name }
-                        })()""");
+        assertStringWithJavet("""
+                (function () {
+                  let a = {};
+                  let proposed = {};
+                  for (let i = 0; i < 5000; i++) proposed = Object.create(proposed);
+                  try { Object.setPrototypeOf(a, proposed); return 'ALLOWED' } catch (e) { return e.name }
+                })()""");
     }
 
     @Test
     @Timeout(60)
     public void testDirectSelfAssignmentIsRejected() {
-        assertStringWithJavet(
-                """
-                        (function () {
-                          let a = {};
-                          try { Object.setPrototypeOf(a, a); return 'ALLOWED' } catch (e) { return e.name }
-                        })()""");
+        assertStringWithJavet("""
+                (function () {
+                  let a = {};
+                  try { Object.setPrototypeOf(a, a); return 'ALLOWED' } catch (e) { return e.name }
+                })()""");
     }
 
     @Test
     @Timeout(60)
     public void testNullPrototypeIsNeverCircular() {
-        assertStringWithJavet(
-                """
-                        (function () {
-                          let a = { x: 1 };
-                          try { Object.setPrototypeOf(a, null); return String(Object.getPrototypeOf(a)) }
-                          catch (e) { return e.name }
-                        })()""");
+        assertStringWithJavet("""
+                (function () {
+                  let a = { x: 1 };
+                  try { Object.setPrototypeOf(a, null); return String(Object.getPrototypeOf(a)) }
+                  catch (e) { return e.name }
+                })()""");
     }
 
     @Test
@@ -163,14 +159,13 @@ public class JSPrototypeCycleTest extends BaseJavetTest {
     public void testProxyInTheChainStopsTheWalk() {
         // ES2024 10.1.2 step 8.c: the walk stops at a non-ordinary object rather than running its
         // getPrototypeOf trap.
-        assertStringWithJavet(
-                """
-                        (function () {
-                          let a = {};
-                          let p = new Proxy({}, { getPrototypeOf() { return a } });
-                          let child = Object.create(p);
-                          try { Object.setPrototypeOf(a, child); return 'ALLOWED' } catch (e) { return e.name }
-                        })()""");
+        assertStringWithJavet("""
+                (function () {
+                  let a = {};
+                  let p = new Proxy({}, { getPrototypeOf() { return a } });
+                  let child = Object.create(p);
+                  try { Object.setPrototypeOf(a, child); return 'ALLOWED' } catch (e) { return e.name }
+                })()""");
     }
 
     @Test
@@ -181,21 +176,18 @@ public class JSPrototypeCycleTest extends BaseJavetTest {
         JSObject proto = context.createJSObject();
 
         // Same prototype: a no-op success, checked before anything else.
-        assertThat(target.setPrototypeChecked(target.getPrototype()))
-                .isEqualTo(JSObject.SetPrototypeResult.SUCCESS);
+        assertThat(target.setPrototypeChecked(target.getPrototype())).isEqualTo(JSObject.SetPrototypeResult.SUCCESS);
 
         // Non-extensible.
         JSObject sealed = context.createJSObject();
         sealed.preventExtensions();
-        assertThat(sealed.setPrototypeChecked(proto))
-                .isEqualTo(JSObject.SetPrototypeResult.NOT_EXTENSIBLE);
+        assertThat(sealed.setPrototypeChecked(proto)).isEqualTo(JSObject.SetPrototypeResult.NOT_EXTENSIBLE);
 
         // Immutable prototype exotic object: Object.prototype.
-        assertStringWithJavet(
-                """
-                        (function () {
-                          try { Object.setPrototypeOf(Object.prototype, {}); return 'ALLOWED' }
-                          catch (e) { return e.name }
-                        })()""");
+        assertStringWithJavet("""
+                (function () {
+                  try { Object.setPrototypeOf(Object.prototype, {}); return 'ALLOWED' }
+                  catch (e) { return e.name }
+                })()""");
     }
 }

@@ -26,76 +26,39 @@ import java.util.Arrays;
 import java.util.function.Supplier;
 
 /**
- * Represents a JavaScript ArrayBuffer object.
- * Based on ES2020 ArrayBuffer specification.
+ * Represents a JavaScript ArrayBuffer object. Based on ES2020 ArrayBuffer specification.
  * <p>
- * An ArrayBuffer is a raw binary data buffer of a fixed length.
- * It cannot be read or written directly - use TypedArrays or DataView.
+ * An ArrayBuffer is a raw binary data buffer of a fixed length. It cannot be read or written directly - use TypedArrays
+ * or DataView.
  */
 public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
-    public static final String NAME = "ArrayBuffer";
     /**
      * The largest data block the JVM can hold in one {@code byte[]}.
      * <p>
-     * HotSpot refuses array lengths within a few words of {@link Integer#MAX_VALUE}, so a request
-     * that survives the specification's own {@code INT32_MAX} check can still be unallocatable.
-     * Rejecting it here makes that a {@code RangeError} the script can catch instead of an
-     * {@code OutOfMemoryError} escaping as an internal engine failure.
+     * HotSpot refuses array lengths within a few words of {@link Integer#MAX_VALUE}, so a request that survives the
+     * specification's own {@code INT32_MAX} check can still be unallocatable. Rejecting it here makes that a
+     * {@code RangeError} the script can catch instead of an {@code OutOfMemoryError} escaping as an internal engine
+     * failure.
      */
     static final int MAX_DATA_BLOCK_BYTE_LENGTH = Integer.MAX_VALUE - 8;
-    private final int maxByteLength;
-    private final boolean resizable;
+    public static final String NAME = "ArrayBuffer";
     /**
-     * Non-final: a resizable buffer allocates what it currently needs and reallocates on growth,
-     * rather than reserving {@code maxByteLength} up front. Nothing in the engine holds the
-     * {@code ByteBuffer} across a {@link #resize(int)} — typed arrays and {@code DataView} re-read
-     * {@link #getBuffer()} per access — so replacing it is safe.
+     * Non-final: a resizable buffer allocates what it currently needs and reallocates on growth, rather than reserving
+     * {@code maxByteLength} up front. Nothing in the engine holds the {@code ByteBuffer} across a {@link #resize(int)}
+     * — typed arrays and {@code DataView} re-read {@link #getBuffer()} per access — so replacing it is safe.
      */
     private ByteBuffer buffer;
     private boolean detached;
     private boolean immutable;
+    private final int maxByteLength;
     private JSMemoryAccounting.Reservation reservation;
-
-    /**
-     * Create an ArrayBuffer with the specified byte length.
-     *
-     * @param byteLength The length in bytes
-     */
-    public JSArrayBuffer(JSContext context, int byteLength) {
-        this(context, byteLength, -1);
-    }
-
-    /**
-     * Create an ArrayBuffer with the specified byte length and max byte length.
-     * <p>
-     * A resizable buffer allocates its <em>current</em> length, not its maximum. Allocating
-     * {@code maxByteLength} eagerly meant {@code new ArrayBuffer(1, {maxByteLength: 1 << 25})} cost
-     * 32 MiB the moment it was constructed, whether or not the script ever grew it.
-     *
-     * @param byteLength    The initial length in bytes
-     * @param maxByteLength The maximum length in bytes, or -1 for non-resizable
-     */
-    public JSArrayBuffer(JSContext context, int byteLength, int maxByteLength) {
-        super(context);
-        if (byteLength < 0) {
-            throw new JSRangeErrorException("ArrayBuffer byteLength must be non-negative");
-        }
-        if (maxByteLength != -1 && maxByteLength < byteLength) {
-            throw new JSRangeErrorException("ArrayBuffer maxByteLength must be >= byteLength");
-        }
-        this.resizable = (maxByteLength != -1);
-        this.maxByteLength = (maxByteLength != -1) ? maxByteLength : byteLength;
-        int capacity = paddedCapacity(byteLength);
-        this.buffer = allocateAccountedBlock(context, capacity);
-        this.buffer.order(ByteOrder.LITTLE_ENDIAN); // JavaScript uses little-endian
-        this.buffer.limit(byteLength);
-        this.detached = false;
-    }
+    private final boolean resizable;
 
     /**
      * Create an ArrayBuffer from an existing byte array.
      *
-     * @param bytes The byte array to wrap
+     * @param bytes
+     *            The byte array to wrap
      */
     public JSArrayBuffer(JSContext context, byte[] bytes) {
         super(context);
@@ -118,155 +81,73 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
     }
 
     /**
-     * Allocate the ArrayBuffer with validated lengths.
-     * Performs allocation limit checks (QuickJS INT32_MAX limit).
-     */
-    private static JSArrayBuffer allocateBuffer(JSContext context, long byteLengthLong, long maxByteLengthLong) {
-        // QuickJS: limited to INT32_MAX (2 GB)
-        if (byteLengthLong > Integer.MAX_VALUE) {
-            throw new JSException(context.throwRangeError("invalid array buffer length"));
-        }
-        int byteLength = (int) byteLengthLong;
-
-        if (maxByteLengthLong >= 0) {
-            if (maxByteLengthLong > Integer.MAX_VALUE) {
-                throw new JSException(context.throwRangeError("invalid array buffer max length"));
-            }
-            return new JSArrayBuffer(context, byteLength, (int) maxByteLengthLong);
-        } else {
-            return new JSArrayBuffer(context, byteLength);
-        }
-    }
-
-    /**
-     * ArrayBuffer constructor implementation.
-     * new ArrayBuffer(byteLength)
-     * new ArrayBuffer(byteLength, options)
-     * <p>
-     * Based on ES2020 24.1.1.1
-     */
-    public static JSArrayBuffer create(JSContext context, JSValue... args) {
-        long[] validated = validateArgs(context, args);
-        return allocateBuffer(context, validated[0], validated[1]);
-    }
-
-    /**
-     * ArrayBuffer constructor with newTarget support for Reflect.construct.
-     * Follows QuickJS js_array_buffer_constructor0/3 ordering:
-     * 1. Argument validation (ToIndex, options, byteLength > maxByteLength)
-     * 2. OrdinaryCreateFromConstructor (accesses newTarget.prototype)
-     * 3. CreateByteDataBlock (allocation limit check + buffer creation)
-     */
-    public static JSArrayBuffer createForConstruct(JSContext context, JSFunction constructor,
-                                                   JSValue newTarget, JSValue... args) {
-        // Step 1: Argument validation (before prototype access)
-        long[] validated = validateArgs(context, args);
-
-        // Step 2: OrdinaryCreateFromConstructor - access newTarget.prototype
-        JSObject resolvedPrototype = null;
-        if (newTarget instanceof JSObject newTargetObject) {
-            resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject, NAME);
-            if (context.hasPendingException()) {
-                throw new JSException(context.getPendingException());
-            }
-        }
-
-        // Step 3: Allocation limit check + buffer creation (CreateByteDataBlock)
-        JSArrayBuffer buf = allocateBuffer(context, validated[0], validated[1]);
-
-        // Set prototype
-        if (resolvedPrototype != null) {
-            buf.setPrototype(resolvedPrototype);
-        } else if (constructor != null) {
-            JSObject constructorPrototype = context.getPrototypeFromConstructor(constructor, NAME);
-            if (context.hasPendingException()) {
-                throw new JSException(context.getPendingException());
-            }
-            if (constructorPrototype != null) {
-                buf.setPrototype(constructorPrototype);
-            }
-        }
-        return buf;
-    }
-
-    /**
-     * The allocation size for a logical byte length, padded to a multiple of four.
-     * <p>
-     * The padding lets {@code Atomics} operate on 16-bit views through the enclosing aligned
-     * 32-bit word. Computed in {@code long}: {@code (byteLength + 3) & ~3} on an {@code int} wraps
-     * to {@link Integer#MIN_VALUE} at {@link Integer#MAX_VALUE}, which reached
-     * {@code ByteBuffer.allocate} as {@code IllegalArgumentException: capacity < 0} — an internal
-     * failure no {@code try}/{@code catch} could see, at a length the allocation check explicitly
-     * permits.
+     * Create an ArrayBuffer with the specified byte length.
      *
-     * @param byteLength the logical length
-     * @return the padded capacity
-     * @throws JSRangeErrorException when the padded size cannot be allocated
+     * @param byteLength
+     *            The length in bytes
      */
-    static int paddedCapacity(int byteLength) {
-        long padded = ((long) byteLength + 3L) & ~3L;
-        if (padded > MAX_DATA_BLOCK_BYTE_LENGTH) {
-            throw new JSRangeErrorException("Invalid array buffer length");
-        }
-        return (int) padded;
+    public JSArrayBuffer(JSContext context, int byteLength) {
+        this(context, byteLength, -1);
     }
 
     /**
-     * Validate ArrayBuffer constructor arguments.
-     * Returns [byteLength, maxByteLength] as longs (-1 for no maxByteLength).
-     * Performs ToIndex and options parsing but NOT allocation limit checks.
+     * Create an ArrayBuffer with the specified byte length and max byte length.
+     * <p>
+     * A resizable buffer allocates its <em>current</em> length, not its maximum. Allocating {@code maxByteLength}
+     * eagerly meant {@code new ArrayBuffer(1, {maxByteLength: 1 << 25})} cost 32 MiB the moment it was constructed,
+     * whether or not the script ever grew it.
+     *
+     * @param byteLength
+     *            The initial length in bytes
+     * @param maxByteLength
+     *            The maximum length in bytes, or -1 for non-resizable
      */
-    private static long[] validateArgs(JSContext context, JSValue[] args) {
-        // Get byteLength using ToIndex (preserves large values, throws RangeError for negative)
-        JSValue byteLengthArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        long byteLengthLong = JSTypeConversions.toIndex(context, byteLengthArg);
-
-        // Check for options (maxByteLength for resizable buffers)
-        long maxByteLengthLong = -1;
-        if (args.length >= 2 && args[1] instanceof JSObject options) {
-            JSValue maxByteLengthValue = options.get(PropertyKey.fromString("maxByteLength"));
-            if (context.hasPendingException()) {
-                throw new JSException(context.getPendingException());
-            }
-            if (!(maxByteLengthValue instanceof JSUndefined)) {
-                // QuickJS: JS_ToInt64Free then check bounds
-                long maxLenLong = (long) JSTypeConversions.toInteger(context, maxByteLengthValue);
-                if (byteLengthLong > maxLenLong || maxLenLong > 9007199254740991L) {
-                    throw new JSException(context.throwRangeError("invalid array buffer max length"));
-                }
-                maxByteLengthLong = maxLenLong;
-            }
+    public JSArrayBuffer(JSContext context, int byteLength, int maxByteLength) {
+        super(context);
+        if (byteLength < 0) {
+            throw new JSRangeErrorException("ArrayBuffer byteLength must be non-negative");
         }
-        return new long[]{byteLengthLong, maxByteLengthLong};
+        if (maxByteLength != -1 && maxByteLength < byteLength) {
+            throw new JSRangeErrorException("ArrayBuffer maxByteLength must be >= byteLength");
+        }
+        this.resizable = (maxByteLength != -1);
+        this.maxByteLength = (maxByteLength != -1) ? maxByteLength : byteLength;
+        int capacity = paddedCapacity(byteLength);
+        this.buffer = allocateAccountedBlock(context, capacity);
+        this.buffer.order(ByteOrder.LITTLE_ENDIAN); // JavaScript uses little-endian
+        this.buffer.limit(byteLength);
+        this.detached = false;
     }
 
     /**
      * Reserve capacity, produce the block, and only then bind the reservation to this buffer.
      * <p>
-     * The reservation has to be taken before the allocation — refusing after the memory is already
-     * committed would defeat the point — so the failing path has to give it back. It used to reserve
-     * and register unconditionally: a JVM allocation failure left the bytes charged until the
-     * half-constructed buffer was collected, and until then a runtime's ceiling was inflated by an
-     * allocation that never happened.
+     * The reservation has to be taken before the allocation — refusing after the memory is already committed would
+     * defeat the point — so the failing path has to give it back. It used to reserve and register unconditionally: a
+     * JVM allocation failure left the bytes charged until the half-constructed buffer was collected, and until then a
+     * runtime's ceiling was inflated by an allocation that never happened.
      *
      * <p>
-     * Package-private so a test can hand it an allocator that fails on demand. Reaching that path
-     * through the JVM's own allocation limit needs a request larger than the heap, which makes the
-     * test's premise a property of the build's {@code -Xmx} rather than of the code under test.
+     * Package-private so a test can hand it an allocator that fails on demand. Reaching that path through the JVM's own
+     * allocation limit needs a request larger than the heap, which makes the test's premise a property of the build's
+     * {@code -Xmx} rather than of the code under test.
      *
-     * @param context   the owning context
-     * @param capacity  the number of bytes being charged
-     * @param allocator produces the block
+     * @param context
+     *            the owning context
+     * @param capacity
+     *            the number of bytes being charged
+     * @param allocator
+     *            produces the block
      * @return the allocated block
-     * @throws JSRangeErrorException when the runtime's limit would be exceeded
+     * @throws JSRangeErrorException
+     *             when the runtime's limit would be exceeded
      */
     ByteBuffer accountBlock(JSContext context, int capacity, Supplier<ByteBuffer> allocator) {
         JSMemoryAccounting accounting = context.getRuntime().getMemoryAccounting();
         JSMemoryAccounting.Reservation pendingReservation = accounting.reserve(this, capacity);
         if (pendingReservation == null) {
-            throw new JSRangeErrorException(
-                    "Array buffer allocation failed: the runtime memory limit of "
-                            + accounting.getLimit() + " bytes would be exceeded");
+            throw new JSRangeErrorException("Array buffer allocation failed: the runtime memory limit of "
+                    + accounting.getLimit() + " bytes would be exceeded");
         }
         ByteBuffer allocated;
         try {
@@ -282,18 +163,20 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
     /**
      * Charge a data block against the runtime's memory accounting and allocate it.
      *
-     * @param context  the owning context
-     * @param capacity the number of bytes to allocate
+     * @param context
+     *            the owning context
+     * @param capacity
+     *            the number of bytes to allocate
      * @return the allocated block
-     * @throws JSRangeErrorException when the runtime's limit would be exceeded
+     * @throws JSRangeErrorException
+     *             when the runtime's limit would be exceeded
      */
     private ByteBuffer allocateAccountedBlock(JSContext context, int capacity) {
         return accountBlock(context, capacity, () -> ByteBuffer.allocate(capacity));
     }
 
     /**
-     * Detach this ArrayBuffer, making it unusable.
-     * ES2020 24.1.1.3
+     * Detach this ArrayBuffer, making it unusable. ES2020 24.1.1.3
      */
     public void detach() {
         this.detached = true;
@@ -306,8 +189,7 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
     }
 
     /**
-     * Get the underlying ByteBuffer.
-     * This is for internal use by TypedArrays and DataView.
+     * Get the underlying ByteBuffer. This is for internal use by TypedArrays and DataView.
      *
      * @return The ByteBuffer, or null if detached
      */
@@ -340,30 +222,30 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
     }
 
     /**
-     * Grow this buffer's reservation, produce the larger block, and give the growth back if
-     * producing it fails.
+     * Grow this buffer's reservation, produce the larger block, and give the growth back if producing it fails.
      * <p>
-     * The reservation grows before the copy, so a buffer declared with a large
-     * {@code maxByteLength} is charged as it actually grows rather than all at once — and can still
-     * be refused when the runtime limit is reached. A failed copy therefore has to hand the growth
-     * back: leaving it charged kept the old buffer alive with a reservation sized for a block that
-     * was never allocated, phantom bytes for the runtime's whole life since nothing later releases
+     * The reservation grows before the copy, so a buffer declared with a large {@code maxByteLength} is charged as it
+     * actually grows rather than all at once — and can still be refused when the runtime limit is reached. A failed
+     * copy therefore has to hand the growth back: leaving it charged kept the old buffer alive with a reservation sized
+     * for a block that was never allocated, phantom bytes for the runtime's whole life since nothing later releases
      * them.
      * <p>
-     * Package-private for the same reason as {@link #accountBlock}: a test can hand it an
-     * allocator that fails on demand instead of asking for more memory than the JVM has.
+     * Package-private for the same reason as {@link #accountBlock}: a test can hand it an allocator that fails on
+     * demand instead of asking for more memory than the JVM has.
      *
-     * @param additionalBytes how much bigger the block is becoming
-     * @param allocator       produces the larger block
+     * @param additionalBytes
+     *            how much bigger the block is becoming
+     * @param allocator
+     *            produces the larger block
      * @return the larger block
-     * @throws JSRangeErrorException when the runtime's limit would be exceeded
+     * @throws JSRangeErrorException
+     *             when the runtime's limit would be exceeded
      */
     byte[] growAccountedBlock(int additionalBytes, Supplier<byte[]> allocator) {
         if (reservation != null && !reservation.grow(additionalBytes)) {
             JSMemoryAccounting accounting = context.getRuntime().getMemoryAccounting();
-            throw new JSRangeErrorException(
-                    "Array buffer resize failed: the runtime memory limit of "
-                            + accounting.getLimit() + " bytes would be exceeded");
+            throw new JSRangeErrorException("Array buffer resize failed: the runtime memory limit of "
+                    + accounting.getLimit() + " bytes would be exceeded");
         }
         try {
             return allocator.get();
@@ -408,17 +290,18 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
     }
 
     /**
-     * Resize the ArrayBuffer to the specified size.
-     * ES2024 25.1.5.3
+     * Resize the ArrayBuffer to the specified size. ES2024 25.1.5.3
      * <p>
-     * Detached and non-resizable are receiver-state conditions, so they are {@code TypeError}s
-     * per ES2024 25.1.6.7 steps 3-4; only an out-of-range requested length is a {@code RangeError}
-     * (step 6). The JavaScript built-in prechecks both, which is why the wrong type on this direct
-     * Java API was invisible from script.
+     * Detached and non-resizable are receiver-state conditions, so they are {@code TypeError}s per ES2024 25.1.6.7
+     * steps 3-4; only an out-of-range requested length is a {@code RangeError} (step 6). The JavaScript built-in
+     * prechecks both, which is why the wrong type on this direct Java API was invisible from script.
      *
-     * @param newByteLength The new byte length
-     * @throws JSTypeErrorException  if the buffer is detached or not resizable
-     * @throws JSRangeErrorException if newByteLength is negative or exceeds maxByteLength
+     * @param newByteLength
+     *            The new byte length
+     * @throws JSTypeErrorException
+     *             if the buffer is detached or not resizable
+     * @throws JSRangeErrorException
+     *             if newByteLength is negative or exceeds maxByteLength
      */
     public void resize(int newByteLength) {
         if (detached) {
@@ -439,8 +322,7 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
             int newCapacity = paddedCapacity(newByteLength);
             int additionalBytes = newCapacity - buffer.capacity();
             byte[] source = buffer.array();
-            byte[] grown = growAccountedBlock(
-                    additionalBytes, () -> Arrays.copyOf(source, newCapacity));
+            byte[] grown = growAccountedBlock(additionalBytes, () -> Arrays.copyOf(source, newCapacity));
             // Bytes between the old length and the old capacity can hold data from before an
             // earlier shrink; ES2024 requires newly accessible bytes to read as zero.
             Arrays.fill(grown, oldByteLength, newByteLength, (byte) 0);
@@ -465,15 +347,18 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
     }
 
     /**
-     * ArrayBuffer.prototype.slice(begin, end)
-     * ES2020 24.1.4.3
-     * Returns a new ArrayBuffer with a copy of the bytes from begin to end.
+     * ArrayBuffer.prototype.slice(begin, end) ES2020 24.1.4.3 Returns a new ArrayBuffer with a copy of the bytes from
+     * begin to end.
      *
-     * @param context the owning context
-     * @param begin   Start offset (inclusive)
-     * @param end     End offset (exclusive)
+     * @param context
+     *            the owning context
+     * @param begin
+     *            Start offset (inclusive)
+     * @param end
+     *            End offset (exclusive)
      * @return A new ArrayBuffer
-     * @throws JSTypeErrorException if the buffer is detached
+     * @throws JSTypeErrorException
+     *             if the buffer is detached
      */
     public JSArrayBuffer slice(JSContext context, int begin, int end) {
         if (detached) {
@@ -520,13 +405,15 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
     }
 
     /**
-     * Transfer the contents to a new ArrayBuffer and detach this buffer.
-     * ES2024 25.1.5.4
+     * Transfer the contents to a new ArrayBuffer and detach this buffer. ES2024 25.1.5.4
      *
-     * @param newByteLength The byte length of the new buffer, or -1 to use current length
+     * @param newByteLength
+     *            The byte length of the new buffer, or -1 to use current length
      * @return A new ArrayBuffer with the transferred contents
-     * @throws JSTypeErrorException  if the buffer is already detached
-     * @throws JSRangeErrorException if newByteLength is negative
+     * @throws JSTypeErrorException
+     *             if the buffer is already detached
+     * @throws JSRangeErrorException
+     *             if newByteLength is negative
      */
     public JSArrayBuffer transfer(JSContext context, int newByteLength) {
         if (detached) {
@@ -563,13 +450,15 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
     }
 
     /**
-     * Transfer the contents to a new fixed-length ArrayBuffer and detach this buffer.
-     * ES2024 25.1.5.5
+     * Transfer the contents to a new fixed-length ArrayBuffer and detach this buffer. ES2024 25.1.5.5
      *
-     * @param newByteLength The byte length of the new buffer, or -1 to use current length
+     * @param newByteLength
+     *            The byte length of the new buffer, or -1 to use current length
      * @return A new non-resizable ArrayBuffer with the transferred contents
-     * @throws JSTypeErrorException  if the buffer is already detached
-     * @throws JSRangeErrorException if newByteLength is negative
+     * @throws JSTypeErrorException
+     *             if the buffer is already detached
+     * @throws JSRangeErrorException
+     *             if newByteLength is negative
      */
     public JSArrayBuffer transferToFixedLength(JSContext context, int newByteLength) {
         if (detached) {
@@ -606,12 +495,14 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
     }
 
     /**
-     * Transfer the contents to a new immutable ArrayBuffer and detach this buffer.
-     * ES2025 ArrayBuffer.prototype.transferToImmutable
+     * Transfer the contents to a new immutable ArrayBuffer and detach this buffer. ES2025
+     * ArrayBuffer.prototype.transferToImmutable
      *
-     * @param context the owning context
+     * @param context
+     *            the owning context
      * @return A new immutable ArrayBuffer with the transferred contents
-     * @throws JSTypeErrorException if the buffer is already detached
+     * @throws JSTypeErrorException
+     *             if the buffer is already detached
      */
     public JSArrayBuffer transferToImmutable(JSContext context) {
         if (detached) {
@@ -641,5 +532,124 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
         detach();
 
         return newBuffer;
+    }
+
+    /**
+     * Allocate the ArrayBuffer with validated lengths. Performs allocation limit checks (QuickJS INT32_MAX limit).
+     */
+    private static JSArrayBuffer allocateBuffer(JSContext context, long byteLengthLong, long maxByteLengthLong) {
+        // QuickJS: limited to INT32_MAX (2 GB)
+        if (byteLengthLong > Integer.MAX_VALUE) {
+            throw new JSException(context.throwRangeError("invalid array buffer length"));
+        }
+        int byteLength = (int) byteLengthLong;
+
+        if (maxByteLengthLong >= 0) {
+            if (maxByteLengthLong > Integer.MAX_VALUE) {
+                throw new JSException(context.throwRangeError("invalid array buffer max length"));
+            }
+            return new JSArrayBuffer(context, byteLength, (int) maxByteLengthLong);
+        } else {
+            return new JSArrayBuffer(context, byteLength);
+        }
+    }
+
+    /**
+     * ArrayBuffer constructor implementation. new ArrayBuffer(byteLength) new ArrayBuffer(byteLength, options)
+     * <p>
+     * Based on ES2020 24.1.1.1
+     */
+    public static JSArrayBuffer create(JSContext context, JSValue... args) {
+        long[] validated = validateArgs(context, args);
+        return allocateBuffer(context, validated[0], validated[1]);
+    }
+
+    /**
+     * ArrayBuffer constructor with newTarget support for Reflect.construct. Follows QuickJS
+     * js_array_buffer_constructor0/3 ordering: 1. Argument validation (ToIndex, options, byteLength > maxByteLength) 2.
+     * OrdinaryCreateFromConstructor (accesses newTarget.prototype) 3. CreateByteDataBlock (allocation limit check +
+     * buffer creation)
+     */
+    public static JSArrayBuffer createForConstruct(JSContext context, JSFunction constructor, JSValue newTarget,
+            JSValue... args) {
+        // Step 1: Argument validation (before prototype access)
+        long[] validated = validateArgs(context, args);
+
+        // Step 2: OrdinaryCreateFromConstructor - access newTarget.prototype
+        JSObject resolvedPrototype = null;
+        if (newTarget instanceof JSObject newTargetObject) {
+            resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject, NAME);
+            if (context.hasPendingException()) {
+                throw new JSException(context.getPendingException());
+            }
+        }
+
+        // Step 3: Allocation limit check + buffer creation (CreateByteDataBlock)
+        JSArrayBuffer buf = allocateBuffer(context, validated[0], validated[1]);
+
+        // Set prototype
+        if (resolvedPrototype != null) {
+            buf.setPrototype(resolvedPrototype);
+        } else if (constructor != null) {
+            JSObject constructorPrototype = context.getPrototypeFromConstructor(constructor, NAME);
+            if (context.hasPendingException()) {
+                throw new JSException(context.getPendingException());
+            }
+            if (constructorPrototype != null) {
+                buf.setPrototype(constructorPrototype);
+            }
+        }
+        return buf;
+    }
+
+    /**
+     * The allocation size for a logical byte length, padded to a multiple of four.
+     * <p>
+     * The padding lets {@code Atomics} operate on 16-bit views through the enclosing aligned 32-bit word. Computed in
+     * {@code long}: {@code (byteLength + 3) & ~3} on an {@code int} wraps to {@link Integer#MIN_VALUE} at
+     * {@link Integer#MAX_VALUE}, which reached {@code ByteBuffer.allocate} as
+     * {@code IllegalArgumentException: capacity < 0} — an internal failure no {@code try}/{@code catch} could see, at a
+     * length the allocation check explicitly permits.
+     *
+     * @param byteLength
+     *            the logical length
+     * @return the padded capacity
+     * @throws JSRangeErrorException
+     *             when the padded size cannot be allocated
+     */
+    static int paddedCapacity(int byteLength) {
+        long padded = ((long) byteLength + 3L) & ~3L;
+        if (padded > MAX_DATA_BLOCK_BYTE_LENGTH) {
+            throw new JSRangeErrorException("Invalid array buffer length");
+        }
+        return (int) padded;
+    }
+
+    /**
+     * Validate ArrayBuffer constructor arguments. Returns [byteLength, maxByteLength] as longs (-1 for no
+     * maxByteLength). Performs ToIndex and options parsing but NOT allocation limit checks.
+     */
+    private static long[] validateArgs(JSContext context, JSValue[] args) {
+        // Get byteLength using ToIndex (preserves large values, throws RangeError for negative)
+        JSValue byteLengthArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        long byteLengthLong = JSTypeConversions.toIndex(context, byteLengthArg);
+
+        // Check for options (maxByteLength for resizable buffers)
+        long maxByteLengthLong = -1;
+        if (args.length >= 2 && args[1] instanceof JSObject options) {
+            JSValue maxByteLengthValue = options.get(PropertyKey.fromString("maxByteLength"));
+            if (context.hasPendingException()) {
+                throw new JSException(context.getPendingException());
+            }
+            if (!(maxByteLengthValue instanceof JSUndefined)) {
+                // QuickJS: JS_ToInt64Free then check bounds
+                long maxLenLong = (long) JSTypeConversions.toInteger(context, maxByteLengthValue);
+                if (byteLengthLong > maxLenLong || maxLenLong > 9007199254740991L) {
+                    throw new JSException(context.throwRangeError("invalid array buffer max length"));
+                }
+                maxByteLengthLong = maxLenLong;
+            }
+        }
+        return new long[]{byteLengthLong, maxByteLengthLong};
     }
 }

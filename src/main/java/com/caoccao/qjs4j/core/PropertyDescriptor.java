@@ -19,19 +19,15 @@ package com.caoccao.qjs4j.core;
 import java.util.Optional;
 
 /**
- * Represents a JavaScript property descriptor.
- * Based on ECMAScript specification and QuickJS implementation.
+ * Represents a JavaScript property descriptor. Based on ECMAScript specification and QuickJS implementation.
  * <p>
- * A property can be either:
- * - Data descriptor: has value and writable
- * - Accessor descriptor: has getter and/or setter
+ * A property can be either: - Data descriptor: has value and writable - Accessor descriptor: has getter and/or setter
  * <p>
  * Both types can have enumerable and configurable attributes.
  * <p>
- * Optional fields use empty vs present to distinguish "not specified" from "specified".
- * Getter/setter use JSUndefined sentinel for "not specified", null for "explicitly undefined",
- * and a JSFunction instance for a real accessor.
- * All fields are initialized and never null.
+ * Optional fields use empty vs present to distinguish "not specified" from "specified". Getter/setter use JSUndefined
+ * sentinel for "not specified", null for "explicitly undefined", and a JSFunction instance for a real accessor. All
+ * fields are initialized and never null.
  */
 public final class PropertyDescriptor {
     private Optional<Boolean> configurable;
@@ -48,44 +44,6 @@ public final class PropertyDescriptor {
         this.setter = JSUndefined.INSTANCE;
         this.value = Optional.empty();
         this.writable = Optional.empty();
-    }
-
-    /**
-     * Create an accessor descriptor.
-     */
-    public static PropertyDescriptor accessorDescriptor(
-            JSFunction getter,
-            JSFunction setter,
-            AccessorState state) {
-        PropertyDescriptor desc = new PropertyDescriptor();
-        if (getter != null) {
-            desc.setGetter(getter);
-        }
-        if (setter != null) {
-            desc.setSetter(setter);
-        }
-        desc.setEnumerable(state.isEnumerable());
-        desc.setConfigurable(state.isConfigurable());
-        return desc;
-    }
-
-    /**
-     * Create a data descriptor.
-     */
-    public static PropertyDescriptor dataDescriptor(JSValue value, DataState state) {
-        PropertyDescriptor desc = new PropertyDescriptor();
-        desc.setValue(value);
-        desc.setWritable(state.isWritable());
-        desc.setEnumerable(state.isEnumerable());
-        desc.setConfigurable(state.isConfigurable());
-        return desc;
-    }
-
-    /**
-     * Create a default data descriptor (writable, enumerable, configurable).
-     */
-    public static PropertyDescriptor defaultData(JSValue value) {
-        return dataDescriptor(value, DataState.All);
     }
 
     /**
@@ -107,8 +65,7 @@ public final class PropertyDescriptor {
     }
 
     /**
-     * Complete this descriptor with default values.
-     * Used when defining a new property.
+     * Complete this descriptor with default values. Used when defining a new property.
      */
     public void completeAsData() {
         if (value.isEmpty()) {
@@ -126,8 +83,7 @@ public final class PropertyDescriptor {
     }
 
     /**
-     * Create a shallow copy from another descriptor, preserving only explicitly
-     * specified attributes.
+     * Create a shallow copy from another descriptor, preserving only explicitly specified attributes.
      */
     public PropertyDescriptor copyFrom(PropertyDescriptor source) {
         if (source.hasValue()) {
@@ -151,8 +107,6 @@ public final class PropertyDescriptor {
         return this;
     }
 
-    // Getters
-
     public JSFunction getGetter() {
         return getter instanceof JSFunction f ? f : null;
     }
@@ -164,6 +118,8 @@ public final class PropertyDescriptor {
     public JSValue getValue() {
         return value.orElse(null);
     }
+
+    // Getters
 
     public boolean hasConfigurable() {
         return configurable.isPresent();
@@ -177,8 +133,6 @@ public final class PropertyDescriptor {
         return !(getter instanceof JSUndefined);
     }
 
-    // "Has" checks for partial descriptors
-
     public boolean hasSetter() {
         return !(setter instanceof JSUndefined);
     }
@@ -191,9 +145,10 @@ public final class PropertyDescriptor {
         return writable.isPresent();
     }
 
+    // "Has" checks for partial descriptors
+
     /**
-     * Check if this is an accessor descriptor.
-     * An accessor descriptor has getter or setter attributes.
+     * Check if this is an accessor descriptor. An accessor descriptor has getter or setter attributes.
      */
     public boolean isAccessorDescriptor() {
         return !(getter instanceof JSUndefined) || !(setter instanceof JSUndefined);
@@ -204,21 +159,18 @@ public final class PropertyDescriptor {
     }
 
     /**
-     * Check if this is a data descriptor.
-     * A data descriptor has value or writable attributes.
+     * Check if this is a data descriptor. A data descriptor has value or writable attributes.
      */
     public boolean isDataDescriptor() {
         return value.isPresent() || writable.isPresent();
     }
 
-    // Setters
-
     /**
      * Check if descriptor is empty (no attributes set).
      */
     public boolean isEmpty() {
-        return value.isEmpty() && writable.isEmpty() && enumerable.isEmpty()
-                && configurable.isEmpty() && getter instanceof JSUndefined && setter instanceof JSUndefined;
+        return value.isEmpty() && writable.isEmpty() && enumerable.isEmpty() && configurable.isEmpty()
+                && getter instanceof JSUndefined && setter instanceof JSUndefined;
     }
 
     public boolean isEnumerable() {
@@ -226,23 +178,22 @@ public final class PropertyDescriptor {
     }
 
     /**
-     * Check if this is a generic descriptor.
-     * A generic descriptor has neither data nor accessor attributes.
+     * Check if this is a generic descriptor. A generic descriptor has neither data nor accessor attributes.
      */
     public boolean isGenericDescriptor() {
         return !isDataDescriptor() && !isAccessorDescriptor();
     }
+
+    // Setters
 
     public boolean isWritable() {
         return writable.orElse(false);
     }
 
     /**
-     * Merge attributes from another descriptor into this one.
-     * Only attributes explicitly specified in the other descriptor are updated.
-     * Unspecified attributes in the other descriptor are left unchanged.
-     * Handles data↔accessor descriptor type conversion by clearing
-     * the old type-specific attributes when switching types.
+     * Merge attributes from another descriptor into this one. Only attributes explicitly specified in the other
+     * descriptor are updated. Unspecified attributes in the other descriptor are left unchanged. Handles data↔accessor
+     * descriptor type conversion by clearing the old type-specific attributes when switching types.
      */
     public void mergeFrom(PropertyDescriptor other) {
         // Handle data → accessor conversion: clear data attributes
@@ -283,8 +234,6 @@ public final class PropertyDescriptor {
         this.enumerable = Optional.of(enumerable);
     }
 
-    // Type checks
-
     public void setGetter(JSFunction getter) {
         this.getter = getter;
     }
@@ -296,6 +245,8 @@ public final class PropertyDescriptor {
     public void setValue(JSValue value) {
         this.value = Optional.ofNullable(value);
     }
+
+    // Type checks
 
     public void setWritable(boolean writable) {
         this.writable = Optional.of(writable);
@@ -329,11 +280,43 @@ public final class PropertyDescriptor {
         return sb.toString();
     }
 
+    /**
+     * Create an accessor descriptor.
+     */
+    public static PropertyDescriptor accessorDescriptor(JSFunction getter, JSFunction setter, AccessorState state) {
+        PropertyDescriptor desc = new PropertyDescriptor();
+        if (getter != null) {
+            desc.setGetter(getter);
+        }
+        if (setter != null) {
+            desc.setSetter(setter);
+        }
+        desc.setEnumerable(state.isEnumerable());
+        desc.setConfigurable(state.isConfigurable());
+        return desc;
+    }
+
+    /**
+     * Create a data descriptor.
+     */
+    public static PropertyDescriptor dataDescriptor(JSValue value, DataState state) {
+        PropertyDescriptor desc = new PropertyDescriptor();
+        desc.setValue(value);
+        desc.setWritable(state.isWritable());
+        desc.setEnumerable(state.isEnumerable());
+        desc.setConfigurable(state.isConfigurable());
+        return desc;
+    }
+
+    /**
+     * Create a default data descriptor (writable, enumerable, configurable).
+     */
+    public static PropertyDescriptor defaultData(JSValue value) {
+        return dataDescriptor(value, DataState.All);
+    }
+
     public enum AccessorState {
-        None(false, false),
-        Enumerable(true, false),
-        Configurable(false, true),
-        All(true, true);
+        All(true, true), Configurable(false, true), Enumerable(true, false), None(false, false);
 
         private final boolean configurable;
         private final boolean enumerable;
@@ -353,14 +336,9 @@ public final class PropertyDescriptor {
     }
 
     public enum DataState {
-        None(false, false, false),
-        Enumerable(false, true, false),
-        EnumerableConfigurable(false, true, true),
-        Configurable(false, false, true),
-        ConfigurableWritable(true, false, true),
-        Writable(true, false, false),
-        EnumerableWritable(true, true, false),
-        All(true, true, true);
+        All(true, true, true), Configurable(false, false, true), ConfigurableWritable(true, false, true), Enumerable(
+                false, true, false), EnumerableConfigurable(false, true, true), EnumerableWritable(true, true,
+                        false), None(false, false, false), Writable(true, false, false);
 
         private final boolean configurable;
         private final boolean enumerable;

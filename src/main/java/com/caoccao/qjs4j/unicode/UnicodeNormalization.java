@@ -19,9 +19,8 @@ package com.caoccao.qjs4j.unicode;
 import java.text.Normalizer;
 
 /**
- * Unicode normalization algorithms (NFC, NFD, NFKC, NFKD).
- * Based on QuickJS libunicode.c implementation.
- * Uses Java's built-in Normalizer for Unicode normalization.
+ * Unicode normalization algorithms (NFC, NFD, NFKC, NFKD). Based on QuickJS libunicode.c implementation. Uses Java's
+ * built-in Normalizer for Unicode normalization.
  */
 public final class UnicodeNormalization {
 
@@ -44,10 +43,36 @@ public final class UnicodeNormalization {
     }
 
     /**
+     * Normalize an array of code points.
+     *
+     * @param codePoints
+     *            Array of Unicode code points
+     * @param form
+     *            The normalization form
+     * @return Array of normalized code points
+     */
+    public static int[] normalize(int[] codePoints, Form form) {
+        if (codePoints == null || codePoints.length == 0) {
+            return codePoints;
+        }
+
+        // Convert code points to String
+        String str = new String(codePoints, 0, codePoints.length);
+
+        // Normalize
+        String normalized = normalize(str, form);
+
+        // Convert back to code points
+        return normalized.codePoints().toArray();
+    }
+
+    /**
      * Normalize a string using the specified normalization form.
      *
-     * @param input The string to normalize
-     * @param form  The normalization form to use
+     * @param input
+     *            The string to normalize
+     * @param form
+     *            The normalization form to use
      * @return The normalized string
      */
     public static String normalize(String input, Form form) {
@@ -70,30 +95,7 @@ public final class UnicodeNormalization {
     }
 
     /**
-     * Normalize an array of code points.
-     *
-     * @param codePoints Array of Unicode code points
-     * @param form       The normalization form
-     * @return Array of normalized code points
-     */
-    public static int[] normalize(int[] codePoints, Form form) {
-        if (codePoints == null || codePoints.length == 0) {
-            return codePoints;
-        }
-
-        // Convert code points to String
-        String str = new String(codePoints, 0, codePoints.length);
-
-        // Normalize
-        String normalized = normalize(str, form);
-
-        // Convert back to code points
-        return normalized.codePoints().toArray();
-    }
-
-    /**
-     * Normalize to NFC (Canonical Composition).
-     * This is the most common normalization form.
+     * Normalize to NFC (Canonical Composition). This is the most common normalization form.
      */
     public static String toNFC(String input) {
         return normalize(input, Form.NFC);

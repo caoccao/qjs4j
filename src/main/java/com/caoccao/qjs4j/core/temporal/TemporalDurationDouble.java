@@ -16,15 +16,6 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
-public record TemporalDurationDouble(
-        double years,
-        double months,
-        double weeks,
-        double days,
-        double hours,
-        double minutes,
-        double seconds,
-        double milliseconds,
-        double microseconds,
-        double nanoseconds) {
+public record TemporalDurationDouble(double years, double months, double weeks, double days, double hours,
+        double minutes, double seconds, double milliseconds, double microseconds, double nanoseconds) {
 }

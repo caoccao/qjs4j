@@ -33,12 +33,8 @@ public final class JSBoundFunction extends JSFunction {
                 "bound " + (target.getName() != null ? target.getName() : ""));
     }
 
-    public JSBoundFunction(JSFunction target, JSValue boundThis, JSValue[] boundArgs) {
-        this(target.getContext(), target, boundThis, boundArgs);
-    }
-
     public JSBoundFunction(JSContext context, JSFunction target, JSValue boundThis, JSValue[] boundArgs,
-                           double computedLength, String computedName) {
+            double computedLength, String computedName) {
         super(context); // Initialize as JSObject
         this.target = target;
         this.boundThis = boundThis;
@@ -58,25 +54,19 @@ public final class JSBoundFunction extends JSFunction {
         } else {
             lengthValue = JSNumber.of((int) this.computedLength);
         }
-        this.defineProperty(
-                PropertyKey.LENGTH,
-                PropertyDescriptor.dataDescriptor(
-                        lengthValue,
-                        PropertyDescriptor.DataState.Configurable
-                )
-        );
+        this.defineProperty(PropertyKey.LENGTH,
+                PropertyDescriptor.dataDescriptor(lengthValue, PropertyDescriptor.DataState.Configurable));
 
-        this.defineProperty(
-                PropertyKey.NAME,
-                PropertyDescriptor.dataDescriptor(
-                        new JSString(this.computedName),
-                        PropertyDescriptor.DataState.Configurable
-                )
-        );
+        this.defineProperty(PropertyKey.NAME, PropertyDescriptor.dataDescriptor(new JSString(this.computedName),
+                PropertyDescriptor.DataState.Configurable));
     }
 
-    public JSBoundFunction(JSFunction target, JSValue boundThis, JSValue[] boundArgs,
-                           double computedLength, String computedName) {
+    public JSBoundFunction(JSFunction target, JSValue boundThis, JSValue[] boundArgs) {
+        this(target.getContext(), target, boundThis, boundArgs);
+    }
+
+    public JSBoundFunction(JSFunction target, JSValue boundThis, JSValue[] boundArgs, double computedLength,
+            String computedName) {
         this(target.getContext(), target, boundThis, boundArgs, computedLength, computedName);
     }
 

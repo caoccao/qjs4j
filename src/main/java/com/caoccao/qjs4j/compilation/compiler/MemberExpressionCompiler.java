@@ -68,9 +68,8 @@ final class MemberExpressionCompiler extends AstNodeCompiler<MemberExpression> {
     }
 
     /**
-     * Compile an optional chain as a single unit so all accesses after `?.` share
-     * one short-circuit exit. E.g., `o?.c.#f` -> null-check o, then access .c and .#f
-     * inside the non-null branch.
+     * Compile an optional chain as a single unit so all accesses after `?.` share one short-circuit exit. E.g.,
+     * `o?.c.#f` -> null-check o, then access .c and .#f inside the non-null branch.
      */
     private void compileOptionalChainFull(MemberExpression memberExpr) {
         var chain = new ArrayList<MemberExpression>();
@@ -110,7 +109,9 @@ final class MemberExpressionCompiler extends AstNodeCompiler<MemberExpression> {
             compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
         } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
             String fieldName = privateId.getName();
-            JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
+            JSSymbol symbol = compilerContext.privateSymbols != null
+                    ? compilerContext.privateSymbols.get(fieldName)
+                    : null;
             if (symbol != null) {
                 compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                 compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);

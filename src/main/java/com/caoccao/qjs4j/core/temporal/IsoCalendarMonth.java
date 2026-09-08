@@ -18,19 +18,10 @@ package com.caoccao.qjs4j.core.temporal;
 
 import com.caoccao.qjs4j.core.JSContext;
 
-public record IsoCalendarMonth(
-        int monthNumber,
-        boolean leapMonth,
-        String monthCode,
-        int daysInMonth) {
+public record IsoCalendarMonth(int monthNumber, boolean leapMonth, String monthCode, int daysInMonth) {
 
-    static IsoCalendarMonth resolveMonthSlotForInput(
-            JSContext context,
-            TemporalCalendarId calendarId,
-            int calendarYear,
-            Integer monthFromProperty,
-            String monthCodeFromProperty,
-            String overflow) {
+    static IsoCalendarMonth resolveMonthSlotForInput(JSContext context, TemporalCalendarId calendarId, int calendarYear,
+            Integer monthFromProperty, String monthCodeFromProperty, String overflow) {
         TemporalMonths monthSlots = TemporalMonths.get(calendarId, calendarYear);
         IsoCalendarMonth monthSlotFromNumber = null;
         if (monthFromProperty != null) {
@@ -60,7 +51,8 @@ public record IsoCalendarMonth(
             monthSlotFromCode = monthSlots.getByMonthCode(monthCodeFromProperty);
             if (monthSlotFromCode == null) {
                 if (!TemporalOverflow.REJECT.matches(overflow) && monthCodeData.leapMonth()) {
-                    String fallbackMonthCode = calendarId.resolveFallbackMonthCodeForMissingLeapMonth(monthCodeFromProperty);
+                    String fallbackMonthCode = calendarId
+                            .resolveFallbackMonthCodeForMissingLeapMonth(monthCodeFromProperty);
                     monthSlotFromCode = monthSlots.getByMonthCode(fallbackMonthCode);
                 }
             }

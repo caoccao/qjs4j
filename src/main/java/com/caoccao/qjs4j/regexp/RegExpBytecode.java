@@ -21,15 +21,9 @@ import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import java.util.Arrays;
 
 /**
- * Represents compiled regex bytecode.
- * Based on QuickJS libregexp.h.
+ * Represents compiled regex bytecode. Based on QuickJS libregexp.h.
  */
-public record RegExpBytecode(
-        byte[] instructions,
-        int flags,
-        int captureCount,
-        int registerCount,
-        String[] groupNames) {
+public record RegExpBytecode(byte[] instructions, int flags, int captureCount, int registerCount, String[] groupNames) {
     public static final int FLAG_DOTALL = 1 << 3;
     // Regex flags
     public static final int FLAG_GLOBAL = 1 << 0;
@@ -146,22 +140,18 @@ public record RegExpBytecode(
 
     @Override
     public String toString() {
-        return "RegExpBytecode{" +
-                "instructions=" + instructions.length + " bytes, " +
-                "flags=" + flagsToString() + ", " +
-                "captureCount=" + captureCount +
-                (groupNames != null ? ", groupNames=" + Arrays.toString(groupNames) : "") +
-                '}';
+        return "RegExpBytecode{" + "instructions=" + instructions.length + " bytes, " + "flags=" + flagsToString()
+                + ", " + "captureCount=" + captureCount
+                + (groupNames != null ? ", groupNames=" + Arrays.toString(groupNames) : "") + '}';
     }
 
     /**
      * Registers the matcher must be able to hold.
      * <p>
-     * Only the zero-advance check allocates one, so most patterns use none and the maximum any
-     * pattern can reach is {@link ExecutionLimits#MAX_REGISTERS}. The matcher saves and restores
-     * this many on every backtrack point where state changed, so sizing it to what the pattern
-     * actually uses — rather than always to the maximum — is what keeps the backtrack stack inside
-     * the memory budget for a long subject.
+     * Only the zero-advance check allocates one, so most patterns use none and the maximum any pattern can reach is
+     * {@link ExecutionLimits#MAX_REGISTERS}. The matcher saves and restores this many on every backtrack point where
+     * state changed, so sizing it to what the pattern actually uses — rather than always to the maximum — is what keeps
+     * the backtrack stack inside the memory budget for a long subject.
      */
     public static final class ExecutionLimits {
         /**

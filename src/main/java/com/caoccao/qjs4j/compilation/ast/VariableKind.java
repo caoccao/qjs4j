@@ -20,16 +20,17 @@ package com.caoccao.qjs4j.compilation.ast;
  * The kind of a variable declaration.
  */
 public enum VariableKind {
-    VAR("var"),
-    LET("let"),
-    CONST("const"),
-    USING("using"),
-    AWAIT_USING("await using");
+    AWAIT_USING("await using"), CONST("const"), LET("let"), USING("using"), VAR("var");
 
     private final String keyword;
 
     VariableKind(String keyword) {
         this.keyword = keyword;
+    }
+
+    @Override
+    public String toString() {
+        return keyword;
     }
 
     public static VariableKind fromKeyword(String keyword) {
@@ -41,10 +42,5 @@ public enum VariableKind {
             case "await using" -> AWAIT_USING;
             default -> throw new IllegalArgumentException("Unknown variable kind: " + keyword);
         };
-    }
-
-    @Override
-    public String toString() {
-        return keyword;
     }
 }

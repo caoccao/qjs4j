@@ -17,8 +17,7 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 /**
- * Represents a spread element in an array literal or function call.
- * Example: [...array] or func(...args)
+ * Represents a spread element in an array literal or function call. Example: [...array] or func(...args)
  */
 public final class SpreadElement extends Expression {
     private final Expression argument;

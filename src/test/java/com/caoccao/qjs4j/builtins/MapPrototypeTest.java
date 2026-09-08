@@ -53,7 +53,7 @@ public class MapPrototypeTest extends BaseJavetTest {
                 // Verify the alias relationship
                 var entriesFunc = Map.prototype.entries;
                 var iteratorFunc = Map.prototype[Symbol.iterator];
-                
+
                 // They must be the exact same reference
                 entriesFunc === iteratorFunc""");
     }
@@ -63,7 +63,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         // Both produce the same iteration results
         assertBooleanWithJavet("""
                 var m = new Map([[1, 'a'], [2, 'b'], [3, 'c']]);
-                
+
                 // Using entries()
                 var result1 = '';
                 var it1 = m.entries();
@@ -71,14 +71,14 @@ public class MapPrototypeTest extends BaseJavetTest {
                 while (!(entry = it1.next()).done) {
                   result1 += entry.value[0] + entry.value[1];
                 }
-                
+
                 // Using Symbol.iterator
                 var result2 = '';
                 var it2 = m[Symbol.iterator]();
                 while (!(entry = it2.next()).done) {
                   result2 += entry.value[0] + entry.value[1];
                 }
-                
+
                 // Results are identical
                 result1 === result2 && result1 === '1a2b3c'""");
     }
@@ -900,9 +900,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertTypeError(MapPrototype.getSize(context, new JSString("not map"), JSValue.NO_ARGS));
         assertPendingException(context);
 
-        assertIntegerWithJavet(
-                "new Map().size",
-                "var a = new Map(); a.set('a', 1); a.size");
+        assertIntegerWithJavet("new Map().size", "var a = new Map(); a.set('a', 1); a.size");
     }
 
     @Test
@@ -953,6 +951,18 @@ public class MapPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    void testHashCodeConsistency() {
+        // hashCode() should return the same value when called multiple times
+        JSMap.KeyWrapper key = new JSMap.KeyWrapper(new JSNumber(0.0));
+        int hash1 = key.hashCode();
+        int hash2 = key.hashCode();
+        int hash3 = key.hashCode();
+
+        assertThat(hash1).isEqualTo(hash2);
+        assertThat(hash2).isEqualTo(hash3);
+    }
+
+    @Test
     void testHasNaN() {
         // has with NaN
         assertBooleanWithJavet("var m = new Map(); m.set(NaN, 'val'); m.has(NaN)");
@@ -984,18 +994,6 @@ public class MapPrototypeTest extends BaseJavetTest {
         // has with +0/-0
         assertBooleanWithJavet("var m = new Map(); m.set(0, 'val'); m.has(-0)");
         assertBooleanWithJavet("var m = new Map(); m.set(-0, 'val'); m.has(0)");
-    }
-
-    @Test
-    void testHashCodeConsistency() {
-        // hashCode() should return the same value when called multiple times
-        JSMap.KeyWrapper key = new JSMap.KeyWrapper(new JSNumber(0.0));
-        int hash1 = key.hashCode();
-        int hash2 = key.hashCode();
-        int hash3 = key.hashCode();
-
-        assertThat(hash1).isEqualTo(hash2);
-        assertThat(hash2).isEqualTo(hash3);
     }
 
     @Test
@@ -1129,8 +1127,10 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testLargeMapDelete() {
         // Delete from large map
-        assertIntegerWithJavet("var m = new Map(); for(var i = 0; i < 1000; i++) m.set(i, 'val'); m.delete(500); m.size");
-        assertBooleanWithJavet("var m = new Map(); for(var i = 0; i < 1000; i++) m.set(i, 'val'); m.delete(500); m.has(500)");
+        assertIntegerWithJavet(
+                "var m = new Map(); for(var i = 0; i < 1000; i++) m.set(i, 'val'); m.delete(500); m.size");
+        assertBooleanWithJavet(
+                "var m = new Map(); for(var i = 0; i < 1000; i++) m.set(i, 'val'); m.delete(500); m.has(500)");
     }
 
     @Test
@@ -1170,7 +1170,8 @@ public class MapPrototypeTest extends BaseJavetTest {
         JSObject mapConstructor = context.getGlobalObject().get("Map").asObject().orElseThrow();
         JSObject mapPrototype = mapConstructor.get("prototype").asObject().orElseThrow();
         JSValue originalSet = mapPrototype.get("set");
-        mapPrototype.set("set", new JSNativeFunction(context, "set", 2, (childContext, thisArg, args) -> childContext.throwError("boom")));
+        mapPrototype.set("set", new JSNativeFunction(context, "set", 2,
+                (childContext, thisArg, args) -> childContext.throwError("boom")));
         try {
             JSValue result = JSMap.create(context, iterable);
             assertThat(result.isError()).isTrue();
@@ -1471,7 +1472,8 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertThat(map.mapGet(new JSString("key2")).isUndefined()).isTrue();
 
         // Edge case: called on non-Map
-        assertTypeError(MapPrototype.set(context, new JSString("not map"), new JSValue[]{new JSString("key"), new JSString("value")}));
+        assertTypeError(MapPrototype.set(context, new JSString("not map"),
+                new JSValue[]{new JSString("key"), new JSString("value")}));
         assertPendingException(context);
     }
 

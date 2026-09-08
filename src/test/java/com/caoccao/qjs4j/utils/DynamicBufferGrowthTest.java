@@ -23,13 +23,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Growth failure used to set an {@code error} flag and make every later append a silent no-op.
- * Nothing read the flag: {@code RegExpCompiler.compile()} appended a final {@code MATCH} that was
- * also ignored and returned the truncated bytes as a valid program, so a resource failure surfaced
- * later as a wrong match with nothing left to say what had happened.
+ * Growth failure used to set an {@code error} flag and make every later append a silent no-op. Nothing read the flag:
+ * {@code RegExpCompiler.compile()} appended a final {@code MATCH} that was also ignored and returned the truncated
+ * bytes as a valid program, so a resource failure surfaced later as a wrong match with nothing left to say what had
+ * happened.
  * <p>
- * The failure path is reachable here because a buffer can be given an explicit ceiling, which is
- * what makes it testable without exhausting the JVM.
+ * The failure path is reachable here because a buffer can be given an explicit ceiling, which is what makes it testable
+ * without exhausting the JVM.
  */
 public class DynamicBufferGrowthTest {
     @Test
@@ -37,8 +37,7 @@ public class DynamicBufferGrowthTest {
         DynamicBuffer buffer = new DynamicBuffer(16, 32);
         buffer.append(new byte[32]);
         assertThat(buffer.size()).isEqualTo(32);
-        assertThatThrownBy(() -> buffer.append((byte) 1))
-                .isInstanceOf(JSRangeErrorException.class)
+        assertThatThrownBy(() -> buffer.append((byte) 1)).isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("32");
     }
 
@@ -46,8 +45,7 @@ public class DynamicBufferGrowthTest {
     public void testBulkAppendPastTheCeilingThrowsAndLeavesTheBufferIntact() {
         DynamicBuffer buffer = new DynamicBuffer(16, 64);
         buffer.appendU32(0x01020304L);
-        assertThatThrownBy(() -> buffer.append(new byte[128]))
-                .isInstanceOf(JSRangeErrorException.class);
+        assertThatThrownBy(() -> buffer.append(new byte[128])).isInstanceOf(JSRangeErrorException.class);
         // Nothing of the failed append landed, so the caller sees the buffer it had.
         assertThat(buffer.size()).isEqualTo(4);
         assertThat(buffer.toByteArray()).containsExactly(4, 3, 2, 1);
@@ -95,8 +93,7 @@ public class DynamicBufferGrowthTest {
         DynamicBuffer buffer = new DynamicBuffer(64, 1024);
         buffer.append(new byte[]{1, 2, 3});
         // size + length overflows int and lands on a value an int comparison accepts.
-        assertThatThrownBy(() -> buffer.insert(1, Integer.MAX_VALUE))
-                .isInstanceOf(JSRangeErrorException.class);
+        assertThatThrownBy(() -> buffer.insert(1, Integer.MAX_VALUE)).isInstanceOf(JSRangeErrorException.class);
         assertThat(buffer.size()).isEqualTo(3);
         assertThat(buffer.toByteArray()).containsExactly(1, 2, 3);
     }
@@ -122,8 +119,7 @@ public class DynamicBufferGrowthTest {
                 .isInstanceOf(IndexOutOfBoundsException.class);
         assertThatThrownBy(() -> buffer.append(new byte[]{1, 2}, Integer.MAX_VALUE, Integer.MAX_VALUE))
                 .isInstanceOf(IndexOutOfBoundsException.class);
-        assertThatThrownBy(() -> buffer.setU32(Integer.MAX_VALUE, 1))
-                .isInstanceOf(IndexOutOfBoundsException.class);
+        assertThatThrownBy(() -> buffer.setU32(Integer.MAX_VALUE, 1)).isInstanceOf(IndexOutOfBoundsException.class);
         assertThat(buffer.size()).isEqualTo(4);
     }
 

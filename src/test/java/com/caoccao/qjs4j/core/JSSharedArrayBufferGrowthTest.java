@@ -28,12 +28,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A {@code SharedArrayBuffer} is shared across agents by definition, and the Test262 agent host
- * hands the same instance to other runtimes, so its mutable length is read and written from several
- * threads. It was a plain {@code int} behind an unsynchronised check-then-write: two agents could
- * read the same old length, ask for 50 and 100, and write 100 then 50 — both calls reporting
- * success while the buffer observably shrank — and a new length had no happens-before edge that
- * made it visible to another thread at all.
+ * A {@code SharedArrayBuffer} is shared across agents by definition, and the Test262 agent host hands the same instance
+ * to other runtimes, so its mutable length is read and written from several threads. It was a plain {@code int} behind
+ * an unsynchronised check-then-write: two agents could read the same old length, ask for 50 and 100, and write 100 then
+ * 50 — both calls reporting success while the buffer observably shrank — and a new length had no happens-before edge
+ * that made it visible to another thread at all.
  */
 public class JSSharedArrayBufferGrowthTest extends BaseJavetTest {
     @Test
@@ -71,9 +70,9 @@ public class JSSharedArrayBufferGrowthTest extends BaseJavetTest {
     /**
      * Race several agents growing the same buffer to different targets from one barrier.
      * <p>
-     * Not compared against V8: Javet drives a single agent, and the defect only exists between
-     * threads. What is asserted is the specification's own guarantee — growth is monotonic — under
-     * an interleaving that used to break it.
+     * Not compared against V8: Javet drives a single agent, and the defect only exists between threads. What is
+     * asserted is the specification's own guarantee — growth is monotonic — under an interleaving that used to break
+     * it.
      */
     @Test
     @Timeout(60)
@@ -114,8 +113,7 @@ public class JSSharedArrayBufferGrowthTest extends BaseJavetTest {
                 start.countDown();
                 assertThat(finished.await(30, TimeUnit.SECONDS)).isTrue();
                 assertThat(observedShrinks.get())
-                        .as("attempt " + attempt + ": a growable SharedArrayBuffer must never shrink")
-                        .isZero();
+                        .as("attempt " + attempt + ": a growable SharedArrayBuffer must never shrink").isZero();
                 assertThat(buffer.getByteLength())
                         .as("attempt " + attempt + ": the final length is the largest accepted target")
                         .isEqualTo(largestAccepted.get());

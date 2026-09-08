@@ -89,6 +89,7 @@ plugins {
     jacoco
     `maven-publish`
     signing
+    id("com.diffplug.spotless") version "8.10.2"
     id("io.github.gradle-nexus.publish-plugin") version "2.0.0"
 }
 
@@ -97,6 +98,23 @@ version = Config.VERSION
 
 repositories {
     mavenCentral()
+}
+
+spotless {
+    lineEndings = com.diffplug.spotless.LineEnding.UNIX
+    java {
+        target("src/main/java/**/*.java", "src/test/java/**/*.java")
+        eclipse("4.40")
+            .configFile("config/eclipse-java-formatter.properties")
+            .sortMembersEnabled(true)
+            // Eclipse requires I as well; omitting it silently selects the default order.
+            // Static fields, static initializers, fields, initializers, constructors,
+            // methods, static methods, then nested types.
+            .sortMembersOrder("SF,SI,F,I,C,M,SM,T")
+            .sortMembersDoNotSortFields(false)
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
 }
 
 // The JDK that runs the tests. Defaults to the compilation toolchain; the CI matrix overrides it

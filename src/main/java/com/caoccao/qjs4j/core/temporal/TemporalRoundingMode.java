@@ -21,51 +21,15 @@ import java.math.BigInteger;
 /**
  * Temporal rounding mode enum.
  * <p>
- * Replaces duplicated {@code negateRoundingMode()}, {@code isValidRoundingMode()},
- * and {@code isValidDifferenceRoundingMode()} methods across temporal prototype files.
+ * Replaces duplicated {@code negateRoundingMode()}, {@code isValidRoundingMode()}, and
+ * {@code isValidDifferenceRoundingMode()} methods across temporal prototype files.
  */
 public enum TemporalRoundingMode {
-    CEIL,
-    FLOOR,
-    TRUNC,
-    EXPAND,
-    HALF_EXPAND,
-    HALF_TRUNC,
-    HALF_EVEN,
-    HALF_CEIL,
-    HALF_FLOOR;
+    CEIL, EXPAND, FLOOR, HALF_CEIL, HALF_EVEN, HALF_EXPAND, HALF_FLOOR, HALF_TRUNC, TRUNC;
 
     /**
-     * Parses a JS rounding mode string. Returns {@code null} if not recognized.
-     */
-    public static TemporalRoundingMode fromString(String text) {
-        if (text == null) {
-            return null;
-        }
-        return switch (text) {
-            case "ceil" -> CEIL;
-            case "floor" -> FLOOR;
-            case "trunc" -> TRUNC;
-            case "expand" -> EXPAND;
-            case "halfExpand" -> HALF_EXPAND;
-            case "halfTrunc" -> HALF_TRUNC;
-            case "halfEven" -> HALF_EVEN;
-            case "halfCeil" -> HALF_CEIL;
-            case "halfFloor" -> HALF_FLOOR;
-            default -> null;
-        };
-    }
-
-    /**
-     * Checks whether the given string is a valid rounding mode.
-     */
-    public static boolean isValid(String text) {
-        return fromString(text) != null;
-    }
-
-    /**
-     * Returns the negated rounding mode, used for .since() operations.
-     * ceil ↔ floor, halfCeil ↔ halfFloor, others unchanged.
+     * Returns the negated rounding mode, used for .since() operations. ceil ↔ floor, halfCeil ↔ halfFloor, others
+     * unchanged.
      */
     public TemporalRoundingMode negate() {
         return switch (this) {
@@ -200,11 +164,7 @@ public enum TemporalRoundingMode {
         if (remainder == 0L) {
             rounded = roundingFloor;
         } else {
-            rounded = unsignedRoundingMode.getRoundedUnit(
-                    roundingFloor,
-                    roundingCeiling,
-                    comparison,
-                    evenCardinality);
+            rounded = unsignedRoundingMode.getRoundedUnit(roundingFloor, roundingCeiling, comparison, evenCardinality);
         }
         if (sign.isPositive()) {
             return increment * rounded;
@@ -221,12 +181,40 @@ public enum TemporalRoundingMode {
             case EXPAND -> TemporalUnsignedRoundingMode.INFINITY;
             case TRUNC -> TemporalUnsignedRoundingMode.ZERO;
             case HALF_CEIL ->
-                    negativeSign ? TemporalUnsignedRoundingMode.HALF_ZERO : TemporalUnsignedRoundingMode.HALF_INFINITY;
+                negativeSign ? TemporalUnsignedRoundingMode.HALF_ZERO : TemporalUnsignedRoundingMode.HALF_INFINITY;
             case HALF_FLOOR ->
-                    negativeSign ? TemporalUnsignedRoundingMode.HALF_INFINITY : TemporalUnsignedRoundingMode.HALF_ZERO;
+                negativeSign ? TemporalUnsignedRoundingMode.HALF_INFINITY : TemporalUnsignedRoundingMode.HALF_ZERO;
             case HALF_EXPAND -> TemporalUnsignedRoundingMode.HALF_INFINITY;
             case HALF_TRUNC -> TemporalUnsignedRoundingMode.HALF_ZERO;
             default -> TemporalUnsignedRoundingMode.HALF_EVEN;
         };
+    }
+
+    /**
+     * Parses a JS rounding mode string. Returns {@code null} if not recognized.
+     */
+    public static TemporalRoundingMode fromString(String text) {
+        if (text == null) {
+            return null;
+        }
+        return switch (text) {
+            case "ceil" -> CEIL;
+            case "floor" -> FLOOR;
+            case "trunc" -> TRUNC;
+            case "expand" -> EXPAND;
+            case "halfExpand" -> HALF_EXPAND;
+            case "halfTrunc" -> HALF_TRUNC;
+            case "halfEven" -> HALF_EVEN;
+            case "halfCeil" -> HALF_CEIL;
+            case "halfFloor" -> HALF_FLOOR;
+            default -> null;
+        };
+    }
+
+    /**
+     * Checks whether the given string is a valid rounding mode.
+     */
+    public static boolean isValid(String text) {
+        return fromString(text) != null;
     }
 }

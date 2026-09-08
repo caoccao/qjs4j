@@ -19,15 +19,12 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 /**
- * Implementation of Set.prototype methods.
- * Based on ES2020 Set specification.
+ * Implementation of Set.prototype methods. Based on ES2020 Set specification.
  */
 public final class SetPrototype {
 
     /**
-     * Set.prototype.add(value)
-     * ES2020 23.2.3.1
-     * Adds the value to the Set. Returns the Set object.
+     * Set.prototype.add(value) ES2020 23.2.3.1 Adds the value to the Set. Returns the Set object.
      */
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
@@ -48,9 +45,7 @@ public final class SetPrototype {
     }
 
     /**
-     * Set.prototype.clear()
-     * ES2020 23.2.3.2
-     * Removes all values from the Set.
+     * Set.prototype.clear() ES2020 23.2.3.2 Removes all values from the Set.
      */
     public static JSValue clear(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
@@ -86,9 +81,8 @@ public final class SetPrototype {
     }
 
     /**
-     * Set.prototype.delete(value)
-     * ES2020 23.2.3.4
-     * Removes the value from the Set. Returns true if the value existed and was removed.
+     * Set.prototype.delete(value) ES2020 23.2.3.4 Removes the value from the Set. Returns true if the value existed and
+     * was removed.
      */
     public static JSValue delete(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
@@ -100,8 +94,7 @@ public final class SetPrototype {
     }
 
     /**
-     * Set.prototype.difference(other)
-     * QuickJS extension.
+     * Set.prototype.difference(other) QuickJS extension.
      */
     public static JSValue difference(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
@@ -148,9 +141,7 @@ public final class SetPrototype {
     }
 
     /**
-     * Set.prototype.entries()
-     * ES2020 23.2.3.5
-     * Returns an iterator over [value, value] pairs.
+     * Set.prototype.entries() ES2020 23.2.3.5 Returns an iterator over [value, value] pairs.
      */
     public static JSValue entries(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
@@ -161,11 +152,9 @@ public final class SetPrototype {
     }
 
     /**
-     * Set.prototype.forEach(callbackFn, thisArg)
-     * ES2020 23.2.3.6
-     * Executes a provided function once per each value in the Set, in insertion order.
-     * Note: The set can be modified while traversing it. Newly added values
-     * during iteration will be visited (matching QuickJS behavior).
+     * Set.prototype.forEach(callbackFn, thisArg) ES2020 23.2.3.6 Executes a provided function once per each value in
+     * the Set, in insertion order. Note: The set can be modified while traversing it. Newly added values during
+     * iteration will be visited (matching QuickJS behavior).
      */
     public static JSValue forEach(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
@@ -226,9 +215,7 @@ public final class SetPrototype {
         if (value instanceof JSSet set) {
             size = set.size();
         } else {
-            JSValue sizeValue = object != null
-                    ? object.get(PropertyKey.SIZE)
-                    : JSUndefined.INSTANCE;
+            JSValue sizeValue = object != null ? object.get(PropertyKey.SIZE) : JSUndefined.INSTANCE;
             if (context.hasPendingException()) {
                 return null;
             }
@@ -251,9 +238,7 @@ public final class SetPrototype {
             }
         }
 
-        JSValue hasValue = object != null
-                ? object.get(PropertyKey.HAS)
-                : JSUndefined.INSTANCE;
+        JSValue hasValue = object != null ? object.get(PropertyKey.HAS) : JSUndefined.INSTANCE;
         if (context.hasPendingException()) {
             return null;
         }
@@ -266,9 +251,7 @@ public final class SetPrototype {
             return null;
         }
 
-        JSValue keysValue = object != null
-                ? object.get(PropertyKey.KEYS)
-                : JSUndefined.INSTANCE;
+        JSValue keysValue = object != null ? object.get(PropertyKey.KEYS) : JSUndefined.INSTANCE;
         if (context.hasPendingException()) {
             return null;
         }
@@ -284,9 +267,7 @@ public final class SetPrototype {
     }
 
     /**
-     * get Set.prototype.size
-     * ES2020 23.2.3.9
-     * Returns the number of values in the Set.
+     * get Set.prototype.size ES2020 23.2.3.9 Returns the number of values in the Set.
      */
     public static JSValue getSize(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
@@ -297,9 +278,7 @@ public final class SetPrototype {
     }
 
     /**
-     * Set.prototype.has(value)
-     * ES2020 23.2.3.7
-     * Returns a boolean indicating whether a value exists in the Set.
+     * Set.prototype.has(value) ES2020 23.2.3.7 Returns a boolean indicating whether a value exists in the Set.
      */
     public static JSValue has(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
@@ -311,8 +290,7 @@ public final class SetPrototype {
     }
 
     /**
-     * Set.prototype.intersection(other)
-     * QuickJS extension.
+     * Set.prototype.intersection(other) QuickJS extension.
      */
     public static JSValue intersection(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
@@ -361,8 +339,7 @@ public final class SetPrototype {
     }
 
     /**
-     * Set.prototype.isDisjointFrom(other)
-     * QuickJS extension.
+     * Set.prototype.isDisjointFrom(other) QuickJS extension.
      */
     public static JSValue isDisjointFrom(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
@@ -411,8 +388,7 @@ public final class SetPrototype {
     }
 
     /**
-     * Set.prototype.isSubsetOf(other)
-     * QuickJS extension.
+     * Set.prototype.isSubsetOf(other) QuickJS extension.
      */
     public static JSValue isSubsetOf(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
@@ -444,8 +420,7 @@ public final class SetPrototype {
     }
 
     /**
-     * Set.prototype.isSupersetOf(other)
-     * QuickJS extension.
+     * Set.prototype.isSupersetOf(other) QuickJS extension.
      */
     public static JSValue isSupersetOf(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
@@ -505,9 +480,7 @@ public final class SetPrototype {
     }
 
     /**
-     * Set.prototype.keys()
-     * ES2020 23.2.3.8
-     * Returns an iterator over values (same as values()).
+     * Set.prototype.keys() ES2020 23.2.3.8 Returns an iterator over values (same as values()).
      */
     public static JSValue keys(JSContext context, JSValue thisArg, JSValue[] args) {
         // In Set, keys() is the same as values()
@@ -515,8 +488,7 @@ public final class SetPrototype {
     }
 
     /**
-     * Set.prototype.symmetricDifference(other)
-     * QuickJS extension.
+     * Set.prototype.symmetricDifference(other) QuickJS extension.
      */
     public static JSValue symmetricDifference(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
@@ -554,8 +526,7 @@ public final class SetPrototype {
     }
 
     /**
-     * Set.prototype.union(other)
-     * QuickJS extension.
+     * Set.prototype.union(other) QuickJS extension.
      */
     public static JSValue union(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {
@@ -587,9 +558,7 @@ public final class SetPrototype {
     }
 
     /**
-     * Set.prototype.values()
-     * ES2020 23.2.3.10
-     * Returns an iterator over values.
+     * Set.prototype.values() ES2020 23.2.3.10 Returns an iterator over values.
      */
     public static JSValue values(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSSet set)) {

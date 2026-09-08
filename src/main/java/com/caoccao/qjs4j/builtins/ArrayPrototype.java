@@ -23,18 +23,15 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Array prototype methods.
- * Implements ECMAScript Array.prototype methods.
+ * Array prototype methods. Implements ECMAScript Array.prototype methods.
  *
  * @see <a href="https://tc39.es/ecma262/#sec-properties-of-the-array-prototype-object">ECMAScript Array.prototype</a>
  */
 public final class ArrayPrototype {
 
     /**
-     * Array.prototype.at(index)
-     * ES2022 23.1.3.1
-     * Returns the element at the specified index, supporting negative indices.
-     * Generic: works on any object with a length property (per spec uses ToObject + LengthOfArrayLike).
+     * Array.prototype.at(index) ES2022 23.1.3.1 Returns the element at the specified index, supporting negative
+     * indices. Generic: works on any object with a length property (per spec uses ToObject + LengthOfArrayLike).
      */
     public static JSValue at(JSContext context, JSValue thisArg, JSValue[] args) {
         // Step 1: Let O be ? ToObject(this value).
@@ -81,11 +78,7 @@ public final class ArrayPrototype {
         return obj.get(PropertyKey.fromString(Long.toString(index)));
     }
 
-    private static JSValue callCallableForSort(
-            JSContext context,
-            JSValue callable,
-            JSValue thisArg,
-            JSValue[] args) {
+    private static JSValue callCallableForSort(JSContext context, JSValue callable, JSValue thisArg, JSValue[] args) {
         if (callable instanceof JSProxy proxy) {
             return proxy.apply(context, thisArg, args);
         }
@@ -96,8 +89,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.concat(...items)
-     * Merges arrays and/or values.
+     * Array.prototype.concat(...items) Merges arrays and/or values.
      */
     public static JSValue concat(JSContext context, JSValue thisArg, JSValue[] args) {
         // ES2024 23.1.3.1 Array.prototype.concat
@@ -108,7 +100,8 @@ public final class ArrayPrototype {
         } else {
             obj = JSTypeConversions.toObject(context, thisArg);
             if (obj == null || context.hasPendingException()) {
-                return context.hasPendingException() ? context.getPendingException()
+                return context.hasPendingException()
+                        ? context.getPendingException()
                         : context.throwTypeError("Array.prototype.concat called on null or undefined");
             }
         }
@@ -170,7 +163,8 @@ public final class ArrayPrototype {
                         }
                         if (resultArr != null) {
                             resultArr.set(resultIndex, val);
-                        } else if (!resultObj.defineProperty(PropertyKey.fromString(Long.toString(resultIndex)), val, PropertyDescriptor.DataState.All)) {
+                        } else if (!resultObj.defineProperty(PropertyKey.fromString(Long.toString(resultIndex)), val,
+                                PropertyDescriptor.DataState.All)) {
                             return context.throwTypeError("Cannot define property " + resultIndex);
                         }
                     }
@@ -182,7 +176,8 @@ public final class ArrayPrototype {
                 }
                 if (resultArr != null) {
                     resultArr.set(resultIndex, element);
-                } else if (!resultObj.defineProperty(PropertyKey.fromString(Long.toString(resultIndex)), element, PropertyDescriptor.DataState.All)) {
+                } else if (!resultObj.defineProperty(PropertyKey.fromString(Long.toString(resultIndex)), element,
+                        PropertyDescriptor.DataState.All)) {
                     return context.throwTypeError("Cannot define property " + resultIndex);
                 }
                 resultIndex++;
@@ -202,9 +197,8 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.copyWithin(target, start[, end])
-     * ES2015 23.1.3.3
-     * Copies a sequence of array elements within the array.
+     * Array.prototype.copyWithin(target, start[, end]) ES2015 23.1.3.3 Copies a sequence of array elements within the
+     * array.
      */
     public static JSValue copyWithin(JSContext context, JSValue thisArg, JSValue[] args) {
         // Step 1: Let O be ? ToObject(this value).
@@ -303,10 +297,9 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype[Symbol.unscopables]
-     * ES2015 23.1.3.32
-     * Returns an object containing property names that are excluded from with statement binding.
-     * These are methods added in ES2015 and later that should not be included in with statements.
+     * Array.prototype[Symbol.unscopables] ES2015 23.1.3.32 Returns an object containing property names that are
+     * excluded from with statement binding. These are methods added in ES2015 and later that should not be included in
+     * with statements.
      */
     public static JSObject createUnscopablesObject(JSContext context) {
         JSObject unscopables = context.createJSObject();
@@ -349,8 +342,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.every(callbackFn[, thisArg])
-     * Tests whether all elements pass the test.
+     * Array.prototype.every(callbackFn[, thisArg]) Tests whether all elements pass the test.
      */
     public static JSValue every(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -403,9 +395,8 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.fill(value[, start[, end]])
-     * ES2015 23.1.3.6
-     * Fills all the elements of an array from a start index to an end index with a static value.
+     * Array.prototype.fill(value[, start[, end]]) ES2015 23.1.3.6 Fills all the elements of an array from a start index
+     * to an end index with a static value.
      */
     public static JSValue fill(JSContext context, JSValue thisArg, JSValue[] args) {
         // Step 1: Let O be ? ToObject(this value).
@@ -463,8 +454,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.filter(callbackFn[, thisArg])
-     * Creates a new array with elements that pass the test.
+     * Array.prototype.filter(callbackFn[, thisArg]) Creates a new array with elements that pass the test.
      */
     public static JSValue filter(JSContext context, JSValue thisArg, JSValue[] args) {
         // Step 1: Let O be ? ToObject(this value).
@@ -522,7 +512,8 @@ public final class ArrayPrototype {
 
             if (JSTypeConversions.toBoolean(keep) == JSBoolean.TRUE) {
                 // Step 7.c.iii.1: Perform ? CreateDataPropertyOrThrow(A, ! ToString(to), kValue).
-                if (!resultObj.defineProperty(PropertyKey.fromString(Long.toString(resultIndex)), element, PropertyDescriptor.DataState.All)) {
+                if (!resultObj.defineProperty(PropertyKey.fromString(Long.toString(resultIndex)), element,
+                        PropertyDescriptor.DataState.All)) {
                     return context.throwTypeError("Cannot define property " + resultIndex);
                 }
                 resultIndex++;
@@ -534,8 +525,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.find(callbackFn[, thisArg])
-     * Returns the first element that satisfies the test.
+     * Array.prototype.find(callbackFn[, thisArg]) Returns the first element that satisfies the test.
      */
     public static JSValue find(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -578,8 +568,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.findIndex(callbackFn[, thisArg])
-     * Returns the index of the first element that satisfies the test.
+     * Array.prototype.findIndex(callbackFn[, thisArg]) Returns the index of the first element that satisfies the test.
      */
     public static JSValue findIndex(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -622,9 +611,8 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.findLast(callbackFn[, thisArg])
-     * ES2023 23.1.3.13
-     * Returns the last element that satisfies the test (iterates backwards).
+     * Array.prototype.findLast(callbackFn[, thisArg]) ES2023 23.1.3.13 Returns the last element that satisfies the test
+     * (iterates backwards).
      */
     public static JSValue findLast(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -668,9 +656,8 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.findLastIndex(callbackFn[, thisArg])
-     * ES2023 23.1.3.14
-     * Returns the index of the last element that satisfies the test (iterates backwards).
+     * Array.prototype.findLastIndex(callbackFn[, thisArg]) ES2023 23.1.3.14 Returns the index of the last element that
+     * satisfies the test (iterates backwards).
      */
     public static JSValue findLastIndex(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -714,8 +701,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.flat([depth])
-     * Creates a new array with all sub-array elements concatenated.
+     * Array.prototype.flat([depth]) Creates a new array with all sub-array elements concatenated.
      */
     public static JSValue flat(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -762,9 +748,8 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.flatMap(callback, thisArg)
-     * ES2019 22.1.3.11
-     * Maps each element using callback, then flattens the result by one level.
+     * Array.prototype.flatMap(callback, thisArg) ES2019 22.1.3.11 Maps each element using callback, then flattens the
+     * result by one level.
      */
     public static JSValue flatMap(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -811,11 +796,7 @@ public final class ArrayPrototype {
             }
 
             // Call the callback with (element, index, array)
-            JSValue[] callbackArgs = new JSValue[]{
-                    element,
-                    JSNumber.of(i),
-                    obj
-            };
+            JSValue[] callbackArgs = new JSValue[]{element, JSNumber.of(i), obj};
             JSValue mapped = callback.call(context, callbackThisArg, callbackArgs);
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -843,7 +824,8 @@ public final class ArrayPrototype {
                             if (context.hasPendingException()) {
                                 return context.getPendingException();
                             }
-                            if (!resultObj.defineProperty(PropertyKey.fromString(Long.toString(resultIndex)), val, PropertyDescriptor.DataState.All)) {
+                            if (!resultObj.defineProperty(PropertyKey.fromString(Long.toString(resultIndex)), val,
+                                    PropertyDescriptor.DataState.All)) {
                                 return context.throwTypeError("Cannot define property " + resultIndex);
                             }
                             resultIndex++;
@@ -852,7 +834,8 @@ public final class ArrayPrototype {
                     continue;
                 }
             }
-            if (!resultObj.defineProperty(PropertyKey.fromString(Long.toString(resultIndex)), mapped, PropertyDescriptor.DataState.All)) {
+            if (!resultObj.defineProperty(PropertyKey.fromString(Long.toString(resultIndex)), mapped,
+                    PropertyDescriptor.DataState.All)) {
                 return context.throwTypeError("Cannot define property " + resultIndex);
             }
             resultIndex++;
@@ -862,8 +845,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.forEach(callbackFn[, thisArg])
-     * Executes a function for each array element.
+     * Array.prototype.forEach(callbackFn[, thisArg]) Executes a function for each array element.
      */
     public static JSValue forEach(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -908,8 +890,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Get element at index from an array-like object.
-     * Uses JSArray fast path for actual arrays.
+     * Get element at index from an array-like object. Uses JSArray fast path for actual arrays.
      */
     static JSValue getElement(JSContext context, JSObject obj, long index) {
         if (obj instanceof JSArray arr && index <= Integer.MAX_VALUE) {
@@ -919,9 +900,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * get Array.prototype.length
-     * Returns the number of elements in the array.
-     * This is a getter for the length property.
+     * get Array.prototype.length Returns the number of elements in the array. This is a getter for the length property.
      */
     public static JSValue getLength(JSContext context, JSValue thisArg, JSValue[] args) {
         long length = 0;
@@ -932,8 +911,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.includes(searchElement[, fromIndex])
-     * Determines whether an array includes a certain element.
+     * Array.prototype.includes(searchElement[, fromIndex]) Determines whether an array includes a certain element.
      */
     public static JSValue includes(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -1012,8 +990,8 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.indexOf(searchElement[, fromIndex])
-     * Returns the first index at which a given element can be found.
+     * Array.prototype.indexOf(searchElement[, fromIndex]) Returns the first index at which a given element can be
+     * found.
      */
     public static JSValue indexOf(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -1069,7 +1047,8 @@ public final class ArrayPrototype {
         return JSNumber.of(-1);
     }
 
-    private static void internalFlattenIntoObject(JSContext context, JSObject source, long sourceLen, int depth, JSObject target, long[] targetIndex) {
+    private static void internalFlattenIntoObject(JSContext context, JSObject source, long sourceLen, int depth,
+            JSObject target, long[] targetIndex) {
         for (long i = 0; i < sourceLen; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             if (!source.has(key)) {
@@ -1099,7 +1078,8 @@ public final class ArrayPrototype {
                     continue;
                 }
             }
-            if (!target.defineProperty(PropertyKey.fromString(Long.toString(targetIndex[0])), element, PropertyDescriptor.DataState.All)) {
+            if (!target.defineProperty(PropertyKey.fromString(Long.toString(targetIndex[0])), element,
+                    PropertyDescriptor.DataState.All)) {
                 context.throwTypeError("Cannot define property " + targetIndex[0]);
                 return;
             }
@@ -1108,8 +1088,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * IsConcatSpreadable per ES2024 23.1.3.1 step 4a.
-     * Following QuickJS JS_isConcatSpreadable.
+     * IsConcatSpreadable per ES2024 23.1.3.1 step 4a. Following QuickJS JS_isConcatSpreadable.
      */
     private static boolean isConcatSpreadable(JSContext context, JSValue val) {
         if (!(val instanceof JSObject obj)) {
@@ -1128,8 +1107,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.join([separator])
-     * Joins all elements of an array into a string.
+     * Array.prototype.join([separator]) Joins all elements of an array into a string.
      */
     public static JSValue join(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -1137,8 +1115,9 @@ public final class ArrayPrototype {
         }
         StringBuilder result = new StringBuilder();
         if (thisArg instanceof JSArray jsArray) {
-            String separator = args.length > 0 && !(args[0] instanceof JSUndefined) ?
-                    JSTypeConversions.toString(context, args[0]).value() : ",";
+            String separator = args.length > 0 && !(args[0] instanceof JSUndefined)
+                    ? JSTypeConversions.toString(context, args[0]).value()
+                    : ",";
             long length = jsArray.getLength();
             for (long i = 0; i < length; i++) {
                 if (i > 0) {
@@ -1155,8 +1134,9 @@ public final class ArrayPrototype {
         } else if (thisArg instanceof JSObject jsObject) {
             // Following QuickJS js_array_join: read length first, then coerce separator
             long length = JSTypeConversions.toLength(context, jsObject.get(PropertyKey.fromString("length")));
-            String separator = args.length > 0 && !(args[0] instanceof JSUndefined) ?
-                    JSTypeConversions.toString(context, args[0]).value() : ",";
+            String separator = args.length > 0 && !(args[0] instanceof JSUndefined)
+                    ? JSTypeConversions.toString(context, args[0]).value()
+                    : ",";
             for (long i = 0; i < length; i++) {
                 if (i > 0) {
                     result.append(separator);
@@ -1174,8 +1154,8 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.lastIndexOf(searchElement[, fromIndex])
-     * Returns the last index at which a given element can be found.
+     * Array.prototype.lastIndexOf(searchElement[, fromIndex]) Returns the last index at which a given element can be
+     * found.
      */
     public static JSValue lastIndexOf(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -1229,8 +1209,8 @@ public final class ArrayPrototype {
     }
 
     /**
-     * LengthOfArrayLike(obj) — returns the length of an array-like object.
-     * Uses JSArray.getLength() fast path for actual arrays.
+     * LengthOfArrayLike(obj) — returns the length of an array-like object. Uses JSArray.getLength() fast path for
+     * actual arrays.
      */
     static long lengthOfArrayLike(JSContext context, JSObject obj) {
         if (obj instanceof JSArray arr) {
@@ -1248,8 +1228,8 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.map(callbackFn[, thisArg])
-     * Creates a new array with the results of calling a function on every element.
+     * Array.prototype.map(callbackFn[, thisArg]) Creates a new array with the results of calling a function on every
+     * element.
      */
     public static JSValue map(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -1317,8 +1297,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.pop()
-     * Removes and returns the last element of an array.
+     * Array.prototype.pop() Removes and returns the last element of an array.
      */
     public static JSValue pop(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -1356,8 +1335,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.push(...items)
-     * Appends elements to the end of an array.
+     * Array.prototype.push(...items) Appends elements to the end of an array.
      *
      * @see <a href="https://tc39.es/ecma262/#sec-array.prototype.push">ECMAScript Array.prototype.push</a>
      */
@@ -1396,8 +1374,8 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.reduce(callbackFn[, initialValue])
-     * Reduces array to a single value by calling a function on each element.
+     * Array.prototype.reduce(callbackFn[, initialValue]) Reduces array to a single value by calling a function on each
+     * element.
      */
     public static JSValue reduce(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -1473,8 +1451,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.reduceRight(callbackFn[, initialValue])
-     * Reduces array from right to left.
+     * Array.prototype.reduceRight(callbackFn[, initialValue]) Reduces array from right to left.
      */
     public static JSValue reduceRight(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -1550,8 +1527,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.reverse()
-     * Reverses the elements of an array in place.
+     * Array.prototype.reverse() Reverses the elements of an array in place.
      */
     public static JSValue reverse(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -1624,8 +1600,8 @@ public final class ArrayPrototype {
     }
 
     /**
-     * ES2024 Set(O, P, V, true) — always throws TypeError on failure regardless of strict mode.
-     * Generates V8-matching error messages based on the failure reason.
+     * ES2024 Set(O, P, V, true) — always throws TypeError on failure regardless of strict mode. Generates V8-matching
+     * error messages based on the failure reason.
      */
     private static boolean setOrThrow(JSContext context, JSObject obj, PropertyKey key, JSValue value) {
         if (!obj.setWithResult(key, value)) {
@@ -1635,8 +1611,8 @@ public final class ArrayPrototype {
                     context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString()
                             + "' of object '" + objectTag(obj) + "'");
                 } else if (!obj.isExtensible()) {
-                    context.throwTypeError("Cannot add property " + key.toPropertyString()
-                            + ", object is not extensible");
+                    context.throwTypeError(
+                            "Cannot add property " + key.toPropertyString() + ", object is not extensible");
                 } else {
                     context.throwTypeError("Cannot set property '" + key.toPropertyString() + "'");
                 }
@@ -1647,8 +1623,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.shift()
-     * Removes and returns the first element of an array.
+     * Array.prototype.shift() Removes and returns the first element of an array.
      */
     public static JSValue shift(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -1707,8 +1682,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.slice([begin[, end]])
-     * Returns a shallow copy of a portion of an array.
+     * Array.prototype.slice([begin[, end]]) Returns a shallow copy of a portion of an array.
      */
     public static JSValue slice(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -1775,7 +1749,8 @@ public final class ArrayPrototype {
                     return context.getPendingException();
                 }
                 // Step 8.b.iii: Perform ? CreateDataPropertyOrThrow(A, ! ToString(resultIndex), kValue).
-                if (!resultObj.defineProperty(PropertyKey.fromString(Long.toString(resultIndex)), element, PropertyDescriptor.DataState.All)) {
+                if (!resultObj.defineProperty(PropertyKey.fromString(Long.toString(resultIndex)), element,
+                        PropertyDescriptor.DataState.All)) {
                     return context.throwTypeError("Cannot define property " + resultIndex);
                 }
             }
@@ -1791,8 +1766,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.some(callbackFn[, thisArg])
-     * Tests whether at least one element passes the test.
+     * Array.prototype.some(callbackFn[, thisArg]) Tests whether at least one element passes the test.
      */
     public static JSValue some(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -1841,8 +1815,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.sort([compareFn])
-     * Sorts the elements of an array in place.
+     * Array.prototype.sort([compareFn]) Sorts the elements of an array in place.
      */
     public static JSValue sort(JSContext context, JSValue thisArg, JSValue[] args) {
         // ES2024 23.1.3.30 step 1: validate comparefn before anything else
@@ -1851,9 +1824,7 @@ public final class ArrayPrototype {
             return context.throwTypeError("The comparison function must be either a function or undefined: "
                     + JSTypeConversions.toString(context, args[0]).value());
         }
-        final JSValue compareCallable = compareFunction instanceof JSUndefined
-                ? null
-                : compareFunction;
+        final JSValue compareCallable = compareFunction instanceof JSUndefined ? null : compareFunction;
 
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
             return context.throwTypeError("Array.prototype.sort called on null or undefined");
@@ -1896,11 +1867,7 @@ public final class ArrayPrototype {
         Collections.sort(sortableElements, (a, b) -> {
             if (compareCallable != null) {
                 JSValue[] compareArgs = {a, b};
-                JSValue result = callCallableForSort(
-                        context,
-                        compareCallable,
-                        JSUndefined.INSTANCE,
-                        compareArgs);
+                JSValue result = callCallableForSort(context, compareCallable, JSUndefined.INSTANCE, compareArgs);
                 return JSTypeConversions.toInt32(context, result);
             } else {
                 // Default: convert to strings and compare
@@ -1943,8 +1910,8 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.splice(start[, deleteCount[, ...items]])
-     * Changes the contents of an array by removing or replacing elements.
+     * Array.prototype.splice(start[, deleteCount[, ...items]]) Changes the contents of an array by removing or
+     * replacing elements.
      */
     public static JSValue splice(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -2014,7 +1981,8 @@ public final class ArrayPrototype {
                     return context.getPendingException();
                 }
                 // Step 10.c.ii: Perform ? CreateDataPropertyOrThrow(A, ! ToString(k), fromValue).
-                if (!deletedObj.defineProperty(PropertyKey.fromString(Long.toString(i)), val, PropertyDescriptor.DataState.All)) {
+                if (!deletedObj.defineProperty(PropertyKey.fromString(Long.toString(i)), val,
+                        PropertyDescriptor.DataState.All)) {
                     return context.throwTypeError("Cannot define property " + i);
                 }
             }
@@ -2102,9 +2070,8 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.toLocaleString()
-     * ES2015 23.1.3.29
-     * Returns a localized string representing the calling array and its elements.
+     * Array.prototype.toLocaleString() ES2015 23.1.3.29 Returns a localized string representing the calling array and
+     * its elements.
      */
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -2146,10 +2113,7 @@ public final class ArrayPrototype {
                 // Per ECMA-402, invoke toLocaleString with exactly 2 args: locales and options
                 JSValue localesArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                 JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-                JSValue localeStringValue = PromiseConstructor.callCallable(
-                        context,
-                        toLocaleStringValue,
-                        element,
+                JSValue localeStringValue = PromiseConstructor.callCallable(context, toLocaleStringValue, element,
                         new JSValue[]{localesArg, optionsArg});
                 if (context.hasPendingException()) {
                     return context.getPendingException();
@@ -2165,9 +2129,8 @@ public final class ArrayPrototype {
     }
 
     /**
-     * ToObject + LengthOfArrayLike helper.
-     * Converts thisArg to an object and gets its length.
-     * Returns null if thisArg is null/undefined (sets pending exception).
+     * ToObject + LengthOfArrayLike helper. Converts thisArg to an object and gets its length. Returns null if thisArg
+     * is null/undefined (sets pending exception).
      */
     static JSObject toObjectChecked(JSContext context, JSValue thisArg) {
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
@@ -2178,9 +2141,8 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.toReversed()
-     * ES2023 23.1.3.31
-     * Returns a new array with elements in reversed order (immutable version of reverse).
+     * Array.prototype.toReversed() ES2023 23.1.3.31 Returns a new array with elements in reversed order (immutable
+     * version of reverse).
      */
     public static JSValue toReversed(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -2217,9 +2179,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.toSorted([compareFn])
-     * ES2023 23.1.3.32
-     * Returns a new sorted array (immutable version of sort).
+     * Array.prototype.toSorted([compareFn]) ES2023 23.1.3.32 Returns a new sorted array (immutable version of sort).
      */
     public static JSValue toSorted(JSContext context, JSValue thisArg, JSValue[] args) {
         // Step 1: If comparefn is not undefined and IsCallable(comparefn) is false, throw a TypeError.
@@ -2229,9 +2189,7 @@ public final class ArrayPrototype {
             return context.throwTypeError("The comparison function must be either a function or undefined: "
                     + JSTypeConversions.toString(context, args[0]).value());
         }
-        final JSValue compareCallable = compareFunction instanceof JSUndefined
-                ? null
-                : compareFunction;
+        final JSValue compareCallable = compareFunction instanceof JSUndefined ? null : compareFunction;
 
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
             return context.throwTypeError("Array.prototype.toSorted called on null or undefined");
@@ -2265,11 +2223,7 @@ public final class ArrayPrototype {
         elements.sort((a, b) -> {
             if (compareCallable != null) {
                 JSValue[] compareArgs = {a, b};
-                JSValue result = callCallableForSort(
-                        context,
-                        compareCallable,
-                        JSUndefined.INSTANCE,
-                        compareArgs);
+                JSValue result = callCallableForSort(context, compareCallable, JSUndefined.INSTANCE, compareArgs);
                 return JSTypeConversions.toInt32(context, result);
             } else {
                 // Default: convert to strings and compare
@@ -2289,9 +2243,8 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.toSpliced(start, deleteCount, ...items)
-     * ES2023 23.1.3.33
-     * Returns a new array with elements removed and/or added (immutable version of splice).
+     * Array.prototype.toSpliced(start, deleteCount, ...items) ES2023 23.1.3.33 Returns a new array with elements
+     * removed and/or added (immutable version of splice).
      */
     public static JSValue toSpliced(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -2401,8 +2354,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.toString()
-     * Returns a string representing the array.
+     * Array.prototype.toString() Returns a string representing the array.
      */
     public static JSValue toString(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg.isNullOrUndefined()) {
@@ -2426,8 +2378,7 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.unshift(...items)
-     * Adds elements to the beginning of an array.
+     * Array.prototype.unshift(...items) Adds elements to the beginning of an array.
      */
     public static JSValue unshift(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -2489,9 +2440,8 @@ public final class ArrayPrototype {
     }
 
     /**
-     * Array.prototype.with(index, value)
-     * ES2023 23.1.3.34
-     * Returns a new array with the element at the given index replaced (immutable version of arr[index] = value).
+     * Array.prototype.with(index, value) ES2023 23.1.3.34 Returns a new array with the element at the given index
+     * replaced (immutable version of arr[index] = value).
      */
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {

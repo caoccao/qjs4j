@@ -24,11 +24,9 @@ import java.util.Map;
 import static com.caoccao.qjs4j.unicode.UnicodePropertyTables.*;
 
 /**
- * Resolves Unicode property names to code point ranges.
- * Ported from QuickJS libunicode.c.
+ * Resolves Unicode property names to code point ranges. Ported from QuickJS libunicode.c.
  * <p>
- * Each JSContext owns its own instance, so the caches are per-context
- * and require no synchronization.
+ * Each JSContext owns its own instance, so the caches are per-context and require no synchronization.
  */
 public final class UnicodePropertyResolver {
 
@@ -45,10 +43,79 @@ public final class UnicodePropertyResolver {
     }
 
     /**
-     * Build ranges of code points that change under case operations.
-     * Ported from QuickJS unicode_case1().
+     * Resolve a binary property name (or alias) to code point ranges. Returns null if the name is not recognized.
+     */
+    public int[] resolveBinaryProperty(String name) {
+        int[] cached = propertyCache.get(name);
+        if (cached != null) {
+            return cached;
+        }
+
+        int[] ranges = resolveBinaryPropertyUncached(name);
+        if (ranges != null) {
+            propertyCache.put(name, ranges);
+        }
+        return ranges;
+    }
+
+    // --- Derived properties ---
+
+    /**
+     * Resolve a General Category name (or alias) to code point ranges. Returns null if the name is not recognized.
+     */
+    public int[] resolveGeneralCategory(String name) {
+        int[] cached = gcCache.get(name);
+        if (cached != null) {
+            return cached;
+        }
+
+        int gcIndex = findName(GC_NAME_TABLE, name);
+        if (gcIndex < 0) {
+            return null;
+        }
+
+        long gcMask;
+        if (gcIndex >= 30) {
+            // Composite categories: LC, L, M, N, S, P, Z, C
+            gcMask = getCompositeGcMask(gcIndex);
+        } else {
+            gcMask = 1L << gcIndex;
+        }
+
+        int[] ranges = decodeGeneralCategory(gcMask);
+        gcCache.put(name, ranges);
+        return ranges;
+    }
+
+    /**
+     * Resolve a script name (or alias) to code point ranges. Returns null if the name is not recognized.
+     */
+    public int[] resolveScript(String name, boolean extensions) {
+        String cacheKey = (extensions ? "scx:" : "sc:") + name;
+        int[] cached = scriptCache.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+
+        int scriptIndex = findName(SCRIPT_NAME_TABLE, name);
+        if (scriptIndex < 0) {
+            return null;
+        }
+
+        int[] ranges = decodeScript(scriptIndex, extensions);
+        if (ranges != null) {
+            scriptCache.put(cacheKey, ranges);
+        }
+        return ranges;
+    }
+
+    // --- Table decoders ---
+
+    /**
+     * Build ranges of code points that change under case operations. Ported from QuickJS unicode_case1().
      *
-     * @param caseMask bitmask of CASE_U, CASE_L, CASE_F
+     * @param caseMask
+     *            bitmask of CASE_U, CASE_L, CASE_F
      */
     private static int[] buildCaseChangeRanges(int caseMask) {
         if (caseMask == 0) {
@@ -57,14 +124,13 @@ public final class UnicodePropertyResolver {
 
         // Run type masks for each case operation (from QuickJS)
         // CASE_U types: U, UF, UL, LSU, U2L_399_EXT2, UF_D20, UF_D1_EXT, U_EXT, UF_EXT2, UF_EXT3
-        int upperMask = (1 << 0) | (1 << 2) | (1 << 4) | (1 << 5) | (1 << 6) |
-                (1 << 7) | (1 << 8) | (1 << 9) | (1 << 11) | (1 << 13);
+        int upperMask = (1 << 0) | (1 << 2) | (1 << 4) | (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8) | (1 << 9)
+                | (1 << 11) | (1 << 13);
         // CASE_L types: L, LF, UL, LSU, U2L_399_EXT2, LF_EXT, LF_EXT2
-        int lowerMask = (1 << 1) | (1 << 3) | (1 << 4) | (1 << 5) | (1 << 6) |
-                (1 << 10) | (1 << 12);
+        int lowerMask = (1 << 1) | (1 << 3) | (1 << 4) | (1 << 5) | (1 << 6) | (1 << 10) | (1 << 12);
         // CASE_F types: UF, LF, UL, LSU, U2L_399_EXT2, LF_EXT, LF_EXT2, UF_D20, UF_D1_EXT, UF_EXT2, UF_EXT3
-        int foldMask = (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5) | (1 << 6) |
-                (1 << 10) | (1 << 12) | (1 << 7) | (1 << 8) | (1 << 11) | (1 << 13);
+        int foldMask = (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5) | (1 << 6) | (1 << 10) | (1 << 12) | (1 << 7)
+                | (1 << 8) | (1 << 11) | (1 << 13);
 
         int mask = 0;
         if ((caseMask & CASE_U) != 0) {
@@ -126,11 +192,8 @@ public final class UnicodePropertyResolver {
         return sortAndMergeRanges(toIntArray(ranges));
     }
 
-    // --- Derived properties ---
-
     /**
-     * Decode a binary property table into ranges [start, end, start, end, ...]
-     * where ranges are inclusive on both ends.
+     * Decode a binary property table into ranges [start, end, start, end, ...] where ranges are inclusive on both ends.
      * Ported from QuickJS unicode_prop1().
      */
     private static int[] decodeBinaryProperty(int propIndex) {
@@ -174,9 +237,8 @@ public final class UnicodePropertyResolver {
     }
 
     /**
-     * Decode the General Category table for a given GC bitmask.
-     * Returns ranges [start, end, start, end, ...] (inclusive).
-     * Ported from QuickJS unicode_general_category1().
+     * Decode the General Category table for a given GC bitmask. Returns ranges [start, end, start, end, ...]
+     * (inclusive). Ported from QuickJS unicode_general_category1().
      */
     private static int[] decodeGeneralCategory(long gcMask) {
         byte[] table = GC_TABLE;
@@ -226,11 +288,8 @@ public final class UnicodePropertyResolver {
         return mergeAdjacentRanges(toIntArray(ranges));
     }
 
-    // --- Table decoders ---
-
     /**
-     * Decode script table for a given script index.
-     * Ported from QuickJS unicode_script().
+     * Decode script table for a given script index. Ported from QuickJS unicode_script().
      */
     private static int[] decodeScript(int scriptIndex, boolean extensions) {
         int[] baseRanges = decodeScriptBase(scriptIndex);
@@ -257,9 +316,8 @@ public final class UnicodePropertyResolver {
     }
 
     /**
-     * Decode the main script table to find code points matching a script index.
-     * Format: high bit = type (has script or not), lower 7 bits = variable-length count.
-     * If type=1, next byte is the script ID.
+     * Decode the main script table to find code points matching a script index. Format: high bit = type (has script or
+     * not), lower 7 bits = variable-length count. If type=1, next byte is the script ID.
      */
     private static int[] decodeScriptBase(int scriptIndex) {
         byte[] table = SCRIPT_TABLE;
@@ -293,11 +351,9 @@ public final class UnicodePropertyResolver {
     }
 
     /**
-     * Decode the script extensions table.
-     * Format: variable-length count, then v_len byte (number of extension IDs),
-     * then v_len script ID bytes.
-     * For Common/Inherited: collects code points that have ANY extensions.
-     * For other scripts: collects code points where the script appears in extensions.
+     * Decode the script extensions table. Format: variable-length count, then v_len byte (number of extension IDs),
+     * then v_len script ID bytes. For Common/Inherited: collects code points that have ANY extensions. For other
+     * scripts: collects code points where the script appears in extensions.
      */
     private static int[] decodeScriptExtensions(int scriptIndex, boolean isCommon) {
         byte[] table = SCRIPT_EXT_TABLE;
@@ -341,8 +397,8 @@ public final class UnicodePropertyResolver {
     }
 
     /**
-     * Find a name in a name table. Each entry in the table contains comma-separated aliases.
-     * Returns the index of the matching entry, or -1 if not found.
+     * Find a name in a name table. Each entry in the table contains comma-separated aliases. Returns the index of the
+     * matching entry, or -1 if not found.
      */
     public static int findName(String[] nameTable, String name) {
         for (int i = 0; i < nameTable.length; i++) {
@@ -372,25 +428,27 @@ public final class UnicodePropertyResolver {
     private static long getCompositeGcMask(int gcIndex) {
         return switch (gcIndex) {
             case 30 -> // LC = Cased_Letter = Lu|Ll|Lt
-                    (1L << GC_LU) | (1L << GC_LL) | (1L << GC_LT);
+                (1L << GC_LU) | (1L << GC_LL) | (1L << GC_LT);
             case 31 -> // L = Letter = Lu|Ll|Lt|Lm|Lo
-                    (1L << GC_LU) | (1L << GC_LL) | (1L << GC_LT) | (1L << GC_LM) | (1L << GC_LO);
+                (1L << GC_LU) | (1L << GC_LL) | (1L << GC_LT) | (1L << GC_LM) | (1L << GC_LO);
             case 32 -> // M = Mark = Mn|Mc|Me
-                    (1L << GC_MN) | (1L << GC_MC) | (1L << GC_ME);
+                (1L << GC_MN) | (1L << GC_MC) | (1L << GC_ME);
             case 33 -> // N = Number = Nd|Nl|No
-                    (1L << GC_ND) | (1L << GC_NL) | (1L << GC_NO);
+                (1L << GC_ND) | (1L << GC_NL) | (1L << GC_NO);
             case 34 -> // S = Symbol = Sm|Sc|Sk|So
-                    (1L << GC_SM) | (1L << GC_SC) | (1L << GC_SK) | (1L << GC_SO);
+                (1L << GC_SM) | (1L << GC_SC) | (1L << GC_SK) | (1L << GC_SO);
             case 35 -> // P = Punctuation = Pc|Pd|Ps|Pe|Pi|Pf|Po
-                    (1L << GC_PC) | (1L << GC_PD) | (1L << GC_PS) | (1L << GC_PE) |
-                            (1L << GC_PI) | (1L << GC_PF) | (1L << GC_PO);
+                (1L << GC_PC) | (1L << GC_PD) | (1L << GC_PS) | (1L << GC_PE) | (1L << GC_PI) | (1L << GC_PF)
+                        | (1L << GC_PO);
             case 36 -> // Z = Separator = Zs|Zl|Zp
-                    (1L << GC_ZS) | (1L << GC_ZL) | (1L << GC_ZP);
+                (1L << GC_ZS) | (1L << GC_ZL) | (1L << GC_ZP);
             case 37 -> // C = Other = Cc|Cf|Cs|Co|Cn
-                    (1L << GC_CC) | (1L << GC_CF) | (1L << GC_CS) | (1L << GC_CO) | (1L << GC_CN);
+                (1L << GC_CC) | (1L << GC_CF) | (1L << GC_CS) | (1L << GC_CO) | (1L << GC_CN);
             default -> 0L;
         };
     }
+
+    // --- Case change detection ---
 
     /**
      * Intersection of two sorted range arrays.
@@ -474,7 +532,7 @@ public final class UnicodePropertyResolver {
         return toIntArray(result);
     }
 
-    // --- Case change detection ---
+    // --- Range set operations ---
 
     private static SequencePropertyResult resolveBasicEmoji() {
         // Basic_Emoji1: single code points (length-1 sequences -> codePointRanges)
@@ -493,8 +551,8 @@ public final class UnicodePropertyResolver {
     }
 
     /**
-     * Resolve a binary property without caching.
-     * Used by UnicodeData static initializers that run before any JSContext exists.
+     * Resolve a binary property without caching. Used by UnicodeData static initializers that run before any JSContext
+     * exists.
      */
     public static int[] resolveBinaryPropertyUncached(String name) {
         int propIndex = findName(PROP_NAME_TABLE, name);
@@ -568,8 +626,7 @@ public final class UnicodePropertyResolver {
         // Alphabetic (propIndex = 58) = Lu|Ll|Lt|Lm|Lo|Nl | Other_Uppercase | Other_Lowercase | Other_Alphabetic
         if (propIndex == 58) {
             int[] base = decodeGeneralCategory(
-                    (1L << GC_LU) | (1L << GC_LL) | (1L << GC_LT) |
-                            (1L << GC_LM) | (1L << GC_LO) | (1L << GC_NL));
+                    (1L << GC_LU) | (1L << GC_LL) | (1L << GC_LT) | (1L << GC_LM) | (1L << GC_LO) | (1L << GC_NL));
             int[] otherUpper = decodeBinaryProperty(PROP_OTHER_UPPERCASE);
             int[] otherLower = decodeBinaryProperty(PROP_OTHER_LOWERCASE);
             int[] otherAlpha = decodeBinaryProperty(PROP_OTHER_ALPHABETIC);
@@ -577,8 +634,8 @@ public final class UnicodePropertyResolver {
         }
         // Grapheme_Base (propIndex = 68) = NOT (Cc|Cf|Cs|Co|Cn|Zl|Zp|Me|Mn | Other_Grapheme_Extend)
         if (propIndex == 68) {
-            long mask = (1L << GC_CC) | (1L << GC_CF) | (1L << GC_CS) | (1L << GC_CO) |
-                    (1L << GC_CN) | (1L << GC_ZL) | (1L << GC_ZP) | (1L << GC_ME) | (1L << GC_MN);
+            long mask = (1L << GC_CC) | (1L << GC_CF) | (1L << GC_CS) | (1L << GC_CO) | (1L << GC_CN) | (1L << GC_ZL)
+                    | (1L << GC_ZP) | (1L << GC_ME) | (1L << GC_MN);
             int[] excluded = decodeGeneralCategory(mask);
             int[] otherGraphemeExtend = decodeBinaryProperty(PROP_OTHER_GRAPHEME_EXTEND);
             int[] combined = unionRanges(excluded, otherGraphemeExtend);
@@ -598,8 +655,7 @@ public final class UnicodePropertyResolver {
         }
         // XID_Start (propIndex = 78)
         if (propIndex == 78) {
-            long gcMask = (1L << GC_LU) | (1L << GC_LL) | (1L << GC_LT) |
-                    (1L << GC_LM) | (1L << GC_LO) | (1L << GC_NL);
+            long gcMask = (1L << GC_LU) | (1L << GC_LL) | (1L << GC_LT) | (1L << GC_LM) | (1L << GC_LO) | (1L << GC_NL);
             int[] base = decodeGeneralCategory(gcMask);
             int[] otherIdStart = decodeBinaryProperty(PROP_OTHER_ID_START);
             int[] patSyntax = decodeBinaryProperty(PROP_PATTERN_SYNTAX);
@@ -611,9 +667,8 @@ public final class UnicodePropertyResolver {
         }
         // XID_Continue (propIndex = 77)
         if (propIndex == 77) {
-            long gcMask = (1L << GC_LU) | (1L << GC_LL) | (1L << GC_LT) |
-                    (1L << GC_LM) | (1L << GC_LO) | (1L << GC_NL) |
-                    (1L << GC_MN) | (1L << GC_MC) | (1L << GC_ND) | (1L << GC_PC);
+            long gcMask = (1L << GC_LU) | (1L << GC_LL) | (1L << GC_LT) | (1L << GC_LM) | (1L << GC_LO) | (1L << GC_NL)
+                    | (1L << GC_MN) | (1L << GC_MC) | (1L << GC_ND) | (1L << GC_PC);
             int[] base = decodeGeneralCategory(gcMask);
             int[] otherIdStart = decodeBinaryProperty(PROP_OTHER_ID_START);
             int[] otherIdContinue = decodeBinaryProperty(PROP_OTHER_ID_CONTINUE);
@@ -658,8 +713,6 @@ public final class UnicodePropertyResolver {
         return null;
     }
 
-    // --- Range set operations ---
-
     private static SequencePropertyResult resolveEmojiKeycapSequence() {
         // Each code point c becomes sequence [c, 0xFE0F, 0x20E3]
         int[] ranges = decodeBinaryProperty(PROP_EMOJI_KEYCAP_SEQUENCE);
@@ -674,61 +727,61 @@ public final class UnicodePropertyResolver {
 
     private static int[] resolvePropertyByIndex(int propIndex) {
         switch (propIndex) {
-            case PROP_ASCII_HEX_DIGIT:
-            case PROP_BIDI_CONTROL:
-            case PROP_DASH:
-            case PROP_DEPRECATED:
-            case PROP_DIACRITIC:
-            case PROP_EXTENDER:
-            case PROP_HEX_DIGIT:
-            case PROP_IDS_UNARY_OPERATOR:
-            case PROP_IDS_BINARY_OPERATOR:
-            case PROP_IDS_TRINARY_OPERATOR:
-            case PROP_IDEOGRAPHIC:
-            case PROP_JOIN_CONTROL:
-            case PROP_LOGICAL_ORDER_EXCEPTION:
-            case PROP_MODIFIER_COMBINING_MARK:
-            case PROP_NONCHARACTER_CODE_POINT:
-            case PROP_PATTERN_SYNTAX:
-            case PROP_PATTERN_WHITE_SPACE:
-            case PROP_QUOTATION_MARK:
-            case PROP_RADICAL:
-            case PROP_REGIONAL_INDICATOR:
-            case PROP_SENTENCE_TERMINAL:
-            case PROP_SOFT_DOTTED:
-            case PROP_TERMINAL_PUNCTUATION:
-            case PROP_UNIFIED_IDEOGRAPH:
-            case PROP_VARIATION_SELECTOR:
-            case PROP_WHITE_SPACE:
-            case PROP_BIDI_MIRRORED:
-            case PROP_EMOJI:
-            case PROP_EMOJI_COMPONENT:
-            case PROP_EMOJI_MODIFIER:
-            case PROP_EMOJI_MODIFIER_BASE:
-            case PROP_EMOJI_PRESENTATION:
-            case PROP_EXTENDED_PICTOGRAPHIC:
-            case PROP_DEFAULT_IGNORABLE_CODE_POINT:
-            case PROP_HYPHEN:
-            case PROP_OTHER_MATH:
-            case PROP_OTHER_ALPHABETIC:
-            case PROP_OTHER_LOWERCASE:
-            case PROP_OTHER_UPPERCASE:
-            case PROP_OTHER_GRAPHEME_EXTEND:
-            case PROP_OTHER_DEFAULT_IGNORABLE_CODE_POINT:
-            case PROP_OTHER_ID_START:
-            case PROP_OTHER_ID_CONTINUE:
-            case PROP_PREPENDED_CONCATENATION_MARK:
-            case PROP_ID_CONTINUE1:
-            case PROP_XID_START1:
-            case PROP_XID_CONTINUE1:
-            case PROP_CHANGES_WHEN_TITLECASED1:
-            case PROP_CHANGES_WHEN_CASEFOLDED1:
-            case PROP_CHANGES_WHEN_NFKC_CASEFOLDED1:
-            case PROP_ID_START:
-            case PROP_CASE_IGNORABLE:
+            case PROP_ASCII_HEX_DIGIT :
+            case PROP_BIDI_CONTROL :
+            case PROP_DASH :
+            case PROP_DEPRECATED :
+            case PROP_DIACRITIC :
+            case PROP_EXTENDER :
+            case PROP_HEX_DIGIT :
+            case PROP_IDS_UNARY_OPERATOR :
+            case PROP_IDS_BINARY_OPERATOR :
+            case PROP_IDS_TRINARY_OPERATOR :
+            case PROP_IDEOGRAPHIC :
+            case PROP_JOIN_CONTROL :
+            case PROP_LOGICAL_ORDER_EXCEPTION :
+            case PROP_MODIFIER_COMBINING_MARK :
+            case PROP_NONCHARACTER_CODE_POINT :
+            case PROP_PATTERN_SYNTAX :
+            case PROP_PATTERN_WHITE_SPACE :
+            case PROP_QUOTATION_MARK :
+            case PROP_RADICAL :
+            case PROP_REGIONAL_INDICATOR :
+            case PROP_SENTENCE_TERMINAL :
+            case PROP_SOFT_DOTTED :
+            case PROP_TERMINAL_PUNCTUATION :
+            case PROP_UNIFIED_IDEOGRAPH :
+            case PROP_VARIATION_SELECTOR :
+            case PROP_WHITE_SPACE :
+            case PROP_BIDI_MIRRORED :
+            case PROP_EMOJI :
+            case PROP_EMOJI_COMPONENT :
+            case PROP_EMOJI_MODIFIER :
+            case PROP_EMOJI_MODIFIER_BASE :
+            case PROP_EMOJI_PRESENTATION :
+            case PROP_EXTENDED_PICTOGRAPHIC :
+            case PROP_DEFAULT_IGNORABLE_CODE_POINT :
+            case PROP_HYPHEN :
+            case PROP_OTHER_MATH :
+            case PROP_OTHER_ALPHABETIC :
+            case PROP_OTHER_LOWERCASE :
+            case PROP_OTHER_UPPERCASE :
+            case PROP_OTHER_GRAPHEME_EXTEND :
+            case PROP_OTHER_DEFAULT_IGNORABLE_CODE_POINT :
+            case PROP_OTHER_ID_START :
+            case PROP_OTHER_ID_CONTINUE :
+            case PROP_PREPENDED_CONCATENATION_MARK :
+            case PROP_ID_CONTINUE1 :
+            case PROP_XID_START1 :
+            case PROP_XID_CONTINUE1 :
+            case PROP_CHANGES_WHEN_TITLECASED1 :
+            case PROP_CHANGES_WHEN_CASEFOLDED1 :
+            case PROP_CHANGES_WHEN_NFKC_CASEFOLDED1 :
+            case PROP_ID_START :
+            case PROP_CASE_IGNORABLE :
                 // Direct table lookup
                 return decodeBinaryProperty(propIndex);
-            default:
+            default :
                 // Handled below as special/derived properties
                 break;
         }
@@ -820,9 +873,8 @@ public final class UnicodePropertyResolver {
     }
 
     /**
-     * Decode RGI Emoji ZWJ Sequences from the compact byte encoding.
-     * Ported directly from QuickJS {@code unicode_sequence_prop1} case
-     * {@code UNICODE_SEQUENCE_PROP_RGI_Emoji_ZWJ_Sequence} in libunicode.c.
+     * Decode RGI Emoji ZWJ Sequences from the compact byte encoding. Ported directly from QuickJS
+     * {@code unicode_sequence_prop1} case {@code UNICODE_SEQUENCE_PROP_RGI_Emoji_ZWJ_Sequence} in libunicode.c.
      * <p>
      * Uses a flat seq[] array with placeholder slots, exactly matching QuickJS.
      */
@@ -911,15 +963,16 @@ public final class UnicodePropertyResolver {
     }
 
     /**
-     * Resolve a Unicode "property of strings" (sequence property) by name.
-     * These are used in RegExp with the {@code v} flag for matching multi-codepoint sequences.
+     * Resolve a Unicode "property of strings" (sequence property) by name. These are used in RegExp with the {@code v}
+     * flag for matching multi-codepoint sequences.
      * <p>
-     * Known properties: Basic_Emoji, Emoji_Keycap_Sequence, RGI_Emoji_Modifier_Sequence,
-     * RGI_Emoji_Flag_Sequence, RGI_Emoji_Tag_Sequence, RGI_Emoji_ZWJ_Sequence, RGI_Emoji.
+     * Known properties: Basic_Emoji, Emoji_Keycap_Sequence, RGI_Emoji_Modifier_Sequence, RGI_Emoji_Flag_Sequence,
+     * RGI_Emoji_Tag_Sequence, RGI_Emoji_ZWJ_Sequence, RGI_Emoji.
      * <p>
      * Ported from QuickJS {@code unicode_sequence_prop1()} in libunicode.c.
      *
-     * @param name the sequence property name
+     * @param name
+     *            the sequence property name
      * @return the result, or null if the name is not a known sequence property
      */
     public static SequencePropertyResult resolveSequenceProperty(String name) {
@@ -1042,79 +1095,12 @@ public final class UnicodePropertyResolver {
     }
 
     /**
-     * Resolve a binary property name (or alias) to code point ranges.
-     * Returns null if the name is not recognized.
-     */
-    public int[] resolveBinaryProperty(String name) {
-        int[] cached = propertyCache.get(name);
-        if (cached != null) {
-            return cached;
-        }
-
-        int[] ranges = resolveBinaryPropertyUncached(name);
-        if (ranges != null) {
-            propertyCache.put(name, ranges);
-        }
-        return ranges;
-    }
-
-    /**
-     * Resolve a General Category name (or alias) to code point ranges.
-     * Returns null if the name is not recognized.
-     */
-    public int[] resolveGeneralCategory(String name) {
-        int[] cached = gcCache.get(name);
-        if (cached != null) {
-            return cached;
-        }
-
-        int gcIndex = findName(GC_NAME_TABLE, name);
-        if (gcIndex < 0) {
-            return null;
-        }
-
-        long gcMask;
-        if (gcIndex >= 30) {
-            // Composite categories: LC, L, M, N, S, P, Z, C
-            gcMask = getCompositeGcMask(gcIndex);
-        } else {
-            gcMask = 1L << gcIndex;
-        }
-
-        int[] ranges = decodeGeneralCategory(gcMask);
-        gcCache.put(name, ranges);
-        return ranges;
-    }
-
-    /**
-     * Resolve a script name (or alias) to code point ranges.
-     * Returns null if the name is not recognized.
-     */
-    public int[] resolveScript(String name, boolean extensions) {
-        String cacheKey = (extensions ? "scx:" : "sc:") + name;
-        int[] cached = scriptCache.get(cacheKey);
-        if (cached != null) {
-            return cached;
-        }
-
-        int scriptIndex = findName(SCRIPT_NAME_TABLE, name);
-        if (scriptIndex < 0) {
-            return null;
-        }
-
-        int[] ranges = decodeScript(scriptIndex, extensions);
-        if (ranges != null) {
-            scriptCache.put(cacheKey, ranges);
-        }
-        return ranges;
-    }
-
-    /**
-     * Result of resolving a Unicode "property of strings" (sequence property).
-     * Used for RegExp with the {@code v} flag.
+     * Result of resolving a Unicode "property of strings" (sequence property). Used for RegExp with the {@code v} flag.
      *
-     * @param codePointRanges single code point ranges as inclusive start/end pairs
-     * @param sequences       multi-codepoint sequences (each int[] is one sequence)
+     * @param codePointRanges
+     *            single code point ranges as inclusive start/end pairs
+     * @param sequences
+     *            multi-codepoint sequences (each int[] is one sequence)
      */
     public record SequencePropertyResult(int[] codePointRanges, List<int[]> sequences) {
     }

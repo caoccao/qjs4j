@@ -20,8 +20,8 @@ import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.vm.Opcode;
 
 /**
- * Compiles statement AST nodes into bytecode.
- * Extracted from BytecodeCompiler to separate statement compilation concerns.
+ * Compiles statement AST nodes into bytecode. Extracted from BytecodeCompiler to separate statement compilation
+ * concerns.
  */
 final class StatementCompiler extends AstNodeCompiler<Statement> {
     StatementCompiler(CompilerContext compilerContext) {

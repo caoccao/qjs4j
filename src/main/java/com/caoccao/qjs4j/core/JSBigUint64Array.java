@@ -23,19 +23,11 @@ import java.math.BigInteger;
 import java.nio.ByteBuffer;
 
 /**
- * Represents a JavaScript BigUint64Array.
- * 64-bit unsigned integer array.
+ * Represents a JavaScript BigUint64Array. 64-bit unsigned integer array.
  */
 public final class JSBigUint64Array extends JSTypedArray {
     public static final int BYTES_PER_ELEMENT = 8;
     public static final String NAME = "BigUint64Array";
-
-    /**
-     * Create a BigUint64Array with a new buffer.
-     */
-    public JSBigUint64Array(JSContext context, int length) {
-        super(context, length, BYTES_PER_ELEMENT);
-    }
 
     /**
      * Create a BigUint64Array view on an existing buffer.
@@ -44,9 +36,11 @@ public final class JSBigUint64Array extends JSTypedArray {
         super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 
-    public static JSObject create(JSContext context, JSValue... args) {
-        return createFromArguments(context, BYTES_PER_ELEMENT,
-                context::createJSBigUint64Array, context::createJSBigUint64Array, args);
+    /**
+     * Create a BigUint64Array with a new buffer.
+     */
+    public JSBigUint64Array(JSContext context, int length) {
+        super(context, length, BYTES_PER_ELEMENT);
     }
 
     @Override
@@ -60,9 +54,9 @@ public final class JSBigUint64Array extends JSTypedArray {
         ByteBuffer buf = getByteBuffer();
         long value = buf.getLong(index * BYTES_PER_ELEMENT);
         // Convert unsigned long to double (may lose precision for very large values)
-        return Long.compareUnsigned(value, 0) < 0 ?
-                (double) (value & Long.MAX_VALUE) + Math.pow(2, 63) :
-                (double) value;
+        return Long.compareUnsigned(value, 0) < 0
+                ? (double) (value & Long.MAX_VALUE) + Math.pow(2, 63)
+                : (double) value;
     }
 
     @Override
@@ -131,5 +125,10 @@ public final class JSBigUint64Array extends JSTypedArray {
         ByteBuffer buf = getByteBuffer();
         // Write raw 64-bit modulo value directly to avoid precision loss via double.
         buf.putLong(index * BYTES_PER_ELEMENT, longVal);
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        return createFromArguments(context, BYTES_PER_ELEMENT, context::createJSBigUint64Array,
+                context::createJSBigUint64Array, args);
     }
 }

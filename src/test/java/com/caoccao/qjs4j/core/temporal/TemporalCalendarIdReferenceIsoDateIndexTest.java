@@ -22,9 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class TemporalCalendarIdReferenceIsoDateIndexTest {
-    private IsoDate findReferenceIsoDateAtOrBelowManual(
-            TemporalCalendarId calendarId,
-            String monthCode,
+    private IsoDate findReferenceIsoDateAtOrBelowManual(TemporalCalendarId calendarId, String monthCode,
             int maximumDayOfMonth) {
         int constrainedMaximumDay = Math.min(maximumDayOfMonth, 31);
         for (int dayOfMonth = constrainedMaximumDay; dayOfMonth >= 1; dayOfMonth--) {
@@ -70,4 +68,3 @@ public class TemporalCalendarIdReferenceIsoDateIndexTest {
         }
     }
 }
-

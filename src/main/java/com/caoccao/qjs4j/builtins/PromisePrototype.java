@@ -19,15 +19,13 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 /**
- * Implementation of Promise.prototype methods.
- * Based on ES2020 Promise specification (simplified).
+ * Implementation of Promise.prototype methods. Based on ES2020 Promise specification (simplified).
  */
 public final class PromisePrototype {
 
     /**
-     * Promise.prototype.catch(onRejected)
-     * ES2020 25.6.5.1
-     * Returns a new Promise, and attaches a callback for rejection only.
+     * Promise.prototype.catch(onRejected) ES2020 25.6.5.1 Returns a new Promise, and attaches a callback for rejection
+     * only.
      */
     public static JSValue catchMethod(JSContext context, JSValue thisArg, JSValue[] args) {
         // catch is just then(undefined, onRejected)
@@ -36,9 +34,8 @@ public final class PromisePrototype {
     }
 
     /**
-     * Promise.prototype.finally(onFinally)
-     * ES2020 25.6.5.2
-     * Returns a new Promise, and attaches a callback that is called when the promise is settled.
+     * Promise.prototype.finally(onFinally) ES2020 25.6.5.2 Returns a new Promise, and attaches a callback that is
+     * called when the promise is settled.
      */
     public static JSValue finallyMethod(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue onFinallyValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -57,7 +54,8 @@ public final class PromisePrototype {
                     if (childContext.hasPendingException()) {
                         return JSUndefined.INSTANCE;
                     }
-                    JSValue resolved = PromiseConstructor.resolve(childContext, constructor, new JSValue[]{onFinallyResult});
+                    JSValue resolved = PromiseConstructor.resolve(childContext, constructor,
+                            new JSValue[]{onFinallyResult});
                     if (childContext.hasPendingException()) {
                         return JSUndefined.INSTANCE;
                     }
@@ -73,7 +71,8 @@ public final class PromisePrototype {
                     if (childContext.hasPendingException()) {
                         return JSUndefined.INSTANCE;
                     }
-                    JSValue resolved = PromiseConstructor.resolve(childContext, constructor, new JSValue[]{onFinallyResult});
+                    JSValue resolved = PromiseConstructor.resolve(childContext, constructor,
+                            new JSValue[]{onFinallyResult});
                     if (childContext.hasPendingException()) {
                         return JSUndefined.INSTANCE;
                     }
@@ -141,9 +140,8 @@ public final class PromisePrototype {
     }
 
     /**
-     * Promise.prototype.then(onFulfilled, onRejected)
-     * ES2020 25.6.5.4
-     * Returns a new Promise, and attaches callbacks for fulfillment and/or rejection.
+     * Promise.prototype.then(onFulfilled, onRejected) ES2020 25.6.5.4 Returns a new Promise, and attaches callbacks for
+     * fulfillment and/or rejection.
      */
     public static JSValue then(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSPromise promise)) {
@@ -154,7 +152,8 @@ public final class PromisePrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        PromiseConstructor.PromiseCapability promiseCapability = PromiseConstructor.newPromiseCapability(context, constructor);
+        PromiseConstructor.PromiseCapability promiseCapability = PromiseConstructor.newPromiseCapability(context,
+                constructor);
         if (promiseCapability == null) {
             return JSUndefined.INSTANCE;
         }
@@ -176,10 +175,10 @@ public final class PromisePrototype {
             fulfillReaction = new JSPromise.ReactionRecord(onFulfilled, chainedPromise, context);
             rejectReaction = new JSPromise.ReactionRecord(onRejected, chainedPromise, context);
         } else {
-            fulfillReaction = new JSPromise.ReactionRecord(
-                    onFulfilled, context, promiseCapability.resolve(), promiseCapability.reject());
-            rejectReaction = new JSPromise.ReactionRecord(
-                    onRejected, context, promiseCapability.resolve(), promiseCapability.reject());
+            fulfillReaction = new JSPromise.ReactionRecord(onFulfilled, context, promiseCapability.resolve(),
+                    promiseCapability.reject());
+            rejectReaction = new JSPromise.ReactionRecord(onRejected, context, promiseCapability.resolve(),
+                    promiseCapability.reject());
         }
 
         // Add reactions to the promise

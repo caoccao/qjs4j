@@ -70,8 +70,8 @@ final class ArrayPatternCompiler extends AstNodeCompiler<ArrayPattern> {
                     // Skip element
                     compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
                     // Stack: iter next catch_offset value done
-                    compilerContext.emitter.emitOpcode(Opcode.DROP);  // Drop done
-                    compilerContext.emitter.emitOpcode(Opcode.DROP);  // Drop value
+                    compilerContext.emitter.emitOpcode(Opcode.DROP); // Drop done
+                    compilerContext.emitter.emitOpcode(Opcode.DROP); // Drop value
                     // Stack: iter next catch_offset
                 }
             }
@@ -90,7 +90,7 @@ final class ArrayPatternCompiler extends AstNodeCompiler<ArrayPattern> {
             int labelRestNext = compilerContext.emitter.currentOffset();
 
             // Get next value: iter next catch_offset array idx -> iter next catch_offset array idx value done
-            compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 2);  // depth = 2 (array and idx)
+            compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 2); // depth = 2 (array and idx)
 
             // Check if done
             int jumpRestDone = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
@@ -123,8 +123,8 @@ final class ArrayPatternCompiler extends AstNodeCompiler<ArrayPattern> {
         } else {
             // Iterator-based array binding semantics.
             compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
-            int iteratorDoneLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
-                    "$arrayPatternIteratorDone" + compilerContext.emitter.currentOffset());
+            int iteratorDoneLocalIndex = compilerContext.scopeManager.currentScope()
+                    .declareLocal("$arrayPatternIteratorDone" + compilerContext.emitter.currentOffset());
             compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, iteratorDoneLocalIndex);
             for (Pattern element : arrPattern.getElements()) {

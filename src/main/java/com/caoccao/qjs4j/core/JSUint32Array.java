@@ -19,19 +19,11 @@ package com.caoccao.qjs4j.core;
 import java.nio.ByteBuffer;
 
 /**
- * Represents a JavaScript Uint32Array.
- * 32-bit unsigned integer array.
+ * Represents a JavaScript Uint32Array. 32-bit unsigned integer array.
  */
 public final class JSUint32Array extends JSTypedArray {
     public static final int BYTES_PER_ELEMENT = 4;
     public static final String NAME = "Uint32Array";
-
-    /**
-     * Create a Uint32Array with a new buffer.
-     */
-    public JSUint32Array(JSContext context, int length) {
-        super(context, length, BYTES_PER_ELEMENT);
-    }
 
     /**
      * Create a Uint32Array view on an existing buffer.
@@ -40,9 +32,11 @@ public final class JSUint32Array extends JSTypedArray {
         super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 
-    public static JSObject create(JSContext context, JSValue... args) {
-        return createFromArguments(context, BYTES_PER_ELEMENT,
-                context::createJSUint32Array, context::createJSUint32Array, args);
+    /**
+     * Create a Uint32Array with a new buffer.
+     */
+    public JSUint32Array(JSContext context, int length) {
+        super(context, length, BYTES_PER_ELEMENT);
     }
 
     @Override
@@ -82,5 +76,10 @@ public final class JSUint32Array extends JSTypedArray {
         checkIndex(index);
         ByteBuffer buf = getByteBuffer();
         buf.putInt(index * BYTES_PER_ELEMENT, JSTypeConversions.toInt32(value));
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        return createFromArguments(context, BYTES_PER_ELEMENT, context::createJSUint32Array,
+                context::createJSUint32Array, args);
     }
 }

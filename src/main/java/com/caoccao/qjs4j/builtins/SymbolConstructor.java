@@ -19,15 +19,12 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 /**
- * Implementation of Symbol constructor and static methods.
- * Based on ES2020 Symbol specification.
+ * Implementation of Symbol constructor and static methods. Based on ES2020 Symbol specification.
  */
 public final class SymbolConstructor {
     /**
-     * Symbol(description)
-     * ES2020 19.4.1
-     * Creates a new unique Symbol value.
-     * Note: Symbol cannot be called with new operator.
+     * Symbol(description) ES2020 19.4.1 Creates a new unique Symbol value. Note: Symbol cannot be called with new
+     * operator.
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         String description = null;
@@ -52,49 +49,42 @@ public final class SymbolConstructor {
     }
 
     /**
-     * Symbol.hasInstance
-     * ES2020 19.4.2.3
+     * Symbol.hasInstance ES2020 19.4.2.3
      */
     public static JSValue getHasInstance(JSContext context, JSValue thisArg, JSValue[] args) {
         return JSSymbol.HAS_INSTANCE;
     }
 
     /**
-     * Symbol.isConcatSpreadable
-     * ES2020 19.4.2.5
+     * Symbol.isConcatSpreadable ES2020 19.4.2.5
      */
     public static JSValue getIsConcatSpreadable(JSContext context, JSValue thisArg, JSValue[] args) {
         return JSSymbol.IS_CONCAT_SPREADABLE;
     }
 
     /**
-     * Symbol.iterator
-     * ES2020 19.4.2.4
+     * Symbol.iterator ES2020 19.4.2.4
      */
     public static JSValue getIterator(JSContext context, JSValue thisArg, JSValue[] args) {
         return JSSymbol.ITERATOR;
     }
 
     /**
-     * Symbol.toPrimitive
-     * ES2020 19.4.2.13
+     * Symbol.toPrimitive ES2020 19.4.2.13
      */
     public static JSValue getToPrimitive(JSContext context, JSValue thisArg, JSValue[] args) {
         return JSSymbol.TO_PRIMITIVE;
     }
 
     /**
-     * Symbol.toStringTag
-     * ES2020 19.4.2.14
+     * Symbol.toStringTag ES2020 19.4.2.14
      */
     public static JSValue getToStringTag(JSContext context, JSValue thisArg, JSValue[] args) {
         return JSSymbol.TO_STRING_TAG;
     }
 
     /**
-     * Symbol.keyFor(sym)
-     * ES2020 19.4.2.6
-     * Returns the key for a Symbol from the global symbol registry.
+     * Symbol.keyFor(sym) ES2020 19.4.2.6 Returns the key for a Symbol from the global symbol registry.
      */
     public static JSValue keyFor(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -111,9 +101,7 @@ public final class SymbolConstructor {
     }
 
     /**
-     * Symbol.for(key)
-     * ES2020 19.4.2.1
-     * Returns a Symbol from the global symbol registry.
+     * Symbol.for(key) ES2020 19.4.2.1 Returns a Symbol from the global symbol registry.
      */
     public static JSValue symbolFor(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue keyValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;

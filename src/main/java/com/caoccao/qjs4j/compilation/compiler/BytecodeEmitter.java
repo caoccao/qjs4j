@@ -23,27 +23,25 @@ import com.caoccao.qjs4j.vm.Opcode;
 import java.util.*;
 
 /**
- * Emits bytecode instructions.
- * Handles encoding of opcodes, operands, and manages constant/atom pools.
+ * Emits bytecode instructions. Handles encoding of opcodes, operands, and manages constant/atom pools.
  */
 public final class BytecodeEmitter {
     private static final int INITIAL_CODE_CAPACITY = 256;
     private final Map<String, Integer> atomIndexCache;
     private final List<String> atomPool;
-    private final Map<JSValue, Integer> constantIndexCache;
-    private final List<JSValue> constantPool;
     /**
      * Growable code buffer, written and patched in place.
      * <p>
-     * This used to be a {@link java.io.ByteArrayOutputStream}, which offers no way to overwrite an
-     * already-written byte: every {@link #patchJump(int, int)} and {@link #markCatchAsFinally(int)}
-     * had to copy the whole buffer out, edit it, reset the stream and copy it back. Compiling a
-     * function with <em>J</em> jumps over <em>N</em> bytes of code cost O(J&middot;N) in raw array
-     * copying, and every {@code if}, loop, {@code &&}, {@code ||}, {@code ?:}, {@code try} and
-     * {@code switch} emits at least one patch.
+     * This used to be a {@link java.io.ByteArrayOutputStream}, which offers no way to overwrite an already-written
+     * byte: every {@link #patchJump(int, int)} and {@link #markCatchAsFinally(int)} had to copy the whole buffer out,
+     * edit it, reset the stream and copy it back. Compiling a function with <em>J</em> jumps over <em>N</em> bytes of
+     * code cost O(J&middot;N) in raw array copying, and every {@code if}, loop, {@code &&}, {@code ||}, {@code ?:},
+     * {@code try} and {@code switch} emits at least one patch.
      */
     private byte[] code;
     private int codeSize;
+    private final Map<JSValue, Integer> constantIndexCache;
+    private final List<JSValue> constantPool;
 
     public BytecodeEmitter() {
         this.code = new byte[INITIAL_CODE_CAPACITY];
@@ -80,8 +78,7 @@ public final class BytecodeEmitter {
     }
 
     /**
-     * Emit an atom (interned string) reference.
-     * Returns the atom index.
+     * Emit an atom (interned string) reference. Returns the atom index.
      */
     public int emitAtom(String str) {
         // Cached the same way emitConstant is. A linear atomPool.indexOf(str) per emitted atom
@@ -100,8 +97,7 @@ public final class BytecodeEmitter {
     }
 
     /**
-     * Add a constant to the constant pool and emit its index.
-     * Returns the constant index.
+     * Add a constant to the constant pool and emit its index. Returns the constant index.
      */
     public int emitConstant(JSValue value) {
         Integer cached = constantIndexCache.get(value);
@@ -249,10 +245,8 @@ public final class BytecodeEmitter {
     }
 
     /**
-     * Mark a previously patched CATCH jump offset as a finally handler
-     * by setting bit 31 of the I32 offset. The VM uses this flag to
-     * distinguish try-catch from try-finally handlers during generator
-     * return unwinding.
+     * Mark a previously patched CATCH jump offset as a finally handler by setting bit 31 of the I32 offset. The VM uses
+     * this flag to distinguish try-catch from try-finally handlers during generator return unwinding.
      */
     public void markCatchAsFinally(int offset) {
         code[offset] |= (byte) 0x80;
@@ -273,7 +267,8 @@ public final class BytecodeEmitter {
     /**
      * Append one byte, growing the buffer when needed.
      *
-     * @param value the value whose low 8 bits are appended
+     * @param value
+     *            the value whose low 8 bits are appended
      */
     private void write(int value) {
         if (codeSize == code.length) {

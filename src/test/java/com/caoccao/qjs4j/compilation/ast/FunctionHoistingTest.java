@@ -22,32 +22,27 @@ import org.junit.jupiter.api.Test;
 /**
  * Tests for function declaration hoisting and Annex B.3.3 behavior.
  * <p>
- * Function declarations must be hoisted to the top of their scope
- * so they are available before their source position.
+ * Function declarations must be hoisted to the top of their scope so they are available before their source position.
  */
 public class FunctionHoistingTest extends BaseJavetTest {
 
     @Test
     public void testCallBeforeDeclaration() {
         // Function should be callable before its declaration in source order
-        assertBooleanWithJavet(
-                "typeof f === 'function' && f() === 42; function f() { return 42; }");
+        assertBooleanWithJavet("typeof f === 'function' && f() === 42; function f() { return 42; }");
     }
 
     @Test
     public void testCallBeforeDeclarationReturnValue() {
         // The program result should be the return value of the hoisted function call
-        assertIntegerWithJavet(
-                "f(); function f() { return 42; } f()");
+        assertIntegerWithJavet("f(); function f() { return 42; } f()");
     }
 
     @Test
     public void testCompletionValueIsLastExpression() {
         // Function declarations don't contribute a completion value;
         // the last expression statement's value should be the result
-        assertIntegerWithJavet(
-                "42; function f() { return 1; }",
-                "function f() { return 1; } 42");
+        assertIntegerWithJavet("42; function f() { return 1; }", "function f() { return 1; } 42");
     }
 
     @Test
@@ -87,15 +82,13 @@ public class FunctionHoistingTest extends BaseJavetTest {
     @Test
     public void testMultipleDeclarationsLastWins() {
         // When multiple function declarations share the same name, the last one wins
-        assertBooleanWithJavet(
-                "f() === 2; function f() { return 1; } function f() { return 2; }");
+        assertBooleanWithJavet("f() === 2; function f() { return 1; } function f() { return 2; }");
     }
 
     @Test
     public void testMultipleDeclarationsLastWinsCalledBeforeAll() {
         // Even when called before all declarations, the last declaration wins
-        assertIntegerWithJavet(
-                "f(); function f() { return 1; } function f() { return 2; } f()");
+        assertIntegerWithJavet("f(); function f() { return 1; } function f() { return 2; } f()");
     }
 
     @Test
@@ -111,7 +104,6 @@ public class FunctionHoistingTest extends BaseJavetTest {
     @Test
     public void testTypeofBeforeDeclaration() {
         // typeof should return "function" for hoisted function declarations
-        assertStringWithJavet(
-                "typeof f; function f() {}");
+        assertStringWithJavet("typeof f; function f() {}");
     }
 }

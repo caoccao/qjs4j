@@ -23,15 +23,11 @@ import java.math.MathContext;
 import java.math.RoundingMode;
 
 /**
- * Double-to-ASCII converter.
- * Implements proper JavaScript number-to-string conversion.
- * Based on QuickJS dtoa.c implementation.
+ * Double-to-ASCII converter. Implements proper JavaScript number-to-string conversion. Based on QuickJS dtoa.c
+ * implementation.
  * <p>
- * Supports JavaScript's Number.prototype methods:
- * - toString() - free format
- * - toFixed(fractionDigits) - fixed decimal notation
- * - toExponential(fractionDigits) - exponential notation
- * - toPrecision(precision) - significant digits
+ * Supports JavaScript's Number.prototype methods: - toString() - free format - toFixed(fractionDigits) - fixed decimal
+ * notation - toExponential(fractionDigits) - exponential notation - toPrecision(precision) - significant digits
  */
 public final class DtoaConverter {
 
@@ -62,20 +58,21 @@ public final class DtoaConverter {
     }
 
     /**
-     * Convert a double to string using free format (automatic best representation).
-     * This is the default JavaScript toString() behavior.
+     * Convert a double to string using free format (automatic best representation). This is the default JavaScript
+     * toString() behavior.
      */
     public static String convert(double value) {
         return convert(value, false);
     }
 
     /**
-     * Convert a double to string with optional minus zero handling.
-     * Implements the ES2024 Number::toString algorithm using BigDecimal
-     * to find the shortest decimal representation, independent of JDK version.
+     * Convert a double to string with optional minus zero handling. Implements the ES2024 Number::toString algorithm
+     * using BigDecimal to find the shortest decimal representation, independent of JDK version.
      *
-     * @param value         The value to convert
-     * @param showMinusZero If true, show "-0" for negative zero
+     * @param value
+     *            The value to convert
+     * @param showMinusZero
+     *            If true, show "-0" for negative zero
      */
     public static String convert(double value, boolean showMinusZero) {
         // Handle special values
@@ -158,8 +155,7 @@ public final class DtoaConverter {
     }
 
     /**
-     * Convert a decimal string to exponential notation.
-     * Preserves the significant digits from the input string.
+     * Convert a decimal string to exponential notation. Preserves the significant digits from the input string.
      */
     private static String convertDecimalToExponential(String decimalStr) {
         // Handle signs
@@ -245,13 +241,15 @@ public final class DtoaConverter {
     }
 
     /**
-     * Convert to exponential notation.
-     * Implements Number.prototype.toExponential(fractionDigits).
+     * Convert to exponential notation. Implements Number.prototype.toExponential(fractionDigits).
      *
-     * @param value          The value to convert
-     * @param fractionDigits Number of digits after decimal point (0-100)
+     * @param value
+     *            The value to convert
+     * @param fractionDigits
+     *            Number of digits after decimal point (0-100)
      * @return The formatted string in exponential notation
-     * @throws IllegalArgumentException if fractionDigits is out of range
+     * @throws IllegalArgumentException
+     *             if fractionDigits is out of range
      */
     public static String convertExponentialWithFractionDigits(double value, int fractionDigits) {
         if (fractionDigits < 0 || fractionDigits > MAX_DIGITS) {
@@ -270,11 +268,11 @@ public final class DtoaConverter {
     }
 
     /**
-     * Convert to exponential notation with automatic precision.
-     * Implements Number.prototype.toExponential() with no arguments.
-     * Uses the minimum number of significant digits to uniquely represent the value.
+     * Convert to exponential notation with automatic precision. Implements Number.prototype.toExponential() with no
+     * arguments. Uses the minimum number of significant digits to uniquely represent the value.
      *
-     * @param value The value to convert
+     * @param value
+     *            The value to convert
      * @return The formatted string in exponential notation
      */
     public static String convertExponentialWithoutFractionDigits(double value) {
@@ -327,13 +325,15 @@ public final class DtoaConverter {
     }
 
     /**
-     * Convert to fixed-point notation.
-     * Implements Number.prototype.toFixed(fractionDigits).
+     * Convert to fixed-point notation. Implements Number.prototype.toFixed(fractionDigits).
      *
-     * @param value          The value to convert
-     * @param fractionDigits Number of digits after decimal point (0-100)
+     * @param value
+     *            The value to convert
+     * @param fractionDigits
+     *            Number of digits after decimal point (0-100)
      * @return The formatted string in fixed notation
-     * @throws IllegalArgumentException if fractionDigits is out of range
+     * @throws IllegalArgumentException
+     *             if fractionDigits is out of range
      */
     public static String convertFixed(double value, int fractionDigits) {
         if (fractionDigits < 0 || fractionDigits > MAX_DIGITS) {
@@ -401,11 +401,13 @@ public final class DtoaConverter {
     }
 
     /**
-     * Convert a double to string with specified radix (2-36).
-     * Uses QuickJS-compatible dtoa algorithm for exact JavaScript compatibility.
+     * Convert a double to string with specified radix (2-36). Uses QuickJS-compatible dtoa algorithm for exact
+     * JavaScript compatibility.
      *
-     * @param value The value to convert
-     * @param radix The radix (base) to use for conversion (2-36)
+     * @param value
+     *            The value to convert
+     * @param radix
+     *            The radix (base) to use for conversion (2-36)
      * @return The string representation in the specified radix
      */
     public static String convertToRadix(double value, int radix) {
@@ -414,13 +416,15 @@ public final class DtoaConverter {
     }
 
     /**
-     * Convert with specified precision (significant digits).
-     * Implements Number.prototype.toPrecision(precision).
+     * Convert with specified precision (significant digits). Implements Number.prototype.toPrecision(precision).
      *
-     * @param value     The value to convert
-     * @param precision Number of significant digits (1-100)
+     * @param value
+     *            The value to convert
+     * @param precision
+     *            Number of significant digits (1-100)
      * @return The formatted string
-     * @throws IllegalArgumentException if precision is out of range
+     * @throws IllegalArgumentException
+     *             if precision is out of range
      */
     public static String convertWithPrecision(double value, int precision) {
         if (precision < 1 || precision > MAX_DIGITS) {
@@ -510,17 +514,14 @@ public final class DtoaConverter {
         // Format the result - keep the exact precision as specified by fractionDigits
         String mantissaStr = mantissa.toPlainString();
 
-        String result = mantissaStr +
-                'e' +
-                (exponent >= 0 ? '+' : "") +
-                exponent;
+        String result = mantissaStr + 'e' + (exponent >= 0 ? '+' : "") + exponent;
 
         return result;
     }
 
     /**
-     * Format a value in exponential notation for toPrecision.
-     * fractionDigits is the number of digits after the decimal point in the mantissa.
+     * Format a value in exponential notation for toPrecision. fractionDigits is the number of digits after the decimal
+     * point in the mantissa.
      */
     private static String formatExponentialPrecision(double value, int fractionDigits) {
         // Use BigDecimal to preserve the exact binary representation, matching formatExponential.
@@ -540,11 +541,7 @@ public final class DtoaConverter {
         }
 
         String mantissaStr = mantissa.toPlainString();
-        String result = (negative ? "-" : "") +
-                mantissaStr +
-                'e' +
-                (exponent >= 0 ? "+" : "") +
-                exponent;
+        String result = (negative ? "-" : "") + mantissaStr + 'e' + (exponent >= 0 ? "+" : "") + exponent;
 
         return result;
     }
@@ -601,8 +598,8 @@ public final class DtoaConverter {
     }
 
     /**
-     * Normalize exponential format from Java to JavaScript style.
-     * Java uses "e+00", "e-00", JavaScript uses "e+0", "e-0"
+     * Normalize exponential format from Java to JavaScript style. Java uses "e+00", "e-00", JavaScript uses "e+0",
+     * "e-0"
      */
     private static String normalizeExponentialFormat(String str) {
         // Find 'e' or 'E'

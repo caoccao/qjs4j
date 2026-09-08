@@ -34,11 +34,13 @@ public final class JSNativeFunction extends JSFunction {
         this(context, name, length, callback, false, false);
     }
 
-    public JSNativeFunction(JSContext context, String name, int length, JSNativeCallback callback, boolean isConstructor) {
+    public JSNativeFunction(JSContext context, String name, int length, JSNativeCallback callback,
+            boolean isConstructor) {
         this(context, name, length, callback, isConstructor, false);
     }
 
-    public JSNativeFunction(JSContext context, String name, int length, JSNativeCallback callback, boolean isConstructor, boolean requiresNew) {
+    public JSNativeFunction(JSContext context, String name, int length, JSNativeCallback callback,
+            boolean isConstructor, boolean requiresNew) {
         super(context); // Initialize as JSObject
         this.name = name;
         this.length = length;
@@ -52,34 +54,23 @@ public final class JSNativeFunction extends JSFunction {
 
         // Per ECMAScript spec, the "length" property has attributes:
         // { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: true }
-        this.defineProperty(
-                PropertyKey.LENGTH,
-                PropertyDescriptor.dataDescriptor(
-                        JSNumber.of(this.length),
-                        PropertyDescriptor.DataState.Configurable
-                )
-        );
+        this.defineProperty(PropertyKey.LENGTH,
+                PropertyDescriptor.dataDescriptor(JSNumber.of(this.length), PropertyDescriptor.DataState.Configurable));
 
         // Per ECMAScript spec, the "name" property has attributes:
         // { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: true }
         // Use empty string for name property if name is null (e.g., Function.prototype)
-        this.defineProperty(
-                PropertyKey.NAME,
-                PropertyDescriptor.dataDescriptor(
-                        new JSString(this.name != null ? this.name : ""),
-                        PropertyDescriptor.DataState.Configurable
-                )
-        );
+        this.defineProperty(PropertyKey.NAME, PropertyDescriptor.dataDescriptor(
+                new JSString(this.name != null ? this.name : ""), PropertyDescriptor.DataState.Configurable));
 
         // Native functions have a prototype property only if they are constructors
         if (isConstructor) {
             JSObject funcPrototype = new JSObject(context);
-            funcPrototype.defineProperty(
-                    PropertyKey.CONSTRUCTOR,
+            funcPrototype.defineProperty(PropertyKey.CONSTRUCTOR,
                     PropertyDescriptor.dataDescriptor(this, PropertyDescriptor.DataState.ConfigurableWritable));
             // Default prototype is configurable so it can be deleted (Proxy) or overridden by explicit setup
-            this.defineProperty(PropertyKey.PROTOTYPE,
-                    PropertyDescriptor.dataDescriptor(funcPrototype, PropertyDescriptor.DataState.ConfigurableWritable));
+            this.defineProperty(PropertyKey.PROTOTYPE, PropertyDescriptor.dataDescriptor(funcPrototype,
+                    PropertyDescriptor.DataState.ConfigurableWritable));
         }
     }
 

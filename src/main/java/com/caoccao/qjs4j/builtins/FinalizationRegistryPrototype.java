@@ -19,17 +19,15 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 /**
- * FinalizationRegistry.prototype methods.
- * Based on QuickJS js_finrec_register and js_finrec_unregister.
+ * FinalizationRegistry.prototype methods. Based on QuickJS js_finrec_register and js_finrec_unregister.
  */
 public final class FinalizationRegistryPrototype {
     private FinalizationRegistryPrototype() {
     }
 
     /**
-     * CanBeHeldWeakly check per ES spec / QuickJS js_weakref_is_target.
-     * Objects and non-registered symbols can be held weakly.
-     * Registered symbols (Symbol.for()) cannot.
+     * CanBeHeldWeakly check per ES spec / QuickJS js_weakref_is_target. Objects and non-registered symbols can be held
+     * weakly. Registered symbols (Symbol.for()) cannot.
      */
     static boolean canBeHeldWeakly(JSValue value) {
         if (value instanceof JSObject) {

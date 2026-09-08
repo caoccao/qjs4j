@@ -22,8 +22,7 @@ import com.caoccao.qjs4j.core.JSShadowRealm;
 import com.caoccao.qjs4j.core.JSValue;
 
 /**
- * ShadowRealm constructor.
- * ShadowRealm is not implemented by QuickJS, so this follows the ECMAScript proposal behavior
+ * ShadowRealm constructor. ShadowRealm is not implemented by QuickJS, so this follows the ECMAScript proposal behavior
  * needed by test262.
  */
 public final class ShadowRealmConstructor {

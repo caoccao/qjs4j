@@ -20,10 +20,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Represents a for-in statement: for (variable in object) { ... }
- * * <p>
- * * Based on ES5 for-in loops.
- * * left can be a VariableDeclaration (e.g., var x) or a Pattern/Expression (e.g., x, obj.prop).
+ * Represents a for-in statement: for (variable in object) { ... } *
+ * <p>
+ * * Based on ES5 for-in loops. * left can be a VariableDeclaration (e.g., var x) or a Pattern/Expression (e.g., x,
+ * obj.prop).
  */
 public final class ForInStatement extends Statement {
     private final Statement body;

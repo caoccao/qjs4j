@@ -19,19 +19,11 @@ package com.caoccao.qjs4j.core;
 import java.nio.ByteBuffer;
 
 /**
- * Represents a JavaScript Uint16Array.
- * 16-bit unsigned integer array.
+ * Represents a JavaScript Uint16Array. 16-bit unsigned integer array.
  */
 public final class JSUint16Array extends JSTypedArray {
     public static final int BYTES_PER_ELEMENT = 2;
     public static final String NAME = "Uint16Array";
-
-    /**
-     * Create a Uint16Array with a new buffer.
-     */
-    public JSUint16Array(JSContext context, int length) {
-        super(context, length, BYTES_PER_ELEMENT);
-    }
 
     /**
      * Create a Uint16Array view on an existing buffer.
@@ -40,9 +32,11 @@ public final class JSUint16Array extends JSTypedArray {
         super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 
-    public static JSObject create(JSContext context, JSValue... args) {
-        return createFromArguments(context, BYTES_PER_ELEMENT,
-                context::createJSUint16Array, context::createJSUint16Array, args);
+    /**
+     * Create a Uint16Array with a new buffer.
+     */
+    public JSUint16Array(JSContext context, int length) {
+        super(context, length, BYTES_PER_ELEMENT);
     }
 
     @Override
@@ -82,5 +76,10 @@ public final class JSUint16Array extends JSTypedArray {
         checkIndex(index);
         ByteBuffer buf = getByteBuffer();
         buf.putShort(index * BYTES_PER_ELEMENT, (short) JSTypeConversions.toInt32(value));
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        return createFromArguments(context, BYTES_PER_ELEMENT, context::createJSUint16Array,
+                context::createJSUint16Array, args);
     }
 }

@@ -23,13 +23,11 @@ import java.util.List;
 /**
  * Base sealed class for all expression nodes.
  */
-public abstract sealed class Expression extends Pattern permits
-        Literal, Identifier, PrivateIdentifier, BinaryExpression, UnaryExpression,
-        AssignmentExpression, ConditionalExpression, CallExpression,
-        MemberExpression, NewExpression, FunctionExpression,
-        ArrowFunctionExpression, ArrayExpression, ObjectExpression, AwaitExpression,
-        YieldExpression, TemplateLiteral, TaggedTemplateExpression, ClassExpression,
-        SpreadElement, SequenceExpression, ImportExpression {
+public abstract sealed class Expression extends Pattern
+        permits Literal, Identifier, PrivateIdentifier, BinaryExpression, UnaryExpression, AssignmentExpression,
+        ConditionalExpression, CallExpression, MemberExpression, NewExpression, FunctionExpression,
+        ArrowFunctionExpression, ArrayExpression, ObjectExpression, AwaitExpression, YieldExpression, TemplateLiteral,
+        TaggedTemplateExpression, ClassExpression, SpreadElement, SequenceExpression, ImportExpression {
     protected Expression(SourceLocation location) {
         super(location);
     }

@@ -19,13 +19,12 @@ package com.caoccao.qjs4j.compilation.ast;
 import java.util.List;
 
 /**
- * Represents a sequence expression (comma operator).
- * Evaluates each expression in order and returns the value of the last one.
- * Example: (a = 1, b = 2, a + b)
+ * Represents a sequence expression (comma operator). Evaluates each expression in order and returns the value of the
+ * last one. Example: (a = 1, b = 2, a + b)
  */
 public final class SequenceExpression extends Expression {
-    private final List<Expression> expressions;
     private Boolean directEvalVarArgumentsInside;
+    private final List<Expression> expressions;
 
     public SequenceExpression(List<Expression> expressions, SourceLocation location) {
         super(location);

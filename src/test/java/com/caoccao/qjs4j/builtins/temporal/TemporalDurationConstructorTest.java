@@ -26,33 +26,15 @@ public class TemporalDurationConstructorTest extends BaseTest {
 
     @Test
     public void testNormalizeFloat64RepresentableFieldsWithAlreadyRepresentableLargeValue() {
-        TemporalDuration originalDuration = new TemporalDuration(
-                18_014_398_509_481_984L,
-                0L,
-                0L,
-                0L,
-                0L,
-                0L,
-                0L,
-                0L,
-                0L,
-                0L);
+        TemporalDuration originalDuration = new TemporalDuration(18_014_398_509_481_984L, 0L, 0L, 0L, 0L, 0L, 0L, 0L,
+                0L, 0L);
         TemporalDuration normalizedDuration = originalDuration.normalizeFloat64RepresentableFields();
         assertThat(normalizedDuration).isSameAs(originalDuration);
     }
 
     @Test
     public void testNormalizeFloat64RepresentableFieldsWithNonRepresentableValue() {
-        TemporalDuration originalDuration = new TemporalDuration(
-                9_007_199_254_740_993L,
-                0L,
-                0L,
-                0L,
-                0L,
-                0L,
-                0L,
-                0L,
-                0L,
+        TemporalDuration originalDuration = new TemporalDuration(9_007_199_254_740_993L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L,
                 0L);
         TemporalDuration normalizedDuration = originalDuration.normalizeFloat64RepresentableFields();
         assertThat(normalizedDuration).isNotSameAs(originalDuration);
@@ -61,17 +43,7 @@ public class TemporalDurationConstructorTest extends BaseTest {
 
     @Test
     public void testNormalizeFloat64RepresentableFieldsWithSmallValues() {
-        TemporalDuration originalDuration = new TemporalDuration(
-                12L,
-                -10L,
-                0L,
-                365L,
-                23L,
-                59L,
-                58L,
-                999L,
-                998L,
-                997L);
+        TemporalDuration originalDuration = new TemporalDuration(12L, -10L, 0L, 365L, 23L, 59L, 58L, 999L, 998L, 997L);
         TemporalDuration normalizedDuration = originalDuration.normalizeFloat64RepresentableFields();
         assertThat(normalizedDuration).isSameAs(originalDuration);
     }

@@ -28,10 +28,10 @@ import static org.assertj.core.api.Assertions.*;
  * {@link CallStack} bounds and diagnostics.
  * <p>
  * {@code drop(int)} had no lower bound and could drive {@code stackTop} negative silently;
- * {@code peek}/{@code pop}/{@code set} raised raw {@code IllegalStateException}s that the engine's
- * own error machinery does not understand; {@code pop}/{@code peek} blind-cast the slot so an
- * internal marker produced a bare {@code ClassCastException}; and vacated slots were never cleared,
- * so a 65,536-entry array could pin object graphs long after the values were dead.
+ * {@code peek}/{@code pop}/{@code set} raised raw {@code IllegalStateException}s that the engine's own error machinery
+ * does not understand; {@code pop}/{@code peek} blind-cast the slot so an internal marker produced a bare
+ * {@code ClassCastException}; and vacated slots were never cleared, so a 65,536-entry array could pin object graphs
+ * long after the values were dead.
  */
 public class CallStackTest {
 
@@ -63,11 +63,9 @@ public class CallStackTest {
     public void testDropRejectsCountBeyondTheStackDepth() {
         CallStack stack = new CallStack();
         stack.push(JSNumber.of(1));
-        assertThatThrownBy(() -> stack.drop(2))
-                .isInstanceOf(JSVirtualMachineException.class)
+        assertThatThrownBy(() -> stack.drop(2)).isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("Stack underflow in drop");
-        assertThatThrownBy(() -> stack.drop(-1))
-                .isInstanceOf(JSVirtualMachineException.class)
+        assertThatThrownBy(() -> stack.drop(-1)).isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("Stack underflow in drop");
         assertThat(stack.getStackTop()).as("a rejected drop must not move the stack top").isEqualTo(1);
     }
@@ -83,25 +81,19 @@ public class CallStackTest {
             for (int index = 0; index <= 65536; index++) {
                 stack.push(JSNumber.of(index));
             }
-        })
-                .isInstanceOf(JSRangeErrorException.class)
-                .hasMessage("Maximum call stack size exceeded");
+        }).isInstanceOf(JSRangeErrorException.class).hasMessage("Maximum call stack size exceeded");
     }
 
     @Test
     public void testPeekAndPopUnderflowRaiseVirtualMachineExceptions() {
         CallStack stack = new CallStack();
-        assertThatThrownBy(stack::pop)
-                .isInstanceOf(JSVirtualMachineException.class)
+        assertThatThrownBy(stack::pop).isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("Stack underflow in pop");
-        assertThatThrownBy(stack::popStackValue)
-                .isInstanceOf(JSVirtualMachineException.class)
+        assertThatThrownBy(stack::popStackValue).isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("Stack underflow in popStackValue");
-        assertThatThrownBy(() -> stack.peek(0))
-                .isInstanceOf(JSVirtualMachineException.class)
+        assertThatThrownBy(() -> stack.peek(0)).isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("Stack underflow in peek");
-        assertThatThrownBy(() -> stack.set(0, JSNumber.of(1)))
-                .isInstanceOf(JSVirtualMachineException.class)
+        assertThatThrownBy(() -> stack.set(0, JSNumber.of(1))).isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("Stack underflow in set");
     }
 
@@ -109,10 +101,8 @@ public class CallStackTest {
     public void testPopOfAnInternalMarkerIsDiagnosable() {
         CallStack stack = new CallStack();
         stack.pushStackValue(new JSCatchOffset(42, false));
-        assertThatThrownBy(stack::pop)
-                .isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("Internal engine error")
-                .hasMessageContaining("JSCatchOffset");
+        assertThatThrownBy(stack::pop).isInstanceOf(JSVirtualMachineException.class)
+                .hasMessageContaining("Internal engine error").hasMessageContaining("JSCatchOffset");
     }
 
     @Test
@@ -145,11 +135,9 @@ public class CallStackTest {
     @Test
     public void testSetStackTopRejectsAnOutOfRangeTop() {
         CallStack stack = new CallStack();
-        assertThatThrownBy(() -> stack.setStackTop(-1))
-                .isInstanceOf(JSVirtualMachineException.class)
+        assertThatThrownBy(() -> stack.setStackTop(-1)).isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("Invalid stack top");
-        assertThatThrownBy(() -> stack.setStackTop(Integer.MAX_VALUE))
-                .isInstanceOf(JSVirtualMachineException.class)
+        assertThatThrownBy(() -> stack.setStackTop(Integer.MAX_VALUE)).isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("Invalid stack top");
     }
 }

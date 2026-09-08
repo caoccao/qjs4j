@@ -20,9 +20,8 @@ import com.caoccao.qjs4j.compilation.ast.Expression;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 
 /**
- * Expression parsing coordinator.
- * Delegates assignment parsing, precedence parsing, and primary/member parsing
- * to focused parser components.
+ * Expression parsing coordinator. Delegates assignment parsing, precedence parsing, and primary/member parsing to
+ * focused parser components.
  */
 final class ExpressionParser {
     private final ExpressionAssignmentParser assignmentParser;
@@ -91,12 +90,12 @@ final class ExpressionParser {
         return binaryParser.parseMultiplicativeExpression();
     }
 
-    Expression parsePostPrimaryExpression(Expression expr, SourceLocation location) {
-        return primaryParser.parsePostPrimaryExpression(expr, location);
-    }
-
     Expression parsePostfixExpression() {
         return primaryParser.parsePostfixExpression();
+    }
+
+    Expression parsePostPrimaryExpression(Expression expr, SourceLocation location) {
+        return primaryParser.parsePostPrimaryExpression(expr, location);
     }
 
     Expression parsePrimaryExpression() {

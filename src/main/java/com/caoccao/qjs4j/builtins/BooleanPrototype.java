@@ -21,27 +21,22 @@ import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.core.JSValue;
 
 /**
- * Implementation of JavaScript Boolean.prototype methods.
- * Based on ES2020 Boolean specification.
+ * Implementation of JavaScript Boolean.prototype methods. Based on ES2020 Boolean specification.
  */
 public final class BooleanPrototype {
     /**
-     * Boolean.prototype.toString()
-     * ES2020 19.3.3.2
+     * Boolean.prototype.toString() ES2020 19.3.3.2
      */
     public static JSValue toString(JSContext context, JSValue thisArg, JSValue[] args) {
-        return thisArg.asBooleanWithDownCast()
-                .map(jsBoolean -> (JSValue) new JSString(jsBoolean.toString()))
-                .orElseGet(() -> context.throwTypeError("Boolean.prototype.toString requires that 'this' be a Boolean"));
+        return thisArg.asBooleanWithDownCast().map(jsBoolean -> (JSValue) new JSString(jsBoolean.toString())).orElseGet(
+                () -> context.throwTypeError("Boolean.prototype.toString requires that 'this' be a Boolean"));
     }
 
     /**
-     * Boolean.prototype.valueOf()
-     * ES2020 19.3.3.3
+     * Boolean.prototype.valueOf() ES2020 19.3.3.3
      */
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        return thisArg.asBooleanWithDownCast()
-                .map(jsBoolean -> (JSValue) jsBoolean)
+        return thisArg.asBooleanWithDownCast().map(jsBoolean -> (JSValue) jsBoolean)
                 .orElseGet(() -> context.throwTypeError("Boolean.prototype.valueOf requires that 'this' be a Boolean"));
     }
 }

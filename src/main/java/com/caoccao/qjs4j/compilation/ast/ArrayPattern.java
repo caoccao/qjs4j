@@ -20,8 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Represents an array destructuring pattern.
- * Example: [a, b] or [x, , z]
+ * Represents an array destructuring pattern. Example: [a, b] or [x, , z]
  */
 public final class ArrayPattern extends Pattern {
     private final List<Pattern> elements;

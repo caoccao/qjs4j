@@ -29,12 +29,12 @@ public class JSCompilerException extends RuntimeException {
         this(message, null, null);
     }
 
-    public JSCompilerException(String message, Throwable cause) {
-        this(message, cause, null);
-    }
-
     public JSCompilerException(String message, ASTNode ast) {
         this(message, null, ast);
+    }
+
+    public JSCompilerException(String message, Throwable cause) {
+        this(message, cause, null);
     }
 
     public JSCompilerException(String message, Throwable cause, ASTNode ast) {

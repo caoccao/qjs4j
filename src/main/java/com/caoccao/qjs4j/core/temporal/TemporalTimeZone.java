@@ -29,27 +29,18 @@ import java.util.regex.Pattern;
  * TimeZone operations backed by java.time.
  */
 public final class TemporalTimeZone {
-    private static final Map<String, String> AVAILABLE_TIME_ZONE_IDS_BY_LOWERCASE =
-            createAvailableTimeZoneIdentifierLookup();
+    private static final Map<String, String> AVAILABLE_TIME_ZONE_IDS_BY_LOWERCASE = createAvailableTimeZoneIdentifierLookup();
     private static final BigInteger BILLION = TemporalConstants.BI_BILLION;
-    private static final Pattern OFFSET_BASIC_PATTERN =
-            Pattern.compile("^([+\\-\\u2212])(\\d{2})(\\d{2})(?:(\\d{2})(?:\\.(\\d{1,9}))?)?$");
-    private static final Pattern OFFSET_EXTENDED_PATTERN =
-            Pattern.compile("^([+\\-\\u2212])(\\d{2}):(\\d{2})(?::(\\d{2})(?:\\.(\\d{1,9}))?)?$");
-    private static final Pattern OFFSET_HOUR_ONLY_PATTERN =
-            Pattern.compile("^([+\\-\\u2212])(\\d{2})$");
+    private static final Pattern OFFSET_BASIC_PATTERN = Pattern
+            .compile("^([+\\-\\u2212])(\\d{2})(\\d{2})(?:(\\d{2})(?:\\.(\\d{1,9}))?)?$");
+    private static final Pattern OFFSET_EXTENDED_PATTERN = Pattern
+            .compile("^([+\\-\\u2212])(\\d{2}):(\\d{2})(?::(\\d{2})(?:\\.(\\d{1,9}))?)?$");
+    private static final Pattern OFFSET_HOUR_ONLY_PATTERN = Pattern.compile("^([+\\-\\u2212])(\\d{2})$");
     private static final int SECONDS_PER_HOUR = 3_600;
     private static final int SECONDS_PER_MINUTE = 60;
-    private static final Pattern SIMPLE_OFFSET_PATTERN =
-            Pattern.compile("^([+\\-\\u2212])(\\d{2}):(\\d{2})$");
-    private static final Map<String, String> SUPPLEMENTARY_TIME_ZONE_IDS = Map.of(
-            "est", "EST",
-            "mst", "MST",
-            "hst", "HST",
-            "gmt+0", "GMT+0",
-            "gmt-0", "GMT-0",
-            "gmt0", "GMT0",
-            "roc", "ROC");
+    private static final Pattern SIMPLE_OFFSET_PATTERN = Pattern.compile("^([+\\-\\u2212])(\\d{2}):(\\d{2})$");
+    private static final Map<String, String> SUPPLEMENTARY_TIME_ZONE_IDS = Map.of("est", "EST", "mst", "MST", "hst",
+            "HST", "gmt+0", "GMT+0", "gmt-0", "GMT-0", "gmt0", "GMT0", "roc", "ROC");
 
     private TemporalTimeZone() {
     }
@@ -79,9 +70,7 @@ public final class TemporalTimeZone {
         }
     }
 
-    public static String canonicalizeTimeZoneIdentifierForEquals(
-            JSContext context,
-            String timeZoneId,
+    public static String canonicalizeTimeZoneIdentifierForEquals(JSContext context, String timeZoneId,
             Map<String, String> primaryTimeZoneIdentifiersByLowercase) {
         if (timeZoneId == null || timeZoneId.isEmpty()) {
             return timeZoneId;
@@ -110,13 +99,12 @@ public final class TemporalTimeZone {
     private static Map<String, String> createAvailableTimeZoneIdentifierLookup() {
         List<String> availableTimeZoneIdentifiers = new ArrayList<>(ZoneId.getAvailableZoneIds());
         Collections.sort(availableTimeZoneIdentifiers);
-        Map<String, String> availableTimeZoneIdentifiersByLowercase = new HashMap<>(availableTimeZoneIdentifiers.size());
+        Map<String, String> availableTimeZoneIdentifiersByLowercase = new HashMap<>(
+                availableTimeZoneIdentifiers.size());
         for (String availableTimeZoneIdentifier : availableTimeZoneIdentifiers) {
             String normalizedTimeZoneIdentifier = availableTimeZoneIdentifier.toLowerCase(Locale.ROOT);
             if (!availableTimeZoneIdentifiersByLowercase.containsKey(normalizedTimeZoneIdentifier)) {
-                availableTimeZoneIdentifiersByLowercase.put(
-                        normalizedTimeZoneIdentifier,
-                        availableTimeZoneIdentifier);
+                availableTimeZoneIdentifiersByLowercase.put(normalizedTimeZoneIdentifier, availableTimeZoneIdentifier);
             }
         }
         return Map.copyOf(availableTimeZoneIdentifiersByLowercase);
@@ -177,8 +165,7 @@ public final class TemporalTimeZone {
     }
 
     /**
-     * Gets the next timezone transition after the given instant.
-     * Returns null if no further transition.
+     * Gets the next timezone transition after the given instant. Returns null if no further transition.
      */
     public static BigInteger getNextTransition(BigInteger epochNs, String timeZoneId) {
         Integer fixedOffsetSeconds = parseFixedOffsetSeconds(timeZoneId);
@@ -211,8 +198,7 @@ public final class TemporalTimeZone {
     }
 
     /**
-     * Gets the previous timezone transition before the given instant.
-     * Returns null if no previous transition.
+     * Gets the previous timezone transition before the given instant. Returns null if no previous transition.
      */
     public static BigInteger getPreviousTransition(BigInteger epochNs, String timeZoneId) {
         Integer fixedOffsetSeconds = parseFixedOffsetSeconds(timeZoneId);
@@ -314,30 +300,18 @@ public final class TemporalTimeZone {
     public static TemporalOffsetParts parseOffsetParts(String offsetText) {
         Matcher extendedMatcher = OFFSET_EXTENDED_PATTERN.matcher(offsetText);
         if (extendedMatcher.matches()) {
-            return new TemporalOffsetParts(
-                    extendedMatcher.group(1),
-                    Integer.parseInt(extendedMatcher.group(2)),
-                    Integer.parseInt(extendedMatcher.group(3)),
-                    extendedMatcher.group(4),
-                    extendedMatcher.group(5));
+            return new TemporalOffsetParts(extendedMatcher.group(1), Integer.parseInt(extendedMatcher.group(2)),
+                    Integer.parseInt(extendedMatcher.group(3)), extendedMatcher.group(4), extendedMatcher.group(5));
         }
         Matcher basicMatcher = OFFSET_BASIC_PATTERN.matcher(offsetText);
         if (basicMatcher.matches()) {
-            return new TemporalOffsetParts(
-                    basicMatcher.group(1),
-                    Integer.parseInt(basicMatcher.group(2)),
-                    Integer.parseInt(basicMatcher.group(3)),
-                    basicMatcher.group(4),
-                    basicMatcher.group(5));
+            return new TemporalOffsetParts(basicMatcher.group(1), Integer.parseInt(basicMatcher.group(2)),
+                    Integer.parseInt(basicMatcher.group(3)), basicMatcher.group(4), basicMatcher.group(5));
         }
         Matcher hourOnlyMatcher = OFFSET_HOUR_ONLY_PATTERN.matcher(offsetText);
         if (hourOnlyMatcher.matches()) {
-            return new TemporalOffsetParts(
-                    hourOnlyMatcher.group(1),
-                    Integer.parseInt(hourOnlyMatcher.group(2)),
-                    0,
-                    null,
-                    null);
+            return new TemporalOffsetParts(hourOnlyMatcher.group(1), Integer.parseInt(hourOnlyMatcher.group(2)), 0,
+                    null, null);
         }
         return null;
     }
@@ -371,15 +345,10 @@ public final class TemporalTimeZone {
             return null;
         }
         char firstCharacter = timeZoneText.charAt(0);
-        boolean startsWithDateCharacter =
-                Character.isDigit(firstCharacter)
-                        || firstCharacter == '+'
-                        || firstCharacter == '-'
-                        || firstCharacter == '\u2212';
-        boolean looksLikeIsoDateTime =
-                startsWithDateCharacter
-                        && (timeZoneText.contains("T") || timeZoneText.contains("t"))
-                        && timeZoneText.contains("-");
+        boolean startsWithDateCharacter = Character.isDigit(firstCharacter) || firstCharacter == '+'
+                || firstCharacter == '-' || firstCharacter == '\u2212';
+        boolean looksLikeIsoDateTime = startsWithDateCharacter
+                && (timeZoneText.contains("T") || timeZoneText.contains("t")) && timeZoneText.contains("-");
         if (!looksLikeIsoDateTime) {
             return canonicalizeTimeZoneIdentifier(timeZoneText);
         }
@@ -394,8 +363,8 @@ public final class TemporalTimeZone {
                 context.throwRangeError("Temporal error: Invalid offset string.");
                 return null;
             }
-            IsoZonedDateTimeOffset parsedZonedDateTime =
-                    IsoZonedDateTimeOffset.parseZonedDateTimeString(context, adjustedTimeZoneText);
+            IsoZonedDateTimeOffset parsedZonedDateTime = IsoZonedDateTimeOffset.parseZonedDateTimeString(context,
+                    adjustedTimeZoneText);
             if (parsedZonedDateTime == null || context.hasPendingException()) {
                 return null;
             }
@@ -477,13 +446,6 @@ public final class TemporalTimeZone {
     }
 
     /**
-     * Converts a date-time with an explicit offset to epoch nanoseconds.
-     */
-    public static BigInteger utcDateTimeToEpochNs(IsoDate date, IsoTime time, int offsetSeconds) {
-        return utcDateTimeToEpochNs(date, time, BigInteger.valueOf(offsetSeconds).multiply(BILLION));
-    }
-
-    /**
      * Converts a date-time with an explicit offset (nanosecond precision) to epoch nanoseconds.
      */
     public static BigInteger utcDateTimeToEpochNs(IsoDate date, IsoTime time, BigInteger offsetNanoseconds) {
@@ -491,6 +453,13 @@ public final class TemporalTimeZone {
         BigInteger dayNs = BigInteger.valueOf(epochDay).multiply(BigInteger.valueOf(86_400_000_000_000L));
         BigInteger timeNs = BigInteger.valueOf(time.totalNanoseconds());
         return dayNs.add(timeNs).subtract(offsetNanoseconds);
+    }
+
+    /**
+     * Converts a date-time with an explicit offset to epoch nanoseconds.
+     */
+    public static BigInteger utcDateTimeToEpochNs(IsoDate date, IsoTime time, int offsetSeconds) {
+        return utcDateTimeToEpochNs(date, time, BigInteger.valueOf(offsetSeconds).multiply(BILLION));
     }
 
 }

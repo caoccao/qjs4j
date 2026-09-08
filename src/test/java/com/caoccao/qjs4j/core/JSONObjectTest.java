@@ -136,19 +136,22 @@ public class JSONObjectTest extends BaseJavetTest {
         result.asObject().orElseThrow();
 
         // Normal case: parse object with properties
-        result = jsonObject().parse(JSUndefined.INSTANCE, new JSValue[]{new JSString("{\"name\": \"test\", \"value\": 123}")});
+        result = jsonObject().parse(JSUndefined.INSTANCE,
+                new JSValue[]{new JSString("{\"name\": \"test\", \"value\": 123}")});
         JSObject obj = result.asObject().orElseThrow();
         assertThat(obj.get("name").asString().map(JSString::value).orElseThrow()).isEqualTo("test");
         assertThat(obj.get("value").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(123.0);
 
         // Normal case: parse nested object
-        result = jsonObject().parse(JSUndefined.INSTANCE, new JSValue[]{new JSString("{\"data\": {\"nested\": true}}")});
+        result = jsonObject().parse(JSUndefined.INSTANCE,
+                new JSValue[]{new JSString("{\"data\": {\"nested\": true}}")});
         obj = result.asObject().orElseThrow();
         JSObject data = obj.get("data").asObject().orElseThrow();
         assertThat(data.get("nested")).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: parse with whitespace
-        result = jsonObject().parse(JSUndefined.INSTANCE, new JSValue[]{new JSString("  {  \"key\"  :  \"value\"  }  ")});
+        result = jsonObject().parse(JSUndefined.INSTANCE,
+                new JSValue[]{new JSString("  {  \"key\"  :  \"value\"  }  ")});
         obj = result.asObject().orElseThrow();
         assertThat(obj.get("key").asString().map(JSString::value).orElseThrow()).isEqualTo("value");
 
@@ -396,7 +399,7 @@ public class JSONObjectTest extends BaseJavetTest {
             JSValue value = args[1];
 
             if (key.equals("internal")) {
-                return JSUndefined.INSTANCE;  // Remove this property
+                return JSUndefined.INSTANCE; // Remove this property
             }
             return value;
         });
@@ -731,19 +734,20 @@ public class JSONObjectTest extends BaseJavetTest {
 
     @Test
     public void testStringifyDescriptorAndToStringTag() {
-        assertStringWithJavet("""
-                var parseDesc = Object.getOwnPropertyDescriptor(JSON, 'parse');
-                var stringifyDesc = Object.getOwnPropertyDescriptor(JSON, 'stringify');
-                var rawJSONDesc = Object.getOwnPropertyDescriptor(JSON, 'rawJSON');
-                var isRawJSONDesc = Object.getOwnPropertyDescriptor(JSON, 'isRawJSON');
-                JSON.stringify([
-                  [typeof parseDesc.value, parseDesc.writable, parseDesc.enumerable, parseDesc.configurable, parseDesc.value.length],
-                  [typeof stringifyDesc.value, stringifyDesc.writable, stringifyDesc.enumerable, stringifyDesc.configurable, stringifyDesc.value.length],
-                  [typeof rawJSONDesc.value, rawJSONDesc.writable, rawJSONDesc.enumerable, rawJSONDesc.configurable, rawJSONDesc.value.length],
-                  [typeof isRawJSONDesc.value, isRawJSONDesc.writable, isRawJSONDesc.enumerable, isRawJSONDesc.configurable, isRawJSONDesc.value.length],
-                  JSON[Symbol.toStringTag],
-                  Object.keys(JSON).length
-                ])""");
+        assertStringWithJavet(
+                """
+                        var parseDesc = Object.getOwnPropertyDescriptor(JSON, 'parse');
+                        var stringifyDesc = Object.getOwnPropertyDescriptor(JSON, 'stringify');
+                        var rawJSONDesc = Object.getOwnPropertyDescriptor(JSON, 'rawJSON');
+                        var isRawJSONDesc = Object.getOwnPropertyDescriptor(JSON, 'isRawJSON');
+                        JSON.stringify([
+                          [typeof parseDesc.value, parseDesc.writable, parseDesc.enumerable, parseDesc.configurable, parseDesc.value.length],
+                          [typeof stringifyDesc.value, stringifyDesc.writable, stringifyDesc.enumerable, stringifyDesc.configurable, stringifyDesc.value.length],
+                          [typeof rawJSONDesc.value, rawJSONDesc.writable, rawJSONDesc.enumerable, rawJSONDesc.configurable, rawJSONDesc.value.length],
+                          [typeof isRawJSONDesc.value, isRawJSONDesc.writable, isRawJSONDesc.enumerable, isRawJSONDesc.configurable, isRawJSONDesc.value.length],
+                          JSON[Symbol.toStringTag],
+                          Object.keys(JSON).length
+                        ])""");
     }
 
     @Test
@@ -792,68 +796,77 @@ public class JSONObjectTest extends BaseJavetTest {
         obj.set("value", new JSNumber(123));
 
         // Normal case: stringify with space parameter (number)
-        JSValue result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj, JSUndefined.INSTANCE, new JSNumber(2)});
+        JSValue result = jsonObject().stringify(JSUndefined.INSTANCE,
+                new JSValue[]{obj, JSUndefined.INSTANCE, new JSNumber(2)});
         String jsonStr = result.asString().map(JSString::value).orElseThrow();
         assertThat(jsonStr.contains("\n  ")).isTrue(); // Should have indentation
 
         // Normal case: stringify with space parameter (string)
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj, JSUndefined.INSTANCE, new JSString("  ")});
+        result = jsonObject().stringify(JSUndefined.INSTANCE,
+                new JSValue[]{obj, JSUndefined.INSTANCE, new JSString("  ")});
         jsonStr = result.asString().map(JSString::value).orElseThrow();
         assertThat(jsonStr.contains("\n  ")).isTrue(); // Should have indentation
 
         // Normal case: stringify with large space (should be limited)
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj, JSUndefined.INSTANCE, new JSNumber(20)});
+        result = jsonObject().stringify(JSUndefined.INSTANCE,
+                new JSValue[]{obj, JSUndefined.INSTANCE, new JSNumber(20)});
         jsonStr = result.asString().map(JSString::value).orElseThrow();
         // Should not have more than 10 spaces of indentation
-        assertThat(jsonStr).isEqualTo("{\n" +
-                "          \"name\": \"test\",\n" +
-                "          \"value\": 123\n" +
-                "}");
+        assertThat(jsonStr).isEqualTo("{\n" + "          \"name\": \"test\",\n" + "          \"value\": 123\n" + "}");
 
         // Test indentation with different number values
         // Indent 0 (no indentation)
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj, JSUndefined.INSTANCE, new JSNumber(0)});
+        result = jsonObject().stringify(JSUndefined.INSTANCE,
+                new JSValue[]{obj, JSUndefined.INSTANCE, new JSNumber(0)});
         jsonStr = result.asString().map(JSString::value).orElseThrow();
         assertThat(jsonStr.contains("\n")).isFalse(); // Should be compact
 
         // Indent 1
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj, JSUndefined.INSTANCE, new JSNumber(1)});
+        result = jsonObject().stringify(JSUndefined.INSTANCE,
+                new JSValue[]{obj, JSUndefined.INSTANCE, new JSNumber(1)});
         jsonStr = result.asString().map(JSString::value).orElseThrow();
         assertThat(jsonStr.contains("\n ")).isTrue(); // Should have 1 space indent
 
         // Indent 4
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj, JSUndefined.INSTANCE, new JSNumber(4)});
+        result = jsonObject().stringify(JSUndefined.INSTANCE,
+                new JSValue[]{obj, JSUndefined.INSTANCE, new JSNumber(4)});
         jsonStr = result.asString().map(JSString::value).orElseThrow();
         assertThat(jsonStr.contains("\n    ")).isTrue(); // Should have 4 spaces indent
 
         // Indent 10 (maximum)
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj, JSUndefined.INSTANCE, new JSNumber(10)});
+        result = jsonObject().stringify(JSUndefined.INSTANCE,
+                new JSValue[]{obj, JSUndefined.INSTANCE, new JSNumber(10)});
         jsonStr = result.asString().map(JSString::value).orElseThrow();
         assertThat(jsonStr.contains("\n          ")).isTrue(); // Should have 10 spaces indent
 
         // Test indentation with different string values
         // Empty string indent
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj, JSUndefined.INSTANCE, new JSString("")});
+        result = jsonObject().stringify(JSUndefined.INSTANCE,
+                new JSValue[]{obj, JSUndefined.INSTANCE, new JSString("")});
         jsonStr = result.asString().map(JSString::value).orElseThrow();
         assertThat(jsonStr.contains("\n")).isFalse(); // Should be compact
 
         // Single space string
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj, JSUndefined.INSTANCE, new JSString(" ")});
+        result = jsonObject().stringify(JSUndefined.INSTANCE,
+                new JSValue[]{obj, JSUndefined.INSTANCE, new JSString(" ")});
         jsonStr = result.asString().map(JSString::value).orElseThrow();
         assertThat(jsonStr.contains("\n ")).isTrue(); // Should have space indent
 
         // Tab character
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj, JSUndefined.INSTANCE, new JSString("\t")});
+        result = jsonObject().stringify(JSUndefined.INSTANCE,
+                new JSValue[]{obj, JSUndefined.INSTANCE, new JSString("\t")});
         jsonStr = result.asString().map(JSString::value).orElseThrow();
         assertThat(jsonStr.contains("\n\t")).isTrue(); // Should have tab indent
 
         // Multiple character string
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj, JSUndefined.INSTANCE, new JSString("  ")});
+        result = jsonObject().stringify(JSUndefined.INSTANCE,
+                new JSValue[]{obj, JSUndefined.INSTANCE, new JSString("  ")});
         jsonStr = result.asString().map(JSString::value).orElseThrow();
         assertThat(jsonStr.contains("\n  ")).isTrue(); // Should have two spaces
 
         // String longer than 10 characters (should be truncated)
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj, JSUndefined.INSTANCE, new JSString("abcdefghijk")});
+        result = jsonObject().stringify(JSUndefined.INSTANCE,
+                new JSValue[]{obj, JSUndefined.INSTANCE, new JSString("abcdefghijk")});
         jsonStr = result.asString().map(JSString::value).orElseThrow();
         assertThat(jsonStr.contains("\nabcdefghij")).isTrue(); // Should have first 10 chars
 
@@ -863,9 +876,11 @@ public class JSONObjectTest extends BaseJavetTest {
         testArr.push(new JSString("test"));
         testArr.push(JSBoolean.TRUE);
 
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{testArr, JSUndefined.INSTANCE, new JSNumber(2)});
+        result = jsonObject().stringify(JSUndefined.INSTANCE,
+                new JSValue[]{testArr, JSUndefined.INSTANCE, new JSNumber(2)});
         jsonStr = result.asString().map(JSString::value).orElseThrow();
-        assertThat(jsonStr.contains("[\n  1,\n  \"test\",\n  true\n]")).isTrue(); // Should have proper array indentation
+        assertThat(jsonStr.contains("[\n  1,\n  \"test\",\n  true\n]")).isTrue(); // Should have proper array
+                                                                                  // indentation
 
         // Test indentation with nested structures
         JSObject nested = new JSObject(context);
@@ -874,9 +889,13 @@ public class JSONObjectTest extends BaseJavetTest {
         outer.set("nested", nested);
         outer.set("array", testArr);
 
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{outer, JSUndefined.INSTANCE, new JSNumber(4)});
+        result = jsonObject().stringify(JSUndefined.INSTANCE,
+                new JSValue[]{outer, JSUndefined.INSTANCE, new JSNumber(4)});
         jsonStr = result.asString().map(JSString::value).orElseThrow();
-        assertThat(jsonStr.contains("{\n    \"nested\": {\n        \"inner\": \"value\"\n    }")).isTrue(); // Should have nested indentation
+        assertThat(jsonStr.contains("{\n    \"nested\": {\n        \"inner\": \"value\"\n    }")).isTrue(); // Should
+                                                                                                            // have
+                                                                                                            // nested
+                                                                                                            // indentation
     }
 
     @Test
@@ -976,7 +995,7 @@ public class JSONObjectTest extends BaseJavetTest {
     public void testStringifyForReplacer() {
         // Test replacer function that converts BigInts to strings
         JSObject objWithBigInt = new JSObject(context);
-        objWithBigInt.set("num", new JSNumber(123));  // Using number instead of BigInt for testing
+        objWithBigInt.set("num", new JSNumber(123)); // Using number instead of BigInt for testing
         objWithBigInt.set("str", new JSString("test"));
 
         // Create a replacer function that doubles numbers
@@ -1273,7 +1292,7 @@ public class JSONObjectTest extends BaseJavetTest {
             JSValue value = args[1];
 
             if (value instanceof JSBoolean) {
-                return JSUndefined.INSTANCE;  // Filter out booleans
+                return JSUndefined.INSTANCE; // Filter out booleans
             }
             return value;
         });

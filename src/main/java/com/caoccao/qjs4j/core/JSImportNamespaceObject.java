@@ -21,8 +21,8 @@ import com.caoccao.qjs4j.exceptions.JSException;
 import java.util.*;
 
 /**
- * Module namespace exotic-like object for dynamic import().
- * It enforces non-extensible and non-configurable exported bindings semantics.
+ * Module namespace exotic-like object for dynamic import(). It enforces non-extensible and non-configurable exported
+ * bindings semantics.
  */
 public final class JSImportNamespaceObject extends JSObject {
     private final JSContext context;
@@ -36,47 +36,13 @@ public final class JSImportNamespaceObject extends JSObject {
         this.earlyExportBindings = new HashMap<>();
         this.exportNames = new HashSet<>();
         this.finalized = false;
-        super.defineProperty(
-                PropertyKey.SYMBOL_TO_STRING_TAG,
-                new JSString("Module"),
+        super.defineProperty(PropertyKey.SYMBOL_TO_STRING_TAG, new JSString("Module"),
                 PropertyDescriptor.DataState.None);
     }
 
-    private static boolean sameValue(JSValue leftValue, JSValue rightValue) {
-        if (leftValue == rightValue) {
-            return true;
-        }
-        if (leftValue == null || rightValue == null) {
-            return false;
-        }
-
-        JSValueType leftType = leftValue.type();
-        JSValueType rightType = rightValue.type();
-        if (leftType != rightType) {
-            return false;
-        }
-
-        return switch (leftType) {
-            case UNDEFINED, NULL -> true;
-            case NUMBER -> {
-                if (!(leftValue instanceof JSNumber leftNumber) || !(rightValue instanceof JSNumber rightNumber)) {
-                    yield false;
-                }
-                double left = leftNumber.value();
-                double right = rightNumber.value();
-                if (Double.isNaN(left) && Double.isNaN(right)) {
-                    yield true;
-                }
-                yield Double.doubleToRawLongBits(left) == Double.doubleToRawLongBits(right);
-            }
-            case STRING -> (leftValue instanceof JSString leftString && rightValue instanceof JSString rightString)
-                    && leftString.value().equals(rightString.value());
-            case BOOLEAN -> (leftValue instanceof JSBoolean leftBoolean && rightValue instanceof JSBoolean rightBoolean)
-                    && leftBoolean.value() == rightBoolean.value();
-            case BIGINT -> (leftValue instanceof JSBigInt leftBigInt && rightValue instanceof JSBigInt rightBigInt)
-                    && leftBigInt.value().equals(rightBigInt.value());
-            case SYMBOL, OBJECT, FUNCTION -> false;
-        };
+    public boolean defineExportBinding(JSContext context, PropertyKey key, JSValue value,
+            PropertyDescriptor.DataState state) {
+        return defineExportBinding(context, key, PropertyDescriptor.dataDescriptor(value, state));
     }
 
     public boolean defineExportBinding(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
@@ -88,10 +54,6 @@ public final class JSImportNamespaceObject extends JSObject {
             registerExportName(key.asString());
         }
         return defined;
-    }
-
-    public boolean defineExportBinding(JSContext context, PropertyKey key, JSValue value, PropertyDescriptor.DataState state) {
-        return defineExportBinding(context, key, PropertyDescriptor.dataDescriptor(value, state));
     }
 
     @Override
@@ -128,10 +90,7 @@ public final class JSImportNamespaceObject extends JSObject {
 
     public void finalizeNamespace() {
         if (!hasOwnProperty(PropertyKey.SYMBOL_TO_STRING_TAG)) {
-            defineProperty(
-                    PropertyKey.SYMBOL_TO_STRING_TAG,
-                    new JSString("Module"),
-                    PropertyDescriptor.DataState.None);
+            defineProperty(PropertyKey.SYMBOL_TO_STRING_TAG, new JSString("Module"), PropertyDescriptor.DataState.None);
         }
         preventExtensions();
         finalized = true;
@@ -209,7 +168,8 @@ public final class JSImportNamespaceObject extends JSObject {
     /**
      * Whether this namespace declares an export name.
      *
-     * @param exportName the name
+     * @param exportName
+     *            the name
      * @return true when the name is one of this module's exports
      */
     public boolean hasExportName(String exportName) {
@@ -284,19 +244,20 @@ public final class JSImportNamespaceObject extends JSObject {
     @Override
     public boolean setWithReceiverAndException(PropertyKey key, JSValue value, JSObject receiver) {
         if (this.context.isStrictMode()) {
-            this.context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString() + "' of [object Module]");
+            this.context.throwTypeError(
+                    "Cannot assign to read only property '" + key.toPropertyString() + "' of [object Module]");
         }
+        return false;
+    }
+
+    @Override
+    public boolean setWithResult(PropertyKey key, JSValue value) {
         return false;
     }
 
     // ES2024 10.4.6.8 [[Set]]: Always returns false for module namespace objects.
     @Override
     public boolean setWithResult(PropertyKey key, JSValue value, JSObject receiver) {
-        return false;
-    }
-
-    @Override
-    public boolean setWithResult(PropertyKey key, JSValue value) {
         return false;
     }
 
@@ -324,5 +285,42 @@ public final class JSImportNamespaceObject extends JSObject {
             return sameValue(currentValue, descriptor.getValue());
         }
         return true;
+    }
+
+    private static boolean sameValue(JSValue leftValue, JSValue rightValue) {
+        if (leftValue == rightValue) {
+            return true;
+        }
+        if (leftValue == null || rightValue == null) {
+            return false;
+        }
+
+        JSValueType leftType = leftValue.type();
+        JSValueType rightType = rightValue.type();
+        if (leftType != rightType) {
+            return false;
+        }
+
+        return switch (leftType) {
+            case UNDEFINED, NULL -> true;
+            case NUMBER -> {
+                if (!(leftValue instanceof JSNumber leftNumber) || !(rightValue instanceof JSNumber rightNumber)) {
+                    yield false;
+                }
+                double left = leftNumber.value();
+                double right = rightNumber.value();
+                if (Double.isNaN(left) && Double.isNaN(right)) {
+                    yield true;
+                }
+                yield Double.doubleToRawLongBits(left) == Double.doubleToRawLongBits(right);
+            }
+            case STRING -> (leftValue instanceof JSString leftString && rightValue instanceof JSString rightString)
+                    && leftString.value().equals(rightString.value());
+            case BOOLEAN -> (leftValue instanceof JSBoolean leftBoolean && rightValue instanceof JSBoolean rightBoolean)
+                    && leftBoolean.value() == rightBoolean.value();
+            case BIGINT -> (leftValue instanceof JSBigInt leftBigInt && rightValue instanceof JSBigInt rightBigInt)
+                    && leftBigInt.value().equals(rightBigInt.value());
+            case SYMBOL, OBJECT, FUNCTION -> false;
+        };
     }
 }

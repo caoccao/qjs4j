@@ -22,13 +22,12 @@ import java.util.*;
 /**
  * Represents a single test262 test case with its metadata and code.
  * <p>
- * A parsed file is not by itself an executable unit. Test262's {@code INTERPRETING.md} defines
- * how many <em>interpretations</em> a file has and what each one is: an ordinary file is executed
- * twice, once as sloppy-mode script source and once with a {@code "use strict"} prologue prepended,
- * while {@code onlyStrict}, {@code noStrict}, {@code module} and {@code raw} each define exactly
- * one. {@link #expandVariants()} turns a parsed file into those units, and {@link #getVariant()}
- * says which one an instance is, so a result is attributable to an interpretation rather than to a
- * path.
+ * A parsed file is not by itself an executable unit. Test262's {@code INTERPRETING.md} defines how many
+ * <em>interpretations</em> a file has and what each one is: an ordinary file is executed twice, once as sloppy-mode
+ * script source and once with a {@code "use strict"} prologue prepended, while {@code onlyStrict}, {@code noStrict},
+ * {@code module} and {@code raw} each define exactly one. {@link #expandVariants()} turns a parsed file into those
+ * units, and {@link #getVariant()} says which one an instance is, so a result is attributable to an interpretation
+ * rather than to a path.
  */
 public class Test262TestCase {
     private String code;
@@ -76,9 +75,8 @@ public class Test262TestCase {
     /**
      * Expand this parsed file into the execution variants Test262 requires for it.
      * <p>
-     * The returned cases share this instance's parsed metadata and source; they differ only in
-     * {@link #getVariant()}, which the executor turns into a strict prologue, a module evaluation
-     * or a harness-free raw evaluation.
+     * The returned cases share this instance's parsed metadata and source; they differ only in {@link #getVariant()},
+     * which the executor turns into a strict prologue, a module evaluation or a harness-free raw evaluation.
      *
      * @return one case per required interpretation, never empty
      */
@@ -212,41 +210,6 @@ public class Test262TestCase {
     }
 
     /**
-     * The interpretations a Test262 file can have.
-     */
-    public enum Variant {
-        /**
-         * The file's source, evaluated as sloppy-mode script source.
-         */
-        NON_STRICT("non-strict"),
-        /**
-         * The file's source with a {@code "use strict";} prologue prepended, evaluated as script
-         * source. Required for every file that is not {@code noStrict}, {@code module} or
-         * {@code raw}.
-         */
-        STRICT("strict"),
-        /**
-         * The file's source evaluated as module source. Module code is always strict, so this is
-         * the only interpretation a {@code module} file has.
-         */
-        MODULE("module"),
-        /**
-         * The file's source evaluated with no harness and no modification.
-         */
-        RAW("raw");
-
-        private final String label;
-
-        Variant(String label) {
-            this.label = label;
-        }
-
-        public String label() {
-            return label;
-        }
-    }
-
-    /**
      * Represents negative test metadata.
      */
     public static class NegativeInfo {
@@ -280,6 +243,40 @@ public class Test262TestCase {
         @Override
         public String toString() {
             return String.format("NegativeInfo{phase='%s', type='%s'}", phase, type);
+        }
+    }
+
+    /**
+     * The interpretations a Test262 file can have.
+     */
+    public enum Variant {
+        /**
+         * The file's source evaluated as module source. Module code is always strict, so this is the only
+         * interpretation a {@code module} file has.
+         */
+        MODULE("module"),
+        /**
+         * The file's source, evaluated as sloppy-mode script source.
+         */
+        NON_STRICT("non-strict"),
+        /**
+         * The file's source evaluated with no harness and no modification.
+         */
+        RAW("raw"),
+        /**
+         * The file's source with a {@code "use strict";} prologue prepended, evaluated as script source. Required for
+         * every file that is not {@code noStrict}, {@code module} or {@code raw}.
+         */
+        STRICT("strict");
+
+        private final String label;
+
+        Variant(String label) {
+            this.label = label;
+        }
+
+        public String label() {
+            return label;
         }
     }
 }

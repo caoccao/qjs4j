@@ -40,18 +40,16 @@ public class ForStatementTest extends BaseJavetTest {
 
     @Test
     public void testSum() {
-        assertIntegerWithJavet(
-                """
-                        let sum = 0;
-                        for (let i = 1; i <= 100; i++) {
-                          sum += i;
-                        }
-                        sum;""",
-                """
-                        let sum = 0;
-                        for (let i = 100; i > 0; i--) {
-                          sum += i;
-                        }
-                        sum;""");
+        assertIntegerWithJavet("""
+                let sum = 0;
+                for (let i = 1; i <= 100; i++) {
+                  sum += i;
+                }
+                sum;""", """
+                let sum = 0;
+                for (let i = 100; i > 0; i--) {
+                  sum += i;
+                }
+                sum;""");
     }
 }

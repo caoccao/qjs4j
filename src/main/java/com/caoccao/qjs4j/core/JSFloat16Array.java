@@ -21,19 +21,11 @@ import com.caoccao.qjs4j.utils.Float16;
 import java.nio.ByteBuffer;
 
 /**
- * Represents a JavaScript Float16Array.
- * 16-bit half-precision floating point array.
+ * Represents a JavaScript Float16Array. 16-bit half-precision floating point array.
  */
 public final class JSFloat16Array extends JSTypedArray {
     public static final int BYTES_PER_ELEMENT = 2;
     public static final String NAME = "Float16Array";
-
-    /**
-     * Create a Float16Array with a new buffer.
-     */
-    public JSFloat16Array(JSContext context, int length) {
-        super(context, length, BYTES_PER_ELEMENT);
-    }
 
     /**
      * Create a Float16Array view on an existing buffer.
@@ -42,9 +34,11 @@ public final class JSFloat16Array extends JSTypedArray {
         super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 
-    public static JSObject create(JSContext context, JSValue... args) {
-        return createFromArguments(context, BYTES_PER_ELEMENT,
-                context::createJSFloat16Array, context::createJSFloat16Array, args);
+    /**
+     * Create a Float16Array with a new buffer.
+     */
+    public JSFloat16Array(JSContext context, int length) {
+        super(context, length, BYTES_PER_ELEMENT);
     }
 
     @Override
@@ -86,5 +80,10 @@ public final class JSFloat16Array extends JSTypedArray {
         ByteBuffer buf = getByteBuffer();
         short halfFloat = Float16.toHalf(value);
         buf.putShort(index * BYTES_PER_ELEMENT, halfFloat);
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        return createFromArguments(context, BYTES_PER_ELEMENT, context::createJSFloat16Array,
+                context::createJSFloat16Array, args);
     }
 }

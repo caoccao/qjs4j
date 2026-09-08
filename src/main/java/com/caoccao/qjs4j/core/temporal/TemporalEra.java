@@ -19,40 +19,13 @@ package com.caoccao.qjs4j.core.temporal;
 import com.caoccao.qjs4j.core.JSContext;
 
 public enum TemporalEra {
-    BCE("bce"),
-    CE("ce"),
-    MEIJI("meiji"),
-    TAISHO("taisho"),
-    SHOWA("showa"),
-    HEISEI("heisei"),
-    REIWA("reiwa"),
-    ROC("roc"),
-    BROC("broc"),
-    BE("be"),
-    AM("am"),
-    AA("aa"),
-    SHAKA("shaka"),
-    AP("ap"),
-    AH("ah"),
-    BH("bh");
+    AA("aa"), AH("ah"), AM("am"), AP("ap"), BCE("bce"), BE("be"), BH("bh"), BROC("broc"), CE("ce"), HEISEI(
+            "heisei"), MEIJI("meiji"), REIWA("reiwa"), ROC("roc"), SHAKA("shaka"), SHOWA("showa"), TAISHO("taisho");
 
     private final String identifier;
 
     TemporalEra(String identifier) {
         this.identifier = identifier;
-    }
-
-    public static TemporalEra createByCalendarId(JSContext context, TemporalCalendarId calendarId, String era) {
-        if (era == null) {
-            context.throwRangeError("Temporal error: Invalid era.");
-            return null;
-        }
-        TemporalEra temporalEra = calendarId.toTemporalEra(era);
-        if (temporalEra == null) {
-            context.throwRangeError("Temporal error: Invalid era.");
-            return null;
-        }
-        return temporalEra;
     }
 
     public int getEraYearByJapaneseEraYear(int eraYear) {
@@ -69,5 +42,18 @@ public enum TemporalEra {
 
     public String identifier() {
         return identifier;
+    }
+
+    public static TemporalEra createByCalendarId(JSContext context, TemporalCalendarId calendarId, String era) {
+        if (era == null) {
+            context.throwRangeError("Temporal error: Invalid era.");
+            return null;
+        }
+        TemporalEra temporalEra = calendarId.toTemporalEra(era);
+        if (temporalEra == null) {
+            context.throwRangeError("Temporal error: Invalid era.");
+            return null;
+        }
+        return temporalEra;
     }
 }

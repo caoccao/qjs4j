@@ -26,8 +26,7 @@ import java.io.PrintStream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Tests for JSConsole.
- * Uses custom PrintStreams to capture and verify output.
+ * Tests for JSConsole. Uses custom PrintStreams to capture and verify output.
  */
 public class JSConsoleTest extends BaseJavetTest {
     private static final String LINE_SEPARATOR = System.lineSeparator();
@@ -540,7 +539,8 @@ public class JSConsoleTest extends BaseJavetTest {
 
     @Test
     public void testLogObjectWithGetter() {
-        context.eval("const o = {}; Object.defineProperty(o, 'x', { get() { return 1; }, enumerable: true }); console.log(o);");
+        context.eval(
+                "const o = {}; Object.defineProperty(o, 'x', { get() { return 1; }, enumerable: true }); console.log(o);");
         assertThat(out()).isEqualTo("{ x: [Getter] }\n");
     }
 

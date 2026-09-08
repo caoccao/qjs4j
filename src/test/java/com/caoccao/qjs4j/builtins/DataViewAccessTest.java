@@ -12,11 +12,6 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class DataViewAccessTest extends BaseJavetTest {
-    private static Stream<String> elementTypes() {
-        return Stream.of("Int8", "Uint8", "Int16", "Uint16", "Int32", "Uint32",
-                "Float16", "Float32", "Float64", "BigInt64", "BigUint64");
-    }
-
     @ParameterizedTest
     @MethodSource("elementTypes")
     public void testConversionsStopOnErrors(String type) {
@@ -122,5 +117,10 @@ public class DataViewAccessTest extends BaseJavetTest {
                   })).join('|');
                 })()
                 """.formatted(type));
+    }
+
+    private static Stream<String> elementTypes() {
+        return Stream.of("Int8", "Uint8", "Int16", "Uint16", "Int32", "Uint32", "Float16", "Float32", "Float64",
+                "BigInt64", "BigUint64");
     }
 }

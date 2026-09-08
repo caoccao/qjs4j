@@ -28,10 +28,7 @@ public final class ArrowFunctionExpression extends Expression {
     private final FunctionParams functionParams;
     private final boolean isAsync;
 
-    public ArrowFunctionExpression(
-            FunctionParams functionParams,
-            ASTNode body,
-            boolean isAsync,
+    public ArrowFunctionExpression(FunctionParams functionParams, ASTNode body, boolean isAsync,
             SourceLocation location) {
         super(location);
         this.functionParams = functionParams;

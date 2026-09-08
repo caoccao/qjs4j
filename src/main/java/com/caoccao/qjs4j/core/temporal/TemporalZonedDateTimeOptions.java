@@ -22,8 +22,10 @@ import com.caoccao.qjs4j.core.JSUndefined;
 import com.caoccao.qjs4j.core.JSValue;
 
 public record TemporalZonedDateTimeOptions(String disambiguation, String offset, String overflow) {
-    public static final TemporalZonedDateTimeOptions DEFAULT_FROM = new TemporalZonedDateTimeOptions("compatible", "reject", "constrain");
-    public static final TemporalZonedDateTimeOptions DEFAULT_WITH = new TemporalZonedDateTimeOptions("compatible", "prefer", "constrain");
+    public static final TemporalZonedDateTimeOptions DEFAULT_FROM = new TemporalZonedDateTimeOptions("compatible",
+            "reject", "constrain");
+    public static final TemporalZonedDateTimeOptions DEFAULT_WITH = new TemporalZonedDateTimeOptions("compatible",
+            "prefer", "constrain");
 
     private static TemporalZonedDateTimeOptions createCanonical(String disambiguation, String offset, String overflow) {
         if ("compatible".equals(disambiguation) && "constrain".equals(overflow)) {

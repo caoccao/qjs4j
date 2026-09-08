@@ -29,20 +29,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Two defects in the wait machinery.
  * <p>
- * Wait lists were keyed by {@code System.identityHashCode(bytes) + ":" + offset}. Identity hash
- * codes are not unique, so two live and unrelated {@code SharedArrayBuffer}s could share a wait
- * list and a notify on one would wake — and count — waiters on the other. And an in-flight
- * {@code Atomics.waitAsync} with no timeout held a daemon thread, a promise and that promise's
- * context for the life of the process; closing its runtime changed nothing.
+ * Wait lists were keyed by {@code System.identityHashCode(bytes) + ":" + offset}. Identity hash codes are not unique,
+ * so two live and unrelated {@code SharedArrayBuffer}s could share a wait list and a notify on one would wake — and
+ * count — waiters on the other. And an in-flight {@code Atomics.waitAsync} with no timeout held a daemon thread, a
+ * promise and that promise's context for the life of the process; closing its runtime changed nothing.
  */
 public class AtomicsWaitListTest extends BaseTest {
-    private static JSTypedArray sharedInt32Array(JSContext context, int elementCount) {
-        JSValue array = context.eval(
-                "new Int32Array(new SharedArrayBuffer(" + (elementCount * 4) + "))",
-                "atomics.js", false);
-        return (JSTypedArray) array;
-    }
-
     @Test
     @Timeout(60)
     public void testAnInjectedClusterObjectOutlivesEveryMemberRuntime() {
@@ -58,9 +50,7 @@ public class AtomicsWaitListTest extends BaseTest {
         first.close();
         assertThat(clusterAtomics.isWaitExecutorTerminated()).isFalse();
         second.close();
-        assertThat(clusterAtomics.isWaitExecutorTerminated())
-                .as("the last member still does not own it")
-                .isFalse();
+        assertThat(clusterAtomics.isWaitExecutorTerminated()).as("the last member still does not own it").isFalse();
         clusterAtomics.close();
         assertThat(clusterAtomics.isWaitExecutorTerminated()).isTrue();
     }
@@ -87,11 +77,9 @@ public class AtomicsWaitListTest extends BaseTest {
                 Thread.sleep(10);
             }
             assertThat(sharedAtomics.getPendingAsyncWaitCount(first))
-                    .as("an infinite waitAsync must not survive its own runtime")
-                    .isZero();
+                    .as("an infinite waitAsync must not survive its own runtime").isZero();
             assertThat(sharedAtomics.getPendingAsyncWaitCount(second))
-                    .as("another agent's wait in the same cluster is untouched")
-                    .isEqualTo(1);
+                    .as("another agent's wait in the same cluster is untouched").isEqualTo(1);
         } finally {
             second.close();
         }
@@ -117,15 +105,12 @@ public class AtomicsWaitListTest extends BaseTest {
             assertThat(runtime.getAtomicsObject().getPendingAsyncWaitCount(runtime)).isEqualTo(1);
 
             // The second context's Atomics has to be able to see the first context's waiters.
-            AtomicsObject.WaitRegistration registration =
-                    runtime.getAtomicsObject().registerWaiter(array, 0);
+            AtomicsObject.WaitRegistration registration = runtime.getAtomicsObject().registerWaiter(array, 0);
             try {
-                assertThat(runtime.getAtomicsObject().findWaitList(array, 0))
-                        .isSameAs(registration.waitList());
+                assertThat(runtime.getAtomicsObject().findWaitList(array, 0)).isSameAs(registration.waitList());
                 after.getGlobalObject().set("sharedArray", array);
                 assertThat(after.eval("Atomics.notify(sharedArray, 0, 1)", "atomics.js", false).toString())
-                        .as("the second context's Atomics.notify reaches the first context's waiter")
-                        .isEqualTo("1");
+                        .as("the second context's Atomics.notify reaches the first context's waiter").isEqualTo("1");
             } finally {
                 registration.waitList().cancel(registration.waiter());
                 runtime.getAtomicsObject().releaseWaitList(registration);
@@ -152,8 +137,7 @@ public class AtomicsWaitListTest extends BaseTest {
 
         runtime.close();
 
-        assertThat(atomics.isWaitExecutorTerminated())
-                .as("a runtime that created its own Atomics object closes it")
+        assertThat(atomics.isWaitExecutorTerminated()).as("a runtime that created its own Atomics object closes it")
                 .isTrue();
         assertThat(atomics.getPendingAsyncWaitCount(runtime)).isZero();
     }
@@ -173,8 +157,7 @@ public class AtomicsWaitListTest extends BaseTest {
                 first.close();
 
                 assertThat(clusterAtomics.isWaitExecutorTerminated())
-                        .as("a shared cluster object is not closed by one of its members")
-                        .isFalse();
+                        .as("a shared cluster object is not closed by one of its members").isFalse();
                 assertThat(clusterAtomics.getPendingAsyncWaitCount(second)).isEqualTo(1);
             }
         }
@@ -194,12 +177,9 @@ public class AtomicsWaitListTest extends BaseTest {
             options.setAtomicsObject(replacement);
             assertThat(runtime.getAtomicsObject()).isSameAs(used);
             runtime.close();
-            assertThat(used.isWaitExecutorTerminated())
-                    .as("the runtime closes the instance it actually used")
-                    .isTrue();
+            assertThat(used.isWaitExecutorTerminated()).as("the runtime closes the instance it actually used").isTrue();
             assertThat(replacement.isWaitExecutorTerminated())
-                    .as("an instance the runtime never used is not its to close")
-                    .isFalse();
+                    .as("an instance the runtime never used is not its to close").isFalse();
         } finally {
             replacement.close();
         }
@@ -221,21 +201,21 @@ public class AtomicsWaitListTest extends BaseTest {
             Thread firstWaiter = new Thread(() -> {
                 JSContext waiterContext = runtime.createContext();
                 firstWaiterStarted.countDown();
-                firstResult[0] = atomics.wait(waiterContext, JSUndefined.INSTANCE, new JSValue[]{
-                        array, JSNumber.of(0), JSNumber.of(0), JSNumber.of(30000)}).toString();
+                firstResult[0] = atomics.wait(waiterContext, JSUndefined.INSTANCE,
+                        new JSValue[]{array, JSNumber.of(0), JSNumber.of(0), JSNumber.of(30000)}).toString();
             }, "first-waiter");
             firstWaiter.start();
             assertThat(firstWaiterStarted.await(10, TimeUnit.SECONDS)).isTrue();
             // Let the waiter actually reach the queue.
             Thread.sleep(200);
 
-            assertThat(atomics.notify(context, JSUndefined.INSTANCE, new JSValue[]{
-                    array, JSNumber.of(0), JSNumber.of(1)}).toString()).isEqualTo("1");
+            assertThat(
+                    atomics.notify(context, JSUndefined.INSTANCE, new JSValue[]{array, JSNumber.of(0), JSNumber.of(1)})
+                            .toString())
+                    .isEqualTo("1");
 
             firstWaiter.join(20000);
-            assertThat(firstResult[0])
-                    .as("the notified waiter must be the one that was waiting")
-                    .isEqualTo("ok");
+            assertThat(firstResult[0]).as("the notified waiter must be the one that was waiting").isEqualTo("ok");
         }
     }
 
@@ -252,15 +232,17 @@ public class AtomicsWaitListTest extends BaseTest {
             Thread waiter = new Thread(() -> {
                 JSContext waiterContext = runtime.createContext();
                 started.countDown();
-                result[0] = atomics.wait(waiterContext, JSUndefined.INSTANCE, new JSValue[]{
-                        array, JSNumber.of(0), JSNumber.of(0), JSNumber.of(700)}).toString();
+                result[0] = atomics.wait(waiterContext, JSUndefined.INSTANCE,
+                        new JSValue[]{array, JSNumber.of(0), JSNumber.of(0), JSNumber.of(700)}).toString();
             }, "index-waiter");
             waiter.start();
             assertThat(started.await(10, TimeUnit.SECONDS)).isTrue();
             Thread.sleep(200);
 
-            assertThat(atomics.notify(context, JSUndefined.INSTANCE, new JSValue[]{
-                    array, JSNumber.of(2), JSNumber.of(1)}).toString()).isEqualTo("0");
+            assertThat(
+                    atomics.notify(context, JSUndefined.INSTANCE, new JSValue[]{array, JSNumber.of(2), JSNumber.of(1)})
+                            .toString())
+                    .isEqualTo("0");
             waiter.join(20000);
             assertThat(result[0]).isEqualTo("timed-out");
         }
@@ -280,17 +262,17 @@ public class AtomicsWaitListTest extends BaseTest {
             Thread waiter = new Thread(() -> {
                 JSContext waiterContext = runtime.createContext();
                 started.countDown();
-                result[0] = atomics.wait(waiterContext, JSUndefined.INSTANCE, new JSValue[]{
-                        waited, JSNumber.of(0), JSNumber.of(0), JSNumber.of(700)}).toString();
+                result[0] = atomics.wait(waiterContext, JSUndefined.INSTANCE,
+                        new JSValue[]{waited, JSNumber.of(0), JSNumber.of(0), JSNumber.of(700)}).toString();
             }, "cross-buffer-waiter");
             waiter.start();
             assertThat(started.await(10, TimeUnit.SECONDS)).isTrue();
             Thread.sleep(200);
 
-            assertThat(atomics.notify(context, JSUndefined.INSTANCE, new JSValue[]{
-                    other, JSNumber.of(0), JSNumber.of(1)}).toString())
-                    .as("a notify on a different buffer must find nobody")
-                    .isEqualTo("0");
+            assertThat(
+                    atomics.notify(context, JSUndefined.INSTANCE, new JSValue[]{other, JSNumber.of(0), JSNumber.of(1)})
+                            .toString())
+                    .as("a notify on a different buffer must find nobody").isEqualTo("0");
 
             waiter.join(20000);
             assertThat(result[0]).isEqualTo("timed-out");
@@ -304,8 +286,10 @@ public class AtomicsWaitListTest extends BaseTest {
             JSContext context = runtime.createContext();
             JSTypedArray array = sharedInt32Array(context, 2);
             AtomicsObject atomics = runtime.getAtomicsObject();
-            assertThat(atomics.notify(context, JSUndefined.INSTANCE, new JSValue[]{
-                    array, JSNumber.of(0), JSNumber.of(1)}).toString()).isEqualTo("0");
+            assertThat(
+                    atomics.notify(context, JSUndefined.INSTANCE, new JSValue[]{array, JSNumber.of(0), JSNumber.of(1)})
+                            .toString())
+                    .isEqualTo("0");
         }
     }
 
@@ -323,8 +307,7 @@ public class AtomicsWaitListTest extends BaseTest {
                         + "globalThis.r = Atomics.waitAsync(i, 0, 0);", "atomics.js", false);
             }
             assertThat(instances[index].isWaitExecutorTerminated())
-                    .as("runtime " + index + " owns and closes its own instance")
-                    .isTrue();
+                    .as("runtime " + index + " owns and closes its own instance").isTrue();
         }
         for (int index = 1; index < instances.length; index++) {
             assertThat(instances[index]).isNotSameAs(instances[index - 1]);
@@ -348,8 +331,7 @@ public class AtomicsWaitListTest extends BaseTest {
             first.close();
             assertThat(first.getAtomicsObject().isWaitExecutorTerminated()).isTrue();
             assertThat(second.getAtomicsObject().isWaitExecutorTerminated())
-                    .as("a runtime that is still open keeps its own executor")
-                    .isFalse();
+                    .as("a runtime that is still open keeps its own executor").isFalse();
             // And it still works, which is the part an embedder would actually notice.
             second.createContext().eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
                     + "globalThis.r = Atomics.waitAsync(i, 0, 0);", "atomics.js", false);
@@ -381,17 +363,13 @@ public class AtomicsWaitListTest extends BaseTest {
             assertThat(atomics.findWaitList(array, 0)).isNull();
 
             assertThat(first.waitList().registerIfLive())
-                    .as("a list that is no longer reachable must not accept a waiter")
-                    .isNull();
+                    .as("a list that is no longer reachable must not accept a waiter").isNull();
 
             AtomicsObject.WaitRegistration second = atomics.registerWaiter(array, 0);
-            assertThat(second.waitList())
-                    .as("the late registration lands on the list that is actually in the lookup")
+            assertThat(second.waitList()).as("the late registration lands on the list that is actually in the lookup")
                     .isNotSameAs(first.waitList());
             assertThat(atomics.findWaitList(array, 0)).isSameAs(second.waitList());
-            assertThat(second.waitList().notifyWaiters(1))
-                    .as("and Atomics.notify can therefore find it")
-                    .isEqualTo(1);
+            assertThat(second.waitList().notifyWaiters(1)).as("and Atomics.notify can therefore find it").isEqualTo(1);
         }
     }
 
@@ -401,8 +379,7 @@ public class AtomicsWaitListTest extends BaseTest {
         try (JSRuntime runtime = new JSRuntime()) {
             JSContext context = runtime.createContext();
             context.eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
-                    + "globalThis.r = Atomics.waitAsync(i, 0, 0);"
-                    + "globalThis.settled = 'pending';"
+                    + "globalThis.r = Atomics.waitAsync(i, 0, 0);" + "globalThis.settled = 'pending';"
                     + "r.value.then(v => { globalThis.settled = v; });", "atomics.js", false);
             assertThat(context.eval("r.async").toString()).isEqualTo("true");
 
@@ -415,6 +392,26 @@ public class AtomicsWaitListTest extends BaseTest {
                 Thread.sleep(10);
             }
             assertThat(context.eval("String(settled)").toString()).isEqualTo("ok");
+        }
+    }
+
+    @Test
+    @Timeout(60)
+    public void testWaitListsOfDifferentOffsetsAreIndependent() {
+        try (JSRuntime runtime = new JSRuntime()) {
+            JSContext context = runtime.createContext();
+            JSTypedArray array = sharedInt32Array(context, 4);
+            AtomicsObject atomics = runtime.getAtomicsObject();
+
+            AtomicsObject.WaitRegistration atZero = atomics.registerWaiter(array, 0);
+            AtomicsObject.WaitRegistration atTwo = atomics.registerWaiter(array, 2);
+            assertThat(atTwo.waitList()).isNotSameAs(atZero.waitList());
+
+            atZero.waitList().cancel(atZero.waiter());
+            atomics.releaseWaitList(atZero);
+            assertThat(atomics.findWaitList(array, 0)).isNull();
+            assertThat(atomics.findWaitList(array, 2)).as("reclaiming one location must not disturb another")
+                    .isSameAs(atTwo.waitList());
         }
     }
 
@@ -440,24 +437,9 @@ public class AtomicsWaitListTest extends BaseTest {
         }
     }
 
-    @Test
-    @Timeout(60)
-    public void testWaitListsOfDifferentOffsetsAreIndependent() {
-        try (JSRuntime runtime = new JSRuntime()) {
-            JSContext context = runtime.createContext();
-            JSTypedArray array = sharedInt32Array(context, 4);
-            AtomicsObject atomics = runtime.getAtomicsObject();
-
-            AtomicsObject.WaitRegistration atZero = atomics.registerWaiter(array, 0);
-            AtomicsObject.WaitRegistration atTwo = atomics.registerWaiter(array, 2);
-            assertThat(atTwo.waitList()).isNotSameAs(atZero.waitList());
-
-            atZero.waitList().cancel(atZero.waiter());
-            atomics.releaseWaitList(atZero);
-            assertThat(atomics.findWaitList(array, 0)).isNull();
-            assertThat(atomics.findWaitList(array, 2))
-                    .as("reclaiming one location must not disturb another")
-                    .isSameAs(atTwo.waitList());
-        }
+    private static JSTypedArray sharedInt32Array(JSContext context, int elementCount) {
+        JSValue array = context.eval("new Int32Array(new SharedArrayBuffer(" + (elementCount * 4) + "))", "atomics.js",
+                false);
+        return (JSTypedArray) array;
     }
 }

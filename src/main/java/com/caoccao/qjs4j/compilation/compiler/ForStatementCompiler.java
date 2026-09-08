@@ -36,8 +36,7 @@ final class ForStatementCompiler extends AstNodeCompiler<ForStatement> {
 
         compilerContext.scopeManager.enterScope();
 
-        boolean hasUsingInit = !initCompiled
-                && forStmt.getInit() instanceof VariableDeclaration usingCheck
+        boolean hasUsingInit = !initCompiled && forStmt.getInit() instanceof VariableDeclaration usingCheck
                 && (usingCheck.getKind() == VariableKind.USING || usingCheck.getKind() == VariableKind.AWAIT_USING);
 
         int forUsingCatchJump = -1;
@@ -69,7 +68,8 @@ final class ForStatementCompiler extends AstNodeCompiler<ForStatement> {
         }
 
         int loopStart = compilerContext.emitter.currentOffset();
-        LoopContext loop = compilerContext.loopManager.createLoopContext(loopStart, compilerContext.scopeManager.getScopeDepth() - 1, compilerContext.scopeManager.getScopeDepth());
+        LoopContext loop = compilerContext.loopManager.createLoopContext(loopStart,
+                compilerContext.scopeManager.getScopeDepth() - 1, compilerContext.scopeManager.getScopeDepth());
         compilerContext.loopManager.pushLoop(loop);
 
         int jumpToEnd = -1;
@@ -120,7 +120,8 @@ final class ForStatementCompiler extends AstNodeCompiler<ForStatement> {
             int jumpOverCatch = compilerContext.emitter.emitJump(Opcode.GOTO);
 
             compilerContext.emitter.patchJump(forUsingCatchJump, compilerContext.emitter.currentOffset());
-            compilerContext.emitHelpers.emitScopeUsingDisposalWithException(compilerContext.scopeManager.currentScope());
+            compilerContext.emitHelpers
+                    .emitScopeUsingDisposalWithException(compilerContext.scopeManager.currentScope());
 
             compilerContext.emitter.patchJump(jumpOverCatch, compilerContext.emitter.currentOffset());
         } else {

@@ -19,8 +19,7 @@ package com.caoccao.qjs4j.compilation.ast;
 import java.util.List;
 
 /**
- * Represents a destructuring pattern with a default value.
- * Example: [x = defaultVal] or { y = defaultVal }.
+ * Represents a destructuring pattern with a default value. Example: [x = defaultVal] or { y = defaultVal }.
  */
 public final class AssignmentPattern extends Pattern {
     private final Pattern left;

@@ -50,9 +50,12 @@ public class DatePrototypeTest extends BaseJavetTest {
 
     @Test
     public void testDateDescriptorsWithJavet() {
-        assertStringWithJavet("var d = Object.getOwnPropertyDescriptor(Date.prototype, 'getYear'); JSON.stringify([typeof d.value, d.enumerable, d.writable, d.configurable]);");
-        assertStringWithJavet("var d = Object.getOwnPropertyDescriptor(Date.prototype, 'setYear'); JSON.stringify([typeof d.value, d.enumerable, d.writable, d.configurable]);");
-        assertStringWithJavet("var d = Object.getOwnPropertyDescriptor(Date.prototype, 'toGMTString'); JSON.stringify([typeof d.value, d.enumerable, d.writable, d.configurable]);");
+        assertStringWithJavet(
+                "var d = Object.getOwnPropertyDescriptor(Date.prototype, 'getYear'); JSON.stringify([typeof d.value, d.enumerable, d.writable, d.configurable]);");
+        assertStringWithJavet(
+                "var d = Object.getOwnPropertyDescriptor(Date.prototype, 'setYear'); JSON.stringify([typeof d.value, d.enumerable, d.writable, d.configurable]);");
+        assertStringWithJavet(
+                "var d = Object.getOwnPropertyDescriptor(Date.prototype, 'toGMTString'); JSON.stringify([typeof d.value, d.enumerable, d.writable, d.configurable]);");
     }
 
     @Test
@@ -64,7 +67,8 @@ public class DatePrototypeTest extends BaseJavetTest {
         String str = ((JSString) result).value();
 
         // Should follow V8 format
-        assertThat(str).matches("^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \\d{2} \\d{4} \\d{2}:\\d{2}:\\d{2} GMT[+-]\\d{4} \\([A-Z]{3,4}\\)$");
+        assertThat(str).matches(
+                "^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \\d{2} \\d{4} \\d{2}:\\d{2}:\\d{2} GMT[+-]\\d{4} \\([A-Z]{3,4}\\)$");
     }
 
     @Test
@@ -415,8 +419,7 @@ public class DatePrototypeTest extends BaseJavetTest {
         // Skip Javet comparison on Windows due to timezone format differences
         assumeFalse(isWindows(), "Skipping on Windows - timezone format differences with V8");
 
-        assertStringWithJavet(
-                "new Date(1735689600000).toString();");
+        assertStringWithJavet("new Date(1735689600000).toString();");
     }
 
     @Test

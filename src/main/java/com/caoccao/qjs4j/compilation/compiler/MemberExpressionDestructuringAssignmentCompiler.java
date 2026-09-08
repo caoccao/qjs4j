@@ -37,8 +37,7 @@ final class MemberExpressionDestructuringAssignmentCompiler extends AstNodeCompi
     void compile(MemberExpression memberExpr) {
         // Stack: [value]
         if (memberExpr.isOptional()) {
-            throw new JSSyntaxErrorException(
-                    "Invalid destructuring assignment target", memberExpr.getLocation());
+            throw new JSSyntaxErrorException("Invalid destructuring assignment target", memberExpr.getLocation());
         }
         if (memberExpr.getObject().isSuperIdentifier()) {
             // Stack starts with [value]
@@ -74,9 +73,7 @@ final class MemberExpressionDestructuringAssignmentCompiler extends AstNodeCompi
                         ? compilerContext.privateSymbols.get(fieldName)
                         : null;
                 if (privateSymbol == null) {
-                    throw new JSCompilerException(
-                            "undefined private field '#" + fieldName + "'",
-                            privateIdentifier);
+                    throw new JSCompilerException("undefined private field '#" + fieldName + "'", privateIdentifier);
                 }
                 // Stack: [value, obj] -> [obj, value] -> [obj, value, privateSymbol]
                 compilerContext.emitter.emitOpcode(Opcode.SWAP);

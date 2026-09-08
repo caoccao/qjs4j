@@ -104,7 +104,8 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertThat(arr.getLength()).isEqualTo(0);
 
         // Edge case: invalid mapFn
-        assertTypeError(ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{sourceArr, new JSString("not a function")}));
+        assertTypeError(ArrayConstructor.from(context, JSUndefined.INSTANCE,
+                new JSValue[]{sourceArr, new JSString("not a function")}));
         assertPendingException(context);
     }
 
@@ -200,7 +201,8 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.FULFILLED);
 
         // Edge case: invalid mapFn
-        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{sourceArr, new JSString("not a function")});
+        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE,
+                new JSValue[]{sourceArr, new JSString("not a function")});
         promise = result.asPromise().orElseThrow();
         awaitPromise(promise);
         assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
@@ -302,11 +304,8 @@ public class ArrayConstructorTest extends BaseJavetTest {
     @Test
     public void testOf() {
         // Normal case: create array with elements
-        JSValue result = ArrayConstructor.of(context, JSUndefined.INSTANCE, new JSValue[]{
-                new JSNumber(1),
-                new JSNumber(2),
-                new JSNumber(3)
-        });
+        JSValue result = ArrayConstructor.of(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSNumber(1), new JSNumber(2), new JSNumber(3)});
         JSArray arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(3);
         assertThat(arr.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
@@ -325,23 +324,17 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertThat(arr.get(0).asString().map(JSString::value).orElseThrow()).isEqualTo("hello");
 
         // Edge case: mixed types
-        result = ArrayConstructor.of(context, JSUndefined.INSTANCE, new JSValue[]{
-                new JSNumber(1),
-                new JSString("two"),
-                JSBoolean.TRUE
-        });
+        result = ArrayConstructor.of(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSNumber(1), new JSString("two"), JSBoolean.TRUE});
         arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(3);
 
-        assertStringWithJavet(
-                "JSON.stringify(Array.of(...[1,2,3]))");
+        assertStringWithJavet("JSON.stringify(Array.of(...[1,2,3]))");
     }
 
     @Test
     public void testTypeof() {
-        assertStringWithJavet(
-                "typeof Array;");
-        assertIntegerWithJavet(
-                "Array.length;");
+        assertStringWithJavet("typeof Array;");
+        assertIntegerWithJavet("Array.length;");
     }
 }

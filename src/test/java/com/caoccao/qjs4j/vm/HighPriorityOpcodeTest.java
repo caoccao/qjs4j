@@ -28,23 +28,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class HighPriorityOpcodeTest extends BaseTest {
-    private JSValue execute(
-            BytecodeEmitter emitter,
-            int localCount,
-            JSValue[] closureVars,
-            JSValue thisArg,
+    private JSValue execute(BytecodeEmitter emitter, int localCount, JSValue[] closureVars, JSValue thisArg,
             JSValue... args) {
-        JSBytecodeFunction function = new JSBytecodeFunction(context, emitter.build(localCount),
-                "test",
-                args.length,
-                closureVars,
-                null,
-                true,
-                false,
-                false,
-                false,
-                false,
-                "function test() { [bytecode] }");
+        JSBytecodeFunction function = new JSBytecodeFunction(context, emitter.build(localCount), "test", args.length,
+                closureVars, null, true, false, false, false, false, "function test() { [bytecode] }");
         return context.getVirtualMachine().execute(function, thisArg, args);
     }
 

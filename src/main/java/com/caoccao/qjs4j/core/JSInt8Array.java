@@ -19,19 +19,11 @@ package com.caoccao.qjs4j.core;
 import java.nio.ByteBuffer;
 
 /**
- * Represents a JavaScript Int8Array.
- * 8-bit signed integer array.
+ * Represents a JavaScript Int8Array. 8-bit signed integer array.
  */
 public final class JSInt8Array extends JSTypedArray {
     public static final int BYTES_PER_ELEMENT = 1;
     public static final String NAME = "Int8Array";
-
-    /**
-     * Create an Int8Array with a new buffer.
-     */
-    public JSInt8Array(JSContext context, int length) {
-        super(context, length, BYTES_PER_ELEMENT);
-    }
 
     /**
      * Create an Int8Array view on an existing buffer.
@@ -40,9 +32,11 @@ public final class JSInt8Array extends JSTypedArray {
         super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 
-    public static JSObject create(JSContext context, JSValue... args) {
-        return createFromArguments(context, BYTES_PER_ELEMENT,
-                context::createJSInt8Array, context::createJSInt8Array, args);
+    /**
+     * Create an Int8Array with a new buffer.
+     */
+    public JSInt8Array(JSContext context, int length) {
+        super(context, length, BYTES_PER_ELEMENT);
     }
 
     @Override
@@ -82,5 +76,10 @@ public final class JSInt8Array extends JSTypedArray {
         checkIndex(index);
         ByteBuffer buf = getByteBuffer();
         buf.put(index, (byte) JSTypeConversions.toInt32(value));
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        return createFromArguments(context, BYTES_PER_ELEMENT, context::createJSInt8Array, context::createJSInt8Array,
+                args);
     }
 }

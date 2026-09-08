@@ -24,30 +24,28 @@ import org.junit.jupiter.api.Timeout;
 import java.util.StringJoiner;
 
 /**
- * A guest-supplied pattern must not choose how much memory the matcher claims — and the ceiling it
- * runs into has to be V8's, not one picked for tidiness.
+ * A guest-supplied pattern must not choose how much memory the matcher claims — and the ceiling it runs into has to be
+ * V8's, not one picked for tidiness.
  * <p>
- * Every limit comparison here runs the same source through V8 and through qjs4j, because V8's
- * behaviour is the specification for these limits in a way no reasoning about them is. Two earlier
- * attempts at this budget were argued from first principles and both were wrong: the first narrowed
- * the ceiling to a round number, the second derived it from the old entry count. Both broke
- * Test262's whole {@code property-escapes} corpus, which matches a greedy {@code +} against every
- * code point in Unicode.
+ * Every limit comparison here runs the same source through V8 and through qjs4j, because V8's behaviour is the
+ * specification for these limits in a way no reasoning about them is. Two earlier attempts at this budget were argued
+ * from first principles and both were wrong: the first narrowed the ceiling to a round number, the second derived it
+ * from the old entry count. Both broke Test262's whole {@code property-escapes} corpus, which matches a greedy
+ * {@code +} against every code point in Unicode.
  * <p>
- * The cap is now {@code RegExpStack::kMaximumStackSize} — {@code 64 * MB}, from V8's
- * {@code src/regexp/regexp-stack.h} — and the backtrack frame was cut from 84 bytes to 12 so that
- * budget buys an amount of backtracking comparable to V8's 4-byte slots.
+ * The cap is now {@code RegExpStack::kMaximumStackSize} — {@code 64 * MB}, from V8's {@code src/regexp/regexp-stack.h}
+ * — and the backtrack frame was cut from 84 bytes to 12 so that budget buys an amount of backtracking comparable to
+ * V8's 4-byte slots.
  * <p>
- * One limit is deliberately absent here: the ReDoS step budget. V8 runs {@code /(a+)+$/} against 64
- * characters to completion and qjs4j stops it with a {@code RangeError}, so comparing the two would
- * assert away the feature. It is covered by {@code JSResourceLimitTest}, which does not go through
- * V8 for that group.
+ * One limit is deliberately absent here: the ReDoS step budget. V8 runs {@code /(a+)+$/} against 64 characters to
+ * completion and qjs4j stops it with a {@code RangeError}, so comparing the two would assert away the feature. It is
+ * covered by {@code JSResourceLimitTest}, which does not go through V8 for that group.
  */
 public class RegExpResourceBoundTest extends BaseJavetTest {
 
     private String allStringsInUnicodeProperty(String propertyName) {
-        UnicodePropertyResolver.SequencePropertyResult property =
-                UnicodePropertyResolver.resolveSequenceProperty(propertyName);
+        UnicodePropertyResolver.SequencePropertyResult property = UnicodePropertyResolver
+                .resolveSequenceProperty(propertyName);
         StringJoiner strings = new StringJoiner(",");
         int[] ranges = property.codePointRanges();
         for (int i = 0; i < ranges.length; i += 2) {
@@ -69,7 +67,8 @@ public class RegExpResourceBoundTest extends BaseJavetTest {
     /**
      * Source that builds a subject containing every Unicode code point, then applies a pattern.
      *
-     * @param pattern the regular expression literal to test with
+     * @param pattern
+     *            the regular expression literal to test with
      * @return source evaluating to {@code 'true'}, {@code 'false'} or the error name
      */
     private String everyCodePoint(String pattern) {
@@ -92,20 +91,18 @@ public class RegExpResourceBoundTest extends BaseJavetTest {
     @Test
     @Timeout(60)
     public void testCaptureCountAtQuickJsLimitIsAccepted() {
-        assertStringWithJavet(
-                "(function () { try { new RegExp('%s'); return 'OK' } catch (e) { return e.name } })()"
-                        .formatted(groups(254)));
+        assertStringWithJavet("(function () { try { new RegExp('%s'); return 'OK' } catch (e) { return e.name } })()"
+                .formatted(groups(254)));
     }
 
     @Test
     @Timeout(300)
     public void testGreedyMatchOverAHalfMillionCharacterSubject() {
-        assertStringWithJavet(
-                """
-                        (function () {
-                          const subject = 'x'.repeat(500000);
-                          try { return String(/^([\\s\\S])+$/u.test(subject)) } catch (e) { return e.name }
-                        })()""");
+        assertStringWithJavet("""
+                (function () {
+                  const subject = 'x'.repeat(500000);
+                  try { return String(/^([\\s\\S])+$/u.test(subject)) } catch (e) { return e.name }
+                })()""");
     }
 
     @Test
@@ -137,21 +134,19 @@ public class RegExpResourceBoundTest extends BaseJavetTest {
     @Test
     @Timeout(60)
     public void testNonCapturingGroupsDoNotCountTowardTheLimit() {
-        assertStringWithJavet(
-                "(function () { try { new RegExp('%s'); return 'OK' } catch (e) { return e.name } })()"
-                        .formatted("(?:)".repeat(1000)));
+        assertStringWithJavet("(function () { try { new RegExp('%s'); return 'OK' } catch (e) { return e.name } })()"
+                .formatted("(?:)".repeat(1000)));
     }
 
     @Test
     @Timeout(60)
     public void testOrdinaryCaptureHeavyPatternStillMatches() {
-        assertStringWithJavet(
-                """
-                        (function () {
-                          const pattern = new RegExp('%s' + '(x)');
-                          const match = pattern.exec('x');
-                          return match.length + ',' + match[match.length - 1];
-                        })()""".formatted(groups(200)));
+        assertStringWithJavet("""
+                (function () {
+                  const pattern = new RegExp('%s' + '(x)');
+                  const match = pattern.exec('x');
+                  return match.length + ',' + match[match.length - 1];
+                })()""".formatted(groups(200)));
     }
 
     @Test

@@ -19,19 +19,19 @@ package com.caoccao.qjs4j.core;
 /**
  * Represents a JavaScript Number object (wrapper) as opposed to a number primitive.
  * <p>
- * In JavaScript, there's a distinction between:
- * - Number primitives: {@code 42}, {@code 3.14}, {@code NaN}, {@code Infinity}
- * - Number objects: {@code new Number(42)}, {@code new Number(3.14)}
+ * In JavaScript, there's a distinction between: - Number primitives: {@code 42}, {@code 3.14}, {@code NaN},
+ * {@code Infinity} - Number objects: {@code new Number(42)}, {@code new Number(3.14)}
  * <p>
- * This class represents the object form, which is necessary for use cases like {@link JSProxy Proxy},
- * since primitive number values cannot be used as Proxy targets. A primitive number value
- * is immutable and cannot have properties, so it cannot be wrapped by a Proxy. JSNumberObject
- * provides an object wrapper that can be used with Proxy while maintaining the number value.
+ * This class represents the object form, which is necessary for use cases like {@link JSProxy Proxy}, since primitive
+ * number values cannot be used as Proxy targets. A primitive number value is immutable and cannot have properties, so
+ * it cannot be wrapped by a Proxy. JSNumberObject provides an object wrapper that can be used with Proxy while
+ * maintaining the number value.
  * <p>
- * The wrapped number value is stored in the {@code [[PrimitiveValue]]} internal slot,
- * following the ECMAScript specification pattern for Number wrapper objects.
+ * The wrapped number value is stored in the {@code [[PrimitiveValue]]} internal slot, following the ECMAScript
+ * specification pattern for Number wrapper objects.
  * <p>
  * Example usage:
+ *
  * <pre>{@code
  * // Create a number object for use with Proxy
  * JSNumberObject numObj = new JSNumberObject(42);
@@ -49,7 +49,8 @@ public final class JSNumberObject extends JSObject {
     /**
      * Create a Number object wrapping the given number value.
      *
-     * @param value the primitive number value to wrap
+     * @param value
+     *            the primitive number value to wrap
      */
     public JSNumberObject(JSContext context, double value) {
         this(context, JSNumber.of(value));
@@ -58,27 +59,13 @@ public final class JSNumberObject extends JSObject {
     /**
      * Create a Number object wrapping the given JSNumber value.
      *
-     * @param value the JSNumber value to wrap
+     * @param value
+     *            the JSNumber value to wrap
      */
     public JSNumberObject(JSContext context, JSNumber value) {
         super(context);
         this.value = value;
         this.setPrimitiveValue(value);
-    }
-
-    public static JSObject create(JSContext context, JSValue... args) {
-        JSNumber numValue;
-        if (args.length == 0) {
-            numValue = JSNumber.of(0.0);
-        } else if (args[0] instanceof JSBigInt bigInt) {
-            // ES2024 20.1.1.1: If prim is a BigInt, let n be 𝔽(ℝ(prim))
-            numValue = JSNumber.of(bigInt.value().doubleValue());
-        } else {
-            numValue = JSTypeConversions.toNumber(context, args[0]);
-        }
-        JSObject jsObject = new JSNumberObject(context, numValue);
-        context.transferPrototype(jsObject, NAME);
-        return jsObject;
     }
 
     /**
@@ -98,5 +85,20 @@ public final class JSNumberObject extends JSObject {
     @Override
     public String toString() {
         return value.toString();
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        JSNumber numValue;
+        if (args.length == 0) {
+            numValue = JSNumber.of(0.0);
+        } else if (args[0] instanceof JSBigInt bigInt) {
+            // ES2024 20.1.1.1: If prim is a BigInt, let n be 𝔽(ℝ(prim))
+            numValue = JSNumber.of(bigInt.value().doubleValue());
+        } else {
+            numValue = JSTypeConversions.toNumber(context, args[0]);
+        }
+        JSObject jsObject = new JSNumberObject(context, numValue);
+        context.transferPrototype(jsObject, NAME);
+        return jsObject;
     }
 }

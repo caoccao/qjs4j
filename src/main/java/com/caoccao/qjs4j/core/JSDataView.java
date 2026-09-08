@@ -25,11 +25,9 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 /**
- * Represents a JavaScript DataView object.
- * Based on ES2020 DataView specification.
+ * Represents a JavaScript DataView object. Based on ES2020 DataView specification.
  * <p>
- * DataView provides a low-level interface for reading and writing
- * multiple number types in an ArrayBuffer.
+ * DataView provides a low-level interface for reading and writing multiple number types in an ArrayBuffer.
  */
 public final class JSDataView extends JSObject {
     public static final String NAME = "DataView";
@@ -55,7 +53,8 @@ public final class JSDataView extends JSObject {
     /**
      * Create a DataView with optional length-tracking semantics on resizable/growable buffers.
      */
-    public JSDataView(JSContext context, IJSArrayBuffer buffer, int byteOffset, int byteLength, boolean lengthTracking) {
+    public JSDataView(JSContext context, IJSArrayBuffer buffer, int byteOffset, int byteLength,
+            boolean lengthTracking) {
         super(context);
         if (buffer == null || buffer.isDetached()) {
             throw new JSTypeErrorException("Cannot create DataView on detached buffer");
@@ -74,116 +73,6 @@ public final class JSDataView extends JSObject {
         this.byteOffset = byteOffset;
         this.byteLength = byteLength;
         this.lengthTracking = lengthTracking;
-    }
-
-    /**
-     * DataView constructor implementation.
-     * new DataView(buffer [, byteOffset [, byteLength]])
-     * <p>
-     * Based on ES2020 24.3.2.1
-     */
-    public static JSObject create(JSContext context, JSValue... args) {
-        if (args.length == 0) {
-            return context.throwTypeError("DataView constructor requires at least 1 argument");
-        }
-
-        // Get buffer argument
-        JSValue bufferArg = args[0];
-        if (!(bufferArg instanceof IJSArrayBuffer buffer)) {
-            return context.throwTypeError("First argument to DataView constructor must be an ArrayBuffer");
-        }
-
-        // Get byteOffset (optional, default 0)
-        int byteOffset = 0;
-        if (args.length > 1) {
-            Double convertedByteOffset = toIndex(context, args[1], "byteOffset");
-            if (convertedByteOffset == null) {
-                return getPendingExceptionAsObject(context);
-            }
-            byteOffset = convertedByteOffset.intValue();
-        }
-
-        if (buffer.isDetached()) {
-            return context.throwTypeError("ArrayBuffer is detached");
-        }
-        if (byteOffset > buffer.getByteLength()) {
-            return context.throwRangeError("byteOffset out of range");
-        }
-
-        // Get byteLength (optional, default to remaining buffer)
-        int byteLength;
-        boolean lengthTracking = false;
-        if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
-            Double convertedByteLength = toIndex(context, args[2], "byteLength");
-            if (convertedByteLength == null) {
-                return getPendingExceptionAsObject(context);
-            }
-            byteLength = convertedByteLength.intValue();
-            if (buffer.isDetached()) {
-                return context.throwTypeError("ArrayBuffer is detached");
-            }
-            if ((long) byteOffset + byteLength > buffer.getByteLength()) {
-                return context.throwRangeError("byteOffset + byteLength out of range");
-            }
-        } else {
-            byteLength = buffer.getByteLength() - byteOffset;
-            lengthTracking = isLengthTrackingCandidate(buffer);
-        }
-
-        if (buffer.isDetached()) {
-            return context.throwTypeError("ArrayBuffer is detached");
-        }
-        if (byteOffset > buffer.getByteLength()) {
-            return context.throwRangeError("byteOffset + byteLength out of range");
-        }
-        if (!lengthTracking && (long) byteOffset + byteLength > buffer.getByteLength()) {
-            return context.throwRangeError("byteOffset + byteLength out of range");
-        }
-
-        JSDataView dataView = new JSDataView(context, buffer, byteOffset, byteLength, lengthTracking);
-        context.transferPrototype(dataView, NAME);
-        return dataView;
-    }
-
-    private static JSObject getPendingExceptionAsObject(JSContext context) {
-        JSValue pendingException = context.getPendingException();
-        if (pendingException instanceof JSObject jsObject) {
-            return jsObject;
-        }
-        return context.throwError("Unknown pending exception");
-    }
-
-    private static boolean isLengthTrackingCandidate(IJSArrayBuffer buffer) {
-        if (buffer instanceof JSArrayBuffer jsArrayBuffer) {
-            return jsArrayBuffer.isResizable();
-        }
-        if (buffer instanceof JSSharedArrayBuffer jsSharedArrayBuffer) {
-            return jsSharedArrayBuffer.isGrowable();
-        }
-        return false;
-    }
-
-    private static Double toIndex(JSContext context, JSValue value, String name) {
-        double index = JSTypeConversions.toInteger(context, value);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (Double.isNaN(index) || index < 0 || Double.isInfinite(index)) {
-            context.throwRangeError("Invalid " + name);
-            return null;
-        }
-        if (index > Integer.MAX_VALUE) {
-            context.throwRangeError(name + " out of range");
-            return null;
-        }
-        return index;
-    }
-
-    private static BigInteger toUnsignedBigInteger(long value) {
-        if (value >= 0) {
-            return BigInteger.valueOf(value);
-        }
-        return BigInteger.valueOf(value & Long.MAX_VALUE).setBit(63);
     }
 
     private void checkOffset(int offset, int size) {
@@ -410,8 +299,8 @@ public final class JSDataView extends JSObject {
     }
 
     /**
-     * Revalidate DataView bounds after constructor prototype resolution.
-     * QuickJS performs a second detached/range check because user code may run while reading newTarget.prototype.
+     * Revalidate DataView bounds after constructor prototype resolution. QuickJS performs a second detached/range check
+     * because user code may run while reading newTarget.prototype.
      */
     public boolean validateConstructorState(JSContext context) {
         if (buffer.isDetached()) {
@@ -428,5 +317,114 @@ public final class JSDataView extends JSObject {
             return false;
         }
         return true;
+    }
+
+    /**
+     * DataView constructor implementation. new DataView(buffer [, byteOffset [, byteLength]])
+     * <p>
+     * Based on ES2020 24.3.2.1
+     */
+    public static JSObject create(JSContext context, JSValue... args) {
+        if (args.length == 0) {
+            return context.throwTypeError("DataView constructor requires at least 1 argument");
+        }
+
+        // Get buffer argument
+        JSValue bufferArg = args[0];
+        if (!(bufferArg instanceof IJSArrayBuffer buffer)) {
+            return context.throwTypeError("First argument to DataView constructor must be an ArrayBuffer");
+        }
+
+        // Get byteOffset (optional, default 0)
+        int byteOffset = 0;
+        if (args.length > 1) {
+            Double convertedByteOffset = toIndex(context, args[1], "byteOffset");
+            if (convertedByteOffset == null) {
+                return getPendingExceptionAsObject(context);
+            }
+            byteOffset = convertedByteOffset.intValue();
+        }
+
+        if (buffer.isDetached()) {
+            return context.throwTypeError("ArrayBuffer is detached");
+        }
+        if (byteOffset > buffer.getByteLength()) {
+            return context.throwRangeError("byteOffset out of range");
+        }
+
+        // Get byteLength (optional, default to remaining buffer)
+        int byteLength;
+        boolean lengthTracking = false;
+        if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
+            Double convertedByteLength = toIndex(context, args[2], "byteLength");
+            if (convertedByteLength == null) {
+                return getPendingExceptionAsObject(context);
+            }
+            byteLength = convertedByteLength.intValue();
+            if (buffer.isDetached()) {
+                return context.throwTypeError("ArrayBuffer is detached");
+            }
+            if ((long) byteOffset + byteLength > buffer.getByteLength()) {
+                return context.throwRangeError("byteOffset + byteLength out of range");
+            }
+        } else {
+            byteLength = buffer.getByteLength() - byteOffset;
+            lengthTracking = isLengthTrackingCandidate(buffer);
+        }
+
+        if (buffer.isDetached()) {
+            return context.throwTypeError("ArrayBuffer is detached");
+        }
+        if (byteOffset > buffer.getByteLength()) {
+            return context.throwRangeError("byteOffset + byteLength out of range");
+        }
+        if (!lengthTracking && (long) byteOffset + byteLength > buffer.getByteLength()) {
+            return context.throwRangeError("byteOffset + byteLength out of range");
+        }
+
+        JSDataView dataView = new JSDataView(context, buffer, byteOffset, byteLength, lengthTracking);
+        context.transferPrototype(dataView, NAME);
+        return dataView;
+    }
+
+    private static JSObject getPendingExceptionAsObject(JSContext context) {
+        JSValue pendingException = context.getPendingException();
+        if (pendingException instanceof JSObject jsObject) {
+            return jsObject;
+        }
+        return context.throwError("Unknown pending exception");
+    }
+
+    private static boolean isLengthTrackingCandidate(IJSArrayBuffer buffer) {
+        if (buffer instanceof JSArrayBuffer jsArrayBuffer) {
+            return jsArrayBuffer.isResizable();
+        }
+        if (buffer instanceof JSSharedArrayBuffer jsSharedArrayBuffer) {
+            return jsSharedArrayBuffer.isGrowable();
+        }
+        return false;
+    }
+
+    private static Double toIndex(JSContext context, JSValue value, String name) {
+        double index = JSTypeConversions.toInteger(context, value);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (Double.isNaN(index) || index < 0 || Double.isInfinite(index)) {
+            context.throwRangeError("Invalid " + name);
+            return null;
+        }
+        if (index > Integer.MAX_VALUE) {
+            context.throwRangeError(name + " out of range");
+            return null;
+        }
+        return index;
+    }
+
+    private static BigInteger toUnsignedBigInteger(long value) {
+        if (value >= 0) {
+            return BigInteger.valueOf(value);
+        }
+        return BigInteger.valueOf(value & Long.MAX_VALUE).setBit(63);
     }
 }

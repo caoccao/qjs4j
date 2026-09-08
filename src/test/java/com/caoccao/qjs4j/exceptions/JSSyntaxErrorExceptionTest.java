@@ -51,11 +51,9 @@ class JSSyntaxErrorExceptionTest {
 
     @Test
     void testLexerExceptionCarriesSourceLocation() {
-        JSSyntaxErrorException exception = catchThrowableOfType(
-                JSSyntaxErrorException.class,
+        JSSyntaxErrorException exception = catchThrowableOfType(JSSyntaxErrorException.class,
                 () -> new Lexer("'\\xG1'").nextToken());
-        JSSyntaxErrorException peekException = catchThrowableOfType(
-                JSSyntaxErrorException.class,
+        JSSyntaxErrorException peekException = catchThrowableOfType(JSSyntaxErrorException.class,
                 () -> new Lexer("'\\xG1'").peekToken());
 
         assertThat(exception.getMessage()).isEqualTo("Invalid or unexpected token");
@@ -73,8 +71,7 @@ class JSSyntaxErrorExceptionTest {
 
     @Test
     void testParserExceptionCarriesSourceLocation() {
-        JSSyntaxErrorException exception = catchThrowableOfType(
-                JSSyntaxErrorException.class,
+        JSSyntaxErrorException exception = catchThrowableOfType(JSSyntaxErrorException.class,
                 () -> new Compiler("const value = ;", "script.js").parse(false));
 
         assertThat(exception.getMessage()).isEqualTo("Unexpected token ';'");

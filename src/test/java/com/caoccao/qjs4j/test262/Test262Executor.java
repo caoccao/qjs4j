@@ -28,13 +28,12 @@ import java.util.List;
 /**
  * Executes test262 test cases with proper flag handling.
  * <p>
- * Negative tests are checked against <em>both</em> halves of their metadata, as
- * {@code INTERPRETING.md} requires: the {@code phase} the error must occur in, and the name of the
- * constructor it must be an instance of. A parse-phase test therefore never reaches evaluation —
- * it is compiled and nothing more, so a program that parses cleanly and throws later fails instead
- * of passing. The expected type is compared against the thrown value's actual constructor, never
- * against text in a formatted message, so {@code throw "SyntaxError"} no longer satisfies a test
- * that requires a {@code SyntaxError}.
+ * Negative tests are checked against <em>both</em> halves of their metadata, as {@code INTERPRETING.md} requires: the
+ * {@code phase} the error must occur in, and the name of the constructor it must be an instance of. A parse-phase test
+ * therefore never reaches evaluation — it is compiled and nothing more, so a program that parses cleanly and throws
+ * later fails instead of passing. The expected type is compared against the thrown value's actual constructor, never
+ * against text in a formatted message, so {@code throw "SyntaxError"} no longer satisfies a test that requires a
+ * {@code SyntaxError}.
  */
 public class Test262Executor {
     /**
@@ -51,8 +50,8 @@ public class Test262Executor {
     /**
      * The harness's {@code Test262Error.prototype} for the test this thread is executing.
      * <p>
-     * Thread-confined because one executor is shared by every worker in a run, so a field would be
-     * whichever test happened to write it last. See {@link #captureHarnessErrorPrototype(JSContext)}.
+     * Thread-confined because one executor is shared by every worker in a run, so a field would be whichever test
+     * happened to write it last. See {@link #captureHarnessErrorPrototype(JSContext)}.
      */
     private final ThreadLocal<JSObject> harnessErrorPrototype = new ThreadLocal<>();
     private final HarnessLoader harnessLoader;
@@ -75,49 +74,47 @@ public class Test262Executor {
     /**
      * Remember the harness's own {@code Test262Error.prototype}, before the test runs.
      * <p>
-     * Captured by identity while the harness is the only thing that has executed, so a test that
-     * later replaces {@code Test262Error} or its {@code prototype} cannot make an unrelated object
-     * answer to the name.
+     * Captured by identity while the harness is the only thing that has executed, so a test that later replaces
+     * {@code Test262Error} or its {@code prototype} cannot make an unrelated object answer to the name.
      *
-     * @param context the context whose harness has just been loaded
+     * @param context
+     *            the context whose harness has just been loaded
      */
     private void captureHarnessErrorPrototype(JSContext context) {
         harnessErrorPrototype.remove();
-        if (context.getGlobalObject().get(PropertyKey.fromString(TEST262_ERROR))
-                instanceof JSObject harnessConstructor
-                && harnessConstructor.get(PropertyKey.fromString("prototype"))
-                instanceof JSObject harnessPrototype) {
+        if (context.getGlobalObject().get(PropertyKey.fromString(TEST262_ERROR)) instanceof JSObject harnessConstructor
+                && harnessConstructor.get(PropertyKey.fromString("prototype")) instanceof JSObject harnessPrototype) {
             harnessErrorPrototype.set(harnessPrototype);
         }
     }
 
     /**
-     * Check the value an asynchronous test reported through {@code $DONE} against the expected
-     * negative metadata.
+     * Check the value an asynchronous test reported through {@code $DONE} against the expected negative metadata.
      *
-     * @param doneValue the value {@code $DONE} was called with
-     * @param test      the test case
+     * @param doneValue
+     *            the value {@code $DONE} was called with
+     * @param test
+     *            the test case
      * @return the result
      */
     private TestResult checkNegativeResult(JSValue doneValue, Test262TestCase test) {
         Test262TestCase.NegativeInfo negative = test.getNegative();
         if (!PHASE_RUNTIME.equals(negative.getPhase())) {
-            return TestResult.fail(test, "Expected a " + negative.getPhase()
-                    + "-phase " + negative.getType() + ", but the test evaluated and reported the "
-                    + "failure asynchronously");
+            return TestResult.fail(test, "Expected a " + negative.getPhase() + "-phase " + negative.getType()
+                    + ", but the test evaluated and reported the " + "failure asynchronously");
         }
         String actualType = errorConstructorName(doneValue);
         if (negative.getType().equals(actualType)) {
             return TestResult.pass(test);
         }
-        return TestResult.fail(test, "Expected " + negative.getType() + " but got "
-                + describeThrownValue(doneValue));
+        return TestResult.fail(test, "Expected " + negative.getType() + " but got " + describeThrownValue(doneValue));
     }
 
     /**
      * Describe the value an asynchronous test reported through {@code $DONE}.
      *
-     * @param doneValue the reported value
+     * @param doneValue
+     *            the reported value
      * @return a short description for a failure message
      */
     private String describeAsyncFailure(JSValue doneValue) {
@@ -133,7 +130,8 @@ public class Test262Executor {
     /**
      * Describe a thrown Java exception for a failure message.
      *
-     * @param e the exception
+     * @param e
+     *            the exception
      * @return a short description
      */
     private String describeThrown(Exception e) {
@@ -150,7 +148,8 @@ public class Test262Executor {
     /**
      * Describe a thrown value for a failure message without claiming it is an error.
      *
-     * @param thrown the thrown value
+     * @param thrown
+     *            the thrown value
      * @return a short description
      */
     private String describeThrownValue(JSValue thrown) {
@@ -167,20 +166,19 @@ public class Test262Executor {
     /**
      * The type of a thrown JavaScript value, decided by what it <em>is</em>.
      * <p>
-     * Test262 matches a negative test's {@code type} against the constructor of the thrown value.
-     * Reading {@code thrown.constructor.name} to find that out asks the failing program to
-     * describe its own failure: every part of that expression is guest-writable, so
-     * {@code throw { constructor: { name: 'TypeError' } }} satisfied a test that requires a real
-     * {@code TypeError}, and the reads themselves could run an accessor or a Proxy trap while the
-     * runner was trying to classify a failure. It is the same class of false green as reading the
-     * error message, moved to a different mutable property.
+     * Test262 matches a negative test's {@code type} against the constructor of the thrown value. Reading
+     * {@code thrown.constructor.name} to find that out asks the failing program to describe its own failure: every part
+     * of that expression is guest-writable, so {@code throw { constructor: { name: 'TypeError' } }} satisfied a test
+     * that requires a real {@code TypeError}, and the reads themselves could run an accessor or a Proxy trap while the
+     * runner was trying to classify a failure. It is the same class of false green as reading the error message, moved
+     * to a different mutable property.
      * <p>
-     * Native errors are sealed Java classes, so their identity is not forgeable from script.
-     * {@code Test262Error} is defined by the harness, so it is identified by walking the internal
-     * prototype chain to the prototype object this run captured before the test could touch
-     * anything — again without consulting a property the test can write.
+     * Native errors are sealed Java classes, so their identity is not forgeable from script. {@code Test262Error} is
+     * defined by the harness, so it is identified by walking the internal prototype chain to the prototype object this
+     * run captured before the test could touch anything — again without consulting a property the test can write.
      *
-     * @param thrown the thrown value
+     * @param thrown
+     *            the thrown value
      * @return the type name, or {@code null} when the value is not one the suite can require
      */
     private String errorConstructorName(JSValue thrown) {
@@ -214,9 +212,8 @@ public class Test262Executor {
         }
         JSObject capturedHarnessErrorPrototype = harnessErrorPrototype.get();
         if (capturedHarnessErrorPrototype != null && thrown instanceof JSObject thrownObject) {
-            for (JSObject prototype = thrownObject.getPrototype();
-                 prototype != null;
-                 prototype = prototype.getPrototype()) {
+            for (JSObject prototype = thrownObject.getPrototype(); prototype != null; prototype = prototype
+                    .getPrototype()) {
                 if (prototype == capturedHarnessErrorPrototype) {
                     return TEST262_ERROR;
                 }
@@ -228,10 +225,14 @@ public class Test262Executor {
     /**
      * Evaluate the prepared source in the interpretation the test case names.
      *
-     * @param context the context
-     * @param runtime the runtime
-     * @param code    the prepared source
-     * @param test    the test case
+     * @param context
+     *            the context
+     * @param runtime
+     *            the runtime
+     * @param code
+     *            the prepared source
+     * @param test
+     *            the test case
      * @return the result
      */
     private TestResult evaluate(JSContext context, JSRuntime runtime, String code, Test262TestCase test) {
@@ -253,10 +254,8 @@ public class Test262Executor {
         // any one of the runtimes that share it: the main runtime would otherwise close it —
         // cancelling every agent's wait — while the agents were still being shut down below.
         AtomicsObject clusterAtomics = new AtomicsObject();
-        try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions()
-                .setAtomicsObject(clusterAtomics)
-                .setShadowRealmEnabled(true)
-                .setTemporalEnabled(true))) {
+        try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setAtomicsObject(clusterAtomics)
+                .setShadowRealmEnabled(true).setTemporalEnabled(true))) {
             try (JSContext context = runtime.createContext()) {
                 agentHost.setSharedAtomicsObject(clusterAtomics);
                 context.setWaitable(!test.hasFlag("CanBlockIsFalse"));
@@ -328,16 +327,11 @@ public class Test262Executor {
         return result;
     }
 
-    private TestResult executeAsync(
-            JSContext context,
-            JSRuntime runtime,
-            String code,
-            Test262TestCase test) {
+    private TestResult executeAsync(JSContext context, JSRuntime runtime, String code, Test262TestCase test) {
         try {
             // Set execution deadline to prevent hangs in eval/runJobs
             if (syncTimeoutMs > 0) {
-                context.getVirtualMachine().setExecutionDeadline(
-                        System.currentTimeMillis() + syncTimeoutMs);
+                context.getVirtualMachine().setExecutionDeadline(System.currentTimeMillis() + syncTimeoutMs);
             }
 
             JSObject globalObject = context.getGlobalObject();
@@ -349,21 +343,18 @@ public class Test262Executor {
             JSValue[] doneResult = {null};
             boolean[] doneCalled = {false};
 
-            JSNativeFunction doneFunction = new JSNativeFunction(context, "$DONE", 1,
-                    (childContext, thisArg, args) -> {
-                        doneCalled[0] = true;
-                        if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
-                            doneResult[0] = args[0];
-                        }
-                        return JSUndefined.INSTANCE;
-                    }
-            );
+            JSNativeFunction doneFunction = new JSNativeFunction(context, "$DONE", 1, (childContext, thisArg, args) -> {
+                doneCalled[0] = true;
+                if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
+                    doneResult[0] = args[0];
+                }
+                return JSUndefined.INSTANCE;
+            });
 
             globalObject.set("$DONE", doneFunction);
 
             // Execute test code (module source is evaluated as a module for top-level await)
-            context.eval(code, test.getPath().toString(),
-                    test.getVariant() == Test262TestCase.Variant.MODULE);
+            context.eval(code, test.getPath().toString(), test.getVariant() == Test262TestCase.Variant.MODULE);
 
             long deadline = System.currentTimeMillis() + Math.max(asyncTimeoutMs, 1);
             while (!doneCalled[0] && System.currentTimeMillis() <= deadline) {
@@ -415,13 +406,11 @@ public class Test262Executor {
         }
     }
 
-    private TestResult executeModule(JSContext context, JSRuntime runtime,
-                                     String code, Test262TestCase test) {
+    private TestResult executeModule(JSContext context, JSRuntime runtime, String code, Test262TestCase test) {
         try {
             // Set execution deadline to prevent hangs
             if (syncTimeoutMs > 0) {
-                context.getVirtualMachine().setExecutionDeadline(
-                        System.currentTimeMillis() + syncTimeoutMs);
+                context.getVirtualMachine().setExecutionDeadline(System.currentTimeMillis() + syncTimeoutMs);
             }
             context.eval(code, test.getPath().toString(), true);
             synchronized (runtime) {
@@ -450,10 +439,14 @@ public class Test262Executor {
     /**
      * Compile the source and require that compilation is what fails.
      *
-     * @param context  the context
-     * @param code     the prepared source
-     * @param isModule whether the source is module source
-     * @param test     the test case
+     * @param context
+     *            the context
+     * @param code
+     *            the prepared source
+     * @param isModule
+     *            whether the source is module source
+     * @param test
+     *            the test case
      * @return the result
      */
     private TestResult executeParsePhase(JSContext context, String code, boolean isModule, Test262TestCase test) {
@@ -465,23 +458,21 @@ public class Test262Executor {
             return negative.getType().equals(actualType)
                     ? TestResult.pass(test)
                     : TestResult.fail(test, "Expected a parse-phase " + negative.getType()
-                    + " but compilation failed with " + describeThrown(e));
+                            + " but compilation failed with " + describeThrown(e));
         } finally {
             // A failed compilation can leave the error on the context; the next activation would
             // otherwise report this test's expected error as its own failure.
             context.clearAllPendingExceptions();
         }
-        return TestResult.fail(test, "Expected a parse-phase " + negative.getType()
-                + " but the source compiled successfully");
+        return TestResult.fail(test,
+                "Expected a parse-phase " + negative.getType() + " but the source compiled successfully");
     }
 
-    private TestResult executeScript(JSContext context, JSRuntime runtime,
-                                     String code, Test262TestCase test) {
+    private TestResult executeScript(JSContext context, JSRuntime runtime, String code, Test262TestCase test) {
         try {
             // Set execution deadline for sync tests to prevent hangs
             if (syncTimeoutMs > 0) {
-                context.getVirtualMachine().setExecutionDeadline(
-                        System.currentTimeMillis() + syncTimeoutMs);
+                context.getVirtualMachine().setExecutionDeadline(System.currentTimeMillis() + syncTimeoutMs);
             }
             context.eval(code, test.getPath().toString(), false);
             synchronized (runtime) {
@@ -534,66 +525,59 @@ public class Test262Executor {
         if (negative.getType().equals(actualType)) {
             return TestResult.pass(test);
         }
-        return TestResult.fail(test,
-                "Expected " + negative.getType() + " but got " + describeThrown(e));
+        return TestResult.fail(test, "Expected " + negative.getType() + " but got " + describeThrown(e));
     }
 
     /**
-     * Install a minimal Test262 host object ($262) with createRealm()/evalScript().
-     * This is enough for cross-realm tests used by annexB RegExp compile checks.
+     * Install a minimal Test262 host object ($262) with createRealm()/evalScript(). This is enough for cross-realm
+     * tests used by annexB RegExp compile checks.
      */
-    public void install262Object(
-            JSContext context,
-            List<JSRuntime> realmRuntimes,
-            Test262AgentHost agentHost,
+    public void install262Object(JSContext context, List<JSRuntime> realmRuntimes, Test262AgentHost agentHost,
             Test262Agent agent) {
         JSObject global = context.getGlobalObject();
         JSObject host262 = context.createJSObject();
 
         host262.set("global", global);
-        host262.set("evalScript", new JSNativeFunction(context, "evalScript", 1,
-                (childContext, thisArg, args) -> {
-                    String script = args.length > 0 ? JSTypeConversions.toString(childContext, args[0]).value() : "";
-                    return context.eval(script, "<test262-evalScript>", false);
-                }));
+        host262.set("evalScript", new JSNativeFunction(context, "evalScript", 1, (childContext, thisArg, args) -> {
+            String script = args.length > 0 ? JSTypeConversions.toString(childContext, args[0]).value() : "";
+            return context.eval(script, "<test262-evalScript>", false);
+        }));
 
-        host262.set("detachArrayBuffer", new JSNativeFunction(context, "detachArrayBuffer", 1,
-                (childContext, thisArg, args) -> {
+        host262.set("detachArrayBuffer",
+                new JSNativeFunction(context, "detachArrayBuffer", 1, (childContext, thisArg, args) -> {
                     if (args.length > 0 && args[0] instanceof JSArrayBuffer jsArrayBuffer) {
                         jsArrayBuffer.detach();
                     }
                     return JSUndefined.INSTANCE;
                 }));
 
-        host262.set("gc", new JSNativeFunction(context, "gc", 0,
-                (childContext, thisArg, args) -> {
-                    childContext.getRuntime().gc();
-                    return JSUndefined.INSTANCE;
-                }));
+        host262.set("gc", new JSNativeFunction(context, "gc", 0, (childContext, thisArg, args) -> {
+            childContext.getRuntime().gc();
+            return JSUndefined.INSTANCE;
+        }));
 
-        host262.set("createRealm", new JSNativeFunction(context, "createRealm", 0,
-                (childContext, thisArg, args) -> {
-                    JSRuntime realmRuntime = context.getRuntime();
-                    JSContext realmContext = realmRuntime.createContext();
-                    install262Object(realmContext, realmRuntimes, agentHost, null);
+        host262.set("createRealm", new JSNativeFunction(context, "createRealm", 0, (childContext, thisArg, args) -> {
+            JSRuntime realmRuntime = context.getRuntime();
+            JSContext realmContext = realmRuntime.createContext();
+            install262Object(realmContext, realmRuntimes, agentHost, null);
 
-                    JSObject realm = childContext.createJSObject();
-                    JSObject realmGlobal = realmContext.getGlobalObject();
-                    realm.set("global", realmGlobal);
-                    realm.set("globalThis", realmGlobal);
-                    realm.set("evalScript", new JSNativeFunction(context, "evalScript", 1,
-                            (innerCtx, innerThisArg, innerArgs) -> {
-                                String script = innerArgs.length > 0
-                                        ? JSTypeConversions.toString(innerCtx, innerArgs[0]).value()
-                                        : "";
-                                JSValue result = realmContext.eval(script, "<test262-realm-evalScript>", false);
-                                synchronized (realmRuntime) {
-                                    realmRuntime.runJobs();
-                                }
-                                return result;
-                            }));
-                    return realm;
-                }));
+            JSObject realm = childContext.createJSObject();
+            JSObject realmGlobal = realmContext.getGlobalObject();
+            realm.set("global", realmGlobal);
+            realm.set("globalThis", realmGlobal);
+            realm.set("evalScript",
+                    new JSNativeFunction(context, "evalScript", 1, (innerCtx, innerThisArg, innerArgs) -> {
+                        String script = innerArgs.length > 0
+                                ? JSTypeConversions.toString(innerCtx, innerArgs[0]).value()
+                                : "";
+                        JSValue result = realmContext.eval(script, "<test262-realm-evalScript>", false);
+                        synchronized (realmRuntime) {
+                            realmRuntime.runJobs();
+                        }
+                        return result;
+                    }));
+            return realm;
+        }));
 
         JSNativeFunction isHTMLDDA = new JSNativeFunction(context, "IsHTMLDDA", 0,
                 (childContext, thisArg, args) -> JSNull.INSTANCE);
@@ -604,8 +588,8 @@ public class Test262Executor {
             global.set("setTimeout", agentHost.createSetTimeoutFunction(context));
         }
         if (global.get("print") instanceof JSUndefined) {
-            global.set("print", new JSNativeFunction(context, "print", 1,
-                    (childContext, thisArg, args) -> JSUndefined.INSTANCE));
+            global.set("print",
+                    new JSNativeFunction(context, "print", 1, (childContext, thisArg, args) -> JSUndefined.INSTANCE));
         }
 
         global.set("$262", host262);
@@ -614,17 +598,17 @@ public class Test262Executor {
     /**
      * Wrap the harness's {@code $DONOTEVALUATE} so the executor can see whether the test body ran.
      * <p>
-     * {@code INTERPRETING.md} splits negative tests by <em>phase</em>, and the engine has no
-     * separate link step: loading, linking and evaluating a module all happen inside one
-     * {@code eval}. Comparing the thrown constructor alone therefore cannot tell a resolution
-     * failure from a body that ran and threw the same constructor later. Test262 marks the boundary
-     * itself — every parse- and resolution-phase test opens its body with {@code $DONOTEVALUATE()},
-     * whose whole purpose is to be unreachable — so observing that call is a direct, source-driven
-     * answer to "did the body execute?".
+     * {@code INTERPRETING.md} splits negative tests by <em>phase</em>, and the engine has no separate link step:
+     * loading, linking and evaluating a module all happen inside one {@code eval}. Comparing the thrown constructor
+     * alone therefore cannot tell a resolution failure from a body that ran and threw the same constructor later.
+     * Test262 marks the boundary itself — every parse- and resolution-phase test opens its body with
+     * {@code $DONOTEVALUATE()}, whose whole purpose is to be unreachable — so observing that call is a direct,
+     * source-driven answer to "did the body execute?".
      * <p>
      * The original function is still called, so the value the test throws is unchanged.
      *
-     * @param context the context whose harness has already been loaded
+     * @param context
+     *            the context whose harness has already been loaded
      * @return a one-element array set to true once the test body starts executing
      */
     private boolean[] installDoNotEvaluateProbe(JSContext context) {
@@ -635,8 +619,8 @@ public class Test262Executor {
             // A raw test has no harness. Nothing to observe, and no resolution-phase test is raw.
             return bodyEvaluated;
         }
-        globalObject.set("$DONOTEVALUATE", new JSNativeFunction(context, "$DONOTEVALUATE", 0,
-                (childContext, thisArg, args) -> {
+        globalObject.set("$DONOTEVALUATE",
+                new JSNativeFunction(context, "$DONOTEVALUATE", 0, (childContext, thisArg, args) -> {
                     bodyEvaluated[0] = true;
                     return originalFunction.call(childContext, thisArg, args);
                 }));
@@ -646,14 +630,14 @@ public class Test262Executor {
     /**
      * Whether anything in the module graph was actually evaluated.
      * <p>
-     * Asked by the runtime-phase branch, which needs the opposite assurance from the
-     * resolution-phase one: something must have run. The engine settles it two ways — the module
-     * the runner itself handed to {@code eval} began running (the total body count exceeds the
-     * count of bodies pulled in by an import), or some module body failed rather than finishing.
-     * Either is evaluation, and a runtime-phase failure raised by a dependency that threw shows up
-     * only as the second.
+     * Asked by the runtime-phase branch, which needs the opposite assurance from the resolution-phase one: something
+     * must have run. The engine settles it two ways — the module the runner itself handed to {@code eval} began running
+     * (the total body count exceeds the count of bodies pulled in by an import), or some module body failed rather than
+     * finishing. Either is evaluation, and a runtime-phase failure raised by a dependency that threw shows up only as
+     * the second.
      *
-     * @param context the context the test ran in
+     * @param context
+     *            the context the test ran in
      * @return true when the graph got past linking
      */
     private boolean moduleGraphWasEvaluated(JSContext context) {
@@ -664,20 +648,19 @@ public class Test262Executor {
     /**
      * Produce the source for this interpretation.
      * <p>
-     * The strict variant gets a {@code "use strict";} prologue as {@code INTERPRETING.md}
-     * prescribes: inserted as the initial character sequence, before any other modification.
-     * Prepending it unconditionally is correct even when the file already begins with its own
-     * directive — a duplicated directive prologue entry is not an error — but the check below
-     * keeps the reported source close to the file's.
+     * The strict variant gets a {@code "use strict";} prologue as {@code INTERPRETING.md} prescribes: inserted as the
+     * initial character sequence, before any other modification. Prepending it unconditionally is correct even when the
+     * file already begins with its own directive — a duplicated directive prologue entry is not an error — but the
+     * check below keeps the reported source close to the file's.
      *
-     * @param test the test case
+     * @param test
+     *            the test case
      * @return the source to compile and evaluate
      */
     private String prepareCode(Test262TestCase test) {
         String code = test.getCode();
 
-        if (test.getVariant() == Test262TestCase.Variant.STRICT
-                && !code.stripLeading().startsWith("\"use strict\"")
+        if (test.getVariant() == Test262TestCase.Variant.STRICT && !code.stripLeading().startsWith("\"use strict\"")
                 && !code.stripLeading().startsWith("'use strict'")) {
             code = "\"use strict\";\n" + code;
         }
@@ -686,17 +669,16 @@ public class Test262Executor {
     }
 
     /**
-     * Prewarm runtime/context class loading before parallel test execution.
-     * This reduces startup class-loader contention when many workers create contexts simultaneously.
+     * Prewarm runtime/context class loading before parallel test execution. This reduces startup class-loader
+     * contention when many workers create contexts simultaneously.
      *
      * @return elapsed prewarm time in milliseconds
      */
     public long prewarm() {
         long startTime = System.currentTimeMillis();
-        try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions()
-                .setShadowRealmEnabled(true)
-                .setTemporalEnabled(true));
-             JSContext context = runtime.createContext()) {
+        try (JSRuntime runtime = new JSRuntime(
+                new JSRuntimeOptions().setShadowRealmEnabled(true).setTemporalEnabled(true));
+                JSContext context = runtime.createContext()) {
             context.clearAllPendingExceptions();
         } catch (Exception ignored) {
             // Best-effort optimization only.
@@ -707,24 +689,27 @@ public class Test262Executor {
     /**
      * Hold a negative test to the phase its metadata declares.
      * <p>
-     * {@code INTERPRETING.md} splits negative tests by the stage they fail in, and both directions
-     * have to be enforced or neither claim means anything. A resolution-phase failure happens while
-     * the graph is linked, so nothing may have been evaluated; a runtime-phase failure happens
-     * while it is evaluated, so something must have been. Checking only the first let a genuine
-     * link failure pass under {@code runtime}, and checking only the root test body let a
+     * {@code INTERPRETING.md} splits negative tests by the stage they fail in, and both directions have to be enforced
+     * or neither claim means anything. A resolution-phase failure happens while the graph is linked, so nothing may
+     * have been evaluated; a runtime-phase failure happens while it is evaluated, so something must have been. Checking
+     * only the first let a genuine link failure pass under {@code runtime}, and checking only the root test body let a
      * dependency that threw pass under {@code resolution}.
      * <p>
-     * {@code $DONOTEVALUATE()} stays as a second, source-level witness: it is what the suite itself
-     * writes to mark the boundary, and it names the offending module directly.
+     * {@code $DONOTEVALUATE()} stays as a second, source-level witness: it is what the suite itself writes to mark the
+     * boundary, and it names the offending module directly.
      *
-     * @param result        the result the phase-agnostic comparison produced
-     * @param test          the test case
-     * @param context       the context the test ran in
-     * @param bodyEvaluated whether the root test body started executing
+     * @param result
+     *            the result the phase-agnostic comparison produced
+     * @param test
+     *            the test case
+     * @param context
+     *            the context the test ran in
+     * @param bodyEvaluated
+     *            whether the root test body started executing
      * @return the result, downgraded to a failure on a phase mismatch
      */
-    private TestResult requireNegativePhase(
-            TestResult result, Test262TestCase test, JSContext context, boolean bodyEvaluated) {
+    private TestResult requireNegativePhase(TestResult result, Test262TestCase test, JSContext context,
+            boolean bodyEvaluated) {
         Test262TestCase.NegativeInfo negative = test.getNegative();
         if (!result.isPassed() || negative == null) {
             return result;
@@ -733,14 +718,16 @@ public class Test262Executor {
             if (test.getVariant() != Test262TestCase.Variant.MODULE || moduleGraphWasEvaluated(context)) {
                 return result;
             }
-            return TestResult.fail(test, "Expected a runtime-phase " + negative.getType()
-                    + " but no module body was evaluated, so the error was raised while the module "
-                    + "graph was still being linked");
+            return TestResult.fail(test,
+                    "Expected a runtime-phase " + negative.getType()
+                            + " but no module body was evaluated, so the error was raised while the module "
+                            + "graph was still being linked");
         }
         if (bodyEvaluated) {
-            return TestResult.fail(test, "Expected a " + negative.getPhase() + "-phase "
-                    + negative.getType() + " but the test body was evaluated, so the error was raised "
-                    + "after the module graph had been linked");
+            return TestResult.fail(test,
+                    "Expected a " + negative.getPhase() + "-phase " + negative.getType()
+                            + " but the test body was evaluated, so the error was raised "
+                            + "after the module graph had been linked");
         }
         // Not one module body, anywhere in the graph. This used to ask a weaker question — whether
         // the module the runner asked for had begun evaluating — because the engine linked named,
@@ -749,9 +736,10 @@ public class Test262Executor {
         // suite's own tests for those. The link pass decides them now, so the real requirement can
         // be asked: a resolution failure means the graph never started.
         if (context.getModuleBodyEvaluationCount() > 0) {
-            return TestResult.fail(test, "Expected a " + negative.getPhase() + "-phase "
-                    + negative.getType() + " but a module body was evaluated, so the error was raised "
-                    + "after the module graph had been linked");
+            return TestResult.fail(test,
+                    "Expected a " + negative.getPhase() + "-phase " + negative.getType()
+                            + " but a module body was evaluated, so the error was raised "
+                            + "after the module graph had been linked");
         }
         return result;
     }
@@ -759,10 +747,14 @@ public class Test262Executor {
     /**
      * Compile the source and report a failure when compilation is <em>not</em> supposed to fail.
      *
-     * @param context  the context
-     * @param code     the prepared source
-     * @param isModule whether the source is module source
-     * @param test     the test case
+     * @param context
+     *            the context
+     * @param code
+     *            the prepared source
+     * @param isModule
+     *            whether the source is module source
+     * @param test
+     *            the test case
      * @return a failing result when the source did not compile, or {@code null} when it did
      */
     private TestResult requireSourceCompiles(JSContext context, String code, boolean isModule, Test262TestCase test) {
@@ -771,8 +763,8 @@ public class Test262Executor {
             new Compiler(code, test.getPath().toString()).setContext(context).compile(isModule);
             return null;
         } catch (Exception e) {
-            return TestResult.fail(test, "Expected a " + negative.getPhase() + "-phase "
-                    + negative.getType() + " but the source failed to compile with " + describeThrown(e));
+            return TestResult.fail(test, "Expected a " + negative.getPhase() + "-phase " + negative.getType()
+                    + " but the source failed to compile with " + describeThrown(e));
         } finally {
             context.clearAllPendingExceptions();
         }
@@ -781,13 +773,13 @@ public class Test262Executor {
     /**
      * The name of the constructor of the JavaScript value an exception carries.
      * <p>
-     * The engine reports some errors as typed Java exceptions that never became JavaScript
-     * objects. For those the Java class <em>is</em> the error's identity, so the mapping below is
-     * exact rather than a guess at the text of a message. Everything else must produce a real
-     * thrown value whose own constructor is read; no name is inferred from message text, which is
-     * what let {@code throw "SyntaxError"} satisfy a typed negative test.
+     * The engine reports some errors as typed Java exceptions that never became JavaScript objects. For those the Java
+     * class <em>is</em> the error's identity, so the mapping below is exact rather than a guess at the text of a
+     * message. Everything else must produce a real thrown value whose own constructor is read; no name is inferred from
+     * message text, which is what let {@code throw "SyntaxError"} satisfy a typed negative test.
      *
-     * @param e the exception
+     * @param e
+     *            the exception
      * @return the constructor name, or {@code null} when the exception carries no error identity
      */
     private String thrownConstructorName(Exception e) {

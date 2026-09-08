@@ -42,6 +42,22 @@ public final class TemporalMonths extends ArrayList<IsoCalendarMonth> {
         monthSlotsByCode = new HashMap<>();
     }
 
+    private void addMonthSlot(IsoCalendarMonth monthSlot) {
+        add(monthSlot);
+        monthSlotsByCode.put(monthSlot.monthCode(), monthSlot);
+    }
+
+    public IsoCalendarMonth getByMonthCode(String monthCode) {
+        return monthSlotsByCode.get(monthCode);
+    }
+
+    public IsoCalendarMonth getByMonthNumber(int monthNumber) {
+        if (monthNumber < 1 || monthNumber > size()) {
+            return null;
+        }
+        return get(monthNumber - 1);
+    }
+
     private static TemporalMonths create(TemporalCalendarId calendarId, int calendarYear) {
         if (calendarId == TemporalCalendarId.HEBREW) {
             return createHebrew(calendarYear);
@@ -49,8 +65,7 @@ public final class TemporalMonths extends ArrayList<IsoCalendarMonth> {
         if (calendarId == TemporalCalendarId.CHINESE || calendarId == TemporalCalendarId.DANGI) {
             return createLunisolar(calendarId, calendarYear);
         }
-        if (calendarId == TemporalCalendarId.COPTIC
-                || calendarId == TemporalCalendarId.ETHIOPIC
+        if (calendarId == TemporalCalendarId.COPTIC || calendarId == TemporalCalendarId.ETHIOPIC
                 || calendarId == TemporalCalendarId.ETHIOAA) {
             int underlyingYear;
             if (calendarId == TemporalCalendarId.ETHIOAA) {
@@ -77,8 +92,7 @@ public final class TemporalMonths extends ArrayList<IsoCalendarMonth> {
         if (calendarId == TemporalCalendarId.PERSIAN) {
             return createPersian(calendarYear);
         }
-        if (calendarId == TemporalCalendarId.ISLAMIC_CIVIL
-                || calendarId == TemporalCalendarId.ISLAMIC_TBLA) {
+        if (calendarId == TemporalCalendarId.ISLAMIC_CIVIL || calendarId == TemporalCalendarId.ISLAMIC_TBLA) {
             return createIslamic(calendarYear);
         }
         if (calendarId == TemporalCalendarId.ISLAMIC_UMALQURA) {
@@ -96,10 +110,7 @@ public final class TemporalMonths extends ArrayList<IsoCalendarMonth> {
     private static TemporalMonths createGregorianLike(int isoYear) {
         TemporalMonths moths = new TemporalMonths();
         for (int monthNumber = 1; monthNumber <= 12; monthNumber++) {
-            moths.addMonthSlot(new IsoCalendarMonth(
-                    monthNumber,
-                    false,
-                    IsoMonth.toMonthCode(monthNumber),
+            moths.addMonthSlot(new IsoCalendarMonth(monthNumber, false, IsoMonth.toMonthCode(monthNumber),
                     IsoDate.daysInMonth(isoYear, monthNumber)));
         }
         return moths;
@@ -148,10 +159,7 @@ public final class TemporalMonths extends ArrayList<IsoCalendarMonth> {
     private static TemporalMonths createIslamic(int calendarYear) {
         TemporalMonths moths = new TemporalMonths();
         for (int monthNumber = 1; monthNumber <= 12; monthNumber++) {
-            moths.addMonthSlot(new IsoCalendarMonth(
-                    monthNumber,
-                    false,
-                    IsoMonth.toMonthCode(monthNumber),
+            moths.addMonthSlot(new IsoCalendarMonth(monthNumber, false, IsoMonth.toMonthCode(monthNumber),
                     TemporalUtils.islamicDaysInMonth(calendarYear, monthNumber)));
         }
         return moths;
@@ -161,7 +169,8 @@ public final class TemporalMonths extends ArrayList<IsoCalendarMonth> {
         if (calendarYear < 1900 || calendarYear > calendarId.getLunisolarMaxYear()) {
             TemporalMonths fallbackMoths = new TemporalMonths();
             for (int monthNumber = 1; monthNumber <= 12; monthNumber++) {
-                fallbackMoths.addMonthSlot(new IsoCalendarMonth(monthNumber, false, IsoMonth.toMonthCode(monthNumber), 30));
+                fallbackMoths
+                        .addMonthSlot(new IsoCalendarMonth(monthNumber, false, IsoMonth.toMonthCode(monthNumber), 30));
             }
             return fallbackMoths;
         }
@@ -189,11 +198,8 @@ public final class TemporalMonths extends ArrayList<IsoCalendarMonth> {
         for (int monthNumber = 7; monthNumber <= 11; monthNumber++) {
             moths.addMonthSlot(new IsoCalendarMonth(monthNumber, false, IsoMonth.toMonthCode(monthNumber), 30));
         }
-        moths.addMonthSlot(new IsoCalendarMonth(
-                12,
-                false,
-                "M12",
-                IsoGregorianYear.isPersianLeapYear(calendarYear) ? 30 : 29));
+        moths.addMonthSlot(
+                new IsoCalendarMonth(12, false, "M12", IsoGregorianYear.isPersianLeapYear(calendarYear) ? 30 : 29));
         return moths;
     }
 
@@ -219,32 +225,11 @@ public final class TemporalMonths extends ArrayList<IsoCalendarMonth> {
             return cachedMoths;
         }
         TemporalMonths createdMoths = create(calendarId, calendarYear);
-        TemporalUtils.putBoundedMapEntry(
-                CACHE,
-                CACHE_EVICTION_QUEUE,
-                cacheKey,
-                createdMoths,
-                CACHE_SIZE);
+        TemporalUtils.putBoundedMapEntry(CACHE, CACHE_EVICTION_QUEUE, cacheKey, createdMoths, CACHE_SIZE);
         TemporalMonths resolvedMoths = CACHE.get(cacheKey);
         if (resolvedMoths != null) {
             return resolvedMoths;
         }
         return createdMoths;
-    }
-
-    private void addMonthSlot(IsoCalendarMonth monthSlot) {
-        add(monthSlot);
-        monthSlotsByCode.put(monthSlot.monthCode(), monthSlot);
-    }
-
-    public IsoCalendarMonth getByMonthCode(String monthCode) {
-        return monthSlotsByCode.get(monthCode);
-    }
-
-    public IsoCalendarMonth getByMonthNumber(int monthNumber) {
-        if (monthNumber < 1 || monthNumber > size()) {
-            return null;
-        }
-        return get(monthNumber - 1);
     }
 }

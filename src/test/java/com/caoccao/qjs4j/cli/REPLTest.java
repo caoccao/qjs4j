@@ -26,20 +26,18 @@ import java.nio.charset.StandardCharsets;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The REPL's renderer was {@code private String stringify(JSValue value) { return null; }}, so the
- * primary interactive interface printed {@code null} for every evaluation. Its runtime was a local
- * variable in the constructor that nothing kept and nothing closed.
+ * The REPL's renderer was {@code private String stringify(JSValue value) { return null; }}, so the primary interactive
+ * interface printed {@code null} for every evaluation. Its runtime was a local variable in the constructor that nothing
+ * kept and nothing closed.
  */
 public class REPLTest {
     private Output runRepl(String input) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ByteArrayOutputStream err = new ByteArrayOutputStream();
         try (PrintStream outStream = new PrintStream(out, true, StandardCharsets.UTF_8);
-             PrintStream errStream = new PrintStream(err, true, StandardCharsets.UTF_8);
-             REPL repl = new REPL(
-                     new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)),
-                     outStream,
-                     errStream)) {
+                PrintStream errStream = new PrintStream(err, true, StandardCharsets.UTF_8);
+                REPL repl = new REPL(new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)), outStream,
+                        errStream)) {
             repl.run();
         }
         return new Output(out.toString(StandardCharsets.UTF_8), err.toString(StandardCharsets.UTF_8));
@@ -108,10 +106,8 @@ public class REPLTest {
     public void testTheReplClosesItsRuntime() {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ByteArrayOutputStream err = new ByteArrayOutputStream();
-        REPL repl = new REPL(
-                new ByteArrayInputStream("exit\n".getBytes(StandardCharsets.UTF_8)),
-                new PrintStream(out, true, StandardCharsets.UTF_8),
-                new PrintStream(err, true, StandardCharsets.UTF_8));
+        REPL repl = new REPL(new ByteArrayInputStream("exit\n".getBytes(StandardCharsets.UTF_8)),
+                new PrintStream(out, true, StandardCharsets.UTF_8), new PrintStream(err, true, StandardCharsets.UTF_8));
         repl.run();
         repl.close();
         // Closing twice is the harmless case a try-with-resources plus an explicit close produces.

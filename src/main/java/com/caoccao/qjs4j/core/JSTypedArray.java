@@ -27,47 +27,25 @@ import java.util.List;
 import java.util.function.IntFunction;
 
 /**
- * Base class for JavaScript TypedArray objects.
- * Based on ES2020 TypedArray specification.
+ * Base class for JavaScript TypedArray objects. Based on ES2020 TypedArray specification.
  * <p>
  * TypedArrays provide an array-like view of an underlying ArrayBuffer.
  */
-public sealed abstract class JSTypedArray extends JSObject permits
-        JSUint8Array, JSUint8ClampedArray, JSUint16Array, JSUint32Array,
-        JSInt8Array, JSInt16Array, JSInt32Array,
-        JSFloat16Array, JSFloat32Array, JSFloat64Array,
-        JSBigInt64Array, JSBigUint64Array {
-    public static final String NAME = "TypedArray";
+public sealed abstract class JSTypedArray extends JSObject
+        permits JSUint8Array, JSUint8ClampedArray, JSUint16Array, JSUint32Array, JSInt8Array, JSInt16Array,
+        JSInt32Array, JSFloat16Array, JSFloat32Array, JSFloat64Array, JSBigInt64Array, JSBigUint64Array {
     private static final int CANONICAL_NUMERIC_INDEX_INVALID = -1;
     private static final int CANONICAL_NUMERIC_INDEX_NOT_CANONICAL = Integer.MIN_VALUE;
+    public static final String NAME = "TypedArray";
     protected final IJSArrayBuffer buffer;
     protected final int byteLength;
     protected final int byteOffset;
     protected final int bytesPerElement;
-    protected final int length;
-    protected final boolean trackRab;
     private ByteBuffer cachedBackingBuffer;
     private ByteBuffer cachedByteBuffer;
     private int cachedByteLength = -1;
-
-    /**
-     * Create a TypedArray with a new buffer of the given length.
-     */
-    protected JSTypedArray(JSContext context, int length, int bytesPerElement) {
-        super(context);
-        if (length < 0) {
-            throw new JSRangeErrorException("invalid length");
-        }
-        if (length > Integer.MAX_VALUE / bytesPerElement) {
-            throw new JSRangeErrorException("invalid array buffer length");
-        }
-        this.bytesPerElement = bytesPerElement;
-        this.length = length;
-        this.byteLength = length * bytesPerElement;
-        this.byteOffset = 0;
-        this.buffer = new JSArrayBuffer(context, this.byteLength);
-        this.trackRab = false;
-    }
+    protected final int length;
+    protected final boolean trackRab;
 
     /**
      * Create a TypedArray view on an existing ArrayBuffer or SharedArrayBuffer.
@@ -120,12 +98,605 @@ public sealed abstract class JSTypedArray extends JSObject permits
     }
 
     /**
-     * Shared constructor dispatch for every element type. Factories retain the
-     * concrete type and its realm prototype while conversions run in source order.
+     * Create a TypedArray with a new buffer of the given length.
      */
-    protected static JSTypedArray createFromArguments(
-            JSContext context, int bytesPerElement, IntFunction<? extends JSTypedArray> lengthFactory,
-            BufferFactory bufferFactory, JSValue... args) {
+    protected JSTypedArray(JSContext context, int length, int bytesPerElement) {
+        super(context);
+        if (length < 0) {
+            throw new JSRangeErrorException("invalid length");
+        }
+        if (length > Integer.MAX_VALUE / bytesPerElement) {
+            throw new JSRangeErrorException("invalid array buffer length");
+        }
+        this.bytesPerElement = bytesPerElement;
+        this.length = length;
+        this.byteLength = length * bytesPerElement;
+        this.byteOffset = 0;
+        this.buffer = new JSArrayBuffer(context, this.byteLength);
+        this.trackRab = false;
+    }
+
+    /**
+     * Check if an index is valid.
+     */
+    protected void checkIndex(int index) {
+        if (buffer.isDetached()) {
+            throw new JSTypeErrorException("TypedArray buffer is detached");
+        }
+        if (index < 0 || index >= getLength()) {
+            throw new JSRangeErrorException("TypedArray index out of range: " + index);
+        }
+    }
+
+    /**
+     * Create a raw view of this array's concrete type on the same buffer.
+     */
+    protected abstract JSTypedArray createView(int byteOffset, int length);
+
+    /**
+     * Integer-Indexed exotic object [[DefineOwnProperty]]. Following QuickJS JS_DefineProperty for typed arrays (lines
+     * 10176-10221). For canonical numeric index strings: validates the index and descriptor, sets the value if
+     * provided, and returns true/false per the spec. For non-numeric keys: delegates to ordinary defineProperty.
+     */
+    @Override
+    public boolean defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
+        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
+        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
+            return super.defineProperty(key, descriptor);
+        }
+        if (canonicalNumericIndex < 0) {
+            return false;
+        }
+        int index = canonicalNumericIndex;
+        // Check bounds and detachment
+        if (buffer.isDetached() || index >= getLength()) {
+            return false;
+        }
+        // IntegerIndexedObjectDefineOwnProperty per ES2024 10.4.5.3
+        // Accessor descriptors are not allowed
+        if (descriptor.isAccessorDescriptor()) {
+            return false;
+        }
+        // Step 2a: If Desc has [[Configurable]] and it's false, return false
+        // (TypedArray elements have configurable: true per ES2024)
+        if (descriptor.hasConfigurable() && !descriptor.isConfigurable()) {
+            return false;
+        }
+        if (descriptor.hasEnumerable() && !descriptor.isEnumerable()) {
+            return false;
+        }
+        if (descriptor.hasWritable() && !descriptor.isWritable()) {
+            return false;
+        }
+        // IntegerIndexedElementSet: convert value then write if buffer still valid
+        if (descriptor.hasValue()) {
+            integerIndexedElementSet(index, descriptor.getValue());
+        }
+        return true;
+    }
+
+    /**
+     * Integer-Indexed exotic object [[Delete]]. Returns false for valid in-bounds indices (elements are
+     * non-configurable). Following QuickJS delete_property() for typed arrays.
+     */
+    @Override
+    public boolean delete(PropertyKey key, boolean throwOnFailure) {
+        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
+        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
+            return super.delete(key, throwOnFailure);
+        }
+        if (canonicalNumericIndex < 0) {
+            return true;
+        }
+        int index = canonicalNumericIndex;
+        if (index >= 0) {
+            // In-bounds element: not deletable
+            if (index < getLength() && !buffer.isDetached()) {
+                if (throwOnFailure) {
+                    context.throwTypeError(
+                            "Cannot delete property '" + index + "' of " + getObjectDescriptionForError(true));
+                }
+                return false;
+            }
+            // Out-of-bounds or detached: canonical numeric index returns true
+            return true;
+        }
+        return true;
+    }
+
+    @Override
+    public PropertyKey[] enumerableKeys() {
+        List<PropertyKey> result = new ArrayList<>();
+        if (!buffer.isDetached() && !isOutOfBounds()) {
+            int len = getLength();
+            for (int i = 0; i < len; i++) {
+                result.add(PropertyKey.fromString(Integer.toString(i)));
+            }
+        }
+        Collections.addAll(result, super.enumerableKeys());
+        return result.toArray(new PropertyKey[0]);
+    }
+
+    protected String formatElement(double value) {
+        if (Double.isNaN(value)) {
+            return "NaN";
+        }
+        if (Double.isInfinite(value)) {
+            return value > 0 ? "Infinity" : "-Infinity";
+        }
+        if (value == 0) {
+            return "0";
+        }
+        long asLong = (long) value;
+        if (value == asLong) {
+            return Long.toString(asLong);
+        }
+        return Double.toString(value);
+    }
+
+    /**
+     * Get the underlying ArrayBuffer or SharedArrayBuffer.
+     */
+    public IJSArrayBuffer getBuffer() {
+        return buffer;
+    }
+
+    /**
+     * Get the ByteBuffer for direct access.
+     */
+    protected ByteBuffer getByteBuffer() {
+        if (buffer.isDetached()) {
+            throw new JSTypeErrorException("TypedArray buffer is detached");
+        }
+        ByteBuffer backingBuffer = buffer.getBuffer();
+        int currentByteLength = getByteLength();
+        if (cachedBackingBuffer == backingBuffer && cachedByteLength == currentByteLength) {
+            return cachedByteBuffer;
+        }
+        ByteBuffer buf = backingBuffer.duplicate();
+        buf.position(byteOffset);
+        buf.limit(byteOffset + currentByteLength);
+        ByteBuffer slice = buf.slice();
+        slice.order(backingBuffer.order());
+        cachedBackingBuffer = backingBuffer;
+        cachedByteLength = currentByteLength;
+        cachedByteBuffer = slice;
+        return cachedByteBuffer;
+    }
+
+    /**
+     * Get the byte length of this view. For length-tracking typed arrays on resizable buffers, returns the current
+     * effective byte length.
+     */
+    public int getByteLength() {
+        if (trackRab) {
+            if (buffer.isDetached()) {
+                return 0;
+            }
+            int currentByteLength = buffer.getByteLength();
+            if (byteOffset > currentByteLength) {
+                return 0;
+            }
+            // Round down to element boundary for partial elements
+            int remainingBytes = currentByteLength - byteOffset;
+            return (remainingBytes / bytesPerElement) * bytesPerElement;
+        }
+        return byteLength;
+    }
+
+    /**
+     * Get the byte offset within the buffer.
+     */
+    public int getByteOffset() {
+        return byteOffset;
+    }
+
+    /**
+     * Get the number of bytes per element.
+     */
+    public int getBytesPerElement() {
+        return bytesPerElement;
+    }
+
+    /**
+     * Get an element as a number.
+     */
+    public abstract double getElement(int index);
+
+    /**
+     * Get an element as the appropriate JSValue type. Regular typed arrays return JSNumber, BigInt typed arrays
+     * override to return JSBigInt.
+     */
+    public JSValue getJSElement(int index) {
+        return JSNumber.of(getElement(index));
+    }
+
+    /**
+     * Get the number of elements. For length-tracking typed arrays on resizable buffers, returns the current effective
+     * length.
+     */
+    public int getLength() {
+        if (trackRab) {
+            if (buffer.isDetached()) {
+                return 0;
+            }
+            int currentByteLength = buffer.getByteLength();
+            if (byteOffset > currentByteLength) {
+                return 0;
+            }
+            return (currentByteLength - byteOffset) / bytesPerElement;
+        }
+        // Fixed-length views backed by resizable buffers return 0 when out of bounds
+        if (isOutOfBounds()) {
+            return 0;
+        }
+        return length;
+    }
+
+    public abstract String getObjectTag();
+
+    /**
+     * Integer-Indexed exotic object [[GetOwnProperty]]. Following QuickJS JS_GetOwnPropertyInternal for fast arrays
+     * (lines 8452-8467). For valid integer indices: returns {value, writable: true, enumerable: true, configurable:
+     * true}. For canonical numeric indices that are not valid integer indices: returns null. For non-numeric keys:
+     * delegates to ordinary getOwnPropertyDescriptor.
+     */
+    @Override
+    protected PropertyDescriptor getOwnPropertyDescriptorRaw(PropertyKey key) {
+        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
+        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
+            return super.getOwnPropertyDescriptorRaw(key);
+        }
+        if (canonicalNumericIndex < 0) {
+            return null;
+        }
+        int index = canonicalNumericIndex;
+        if (buffer.isDetached() || index >= getLength()) {
+            return null;
+        }
+        return PropertyDescriptor.dataDescriptor(getJSElement(index), PropertyDescriptor.DataState.All);
+    }
+
+    /**
+     * Integer-Indexed exotic object [[OwnPropertyKeys]]. Following QuickJS JS_GetOwnPropertyNamesInternal for fast
+     * arrays (lines 8334-8354). Returns integer indices first (in ascending order), then string keys, then symbol keys.
+     */
+    @Override
+    public List<PropertyKey> getOwnPropertyKeys() {
+        List<PropertyKey> result = new ArrayList<>();
+        // Add integer indices for buffer elements (only if not detached and not OOB)
+        if (!buffer.isDetached() && !isOutOfBounds()) {
+            int len = getLength();
+            for (int i = 0; i < len; i++) {
+                result.add(PropertyKey.fromString(Integer.toString(i)));
+            }
+        }
+        // Add non-index own properties from the shape (string keys, then symbols)
+        result.addAll(super.getOwnPropertyKeys());
+        return result;
+    }
+
+    /**
+     * Get the TypedArrayName (e.g., "Int8Array", "Float64Array"). Per ES spec, this is returned by the @@toStringTag
+     * getter.
+     */
+    public String getTypedArrayName() {
+        return NAME;
+    }
+
+    /**
+     * Integer-Indexed exotic object [[Get]]. For canonical numeric index strings, return the element or undefined
+     * without walking the prototype chain.
+     */
+    @Override
+    protected JSValue getWithReceiver(PropertyKey key, JSValue receiver, int depth) {
+        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
+        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
+            return super.getWithReceiver(key, receiver, depth);
+        }
+        if (canonicalNumericIndex < 0) {
+            return JSUndefined.INSTANCE;
+        }
+        int index = canonicalNumericIndex;
+        if (buffer.isDetached() || isOutOfBounds() || index >= getLength()) {
+            return JSUndefined.INSTANCE;
+        }
+        return getJSElement(index);
+    }
+
+    @Override
+    protected boolean has(PropertyKey key, int depth) {
+        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
+        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
+            return super.has(key, depth);
+        }
+        if (canonicalNumericIndex < 0) {
+            return false;
+        }
+        return !buffer.isDetached() && canonicalNumericIndex < getLength();
+    }
+
+    /**
+     * IntegerIndexedElementSet per ES spec. Converts value to the appropriate type (ToNumber or ToBigInt), then writes
+     * to the buffer only if it is still valid (not detached and index in bounds). This handles the case where
+     * ToNumber/ToBigInt detaches the buffer as a side effect. BigInt typed arrays override to use ToBigInt instead of
+     * ToNumber.
+     */
+    protected void integerIndexedElementSet(int index, JSValue value) {
+        double numValue = JSTypeConversions.toNumber(context, value).value();
+        if (context.hasPendingException()) {
+            return;
+        }
+        if (!buffer.isDetached() && index >= 0 && index < getLength()) {
+            setElement(index, numValue);
+        }
+    }
+
+    /**
+     * A canonical numeric index on an integer-indexed exotic object resolves to the element or to undefined without
+     * consulting the prototype chain, so a typed array asked for such a key decides the lookup itself. Every other key
+     * is an ordinary lookup that the iterative prototype walk can carry on through.
+     *
+     * @param key
+     *            the property being looked up
+     * @return true for a canonical numeric index string
+     */
+    @Override
+    protected boolean interceptsPropertyLookup(PropertyKey key) {
+        return resolveCanonicalNumericIndex(key) != CANONICAL_NUMERIC_INDEX_NOT_CANONICAL;
+    }
+
+    public abstract boolean isAtomicsReadableAndWriteable();
+
+    /**
+     * Whether {@code Atomics} may write to this element type.
+     *
+     * @return true when this typed array is a valid Atomics write target
+     */
+    public abstract boolean isAtomicsWriteable();
+
+    /**
+     * Returns true if this TypedArray is length-tracking (auto-length) on a resizable ArrayBuffer.
+     */
+    public boolean isLengthTracking() {
+        return trackRab;
+    }
+
+    /**
+     * Check if this TypedArray is out of bounds due to buffer resize or detach. Following QuickJS typed_array_is_oob
+     * semantics.
+     */
+    public boolean isOutOfBounds() {
+        if (buffer.isDetached()) {
+            return true;
+        }
+        int currentByteLength = buffer.getByteLength();
+        if (byteOffset > currentByteLength) {
+            return true;
+        }
+        if (trackRab) {
+            return false;
+        }
+        // Fixed length: check if the view exceeds the current buffer size
+        return (long) byteOffset + byteLength > currentByteLength;
+    }
+
+    @Override
+    public PropertyKey[] ownPropertyKeys() {
+        return getOwnPropertyKeys().toArray(new PropertyKey[0]);
+    }
+
+    @Override
+    public boolean preventExtensionsWithResult() {
+        if (buffer instanceof JSArrayBuffer arrayBuffer && arrayBuffer.isResizable()) {
+            return false;
+        }
+        if (buffer instanceof JSSharedArrayBuffer sharedArrayBuffer && sharedArrayBuffer.isGrowable() && trackRab) {
+            return false;
+        }
+        return super.preventExtensionsWithResult();
+    }
+
+    @Override
+    public void set(PropertyKey key, JSValue value) {
+        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
+        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
+            super.set(key, value);
+            return;
+        }
+        // TypedArray [[Set]] with SameValue(O, Receiver) = true
+        // Always call integerIndexedElementSet which performs value conversion
+        // (ToNumber/ToBigInt) BEFORE checking detached/bounds per spec.
+        if (canonicalNumericIndex < 0) {
+            // Invalid numeric index strings must still run conversion side effects.
+            integerIndexedElementSet(CANONICAL_NUMERIC_INDEX_INVALID, value);
+            return;
+        }
+        integerIndexedElementSet(canonicalNumericIndex, value);
+    }
+
+    /**
+     * TypedArray.prototype.set(array, offset) Copy values from array into this TypedArray.
+     */
+    public void setArray(JSValue source, int offset) {
+        int currentLength = getLength();
+        if (offset < 0 || offset > currentLength) {
+            throw new JSRangeErrorException("TypedArray offset out of range");
+        }
+
+        if (source instanceof JSArray srcArray) {
+            int srcLength = toArrayLikeLength(context, JSNumber.of(srcArray.getLength()));
+            if (offset + srcLength > currentLength) {
+                throw new JSRangeErrorException("Source array too large");
+            }
+            for (int i = 0; i < srcLength; i++) {
+                JSValue value = srcArray.get(i);
+                if (context.hasPendingException()) {
+                    return;
+                }
+                setJSElement(offset + i, value);
+                if (context.hasPendingException()) {
+                    return;
+                }
+            }
+        } else if (source instanceof JSTypedArray srcTyped) {
+            int srcLength = srcTyped.getLength();
+            if (offset + srcLength > currentLength) {
+                throw new JSRangeErrorException("Source array too large");
+            }
+            for (int i = 0; i < srcLength; i++) {
+                setJSElement(offset + i, srcTyped.getJSElement(i));
+                if (context.hasPendingException()) {
+                    return;
+                }
+            }
+        } else if (source instanceof JSIterator jsIterator) {
+            JSArray jsArray = JSIteratorHelper.toArray(context, jsIterator);
+            if (context.hasPendingException()) {
+                return;
+            }
+            setArray(jsArray, offset);
+        } else if (source instanceof JSObject srcObject) {
+            JSValue lengthValue = srcObject.get(PropertyKey.LENGTH);
+            if (context.hasPendingException()) {
+                return;
+            }
+            int srcLength = toArrayLikeLength(context, lengthValue);
+            if (context.hasPendingException()) {
+                return;
+            }
+            if (offset + srcLength > currentLength) {
+                throw new JSRangeErrorException("Source array too large");
+            }
+            for (int i = 0; i < srcLength; i++) {
+                JSValue value = srcObject.get(PropertyKey.fromIndex(i));
+                if (context.hasPendingException()) {
+                    return;
+                }
+                setJSElement(offset + i, value);
+                if (context.hasPendingException()) {
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     * Set an element from a number.
+     */
+    public abstract void setElement(int index, double value);
+
+    /**
+     * Set an element from a JSValue, performing the appropriate type conversion. Regular typed arrays convert to
+     * Number, BigInt typed arrays override to convert to BigInt.
+     */
+    protected void setJSElement(int index, JSValue value) {
+        setElement(index, JSTypeConversions.toNumber(context, value).value());
+    }
+
+    /**
+     * Override 3-arg setWithResult to route through the JSValue receiver version, ensuring TypedArray's canonical
+     * numeric index handling is used when called by generic Array.prototype methods (e.g., copyWithin, fill).
+     */
+    @Override
+    public boolean setWithResult(PropertyKey key, JSValue value) {
+        return setWithResult(key, value, (JSValue) this);
+    }
+
+    /**
+     * TypedArray [[Set]](P, V, Receiver) - ES spec 10.4.5.5 Handles the case where Receiver may be any ECMAScript value
+     * (not just an object). Following QuickJS JS_SetPropertyInternal typed_array_oob handling.
+     */
+    @Override
+    public boolean setWithResult(PropertyKey key, JSValue value, JSValue receiver) {
+        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
+        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
+            return super.setWithResult(key, value, receiver);
+        }
+        // Step b.i: If SameValue(O, Receiver) is true
+        if (receiver == this) {
+            // Perform TypedArraySetElement(O, numericIndex, V)
+            set(key, value);
+            return !context.hasPendingException();
+        }
+        // Step b.ii: If IsValidIntegerIndex(O, numericIndex) is false, return true
+        if (canonicalNumericIndex < 0 || buffer.isDetached() || canonicalNumericIndex >= getLength()) {
+            return true;
+        }
+        // Valid integer index with different receiver.
+        // Per ES2024 10.4.5.5 step 3: Return ? OrdinarySet(O, P, V, Receiver).
+        // The TypedArray element acts as an own writable data property, so OrdinarySet
+        // skips prototype chain walk and goes directly to setting on the receiver.
+        if (receiver instanceof JSObject receiverObj) {
+            PropertyDescriptor existingDescriptor = receiverObj.getOwnPropertyDescriptor(key);
+            if (context.hasPendingException()) {
+                return false;
+            }
+            if (existingDescriptor != null) {
+                if (existingDescriptor.isAccessorDescriptor()) {
+                    return false;
+                }
+                if (!existingDescriptor.isWritable()) {
+                    return false;
+                }
+                PropertyDescriptor valueDescriptor = new PropertyDescriptor();
+                valueDescriptor.setValue(value);
+                return receiverObj.defineProperty(key, valueDescriptor);
+            }
+            if (!receiverObj.isExtensible()) {
+                return false;
+            }
+            return receiverObj.defineProperty(key, value, PropertyDescriptor.DataState.All);
+        }
+        return false;
+    }
+
+    /**
+     * TypedArray.prototype.subarray(begin, end) Returns a new TypedArray view on the same buffer.
+     */
+    public JSTypedArray subarray(int begin, int end) {
+        // Normalize indices
+        int currentLength = getLength();
+        if (begin < 0) {
+            begin = Math.max(currentLength + begin, 0);
+        } else {
+            begin = Math.min(begin, currentLength);
+        }
+
+        if (end < 0) {
+            end = Math.max(currentLength + end, 0);
+        } else {
+            end = Math.min(end, currentLength);
+        }
+
+        int newLength = Math.max(end - begin, 0);
+        int newByteOffset = byteOffset + begin * bytesPerElement;
+
+        return createView(newByteOffset, newLength);
+    }
+
+    @Override
+    public String toString() {
+        int currentLength = getLength();
+        if (currentLength == 0) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < currentLength; i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append(formatElement(getElement(i)));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Shared constructor dispatch for every element type. Factories retain the concrete type and its realm prototype
+     * while conversions run in source order.
+     */
+    protected static JSTypedArray createFromArguments(JSContext context, int bytesPerElement,
+            IntFunction<? extends JSTypedArray> lengthFactory, BufferFactory bufferFactory, JSValue... args) {
         int length = 0;
         if (args.length >= 1) {
             JSValue firstArg = normalizeConstructorSource(context, args[0]);
@@ -240,14 +811,13 @@ public sealed abstract class JSTypedArray extends JSObject permits
     /**
      * TypedArray constructor source normalization for object arguments.
      *
-     * <p>If @@iterator exists and is callable, constructors must consume the iterable.
-     * If @@iterator exists but is not callable, throw TypeError. If absent/nullish,
-     * keep array-like semantics.</p>
+     * <p>
+     * If @@iterator exists and is callable, constructors must consume the iterable. If @@iterator exists but is not
+     * callable, throw TypeError. If absent/nullish, keep array-like semantics.
+     * </p>
      */
     protected static JSValue normalizeConstructorSource(JSContext context, JSValue source) {
-        if (!(source instanceof JSObject sourceObject)
-                || source instanceof JSIterator
-                || source instanceof JSTypedArray
+        if (!(source instanceof JSObject sourceObject) || source instanceof JSIterator || source instanceof JSTypedArray
                 || source instanceof IJSArrayBuffer) {
             return source;
         }
@@ -272,17 +842,16 @@ public sealed abstract class JSTypedArray extends JSObject permits
     }
 
     /**
-     * Format a number the same way as JavaScript's ToString(Number).
-     * Used by isCanonicalNumericIndex to check round-trip identity.
+     * Format a number the same way as JavaScript's ToString(Number). Used by isCanonicalNumericIndex to check
+     * round-trip identity.
      */
     private static String numberToString(double value) {
         return DtoaConverter.convert(value);
     }
 
     /**
-     * ES2024 InitializeTypedArrayFromArrayBuffer steps 2-3:
-     * Resolve byteOffset via ToIndex, then check alignment before ToIndex(length).
-     * Returns the validated byteOffset, or -1 if a pending exception was set.
+     * ES2024 InitializeTypedArrayFromArrayBuffer steps 2-3: Resolve byteOffset via ToIndex, then check alignment before
+     * ToIndex(length). Returns the validated byteOffset, or -1 if a pending exception was set.
      */
     protected static int resolveAndValidateByteOffset(JSContext context, JSValue value, int bytesPerElement) {
         int byteOffset = toTypedArrayByteOffset(context, value);
@@ -299,9 +868,8 @@ public sealed abstract class JSTypedArray extends JSObject permits
     /**
      * Resolve a key for integer-indexed exotic semantics.
      *
-     * @return non-negative integer index when canonical and valid;
-     * {@link #CANONICAL_NUMERIC_INDEX_INVALID} when canonical numeric but invalid integer index;
-     * {@link #CANONICAL_NUMERIC_INDEX_NOT_CANONICAL} otherwise.
+     * @return non-negative integer index when canonical and valid; {@link #CANONICAL_NUMERIC_INDEX_INVALID} when
+     *         canonical numeric but invalid integer index; {@link #CANONICAL_NUMERIC_INDEX_NOT_CANONICAL} otherwise.
      */
     private static int resolveCanonicalNumericIndex(PropertyKey key) {
         int typedArrayIndex = toTypedArrayIndex(key);
@@ -319,9 +887,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
             return CANONICAL_NUMERIC_INDEX_INVALID;
         }
         char firstCharacter = keyString.charAt(0);
-        if (!((firstCharacter >= '0' && firstCharacter <= '9')
-                || firstCharacter == '-'
-                || firstCharacter == 'I'
+        if (!((firstCharacter >= '0' && firstCharacter <= '9') || firstCharacter == '-' || firstCharacter == 'I'
                 || firstCharacter == 'N')) {
             return CANONICAL_NUMERIC_INDEX_NOT_CANONICAL;
         }
@@ -367,8 +933,8 @@ public sealed abstract class JSTypedArray extends JSObject permits
     }
 
     /**
-     * Try to interpret a PropertyKey as a typed array integer index.
-     * Returns the index if it's a valid canonical numeric index string, or -1 otherwise.
+     * Try to interpret a PropertyKey as a typed array integer index. Returns the index if it's a valid canonical
+     * numeric index string, or -1 otherwise.
      */
     private static int toTypedArrayIndex(PropertyKey key) {
         int fastIndex = key.toIndex();
@@ -411,8 +977,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
     }
 
     protected static int toTypedArrayLength(JSContext context, JSValue value, int bytesPerElement) {
-        return toTypedArrayLength(
-                JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, value)),
+        return toTypedArrayLength(JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, value)),
                 bytesPerElement);
     }
 
@@ -430,593 +995,6 @@ public sealed abstract class JSTypedArray extends JSObject permits
         if (buffer.isDetached()) {
             throw new JSTypeErrorException("ArrayBuffer is detached");
         }
-    }
-
-    /**
-     * Check if an index is valid.
-     */
-    protected void checkIndex(int index) {
-        if (buffer.isDetached()) {
-            throw new JSTypeErrorException("TypedArray buffer is detached");
-        }
-        if (index < 0 || index >= getLength()) {
-            throw new JSRangeErrorException("TypedArray index out of range: " + index);
-        }
-    }
-
-    /**
-     * Create a raw view of this array's concrete type on the same buffer.
-     */
-    protected abstract JSTypedArray createView(int byteOffset, int length);
-
-    /**
-     * Integer-Indexed exotic object [[DefineOwnProperty]].
-     * Following QuickJS JS_DefineProperty for typed arrays (lines 10176-10221).
-     * For canonical numeric index strings: validates the index and descriptor,
-     * sets the value if provided, and returns true/false per the spec.
-     * For non-numeric keys: delegates to ordinary defineProperty.
-     */
-    @Override
-    public boolean defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
-        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
-        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
-            return super.defineProperty(key, descriptor);
-        }
-        if (canonicalNumericIndex < 0) {
-            return false;
-        }
-        int index = canonicalNumericIndex;
-        // Check bounds and detachment
-        if (buffer.isDetached() || index >= getLength()) {
-            return false;
-        }
-        // IntegerIndexedObjectDefineOwnProperty per ES2024 10.4.5.3
-        // Accessor descriptors are not allowed
-        if (descriptor.isAccessorDescriptor()) {
-            return false;
-        }
-        // Step 2a: If Desc has [[Configurable]] and it's false, return false
-        // (TypedArray elements have configurable: true per ES2024)
-        if (descriptor.hasConfigurable() && !descriptor.isConfigurable()) {
-            return false;
-        }
-        if (descriptor.hasEnumerable() && !descriptor.isEnumerable()) {
-            return false;
-        }
-        if (descriptor.hasWritable() && !descriptor.isWritable()) {
-            return false;
-        }
-        // IntegerIndexedElementSet: convert value then write if buffer still valid
-        if (descriptor.hasValue()) {
-            integerIndexedElementSet(index, descriptor.getValue());
-        }
-        return true;
-    }
-
-    /**
-     * Integer-Indexed exotic object [[Delete]].
-     * Returns false for valid in-bounds indices (elements are non-configurable).
-     * Following QuickJS delete_property() for typed arrays.
-     */
-    @Override
-    public boolean delete(PropertyKey key, boolean throwOnFailure) {
-        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
-        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
-            return super.delete(key, throwOnFailure);
-        }
-        if (canonicalNumericIndex < 0) {
-            return true;
-        }
-        int index = canonicalNumericIndex;
-        if (index >= 0) {
-            // In-bounds element: not deletable
-            if (index < getLength() && !buffer.isDetached()) {
-                if (throwOnFailure) {
-                    context.throwTypeError("Cannot delete property '" + index + "' of "
-                            + getObjectDescriptionForError(true));
-                }
-                return false;
-            }
-            // Out-of-bounds or detached: canonical numeric index returns true
-            return true;
-        }
-        return true;
-    }
-
-    @Override
-    public PropertyKey[] enumerableKeys() {
-        List<PropertyKey> result = new ArrayList<>();
-        if (!buffer.isDetached() && !isOutOfBounds()) {
-            int len = getLength();
-            for (int i = 0; i < len; i++) {
-                result.add(PropertyKey.fromString(Integer.toString(i)));
-            }
-        }
-        Collections.addAll(result, super.enumerableKeys());
-        return result.toArray(new PropertyKey[0]);
-    }
-
-    protected String formatElement(double value) {
-        if (Double.isNaN(value)) {
-            return "NaN";
-        }
-        if (Double.isInfinite(value)) {
-            return value > 0 ? "Infinity" : "-Infinity";
-        }
-        if (value == 0) {
-            return "0";
-        }
-        long asLong = (long) value;
-        if (value == asLong) {
-            return Long.toString(asLong);
-        }
-        return Double.toString(value);
-    }
-
-    /**
-     * Get the underlying ArrayBuffer or SharedArrayBuffer.
-     */
-    public IJSArrayBuffer getBuffer() {
-        return buffer;
-    }
-
-    /**
-     * Get the ByteBuffer for direct access.
-     */
-    protected ByteBuffer getByteBuffer() {
-        if (buffer.isDetached()) {
-            throw new JSTypeErrorException("TypedArray buffer is detached");
-        }
-        ByteBuffer backingBuffer = buffer.getBuffer();
-        int currentByteLength = getByteLength();
-        if (cachedBackingBuffer == backingBuffer && cachedByteLength == currentByteLength) {
-            return cachedByteBuffer;
-        }
-        ByteBuffer buf = backingBuffer.duplicate();
-        buf.position(byteOffset);
-        buf.limit(byteOffset + currentByteLength);
-        ByteBuffer slice = buf.slice();
-        slice.order(backingBuffer.order());
-        cachedBackingBuffer = backingBuffer;
-        cachedByteLength = currentByteLength;
-        cachedByteBuffer = slice;
-        return cachedByteBuffer;
-    }
-
-    /**
-     * Get the byte length of this view.
-     * For length-tracking typed arrays on resizable buffers, returns the current effective byte length.
-     */
-    public int getByteLength() {
-        if (trackRab) {
-            if (buffer.isDetached()) {
-                return 0;
-            }
-            int currentByteLength = buffer.getByteLength();
-            if (byteOffset > currentByteLength) {
-                return 0;
-            }
-            // Round down to element boundary for partial elements
-            int remainingBytes = currentByteLength - byteOffset;
-            return (remainingBytes / bytesPerElement) * bytesPerElement;
-        }
-        return byteLength;
-    }
-
-    /**
-     * Get the byte offset within the buffer.
-     */
-    public int getByteOffset() {
-        return byteOffset;
-    }
-
-    /**
-     * Get the number of bytes per element.
-     */
-    public int getBytesPerElement() {
-        return bytesPerElement;
-    }
-
-    /**
-     * Get an element as a number.
-     */
-    public abstract double getElement(int index);
-
-    /**
-     * Get an element as the appropriate JSValue type.
-     * Regular typed arrays return JSNumber, BigInt typed arrays override to return JSBigInt.
-     */
-    public JSValue getJSElement(int index) {
-        return JSNumber.of(getElement(index));
-    }
-
-    /**
-     * Get the number of elements.
-     * For length-tracking typed arrays on resizable buffers, returns the current effective length.
-     */
-    public int getLength() {
-        if (trackRab) {
-            if (buffer.isDetached()) {
-                return 0;
-            }
-            int currentByteLength = buffer.getByteLength();
-            if (byteOffset > currentByteLength) {
-                return 0;
-            }
-            return (currentByteLength - byteOffset) / bytesPerElement;
-        }
-        // Fixed-length views backed by resizable buffers return 0 when out of bounds
-        if (isOutOfBounds()) {
-            return 0;
-        }
-        return length;
-    }
-
-    public abstract String getObjectTag();
-
-    /**
-     * Integer-Indexed exotic object [[GetOwnProperty]].
-     * Following QuickJS JS_GetOwnPropertyInternal for fast arrays (lines 8452-8467).
-     * For valid integer indices: returns {value, writable: true, enumerable: true, configurable: true}.
-     * For canonical numeric indices that are not valid integer indices: returns null.
-     * For non-numeric keys: delegates to ordinary getOwnPropertyDescriptor.
-     */
-    @Override
-    protected PropertyDescriptor getOwnPropertyDescriptorRaw(PropertyKey key) {
-        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
-        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
-            return super.getOwnPropertyDescriptorRaw(key);
-        }
-        if (canonicalNumericIndex < 0) {
-            return null;
-        }
-        int index = canonicalNumericIndex;
-        if (buffer.isDetached() || index >= getLength()) {
-            return null;
-        }
-        return PropertyDescriptor.dataDescriptor(getJSElement(index), PropertyDescriptor.DataState.All);
-    }
-
-    /**
-     * Integer-Indexed exotic object [[OwnPropertyKeys]].
-     * Following QuickJS JS_GetOwnPropertyNamesInternal for fast arrays (lines 8334-8354).
-     * Returns integer indices first (in ascending order), then string keys, then symbol keys.
-     */
-    @Override
-    public List<PropertyKey> getOwnPropertyKeys() {
-        List<PropertyKey> result = new ArrayList<>();
-        // Add integer indices for buffer elements (only if not detached and not OOB)
-        if (!buffer.isDetached() && !isOutOfBounds()) {
-            int len = getLength();
-            for (int i = 0; i < len; i++) {
-                result.add(PropertyKey.fromString(Integer.toString(i)));
-            }
-        }
-        // Add non-index own properties from the shape (string keys, then symbols)
-        result.addAll(super.getOwnPropertyKeys());
-        return result;
-    }
-
-    /**
-     * Get the TypedArrayName (e.g., "Int8Array", "Float64Array").
-     * Per ES spec, this is returned by the @@toStringTag getter.
-     */
-    public String getTypedArrayName() {
-        return NAME;
-    }
-
-    /**
-     * Integer-Indexed exotic object [[Get]].
-     * For canonical numeric index strings, return the element or undefined
-     * without walking the prototype chain.
-     */
-    @Override
-    protected JSValue getWithReceiver(PropertyKey key, JSValue receiver, int depth) {
-        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
-        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
-            return super.getWithReceiver(key, receiver, depth);
-        }
-        if (canonicalNumericIndex < 0) {
-            return JSUndefined.INSTANCE;
-        }
-        int index = canonicalNumericIndex;
-        if (buffer.isDetached() || isOutOfBounds() || index >= getLength()) {
-            return JSUndefined.INSTANCE;
-        }
-        return getJSElement(index);
-    }
-
-    @Override
-    protected boolean has(PropertyKey key, int depth) {
-        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
-        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
-            return super.has(key, depth);
-        }
-        if (canonicalNumericIndex < 0) {
-            return false;
-        }
-        return !buffer.isDetached() && canonicalNumericIndex < getLength();
-    }
-
-    /**
-     * IntegerIndexedElementSet per ES spec.
-     * Converts value to the appropriate type (ToNumber or ToBigInt), then writes
-     * to the buffer only if it is still valid (not detached and index in bounds).
-     * This handles the case where ToNumber/ToBigInt detaches the buffer as a side effect.
-     * BigInt typed arrays override to use ToBigInt instead of ToNumber.
-     */
-    protected void integerIndexedElementSet(int index, JSValue value) {
-        double numValue = JSTypeConversions.toNumber(context, value).value();
-        if (context.hasPendingException()) {
-            return;
-        }
-        if (!buffer.isDetached() && index >= 0 && index < getLength()) {
-            setElement(index, numValue);
-        }
-    }
-
-    /**
-     * A canonical numeric index on an integer-indexed exotic object resolves to the element or to
-     * undefined without consulting the prototype chain, so a typed array asked for such a key
-     * decides the lookup itself. Every other key is an ordinary lookup that the iterative
-     * prototype walk can carry on through.
-     *
-     * @param key the property being looked up
-     * @return true for a canonical numeric index string
-     */
-    @Override
-    protected boolean interceptsPropertyLookup(PropertyKey key) {
-        return resolveCanonicalNumericIndex(key) != CANONICAL_NUMERIC_INDEX_NOT_CANONICAL;
-    }
-
-    public abstract boolean isAtomicsReadableAndWriteable();
-
-    /**
-     * Whether {@code Atomics} may write to this element type.
-     *
-     * @return true when this typed array is a valid Atomics write target
-     */
-    public abstract boolean isAtomicsWriteable();
-
-    /**
-     * Returns true if this TypedArray is length-tracking (auto-length)
-     * on a resizable ArrayBuffer.
-     */
-    public boolean isLengthTracking() {
-        return trackRab;
-    }
-
-    /**
-     * Check if this TypedArray is out of bounds due to buffer resize or detach.
-     * Following QuickJS typed_array_is_oob semantics.
-     */
-    public boolean isOutOfBounds() {
-        if (buffer.isDetached()) {
-            return true;
-        }
-        int currentByteLength = buffer.getByteLength();
-        if (byteOffset > currentByteLength) {
-            return true;
-        }
-        if (trackRab) {
-            return false;
-        }
-        // Fixed length: check if the view exceeds the current buffer size
-        return (long) byteOffset + byteLength > currentByteLength;
-    }
-
-    @Override
-    public PropertyKey[] ownPropertyKeys() {
-        return getOwnPropertyKeys().toArray(new PropertyKey[0]);
-    }
-
-    @Override
-    public boolean preventExtensionsWithResult() {
-        if (buffer instanceof JSArrayBuffer arrayBuffer && arrayBuffer.isResizable()) {
-            return false;
-        }
-        if (buffer instanceof JSSharedArrayBuffer sharedArrayBuffer && sharedArrayBuffer.isGrowable() && trackRab) {
-            return false;
-        }
-        return super.preventExtensionsWithResult();
-    }
-
-    @Override
-    public void set(PropertyKey key, JSValue value) {
-        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
-        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
-            super.set(key, value);
-            return;
-        }
-        // TypedArray [[Set]] with SameValue(O, Receiver) = true
-        // Always call integerIndexedElementSet which performs value conversion
-        // (ToNumber/ToBigInt) BEFORE checking detached/bounds per spec.
-        if (canonicalNumericIndex < 0) {
-            // Invalid numeric index strings must still run conversion side effects.
-            integerIndexedElementSet(CANONICAL_NUMERIC_INDEX_INVALID, value);
-            return;
-        }
-        integerIndexedElementSet(canonicalNumericIndex, value);
-    }
-
-    /**
-     * TypedArray.prototype.set(array, offset)
-     * Copy values from array into this TypedArray.
-     */
-    public void setArray(JSValue source, int offset) {
-        int currentLength = getLength();
-        if (offset < 0 || offset > currentLength) {
-            throw new JSRangeErrorException("TypedArray offset out of range");
-        }
-
-        if (source instanceof JSArray srcArray) {
-            int srcLength = toArrayLikeLength(context, JSNumber.of(srcArray.getLength()));
-            if (offset + srcLength > currentLength) {
-                throw new JSRangeErrorException("Source array too large");
-            }
-            for (int i = 0; i < srcLength; i++) {
-                JSValue value = srcArray.get(i);
-                if (context.hasPendingException()) {
-                    return;
-                }
-                setJSElement(offset + i, value);
-                if (context.hasPendingException()) {
-                    return;
-                }
-            }
-        } else if (source instanceof JSTypedArray srcTyped) {
-            int srcLength = srcTyped.getLength();
-            if (offset + srcLength > currentLength) {
-                throw new JSRangeErrorException("Source array too large");
-            }
-            for (int i = 0; i < srcLength; i++) {
-                setJSElement(offset + i, srcTyped.getJSElement(i));
-                if (context.hasPendingException()) {
-                    return;
-                }
-            }
-        } else if (source instanceof JSIterator jsIterator) {
-            JSArray jsArray = JSIteratorHelper.toArray(context, jsIterator);
-            if (context.hasPendingException()) {
-                return;
-            }
-            setArray(jsArray, offset);
-        } else if (source instanceof JSObject srcObject) {
-            JSValue lengthValue = srcObject.get(PropertyKey.LENGTH);
-            if (context.hasPendingException()) {
-                return;
-            }
-            int srcLength = toArrayLikeLength(context, lengthValue);
-            if (context.hasPendingException()) {
-                return;
-            }
-            if (offset + srcLength > currentLength) {
-                throw new JSRangeErrorException("Source array too large");
-            }
-            for (int i = 0; i < srcLength; i++) {
-                JSValue value = srcObject.get(PropertyKey.fromIndex(i));
-                if (context.hasPendingException()) {
-                    return;
-                }
-                setJSElement(offset + i, value);
-                if (context.hasPendingException()) {
-                    return;
-                }
-            }
-        }
-    }
-
-    /**
-     * Set an element from a number.
-     */
-    public abstract void setElement(int index, double value);
-
-    /**
-     * Set an element from a JSValue, performing the appropriate type conversion.
-     * Regular typed arrays convert to Number, BigInt typed arrays override to convert to BigInt.
-     */
-    protected void setJSElement(int index, JSValue value) {
-        setElement(index, JSTypeConversions.toNumber(context, value).value());
-    }
-
-    /**
-     * Override 3-arg setWithResult to route through the JSValue receiver version,
-     * ensuring TypedArray's canonical numeric index handling is used when called
-     * by generic Array.prototype methods (e.g., copyWithin, fill).
-     */
-    @Override
-    public boolean setWithResult(PropertyKey key, JSValue value) {
-        return setWithResult(key, value, (JSValue) this);
-    }
-
-    /**
-     * TypedArray [[Set]](P, V, Receiver) - ES spec 10.4.5.5
-     * Handles the case where Receiver may be any ECMAScript value (not just an object).
-     * Following QuickJS JS_SetPropertyInternal typed_array_oob handling.
-     */
-    @Override
-    public boolean setWithResult(PropertyKey key, JSValue value, JSValue receiver) {
-        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
-        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
-            return super.setWithResult(key, value, receiver);
-        }
-        // Step b.i: If SameValue(O, Receiver) is true
-        if (receiver == this) {
-            // Perform TypedArraySetElement(O, numericIndex, V)
-            set(key, value);
-            return !context.hasPendingException();
-        }
-        // Step b.ii: If IsValidIntegerIndex(O, numericIndex) is false, return true
-        if (canonicalNumericIndex < 0 || buffer.isDetached() || canonicalNumericIndex >= getLength()) {
-            return true;
-        }
-        // Valid integer index with different receiver.
-        // Per ES2024 10.4.5.5 step 3: Return ? OrdinarySet(O, P, V, Receiver).
-        // The TypedArray element acts as an own writable data property, so OrdinarySet
-        // skips prototype chain walk and goes directly to setting on the receiver.
-        if (receiver instanceof JSObject receiverObj) {
-            PropertyDescriptor existingDescriptor = receiverObj.getOwnPropertyDescriptor(key);
-            if (context.hasPendingException()) {
-                return false;
-            }
-            if (existingDescriptor != null) {
-                if (existingDescriptor.isAccessorDescriptor()) {
-                    return false;
-                }
-                if (!existingDescriptor.isWritable()) {
-                    return false;
-                }
-                PropertyDescriptor valueDescriptor = new PropertyDescriptor();
-                valueDescriptor.setValue(value);
-                return receiverObj.defineProperty(key, valueDescriptor);
-            }
-            if (!receiverObj.isExtensible()) {
-                return false;
-            }
-            return receiverObj.defineProperty(key, value, PropertyDescriptor.DataState.All);
-        }
-        return false;
-    }
-
-    /**
-     * TypedArray.prototype.subarray(begin, end)
-     * Returns a new TypedArray view on the same buffer.
-     */
-    public JSTypedArray subarray(int begin, int end) {
-        // Normalize indices
-        int currentLength = getLength();
-        if (begin < 0) {
-            begin = Math.max(currentLength + begin, 0);
-        } else {
-            begin = Math.min(begin, currentLength);
-        }
-
-        if (end < 0) {
-            end = Math.max(currentLength + end, 0);
-        } else {
-            end = Math.min(end, currentLength);
-        }
-
-        int newLength = Math.max(end - begin, 0);
-        int newByteOffset = byteOffset + begin * bytesPerElement;
-
-        return createView(newByteOffset, newLength);
-    }
-
-    @Override
-    public String toString() {
-        int currentLength = getLength();
-        if (currentLength == 0) {
-            return "";
-        }
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < currentLength; i++) {
-            if (i > 0) {
-                sb.append(',');
-            }
-            sb.append(formatElement(getElement(i)));
-        }
-        return sb.toString();
     }
 
     @FunctionalInterface

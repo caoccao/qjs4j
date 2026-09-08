@@ -20,28 +20,25 @@ package com.caoccao.qjs4j.compilation.ast;
  * Represents an assignment expression.
  */
 public final class AssignmentExpression extends Expression {
+    private Boolean directEvalVarArgumentsInside;
     private final Expression left;
     private final boolean lhsIsIdentifierRef;
     private final AssignmentOperator operator;
     private final Expression right;
-    private Boolean directEvalVarArgumentsInside;
 
-    public AssignmentExpression(Expression left, AssignmentOperator operator, Expression right, SourceLocation location) {
-        this(left, operator, right, false, location);
-    }
-
-    public AssignmentExpression(
-            Expression left,
-            AssignmentOperator operator,
-            Expression right,
-            boolean lhsIsIdentifierRef,
-            SourceLocation location) {
+    public AssignmentExpression(Expression left, AssignmentOperator operator, Expression right,
+            boolean lhsIsIdentifierRef, SourceLocation location) {
         super(location);
         this.left = left;
         this.operator = operator;
         this.right = right;
         this.lhsIsIdentifierRef = lhsIsIdentifierRef;
         directEvalVarArgumentsInside = null;
+    }
+
+    public AssignmentExpression(Expression left, AssignmentOperator operator, Expression right,
+            SourceLocation location) {
+        this(left, operator, right, false, location);
     }
 
     @Override

@@ -29,16 +29,17 @@ import java.util.List;
 import java.util.Set;
 
 final class ExpressionAssignmentParser {
-    private static final Set<String> RESERVED_WORDS = Set.of(
-            JSKeyword.BREAK, JSKeyword.CASE, JSKeyword.CATCH, JSKeyword.CLASS, JSKeyword.CONST, JSKeyword.CONTINUE, JSKeyword.DEBUGGER,
-            JSKeyword.DEFAULT, JSKeyword.DELETE, JSKeyword.DO, JSKeyword.ELSE, JSKeyword.ENUM, JSKeyword.EXPORT, JSKeyword.EXTENDS,
-            JSKeyword.FALSE, JSKeyword.FINALLY, JSKeyword.FOR, JSKeyword.FUNCTION, JSKeyword.IF, JSKeyword.IMPORT, JSKeyword.IN,
-            JSKeyword.INSTANCEOF, JSKeyword.NEW, JSKeyword.NULL, JSKeyword.RETURN, JSKeyword.SUPER, JSKeyword.SWITCH, JSKeyword.THIS,
-            JSKeyword.THROW, JSKeyword.TRUE, JSKeyword.TRY, JSKeyword.TYPEOF, JSKeyword.VAR, JSKeyword.VOID, JSKeyword.WHILE, JSKeyword.WITH);
+    private static final Set<String> RESERVED_WORDS = Set.of(JSKeyword.BREAK, JSKeyword.CASE, JSKeyword.CATCH,
+            JSKeyword.CLASS, JSKeyword.CONST, JSKeyword.CONTINUE, JSKeyword.DEBUGGER, JSKeyword.DEFAULT,
+            JSKeyword.DELETE, JSKeyword.DO, JSKeyword.ELSE, JSKeyword.ENUM, JSKeyword.EXPORT, JSKeyword.EXTENDS,
+            JSKeyword.FALSE, JSKeyword.FINALLY, JSKeyword.FOR, JSKeyword.FUNCTION, JSKeyword.IF, JSKeyword.IMPORT,
+            JSKeyword.IN, JSKeyword.INSTANCEOF, JSKeyword.NEW, JSKeyword.NULL, JSKeyword.RETURN, JSKeyword.SUPER,
+            JSKeyword.SWITCH, JSKeyword.THIS, JSKeyword.THROW, JSKeyword.TRUE, JSKeyword.TRY, JSKeyword.TYPEOF,
+            JSKeyword.VAR, JSKeyword.VOID, JSKeyword.WHILE, JSKeyword.WITH);
 
-    private static final Set<String> STRICT_RESERVED_WORDS = Set.of(
-            JSKeyword.IMPLEMENTS, JSKeyword.INTERFACE, JSKeyword.LET, JSKeyword.PACKAGE, JSKeyword.PRIVATE, JSKeyword.PROTECTED,
-            JSKeyword.PUBLIC, JSKeyword.STATIC, JSKeyword.YIELD);
+    private static final Set<String> STRICT_RESERVED_WORDS = Set.of(JSKeyword.IMPLEMENTS, JSKeyword.INTERFACE,
+            JSKeyword.LET, JSKeyword.PACKAGE, JSKeyword.PRIVATE, JSKeyword.PROTECTED, JSKeyword.PUBLIC,
+            JSKeyword.STATIC, JSKeyword.YIELD);
 
     private final ParserDelegates delegates;
     private final ExpressionParser expressions;
@@ -48,37 +49,6 @@ final class ExpressionAssignmentParser {
         this.parserContext = parserContext;
         this.delegates = delegates;
         this.expressions = expressions;
-    }
-
-    /**
-     * Check that parameter BoundNames do not also appear in the LexicallyDeclaredNames of the body.
-     * Per spec: "It is a Syntax Error if BoundNames of FormalParameters also occurs in the
-     * LexicallyDeclaredNames of AsyncFunctionBody / ConciseBody."
-     */
-    static void validateFormalsBodyDuplicate(List<Pattern> params, RestParameter restParameter, List<Statement> body) {
-        Set<String> paramNames = new HashSet<>();
-        for (Pattern pattern : params) {
-            paramNames.addAll(pattern.getBoundNames());
-        }
-        if (restParameter != null) {
-            paramNames.addAll(restParameter.getArgument().getBoundNames());
-        }
-        if (paramNames.isEmpty()) {
-            return;
-        }
-        for (Statement statement : body) {
-            if (statement instanceof VariableDeclaration variableDeclaration
-                    && (variableDeclaration.getKind() == VariableKind.LET
-                    || variableDeclaration.getKind() == VariableKind.CONST)) {
-                for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                    for (String declaredName : declarator.getId().getBoundNames()) {
-                        if (paramNames.contains(declaredName)) {
-                            throw new JSSyntaxErrorException("invalid redefinition of parameter name");
-                        }
-                    }
-                }
-            }
-        }
     }
 
     private ArrayPattern convertArrowArrayExpressionToPattern(ArrayExpression arrayExpression) {
@@ -117,10 +87,11 @@ final class ExpressionAssignmentParser {
         if (expression instanceof AssignmentExpression assignmentExpression
                 && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
             Pattern leftPattern = convertArrowExpressionToPattern(assignmentExpression.getLeft());
-            return new AssignmentPattern(leftPattern, assignmentExpression.getRight(), assignmentExpression.getLocation());
+            return new AssignmentPattern(leftPattern, assignmentExpression.getRight(),
+                    assignmentExpression.getLocation());
         }
-        throw new JSSyntaxErrorException("Invalid arrow function parameter at line " +
-                parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
+        throw new JSSyntaxErrorException("Invalid arrow function parameter at line " + parserContext.currentToken.line()
+                + ", column " + parserContext.currentToken.column());
     }
 
     private ObjectPattern convertArrowObjectExpressionToPattern(ObjectExpression objectExpression) {
@@ -141,23 +112,21 @@ final class ExpressionAssignmentParser {
                 continue;
             }
             if (!"init".equals(property.getKind())) {
-                throw new JSSyntaxErrorException("Invalid arrow function parameter at line " +
-                        parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
+                throw new JSSyntaxErrorException("Invalid arrow function parameter at line "
+                        + parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
             }
             Expression propertyKey = property.getKey();
             boolean validNonComputedKey = propertyKey instanceof Identifier
-                    || (propertyKey instanceof Literal literal
-                    && (literal.getValue() instanceof String
-                    || literal.getValue() instanceof Integer
-                    || literal.getValue() instanceof Long
-                    || literal.getValue() instanceof Double
-                    || literal.getValue() instanceof Float));
+                    || (propertyKey instanceof Literal literal && (literal.getValue() instanceof String
+                            || literal.getValue() instanceof Integer || literal.getValue() instanceof Long
+                            || literal.getValue() instanceof Double || literal.getValue() instanceof Float));
             if (!property.isComputed() && !validNonComputedKey) {
-                throw new JSSyntaxErrorException("Invalid arrow function parameter at line " +
-                        parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
+                throw new JSSyntaxErrorException("Invalid arrow function parameter at line "
+                        + parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
             }
             Pattern valuePattern = convertArrowExpressionToPattern(property.getValue());
-            properties.add(new ObjectPatternProperty(propertyKey, valuePattern, property.isComputed(), property.isShorthand()));
+            properties.add(new ObjectPatternProperty(propertyKey, valuePattern, property.isComputed(),
+                    property.isShorthand()));
         }
         return new ObjectPattern(properties, restElement, objectExpression.getLocation());
     }
@@ -258,14 +227,9 @@ final class ExpressionAssignmentParser {
     }
 
     private boolean isAsyncArrowParameterIdentifierToken(TokenType tokenType) {
-        return tokenType == TokenType.IDENTIFIER
-                || tokenType == TokenType.ASYNC
-                || tokenType == TokenType.AWAIT
-                || tokenType == TokenType.YIELD
-                || tokenType == TokenType.FROM
-                || tokenType == TokenType.OF
-                || tokenType == TokenType.AS
-                || tokenType == TokenType.LET;
+        return tokenType == TokenType.IDENTIFIER || tokenType == TokenType.ASYNC || tokenType == TokenType.AWAIT
+                || tokenType == TokenType.YIELD || tokenType == TokenType.FROM || tokenType == TokenType.OF
+                || tokenType == TokenType.AS || tokenType == TokenType.LET;
     }
 
     private boolean isOptionalChainExpression(Expression expression) {
@@ -278,10 +242,7 @@ final class ExpressionAssignmentParser {
         return false;
     }
 
-    private void parseArrowParameterExpression(
-            Expression expression,
-            List<Pattern> params,
-            List<Expression> defaults) {
+    private void parseArrowParameterExpression(Expression expression, List<Pattern> params, List<Expression> defaults) {
         if (expression instanceof Identifier identifier) {
             params.add(identifier);
             defaults.add(null);
@@ -298,24 +259,22 @@ final class ExpressionAssignmentParser {
             parseDestructuringArrowParameter(expression, params, defaults);
             return;
         }
-        throw new JSSyntaxErrorException("Invalid arrow function parameter at line " +
-                parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
+        throw new JSSyntaxErrorException("Invalid arrow function parameter at line " + parserContext.currentToken.line()
+                + ", column " + parserContext.currentToken.column());
     }
 
     Expression parseAssignmentExpression() {
         SourceLocation location = parserContext.getLocation();
         // Save whether the current token is a direct identifier for fn-name inference (spec 13.15.2 step 1.c)
         TokenType startTokenType = parserContext.currentToken.type();
-        boolean lhsStartsWithIdentifier = startTokenType == TokenType.IDENTIFIER
-                || startTokenType == TokenType.ASYNC || startTokenType == TokenType.AWAIT
-                || startTokenType == TokenType.YIELD || startTokenType == TokenType.FROM
-                || startTokenType == TokenType.OF;
+        boolean lhsStartsWithIdentifier = startTokenType == TokenType.IDENTIFIER || startTokenType == TokenType.ASYNC
+                || startTokenType == TokenType.AWAIT || startTokenType == TokenType.YIELD
+                || startTokenType == TokenType.FROM || startTokenType == TokenType.OF;
 
         // ES2024 12.7.1: Escaped contextual keywords (e.g. \u0061sync) are IDENTIFIER tokens.
         // When escaped `async` precedes `function` on the same line, V8 gives
         // "Keyword must not contain escaped characters" rather than a generic parse error.
-        if (parserContext.match(TokenType.IDENTIFIER)
-                && parserContext.currentToken.escaped()
+        if (parserContext.match(TokenType.IDENTIFIER) && parserContext.currentToken.escaped()
                 && JSKeyword.ASYNC.equals(parserContext.currentToken.value())
                 && parserContext.nextToken.type() == TokenType.FUNCTION
                 && parserContext.nextToken.line() == parserContext.currentToken.line()) {
@@ -365,13 +324,10 @@ final class ExpressionAssignmentParser {
                         validateFormalsBodyDuplicate(List.of(param), null, blockBody.getBody());
                     }
 
-                    SourceLocation fullLocation = new SourceLocation(
-                            asyncLocation.line(),
-                            asyncLocation.column(),
-                            asyncLocation.offset(),
-                            parserContext.previousTokenEndOffset
-                    );
-                    return new ArrowFunctionExpression(new FunctionParams(List.of(param), null, null), body, true, fullLocation);
+                    SourceLocation fullLocation = new SourceLocation(asyncLocation.line(), asyncLocation.column(),
+                            asyncLocation.offset(), parserContext.previousTokenEndOffset);
+                    return new ArrowFunctionExpression(new FunctionParams(List.of(param), null, null), body, true,
+                            fullLocation);
                 }
 
                 if (parserContext.match(TokenType.LPAREN) && peekPastParensIsArrow()) {
@@ -393,15 +349,12 @@ final class ExpressionAssignmentParser {
                         // Async arrows have the same early errors as regular arrows (spec 15.8.1)
                         validateArrowParameters(funcParams, body);
                         if (body instanceof BlockStatement blockBody) {
-                            validateFormalsBodyDuplicate(funcParams.params(), funcParams.restParameter(), blockBody.getBody());
+                            validateFormalsBodyDuplicate(funcParams.params(), funcParams.restParameter(),
+                                    blockBody.getBody());
                         }
 
-                        SourceLocation fullLocation = new SourceLocation(
-                                location.line(),
-                                location.column(),
-                                location.offset(),
-                                parserContext.previousTokenEndOffset
-                        );
+                        SourceLocation fullLocation = new SourceLocation(location.line(), location.column(),
+                                location.offset(), parserContext.previousTokenEndOffset);
                         return new ArrowFunctionExpression(funcParams, body, true, fullLocation);
                     } finally {
                         parserContext.inClassStaticInit = savedInClassStaticInit;
@@ -438,14 +391,10 @@ final class ExpressionAssignmentParser {
                 if (delegate) {
                     // yield* requires an AssignmentExpression (no line terminator restriction)
                     argument = parseAssignmentExpression();
-                } else if (!parserContext.hasNewlineBefore()
-                        && !parserContext.match(TokenType.SEMICOLON)
-                        && !parserContext.match(TokenType.RBRACE)
-                        && !parserContext.match(TokenType.RBRACKET)
-                        && !parserContext.match(TokenType.RPAREN)
-                        && !parserContext.match(TokenType.TEMPLATE)
-                        && !parserContext.match(TokenType.COLON)
-                        && !parserContext.match(TokenType.COMMA)
+                } else if (!parserContext.hasNewlineBefore() && !parserContext.match(TokenType.SEMICOLON)
+                        && !parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.RBRACKET)
+                        && !parserContext.match(TokenType.RPAREN) && !parserContext.match(TokenType.TEMPLATE)
+                        && !parserContext.match(TokenType.COLON) && !parserContext.match(TokenType.COMMA)
                         && !parserContext.match(TokenType.EOF)) {
                     argument = parseAssignmentExpression();
                 }
@@ -472,11 +421,10 @@ final class ExpressionAssignmentParser {
                     && assignExpr.getLeft() instanceof Identifier paramId) {
                 params.add(paramId);
                 defaults.add(assignExpr.getRight());
-            } else if (left instanceof ObjectExpression
-                    || (left instanceof AssignmentExpression assignmentExpression
+            } else if (left instanceof ObjectExpression || (left instanceof AssignmentExpression assignmentExpression
                     && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN
                     && (assignmentExpression.getLeft() instanceof ObjectExpression
-                    || assignmentExpression.getLeft() instanceof ArrayExpression))) {
+                            || assignmentExpression.getLeft() instanceof ArrayExpression))) {
                 parseDestructuringArrowParameter(left, params, defaults);
             } else if (left instanceof SequenceExpression seqExpr) {
                 for (Expression expr : seqExpr.getExpressions()) {
@@ -502,8 +450,8 @@ final class ExpressionAssignmentParser {
                     }
                 }
             } else {
-                throw new JSSyntaxErrorException("Unsupported arrow function parameters at line " +
-                        parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
+                throw new JSSyntaxErrorException("Unsupported arrow function parameters at line "
+                        + parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
             }
 
             parserContext.advance();
@@ -524,21 +472,16 @@ final class ExpressionAssignmentParser {
             }
             validateArrowParameters(new FunctionParams(params, defaults, restParameter), body);
 
-            SourceLocation fullLocation = new SourceLocation(
-                    location.line(),
-                    location.column(),
-                    location.offset(),
-                    parserContext.previousTokenEndOffset
-            );
+            SourceLocation fullLocation = new SourceLocation(location.line(), location.column(), location.offset(),
+                    parserContext.previousTokenEndOffset);
 
-            return new ArrowFunctionExpression(new FunctionParams(params, defaults, restParameter), body, false, fullLocation);
+            return new ArrowFunctionExpression(new FunctionParams(params, defaults, restParameter), body, false,
+                    fullLocation);
         }
 
         if (parserContext.isAssignmentOperator(parserContext.currentToken.type())) {
-            if (!(left instanceof Identifier)
-                    && !(left instanceof MemberExpression)
-                    && !(left instanceof ArrayExpression)
-                    && !(left instanceof ObjectExpression)
+            if (!(left instanceof Identifier) && !(left instanceof MemberExpression)
+                    && !(left instanceof ArrayExpression) && !(left instanceof ObjectExpression)
                     && !(left instanceof CallExpression)) {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
             }
@@ -579,8 +522,7 @@ final class ExpressionAssignmentParser {
             parserContext.advance();
             Expression right = parseAssignmentExpression();
 
-            if (op == TokenType.ASSIGN
-                    && (left instanceof ArrayExpression || left instanceof ObjectExpression)) {
+            if (op == TokenType.ASSIGN && (left instanceof ArrayExpression || left instanceof ObjectExpression)) {
                 validateAssignmentPatternTarget(left, assignmentOperatorOffset);
             }
 
@@ -611,9 +553,7 @@ final class ExpressionAssignmentParser {
         return left;
     }
 
-    private void parseDestructuringArrowParameter(
-            Expression expression,
-            List<Pattern> params,
+    private void parseDestructuringArrowParameter(Expression expression, List<Pattern> params,
             List<Expression> defaults) {
         Pattern parameterPattern;
         Expression defaultExpression = null;
@@ -712,9 +652,7 @@ final class ExpressionAssignmentParser {
             }
             validateAssignmentPatternTarget(extractAssignmentTarget(elementExpression), assignmentOperatorOffset);
         }
-        if (seenRestElement
-                && !elements.isEmpty()
-                && elements.get(elements.size() - 1) instanceof SpreadElement
+        if (seenRestElement && !elements.isEmpty() && elements.get(elements.size() - 1) instanceof SpreadElement
                 && hasTrailingCommaAfterRestElement(arrayExpression, assignmentOperatorOffset)) {
             throw new JSSyntaxErrorException("Rest element must be last element");
         }
@@ -744,7 +682,8 @@ final class ExpressionAssignmentParser {
                 if (!seen.add(parameterName)) {
                     throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
                 }
-                if (strictParameters && (JSKeyword.EVAL.equals(parameterName) || JSKeyword.ARGUMENTS.equals(parameterName))) {
+                if (strictParameters
+                        && (JSKeyword.EVAL.equals(parameterName) || JSKeyword.ARGUMENTS.equals(parameterName))) {
                     throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
                 }
             }
@@ -761,7 +700,8 @@ final class ExpressionAssignmentParser {
             }
         }
         if (bodyHasUseStrict && functionParams.hasNonSimpleParameters()) {
-            throw new JSSyntaxErrorException("Illegal 'use strict' directive in function with non-simple parameter list");
+            throw new JSSyntaxErrorException(
+                    "Illegal 'use strict' directive in function with non-simple parameter list");
         }
     }
 
@@ -772,16 +712,15 @@ final class ExpressionAssignmentParser {
             }
         }
         if (expression instanceof Identifier identifier) {
-            if ("import.meta".equals(identifier.getName())
-                    || "new.target".equals(identifier.getName())
+            if ("import.meta".equals(identifier.getName()) || "new.target".equals(identifier.getName())
                     || JSKeyword.THIS.equals(identifier.getName())) {
                 throw new JSSyntaxErrorException("Invalid destructuring assignment target");
             }
             // Per spec: IdentifierReference cannot be a ReservedWord.
             // This catches shorthand properties like { break } or { def\u0061ult } in destructuring.
             validateBindingIdentifier(identifier.getName());
-            if (parserContext.strictMode
-                    && (JSKeyword.EVAL.equals(identifier.getName()) || JSKeyword.ARGUMENTS.equals(identifier.getName()))) {
+            if (parserContext.strictMode && (JSKeyword.EVAL.equals(identifier.getName())
+                    || JSKeyword.ARGUMENTS.equals(identifier.getName()))) {
                 throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
             }
             return;
@@ -832,7 +771,8 @@ final class ExpressionAssignmentParser {
         validateAssignmentPatternTarget(expression, assignmentBoundaryOffset);
     }
 
-    private void validateObjectAssignmentPatternTarget(ObjectExpression objectExpression, int assignmentOperatorOffset) {
+    private void validateObjectAssignmentPatternTarget(ObjectExpression objectExpression,
+            int assignmentOperatorOffset) {
         List<ObjectExpressionProperty> properties = objectExpression.getProperties();
         boolean seenRestElement = false;
         for (int propertyIndex = 0; propertyIndex < properties.size(); propertyIndex++) {
@@ -862,6 +802,37 @@ final class ExpressionAssignmentParser {
                 throw new JSSyntaxErrorException("Invalid destructuring assignment target");
             }
             validateAssignmentPatternTarget(extractAssignmentTarget(propertyValue), assignmentOperatorOffset);
+        }
+    }
+
+    /**
+     * Check that parameter BoundNames do not also appear in the LexicallyDeclaredNames of the body. Per spec: "It is a
+     * Syntax Error if BoundNames of FormalParameters also occurs in the LexicallyDeclaredNames of AsyncFunctionBody /
+     * ConciseBody."
+     */
+    static void validateFormalsBodyDuplicate(List<Pattern> params, RestParameter restParameter, List<Statement> body) {
+        Set<String> paramNames = new HashSet<>();
+        for (Pattern pattern : params) {
+            paramNames.addAll(pattern.getBoundNames());
+        }
+        if (restParameter != null) {
+            paramNames.addAll(restParameter.getArgument().getBoundNames());
+        }
+        if (paramNames.isEmpty()) {
+            return;
+        }
+        for (Statement statement : body) {
+            if (statement instanceof VariableDeclaration variableDeclaration
+                    && (variableDeclaration.getKind() == VariableKind.LET
+                            || variableDeclaration.getKind() == VariableKind.CONST)) {
+                for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                    for (String declaredName : declarator.getId().getBoundNames()) {
+                        if (paramNames.contains(declaredName)) {
+                            throw new JSSyntaxErrorException("invalid redefinition of parameter name");
+                        }
+                    }
+                }
+            }
         }
     }
 }

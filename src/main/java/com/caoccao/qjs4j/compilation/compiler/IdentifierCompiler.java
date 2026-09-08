@@ -26,8 +26,8 @@ import com.caoccao.qjs4j.vm.Opcode;
 import java.util.List;
 
 /**
- * Handles compilation of identifier expressions and with-scope-aware
- * identifier resolution for reads, calls, and deletes.
+ * Handles compilation of identifier expressions and with-scope-aware identifier resolution for reads, calls, and
+ * deletes.
  */
 final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
     IdentifierCompiler(CompilerContext compilerContext) {
@@ -107,7 +107,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
             // Emit SPECIAL_OBJECT opcode with type 0 (SPECIAL_OBJECT_ARGUMENTS)
             // The VM will handle differently for arrow vs regular functions
             compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-            compilerContext.emitter.emitU8(0);  // Type 0 = arguments object
+            compilerContext.emitter.emitU8(0); // Type 0 = arguments object
             return;
         }
 
@@ -122,10 +122,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         emitInheritedWithAwareDeleteIdentifier(name, withBindingNames, withDepth, false);
     }
 
-    void emitInheritedWithAwareDeleteIdentifier(
-            String name,
-            List<String> withBindingNames,
-            int withDepth,
+    void emitInheritedWithAwareDeleteIdentifier(String name, List<String> withBindingNames, int withDepth,
             boolean fallbackToFalse) {
         if (withDepth >= withBindingNames.size()) {
             if (fallbackToFalse) {
@@ -168,7 +165,8 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
                 () -> emitInheritedWithAwareIdentifierLookup(name, withBindingNames, withDepth + 1));
     }
 
-    private void emitInheritedWithAwareIdentifierLookupForCall(String name, List<String> withBindingNames, int withDepth) {
+    private void emitInheritedWithAwareIdentifierLookupForCall(String name, List<String> withBindingNames,
+            int withDepth) {
         if (withDepth >= withBindingNames.size()) {
             emitCapturedOrGlobalIdentifierLookup(name);
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
@@ -205,10 +203,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         emitWithAwareDeleteIdentifier(name, withObjectLocals, withDepth, false);
     }
 
-    void emitWithAwareDeleteIdentifier(
-            String name,
-            List<Integer> withObjectLocals,
-            int withDepth,
+    void emitWithAwareDeleteIdentifier(String name, List<Integer> withObjectLocals, int withDepth,
             boolean fallbackToFalse) {
         if (withDepth >= withObjectLocals.size()) {
             if (fallbackToFalse) {
@@ -239,8 +234,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
 
         int withObjectLocalIndex = withObjectLocals.get(withDepth);
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withObjectLocalIndex);
-        emitWithObjectLookup(name, false,
-                () -> emitWithAwareIdentifierLookup(name, withObjectLocals, withDepth + 1));
+        emitWithObjectLookup(name, false, () -> emitWithAwareIdentifierLookup(name, withObjectLocals, withDepth + 1));
     }
 
     void emitWithAwareIdentifierLookupForCall(String name) {
@@ -250,7 +244,8 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
             return;
         }
         if (!compilerContext.withObjectManager.getInheritedBindingNames().isEmpty()) {
-            emitInheritedWithAwareIdentifierLookupForCall(name, compilerContext.withObjectManager.getInheritedBindingNames(), 0);
+            emitInheritedWithAwareIdentifierLookupForCall(name,
+                    compilerContext.withObjectManager.getInheritedBindingNames(), 0);
             return;
         }
         emitIdentifierLookupWithoutWith(name);
@@ -279,8 +274,8 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
     }
 
     /**
-     * Resolve a delete against the with-object already on the stack.
-     * Stack: withObject -> boolean. The fallback starts with the with-object removed.
+     * Resolve a delete against the with-object already on the stack. Stack: withObject -> boolean. The fallback starts
+     * with the with-object removed.
      */
     private void emitWithObjectDelete(String name, Runnable emitFallback) {
         int jumpToFallback = emitWithHasPropertyAndJumpIfMissing(name);
@@ -316,10 +311,9 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
     }
 
     /**
-     * Resolve a read or call against the with-object already on the stack.
-     * Stack: withObject -> value (read), or value, withObject (call).
-     * GetBindingValue must repeat HasProperty after HasBinding and the unscopables
-     * check: proxy traps or getters may have removed the binding in between.
+     * Resolve a read or call against the with-object already on the stack. Stack: withObject -> value (read), or value,
+     * withObject (call). GetBindingValue must repeat HasProperty after HasBinding and the unscopables check: proxy
+     * traps or getters may have removed the binding in between.
      */
     private void emitWithObjectLookup(String name, boolean forCall, Runnable emitFallback) {
         int jumpToFallback = emitWithHasPropertyAndJumpIfMissing(name);

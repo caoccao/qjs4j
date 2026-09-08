@@ -19,8 +19,7 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Base sealed class for module-level items.
  */
-public abstract sealed class ModuleItem extends ASTNode permits
-        ImportDeclaration, ExportDeclaration {
+public abstract sealed class ModuleItem extends ASTNode permits ImportDeclaration, ExportDeclaration {
 
     protected ModuleItem(SourceLocation location) {
         super(location);

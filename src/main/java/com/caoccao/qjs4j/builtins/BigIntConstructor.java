@@ -23,14 +23,11 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 
 /**
- * Implementation of BigInt constructor and static methods.
- * Based on ES2020 BigInt specification.
+ * Implementation of BigInt constructor and static methods. Based on ES2020 BigInt specification.
  */
 public final class BigIntConstructor {
     /**
-     * BigInt.asIntN(bits, bigint)
-     * ES2020 20.2.2.1
-     * Wraps a BigInt value to a signed integer of the given bit width.
+     * BigInt.asIntN(bits, bigint) ES2020 20.2.2.1 Wraps a BigInt value to a signed integer of the given bit width.
      */
     public static JSValue asIntN(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue bitsArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -48,9 +45,7 @@ public final class BigIntConstructor {
     }
 
     /**
-     * BigInt.asUintN(bits, bigint)
-     * ES2020 20.2.2.2
-     * Wraps a BigInt value to an unsigned integer of the given bit width.
+     * BigInt.asUintN(bits, bigint) ES2020 20.2.2.2 Wraps a BigInt value to an unsigned integer of the given bit width.
      */
     public static JSValue asUintN(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue bitsArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -68,10 +63,8 @@ public final class BigIntConstructor {
     }
 
     /**
-     * BigInt(value)
-     * ES2020 20.2.1
-     * Creates a new BigInt value from a number or string.
-     * Note: BigInt cannot be called with new operator in ES2020.
+     * BigInt(value) ES2020 20.2.1 Creates a new BigInt value from a number or string. Note: BigInt cannot be called
+     * with new operator in ES2020.
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -95,8 +88,8 @@ public final class BigIntConstructor {
             double value = num.value();
             // Check if value is an integer
             if (value != Math.floor(value) || Double.isInfinite(value) || Double.isNaN(value)) {
-                return context.throwRangeError("The number " + num +
-                        " cannot be converted to a BigInt because it is not an integer");
+                return context.throwRangeError(
+                        "The number " + num + " cannot be converted to a BigInt because it is not an integer");
             }
             // Use BigDecimal for exact conversion to handle values outside long range
             BigInteger bigIntValue = new BigDecimal(value).toBigInteger();

@@ -19,23 +19,18 @@ package com.caoccao.qjs4j.compilation.ast;
 import java.util.List;
 
 /**
- * Template literal expression.
- * Represents template strings like `hello ${world}`.
+ * Template literal expression. Represents template strings like `hello ${world}`.
  *
  * <p>
- * Holds the cooked template element strings (the static parts; entries can be null in a tagged
- * template when an escape is invalid), the raw template element strings, the expressions to be
- * interpolated, and the source location.
+ * Holds the cooked template element strings (the static parts; entries can be null in a tagged template when an escape
+ * is invalid), the raw template element strings, the expressions to be interpolated, and the source location.
  */
 public final class TemplateLiteral extends Expression {
     private final List<Expression> expressions;
     private final List<String> quasis;
     private final List<String> rawQuasis;
 
-    public TemplateLiteral(
-            List<String> quasis,
-            List<String> rawQuasis,
-            List<Expression> expressions,
+    public TemplateLiteral(List<String> quasis, List<String> rawQuasis, List<Expression> expressions,
             SourceLocation location) {
         super(location);
         this.quasis = quasis;

@@ -19,22 +19,22 @@ package com.caoccao.qjs4j.core;
 /**
  * Represents a JavaScript Symbol object (wrapper) as opposed to a symbol primitive.
  * <p>
- * In JavaScript, there's a distinction between:
- * - Symbol primitives: {@code Symbol('foo')}, {@code Symbol.iterator}
- * - Symbol objects: {@code Object(Symbol('foo'))}, {@code Object(Symbol.iterator)}
+ * In JavaScript, there's a distinction between: - Symbol primitives: {@code Symbol('foo')}, {@code Symbol.iterator} -
+ * Symbol objects: {@code Object(Symbol('foo'))}, {@code Object(Symbol.iterator)}
  * <p>
- * This class represents the object form, which is necessary for use cases like {@link JSProxy Proxy},
- * since primitive symbol values cannot be used as Proxy targets. A primitive symbol value
- * is immutable and cannot have properties, so it cannot be wrapped by a Proxy. JSSymbolObject
- * provides an object wrapper that can be used with Proxy while maintaining the symbol value.
+ * This class represents the object form, which is necessary for use cases like {@link JSProxy Proxy}, since primitive
+ * symbol values cannot be used as Proxy targets. A primitive symbol value is immutable and cannot have properties, so
+ * it cannot be wrapped by a Proxy. JSSymbolObject provides an object wrapper that can be used with Proxy while
+ * maintaining the symbol value.
  * <p>
- * Note: In JavaScript, Symbol cannot be called with the new operator (it throws TypeError).
- * Symbol objects are created using {@code Object(symbolValue)}.
+ * Note: In JavaScript, Symbol cannot be called with the new operator (it throws TypeError). Symbol objects are created
+ * using {@code Object(symbolValue)}.
  * <p>
- * The wrapped symbol value is stored in the {@code [[PrimitiveValue]]} internal slot,
- * following the ECMAScript specification pattern for Symbol wrapper objects.
+ * The wrapped symbol value is stored in the {@code [[PrimitiveValue]]} internal slot, following the ECMAScript
+ * specification pattern for Symbol wrapper objects.
  * <p>
  * Example usage:
+ *
  * <pre>{@code
  * // Create a symbol object for use with Proxy
  * JSSymbol sym = new JSSymbol("foo");
@@ -55,18 +55,10 @@ public final class JSSymbolObject extends JSObject {
     private final JSSymbol value;
 
     /**
-     * Create a Symbol object wrapping the given string description.
-     *
-     * @param description the symbol description to wrap
-     */
-    public JSSymbolObject(JSContext context, String description) {
-        this(context, new JSSymbol(description));
-    }
-
-    /**
      * Create a Symbol object wrapping the given JSSymbol value.
      *
-     * @param value the JSSymbol value to wrap
+     * @param value
+     *            the JSSymbol value to wrap
      */
     public JSSymbolObject(JSContext context, JSSymbol value) {
         super(context);
@@ -74,8 +66,14 @@ public final class JSSymbolObject extends JSObject {
         this.setPrimitiveValue(value);
     }
 
-    public static JSObject create(JSContext context, JSValue... args) {
-        return context.throwTypeError("Symbol is not a constructor");
+    /**
+     * Create a Symbol object wrapping the given string description.
+     *
+     * @param description
+     *            the symbol description to wrap
+     */
+    public JSSymbolObject(JSContext context, String description) {
+        this(context, new JSSymbol(description));
     }
 
     /**
@@ -100,5 +98,9 @@ public final class JSSymbolObject extends JSObject {
             return "Symbol()";
         }
         return "Symbol(" + desc + ")";
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        return context.throwTypeError("Symbol is not a constructor");
     }
 }

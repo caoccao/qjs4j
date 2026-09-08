@@ -22,26 +22,20 @@ import java.util.HashSet;
 import java.util.List;
 
 /**
- * A deferred module namespace proxy that lazily evaluates the module
- * on first property access. Implements the [[Get]], [[Has]], etc.
- * internal methods per the import-defer specification.
+ * A deferred module namespace proxy that lazily evaluates the module on first property access. Implements the [[Get]],
+ * [[Has]], etc. internal methods per the import-defer specification.
  */
 final class JSDeferredModuleNamespace extends JSObject {
     private final JSContext context;
     private final JSDynamicImportModule moduleRecord;
 
-    JSDeferredModuleNamespace(
-            JSContext context,
-            JSDynamicImportModule moduleRecord) {
+    JSDeferredModuleNamespace(JSContext context, JSDynamicImportModule moduleRecord) {
         super(context);
         this.context = context;
         this.moduleRecord = moduleRecord;
         setPrototype(null);
-        definePropertyInternal(
-                PropertyKey.SYMBOL_TO_STRING_TAG,
-                PropertyDescriptor.dataDescriptor(
-                        new JSString("Deferred Module"),
-                        PropertyDescriptor.DataState.None));
+        definePropertyInternal(PropertyKey.SYMBOL_TO_STRING_TAG,
+                PropertyDescriptor.dataDescriptor(new JSString("Deferred Module"), PropertyDescriptor.DataState.None));
         super.preventExtensions();
     }
 
@@ -77,8 +71,8 @@ final class JSDeferredModuleNamespace extends JSObject {
         }
         if (moduleRecord.status() == JSDynamicImportModule.Status.EVALUATING
                 || moduleRecord.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC) {
-            throw new JSException(context.throwTypeError(
-                    "Cannot access deferred namespace of a module that is currently being evaluated"));
+            throw new JSException(context
+                    .throwTypeError("Cannot access deferred namespace of a module that is currently being evaluated"));
         }
         if (moduleRecord.status() != JSDynamicImportModule.Status.EVALUATED) {
             if (!context.readyForSyncExecution(moduleRecord.resolvedSpecifier(), new HashSet<>())) {
@@ -195,10 +189,11 @@ final class JSDeferredModuleNamespace extends JSObject {
     }
 
     /**
-     * Reading a non-symbol key evaluates the deferred module, so this object decides the lookup
-     * itself and must be dispatched to when it appears in a prototype chain.
+     * Reading a non-symbol key evaluates the deferred module, so this object decides the lookup itself and must be
+     * dispatched to when it appears in a prototype chain.
      *
-     * @param key the property being looked up
+     * @param key
+     *            the property being looked up
      * @return true unless the key is one of the namespace's own symbol-like keys
      */
     @Override
@@ -244,9 +239,8 @@ final class JSDeferredModuleNamespace extends JSObject {
             (callerContext != null ? callerContext : this.context).setPendingException(errorValue);
         } else {
             JSContext context = callerContext != null ? callerContext : this.context;
-            context.setPendingException(
-                    context.throwError(
-                            jsException.getMessage() != null ? jsException.getMessage() : "Module evaluation error"));
+            context.setPendingException(context.throwError(
+                    jsException.getMessage() != null ? jsException.getMessage() : "Module evaluation error"));
         }
     }
 
@@ -261,18 +255,19 @@ final class JSDeferredModuleNamespace extends JSObject {
     @Override
     public boolean setWithReceiverAndException(PropertyKey key, JSValue value, JSObject receiver) {
         if (context.isStrictMode()) {
-            context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString() + "' of [object Module]");
+            context.throwTypeError(
+                    "Cannot assign to read only property '" + key.toPropertyString() + "' of [object Module]");
         }
         return false;
     }
 
     @Override
-    public boolean setWithResult(PropertyKey key, JSValue value, JSObject receiver) {
+    public boolean setWithResult(PropertyKey key, JSValue value) {
         return false;
     }
 
     @Override
-    public boolean setWithResult(PropertyKey key, JSValue value) {
+    public boolean setWithResult(PropertyKey key, JSValue value, JSObject receiver) {
         return false;
     }
 }

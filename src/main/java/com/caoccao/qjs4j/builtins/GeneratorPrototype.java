@@ -22,8 +22,7 @@ import com.caoccao.qjs4j.core.JSUndefined;
 import com.caoccao.qjs4j.core.JSValue;
 
 /**
- * Generator.prototype methods.
- * Based on QuickJS js_generator_next (js_generator_proto_funcs).
+ * Generator.prototype methods. Based on QuickJS js_generator_next (js_generator_proto_funcs).
  */
 public final class GeneratorPrototype {
     private GeneratorPrototype() {

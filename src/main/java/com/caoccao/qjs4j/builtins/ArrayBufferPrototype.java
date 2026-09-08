@@ -23,15 +23,12 @@ import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import java.nio.ByteBuffer;
 
 /**
- * Implementation of ArrayBuffer.prototype methods.
- * Based on ES2020 ArrayBuffer specification.
+ * Implementation of ArrayBuffer.prototype methods. Based on ES2020 ArrayBuffer specification.
  */
 public final class ArrayBufferPrototype {
 
     /**
-     * get ArrayBuffer.prototype.byteLength
-     * ES2020 24.1.4.1
-     * Returns the byte length of the buffer.
+     * get ArrayBuffer.prototype.byteLength ES2020 24.1.4.1 Returns the byte length of the buffer.
      */
     public static JSValue getByteLength(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSArrayBuffer buffer)) {
@@ -42,9 +39,7 @@ public final class ArrayBufferPrototype {
     }
 
     /**
-     * get ArrayBuffer.prototype.detached
-     * ES2024 25.1.5.1
-     * Returns true if the ArrayBuffer has been detached.
+     * get ArrayBuffer.prototype.detached ES2024 25.1.5.1 Returns true if the ArrayBuffer has been detached.
      */
     public static JSValue getDetached(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSArrayBuffer buffer)) {
@@ -55,9 +50,8 @@ public final class ArrayBufferPrototype {
     }
 
     /**
-     * get ArrayBuffer.prototype.immutable
-     * ES2025 immutable ArrayBuffer proposal.
-     * Returns true if the ArrayBuffer is immutable.
+     * get ArrayBuffer.prototype.immutable ES2025 immutable ArrayBuffer proposal. Returns true if the ArrayBuffer is
+     * immutable.
      */
     public static JSValue getImmutable(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSArrayBuffer buffer)) {
@@ -68,9 +62,8 @@ public final class ArrayBufferPrototype {
     }
 
     /**
-     * get ArrayBuffer.prototype.maxByteLength
-     * ES2024 25.1.5.2
-     * Returns the maximum byte length that the ArrayBuffer can be resized to.
+     * get ArrayBuffer.prototype.maxByteLength ES2024 25.1.5.2 Returns the maximum byte length that the ArrayBuffer can
+     * be resized to.
      */
     public static JSValue getMaxByteLength(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSArrayBuffer buffer)) {
@@ -86,9 +79,7 @@ public final class ArrayBufferPrototype {
     }
 
     /**
-     * get ArrayBuffer.prototype.resizable
-     * ES2024 25.1.5.3
-     * Returns true if the ArrayBuffer can be resized.
+     * get ArrayBuffer.prototype.resizable ES2024 25.1.5.3 Returns true if the ArrayBuffer can be resized.
      */
     public static JSValue getResizable(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSArrayBuffer buffer)) {
@@ -99,18 +90,15 @@ public final class ArrayBufferPrototype {
     }
 
     /**
-     * get ArrayBuffer.prototype[@@toStringTag]
-     * ES2020 24.1.4.4
-     * Returns "ArrayBuffer".
+     * get ArrayBuffer.prototype[@@toStringTag] ES2020 24.1.4.4 Returns "ArrayBuffer".
      */
     public static JSValue getToStringTag(JSContext context, JSValue thisArg, JSValue[] args) {
         return new JSString(JSArrayBuffer.NAME);
     }
 
     /**
-     * ArrayBuffer.prototype.resize(newByteLength)
-     * ES2024 25.1.5.4
-     * Resizes the ArrayBuffer to the specified size, in bytes.
+     * ArrayBuffer.prototype.resize(newByteLength) ES2024 25.1.5.4 Resizes the ArrayBuffer to the specified size, in
+     * bytes.
      */
     public static JSValue resize(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSArrayBuffer buffer)) {
@@ -119,7 +107,8 @@ public final class ArrayBufferPrototype {
 
         // Step 2: RequireInternalSlot(O, [[ArrayBufferMaxByteLength]]) - check resizable
         if (!buffer.isResizable()) {
-            return context.throwTypeError("Method ArrayBuffer.prototype.resize called on incompatible receiver #<ArrayBuffer>");
+            return context.throwTypeError(
+                    "Method ArrayBuffer.prototype.resize called on incompatible receiver #<ArrayBuffer>");
         }
 
         // Step 4: Let newByteLength be ? ToIndex(newLength) - may trigger valueOf which could detach
@@ -155,9 +144,7 @@ public final class ArrayBufferPrototype {
     }
 
     /**
-     * ArrayBuffer.prototype.slice(begin, end)
-     * ES2020 24.1.4.3
-     * Returns a new ArrayBuffer with a copy of bytes.
+     * ArrayBuffer.prototype.slice(begin, end) ES2020 24.1.4.3 Returns a new ArrayBuffer with a copy of bytes.
      */
     public static JSValue slice(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSArrayBuffer buffer)) {
@@ -257,10 +244,8 @@ public final class ArrayBufferPrototype {
     }
 
     /**
-     * SpeciesConstructor(O, defaultConstructor) per ES2020 7.3.20.
-     * Returns JSUndefined.INSTANCE to use the default constructor,
-     * or the species constructor function.
-     * Sets pending exception on error.
+     * SpeciesConstructor(O, defaultConstructor) per ES2020 7.3.20. Returns JSUndefined.INSTANCE to use the default
+     * constructor, or the species constructor function. Sets pending exception on error.
      */
     private static JSValue speciesConstructor(JSContext context, JSObject obj) {
         JSValue ctor = obj.get(PropertyKey.CONSTRUCTOR);
@@ -289,9 +274,8 @@ public final class ArrayBufferPrototype {
     }
 
     /**
-     * ArrayBuffer.prototype.transfer([newByteLength])
-     * ES2024 25.1.5.4
-     * Creates a new ArrayBuffer with the same byte content as this buffer, then detaches this buffer.
+     * ArrayBuffer.prototype.transfer([newByteLength]) ES2024 25.1.5.4 Creates a new ArrayBuffer with the same byte
+     * content as this buffer, then detaches this buffer.
      */
     public static JSValue transfer(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSArrayBuffer buffer)) {
@@ -337,9 +321,8 @@ public final class ArrayBufferPrototype {
     }
 
     /**
-     * ArrayBuffer.prototype.transferToFixedLength([newByteLength])
-     * ES2024 25.1.5.5
-     * Creates a new non-resizable ArrayBuffer with the same byte content as this buffer, then detaches this buffer.
+     * ArrayBuffer.prototype.transferToFixedLength([newByteLength]) ES2024 25.1.5.5 Creates a new non-resizable
+     * ArrayBuffer with the same byte content as this buffer, then detaches this buffer.
      */
     public static JSValue transferToFixedLength(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSArrayBuffer buffer)) {
@@ -362,7 +345,8 @@ public final class ArrayBufferPrototype {
         }
 
         if (buffer.isDetached()) {
-            return context.throwTypeError("Cannot perform ArrayBuffer.prototype.transferToFixedLength on a detached ArrayBuffer");
+            return context.throwTypeError(
+                    "Cannot perform ArrayBuffer.prototype.transferToFixedLength on a detached ArrayBuffer");
         }
 
         // Step 6: If IsImmutableBuffer(arrayBuffer) is true, throw a TypeError
@@ -385,8 +369,8 @@ public final class ArrayBufferPrototype {
     }
 
     /**
-     * ArrayBuffer.prototype.transferToImmutable()
-     * ES2025 - Creates a new immutable ArrayBuffer with the same byte content, then detaches this buffer.
+     * ArrayBuffer.prototype.transferToImmutable() ES2025 - Creates a new immutable ArrayBuffer with the same byte
+     * content, then detaches this buffer.
      */
     public static JSValue transferToImmutable(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSArrayBuffer buffer)) {

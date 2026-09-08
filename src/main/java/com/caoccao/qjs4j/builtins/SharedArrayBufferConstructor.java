@@ -21,14 +21,12 @@ import com.caoccao.qjs4j.core.JSSharedArrayBuffer;
 import com.caoccao.qjs4j.core.JSValue;
 
 /**
- * SharedArrayBuffer constructor implementation.
- * Based on ES2017 SharedArrayBuffer specification.
+ * SharedArrayBuffer constructor implementation. Based on ES2017 SharedArrayBuffer specification.
  */
 public final class SharedArrayBufferConstructor {
 
     /**
-     * SharedArrayBuffer constructor call/new.
-     * Delegates to JSSharedArrayBuffer.create().
+     * SharedArrayBuffer constructor call/new. Delegates to JSSharedArrayBuffer.create().
      * <p>
      * Based on ES2017 24.2.1.1
      */
@@ -37,8 +35,7 @@ public final class SharedArrayBufferConstructor {
     }
 
     /**
-     * get SharedArrayBuffer[@@species]
-     * ES2024 SharedArrayBuffer constructor species getter.
+     * get SharedArrayBuffer[@@species] ES2024 SharedArrayBuffer constructor species getter.
      */
     public static JSValue getSpecies(JSContext context, JSValue thisArg, JSValue[] args) {
         return thisArg;

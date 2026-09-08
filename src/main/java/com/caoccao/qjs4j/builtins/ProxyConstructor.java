@@ -19,20 +19,20 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 /**
- * Implementation of the Proxy constructor.
- * Based on ES2020 Proxy specification (simplified).
- * The Proxy constructor creates a Proxy object that wraps a target object
- * and allows intercepting operations on it via handler traps.
+ * Implementation of the Proxy constructor. Based on ES2020 Proxy specification (simplified). The Proxy constructor
+ * creates a Proxy object that wraps a target object and allows intercepting operations on it via handler traps.
  */
 public final class ProxyConstructor {
 
     /**
-     * Proxy constructor call handler.
-     * Creates a new Proxy object.
+     * Proxy constructor call handler. Creates a new Proxy object.
      *
-     * @param context The execution context
-     * @param thisArg The this value (unused for constructor)
-     * @param args    The arguments array (target and handler)
+     * @param context
+     *            The execution context
+     * @param thisArg
+     *            The this value (unused for constructor)
+     * @param args
+     *            The arguments array (target and handler)
      * @return New Proxy object
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -40,10 +40,8 @@ public final class ProxyConstructor {
     }
 
     /**
-     * Proxy.revocable(target, handler)
-     * ES2020 26.2.2.1
-     * Creates a revocable proxy object.
-     * Returns an object with a proxy and a revoke function.
+     * Proxy.revocable(target, handler) ES2020 26.2.2.1 Creates a revocable proxy object. Returns an object with a proxy
+     * and a revoke function.
      */
     public static JSValue revocable(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 2) {

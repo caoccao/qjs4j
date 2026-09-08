@@ -17,17 +17,16 @@
 package com.caoccao.qjs4j.core;
 
 /**
- * Represents a JavaScript Iterator object.
- * Based on ES2020 Iterator protocol.
+ * Represents a JavaScript Iterator object. Based on ES2020 Iterator protocol.
  * <p>
- * An iterator is an object that implements the iterator protocol by having a next() method
- * that returns an object with two properties: value and done.
+ * An iterator is an object that implements the iterator protocol by having a next() method that returns an object with
+ * two properties: value and done.
  */
 public class JSIterator extends JSObject {
     public static final String NAME = "Iterator";
     private final JSContext context;
-    private final IteratorFunction iteratorFunction;
     private boolean exhausted;
+    private final IteratorFunction iteratorFunction;
 
     /**
      * Create an iterator with the given iteration logic.
@@ -74,15 +73,36 @@ public class JSIterator extends JSObject {
         }
 
         // Make the iterator iterable by adding [Symbol.iterator] method
-        JSNativeFunction iteratorMethod = new JSNativeFunction(context, "@@iterator", 0, (childContext, thisArg, args) -> thisArg);
-        defineProperty(PropertyKey.fromSymbol(JSSymbol.ITERATOR), iteratorMethod, PropertyDescriptor.DataState.ConfigurableWritable);
+        JSNativeFunction iteratorMethod = new JSNativeFunction(context, "@@iterator", 0,
+                (childContext, thisArg, args) -> thisArg);
+        defineProperty(PropertyKey.fromSymbol(JSSymbol.ITERATOR), iteratorMethod,
+                PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Only set own toStringTag if no shared prototype provides it
         if (toStringTag != null && iterProto == null) {
-            defineProperty(
-                    PropertyKey.SYMBOL_TO_STRING_TAG,
-                    PropertyDescriptor.dataDescriptor(new JSString(toStringTag), PropertyDescriptor.DataState.Configurable));
+            defineProperty(PropertyKey.SYMBOL_TO_STRING_TAG, PropertyDescriptor
+                    .dataDescriptor(new JSString(toStringTag), PropertyDescriptor.DataState.Configurable));
         }
+    }
+
+    /**
+     * Get the next value in the iteration. Returns an object with 'value' and 'done' properties.
+     */
+    public JSObject next() {
+        if (exhausted) {
+            return IteratorResult.done(context).toObject();
+        }
+
+        IteratorResult result = iteratorFunction.next();
+        if (result.done) {
+            exhausted = true;
+        }
+        return result.toObject();
+    }
+
+    @Override
+    public String toString() {
+        return "[object Iterator]";
     }
 
     /**
@@ -145,8 +165,7 @@ public class JSIterator extends JSObject {
     }
 
     /**
-     * Create a Set entries iterator.
-     * Returns [value, value] pairs (Set uses value twice for consistency with Map).
+     * Create a Set entries iterator. Returns [value, value] pairs (Set uses value twice for consistency with Map).
      */
     public static JSIterator setEntriesIterator(JSContext context, JSSet set) {
         final JSSet.IterationCursor cursor = set.createIterationCursor();
@@ -195,27 +214,6 @@ public class JSIterator extends JSObject {
     }
 
     /**
-     * Get the next value in the iteration.
-     * Returns an object with 'value' and 'done' properties.
-     */
-    public JSObject next() {
-        if (exhausted) {
-            return IteratorResult.done(context).toObject();
-        }
-
-        IteratorResult result = iteratorFunction.next();
-        if (result.done) {
-            exhausted = true;
-        }
-        return result.toObject();
-    }
-
-    @Override
-    public String toString() {
-        return "[object Iterator]";
-    }
-
-    /**
      * Functional interface for iterator logic.
      */
     @FunctionalInterface
@@ -233,14 +231,22 @@ public class JSIterator extends JSObject {
      */
     public static class IteratorResult {
         private static final PropertyKey[] RESULT_KEYS = {PropertyKey.VALUE, PropertyKey.DONE};
+        private final JSContext context;
         public final boolean done;
         public final JSValue value;
-        private final JSContext context;
 
         public IteratorResult(JSContext context, JSValue value, boolean done) {
             this.context = context;
             this.value = value;
             this.done = done;
+        }
+
+        public JSObject toObject() {
+            JSValue doneValue = JSBoolean.valueOf(done);
+            JSObject obj = context.createJSObject();
+            obj.initProperties(RESULT_KEYS.clone(), new PropertyDescriptor[]{PropertyDescriptor.defaultData(value),
+                    PropertyDescriptor.defaultData(doneValue)}, new JSValue[]{value, doneValue});
+            return obj;
         }
 
         public static IteratorResult done(JSContext context) {
@@ -249,20 +255,6 @@ public class JSIterator extends JSObject {
 
         public static IteratorResult of(JSContext context, JSValue value) {
             return new IteratorResult(context, value, false);
-        }
-
-        public JSObject toObject() {
-            JSValue doneValue = JSBoolean.valueOf(done);
-            JSObject obj = context.createJSObject();
-            obj.initProperties(
-                    RESULT_KEYS.clone(),
-                    new PropertyDescriptor[]{
-                            PropertyDescriptor.defaultData(value),
-                            PropertyDescriptor.defaultData(doneValue)
-                    },
-                    new JSValue[]{value, doneValue}
-            );
-            return obj;
         }
     }
 }

@@ -22,15 +22,23 @@ package com.caoccao.qjs4j.core.temporal;
  * Controls how a calendar annotation is rendered in {@code toString()} output.
  */
 public enum TemporalDisplayCalendar {
-    AUTO("auto"),
-    ALWAYS("always"),
-    NEVER("never"),
-    CRITICAL("critical");
+    ALWAYS("always"), AUTO("auto"), CRITICAL("critical"), NEVER("never");
 
     private final String jsName;
 
     TemporalDisplayCalendar(String jsName) {
         this.jsName = jsName;
+    }
+
+    /**
+     * Returns the JS-canonical name (e.g. "auto").
+     */
+    public String jsName() {
+        return jsName;
+    }
+
+    public boolean requiresAnnotation() {
+        return this == ALWAYS || this == CRITICAL;
     }
 
     /**
@@ -47,16 +55,5 @@ public enum TemporalDisplayCalendar {
             case "critical" -> CRITICAL;
             default -> null;
         };
-    }
-
-    /**
-     * Returns the JS-canonical name (e.g. "auto").
-     */
-    public String jsName() {
-        return jsName;
-    }
-
-    public boolean requiresAnnotation() {
-        return this == ALWAYS || this == CRITICAL;
     }
 }

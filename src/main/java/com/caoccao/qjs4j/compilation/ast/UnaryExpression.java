@@ -20,16 +20,12 @@ package com.caoccao.qjs4j.compilation.ast;
  * Represents a unary expression.
  */
 public final class UnaryExpression extends Expression {
+    private Boolean directEvalVarArgumentsInside;
     private final Expression operand;
     private final UnaryOperator operator;
     private final boolean prefix;
-    private Boolean directEvalVarArgumentsInside;
 
-    public UnaryExpression(
-            UnaryOperator operator,
-            Expression operand,
-            boolean prefix,
-            SourceLocation location) {
+    public UnaryExpression(UnaryOperator operator, Expression operand, boolean prefix, SourceLocation location) {
         super(location);
         this.operator = operator;
         this.operand = operand;
@@ -74,6 +70,6 @@ public final class UnaryExpression extends Expression {
     }
 
     public enum UnaryOperator {
-        PLUS, MINUS, NOT, BIT_NOT, TYPEOF, VOID, DELETE, INC, DEC
+        BIT_NOT, DEC, DELETE, INC, MINUS, NOT, PLUS, TYPEOF, VOID
     }
 }

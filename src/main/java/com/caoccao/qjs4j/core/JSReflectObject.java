@@ -20,16 +20,14 @@ import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.exceptions.JSException;
 
 /**
- * Implementation of Reflect object static methods.
- * Based on ES2020 Reflect specification.
- * The Reflect object provides methods for interceptable JavaScript operations.
+ * Implementation of Reflect object static methods. Based on ES2020 Reflect specification. The Reflect object provides
+ * methods for interceptable JavaScript operations.
  */
 public final class JSReflectObject {
 
     /**
-     * Reflect.apply(target, thisArg, argumentsList)
-     * ES2020 26.1.1
-     * Calls a target function with specified this value and arguments.
+     * Reflect.apply(target, thisArg, argumentsList) ES2020 26.1.1 Calls a target function with specified this value and
+     * arguments.
      */
     public static JSValue apply(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !JSTypeChecking.isFunction(args[0])) {
@@ -81,9 +79,8 @@ public final class JSReflectObject {
     }
 
     /**
-     * Reflect.construct(target, argumentsList, newTarget)
-     * ES2020 26.1.2
-     * Acts like the 'new' operator, but as a function.
+     * Reflect.construct(target, argumentsList, newTarget) ES2020 26.1.2 Acts like the 'new' operator, but as a
+     * function.
      */
     public static JSValue construct(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !JSTypeChecking.isConstructor(args[0])) {
@@ -104,12 +101,8 @@ public final class JSReflectObject {
         return constructFunction(context, args[0], constructorArgs, newTarget);
     }
 
-    private static JSValue constructDynamicFunction(
-            JSContext context,
-            JSFunction function,
-            JSNativeFunction nativeFunction,
-            JSValue[] args,
-            JSValue newTarget) {
+    private static JSValue constructDynamicFunction(JSContext context, JSFunction function,
+            JSNativeFunction nativeFunction, JSValue[] args, JSValue newTarget) {
         JSContext constructorContext = function.getRealmContext() != null ? function.getRealmContext() : context;
         JSValue savedNewTarget = context.getConstructorNewTarget();
         JSValue savedConstructorContextNewTarget = null;
@@ -174,8 +167,7 @@ public final class JSReflectObject {
             JSObject thisObject = new JSObject(context);
             String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
             if (newTarget instanceof JSObject newTargetObject) {
-                JSObject resolvedPrototype = context.getPrototypeFromConstructor(
-                        newTargetObject,
+                JSObject resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject,
                         intrinsicDefaultPrototypeName);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
@@ -184,7 +176,8 @@ public final class JSReflectObject {
                     thisObject.setPrototype(resolvedPrototype);
                 }
             } else {
-                JSObject resolvedPrototype = context.getPrototypeFromConstructor(function, intrinsicDefaultPrototypeName);
+                JSObject resolvedPrototype = context.getPrototypeFromConstructor(function,
+                        intrinsicDefaultPrototypeName);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -194,8 +187,7 @@ public final class JSReflectObject {
             }
 
             // Check if this is a derived constructor
-            boolean isDerived = function instanceof JSBytecodeFunction bcFunc
-                    && bcFunc.isDerivedConstructor();
+            boolean isDerived = function instanceof JSBytecodeFunction bcFunc && bcFunc.isDerivedConstructor();
             // For derived constructors, use JSUndefined as initial this
             // (this must be initialized by super() call)
             JSValue constructThis = isDerived ? JSUndefined.INSTANCE : thisObject;
@@ -216,7 +208,8 @@ public final class JSReflectObject {
                     constructorContext.setNativeConstructorNewTarget(newTarget);
                     result = nativeFunc.call(context, constructThis, args);
                 } else if (function instanceof JSBytecodeFunction bytecodeFunction) {
-                    result = constructorContext.getVirtualMachine().execute(bytecodeFunction, constructThis, args, newTarget);
+                    result = constructorContext.getVirtualMachine().execute(bytecodeFunction, constructThis, args,
+                            newTarget);
                 } else {
                     result = function.call(constructorContext, constructThis, args);
                 }
@@ -274,8 +267,7 @@ public final class JSReflectObject {
             JSObject resolvedPrototype = null;
             if (newTarget instanceof JSObject newTargetObject) {
                 String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
-                resolvedPrototype = context.getPrototypeFromConstructor(
-                        newTargetObject, intrinsicDefaultPrototypeName);
+                resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject, intrinsicDefaultPrototypeName);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -326,9 +318,7 @@ public final class JSReflectObject {
         if (isTypedArrayConstructor && args.length > 0 && args[0] instanceof IJSArrayBuffer) {
             if (newTarget instanceof JSObject newTargetObject) {
                 String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
-                resolvedPrototype = context.getPrototypeFromConstructor(
-                        newTargetObject,
-                        intrinsicDefaultPrototypeName);
+                resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject, intrinsicDefaultPrototypeName);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -351,8 +341,7 @@ public final class JSReflectObject {
                 // resolve prototype after argument processing.
                 if (newTarget instanceof JSObject newTargetObject) {
                     String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
-                    resolvedPrototype = context.getPrototypeFromConstructor(
-                            newTargetObject,
+                    resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject,
                             intrinsicDefaultPrototypeName);
                     if (context.hasPendingException()) {
                         return context.getPendingException();
@@ -362,8 +351,7 @@ public final class JSReflectObject {
                 // TypedArray with non-buffer arg: resolve prototype after argument processing
                 if (newTarget instanceof JSObject newTargetObject) {
                     String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
-                    resolvedPrototype = context.getPrototypeFromConstructor(
-                            newTargetObject,
+                    resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject,
                             intrinsicDefaultPrototypeName);
                     if (context.hasPendingException()) {
                         return context.getPendingException();
@@ -383,16 +371,14 @@ public final class JSReflectObject {
     }
 
     /**
-     * Construct a value using the given target as both constructor and newTarget.
-     * Equivalent to `new target(...args)`.
+     * Construct a value using the given target as both constructor and newTarget. Equivalent to `new target(...args)`.
      */
     public static JSValue constructSimple(JSContext context, JSValue target, JSValue[] args) {
         return constructFunction(context, target, args, target);
     }
 
     /**
-     * Reflect.defineProperty(target, propertyKey, attributes)
-     * ES2020 26.1.3
+     * Reflect.defineProperty(target, propertyKey, attributes) ES2020 26.1.3
      */
     public static JSValue defineProperty(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
@@ -420,9 +406,8 @@ public final class JSReflectObject {
     }
 
     /**
-     * Reflect.deleteProperty(target, propertyKey)
-     * ES2020 26.1.4
-     * Deletes a property from an object (like the 'delete' operator).
+     * Reflect.deleteProperty(target, propertyKey) ES2020 26.1.4 Deletes a property from an object (like the 'delete'
+     * operator).
      */
     public static JSValue deleteProperty(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
@@ -454,11 +439,14 @@ public final class JSReflectObject {
         JSObject descriptorObject = context.createJSObject();
 
         if (descriptor.isDataDescriptor()) {
-            descriptorObject.set(PropertyKey.VALUE, descriptor.getValue() != null ? descriptor.getValue() : JSUndefined.INSTANCE);
+            descriptorObject.set(PropertyKey.VALUE,
+                    descriptor.getValue() != null ? descriptor.getValue() : JSUndefined.INSTANCE);
             descriptorObject.set(PropertyKey.WRITABLE, JSBoolean.valueOf(descriptor.isWritable()));
         } else if (descriptor.isAccessorDescriptor()) {
-            descriptorObject.set(PropertyKey.GET, descriptor.getGetter() != null ? descriptor.getGetter() : JSUndefined.INSTANCE);
-            descriptorObject.set(PropertyKey.SET, descriptor.getSetter() != null ? descriptor.getSetter() : JSUndefined.INSTANCE);
+            descriptorObject.set(PropertyKey.GET,
+                    descriptor.getGetter() != null ? descriptor.getGetter() : JSUndefined.INSTANCE);
+            descriptorObject.set(PropertyKey.SET,
+                    descriptor.getSetter() != null ? descriptor.getSetter() : JSUndefined.INSTANCE);
         }
 
         descriptorObject.set(PropertyKey.ENUMERABLE, JSBoolean.valueOf(descriptor.isEnumerable()));
@@ -467,9 +455,7 @@ public final class JSReflectObject {
     }
 
     /**
-     * Reflect.get(target, propertyKey, receiver)
-     * ES2020 26.1.6
-     * Gets the value of a property on an object.
+     * Reflect.get(target, propertyKey, receiver) ES2020 26.1.6 Gets the value of a property on an object.
      */
     public static JSValue get(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
@@ -485,10 +471,8 @@ public final class JSReflectObject {
         JSValue result = target.get(key, receiver);
         // Cross-realm: if the getter moved the exception to the receiver's context,
         // transfer it back to the caller's context so it can be properly thrown.
-        if (!context.hasPendingException()
-                && receiver instanceof JSObject receiverObj
-                && receiverObj.getContext() != null
-                && receiverObj.getContext() != context
+        if (!context.hasPendingException() && receiver instanceof JSObject receiverObj
+                && receiverObj.getContext() != null && receiverObj.getContext() != context
                 && receiverObj.getContext().hasPendingException()) {
             context.setPendingException(receiverObj.getContext().getPendingException());
             receiverObj.getContext().clearPendingException();
@@ -497,8 +481,7 @@ public final class JSReflectObject {
     }
 
     /**
-     * Reflect.getOwnPropertyDescriptor(target, propertyKey)
-     * ES2020 26.1.7
+     * Reflect.getOwnPropertyDescriptor(target, propertyKey) ES2020 26.1.7
      */
     public static JSValue getOwnPropertyDescriptor(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
@@ -515,9 +498,7 @@ public final class JSReflectObject {
     }
 
     /**
-     * Reflect.getPrototypeOf(target)
-     * ES2020 26.1.8
-     * Gets the prototype of an object.
+     * Reflect.getPrototypeOf(target) ES2020 26.1.8 Gets the prototype of an object.
      */
     public static JSValue getPrototypeOf(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
@@ -529,9 +510,7 @@ public final class JSReflectObject {
     }
 
     /**
-     * Reflect.has(target, propertyKey)
-     * ES2020 26.1.9
-     * Checks if an object has a property (like the 'in' operator).
+     * Reflect.has(target, propertyKey) ES2020 26.1.9 Checks if an object has a property (like the 'in' operator).
      */
     public static JSValue has(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
@@ -548,16 +527,12 @@ public final class JSReflectObject {
 
     private static boolean isDynamicFunctionConstructor(JSNativeFunction function) {
         String functionName = function.getName();
-        return JSFunction.NAME.equals(functionName)
-                || "GeneratorFunction".equals(functionName)
-                || "AsyncFunction".equals(functionName)
-                || "AsyncGeneratorFunction".equals(functionName);
+        return JSFunction.NAME.equals(functionName) || "GeneratorFunction".equals(functionName)
+                || "AsyncFunction".equals(functionName) || "AsyncGeneratorFunction".equals(functionName);
     }
 
     /**
-     * Reflect.isExtensible(target)
-     * ES2020 26.1.10
-     * Checks if an object is extensible.
+     * Reflect.isExtensible(target) ES2020 26.1.10 Checks if an object is extensible.
      */
     public static JSValue isExtensible(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
@@ -568,9 +543,7 @@ public final class JSReflectObject {
     }
 
     /**
-     * Reflect.ownKeys(target)
-     * ES2020 26.1.11
-     * Returns an array of the target object's own property keys.
+     * Reflect.ownKeys(target) ES2020 26.1.11 Returns an array of the target object's own property keys.
      */
     public static JSValue ownKeys(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
@@ -589,9 +562,7 @@ public final class JSReflectObject {
     }
 
     /**
-     * Reflect.preventExtensions(target)
-     * ES2020 26.1.12
-     * Prevents new properties from being added to an object.
+     * Reflect.preventExtensions(target) ES2020 26.1.12 Prevents new properties from being added to an object.
      */
     public static JSValue preventExtensions(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
@@ -601,9 +572,7 @@ public final class JSReflectObject {
     }
 
     /**
-     * Reflect.set(target, propertyKey, value, receiver)
-     * ES2020 26.1.13
-     * Sets the value of a property on an object.
+     * Reflect.set(target, propertyKey, value, receiver) ES2020 26.1.13 Sets the value of a property on an object.
      */
     public static JSValue set(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
@@ -628,9 +597,7 @@ public final class JSReflectObject {
     }
 
     /**
-     * Reflect.setPrototypeOf(target, prototype)
-     * ES2020 26.1.14
-     * Sets the prototype of an object.
+     * Reflect.setPrototypeOf(target, prototype) ES2020 26.1.14 Sets the prototype of an object.
      */
     public static JSValue setPrototypeOf(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
@@ -701,7 +668,8 @@ public final class JSReflectObject {
         }
 
         if (descriptor.isAccessorDescriptor() && descriptor.isDataDescriptor()) {
-            context.throwTypeError("Invalid property descriptor. Cannot both specify accessors and a value or writable attribute");
+            context.throwTypeError(
+                    "Invalid property descriptor. Cannot both specify accessors and a value or writable attribute");
             return null;
         }
 

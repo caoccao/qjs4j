@@ -17,19 +17,22 @@
 package com.caoccao.qjs4j.core.temporal;
 
 /**
- * Temporal offset option enum for controlling how a provided UTC offset
- * is handled during ZonedDateTime operations.
+ * Temporal offset option enum for controlling how a provided UTC offset is handled during ZonedDateTime operations.
  */
 public enum TemporalOffsetOption {
-    PREFER("prefer"),
-    USE("use"),
-    IGNORE("ignore"),
-    REJECT("reject");
+    IGNORE("ignore"), PREFER("prefer"), REJECT("reject"), USE("use");
 
     private final String jsName;
 
     TemporalOffsetOption(String jsName) {
         this.jsName = jsName;
+    }
+
+    /**
+     * Returns the JS-canonical name (e.g. "prefer").
+     */
+    public String jsName() {
+        return jsName;
     }
 
     /**
@@ -46,12 +49,5 @@ public enum TemporalOffsetOption {
             case "reject" -> REJECT;
             default -> null;
         };
-    }
-
-    /**
-     * Returns the JS-canonical name (e.g. "prefer").
-     */
-    public String jsName() {
-        return jsName;
     }
 }

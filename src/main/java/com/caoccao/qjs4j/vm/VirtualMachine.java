@@ -26,8 +26,7 @@ import java.math.BigInteger;
 import java.util.*;
 
 /**
- * The JavaScript virtual machine bytecode interpreter.
- * Executes compiled bytecode using a stack-based architecture.
+ * The JavaScript virtual machine bytecode interpreter. Executes compiled bytecode using a stack-based architecture.
  */
 public final class VirtualMachine {
     static final BigInteger BIGINT_NEGATIVE_ONE = BigInteger.valueOf(-1);
@@ -36,31 +35,31 @@ public final class VirtualMachine {
     static final int INTERRUPT_CHECK_INTERVAL = 0xFFFF; // Check every ~65K opcodes
     static final int SMALL_ARGS_BUFFER_SIZE = 8;
     static final JSValue UNINITIALIZED_MARKER = new JSSymbol("UninitializedMarker");
-    final JSContext context;
-    final Set<JSObject> exhaustedForOfIterators;
-    final StringBuilder propertyAccessChain;  // Track last property access for better error messages
-    final JSValue[] singleArgBuffer = new JSValue[1];   // Reusable 1-element args buffer
-    final JSValue[] smallArgsBuffer = new JSValue[SMALL_ARGS_BUFFER_SIZE]; // Reusable small args buffer
-    final boolean trackPropertyAccess;
-    final CallStack valueStack;
     JSGeneratorState activeGeneratorState;
     boolean awaitSuspensionEnabled;
     JSPromise awaitSuspensionPromise;
+    final JSContext context;
     StackFrame currentFrame;
-    long executionDeadline;  // 0 = no deadline
+    long executionDeadline; // 0 = no deadline
     long executionDeadlineNanos; // 0 = no deadline
+    final Set<JSObject> exhaustedForOfIterators;
     JSValue[] forOfTempValues;
-    boolean generatorForceReturn;  // When true, exception handler skips catch offsets, enters only finally
+    boolean generatorForceReturn; // When true, exception handler skips catch offsets, enters only finally
     int generatorResumeIndex;
     List<JSGeneratorState.ResumeRecord> generatorResumeRecords;
-    JSValue generatorReturnValue;  // The return value during generator force return
+    JSValue generatorReturnValue; // The return value during generator force return
     int interruptCounter;
-    JSValue lastConstructorThisArg;  // Saved from frame before return for derived constructor check
+    JSValue lastConstructorThisArg; // Saved from frame before return for derived constructor check
     JSValue pendingException;
-    boolean propertyAccessLock;  // When true, don't update lastPropertyAccess (during argument evaluation)
-    TailCallRequest tailCallPending;  // Set by TAIL_CALL handler for trampoline in execute()
-    YieldResult yieldResult;  // Set when generator yields
-    int yieldSkipCount;  // How many yields to skip (for resuming generators)
+    final StringBuilder propertyAccessChain; // Track last property access for better error messages
+    boolean propertyAccessLock; // When true, don't update lastPropertyAccess (during argument evaluation)
+    final JSValue[] singleArgBuffer = new JSValue[1]; // Reusable 1-element args buffer
+    final JSValue[] smallArgsBuffer = new JSValue[SMALL_ARGS_BUFFER_SIZE]; // Reusable small args buffer
+    TailCallRequest tailCallPending; // Set by TAIL_CALL handler for trampoline in execute()
+    final boolean trackPropertyAccess;
+    final CallStack valueStack;
+    YieldResult yieldResult; // Set when generator yields
+    int yieldSkipCount; // How many yields to skip (for resuming generators)
 
     public VirtualMachine(JSContext context) {
         this.valueStack = new CallStack();
@@ -72,7 +71,8 @@ public final class VirtualMachine {
         this.generatorResumeIndex = 0;
         this.pendingException = null;
         this.propertyAccessChain = new StringBuilder();
-        this.trackPropertyAccess = !"false".equalsIgnoreCase(System.getProperty("qjs4j.vm.trackPropertyAccess", "true"));
+        this.trackPropertyAccess = !"false"
+                .equalsIgnoreCase(System.getProperty("qjs4j.vm.trackPropertyAccess", "true"));
         this.propertyAccessLock = false;
         this.awaitSuspensionEnabled = false;
         this.awaitSuspensionPromise = null;
@@ -82,231 +82,6 @@ public final class VirtualMachine {
         this.executionDeadlineNanos = 0;
         this.interruptCounter = 0;
         this.forOfTempValues = JSValue.NO_ARGS;
-    }
-
-    /**
-     * Auto-close an iterator during exception unwinding.
-     * Following QuickJS JS_IteratorClose semantics:
-     * - If isThrowCompletion is true, close errors are suppressed (original error preserved).
-     * - If isThrowCompletion is false (return completion), close errors propagate and
-     * cancel any active generator force return.
-     */
-    private static void autoCloseIterator(
-            ExecutionContext executionContext,
-            JSObject iterator,
-            boolean isThrowCompletion) {
-        JSContext currentContext = executionContext.virtualMachine.context;
-        boolean savedGeneratorForceReturn = executionContext.virtualMachine.generatorForceReturn;
-        JSValue savedGeneratorReturnValue = executionContext.virtualMachine.generatorReturnValue;
-        if (savedGeneratorForceReturn) {
-            executionContext.virtualMachine.generatorForceReturn = false;
-        }
-        JSValue returnMethodValue;
-        try {
-            returnMethodValue = iterator.get(PropertyKey.RETURN);
-        } catch (JSVirtualMachineException e) {
-            if (!isThrowCompletion) {
-                executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
-                executionContext.virtualMachine.generatorForceReturn = false;
-            } else {
-                currentContext.clearPendingException();
-            }
-            return;
-        }
-        if (currentContext.hasPendingException()) {
-            if (!isThrowCompletion) {
-                executionContext.virtualMachine.pendingException = currentContext.getPendingException();
-                executionContext.virtualMachine.generatorForceReturn = false;
-            }
-            currentContext.clearPendingException();
-            return;
-        }
-        boolean shouldRestoreGeneratorForceReturn = true;
-        if (returnMethodValue instanceof JSFunction returnMethod) {
-            JSValue closeResult;
-            try {
-                closeResult = returnMethod.call(currentContext, iterator, JSValue.NO_ARGS);
-            } catch (JSVirtualMachineException e) {
-                if (!isThrowCompletion) {
-                    executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
-                    executionContext.virtualMachine.generatorForceReturn = false;
-                } else {
-                    currentContext.clearPendingException();
-                }
-                return;
-            }
-            if (currentContext.hasPendingException()) {
-                if (!isThrowCompletion) {
-                    executionContext.virtualMachine.pendingException = currentContext.getPendingException();
-                    executionContext.virtualMachine.generatorForceReturn = false;
-                    shouldRestoreGeneratorForceReturn = false;
-                }
-                currentContext.clearPendingException();
-            } else if (!(closeResult instanceof JSObject)) {
-                if (!isThrowCompletion) {
-                    executionContext.virtualMachine.pendingException =
-                            currentContext.throwTypeError("iterator result is not an object");
-                    executionContext.virtualMachine.generatorForceReturn = false;
-                    shouldRestoreGeneratorForceReturn = false;
-                }
-            }
-        }
-
-        if (savedGeneratorForceReturn && shouldRestoreGeneratorForceReturn) {
-            executionContext.virtualMachine.generatorForceReturn = true;
-            executionContext.virtualMachine.generatorReturnValue = savedGeneratorReturnValue;
-        }
-    }
-
-    /**
-     * Build a diagnostic message for an engine defect that escaped the interpreter loop.
-     *
-     * @param function         the function being executed
-     * @param executionContext the execution context, or {@code null} if the failure happened while
-     *                         creating it
-     * @param failure          the escaping exception
-     * @return a message naming the function, the program counter and the failure type
-     */
-    private static String describeInternalFailure(
-            JSBytecodeFunction function,
-            ExecutionContext executionContext,
-            RuntimeException failure) {
-        StringBuilder message = new StringBuilder("Internal engine error");
-        if (executionContext != null) {
-            message.append(" at pc=").append(executionContext.pc);
-        }
-        if (function != null) {
-            String functionName = function.getName();
-            message.append(" in ")
-                    .append(functionName == null || functionName.isEmpty() ? "<anonymous>" : functionName);
-        }
-        message.append(": ").append(failure.getClass().getName());
-        String failureMessage = failure.getMessage();
-        if (failureMessage != null && !failureMessage.isEmpty()) {
-            message.append(": ").append(failureMessage);
-        }
-        return message.toString();
-    }
-
-    static PendingExceptionAction handlePendingExceptionForExecute(ExecutionContext executionContext) {
-        if (executionContext.virtualMachine.pendingException == null) {
-            return PendingExceptionAction.NONE;
-        }
-
-        JSValue exception = executionContext.virtualMachine.pendingException;
-        executionContext.virtualMachine.pendingException = null;
-        executionContext.virtualMachine.context.clearPendingException();
-
-        boolean foundHandler = false;
-        while (executionContext.virtualMachine.valueStack.stackTop > executionContext.frameStackBase) {
-            JSStackValue stackValue = executionContext.virtualMachine.valueStack.stack[--executionContext.virtualMachine.valueStack.stackTop];
-            if (stackValue instanceof JSCatchOffset catchOffset) {
-                if (catchOffset.isIteratorCloseMarker()) {
-                    // Iterator enumerator marker (from FOR_OF_START). Following QuickJS:
-                    // auto-close the iterator. Stack below is: [iter, next].
-                    // Pop next method, then close iterator.
-                    executionContext.virtualMachine.valueStack.stackTop--; // pop next
-                    int iterIdx = executionContext.virtualMachine.valueStack.stackTop - 1;
-                    if (iterIdx >= executionContext.frameStackBase) {
-                        JSValue iteratorValue = (JSValue) executionContext.virtualMachine.valueStack.stack[iterIdx];
-                        executionContext.virtualMachine.valueStack.stackTop--; // pop iter
-                        if (iteratorValue instanceof JSObject iteratorObj && !iteratorValue.isUndefined()) {
-                            // For throw completions, suppress close errors.
-                            // For return completions (generatorForceReturn), propagate close errors.
-                            boolean isThrowCompletion = !executionContext.virtualMachine.generatorForceReturn;
-                            autoCloseIterator(executionContext, iteratorObj, isThrowCompletion);
-                        }
-                    }
-                    continue;
-                }
-                if (executionContext.virtualMachine.generatorForceReturn && !catchOffset.isFinally()) {
-                    continue;
-                }
-                executionContext.virtualMachine.valueStack.pushStackValue(exception);
-                executionContext.pc = catchOffset.offset();
-                foundHandler = true;
-                executionContext.virtualMachine.context.clearPendingException();
-                break;
-            }
-        }
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
-
-        if (foundHandler) {
-            return PendingExceptionAction.CONTINUE;
-        }
-
-        if (executionContext.virtualMachine.generatorForceReturn) {
-            executionContext.virtualMachine.generatorForceReturn = false;
-            executionContext.virtualMachine.restoreExecuteCallerState(
-                    executionContext.restoreStackTop,
-                    executionContext.previousFrame,
-                    executionContext.savedStrictMode);
-            executionContext.virtualMachine.context.clearPendingException();
-            executionContext.returnValue = executionContext.virtualMachine.generatorReturnValue;
-            return PendingExceptionAction.RETURN;
-        }
-
-        if (executionContext.virtualMachine.pendingException != null) {
-            exception = executionContext.virtualMachine.pendingException;
-            executionContext.virtualMachine.pendingException = null;
-        }
-
-        executionContext.virtualMachine.restoreExecuteCallerState(
-                executionContext.restoreStackTop,
-                executionContext.previousFrame,
-                executionContext.savedStrictMode);
-        if (exception instanceof JSError jsError) {
-            String vmMessage = jsError.getVmMessage();
-            if (vmMessage != null && !vmMessage.isEmpty()) {
-                throw new JSVirtualMachineException(vmMessage, jsError);
-            }
-            throw new JSVirtualMachineException(jsError);
-        }
-        String exceptionMessage = executionContext.virtualMachine.safeExceptionToString(executionContext.virtualMachine.context, exception);
-        throw new JSVirtualMachineException("Unhandled exception: " + exceptionMessage, exception);
-    }
-
-    /**
-     * Resolve a local variable's declared name from the running function's bytecode.
-     *
-     * @param frame      the active stack frame
-     * @param localIndex the local slot index
-     * @return the declared name, or {@code null} when it is unavailable
-     */
-    static String localVariableName(StackFrame frame, int localIndex) {
-        if (frame == null || localIndex < 0) {
-            return null;
-        }
-        JSFunction function = frame.getFunction();
-        if (!(function instanceof JSBytecodeFunction bytecodeFunction)) {
-            return null;
-        }
-        String[] names = bytecodeFunction.getBytecode().getLocalVarNames();
-        return names != null && localIndex < names.length ? names[localIndex] : null;
-    }
-
-    /**
-     * Read an own data property as a string without invoking any accessor or Proxy trap.
-     * <p>
-     * {@code getOwnPropertyDescriptor} is virtual, and {@link JSProxy} overrides it with the
-     * {@code getOwnPropertyDescriptor} trap, so this read used to re-enter guest code for a thrown
-     * Proxy — during exception unwinding, which is exactly what this path exists to avoid.
-     * {@code getOwnDataPropertyForDiagnostics} is {@code final} and reads physical storage only.
-     *
-     * @param object the object to read from
-     * @param key    the property key
-     * @return the property rendered as a string, or {@code null} when it is absent, is an accessor,
-     * or belongs to a Proxy
-     */
-    private static String ownDataPropertyAsString(JSObject object, PropertyKey key) {
-        JSValue value = object.getOwnDataPropertyForDiagnostics(key);
-        if (value instanceof JSString stringValue) {
-            return stringValue.value();
-        }
-        if (value == null || value instanceof JSUndefined) {
-            return null;
-        }
-        return value.toString();
     }
 
     JSValue addValues(JSValue left, JSValue right) {
@@ -375,21 +150,19 @@ public final class VirtualMachine {
     }
 
     /**
-     * Return a reusable args buffer for the given argument count.
-     * For 0 args, returns JSValue.NO_ARGS (shared empty).
-     * For 1-8 args, returns smallArgsBuffer (caller fills it).
-     * For &gt;8 args, allocates a new array.
+     * Return a reusable args buffer for the given argument count. For 0 args, returns JSValue.NO_ARGS (shared empty).
+     * For 1-8 args, returns smallArgsBuffer (caller fills it). For &gt;8 args, allocates a new array.
      * <p>
-     * The returned buffer (except NO_ARGS) is owned by this VM, and there is exactly one of it.
-     * The contract is therefore strict: <strong>the caller must fill the buffer and hand it to
-     * {@link StackFrame} — which copies it — before anything that can run user code, because the
-     * engine is deeply re-entrant and a getter, a {@code Symbol.toPrimitive}, a Proxy trap or a
-     * {@code valueOf} reaching this method again would overwrite the outer call's arguments.</strong>
-     * Filling the buffer only reads from the value stack, so the window is closed today; the
-     * hazard is that a future reordering of argument evaluation reopens it silently, with a wrong
-     * answer rather than a crash.
+     * The returned buffer (except NO_ARGS) is owned by this VM, and there is exactly one of it. The contract is
+     * therefore strict: <strong>the caller must fill the buffer and hand it to {@link StackFrame} — which copies it —
+     * before anything that can run user code, because the engine is deeply re-entrant and a getter, a
+     * {@code Symbol.toPrimitive}, a Proxy trap or a {@code valueOf} reaching this method again would overwrite the
+     * outer call's arguments.</strong> Filling the buffer only reads from the value stack, so the window is closed
+     * today; the hazard is that a future reordering of argument evaluation reopens it silently, with a wrong answer
+     * rather than a crash.
      *
-     * @param argCount the number of arguments the caller is about to fill in
+     * @param argCount
+     *            the number of arguments the caller is about to fill in
      * @return a buffer of at least {@code argCount} slots
      */
     JSValue[] borrowArgsBuffer(int argCount) {
@@ -437,14 +210,14 @@ public final class VirtualMachine {
     }
 
     /**
-     * Convert an engine error that escaped an opcode handler into {@link #pendingException} so the
-     * interpreter loop can route it to the script's own catch handlers.
+     * Convert an engine error that escaped an opcode handler into {@link #pendingException} so the interpreter loop can
+     * route it to the script's own catch handlers.
      * <p>
-     * Only the three JS error carriers are converted. A bare {@link NullPointerException} or
-     * {@link ClassCastException} is an engine defect, not a script error, so it is left to
-     * propagate and be reported as an internal engine error.
+     * Only the three JS error carriers are converted. A bare {@link NullPointerException} or {@link ClassCastException}
+     * is an engine defect, not a script error, so it is left to propagate and be reported as an internal engine error.
      *
-     * @param e the exception that escaped the handler
+     * @param e
+     *            the exception that escaped the handler
      * @return true when the exception became a pending exception, false when it must propagate
      */
     private boolean captureHandlerException(RuntimeException e) {
@@ -456,9 +229,8 @@ public final class VirtualMachine {
             JSValue errorValue = jsException.getErrorValue();
             pendingException = errorValue != null
                     ? errorValue
-                    : context.throwError(jsException.getMessage() != null
-                    ? jsException.getMessage()
-                    : "Unhandled exception");
+                    : context.throwError(
+                            jsException.getMessage() != null ? jsException.getMessage() : "Unhandled exception");
             context.clearPendingException();
             return true;
         }
@@ -502,15 +274,14 @@ public final class VirtualMachine {
         } else if (context.hasPendingException()) {
             pendingException = context.getPendingException();
         } else {
-            pendingException = context.throwError(
-                    e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+            pendingException = context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
         }
         context.clearPendingException();
     }
 
     /**
-     * Convert a JSVirtualMachineException to a pendingException so the VM's
-     * JS exception handling mechanism (catch handlers on the value stack) can process it.
+     * Convert a JSVirtualMachineException to a pendingException so the VM's JS exception handling mechanism (catch
+     * handlers on the value stack) can process it.
      */
     void captureVMException(JSVirtualMachineException e) {
         if (e.getJsValue() != null) {
@@ -520,8 +291,7 @@ public final class VirtualMachine {
         } else if (context.hasPendingException()) {
             pendingException = context.getPendingException();
         } else {
-            pendingException = context.throwError(
-                    e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+            pendingException = context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
         }
         context.clearPendingException();
     }
@@ -529,11 +299,11 @@ public final class VirtualMachine {
     /**
      * Check whether the host wants this evaluation to stop.
      * <p>
-     * Both the deadline and {@link JSRuntime#shouldInterrupt()} raise a
-     * {@link JSTerminationException} so a script cannot keep itself alive by wrapping its own loop
-     * in {@code try}/{@code catch}.
+     * Both the deadline and {@link JSRuntime#shouldInterrupt()} raise a {@link JSTerminationException} so a script
+     * cannot keep itself alive by wrapping its own loop in {@code try}/{@code catch}.
      *
-     * @throws JSTerminationException when the deadline has passed or the host asked to interrupt
+     * @throws JSTerminationException
+     *             when the deadline has passed or the host asked to interrupt
      */
     public void checkExecutionInterrupt() {
         if (executionDeadline != 0 && System.nanoTime() >= executionDeadlineNanos) {
@@ -562,8 +332,7 @@ public final class VirtualMachine {
     }
 
     /**
-     * Clear the pending exception in the VM.
-     * This is needed when an async function catches an exception.
+     * Clear the pending exception in the VM. This is needed when an async function catches an exception.
      */
     public void clearPendingException() {
         this.pendingException = null;
@@ -588,8 +357,7 @@ public final class VirtualMachine {
             JSObject thisObject = new JSObject(context);
             String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
             if (newTarget instanceof JSObject newTargetObject) {
-                JSObject resolvedPrototype = context.getPrototypeFromConstructor(
-                        newTargetObject,
+                JSObject resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject,
                         intrinsicDefaultPrototypeName);
                 if (context.hasPendingException()) {
                     return null;
@@ -598,7 +366,8 @@ public final class VirtualMachine {
                     thisObject.setPrototype(resolvedPrototype);
                 }
             } else {
-                JSObject resolvedPrototype = context.getPrototypeFromConstructor(function, intrinsicDefaultPrototypeName);
+                JSObject resolvedPrototype = context.getPrototypeFromConstructor(function,
+                        intrinsicDefaultPrototypeName);
                 if (context.hasPendingException()) {
                     return null;
                 }
@@ -608,8 +377,7 @@ public final class VirtualMachine {
             }
 
             // Check if this is a derived constructor
-            boolean isDerived = function instanceof JSBytecodeFunction bcFunc
-                    && bcFunc.isDerivedConstructor();
+            boolean isDerived = function instanceof JSBytecodeFunction bcFunc && bcFunc.isDerivedConstructor();
 
             // For derived constructors, use JSUndefined as initial this
             // (this must be initialized by super() call)
@@ -634,7 +402,8 @@ public final class VirtualMachine {
                         return null;
                     }
                 } else if (function instanceof JSBytecodeFunction bytecodeFunction) {
-                    result = constructorContext.getVirtualMachine().execute(bytecodeFunction, constructThis, args, newTarget);
+                    result = constructorContext.getVirtualMachine().execute(bytecodeFunction, constructThis, args,
+                            newTarget);
                     if (constructorContext != context && constructorContext.hasPendingException()) {
                         context.setPendingException(constructorContext.getPendingException());
                         constructorContext.clearPendingException();
@@ -674,13 +443,15 @@ public final class VirtualMachine {
                         ? lastConstructorThisArg
                         : constructorContext.getVirtualMachine().lastConstructorThisArg;
                 if (finalThis == null || finalThis instanceof JSUndefined) {
-                    context.throwReferenceError("Must call super constructor in derived class before accessing 'this' or returning from derived constructor");
+                    context.throwReferenceError(
+                            "Must call super constructor in derived class before accessing 'this' or returning from derived constructor");
                     return null;
                 }
                 if (finalThis instanceof JSObject finalThisObj) {
                     return finalThisObj;
                 }
-                context.throwReferenceError("Must call super constructor in derived class before accessing 'this' or returning from derived constructor");
+                context.throwReferenceError(
+                        "Must call super constructor in derived class before accessing 'this' or returning from derived constructor");
                 return null;
             }
             return thisObject;
@@ -690,8 +461,7 @@ public final class VirtualMachine {
         JSObject preResolvedPrototype = null;
         if (isErrorConstructorType(constructorType) && newTarget instanceof JSObject newTargetObject) {
             String intrinsicDefaultPrototypeName = constructorContext.getIntrinsicDefaultPrototypeName(function);
-            preResolvedPrototype = constructorContext.getPrototypeFromConstructor(
-                    newTargetObject,
+            preResolvedPrototype = constructorContext.getPrototypeFromConstructor(newTargetObject,
                     intrinsicDefaultPrototypeName);
             if (constructorContext.hasPendingException()) {
                 if (constructorContext != context) {
@@ -739,8 +509,7 @@ public final class VirtualMachine {
             JSObject resolvedPrototype = preResolvedPrototype;
             if (resolvedPrototype == null && newTarget instanceof JSObject newTargetObject) {
                 String intrinsicDefaultPrototypeName = constructorContext.getIntrinsicDefaultPrototypeName(function);
-                resolvedPrototype = constructorContext.getPrototypeFromConstructor(
-                        newTargetObject,
+                resolvedPrototype = constructorContext.getPrototypeFromConstructor(newTargetObject,
                         intrinsicDefaultPrototypeName);
                 if (constructorContext.hasPendingException()) {
                     if (constructorContext != context) {
@@ -820,8 +589,8 @@ public final class VirtualMachine {
                 return;
             }
             if (!created) {
-                pendingException = context.throwTypeError(
-                        "Cannot create property '" + key.toPropertyString() + "' on the copy target");
+                pendingException = context
+                        .throwTypeError("Cannot create property '" + key.toPropertyString() + "' on the copy target");
                 context.clearPendingException();
                 return;
             }
@@ -855,38 +624,26 @@ public final class VirtualMachine {
         return argumentsObject;
     }
 
-    ExecutionContext createExecutionContext(
-            JSBytecodeFunction function,
-            StackFrame frame,
-            StackFrame previousFrame,
-            int frameStackBase,
-            int restoreStackTop,
-            boolean savedStrictMode,
-            JSGeneratorState generatorStateForExecution,
-            boolean resumeGeneratorExecution) {
-        ExecutionContext executionContext = new ExecutionContext(
-                this,
-                function.getBytecode(),
-                frame,
-                previousFrame,
-                frameStackBase,
-                restoreStackTop,
-                savedStrictMode);
+    ExecutionContext createExecutionContext(JSBytecodeFunction function, StackFrame frame, StackFrame previousFrame,
+            int frameStackBase, int restoreStackTop, boolean savedStrictMode,
+            JSGeneratorState generatorStateForExecution, boolean resumeGeneratorExecution) {
+        ExecutionContext executionContext = new ExecutionContext(this, function.getBytecode(), frame, previousFrame,
+                frameStackBase, restoreStackTop, savedStrictMode);
         if (resumeGeneratorExecution) {
             valueStack.stackTop = frameStackBase;
             JSStackValue[] suspendedStackValues = generatorStateForExecution.getSuspendedStackValues();
             if (suspendedStackValues != null && suspendedStackValues.length > 0) {
-                System.arraycopy(suspendedStackValues, 0, valueStack.stack, frameStackBase, suspendedStackValues.length);
+                System.arraycopy(suspendedStackValues, 0, valueStack.stack, frameStackBase,
+                        suspendedStackValues.length);
             }
             executionContext.sp = frameStackBase + (suspendedStackValues == null ? 0 : suspendedStackValues.length);
             int suspendedProgramCounter = generatorStateForExecution.getSuspendedProgramCounter();
             executionContext.pc = suspendedProgramCounter;
             Opcode suspendedOpcode = Opcode.fromInt(executionContext.bytecode.readU8(suspendedProgramCounter));
-            boolean suspendedAtYieldStar =
-                    suspendedOpcode == Opcode.YIELD_STAR || suspendedOpcode == Opcode.ASYNC_YIELD_STAR;
+            boolean suspendedAtYieldStar = suspendedOpcode == Opcode.YIELD_STAR
+                    || suspendedOpcode == Opcode.ASYNC_YIELD_STAR;
             YieldResult suspendedYieldResult = generatorStateForExecution.getLastYieldResult();
-            boolean resumingActiveYieldStarDelegation = suspendedAtYieldStar
-                    && suspendedYieldResult != null
+            boolean resumingActiveYieldStarDelegation = suspendedAtYieldStar && suspendedYieldResult != null
                     && suspendedYieldResult.isYieldStar()
                     && suspendedYieldResult.delegationProgramCounter() == suspendedProgramCounter
                     && suspendedYieldResult.delegateIterator() != null;
@@ -919,36 +676,31 @@ public final class VirtualMachine {
         JSObject referenceObject = new JSObject(context);
         PropertyKey key = PropertyKey.fromString(atomName);
 
-        JSNativeFunction getter = new JSNativeFunction(context, "get " + atomName,
-                0,
-                (childContext, thisArg, args) -> readReferenceValue(capturedFrame, makeRefOpcode, refIndex),
-                false);
-        JSNativeFunction setter = new JSNativeFunction(context, "set " + atomName,
-                1,
-                (childContext, thisArg, args) -> {
-                    JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                    writeReferenceValue(capturedFrame, makeRefOpcode, refIndex, value);
-                    return JSUndefined.INSTANCE;
-                },
-                false);
+        JSNativeFunction getter = new JSNativeFunction(context, "get " + atomName, 0,
+                (childContext, thisArg, args) -> readReferenceValue(capturedFrame, makeRefOpcode, refIndex), false);
+        JSNativeFunction setter = new JSNativeFunction(context, "set " + atomName, 1, (childContext, thisArg, args) -> {
+            JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            writeReferenceValue(capturedFrame, makeRefOpcode, refIndex, value);
+            return JSUndefined.INSTANCE;
+        }, false);
 
-        referenceObject.defineProperty(
-                key,
+        referenceObject.defineProperty(key,
                 PropertyDescriptor.accessorDescriptor(getter, setter, PropertyDescriptor.AccessorState.All));
         return referenceObject;
     }
 
     /**
-     * Create special runtime objects based on object type.
-     * Based on QuickJS OP_SPECIAL_OBJECT opcode (quickjs.c).
+     * Create special runtime objects based on object type. Based on QuickJS OP_SPECIAL_OBJECT opcode (quickjs.c).
      *
-     * @param objectType   Type identifier (0=arguments, 1=mapped_arguments, 2=this_func, etc.)
-     * @param currentFrame Current stack frame for context
+     * @param objectType
+     *            Type identifier (0=arguments, 1=mapped_arguments, 2=this_func, etc.)
+     * @param currentFrame
+     *            Current stack frame for context
      * @return The created special object
      */
     JSValue createSpecialObject(int objectType, StackFrame currentFrame) {
         switch (objectType) {
-            case 0: // SPECIAL_OBJECT_ARGUMENTS
+            case 0 : // SPECIAL_OBJECT_ARGUMENTS
                 // For arrow functions, use lexically captured arguments from the defining scope
                 // Following QuickJS: arrow functions inherit arguments from enclosing scope
                 JSFunction currentFunc = currentFrame.getFunction();
@@ -961,15 +713,14 @@ public final class VirtualMachine {
                 }
                 return createArgumentsObject(currentFrame, currentFunc, shouldUseMappedArguments(currentFunc));
 
-            case 1: // SPECIAL_OBJECT_MAPPED_ARGUMENTS
+            case 1 : // SPECIAL_OBJECT_MAPPED_ARGUMENTS
                 // Legacy mapped arguments (shares with function parameters)
                 JSFunction mappedFunc = currentFrame.getFunction();
-                boolean canMap = mappedFunc != null && !(
-                        mappedFunc instanceof JSBytecodeFunction bytecodeFunction
-                                && bytecodeFunction.isStrict());
+                boolean canMap = mappedFunc != null
+                        && !(mappedFunc instanceof JSBytecodeFunction bytecodeFunction && bytecodeFunction.isStrict());
                 return createArgumentsObject(currentFrame, mappedFunc, canMap);
 
-            case 2: // SPECIAL_OBJECT_THIS_FUNC
+            case 2 : // SPECIAL_OBJECT_THIS_FUNC
                 // Return the currently executing function.
                 // For arrow functions and eval with super call, return the captured enclosing
                 // constructor function (e.g., for super() calls in derived constructors).
@@ -983,17 +734,17 @@ public final class VirtualMachine {
                 }
                 return thisFunc;
 
-            case 3: // SPECIAL_OBJECT_NEW_TARGET
+            case 3 : // SPECIAL_OBJECT_NEW_TARGET
                 // Return new.target.
                 // Propagated from constructor invocation paths (new / Reflect.construct).
                 return currentFrame.getNewTarget();
 
-            case 4: // SPECIAL_OBJECT_HOME_OBJECT
+            case 4 : // SPECIAL_OBJECT_HOME_OBJECT
                 // Return the home object for super property access
                 JSObject homeObject = currentFrame.getFunction().getHomeObject();
                 return homeObject != null ? homeObject : JSUndefined.INSTANCE;
 
-            case 5: // SPECIAL_OBJECT_VAR_OBJECT
+            case 5 : // SPECIAL_OBJECT_VAR_OBJECT
                 // Return an object that resolves direct-eval dynamic bindings first,
                 // then falls back to the global object through prototype lookup.
                 Map<String, JSValue> dynamicBindings = currentFrame.getDynamicVarBindings();
@@ -1007,7 +758,7 @@ public final class VirtualMachine {
                 }
                 return variableObject;
 
-            case 6: // SPECIAL_OBJECT_IMPORT_META
+            case 6 : // SPECIAL_OBJECT_IMPORT_META
                 String filename = null;
                 JSFunction activeFunction = currentFrame.getFunction();
                 if (activeFunction != null) {
@@ -1019,7 +770,7 @@ public final class VirtualMachine {
                 }
                 return context.createImportMetaObject(filename);
 
-            default:
+            default :
                 throw new JSVirtualMachineException("Unknown special object type: " + objectType);
         }
     }
@@ -1082,15 +833,12 @@ public final class VirtualMachine {
         return execute(function, thisArg, args, args.length, JSUndefined.INSTANCE);
     }
 
-    public JSValue execute(JSBytecodeFunction function, JSValue thisArg, JSValue[] args, JSValue newTarget) {
-        return execute(function, thisArg, args, args.length, newTarget);
-    }
-
     /**
-     * Execute a bytecode function with an explicit argument count.
-     * When args comes from a reusable buffer, argCount may be less than args.length.
+     * Execute a bytecode function with an explicit argument count. When args comes from a reusable buffer, argCount may
+     * be less than args.length.
      */
-    public JSValue execute(JSBytecodeFunction function, JSValue thisArg, JSValue[] args, int argCount, JSValue newTarget) {
+    public JSValue execute(JSBytecodeFunction function, JSValue thisArg, JSValue[] args, int argCount,
+            JSValue newTarget) {
         // Track executing context on runtime for cross-realm proxy support.
         // Uses a plain field (not ThreadLocal) — just a pointer write per outermost call.
         boolean isOuterCall = (currentFrame == null);
@@ -1112,19 +860,17 @@ public final class VirtualMachine {
             // When TAIL_CALL fires, it sets tailCallPending and returns from the inner loop.
             // This outer loop then restarts execution with the new function/args without
             // consuming an additional Java stack frame.
-            tailCallLoop:
-            while (true) {
+            tailCallLoop : while (true) {
                 JSGeneratorState generatorStateForExecution = activeGeneratorState;
-                boolean resumeGeneratorExecution =
-                        generatorStateForExecution != null
-                                && generatorStateForExecution.getFunction() == function
-                                && generatorStateForExecution.hasSuspendedExecutionState()
-                                && generatorStateForExecution.hasPendingResumeRecord();
+                boolean resumeGeneratorExecution = generatorStateForExecution != null
+                        && generatorStateForExecution.getFunction() == function
+                        && generatorStateForExecution.hasSuspendedExecutionState()
+                        && generatorStateForExecution.hasPendingResumeRecord();
                 // Save the current caller stack position so function exit can restore it.
                 int callerStackTop = valueStack.getStackTop();
                 // Always use callerStackTop as the frame's operand stack base.
                 // For resumed generators, the suspended stack values are relative and
-                // will be correctly placed at the current caller position.  Using the
+                // will be correctly placed at the current caller position. Using the
                 // original suspended stackBase would write into the caller's stack
                 // region when the generator is resumed at a different call depth.
                 int frameStackBase = callerStackTop;
@@ -1170,15 +916,8 @@ public final class VirtualMachine {
 
                 ExecutionContext executionContext = null;
                 try {
-                    executionContext = createExecutionContext(
-                            function,
-                            frame,
-                            previousFrame,
-                            frameStackBase,
-                            restoreStackTop,
-                            savedStrictMode,
-                            generatorStateForExecution,
-                            resumeGeneratorExecution);
+                    executionContext = createExecutionContext(function, frame, previousFrame, frameStackBase,
+                            restoreStackTop, savedStrictMode, generatorStateForExecution, resumeGeneratorExecution);
                     int sp = executionContext.sp;
                     int pc = executionContext.pc;
 
@@ -1195,7 +934,8 @@ public final class VirtualMachine {
 
                         // Inline pending exception check (hot path: null check only)
                         if (pendingException != null) {
-                            PendingExceptionAction pendingExceptionAction = handlePendingExceptionForExecute(executionContext);
+                            PendingExceptionAction pendingExceptionAction = handlePendingExceptionForExecute(
+                                    executionContext);
                             if (pendingExceptionAction == PendingExceptionAction.RETURN) {
                                 return executionContext.returnValue;
                             }
@@ -1218,7 +958,7 @@ public final class VirtualMachine {
                         } catch (RuntimeException e) {
                             // Single error channel: an engine error raised as a Java exception from
                             // inside an opcode handler becomes a pending exception so the loop top
-                            // can offer it to the script's own catch handlers.  Without this, every
+                            // can offer it to the script's own catch handlers. Without this, every
                             // `throw new JSException(...)` in the engine would unwind straight out
                             // of execute() and bypass JavaScript try/catch entirely.
                             if (!captureHandlerException(e)) {
@@ -1280,8 +1020,7 @@ public final class VirtualMachine {
                     // message that was frequently just "VM error: null". Say where it happened and
                     // keep the cause.
                     restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);
-                    throw new JSVirtualMachineException(
-                            describeInternalFailure(function, executionContext, e), e);
+                    throw new JSVirtualMachineException(describeInternalFailure(function, executionContext, e), e);
                 }
             }
         } finally {
@@ -1296,6 +1035,10 @@ public final class VirtualMachine {
                 context.getRuntime().setCurrentExecutingContext(previousExecutingContext);
             }
         }
+    }
+
+    public JSValue execute(JSBytecodeFunction function, JSValue thisArg, JSValue[] args, JSValue newTarget) {
+        return execute(function, thisArg, args, args.length, newTarget);
     }
 
     public JSValue executeAsyncFunction(JSGeneratorState state, JSContext context) {
@@ -1314,8 +1057,7 @@ public final class VirtualMachine {
     }
 
     /**
-     * Execute a generator function with state management.
-     * Resumes from saved state if generator was previously yielded.
+     * Execute a generator function with state management. Resumes from saved state if generator was previously yielded.
      */
     public JSValue executeGenerator(JSGeneratorState state, JSContext context) {
         JSBytecodeFunction function = state.getFunction();
@@ -1330,9 +1072,7 @@ public final class VirtualMachine {
         yieldResult = null;
         state.setAwaitSuspended(false);
 
-        boolean useSuspendedExecutionState =
-                state.hasSuspendedExecutionState()
-                        && state.hasPendingResumeRecord();
+        boolean useSuspendedExecutionState = state.hasSuspendedExecutionState() && state.hasPendingResumeRecord();
         if (useSuspendedExecutionState) {
             yieldSkipCount = 0;
             generatorResumeRecords = List.of();
@@ -1395,9 +1135,7 @@ public final class VirtualMachine {
     }
 
     void finalizeExecuteReturn(ExecutionContext executionContext) {
-        restoreExecuteCallerState(
-                executionContext.restoreStackTop,
-                executionContext.previousFrame,
+        restoreExecuteCallerState(executionContext.restoreStackTop, executionContext.previousFrame,
                 executionContext.savedStrictMode);
     }
 
@@ -1440,8 +1178,7 @@ public final class VirtualMachine {
     }
 
     /**
-     * Get the last yield result from generator execution.
-     * Used to check if the yield was a yield* (delegation).
+     * Get the last yield result from generator execution. Used to check if the yield was a yield* (delegation).
      */
     public YieldResult getLastYieldResult() {
         return yieldResult;
@@ -1485,8 +1222,9 @@ public final class VirtualMachine {
 
     private boolean isErrorConstructorType(JSConstructorType constructorType) {
         return switch (constructorType) {
-            case ERROR, EVAL_ERROR, RANGE_ERROR, REFERENCE_ERROR, SYNTAX_ERROR, TYPE_ERROR, URI_ERROR,
-                 AGGREGATE_ERROR, SUPPRESSED_ERROR -> true;
+            case ERROR, EVAL_ERROR, RANGE_ERROR, REFERENCE_ERROR, SYNTAX_ERROR, TYPE_ERROR, URI_ERROR, AGGREGATE_ERROR,
+                    SUPPRESSED_ERROR ->
+                true;
             default -> false;
         };
     }
@@ -1558,7 +1296,8 @@ public final class VirtualMachine {
             throw new JSVirtualMachineException("instanceof check failed");
         }
         if (!(prototypeValue instanceof JSObject constructorPrototype)) {
-            throw new JSVirtualMachineException(context.throwTypeError("Function has non-object prototype in instanceof check"));
+            throw new JSVirtualMachineException(
+                    context.throwTypeError("Function has non-object prototype in instanceof check"));
         }
 
         JSObject currentPrototype = object.getPrototype();
@@ -1572,12 +1311,14 @@ public final class VirtualMachine {
     }
 
     /**
-     * Invoke proxy apply trap when calling a proxy as a function.
-     * Based on QuickJS js_proxy_call (quickjs.c:50338).
+     * Invoke proxy apply trap when calling a proxy as a function. Based on QuickJS js_proxy_call (quickjs.c:50338).
      *
-     * @param proxy   The proxy being called
-     * @param thisArg The 'this' value for the call
-     * @param args    The arguments
+     * @param proxy
+     *            The proxy being called
+     * @param thisArg
+     *            The 'this' value for the call
+     * @param args
+     *            The arguments
      * @return The result of the call
      */
     JSValue proxyApply(JSProxy proxy, JSValue thisArg, JSValue[] args) {
@@ -1620,25 +1361,24 @@ public final class VirtualMachine {
             argArray.push(arg);
         }
 
-        JSValue[] trapArgs = new JSValue[]{
-                proxy.getTarget(),
-                thisArg,
-                argArray
-        };
+        JSValue[] trapArgs = new JSValue[]{proxy.getTarget(), thisArg, argArray};
         return applyFunc.call(context, proxy.getHandler(), trapArgs);
     }
 
     /**
-     * Invoke proxy construct trap when calling a proxy with 'new'.
-     * Based on QuickJS js_proxy_call_constructor (quickjs.c:50304).
+     * Invoke proxy construct trap when calling a proxy with 'new'. Based on QuickJS js_proxy_call_constructor
+     * (quickjs.c:50304).
      *
-     * @param proxy The proxy being constructed
-     * @param args  The arguments
+     * @param proxy
+     *            The proxy being constructed
+     * @param args
+     *            The arguments
      * @return The constructed object
      */
     JSValue proxyConstruct(JSProxy proxy, JSValue[] args, JSValue newTarget) {
         if (proxy.isRevoked()) {
-            throw new JSException(context.throwTypeError("Cannot perform 'construct' on a proxy that has been revoked"));
+            throw new JSException(
+                    context.throwTypeError("Cannot perform 'construct' on a proxy that has been revoked"));
         }
 
         JSValue target = proxy.getTarget();
@@ -1675,19 +1415,13 @@ public final class VirtualMachine {
             argArray.push(arg);
         }
 
-        JSValue[] trapArgs = new JSValue[]{
-                target,
-                argArray,
-                newTarget
-        };
+        JSValue[] trapArgs = new JSValue[]{target, argArray, newTarget};
 
         JSValue result = constructFunc.call(context, proxy.getHandler(), trapArgs);
 
         if (!(result instanceof JSObject)) {
-            throw new JSException(context.throwTypeError(
-                    "'construct' on proxy: trap returned non-object ('" +
-                            JSTypeConversions.toString(context, result) +
-                            "')"));
+            throw new JSException(context.throwTypeError("'construct' on proxy: trap returned non-object ('"
+                    + JSTypeConversions.toString(context, result) + "')"));
         }
 
         return result;
@@ -1725,9 +1459,7 @@ public final class VirtualMachine {
     }
 
     void requestOpcodeReturnFromExecute(ExecutionContext executionContext, JSValue returnValue) {
-        restoreExecuteCallerState(
-                executionContext.restoreStackTop,
-                executionContext.previousFrame,
+        restoreExecuteCallerState(executionContext.restoreStackTop, executionContext.previousFrame,
                 executionContext.savedStrictMode);
         executionContext.returnValue = returnValue;
         executionContext.opcodeRequestedReturn = true;
@@ -1736,8 +1468,8 @@ public final class VirtualMachine {
     /**
      * Release the VM's retained execution state.
      * <p>
-     * Called from {@link JSContext#close()}. The value stack alone is up to 65,536 slots, and every
-     * slot that still holds a value pins whatever object graph that value references.
+     * Called from {@link JSContext#close()}. The value stack alone is up to 65,536 slots, and every slot that still
+     * holds a value pins whatever object graph that value references.
      */
     public void reset() {
         valueStack.setStackTop(0);
@@ -1789,17 +1521,18 @@ public final class VirtualMachine {
     }
 
     /**
-     * Safely convert an exception object to a string without calling JavaScript methods.
-     * This is used when already in an exception state to avoid cascading failures.
+     * Safely convert an exception object to a string without calling JavaScript methods. This is used when already in
+     * an exception state to avoid cascading failures.
      * <p>
-     * Own data properties only. {@code JSObject.get} invokes accessors, so reading {@code message}
-     * that way ran arbitrary user code <em>during</em> exception unwinding — exactly the cascading
-     * failure this method exists to prevent — and the {@code catch (Exception e)} around it hid
-     * whatever that code did, including a second pending exception overwriting the one being
-     * reported.
+     * Own data properties only. {@code JSObject.get} invokes accessors, so reading {@code message} that way ran
+     * arbitrary user code <em>during</em> exception unwinding — exactly the cascading failure this method exists to
+     * prevent — and the {@code catch (Exception e)} around it hid whatever that code did, including a second pending
+     * exception overwriting the one being reported.
      *
-     * @param context   the context (unused; kept for call-site symmetry)
-     * @param exception the thrown value
+     * @param context
+     *            the context (unused; kept for call-site symmetry)
+     * @param exception
+     *            the thrown value
      * @return a description of the thrown value built without running any script
      */
     String safeExceptionToString(JSContext context, JSValue exception) {
@@ -1825,12 +1558,8 @@ public final class VirtualMachine {
         return exceptionObj.toString();
     }
 
-    void saveActiveGeneratorSuspendedExecutionState(
-            StackFrame frame,
-            int programCounter,
-            JSStackValue[] stack,
-            int stackTop,
-            int stackBase) {
+    void saveActiveGeneratorSuspendedExecutionState(StackFrame frame, int programCounter, JSStackValue[] stack,
+            int stackTop, int stackBase) {
         if (activeGeneratorState == null) {
             return;
         }
@@ -1848,9 +1577,8 @@ public final class VirtualMachine {
     }
 
     /**
-     * Set an execution deadline for the VM.
-     * After this time, the VM will throw an interrupt exception.
-     * Set to 0 to clear the deadline.
+     * Set an execution deadline for the VM. After this time, the VM will throw an interrupt exception. Set to 0 to
+     * clear the deadline.
      */
     public void setExecutionDeadline(long deadlineMs) {
         this.executionDeadline = deadlineMs;
@@ -1913,22 +1641,18 @@ public final class VirtualMachine {
             return new JSBigInt(value.value().signum() < 0 ? BIGINT_NEGATIVE_ONE : BIGINT_ZERO);
         }
         int shift = magnitude.intValue();
-        BigInteger result = performLeftShift
-                ? value.value().shiftLeft(shift)
-                : value.value().shiftRight(shift);
+        BigInteger result = performLeftShift ? value.value().shiftLeft(shift) : value.value().shiftRight(shift);
         return new JSBigInt(result);
     }
 
     boolean shouldUseMappedArguments(JSFunction function) {
-        return function instanceof JSBytecodeFunction bytecodeFunction
-                && !bytecodeFunction.isStrict()
-                && !bytecodeFunction.isArrow()
-                && !bytecodeFunction.hasParameterExpressions();
+        return function instanceof JSBytecodeFunction bytecodeFunction && !bytecodeFunction.isStrict()
+                && !bytecodeFunction.isArrow() && !bytecodeFunction.hasParameterExpressions();
     }
 
     /**
-     * Return a reusable 1-element args array containing the given value.
-     * The returned array is owned by this VM — callers must not retain it.
+     * Return a reusable 1-element args array containing the given value. The returned array is owned by this VM —
+     * callers must not retain it.
      */
     JSValue[] singleArg(JSValue value) {
         singleArgBuffer[0] = value;
@@ -1947,11 +1671,12 @@ public final class VirtualMachine {
     /**
      * Raise the temporal-dead-zone ReferenceError, naming the variable when it is known.
      * <p>
-     * The message used to be {@code "variable is uninitialized"} — it named nothing, so a TDZ error
-     * in a large function gave the developer nothing to go on, even though the local variable names
-     * are in the bytecode. The wording now matches V8's, which the engine is tested against.
+     * The message used to be {@code "variable is uninitialized"} — it named nothing, so a TDZ error in a large function
+     * gave the developer nothing to go on, even though the local variable names are in the bytecode. The wording now
+     * matches V8's, which the engine is tested against.
      *
-     * @param variableName the variable's name, or {@code null} when it is not recoverable
+     * @param variableName
+     *            the variable's name, or {@code null} when it is not recoverable
      */
     void throwVariableUninitializedReferenceError(String variableName) {
         String message = variableName == null || variableName.isEmpty()
@@ -1978,9 +1703,8 @@ public final class VirtualMachine {
     }
 
     /**
-     * Convert a value to an object (auto-boxing for primitives).
-     * Returns null for null and undefined.
-     * Since JSFunction now extends JSObject, functions are already objects.
+     * Convert a value to an object (auto-boxing for primitives). Returns null for null and undefined. Since JSFunction
+     * now extends JSObject, functions are already objects.
      */
     JSObject toObject(JSValue value) {
         return JSTypeConversions.toObject(context, value);
@@ -2027,13 +1751,233 @@ public final class VirtualMachine {
         }
     }
 
-    enum PendingExceptionAction {
-        NONE,
-        CONTINUE,
-        RETURN
+    /**
+     * Auto-close an iterator during exception unwinding. Following QuickJS JS_IteratorClose semantics: - If
+     * isThrowCompletion is true, close errors are suppressed (original error preserved). - If isThrowCompletion is
+     * false (return completion), close errors propagate and cancel any active generator force return.
+     */
+    private static void autoCloseIterator(ExecutionContext executionContext, JSObject iterator,
+            boolean isThrowCompletion) {
+        JSContext currentContext = executionContext.virtualMachine.context;
+        boolean savedGeneratorForceReturn = executionContext.virtualMachine.generatorForceReturn;
+        JSValue savedGeneratorReturnValue = executionContext.virtualMachine.generatorReturnValue;
+        if (savedGeneratorForceReturn) {
+            executionContext.virtualMachine.generatorForceReturn = false;
+        }
+        JSValue returnMethodValue;
+        try {
+            returnMethodValue = iterator.get(PropertyKey.RETURN);
+        } catch (JSVirtualMachineException e) {
+            if (!isThrowCompletion) {
+                executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
+                executionContext.virtualMachine.generatorForceReturn = false;
+            } else {
+                currentContext.clearPendingException();
+            }
+            return;
+        }
+        if (currentContext.hasPendingException()) {
+            if (!isThrowCompletion) {
+                executionContext.virtualMachine.pendingException = currentContext.getPendingException();
+                executionContext.virtualMachine.generatorForceReturn = false;
+            }
+            currentContext.clearPendingException();
+            return;
+        }
+        boolean shouldRestoreGeneratorForceReturn = true;
+        if (returnMethodValue instanceof JSFunction returnMethod) {
+            JSValue closeResult;
+            try {
+                closeResult = returnMethod.call(currentContext, iterator, JSValue.NO_ARGS);
+            } catch (JSVirtualMachineException e) {
+                if (!isThrowCompletion) {
+                    executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
+                    executionContext.virtualMachine.generatorForceReturn = false;
+                } else {
+                    currentContext.clearPendingException();
+                }
+                return;
+            }
+            if (currentContext.hasPendingException()) {
+                if (!isThrowCompletion) {
+                    executionContext.virtualMachine.pendingException = currentContext.getPendingException();
+                    executionContext.virtualMachine.generatorForceReturn = false;
+                    shouldRestoreGeneratorForceReturn = false;
+                }
+                currentContext.clearPendingException();
+            } else if (!(closeResult instanceof JSObject)) {
+                if (!isThrowCompletion) {
+                    executionContext.virtualMachine.pendingException = currentContext
+                            .throwTypeError("iterator result is not an object");
+                    executionContext.virtualMachine.generatorForceReturn = false;
+                    shouldRestoreGeneratorForceReturn = false;
+                }
+            }
+        }
+
+        if (savedGeneratorForceReturn && shouldRestoreGeneratorForceReturn) {
+            executionContext.virtualMachine.generatorForceReturn = true;
+            executionContext.virtualMachine.generatorReturnValue = savedGeneratorReturnValue;
+        }
+    }
+
+    /**
+     * Build a diagnostic message for an engine defect that escaped the interpreter loop.
+     *
+     * @param function
+     *            the function being executed
+     * @param executionContext
+     *            the execution context, or {@code null} if the failure happened while creating it
+     * @param failure
+     *            the escaping exception
+     * @return a message naming the function, the program counter and the failure type
+     */
+    private static String describeInternalFailure(JSBytecodeFunction function, ExecutionContext executionContext,
+            RuntimeException failure) {
+        StringBuilder message = new StringBuilder("Internal engine error");
+        if (executionContext != null) {
+            message.append(" at pc=").append(executionContext.pc);
+        }
+        if (function != null) {
+            String functionName = function.getName();
+            message.append(" in ")
+                    .append(functionName == null || functionName.isEmpty() ? "<anonymous>" : functionName);
+        }
+        message.append(": ").append(failure.getClass().getName());
+        String failureMessage = failure.getMessage();
+        if (failureMessage != null && !failureMessage.isEmpty()) {
+            message.append(": ").append(failureMessage);
+        }
+        return message.toString();
+    }
+
+    static PendingExceptionAction handlePendingExceptionForExecute(ExecutionContext executionContext) {
+        if (executionContext.virtualMachine.pendingException == null) {
+            return PendingExceptionAction.NONE;
+        }
+
+        JSValue exception = executionContext.virtualMachine.pendingException;
+        executionContext.virtualMachine.pendingException = null;
+        executionContext.virtualMachine.context.clearPendingException();
+
+        boolean foundHandler = false;
+        while (executionContext.virtualMachine.valueStack.stackTop > executionContext.frameStackBase) {
+            JSStackValue stackValue = executionContext.virtualMachine.valueStack.stack[--executionContext.virtualMachine.valueStack.stackTop];
+            if (stackValue instanceof JSCatchOffset catchOffset) {
+                if (catchOffset.isIteratorCloseMarker()) {
+                    // Iterator enumerator marker (from FOR_OF_START). Following QuickJS:
+                    // auto-close the iterator. Stack below is: [iter, next].
+                    // Pop next method, then close iterator.
+                    executionContext.virtualMachine.valueStack.stackTop--; // pop next
+                    int iterIdx = executionContext.virtualMachine.valueStack.stackTop - 1;
+                    if (iterIdx >= executionContext.frameStackBase) {
+                        JSValue iteratorValue = (JSValue) executionContext.virtualMachine.valueStack.stack[iterIdx];
+                        executionContext.virtualMachine.valueStack.stackTop--; // pop iter
+                        if (iteratorValue instanceof JSObject iteratorObj && !iteratorValue.isUndefined()) {
+                            // For throw completions, suppress close errors.
+                            // For return completions (generatorForceReturn), propagate close errors.
+                            boolean isThrowCompletion = !executionContext.virtualMachine.generatorForceReturn;
+                            autoCloseIterator(executionContext, iteratorObj, isThrowCompletion);
+                        }
+                    }
+                    continue;
+                }
+                if (executionContext.virtualMachine.generatorForceReturn && !catchOffset.isFinally()) {
+                    continue;
+                }
+                executionContext.virtualMachine.valueStack.pushStackValue(exception);
+                executionContext.pc = catchOffset.offset();
+                foundHandler = true;
+                executionContext.virtualMachine.context.clearPendingException();
+                break;
+            }
+        }
+        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+
+        if (foundHandler) {
+            return PendingExceptionAction.CONTINUE;
+        }
+
+        if (executionContext.virtualMachine.generatorForceReturn) {
+            executionContext.virtualMachine.generatorForceReturn = false;
+            executionContext.virtualMachine.restoreExecuteCallerState(executionContext.restoreStackTop,
+                    executionContext.previousFrame, executionContext.savedStrictMode);
+            executionContext.virtualMachine.context.clearPendingException();
+            executionContext.returnValue = executionContext.virtualMachine.generatorReturnValue;
+            return PendingExceptionAction.RETURN;
+        }
+
+        if (executionContext.virtualMachine.pendingException != null) {
+            exception = executionContext.virtualMachine.pendingException;
+            executionContext.virtualMachine.pendingException = null;
+        }
+
+        executionContext.virtualMachine.restoreExecuteCallerState(executionContext.restoreStackTop,
+                executionContext.previousFrame, executionContext.savedStrictMode);
+        if (exception instanceof JSError jsError) {
+            String vmMessage = jsError.getVmMessage();
+            if (vmMessage != null && !vmMessage.isEmpty()) {
+                throw new JSVirtualMachineException(vmMessage, jsError);
+            }
+            throw new JSVirtualMachineException(jsError);
+        }
+        String exceptionMessage = executionContext.virtualMachine
+                .safeExceptionToString(executionContext.virtualMachine.context, exception);
+        throw new JSVirtualMachineException("Unhandled exception: " + exceptionMessage, exception);
+    }
+
+    /**
+     * Resolve a local variable's declared name from the running function's bytecode.
+     *
+     * @param frame
+     *            the active stack frame
+     * @param localIndex
+     *            the local slot index
+     * @return the declared name, or {@code null} when it is unavailable
+     */
+    static String localVariableName(StackFrame frame, int localIndex) {
+        if (frame == null || localIndex < 0) {
+            return null;
+        }
+        JSFunction function = frame.getFunction();
+        if (!(function instanceof JSBytecodeFunction bytecodeFunction)) {
+            return null;
+        }
+        String[] names = bytecodeFunction.getBytecode().getLocalVarNames();
+        return names != null && localIndex < names.length ? names[localIndex] : null;
+    }
+
+    /**
+     * Read an own data property as a string without invoking any accessor or Proxy trap.
+     * <p>
+     * {@code getOwnPropertyDescriptor} is virtual, and {@link JSProxy} overrides it with the
+     * {@code getOwnPropertyDescriptor} trap, so this read used to re-enter guest code for a thrown Proxy — during
+     * exception unwinding, which is exactly what this path exists to avoid. {@code getOwnDataPropertyForDiagnostics} is
+     * {@code final} and reads physical storage only.
+     *
+     * @param object
+     *            the object to read from
+     * @param key
+     *            the property key
+     * @return the property rendered as a string, or {@code null} when it is absent, is an accessor, or belongs to a
+     *         Proxy
+     */
+    private static String ownDataPropertyAsString(JSObject object, PropertyKey key) {
+        JSValue value = object.getOwnDataPropertyForDiagnostics(key);
+        if (value instanceof JSString stringValue) {
+            return stringValue.value();
+        }
+        if (value == null || value instanceof JSUndefined) {
+            return null;
+        }
+        return value.toString();
     }
 
     record NumericPair(JSValue left, JSValue right, boolean bigInt) {
+    }
+
+    enum PendingExceptionAction {
+        CONTINUE, NONE, RETURN
     }
 
     /**

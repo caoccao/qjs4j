@@ -29,22 +29,22 @@ import java.util.regex.Matcher;
 /**
  * Runs source: QuickJS's {@code JS_EvalInternal}, as a class.
  * <p>
- * Every public {@code eval} overload on {@link JSContext} funnels through the one private method
- * here, which is the only place the lifecycle guard, the stack-depth check and the exception
- * translation live. What that method does is laid out phase by phase in {@code EvalActivation}: an
- * activation object rather than a six-hundred-line body, because the phases share a great deal of
- * state and the order they run in is the specification's, not an implementation detail.
+ * Every public {@code eval} overload on {@link JSContext} funnels through the one private method here, which is the
+ * only place the lifecycle guard, the stack-depth check and the exception translation live. What that method does is
+ * laid out phase by phase in {@code EvalActivation}: an activation object rather than a six-hundred-line body, because
+ * the phases share a great deal of state and the order they run in is the specification's, not an implementation
+ * detail.
  * <p>
- * It also owns the two pieces of state that only mean anything between a call site and the eval it
- * is about to perform — whether the next {@code eval(...)} call is a syntactic direct eval, and
- * whether it sits in a class field initializer — because the compiler emits the call before the VM
- * makes it, and the flag is how the two agree on which it was.
+ * It also owns the two pieces of state that only mean anything between a call site and the eval it is about to perform
+ * — whether the next {@code eval(...)} call is a syntactic direct eval, and whether it sits in a class field
+ * initializer — because the compiler emits the call before the VM makes it, and the flag is how the two agree on which
+ * it was.
  */
 final class EvalRunner {
     private final JSContext context;
-    private final ModuleSourceTransformer transformer;
     private boolean pendingClassFieldEval;
     private int pendingDirectEvalCalls;
+    private final ModuleSourceTransformer transformer;
 
     EvalRunner(JSContext context, ModuleSourceTransformer transformer) {
         this.context = context;
@@ -109,10 +109,8 @@ final class EvalRunner {
     }
 
     JSValue eval(String code, String filename, boolean isModule, boolean isDirectEval,
-                 boolean predeclareProgramLexicalsAsLocals,
-                 boolean skipGlobalDeclarationTracking,
-                 boolean inheritedStrictModeForDirectEval,
-                 boolean useDirectEvalCallerFrame) {
+            boolean predeclareProgramLexicalsAsLocals, boolean skipGlobalDeclarationTracking,
+            boolean inheritedStrictModeForDirectEval, boolean useDirectEvalCallerFrame) {
         // The single gateway every public eval overload funnels through, so the lifecycle check
         // belongs here. Duplicating it in selected overloads left eval(code, filename, isModule,
         // isDirectEval) unguarded: a closed context ran the source, mutated the realm, and only
@@ -125,10 +123,9 @@ final class EvalRunner {
         if (!context.pushStackFrame(new JSStackFrame("<eval>", filename, 1))) {
             return context.throwError("RangeError", "Maximum call stack size exceeded");
         }
-        EvalActivation activation = new EvalActivation(
-                code, filename, isModule, isDirectEval,
-                predeclareProgramLexicalsAsLocals, skipGlobalDeclarationTracking,
-                inheritedStrictModeForDirectEval, useDirectEvalCallerFrame);
+        EvalActivation activation = new EvalActivation(code, filename, isModule, isDirectEval,
+                predeclareProgramLexicalsAsLocals, skipGlobalDeclarationTracking, inheritedStrictModeForDirectEval,
+                useDirectEvalCallerFrame);
         try {
             return activation.run();
         } catch (JSException e) {
@@ -163,8 +160,8 @@ final class EvalRunner {
     }
 
     /**
-     * Convert a null return from the private eval() into a JSException throw.
-     * Used by all public eval methods to maintain the throwing API contract.
+     * Convert a null return from the private eval() into a JSException throw. Used by all public eval methods to
+     * maintain the throwing API contract.
      */
     JSValue evalOrThrow(JSValue result) {
         if (result == null) {
@@ -176,9 +173,8 @@ final class EvalRunner {
     }
 
     /**
-     * Process all module imports in source order, handling side-effect, namespace, and binding
-     * imports together. This ensures deferred modules' async dependencies are pre-evaluated
-     * in the correct position relative to other imports.
+     * Process all module imports in source order, handling side-effect, namespace, and binding imports together. This
+     * ensures deferred modules' async dependencies are pre-evaluated in the correct position relative to other imports.
      */
     EvalOverlayManager.Frame evaluateModuleImportsInOrder(String code, String filename) {
         String scanCode = transformer.maskModuleComments(code);
@@ -220,7 +216,8 @@ final class EvalRunner {
                     sideEffectMatcher.reset(scanCode);
                     if (sideEffectMatcher.find(start) && sideEffectMatcher.start() == start) {
                         String specifier = transformer.decodeModuleStringLiteralValue(sideEffectMatcher.group(2));
-                        Map<String, String> importAttributes = transformer.extractImportAttributes(sideEffectMatcher.group(0));
+                        Map<String, String> importAttributes = transformer
+                                .extractImportAttributes(sideEffectMatcher.group(0));
                         context.moduleLoader().loadDynamicImportModule(specifier, filename, importAttributes);
                         // If this side-effect import was generated for an export-from,
                         // resolve the corresponding re-export binding immediately so
@@ -234,14 +231,18 @@ final class EvalRunner {
                         String deferKeyword = namespaceMatcher.group(1);
                         String localName = namespaceMatcher.group(2);
                         String specifier = transformer.decodeModuleStringLiteralValue(namespaceMatcher.group(4));
-                        Map<String, String> importAttributes = transformer.extractImportAttributes(namespaceMatcher.group(0));
+                        Map<String, String> importAttributes = transformer
+                                .extractImportAttributes(namespaceMatcher.group(0));
                         JSObject namespaceObject;
                         if ("defer".equals(deferKeyword)) {
-                            namespaceObject = context.moduleLoader().loadDynamicImportModuleDeferred(specifier, filename, importAttributes);
+                            namespaceObject = context.moduleLoader().loadDynamicImportModuleDeferred(specifier,
+                                    filename, importAttributes);
                         } else {
-                            namespaceObject = context.moduleLoader().loadDynamicImportModule(specifier, filename, importAttributes);
+                            namespaceObject = context.moduleLoader().loadDynamicImportModule(specifier, filename,
+                                    importAttributes);
                         }
-                        context.importBindingInstaller().bindImportOverlayValue(globalObject, savedGlobals, absentKeys, localName, namespaceObject);
+                        context.importBindingInstaller().bindImportOverlayValue(globalObject, savedGlobals, absentKeys,
+                                localName, namespaceObject);
                     }
                 } else {
                     // Binding import
@@ -252,32 +253,27 @@ final class EvalRunner {
                             continue;
                         }
                         String specifier = transformer.decodeModuleStringLiteralValue(bindingMatcher.group(3));
-                        Map<String, String> importAttributes = transformer.extractImportAttributes(bindingMatcher.group(0));
-                        if (specifier.endsWith(".json")
-                                && importAttributes != null
+                        Map<String, String> importAttributes = transformer
+                                .extractImportAttributes(bindingMatcher.group(0));
+                        if (specifier.endsWith(".json") && importAttributes != null
                                 && "json".equals(importAttributes.get("type"))) {
                             if (transformer.hasNonDefaultNamedBindings(importClause)) {
-                                throw new JSSyntaxErrorException(
-                                        "JSON modules do not support named exports");
+                                throw new JSSyntaxErrorException("JSON modules do not support named exports");
                             }
                         }
                         if (importAttributes != null) {
                             String attrType = importAttributes.get("type");
                             if ("text".equals(attrType) || "bytes".equals(attrType)) {
                                 if (transformer.hasNonDefaultNamedBindings(importClause)) {
-                                    throw new JSSyntaxErrorException(
-                                            (("text".equals(attrType)) ? "Text" : "Bytes")
-                                                    + " modules do not support named exports");
+                                    throw new JSSyntaxErrorException((("text".equals(attrType)) ? "Text" : "Bytes")
+                                            + " modules do not support named exports");
                                 }
                             }
                         }
-                        JSObject namespaceObject = context.moduleLoader().loadDynamicImportModule(specifier, filename, importAttributes);
-                        context.importBindingInstaller().applyImportClauseBindings(
-                                globalObject,
-                                savedGlobals,
-                                absentKeys,
-                                namespaceObject,
-                                importClause);
+                        JSObject namespaceObject = context.moduleLoader().loadDynamicImportModule(specifier, filename,
+                                importAttributes);
+                        context.importBindingInstaller().applyImportClauseBindings(globalObject, savedGlobals,
+                                absentKeys, namespaceObject, importClause);
                     }
                 }
             }
@@ -313,16 +309,15 @@ final class EvalRunner {
                     continue;
                 }
                 JSDynamicImportModule moduleRecord = context.moduleLoader().cachedModule(resolvedSpec);
-                if (moduleRecord != null
-                        && moduleRecord.status() == JSDynamicImportModule.Status.EVALUATED
+                if (moduleRecord != null && moduleRecord.status() == JSDynamicImportModule.Status.EVALUATED
                         && moduleRecord.namespace().isFinalized()) {
                     context.moduleLinker().validateNamedImportBindings(moduleRecord.namespace(), importClause);
-                } else if (moduleRecord != null
-                        && (moduleRecord.status() == JSDynamicImportModule.Status.LOADING
+                } else if (moduleRecord != null && (moduleRecord.status() == JSDynamicImportModule.Status.LOADING
                         || moduleRecord.status() == JSDynamicImportModule.Status.EVALUATING)) {
                     // For self-referencing or circular imports, the namespace may not be finalized.
                     // Validate through recursive ResolveExport instead of namespace properties.
-                    context.moduleLinker().validateNamedImportBindingsAgainstExplicitExports(moduleRecord, importClause);
+                    context.moduleLinker().validateNamedImportBindingsAgainstExplicitExports(moduleRecord,
+                            importClause);
                 }
             }
         }
@@ -370,10 +365,10 @@ final class EvalRunner {
             }
             if (specifier != null) {
                 try {
-                    String resolvedSpec = context.moduleLoader().resolveDynamicImportSpecifier(specifier, filename, specifier);
+                    String resolvedSpec = context.moduleLoader().resolveDynamicImportSpecifier(specifier, filename,
+                            specifier);
                     JSDynamicImportModule moduleRecord = context.moduleLoader().cachedModule(resolvedSpec);
-                    if (moduleRecord != null
-                            && moduleRecord.status() == JSDynamicImportModule.Status.EVALUATED_ERROR) {
+                    if (moduleRecord != null && moduleRecord.status() == JSDynamicImportModule.Status.EVALUATED_ERROR) {
                         throw new JSException(moduleRecord.evaluationError());
                     }
                 } catch (JSException e) {
@@ -401,57 +396,50 @@ final class EvalRunner {
     /**
      * One run of the eval pipeline, from source text to completion value.
      * <p>
-     * A class rather than one long method because the pipeline is a sequence of phases that share
-     * a great deal of state: the source (which module normalisation rewrites), the compiler and its
-     * flavour flags, the module records registered on the way in and unwound on the way out, and
-     * the error that decides what the context is left holding. Each phase below is one of the
-     * stages ECMAScript names — early errors, linking, GlobalDeclarationInstantiation /
+     * A class rather than one long method because the pipeline is a sequence of phases that share a great deal of
+     * state: the source (which module normalisation rewrites), the compiler and its flavour flags, the module records
+     * registered on the way in and unwound on the way out, and the error that decides what the context is left holding.
+     * Each phase below is one of the stages ECMAScript names — early errors, linking, GlobalDeclarationInstantiation /
      * EvalDeclarationInstantiation, evaluation — in the order they must happen.
      * <p>
-     * An activation is used once. It is created after the stack frame is pushed and released in
-     * {@code eval}'s {@code finally}, so every record it registered is unwound whether the body
-     * completed, threw, or left a pending exception behind.
+     * An activation is used once. It is created after the stack frame is pushed and released in {@code eval}'s
+     * {@code finally}, so every record it registered is unwound whether the body completed, threw, or left a pending
+     * exception behind.
      */
     private final class EvalActivation {
-        private final String filename;
-        private final boolean inheritedStrictModeForDirectEval;
-        private final boolean isDirectEval;
-        private final boolean isModule;
-        private final boolean predeclareProgramLexicalsAsLocals;
-        private final boolean skipGlobalDeclarationTracking;
-        private final boolean useDirectEvalCallerFrame;
         private boolean allowNewTargetInEval;
         private boolean allowSuperCallInEval;
         private boolean allowSuperPropertyInEval;
         private String code;
-        private Compiler.CompileResult compileResult;
         private Compiler compiler;
+        private Compiler.CompileResult compileResult;
         private StackFrame directEvalCallerFrame;
         private JSDynamicImportModule dynamicImportEvalModuleRecord;
         private JSValue evalError;
         private JSValue evalNewTarget;
         private JSValue evalThisArg;
         private boolean evaluatingRawDynamicImportModule;
+        private final String filename;
         private JSBytecodeFunction func;
         private Set<String> globalEvalFunctionNames;
         private Set<String> globalScriptFunctionNames;
+        private final boolean inheritedStrictModeForDirectEval;
+        private final boolean isDirectEval;
+        private final boolean isModule;
         private EvalOverlayManager.Frame moduleNamespaceImportOverlay;
+        private final boolean predeclareProgramLexicalsAsLocals;
         private boolean removeSelfModuleRecordAfterEval;
         private JSDynamicImportModule.Status selfModulePreviousStatus;
         private JSDynamicImportModule selfModuleRecord;
         private boolean shouldEvaluateRawModuleThroughTransformedSource;
         private boolean shouldEvaluateRawTopLevelAwaitModule;
         private boolean skipEvaluatedDynamicImportModule;
+        private final boolean skipGlobalDeclarationTracking;
+        private final boolean useDirectEvalCallerFrame;
 
-        private EvalActivation(
-                String code,
-                String filename,
-                boolean isModule,
-                boolean isDirectEval,
-                boolean predeclareProgramLexicalsAsLocals,
-                boolean skipGlobalDeclarationTracking,
-                boolean inheritedStrictModeForDirectEval,
-                boolean useDirectEvalCallerFrame) {
+        private EvalActivation(String code, String filename, boolean isModule, boolean isDirectEval,
+                boolean predeclareProgramLexicalsAsLocals, boolean skipGlobalDeclarationTracking,
+                boolean inheritedStrictModeForDirectEval, boolean useDirectEvalCallerFrame) {
             this.code = code;
             this.filename = filename;
             this.isModule = isModule;
@@ -465,10 +453,9 @@ final class EvalRunner {
         /**
          * Build the compiler and resolve which flavour of eval this is.
          * <p>
-         * Direct eval inherits a great deal from the frame that called it — strictness,
-         * {@code new.target}, the home object {@code super.x} resolves against, whether
-         * {@code super()} is allowed, and the private names in scope — and all of it is decided
-         * here, from the caller's frame, before a single token is read.
+         * Direct eval inherits a great deal from the frame that called it — strictness, {@code new.target}, the home
+         * object {@code super.x} resolves against, whether {@code super()} is allowed, and the private names in scope —
+         * and all of it is decided here, from the caller's frame, before a single token is read.
          */
         private void createCompiler() {
             compiler = new Compiler(code, filename).setContext(context);
@@ -523,14 +510,11 @@ final class EvalRunner {
         /**
          * Define the global function bindings the body created, now that it has run.
          * <p>
-         * CreateGlobalFunctionBinding's second half: the property's attributes depend on whether it
-         * already existed and on whether this was a script (non-configurable) or a global direct
-         * eval (configurable).
+         * CreateGlobalFunctionBinding's second half: the property's attributes depend on whether it already existed and
+         * on whether this was a script (non-configurable) or a global direct eval (configurable).
          */
         private void defineGlobalFunctionBindingsAfterExecution() {
-            if (!isModule
-                    && isDirectEval
-                    && directEvalCallerFrame != null
+            if (!isModule && isDirectEval && directEvalCallerFrame != null
                     && directEvalCallerFrame.getCaller() == null) {
                 if (globalEvalFunctionNames == null) {
                     globalEvalFunctionNames = new LinkedHashSet<>();
@@ -576,22 +560,24 @@ final class EvalRunner {
         /**
          * Evaluate a tracked module through its own record rather than as plain source.
          * <p>
-         * A module with exports, or one whose imports have to be pulled in first, runs from the
-         * transformed source held on its record; the record then carries whether it finished, is
-         * still awaiting, or failed.
+         * A module with exports, or one whose imports have to be pulled in first, runs from the transformed source held
+         * on its record; the record then carries whether it finished, is still awaiting, or failed.
          *
          * @return the completion value, or null when the module's evaluation failed
          */
         private JSValue evaluateThroughModuleRecord() {
             JSValue evalResult = context.moduleLoader().evaluateDynamicImportModule(dynamicImportEvalModuleRecord);
             if (dynamicImportEvalModuleRecord.hasTLA() && evalResult instanceof JSPromise asyncPromise) {
-                dynamicImportEvalModuleRecord.setAsyncEvaluationOrder(context.moduleLoader().nextAsyncEvaluationOrder());
+                dynamicImportEvalModuleRecord
+                        .setAsyncEvaluationOrder(context.moduleLoader().nextAsyncEvaluationOrder());
                 dynamicImportEvalModuleRecord.setStatus(JSDynamicImportModule.Status.EVALUATING_ASYNC);
                 dynamicImportEvalModuleRecord.setAsyncEvaluationPromise(asyncPromise);
-                context.moduleLoader().registerAsyncModuleCompletion(dynamicImportEvalModuleRecord, asyncPromise, new HashSet<>());
+                context.moduleLoader().registerAsyncModuleCompletion(dynamicImportEvalModuleRecord, asyncPromise,
+                        new HashSet<>());
             } else {
                 if (dynamicImportEvalModuleRecord.hasExportSyntax()) {
-                    context.moduleLinker().resolveDynamicImportReExports(dynamicImportEvalModuleRecord, new HashSet<>());
+                    context.moduleLinker().resolveDynamicImportReExports(dynamicImportEvalModuleRecord,
+                            new HashSet<>());
                     dynamicImportEvalModuleRecord.namespace().finalizeNamespace();
                 }
                 dynamicImportEvalModuleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
@@ -609,8 +595,8 @@ final class EvalRunner {
         /**
          * Run the compiled body on the virtual machine.
          * <p>
-         * The module-body counters move here, and only here: crossing this line is the observable
-         * boundary between a graph that failed to link and one that linked and then threw. See
+         * The module-body counters move here, and only here: crossing this line is the observable boundary between a
+         * graph that failed to link and one that linked and then threw. See
          * {@link JSContext#getModuleBodyEvaluationCount()}.
          *
          * @return the body's completion value, or null when it left a pending exception
@@ -656,18 +642,15 @@ final class EvalRunner {
         /**
          * Hand the import overlay to the module's evaluation promise when the body is still running.
          * <p>
-         * A top-level-await body has not finished when {@code execute} returns its promise, so
-         * taking its imports away now would remove them from underneath it.
+         * A top-level-await body has not finished when {@code execute} returns its promise, so taking its imports away
+         * now would remove them from underneath it.
          *
-         * @param result the body's completion value
+         * @param result
+         *            the body's completion value
          */
         private void handOverImportOverlayToAsyncModule(JSValue result) {
-            if (isModule
-                    && !isDirectEval
-                    && moduleNamespaceImportOverlay != null
-                    && evaluatingRawDynamicImportModule
-                    && dynamicImportEvalModuleRecord != null
-                    && dynamicImportEvalModuleRecord.hasExportSyntax()
+            if (isModule && !isDirectEval && moduleNamespaceImportOverlay != null && evaluatingRawDynamicImportModule
+                    && dynamicImportEvalModuleRecord != null && dynamicImportEvalModuleRecord.hasExportSyntax()
                     && result instanceof JSPromise asyncModulePromise) {
                 context.evalOverlayManager().registerDeferredRestore(asyncModulePromise, moduleNamespaceImportOverlay);
                 moduleNamespaceImportOverlay = null;
@@ -675,13 +658,11 @@ final class EvalRunner {
         }
 
         /**
-         * EvalDeclarationInstantiation's CanDeclareGlobalFunction / CanDeclareGlobalVar checks,
-         * ES2024 19.2.1.3 step 8.
+         * EvalDeclarationInstantiation's CanDeclareGlobalFunction / CanDeclareGlobalVar checks, ES2024 19.2.1.3 step 8.
          * <p>
-         * Every check runs before any code does: a function declaration targeting a
-         * non-configurable global property that is not both writable and enumerable is a
-         * {@code TypeError} raised in front of the eval, not part-way through it. Following
-         * QuickJS's {@code js_closure2} first pass with {@code JS_CheckDefineGlobalVar}.
+         * Every check runs before any code does: a function declaration targeting a non-configurable global property
+         * that is not both writable and enumerable is a {@code TypeError} raised in front of the eval, not part-way
+         * through it. Following QuickJS's {@code js_closure2} first pass with {@code JS_CheckDefineGlobalVar}.
          */
         private void instantiateEvalGlobalDeclarations() {
             if (isModule || !isDirectEval) {
@@ -694,8 +675,7 @@ final class EvalRunner {
                 PropertyKey key = PropertyKey.fromString(functionName);
                 PropertyDescriptor desc = context.getGlobalObject().getOwnPropertyDescriptor(key);
                 if (desc != null && !desc.isConfigurable()) {
-                    if (desc.isAccessorDescriptor()
-                            || !(desc.isWritable() && desc.isEnumerable())) {
+                    if (desc.isAccessorDescriptor() || !(desc.isWritable() && desc.isEnumerable())) {
                         throw new JSException(context.throwTypeError("cannot define variable '" + functionName + "'"));
                     }
                 }
@@ -704,11 +684,8 @@ final class EvalRunner {
                 }
                 if (directEvalCallerFrame != null && directEvalCallerFrame.getCaller() == null) {
                     if (desc == null || desc.isConfigurable()) {
-                        JSValue initialValue = desc != null && desc.hasValue()
-                                ? desc.getValue()
-                                : JSUndefined.INSTANCE;
-                        context.getGlobalObject().defineProperty(
-                                key,
+                        JSValue initialValue = desc != null && desc.hasValue() ? desc.getValue() : JSUndefined.INSTANCE;
+                        context.getGlobalObject().defineProperty(key,
                                 PropertyDescriptor.dataDescriptor(initialValue, PropertyDescriptor.DataState.All));
                     }
                 }
@@ -719,9 +696,9 @@ final class EvalRunner {
                         continue;
                     }
                     PropertyKey key = PropertyKey.fromString(declarationName);
-                    if (!context.getGlobalObject().has(key)
-                            && !context.getGlobalObject().isExtensible()) {
-                        throw new JSException(context.throwTypeError("cannot define variable '" + declarationName + "'"));
+                    if (!context.getGlobalObject().has(key) && !context.getGlobalObject().isExtensible()) {
+                        throw new JSException(
+                                context.throwTypeError("cannot define variable '" + declarationName + "'"));
                     }
                 }
             }
@@ -730,10 +707,9 @@ final class EvalRunner {
         /**
          * GlobalDeclarationInstantiation for a top-level script, ES2024 16.1.7.
          * <p>
-         * Every redeclaration conflict is decided before anything runs — against the names previous
-         * scripts declared as well as against the global object's own properties — and the
-         * {@code var} bindings are created as non-configurable properties, so they exist from the
-         * first statement onwards.
+         * Every redeclaration conflict is decided before anything runs — against the names previous scripts declared as
+         * well as against the global object's own properties — and the {@code var} bindings are created as
+         * non-configurable properties, so they exist from the first statement onwards.
          */
         private void instantiateScriptGlobalDeclarations() {
             if (isModule || isDirectEval || skipGlobalDeclarationTracking) {
@@ -753,29 +729,25 @@ final class EvalRunner {
             // or restricted global properties (non-configurable or script-level var)
             for (String name : newLexDecls) {
                 if (context.globalLexicalScope().hasLexDeclaration(name)) {
-                    throw new JSSyntaxErrorException(
-                            "Identifier '" + name + "' has already been declared");
+                    throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
                 }
                 // Check for non-configurable property on global object
                 PropertyKey key = PropertyKey.fromString(name);
                 PropertyDescriptor desc = context.getGlobalObject().getOwnPropertyDescriptor(key);
                 if (desc != null && !desc.isConfigurable()) {
-                    throw new JSSyntaxErrorException(
-                            "Identifier '" + name + "' has already been declared");
+                    throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
                 }
                 // Check against script-level var declarations (these should be
                 // non-configurable per spec, tracked separately)
                 if (context.globalLexicalScope().hasVarDeclaration(name)) {
-                    throw new JSSyntaxErrorException(
-                            "Identifier '" + name + "' has already been declared");
+                    throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
                 }
             }
 
             // Check: var/function names must not collide with existing lex declarations
             for (String name : newVarDecls) {
                 if (context.globalLexicalScope().hasLexDeclaration(name)) {
-                    throw new JSSyntaxErrorException(
-                            "Identifier '" + name + "' has already been declared");
+                    throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
                 }
             }
 
@@ -790,8 +762,7 @@ final class EvalRunner {
                     continue;
                 }
                 if (!desc.isConfigurable()) {
-                    if (desc.isAccessorDescriptor()
-                            || !(desc.isWritable() && desc.isEnumerable())) {
+                    if (desc.isAccessorDescriptor() || !(desc.isWritable() && desc.isEnumerable())) {
                         throw new JSException(context.throwTypeError("cannot define variable '" + functionName + "'"));
                     }
                 }
@@ -815,11 +786,8 @@ final class EvalRunner {
                 }
                 if (existing == null) {
                     // Property doesn't exist: create {writable, enumerable, NOT configurable}
-                    context.getGlobalObject().defineProperty(key,
-                            PropertyDescriptor.dataDescriptor(
-                                    JSUndefined.INSTANCE,
-                                    PropertyDescriptor.DataState.EnumerableWritable
-                            ));
+                    context.getGlobalObject().defineProperty(key, PropertyDescriptor
+                            .dataDescriptor(JSUndefined.INSTANCE, PropertyDescriptor.DataState.EnumerableWritable));
                 }
             }
         }
@@ -833,22 +801,18 @@ final class EvalRunner {
         }
 
         /**
-         * Resolve the {@code this} binding, {@code new.target} and the captured references the body
-         * runs with.
+         * Resolve the {@code this} binding, {@code new.target} and the captured references the body runs with.
          * <p>
-         * ES2024 PerformEval: a direct eval sees its caller's {@code this}, and — where the caller
-         * allows it — its {@code new.target}, its home object, and the shared {@code this} binding
-         * a derived constructor's {@code super()} initialises. A module's top-level {@code this} is
-         * {@code undefined} (16.2.1.6.4).
+         * ES2024 PerformEval: a direct eval sees its caller's {@code this}, and — where the caller allows it — its
+         * {@code new.target}, its home object, and the shared {@code this} binding a derived constructor's
+         * {@code super()} initialises. A module's top-level {@code this} is {@code undefined} (16.2.1.6.4).
          */
         private void prepareExecutionEnvironment() {
             // For direct eval, inherit the caller's 'this' binding per ES2024 PerformEval.
             // In strict mode functions called without receiver, 'this' is undefined, and
             // eval('this') must see that same undefined value, not the global object.
             // ES2024 16.2.1.6.4: Module top-level 'this' is undefined.
-            evalThisArg = isModule && !isDirectEval
-                    ? JSUndefined.INSTANCE
-                    : context.getGlobalObject();
+            evalThisArg = isModule && !isDirectEval ? JSUndefined.INSTANCE : context.getGlobalObject();
             evalNewTarget = JSUndefined.INSTANCE;
             if (isDirectEval && directEvalCallerFrame != null) {
                 evalThisArg = directEvalCallerFrame.getThisArg();
@@ -922,10 +886,7 @@ final class EvalRunner {
             if (!isModule && !isDirectEval && globalScriptFunctionNames != null) {
                 globalFunctionBindingInitializations = new HashSet<>(globalScriptFunctionNames);
             }
-            if (!isModule
-                    && isDirectEval
-                    && directEvalCallerFrame != null
-                    && directEvalCallerFrame.getCaller() == null
+            if (!isModule && isDirectEval && directEvalCallerFrame != null && directEvalCallerFrame.getCaller() == null
                     && globalEvalFunctionNames != null) {
                 if (globalFunctionBindingInitializations == null) {
                     globalFunctionBindingInitializations = new HashSet<>();
@@ -933,14 +894,13 @@ final class EvalRunner {
                 globalFunctionBindingInitializations.addAll(globalEvalFunctionNames);
                 globalFunctionBindingsConfigurable = true;
             }
-            context.setGlobalFunctionBindingInitializations(
-                    globalFunctionBindingInitializations,
+            context.setGlobalFunctionBindingInitializations(globalFunctionBindingInitializations,
                     globalFunctionBindingsConfigurable);
         }
 
         /**
-         * Raise the source's early errors, link the graph it names, and put its declarations on
-         * their own lines — in that order, and all before anything is evaluated.
+         * Raise the source's early errors, link the graph it names, and put its declarations on their own lines — in
+         * that order, and all before anything is evaluated.
          */
         private void prepareModuleSource() {
             if (!isModule || isDirectEval) {
@@ -974,13 +934,11 @@ final class EvalRunner {
         /**
          * Register this module in the cache as EVALUATING, then evaluate its imports.
          * <p>
-         * The record goes in before the imports are processed, because that is what lets a module
-         * importing itself — {@code import defer * as self from './thisFile.js'} — see the
-         * re-entrancy and fail instead of recursing.
+         * The record goes in before the imports are processed, because that is what lets a module importing itself —
+         * {@code import defer * as self from './thisFile.js'} — see the re-entrancy and fail instead of recursing.
          */
         private void registerSelfModuleAndEvaluateImports() {
-            if (!isModule || isDirectEval
-                    || filename == null || filename.isEmpty() || filename.startsWith("<")) {
+            if (!isModule || isDirectEval || filename == null || filename.isEmpty() || filename.startsWith("<")) {
                 return;
             }
             // Register the current module as EVALUATING in the cache so that
@@ -995,8 +953,8 @@ final class EvalRunner {
                 existingRecord.setStatus(JSDynamicImportModule.Status.EVALUATING);
                 selfModuleRecord = existingRecord;
             } else {
-                selfModuleRecord = new JSDynamicImportModule(
-                        normalizedFilename, context.moduleLoader().createModuleNamespaceObject());
+                selfModuleRecord = new JSDynamicImportModule(normalizedFilename,
+                        context.moduleLoader().createModuleNamespaceObject());
                 selfModuleRecord.setStatus(JSDynamicImportModule.Status.EVALUATING);
                 selfModuleRecord.setRawSource(code);
                 context.moduleLoader().cacheModule(normalizedFilename, selfModuleRecord);
@@ -1009,11 +967,10 @@ final class EvalRunner {
         /**
          * Unwind everything this activation registered, and leave the context in a clean state.
          * <p>
-         * Runs whether the body completed, threw, or left a pending exception behind: a module
-         * record registered for an evaluation that did not finish is evicted, the import overlay is
-         * taken off the global object, and the stack frame is popped. The pending exception is
-         * cleared and then re-set from {@code evalError}, so what the context holds afterwards is
-         * exactly the error this eval is reporting and nothing a nested one left over.
+         * Runs whether the body completed, threw, or left a pending exception behind: a module record registered for an
+         * evaluation that did not finish is evicted, the import overlay is taken off the global object, and the stack
+         * frame is popped. The pending exception is cleared and then re-set from {@code evalError}, so what the context
+         * holds afterwards is exactly the error this eval is reporting and nothing a nested one left over.
          */
         private void release() {
             if (evalError != null && dynamicImportEvalModuleRecord != null
@@ -1056,10 +1013,8 @@ final class EvalRunner {
                 context.processMicrotasks();
                 return JSUndefined.INSTANCE;
             }
-            if (evaluatingRawDynamicImportModule
-                    && (dynamicImportEvalModuleRecord.hasExportSyntax()
-                    || shouldEvaluateRawModuleThroughTransformedSource
-                    || shouldEvaluateRawTopLevelAwaitModule)) {
+            if (evaluatingRawDynamicImportModule && (dynamicImportEvalModuleRecord.hasExportSyntax()
+                    || shouldEvaluateRawModuleThroughTransformedSource || shouldEvaluateRawTopLevelAwaitModule)) {
                 return evaluateThroughModuleRecord();
             }
 
@@ -1093,27 +1048,24 @@ final class EvalRunner {
         }
 
         /**
-         * Decide whether this source is a module the realm should track a record for, and register
-         * or reuse that record.
+         * Decide whether this source is a module the realm should track a record for, and register or reuse that
+         * record.
          * <p>
-         * Only a module loaded under a real file name is tracked: a record is what lets a later
-         * {@code import} of the same file find it rather than evaluate it a second time, and source
-         * handed straight to {@code eval} has no identity to key one on.
+         * Only a module loaded under a real file name is tracked: a record is what lets a later {@code import} of the
+         * same file find it rather than evaluate it a second time, and source handed straight to {@code eval} has no
+         * identity to key one on.
          */
         private void trackDynamicImportModule() {
-            boolean shouldTrackDynamicImportModule = isModule
-                    && !isDirectEval
-                    && filename != null
-                    && !filename.isEmpty()
-                    && !filename.startsWith("<")
+            boolean shouldTrackDynamicImportModule = isModule && !isDirectEval && filename != null
+                    && !filename.isEmpty() && !filename.startsWith("<")
                     && (code.contains("import(") || code.contains("import.defer(")
-                    || transformer.hasModuleExportSyntax(code)
-                    || transformer.hasModuleStaticImportSyntax(code)
-                    || transformer.hasModuleTopLevelAwaitSyntax(code));
+                            || transformer.hasModuleExportSyntax(code) || transformer.hasModuleStaticImportSyntax(code)
+                            || transformer.hasModuleTopLevelAwaitSyntax(code));
             if (shouldTrackDynamicImportModule) {
                 String resolvedModuleSpecifier;
                 try {
-                    resolvedModuleSpecifier = context.moduleLoader().resolveDynamicImportSpecifier(filename, null, filename);
+                    resolvedModuleSpecifier = context.moduleLoader().resolveDynamicImportSpecifier(filename, null,
+                            filename);
                 } catch (JSException jsException) {
                     // A filename that does not resolve to a module on disk is normal here — the
                     // source was handed to eval() directly. Clear the pending exception the
@@ -1130,8 +1082,8 @@ final class EvalRunner {
                 if (!executingTransformedModuleSource) {
                     dynamicImportEvalModuleRecord = existingRecord;
                     if (dynamicImportEvalModuleRecord == null) {
-                        dynamicImportEvalModuleRecord =
-                                new JSDynamicImportModule(resolvedModuleSpecifier, context.moduleLoader().createModuleNamespaceObject());
+                        dynamicImportEvalModuleRecord = new JSDynamicImportModule(resolvedModuleSpecifier,
+                                context.moduleLoader().createModuleNamespaceObject());
                         dynamicImportEvalModuleRecord.setStatus(JSDynamicImportModule.Status.LOADING);
                         dynamicImportEvalModuleRecord.setRawSource(code);
                         // Early errors were already raised above, against the caller's own text
@@ -1143,20 +1095,14 @@ final class EvalRunner {
                     }
                 }
             }
-            evaluatingRawDynamicImportModule =
-                    dynamicImportEvalModuleRecord != null
-                            && Objects.equals(dynamicImportEvalModuleRecord.rawSource(), code);
-            shouldEvaluateRawModuleThroughTransformedSource =
-                    evaluatingRawDynamicImportModule
-                            && !dynamicImportEvalModuleRecord.hasExportSyntax()
-                            && !dynamicImportEvalModuleRecord.hasTLA()
-                            && transformer.hasModuleStaticImportSyntax(code)
-                            && code.contains("import(");
-            shouldEvaluateRawTopLevelAwaitModule =
-                    evaluatingRawDynamicImportModule
-                            && !dynamicImportEvalModuleRecord.hasExportSyntax()
-                            && dynamicImportEvalModuleRecord.hasTLA()
-                            && !transformer.hasModuleStaticImportSyntax(code);
+            evaluatingRawDynamicImportModule = dynamicImportEvalModuleRecord != null
+                    && Objects.equals(dynamicImportEvalModuleRecord.rawSource(), code);
+            shouldEvaluateRawModuleThroughTransformedSource = evaluatingRawDynamicImportModule
+                    && !dynamicImportEvalModuleRecord.hasExportSyntax() && !dynamicImportEvalModuleRecord.hasTLA()
+                    && transformer.hasModuleStaticImportSyntax(code) && code.contains("import(");
+            shouldEvaluateRawTopLevelAwaitModule = evaluatingRawDynamicImportModule
+                    && !dynamicImportEvalModuleRecord.hasExportSyntax() && dynamicImportEvalModuleRecord.hasTLA()
+                    && !transformer.hasModuleStaticImportSyntax(code);
         }
     }
 }

@@ -32,26 +32,25 @@ import java.util.stream.Stream;
  * Main runner for executing test262 conformance tests.
  */
 public class Test262Runner {
-    /**
-     * The prefix every worker thread's name carries, so a leaked worker is identifiable.
-     * <p>
-     * Each runner appends a number of its own — see {@link #workerThreadNamePrefix()} — so a
-     * thread that outlives its run can be traced back to the run that started it rather than to
-     * "some Test262 run in this JVM".
-     */
-    static final String WORKER_THREAD_NAME_PREFIX = "test262-worker-";
     private static final long DEFAULT_WORKER_TERMINATION_TIMEOUT_MILLISECONDS = TimeUnit.MINUTES.toMillis(5);
     /**
      * The selections this runner accepts, and nothing else.
      * <p>
-     * A map rather than a {@code switch} with a {@code default}, so that an argument the runner does
-     * not recognise has nowhere to fall through to.
+     * A map rather than a {@code switch} with a {@code default}, so that an argument the runner does not recognise has
+     * nowhere to fall through to.
      */
-    private static final Map<String, Supplier<Test262Config>> MODE_CONFIGURATIONS = Map.of(
-            "--quick", Test262Config::forQuickTest,
-            "--language", Test262Config::forLanguageTests,
-            "--long-running", Test262Config::forLongRunningTest);
+    private static final Map<String, Supplier<Test262Config>> MODE_CONFIGURATIONS = Map.of("--quick",
+            Test262Config::forQuickTest, "--language", Test262Config::forLanguageTests, "--long-running",
+            Test262Config::forLongRunningTest);
     private static final AtomicInteger RUNNER_NUMBER = new AtomicInteger();
+    /**
+     * The prefix every worker thread's name carries, so a leaked worker is identifiable.
+     * <p>
+     * Each runner appends a number of its own — see {@link #workerThreadNamePrefix()} — so a thread that outlives its
+     * run can be traced back to the run that started it rather than to "some Test262 run in this JVM".
+     */
+    static final String WORKER_THREAD_NAME_PREFIX = "test262-worker-";
+    private boolean allowEmptySelection;
     private final Test262Config config;
     private final Test262Executor executor;
     private final Test262Parser parser;
@@ -59,10 +58,8 @@ public class Test262Runner {
     private final Integer requestedThreadCount;
     private final String singleTestPathFragment;
     private final Path test262Root;
-    private final String workerThreadNamePrefix =
-            WORKER_THREAD_NAME_PREFIX + RUNNER_NUMBER.incrementAndGet() + "-";
-    private boolean allowEmptySelection;
     private long workerTerminationTimeoutMilliseconds = DEFAULT_WORKER_TERMINATION_TIMEOUT_MILLISECONDS;
+    private final String workerThreadNamePrefix = WORKER_THREAD_NAME_PREFIX + RUNNER_NUMBER.incrementAndGet() + "-";
 
     public Test262Runner(Path test262Root, Test262Config config) {
         this(test262Root, config, null, null);
@@ -72,10 +69,7 @@ public class Test262Runner {
         this(test262Root, config, singleTestPathFragment, null);
     }
 
-    public Test262Runner(
-            Path test262Root,
-            Test262Config config,
-            String singleTestPathFragment,
+    public Test262Runner(Path test262Root, Test262Config config, String singleTestPathFragment,
             Integer requestedThreadCount) {
         this.test262Root = test262Root;
         this.config = config;
@@ -87,149 +81,19 @@ public class Test262Runner {
         this.reporter = new Test262Reporter();
     }
 
-    public static void main(String[] args) {
-        int exitCode = 1;
-        try {
-            exitCode = runMain(args);
-        } catch (Exception e) {
-            System.err.println("Error running test262: " + e.getMessage());
-            e.printStackTrace();
-        }
-        if (exitCode != 0) {
-            System.exit(exitCode);
-        }
-    }
-
-    /**
-     * State what this run is, report what is wrong with its premises, and say whether it should go
-     * ahead.
-     * <p>
-     * The revision and the zone are printed whatever happens. A pass count means nothing without
-     * them, and a log is where a count outlives the machine that produced it — the CI artifact is
-     * this output and nothing else, so a summary copied out of it has to carry its own provenance.
-     * <p>
-     * A suite whose revision is not the pinned one, or cannot be read at all, is refused: counts
-     * from another revision are not comparable with anything this repository records, and a suite
-     * that cannot be identified cannot be said to be the pinned one. A host in a zone the pinned
-     * harness dislikes is only printed — it costs a handful of intl402 interpretations, not the
-     * meaning of the run.
-     *
-     * @param test262Root the suite root
-     * @return true when the run should be refused
-     */
-    private static boolean reportEnvironment(Path test262Root) {
-        System.out.println(Test262Environment.describe(test262Root));
-        boolean refused = false;
-        for (Test262Environment.Diagnostic diagnostic : Test262Environment.check(test262Root)) {
-            System.err.println((diagnostic.fatal() ? "Error: " : "Warning: ") + diagnostic.message());
-            refused |= diagnostic.fatal();
-        }
-        return refused;
-    }
-
-    /**
-     * Parse the command line, run the suite and decide the process status.
-     * <p>
-     * Anything that means "the suite did not demonstrate conformance" is a nonzero status: a
-     * failing test, a timeout, a missing test root, a filter that selected nothing, or an
-     * interrupted run. Previously only a thrown Java exception was a failure, so a run in which
-     * every test failed — or in which no test ran at all — still reported {@code BUILD SUCCESSFUL}.
-     *
-     * @param args the command line
-     * @return the process exit status
-     * @throws IOException if test discovery fails
-     */
-    static int runMain(String[] args) throws IOException {
-        {
-            Path test262Root = Paths.get("../test262");
-            String mode = null;
-            String singleTestPathFragment = null;
-            Integer requestedThreadCount = null;
-
-            int argIndex = 0;
-            if (args.length > 0 && !args[0].startsWith("--")) {
-                test262Root = Paths.get(args[0]);
-                argIndex = 1;
-            }
-            while (argIndex < args.length) {
-                String argument = args[argIndex];
-                if ("--single".equals(argument)) {
-                    if (argIndex + 1 >= args.length) {
-                        throw new IllegalArgumentException("Missing value for --single");
-                    }
-                    singleTestPathFragment = args[argIndex + 1];
-                    argIndex += 2;
-                    continue;
-                }
-                if ("--threads".equals(argument)) {
-                    if (argIndex + 1 >= args.length) {
-                        throw new IllegalArgumentException("Missing value for --threads");
-                    }
-                    requestedThreadCount = Integer.parseInt(args[argIndex + 1]);
-                    argIndex += 2;
-                    continue;
-                }
-                // Anything left has to be a mode, and it has to be one this runner knows. Every
-                // unrecognised argument used to overwrite `mode` and then fall through the switch
-                // below to the full default selection, so `--quik`, a stray positional, or a focus
-                // argument appended after `--quick` silently ran a much larger suite than the one
-                // asked for — and a mistyped `--long-running` silently ran no long-running test
-                // while still reporting success.
-                if (!MODE_CONFIGURATIONS.containsKey(argument)) {
-                    throw new IllegalArgumentException(
-                            "Unknown argument '" + argument + "'.\n" + usage());
-                }
-                if (mode != null) {
-                    throw new IllegalArgumentException(
-                            "Modes are mutually exclusive, but both '" + mode + "' and '" + argument
-                                    + "' were given.\n" + usage());
-                }
-                mode = argument;
-                argIndex++;
-            }
-
-            // A pass count means nothing without the suite revision that produced it and the zone
-            // the host read dates in. Both used to be arranged in one CI workflow, so the
-            // documented Gradle command accepted whatever was on disk; a run that cannot say what
-            // it tested is checked here instead, once, before anything is discovered.
-            if (reportEnvironment(test262Root)) {
-                return 1;
-            }
-
-            Test262Config config = mode == null
-                    ? Test262Config.loadDefault()
-                    : MODE_CONFIGURATIONS.get(mode).get();
-
-            Test262Runner runner = new Test262Runner(test262Root, config, singleTestPathFragment, requestedThreadCount);
-            return runner.run().exitCode();
-        }
-    }
-
-    /**
-     * How to invoke the runner.
-     *
-     * @return the usage text
-     */
-    private static String usage() {
-        List<String> modes = new ArrayList<>(MODE_CONFIGURATIONS.keySet());
-        Collections.sort(modes);
-        return "Usage: Test262Runner [<test262-root>] [" + String.join(" | ", modes) + "]"
-                + " [--single <path-fragment>] [--threads <count>]\n"
-                + "With no mode, the full default selection runs.";
-    }
-
     /**
      * Wait for every worker to stop, ignoring further interruption so cleanup always completes.
      * <p>
-     * Java interruption is cooperative, so this can only ever wait — a native call, a monitor wait
-     * or a loop that never checks its interrupt flag survives {@code shutdownNow()}. Waiting
-     * forever is not an option either, so the wait has a deadline and what happens past it is
-     * reported rather than assumed: the count of workers still running becomes part of the run's
-     * outcome, and the reporter is frozen so nothing they do afterwards can move a number the
+     * Java interruption is cooperative, so this can only ever wait — a native call, a monitor wait or a loop that never
+     * checks its interrupt flag survives {@code shutdownNow()}. Waiting forever is not an option either, so the wait
+     * has a deadline and what happens past it is reported rather than assumed: the count of workers still running
+     * becomes part of the run's outcome, and the reporter is frozen so nothing they do afterwards can move a number the
      * caller has already been given.
      *
-     * @param executorService the pool, already shut down
-     * @param workerThreads   every thread created by the pool's thread factory
+     * @param executorService
+     *            the pool, already shut down
+     * @param workerThreads
+     *            every thread created by the pool's thread factory
      * @return how the wait ended
      */
     WorkerShutdown awaitWorkerTermination(ThreadPoolExecutor executorService, List<Thread> workerThreads) {
@@ -239,8 +103,8 @@ public class Test262Runner {
         while (true) {
             try {
                 long remainingNanoseconds = Math.max(0L, deadline - System.nanoTime());
-                if (executorService.awaitTermination(
-                        Math.min(pollNanoseconds, remainingNanoseconds), TimeUnit.NANOSECONDS)) {
+                if (executorService.awaitTermination(Math.min(pollNanoseconds, remainingNanoseconds),
+                        TimeUnit.NANOSECONDS)) {
                     // The pool signals termination from its last worker's exit bookkeeping,
                     // before that thread has returned from run(). Join the actual threads so
                     // a clean outcome also guarantees that none is still alive. Every join
@@ -266,8 +130,8 @@ public class Test262Runner {
             if (System.nanoTime() - deadline >= 0) {
                 // getActiveCount() is already zero during the thread-exit window above.
                 int abandonedWorkers = Math.max(1, (int) workerThreads.stream().filter(Thread::isAlive).count());
-                System.err.println("Gave up waiting for " + abandonedWorkers
-                        + " test task(s) to finish; abandoning them");
+                System.err.println(
+                        "Gave up waiting for " + abandonedWorkers + " test task(s) to finish; abandoning them");
                 return new WorkerShutdown(false, abandonedWorkers);
             }
         }
@@ -277,10 +141,8 @@ public class Test262Runner {
         List<Path> testFiles = new ArrayList<>();
 
         try (Stream<Path> paths = Files.walk(testsDir)) {
-            paths.filter(Files::isRegularFile)
-                    .filter(p -> p.toString().endsWith(".js"))
-                    .filter(p -> !p.toString().contains("_FIXTURE"))
-                    .filter(p -> config.matchesIncludePattern(p))
+            paths.filter(Files::isRegularFile).filter(p -> p.toString().endsWith(".js"))
+                    .filter(p -> !p.toString().contains("_FIXTURE")).filter(p -> config.matchesIncludePattern(p))
                     .sorted(Comparator.comparing(Path::toString)) // Sort for consistent order
                     .forEach(testFiles::add);
         }
@@ -290,16 +152,15 @@ public class Test262Runner {
     private List<Path> discoverTestsWithSingleFilter(Path testsDir) throws IOException {
         List<Path> testFiles = discoverTests(testsDir);
         String normalizedPathFragment = singleTestPathFragment.replace('\\', '/');
-        testFiles.removeIf(testFile ->
-                !testFile.toString().replace('\\', '/').contains(normalizedPathFragment));
+        testFiles.removeIf(testFile -> !testFile.toString().replace('\\', '/').contains(normalizedPathFragment));
         return testFiles;
     }
 
     /**
      * The reporter this run wrote into.
      * <p>
-     * Package-private and for tests: what a run returns should not change afterwards, and proving
-     * that means being able to look at the reporter once the run is over.
+     * Package-private and for tests: what a run returns should not change afterwards, and proving that means being able
+     * to look at the reporter once the run is over.
      *
      * @return the reporter
      */
@@ -332,7 +193,8 @@ public class Test262Runner {
      * Discover, expand and execute the selected tests.
      *
      * @return a structured outcome; {@link RunOutcome#exitCode()} is what {@code main} exits with
-     * @throws IOException if test discovery fails
+     * @throws IOException
+     *             if test discovery fails
      */
     public RunOutcome run() throws IOException {
         System.out.println("Test262 Runner for qjs4j");
@@ -403,9 +265,8 @@ public class Test262Runner {
 
         AtomicInteger workerNumber = new AtomicInteger();
         List<Thread> workerThreads = new CopyOnWriteArrayList<>();
-        ThreadPoolExecutor executorService = new ThreadPoolExecutor(
-                threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
-                runnable -> {
+        ThreadPoolExecutor executorService = new ThreadPoolExecutor(threadCount, threadCount, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>(), runnable -> {
                     // Named so a leaked worker is identifiable, and daemon so one that will not
                     // stop cannot keep the JVM alive after run() has returned.
                     Thread worker = new Thread(runnable, workerThreadNamePrefix + workerNumber.incrementAndGet());
@@ -463,9 +324,8 @@ public class Test262Runner {
                         }
                     }
                 } catch (Throwable t) {
-                    reporter.recordResult(TestResult.fail(parsedFile,
-                            "Unexpected runner error: " + t.getClass().getSimpleName()
-                                    + (t.getMessage() != null ? " - " + t.getMessage() : "")));
+                    reporter.recordResult(TestResult.fail(parsedFile, "Unexpected runner error: "
+                            + t.getClass().getSimpleName() + (t.getMessage() != null ? " - " + t.getMessage() : "")));
                 }
             });
             futures.add(future);
@@ -491,8 +351,8 @@ public class Test262Runner {
                 Test262TestCase testCase = testCases.get(i);
                 Throwable cause = e.getCause() == null ? e : e.getCause();
                 System.err.println("Error processing test " + testCase.getPath() + ": " + cause.getMessage());
-                reporter.recordResult(TestResult.fail(testCase,
-                        "Internal runner error: " + cause.getClass().getSimpleName()
+                reporter.recordResult(
+                        TestResult.fail(testCase, "Internal runner error: " + cause.getClass().getSimpleName()
                                 + (cause.getMessage() != null ? " - " + cause.getMessage() : "")));
             } catch (CancellationException e) {
                 // Only reachable once cleanup has cancelled the remaining work.
@@ -525,8 +385,7 @@ public class Test262Runner {
             System.err.println(shutdown.abandonedWorkers() + " test task(s) were abandoned; the "
                     + "counts above exclude anything they do from now on");
         }
-        RunOutcome outcome = RunOutcome.of(
-                reporter, interrupted, shutdown.abandonedWorkers(), allowEmptySelection);
+        RunOutcome outcome = RunOutcome.of(reporter, interrupted, shutdown.abandonedWorkers(), allowEmptySelection);
         if (!outcome.isSuccessful()) {
             System.err.println(outcome.diagnostic());
         }
@@ -536,10 +395,11 @@ public class Test262Runner {
     /**
      * Allow a selection that matches no test file to be a successful run.
      * <p>
-     * Off by default: a filter that silently selects nothing is the same false green as a run whose
-     * tests all failed. Tooling that deliberately runs an empty selection opts in.
+     * Off by default: a filter that silently selects nothing is the same false green as a run whose tests all failed.
+     * Tooling that deliberately runs an empty selection opts in.
      *
-     * @param allowEmptySelection true to treat an empty selection as success
+     * @param allowEmptySelection
+     *            true to treat an empty selection as success
      * @return this
      */
     public Test262Runner setAllowEmptySelection(boolean allowEmptySelection) {
@@ -550,10 +410,11 @@ public class Test262Runner {
     /**
      * Set how long {@link #awaitWorkerTermination} waits before abandoning workers.
      * <p>
-     * Package-private and for tests: the five-minute default cannot be reached in a unit test, and
-     * the behaviour past the deadline is the part worth testing.
+     * Package-private and for tests: the five-minute default cannot be reached in a unit test, and the behaviour past
+     * the deadline is the part worth testing.
      *
-     * @param workerTerminationTimeoutMilliseconds the timeout in milliseconds
+     * @param workerTerminationTimeoutMilliseconds
+     *            the timeout in milliseconds
      * @return this
      */
     Test262Runner setWorkerTerminationTimeoutMilliseconds(long workerTerminationTimeoutMilliseconds) {
@@ -570,56 +431,173 @@ public class Test262Runner {
         return workerThreadNamePrefix;
     }
 
+    public static void main(String[] args) {
+        int exitCode = 1;
+        try {
+            exitCode = runMain(args);
+        } catch (Exception e) {
+            System.err.println("Error running test262: " + e.getMessage());
+            e.printStackTrace();
+        }
+        if (exitCode != 0) {
+            System.exit(exitCode);
+        }
+    }
+
+    /**
+     * State what this run is, report what is wrong with its premises, and say whether it should go ahead.
+     * <p>
+     * The revision and the zone are printed whatever happens. A pass count means nothing without them, and a log is
+     * where a count outlives the machine that produced it — the CI artifact is this output and nothing else, so a
+     * summary copied out of it has to carry its own provenance.
+     * <p>
+     * A suite whose revision is not the pinned one, or cannot be read at all, is refused: counts from another revision
+     * are not comparable with anything this repository records, and a suite that cannot be identified cannot be said to
+     * be the pinned one. A host in a zone the pinned harness dislikes is only printed — it costs a handful of intl402
+     * interpretations, not the meaning of the run.
+     *
+     * @param test262Root
+     *            the suite root
+     * @return true when the run should be refused
+     */
+    private static boolean reportEnvironment(Path test262Root) {
+        System.out.println(Test262Environment.describe(test262Root));
+        boolean refused = false;
+        for (Test262Environment.Diagnostic diagnostic : Test262Environment.check(test262Root)) {
+            System.err.println((diagnostic.fatal() ? "Error: " : "Warning: ") + diagnostic.message());
+            refused |= diagnostic.fatal();
+        }
+        return refused;
+    }
+
+    /**
+     * Parse the command line, run the suite and decide the process status.
+     * <p>
+     * Anything that means "the suite did not demonstrate conformance" is a nonzero status: a failing test, a timeout, a
+     * missing test root, a filter that selected nothing, or an interrupted run. Previously only a thrown Java exception
+     * was a failure, so a run in which every test failed — or in which no test ran at all — still reported
+     * {@code BUILD SUCCESSFUL}.
+     *
+     * @param args
+     *            the command line
+     * @return the process exit status
+     * @throws IOException
+     *             if test discovery fails
+     */
+    static int runMain(String[] args) throws IOException {
+        {
+            Path test262Root = Paths.get("../test262");
+            String mode = null;
+            String singleTestPathFragment = null;
+            Integer requestedThreadCount = null;
+
+            int argIndex = 0;
+            if (args.length > 0 && !args[0].startsWith("--")) {
+                test262Root = Paths.get(args[0]);
+                argIndex = 1;
+            }
+            while (argIndex < args.length) {
+                String argument = args[argIndex];
+                if ("--single".equals(argument)) {
+                    if (argIndex + 1 >= args.length) {
+                        throw new IllegalArgumentException("Missing value for --single");
+                    }
+                    singleTestPathFragment = args[argIndex + 1];
+                    argIndex += 2;
+                    continue;
+                }
+                if ("--threads".equals(argument)) {
+                    if (argIndex + 1 >= args.length) {
+                        throw new IllegalArgumentException("Missing value for --threads");
+                    }
+                    requestedThreadCount = Integer.parseInt(args[argIndex + 1]);
+                    argIndex += 2;
+                    continue;
+                }
+                // Anything left has to be a mode, and it has to be one this runner knows. Every
+                // unrecognised argument used to overwrite `mode` and then fall through the switch
+                // below to the full default selection, so `--quik`, a stray positional, or a focus
+                // argument appended after `--quick` silently ran a much larger suite than the one
+                // asked for — and a mistyped `--long-running` silently ran no long-running test
+                // while still reporting success.
+                if (!MODE_CONFIGURATIONS.containsKey(argument)) {
+                    throw new IllegalArgumentException("Unknown argument '" + argument + "'.\n" + usage());
+                }
+                if (mode != null) {
+                    throw new IllegalArgumentException("Modes are mutually exclusive, but both '" + mode + "' and '"
+                            + argument + "' were given.\n" + usage());
+                }
+                mode = argument;
+                argIndex++;
+            }
+
+            // A pass count means nothing without the suite revision that produced it and the zone
+            // the host read dates in. Both used to be arranged in one CI workflow, so the
+            // documented Gradle command accepted whatever was on disk; a run that cannot say what
+            // it tested is checked here instead, once, before anything is discovered.
+            if (reportEnvironment(test262Root)) {
+                return 1;
+            }
+
+            Test262Config config = mode == null ? Test262Config.loadDefault() : MODE_CONFIGURATIONS.get(mode).get();
+
+            Test262Runner runner = new Test262Runner(test262Root, config, singleTestPathFragment, requestedThreadCount);
+            return runner.run().exitCode();
+        }
+    }
+
+    /**
+     * How to invoke the runner.
+     *
+     * @return the usage text
+     */
+    private static String usage() {
+        List<String> modes = new ArrayList<>(MODE_CONFIGURATIONS.keySet());
+        Collections.sort(modes);
+        return "Usage: Test262Runner [<test262-root>] [" + String.join(" | ", modes) + "]"
+                + " [--single <path-fragment>] [--threads <count>]\n"
+                + "With no mode, the full default selection runs.";
+    }
+
     /**
      * The outcome of a run, and the process status that follows from it.
      *
-     * @param failed                the number of failing tests
-     * @param timedOut              the number of timed-out tests
-     * @param passed                the number of passing tests
-     * @param skipped               the number of skipped tests
-     * @param interrupted           whether the run was interrupted before it finished
-     * @param abandonedWorkers      how many workers were still running when the runner stopped
-     *                              waiting for them
-     * @param discoveryError        the reason discovery produced nothing usable, or {@code null}
-     * @param emptySelectionAllowed whether the caller opted into a run that executes nothing
+     * @param failed
+     *            the number of failing tests
+     * @param timedOut
+     *            the number of timed-out tests
+     * @param passed
+     *            the number of passing tests
+     * @param skipped
+     *            the number of skipped tests
+     * @param interrupted
+     *            whether the run was interrupted before it finished
+     * @param abandonedWorkers
+     *            how many workers were still running when the runner stopped waiting for them
+     * @param discoveryError
+     *            the reason discovery produced nothing usable, or {@code null}
+     * @param emptySelectionAllowed
+     *            whether the caller opted into a run that executes nothing
      */
-    public record RunOutcome(
-            int failed,
-            int timedOut,
-            int passed,
-            int skipped,
-            boolean interrupted,
-            int abandonedWorkers,
-            String discoveryError,
-            boolean emptySelectionAllowed) {
+    public record RunOutcome(int failed, int timedOut, int passed, int skipped, boolean interrupted,
+            int abandonedWorkers, String discoveryError, boolean emptySelectionAllowed) {
 
         static RunOutcome discoveryFailed(String reason) {
             return new RunOutcome(0, 0, 0, 0, false, 0, reason, false);
         }
 
-        static RunOutcome of(
-                Test262Reporter reporter,
-                boolean interrupted,
-                int abandonedWorkers,
+        static RunOutcome of(Test262Reporter reporter, boolean interrupted, int abandonedWorkers,
                 boolean emptySelectionAllowed) {
-            return new RunOutcome(
-                    reporter.getFailed(),
-                    reporter.getTimeout(),
-                    reporter.getPassed(),
-                    reporter.getSkipped(),
-                    interrupted,
-                    abandonedWorkers,
-                    null,
-                    emptySelectionAllowed);
+            return new RunOutcome(reporter.getFailed(), reporter.getTimeout(), reporter.getPassed(),
+                    reporter.getSkipped(), interrupted, abandonedWorkers, null, emptySelectionAllowed);
         }
 
         /**
          * Why this run did not demonstrate conformance.
          * <p>
-         * Discovery finding no file and discovery finding files that were then all skipped are
-         * different problems, and asking for a concrete test that declares only unsupported
-         * features produces the second one: zero interpretations executed, and — before the
-         * {@link #isSuccessful()} rule below — exit status zero.
+         * Discovery finding no file and discovery finding files that were then all skipped are different problems, and
+         * asking for a concrete test that declares only unsupported features produces the second one: zero
+         * interpretations executed, and — before the {@link #isSuccessful()} rule below — exit status zero.
          *
          * @return the diagnostic, or {@code null} when the run is successful
          */
@@ -666,8 +644,7 @@ public class Test262Runner {
         /**
          * Whether the run demonstrated conformance over its selection.
          *
-         * @return true when discovery succeeded, the run completed, something ran, and nothing
-         * failed or timed out
+         * @return true when discovery succeeded, the run completed, something ran, and nothing failed or timed out
          */
         public boolean isSuccessful() {
             return diagnostic() == null;
@@ -677,8 +654,10 @@ public class Test262Runner {
     /**
      * How a wait for the worker pool ended.
      *
-     * @param clean            true when every worker stopped and nothing was interrupted
-     * @param abandonedWorkers how many workers were still running when the wait gave up
+     * @param clean
+     *            true when every worker stopped and nothing was interrupted
+     * @param abandonedWorkers
+     *            how many workers were still running when the wait gave up
      */
     record WorkerShutdown(boolean clean, int abandonedWorkers) {
     }

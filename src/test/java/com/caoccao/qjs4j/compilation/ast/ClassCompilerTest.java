@@ -283,25 +283,22 @@ public class ClassCompilerTest extends BaseJavetTest {
 
     @Test
     public void testClassToString() {
-        assertStringWithJavet(
-                """
-                        class A {
-                        }
-                        typeof A""",
-                """
-                        class A {
-                          toString() {
-                            return 'A';
-                          }
-                        }
-                        A.toString()""",
-                """
-                        class A {
-                          toString() {
-                            return 'A';
-                          }
-                        }
-                        String(A)""");
+        assertStringWithJavet("""
+                class A {
+                }
+                typeof A""", """
+                class A {
+                  toString() {
+                    return 'A';
+                  }
+                }
+                A.toString()""", """
+                class A {
+                  toString() {
+                    return 'A';
+                  }
+                }
+                String(A)""");
     }
 
     @Test
@@ -319,8 +316,7 @@ public class ClassCompilerTest extends BaseJavetTest {
 
     @Test
     public void testClassWithDuplicatePrivateMethodThrows() {
-        assertThatThrownBy(() -> resetContext().eval("class C { #m() {} #m() {} }"))
-                .isInstanceOf(JSException.class);
+        assertThatThrownBy(() -> resetContext().eval("class C { #m() {} #m() {} }")).isInstanceOf(JSException.class);
     }
 
     @Test
@@ -356,16 +352,16 @@ public class ClassCompilerTest extends BaseJavetTest {
                     constructor(value) {
                         this.value = value;
                     }
-                
+
                     add(n) {
                         return this.value + n;
                     }
-                
+
                     static multiply(a, b) {
                         return a * b;
                     }
                 }
-                
+
                 const c = new Calculator(10);
                 const instanceResult = c.add(5);
                 const staticResult = Calculator.multiply(3, 4);
@@ -480,9 +476,7 @@ public class ClassCompilerTest extends BaseJavetTest {
                         return #x in value;
                     }
                 }
-                new C().has(1)"""))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("invalid 'in' operand");
+                new C().has(1)""")).isInstanceOf(JSException.class).hasMessageContaining("invalid 'in' operand");
     }
 
     @Test
@@ -493,9 +487,7 @@ public class ClassCompilerTest extends BaseJavetTest {
                     has(obj) {
                         return #y in obj;
                     }
-                }"""))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("undefined private field '#y'");
+                }""")).isInstanceOf(JSException.class).hasMessageContaining("undefined private field '#y'");
     }
 
     @Test
@@ -612,23 +604,6 @@ public class ClassCompilerTest extends BaseJavetTest {
     }
 
     @Test
-    public void testClassWithStaticPrivateFieldInMixedPrivateNamespace() {
-        assertIntegerWithJavet("""
-                class C {
-                    #instanceValue = 3;
-                    static #staticValue = 4;
-                    getInstanceValue() {
-                        return this.#instanceValue;
-                    }
-                    static getStaticValue() {
-                        return this.#staticValue;
-                    }
-                }
-                const c = new C();
-                c.getInstanceValue() + C.getStaticValue()""");
-    }
-
-    @Test
     public void testClassWithStaticPrivateFieldInitializedByStaticBlock() {
         assertIntegerWithJavet("""
                 class C {
@@ -657,6 +632,23 @@ public class ClassCompilerTest extends BaseJavetTest {
                 }
                 Counter.increment();
                 Counter.getCount()""");
+    }
+
+    @Test
+    public void testClassWithStaticPrivateFieldInMixedPrivateNamespace() {
+        assertIntegerWithJavet("""
+                class C {
+                    #instanceValue = 3;
+                    static #staticValue = 4;
+                    getInstanceValue() {
+                        return this.#instanceValue;
+                    }
+                    static getStaticValue() {
+                        return this.#staticValue;
+                    }
+                }
+                const c = new C();
+                c.getInstanceValue() + C.getStaticValue()""");
     }
 
     @Test
@@ -706,9 +698,7 @@ public class ClassCompilerTest extends BaseJavetTest {
     @Test
     public void testDefaultDerivedConstructorExtendsNull() {
         assertThatThrownBy(() -> resetContext().eval("""
-                new (class extends null {})()"""))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("TypeError");
+                new (class extends null {})()""")).isInstanceOf(JSException.class).hasMessageContaining("TypeError");
     }
 
     @Test
@@ -818,9 +808,7 @@ public class ClassCompilerTest extends BaseJavetTest {
     public void testDerivedConstructorExtendsNullExplicitSuper() {
         assertThatThrownBy(() -> resetContext().eval("""
                 class A extends null { constructor() { super(); } }
-                new A()"""))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("TypeError");
+                new A()""")).isInstanceOf(JSException.class).hasMessageContaining("TypeError");
     }
 
     @Test
@@ -847,8 +835,7 @@ public class ClassCompilerTest extends BaseJavetTest {
 
     @Test
     public void testPrivateInOperatorOutsideClassThrows() {
-        assertThatThrownBy(() -> resetContext().eval("#x in ({})"))
-                .isInstanceOf(JSException.class)
+        assertThatThrownBy(() -> resetContext().eval("#x in ({})")).isInstanceOf(JSException.class)
                 .hasMessageContaining("undefined private field '#x'");
     }
 }

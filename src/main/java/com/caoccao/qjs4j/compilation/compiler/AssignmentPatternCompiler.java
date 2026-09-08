@@ -21,8 +21,8 @@ import com.caoccao.qjs4j.compilation.ast.Identifier;
 import com.caoccao.qjs4j.vm.Opcode;
 
 /**
- * Compiles AssignmentPattern (destructuring with default value) into bytecode.
- * Handles patterns like [x = defaultVal] or { y = defaultVal }.
+ * Compiles AssignmentPattern (destructuring with default value) into bytecode. Handles patterns like [x = defaultVal]
+ * or { y = defaultVal }.
  */
 final class AssignmentPatternCompiler extends AstNodeCompiler<AssignmentPattern> {
 

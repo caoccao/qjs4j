@@ -32,8 +32,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 public class NumberPrototypeTest extends BaseJavetTest {
     private void assertInvalidNumericLiteral(String source) {
-        assertThatThrownBy(() -> resetContext().eval(source))
-                .isInstanceOf(JSException.class)
+        assertThatThrownBy(() -> resetContext().eval(source)).isInstanceOf(JSException.class)
                 .hasMessageContaining("SyntaxError");
     }
 
@@ -41,24 +40,13 @@ public class NumberPrototypeTest extends BaseJavetTest {
     public void testEquals() {
         assertBooleanWithJavet(
                 // Verify that loose equality passes between primitive and primitive
-                "123 == 123",
-                "123 == 321",
-                "123 == Number(123)",
-                "123 == Number(321)",
+                "123 == 123", "123 == 321", "123 == Number(123)", "123 == Number(321)",
                 // Verify that strict equality passes between primitive and primitive
-                "123 === 123",
-                "123 === 321",
-                "123 === Number(123)",
-                "123 === Number(321)",
+                "123 === 123", "123 === 321", "123 === Number(123)", "123 === Number(321)",
                 // Verify that loose equality passes between primitive and primitive
-                "Number(123) == Number(123)",
-                "Number(123) == Number(321)",
-                "Number(123) == 123",
-                "Number(123) == 321",
+                "Number(123) == Number(123)", "Number(123) == Number(321)", "Number(123) == 123", "Number(123) == 321",
                 // Verify that loose equality passes between primitive and object
-                "123 == new Number(123)",
-                "123 == new Number(321)",
-                "Number(123) == new Number(123)",
+                "123 == new Number(123)", "123 == new Number(321)", "Number(123) == new Number(123)",
                 "Number(123) == new Number(321)",
                 // Verify that loose equality fails between object and object
                 "new Number(123) == new Number(123)",
@@ -79,11 +67,13 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: positive Infinity
-        result = NumberPrototype.isFinite(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(Double.POSITIVE_INFINITY)});
+        result = NumberPrototype.isFinite(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSNumber(Double.POSITIVE_INFINITY)});
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: negative Infinity
-        result = NumberPrototype.isFinite(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(Double.NEGATIVE_INFINITY)});
+        result = NumberPrototype.isFinite(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSNumber(Double.NEGATIVE_INFINITY)});
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: non-number value
@@ -118,7 +108,8 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: Infinity
-        result = NumberPrototype.isInteger(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(Double.POSITIVE_INFINITY)});
+        result = NumberPrototype.isInteger(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSNumber(Double.POSITIVE_INFINITY)});
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: non-number value
@@ -141,7 +132,8 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: Infinity
-        result = NumberPrototype.isNaN(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(Double.POSITIVE_INFINITY)});
+        result = NumberPrototype.isNaN(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSNumber(Double.POSITIVE_INFINITY)});
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: non-number value
@@ -160,15 +152,18 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: maximum safe integer
-        result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(NumberPrototype.MAX_SAFE_INTEGER)});
+        result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSNumber(NumberPrototype.MAX_SAFE_INTEGER)});
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: minimum safe integer
-        result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(-NumberPrototype.MAX_SAFE_INTEGER)});
+        result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSNumber(-NumberPrototype.MAX_SAFE_INTEGER)});
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: unsafe integer (too large)
-        result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(NumberPrototype.MAX_SAFE_INTEGER + 1)});
+        result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSNumber(NumberPrototype.MAX_SAFE_INTEGER + 1)});
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: float
@@ -180,7 +175,8 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: Infinity
-        result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(Double.POSITIVE_INFINITY)});
+        result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSNumber(Double.POSITIVE_INFINITY)});
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: non-number value
@@ -194,9 +190,7 @@ public class NumberPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testNumberPropertyDescriptorsWithJavet() {
-        assertBooleanWithJavet(
-                "Number.parseInt === parseInt",
-                "Number.parseFloat === parseFloat",
+        assertBooleanWithJavet("Number.parseInt === parseInt", "Number.parseFloat === parseFloat",
                 "Object.getOwnPropertyDescriptor(Number, 'parseInt').writable === true",
                 "Object.getOwnPropertyDescriptor(Number, 'parseInt').enumerable === false",
                 "Object.getOwnPropertyDescriptor(Number, 'parseInt').configurable === true",
@@ -315,7 +309,8 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(-123.0);
 
         // Normal case: hexadecimal
-        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("0xFF"), new JSNumber(16)});
+        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSString("0xFF"), new JSNumber(16)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(255.0);
 
         // Normal case: auto-detect hex
@@ -323,7 +318,8 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(255.0);
 
         // Normal case: binary
-        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("1010"), new JSNumber(2)});
+        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSString("1010"), new JSNumber(2)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(10.0);
 
         // Normal case: leading/trailing whitespace
@@ -347,11 +343,13 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Edge case: invalid radix (too low)
-        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("42"), new JSNumber(1)});
+        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSString("42"), new JSNumber(1)});
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Edge case: invalid radix (too high)
-        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("42"), new JSNumber(37)});
+        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE,
+                new JSValue[]{new JSString("42"), new JSNumber(37)});
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Edge case: non-string argument (should coerce)
@@ -361,15 +359,9 @@ public class NumberPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testParseIntWithJavet() {
-        assertBooleanWithJavet(
-                "parseInt('-0xF') === -15",
-                "Number.parseInt('-0xF') === -15",
-                "parseInt('+0x10') === 16",
-                "Number.parseInt('+0x10') === 16",
-                "parseInt('0o10') === 0",
-                "Number.parseInt('0o10') === 0",
-                "parseInt('0b10') === 0",
-                "Number.parseInt('0b10') === 0");
+        assertBooleanWithJavet("parseInt('-0xF') === -15", "Number.parseInt('-0xF') === -15",
+                "parseInt('+0x10') === 16", "Number.parseInt('+0x10') === 16", "parseInt('0o10') === 0",
+                "Number.parseInt('0o10') === 0", "parseInt('0b10') === 0", "Number.parseInt('0b10') === 0");
     }
 
     @Test
@@ -420,40 +412,30 @@ public class NumberPrototypeTest extends BaseJavetTest {
     @Test
     public void testToExponentialShortestRepresentationWithJavet() {
         // Test toExponential() without arguments (shortest representation in exponential form)
-        assertStringWithJavet(
-                "(0).toExponential()",
-                "(-0).toExponential()",
-                "(1).toExponential()",
-                "(-1).toExponential()",
-                "(123).toExponential()",
-                "(123.456).toExponential()",
-                "(-123.456).toExponential()",
-                "(0.001).toExponential()",
-                "(0.0001).toExponential()",
-                "(-0.0001).toExponential()",
-                "(1e20).toExponential()",
-                "(1e-20).toExponential()",
-                "(1000000000000000128).toExponential()",
-                "(9007199254740992).toExponential()",
-                "(1.7976931348623157e+308).toExponential()",
-                "(5e-324).toExponential()",
-                "(3.141592653589793).toExponential()",
-                "(999999999999999).toExponential()",
+        assertStringWithJavet("(0).toExponential()", "(-0).toExponential()", "(1).toExponential()",
+                "(-1).toExponential()", "(123).toExponential()", "(123.456).toExponential()",
+                "(-123.456).toExponential()", "(0.001).toExponential()", "(0.0001).toExponential()",
+                "(-0.0001).toExponential()", "(1e20).toExponential()", "(1e-20).toExponential()",
+                "(1000000000000000128).toExponential()", "(9007199254740992).toExponential()",
+                "(1.7976931348623157e+308).toExponential()", "(5e-324).toExponential()",
+                "(3.141592653589793).toExponential()", "(999999999999999).toExponential()",
                 "(12345678.9).toExponential()");
     }
 
     @Test
     public void testToExponentialWithJavet() {
-        List<Double> testNumbers = List.of(
-                0D, 1D, -1D, 123.456D, -123.456D, 123456789.123456789D, -123456789.123456789D,
-                Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
+        List<Double> testNumbers = List.of(0D, 1D, -1D, 123.456D, -123.456D, 123456789.123456789D,
+                -123456789.123456789D, Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
         testNumbers.forEach(number -> {
             IntStream.range(0, 101).forEach(fractionDigits -> assertWithJavet(
-                    () -> v8Runtime.getExecutor("Number(" + number + ").toExponential(" + fractionDigits + ")").executeString(),
-                    () -> NumberPrototype.toExponential(context, new JSNumber(number), new JSValue[]{new JSNumber(fractionDigits)}).asString().map(JSString::value).orElseThrow()));
-            assertWithJavet(
-                    () -> v8Runtime.getExecutor("Number(" + number + ").toExponential()").executeString(),
-                    () -> NumberPrototype.toExponential(context, new JSNumber(number), JSValue.NO_ARGS).asString().map(JSString::value).orElseThrow());
+                    () -> v8Runtime.getExecutor("Number(" + number + ").toExponential(" + fractionDigits + ")")
+                            .executeString(),
+                    () -> NumberPrototype
+                            .toExponential(context, new JSNumber(number), new JSValue[]{new JSNumber(fractionDigits)})
+                            .asString().map(JSString::value).orElseThrow()));
+            assertWithJavet(() -> v8Runtime.getExecutor("Number(" + number + ").toExponential()").executeString(),
+                    () -> NumberPrototype.toExponential(context, new JSNumber(number), JSValue.NO_ARGS).asString()
+                            .map(JSString::value).orElseThrow());
         });
     }
 
@@ -494,7 +476,8 @@ public class NumberPrototypeTest extends BaseJavetTest {
 
         // Special case: large number
         result = NumberPrototype.toFixed(context, new JSNumber(1e22), JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).satisfies(s -> assertThat(s.contains("e")).isTrue());
+        assertThat(result.asString().map(JSString::value).orElseThrow())
+                .satisfies(s -> assertThat(s.contains("e")).isTrue());
 
         // Edge case: precision too low - skip error check due to JSObject implementation
         assertRangeError(NumberPrototype.toFixed(context, num, new JSValue[]{new JSNumber(-1)}));
@@ -508,32 +491,26 @@ public class NumberPrototypeTest extends BaseJavetTest {
     @Test
     public void testToFixedExactnessWithJavet() {
         // Test that toFixed uses exact binary value, not shortest representation
-        assertStringWithJavet(
-                "(1000000000000000128).toString()",
-                "(1000000000000000128).toFixed(0)",
-                "(0.1).toFixed(20)",
-                "(0.2).toFixed(20)",
-                "(0.1 + 0.2).toFixed(20)",
-                "(1e20).toFixed(0)",
-                "(-1e20).toFixed(0)",
-                "(1.005).toFixed(2)",
-                "(0.5).toFixed(0)",
-                "(1.5).toFixed(0)",
-                "(2.5).toFixed(0)");
+        assertStringWithJavet("(1000000000000000128).toString()", "(1000000000000000128).toFixed(0)",
+                "(0.1).toFixed(20)", "(0.2).toFixed(20)", "(0.1 + 0.2).toFixed(20)", "(1e20).toFixed(0)",
+                "(-1e20).toFixed(0)", "(1.005).toFixed(2)", "(0.5).toFixed(0)", "(1.5).toFixed(0)", "(2.5).toFixed(0)");
     }
 
     @Test
     public void testToFixedWithJavet() {
-        List<Double> testNumbers = List.of(
-                0D, 1D, -1D, 123.456D, -123.456D, 123456789.123456789D, -123456789.123456789D,
-                Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
+        List<Double> testNumbers = List.of(0D, 1D, -1D, 123.456D, -123.456D, 123456789.123456789D,
+                -123456789.123456789D, Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
         testNumbers.forEach(number -> {
-            IntStream.range(0, 101).forEach(fractionDigits -> assertWithJavet(
-                    () -> v8Runtime.getExecutor("Number(" + number + ").toFixed(" + fractionDigits + ")").executeString(),
-                    () -> NumberPrototype.toFixed(context, new JSNumber(number), new JSValue[]{new JSNumber(fractionDigits)}).asString().map(JSString::value).orElseThrow()));
-            assertWithJavet(
-                    () -> v8Runtime.getExecutor("Number(" + number + ").toFixed()").executeString(),
-                    () -> NumberPrototype.toFixed(context, new JSNumber(number), JSValue.NO_ARGS).asString().map(JSString::value).orElseThrow());
+            IntStream.range(0, 101)
+                    .forEach(fractionDigits -> assertWithJavet(
+                            () -> v8Runtime.getExecutor("Number(" + number + ").toFixed(" + fractionDigits + ")")
+                                    .executeString(),
+                            () -> NumberPrototype
+                                    .toFixed(context, new JSNumber(number), new JSValue[]{new JSNumber(fractionDigits)})
+                                    .asString().map(JSString::value).orElseThrow()));
+            assertWithJavet(() -> v8Runtime.getExecutor("Number(" + number + ").toFixed()").executeString(),
+                    () -> NumberPrototype.toFixed(context, new JSNumber(number), JSValue.NO_ARGS).asString()
+                            .map(JSString::value).orElseThrow());
         });
     }
 
@@ -598,16 +575,19 @@ public class NumberPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testToPrecisionWithJavet() {
-        List<Double> testNumbers = List.of(
-                0D, 1D, -1D, 123.456D, -123.456D, 123456789.123456789D, -123456789.123456789D,
-                Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
+        List<Double> testNumbers = List.of(0D, 1D, -1D, 123.456D, -123.456D, 123456789.123456789D,
+                -123456789.123456789D, Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
         testNumbers.forEach(number -> {
-            IntStream.range(1, 101).forEach(precision -> assertWithJavet(
-                    () -> v8Runtime.getExecutor("Number(" + number + ").toPrecision(" + precision + ")").executeString(),
-                    () -> NumberPrototype.toPrecision(context, new JSNumber(number), new JSValue[]{new JSNumber(precision)}).asString().map(JSString::value).orElseThrow()));
-            assertWithJavet(
-                    () -> v8Runtime.getExecutor("Number(" + number + ").toPrecision()").executeString(),
-                    () -> NumberPrototype.toPrecision(context, new JSNumber(number), JSValue.NO_ARGS).asString().map(JSString::value).orElseThrow());
+            IntStream.range(1, 101)
+                    .forEach(precision -> assertWithJavet(
+                            () -> v8Runtime.getExecutor("Number(" + number + ").toPrecision(" + precision + ")")
+                                    .executeString(),
+                            () -> NumberPrototype
+                                    .toPrecision(context, new JSNumber(number), new JSValue[]{new JSNumber(precision)})
+                                    .asString().map(JSString::value).orElseThrow()));
+            assertWithJavet(() -> v8Runtime.getExecutor("Number(" + number + ").toPrecision()").executeString(),
+                    () -> NumberPrototype.toPrecision(context, new JSNumber(number), JSValue.NO_ARGS).asString()
+                            .map(JSString::value).orElseThrow());
         });
     }
 
@@ -668,74 +648,45 @@ public class NumberPrototypeTest extends BaseJavetTest {
         // exponential notation boundaries, and special IEEE 754 values.
         assertStringWithJavet(
                 // Large integers where exact binary value differs from shortest representation
-                "(1000000000000000128).toString()",
-                "(-1000000000000000128).toString()",
-                "(9007199254740992).toString()",
-                "(9007199254740994).toString()",
+                "(1000000000000000128).toString()", "(-1000000000000000128).toString()",
+                "(9007199254740992).toString()", "(9007199254740994).toString()",
                 // Integers at various magnitudes
-                "(1e15).toString()",
-                "(1e16).toString()",
-                "(1e17).toString()",
-                "(1e18).toString()",
-                "(1e19).toString()",
-                "(1e20).toString()",
-                "(-1e20).toString()",
+                "(1e15).toString()", "(1e16).toString()", "(1e17).toString()", "(1e18).toString()", "(1e19).toString()",
+                "(1e20).toString()", "(-1e20).toString()",
                 // Boundary: decimal vs exponential notation (exponent 20 vs 21)
-                "(1e21).toString()",
-                "(1e22).toString()",
-                "(-1e21).toString()",
-                "(9.999999999999998e20).toString()",
+                "(1e21).toString()", "(1e22).toString()", "(-1e21).toString()", "(9.999999999999998e20).toString()",
                 "(1.5e20).toString()",
                 // Small numbers: boundary at 1e-7 (decimal) vs 1e-7 (exponential)
-                "(0.000001).toString()",
-                "(0.0000001).toString()",
-                "(0.00000015).toString()",
-                "(-0.000001).toString()",
-                "(-0.0000001).toString()",
-                "(1e-6).toString()",
-                "(1e-7).toString()",
-                "(1e-8).toString()",
+                "(0.000001).toString()", "(0.0000001).toString()", "(0.00000015).toString()", "(-0.000001).toString()",
+                "(-0.0000001).toString()", "(1e-6).toString()", "(1e-7).toString()", "(1e-8).toString()",
                 "(5e-324).toString()",
                 // Regular decimals
-                "(0.1).toString()",
-                "(0.2).toString()",
-                "(0.3).toString()",
-                "(1.5).toString()",
-                "(-1.5).toString()",
-                "(3.141592653589793).toString()",
-                "(0.1 + 0.2).toString()",
+                "(0.1).toString()", "(0.2).toString()", "(0.3).toString()", "(1.5).toString()", "(-1.5).toString()",
+                "(3.141592653589793).toString()", "(0.1 + 0.2).toString()",
                 // Integers that are exactly representable
-                "(42).toString()",
-                "(-42).toString()",
-                "(100).toString()",
-                "(999999999999999).toString()",
+                "(42).toString()", "(-42).toString()", "(100).toString()", "(999999999999999).toString()",
                 "(9999999999999998).toString()",
                 // Large values in exponential notation
-                "(1.7976931348623157e+308).toString()",
-                "(1.5e+308).toString()",
-                "(1e+100).toString()",
+                "(1.7976931348623157e+308).toString()", "(1.5e+308).toString()", "(1e+100).toString()",
                 "(-1.7976931348623157e+308).toString()",
                 // Small subnormals
-                "(5e-324).toString()",
-                "(2.2250738585072014e-308).toString()",
-                "(2.2250738585072e-308).toString()",
+                "(5e-324).toString()", "(2.2250738585072014e-308).toString()", "(2.2250738585072e-308).toString()",
                 // Zero
-                "(0).toString()",
-                "(-0).toString()",
+                "(0).toString()", "(-0).toString()",
                 // NaN and Infinity
-                "NaN.toString()",
-                "Infinity.toString()",
-                "(-Infinity).toString()");
+                "NaN.toString()", "Infinity.toString()", "(-Infinity).toString()");
     }
 
     @Test
     public void testToStringWithJavet() {
-        List<Double> testNumbers = List.of(
-                0D, 1D, -1D, 123.456D, -123.456D, 123456789.123456789D, -123456789.123456789D,
-                Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
-        testNumbers.forEach(number -> IntStream.range(2, 37).forEach(radix -> assertWithJavet(
-                () -> v8Runtime.getExecutor("Number(" + number + ").toString(" + radix + ")").executeString(),
-                () -> NumberPrototype.toString(context, new JSNumber(number), new JSValue[]{new JSNumber(radix)}).asString().map(JSString::value).orElseThrow())));
+        List<Double> testNumbers = List.of(0D, 1D, -1D, 123.456D, -123.456D, 123456789.123456789D,
+                -123456789.123456789D, Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
+        testNumbers.forEach(number -> IntStream.range(2, 37)
+                .forEach(radix -> assertWithJavet(
+                        () -> v8Runtime.getExecutor("Number(" + number + ").toString(" + radix + ")").executeString(),
+                        () -> NumberPrototype
+                                .toString(context, new JSNumber(number), new JSValue[]{new JSNumber(radix)}).asString()
+                                .map(JSString::value).orElseThrow())));
     }
 
     @Test

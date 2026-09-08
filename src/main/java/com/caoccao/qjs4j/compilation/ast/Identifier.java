@@ -19,8 +19,7 @@ package com.caoccao.qjs4j.compilation.ast;
 import java.util.List;
 
 /**
- * Represents an identifier.
- * Identifiers can be used as expressions and as patterns in destructuring.
+ * Represents an identifier. Identifiers can be used as expressions and as patterns in destructuring.
  */
 public final class Identifier extends Expression {
     private final String name;

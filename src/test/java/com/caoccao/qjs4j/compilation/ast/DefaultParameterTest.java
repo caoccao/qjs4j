@@ -33,13 +33,12 @@ public class DefaultParameterTest extends BaseJavetTest {
 
     @Test
     public void testArrowDefaultLazyEvaluation() {
-        assertIntegerWithJavet(
-                """
-                        var count = 0;
-                        var counter = () => { count++; return count; };
-                        var f = (x = counter()) => x;
-                        f(99);
-                        count;""");
+        assertIntegerWithJavet("""
+                var count = 0;
+                var counter = () => { count++; return count; };
+                var f = (x = counter()) => x;
+                f(99);
+                count;""");
     }
 
     @Test
@@ -54,12 +53,11 @@ public class DefaultParameterTest extends BaseJavetTest {
 
     @Test
     public void testArrowDefaultWithFunctionCall() {
-        assertIntegerWithJavet(
-                """
-                        var count = 0;
-                        var counter = () => { count++; return count; };
-                        var f = (x = counter()) => x;
-                        f();""");
+        assertIntegerWithJavet("""
+                var count = 0;
+                var counter = () => { count++; return count; };
+                var f = (x = counter()) => x;
+                f();""");
     }
 
     @Test
@@ -99,18 +97,16 @@ public class DefaultParameterTest extends BaseJavetTest {
 
     @Test
     public void testDefaultParamArgumentsLengthWithValue() {
-        assertIntegerWithJavet(
-                """
-                        function f(x = 42) { return arguments.length; }
-                        f(10);""");
+        assertIntegerWithJavet("""
+                function f(x = 42) { return arguments.length; }
+                f(10);""");
     }
 
     @Test
     public void testDefaultParamDoesNotAffectArgumentsLength() {
-        assertIntegerWithJavet(
-                """
-                        function f(x = 42) { return arguments.length; }
-                        f();""");
+        assertIntegerWithJavet("""
+                function f(x = 42) { return arguments.length; }
+                f();""");
     }
 
     @Test
@@ -130,13 +126,12 @@ public class DefaultParameterTest extends BaseJavetTest {
 
     @Test
     public void testFunctionDeclarationDefaultCalledEachTime() {
-        assertIntegerWithJavet(
-                """
-                        var count = 0;
-                        function counter() { count++; return count; }
-                        function f(x = counter()) { return x; }
-                        f(); f(); f();
-                        count;""");
+        assertIntegerWithJavet("""
+                var count = 0;
+                function counter() { count++; return count; }
+                function f(x = counter()) { return x; }
+                f(); f(); f();
+                count;""");
     }
 
     @Test
@@ -146,23 +141,21 @@ public class DefaultParameterTest extends BaseJavetTest {
 
     @Test
     public void testFunctionDeclarationDefaultFunctionCall() {
-        assertIntegerWithJavet(
-                """
-                        var count = 0;
-                        function counter() { count++; return count; }
-                        function f(x = counter()) { return x; }
-                        f();""");
+        assertIntegerWithJavet("""
+                var count = 0;
+                function counter() { count++; return count; }
+                function f(x = counter()) { return x; }
+                f();""");
     }
 
     @Test
     public void testFunctionDeclarationDefaultLazyEvaluation() {
-        assertIntegerWithJavet(
-                """
-                        var count = 0;
-                        function counter() { count++; return count; }
-                        function f(x = counter()) { return x; }
-                        f(99);
-                        count;""");
+        assertIntegerWithJavet("""
+                var count = 0;
+                function counter() { count++; return count; }
+                function f(x = counter()) { return x; }
+                f(99);
+                count;""");
     }
 
     @Test
@@ -212,13 +205,12 @@ public class DefaultParameterTest extends BaseJavetTest {
 
     @Test
     public void testFunctionDeclarationDefaultUsedInBody() {
-        assertIntegerWithJavet(
-                """
-                        function f(x = 10) {
-                            var y = x + 5;
-                            return y;
-                        }
-                        f();""");
+        assertIntegerWithJavet("""
+                function f(x = 10) {
+                    var y = x + 5;
+                    return y;
+                }
+                f();""");
     }
 
     @Test
@@ -228,11 +220,10 @@ public class DefaultParameterTest extends BaseJavetTest {
 
     @Test
     public void testFunctionDeclarationDefaultWithClosureCapture() {
-        assertIntegerWithJavet(
-                """
-                        var val = 42;
-                        function f(x = val) { return x; }
-                        f();""");
+        assertIntegerWithJavet("""
+                var val = 42;
+                function f(x = val) { return x; }
+                f();""");
     }
 
     @Test
@@ -342,39 +333,35 @@ public class DefaultParameterTest extends BaseJavetTest {
 
     @Test
     public void testMethodDefaultParam() {
-        assertIntegerWithJavet(
-                """
-                        var obj = {
-                            add(x, y = 10) { return x + y; }
-                        };
-                        obj.add(5);""");
+        assertIntegerWithJavet("""
+                var obj = {
+                    add(x, y = 10) { return x + y; }
+                };
+                obj.add(5);""");
     }
 
     @Test
     public void testMethodDefaultParamNotUsed() {
-        assertIntegerWithJavet(
-                """
-                        var obj = {
-                            add(x, y = 10) { return x + y; }
-                        };
-                        obj.add(5, 20);""");
+        assertIntegerWithJavet("""
+                var obj = {
+                    add(x, y = 10) { return x + y; }
+                };
+                obj.add(5, 20);""");
     }
 
     @Test
     public void testMultipleCallsCounterDefault() {
-        assertStringWithJavet(
-                """
-                        var count = 0;
-                        function counter() { return ++count; }
-                        function f(x = counter()) { return x; }
-                        '' + f() + ',' + f() + ',' + f(99);""");
+        assertStringWithJavet("""
+                var count = 0;
+                function counter() { return ++count; }
+                function f(x = counter()) { return x; }
+                '' + f() + ',' + f() + ',' + f(99);""");
     }
 
     @Test
     public void testMultipleCallsSameDefault() {
-        assertStringWithJavet(
-                """
-                        function f(x = 0) { return x; }
-                        '' + f() + ',' + f(1) + ',' + f() + ',' + f(2);""");
+        assertStringWithJavet("""
+                function f(x = 0) { return x; }
+                '' + f() + ',' + f(1) + ',' + f() + ',' + f(2);""");
     }
 }

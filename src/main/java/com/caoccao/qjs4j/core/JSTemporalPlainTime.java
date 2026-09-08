@@ -20,8 +20,7 @@ import com.caoccao.qjs4j.core.temporal.IsoTime;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
 /**
- * JSObject subclass representing a Temporal.PlainTime value.
- * Internal slot: [[ISOTime]]
+ * JSObject subclass representing a Temporal.PlainTime value. Internal slot: [[ISOTime]]
  */
 public final class JSTemporalPlainTime extends JSObject {
     private final IsoTime isoTime;
@@ -29,6 +28,10 @@ public final class JSTemporalPlainTime extends JSObject {
     public JSTemporalPlainTime(JSContext context, IsoTime isoTime) {
         super(context);
         this.isoTime = isoTime;
+    }
+
+    public IsoTime getIsoTime() {
+        return isoTime;
     }
 
     public static JSTemporalPlainTime create(JSContext context, IsoTime isoTime) {
@@ -42,9 +45,5 @@ public final class JSTemporalPlainTime extends JSObject {
             plainTime.setPrototype(prototype);
         }
         return plainTime;
-    }
-
-    public IsoTime getIsoTime() {
-        return isoTime;
     }
 }

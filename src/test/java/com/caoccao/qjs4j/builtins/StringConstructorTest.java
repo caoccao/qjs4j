@@ -103,7 +103,8 @@ public class StringConstructorTest extends BaseJavetTest {
         assertThat(result1).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("A"));
 
         JSValue result2 = context.eval("String.fromCharCode(72, 101, 108, 108, 111);");
-        assertThat(result2).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("Hello"));
+        assertThat(result2).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("Hello"));
 
         // Test with no arguments
         JSValue result3 = context.eval("String.fromCharCode();");
@@ -119,7 +120,8 @@ public class StringConstructorTest extends BaseJavetTest {
 
         // Test with negative numbers (converted to uint16)
         JSValue result6 = context.eval("String.fromCharCode(-1);");
-        assertThat(result6).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo(String.valueOf((char) 65535)));
+        assertThat(result6).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo(String.valueOf((char) 65535)));
 
         // Test with floating point numbers (truncated to integer)
         JSValue result7 = context.eval("String.fromCharCode(65.9);");
@@ -135,7 +137,8 @@ public class StringConstructorTest extends BaseJavetTest {
         assertThat(result1).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("A"));
 
         JSValue result2 = context.eval("String.fromCodePoint(72, 101, 108, 108, 111);");
-        assertThat(result2).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("Hello"));
+        assertThat(result2).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("Hello"));
 
         // Test with no arguments
         JSValue result3 = context.eval("String.fromCodePoint();");
@@ -154,13 +157,16 @@ public class StringConstructorTest extends BaseJavetTest {
 
         // Test error cases - invalid code points
         JSValue error1 = context.eval("try { String.fromCodePoint(-1); 'no error'; } catch(e) { e.name; }");
-        assertThat(error1).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("RangeError"));
+        assertThat(error1).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("RangeError"));
 
         JSValue error2 = context.eval("try { String.fromCodePoint(1114112); 'no error'; } catch(e) { e.name; }");
-        assertThat(error2).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("RangeError"));
+        assertThat(error2).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("RangeError"));
 
         JSValue error3 = context.eval("try { String.fromCodePoint(3.14); 'no error'; } catch(e) { e.name; }");
-        assertThat(error3).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("RangeError"));
+        assertThat(error3).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("RangeError"));
 
         assertStringWithJavet("String.fromCodePoint(72, 101, 108, 108, 111)", "String.fromCodePoint(128512)");
     }
@@ -174,7 +180,8 @@ public class StringConstructorTest extends BaseJavetTest {
     @Test
     public void testStringObjectConcat() {
         JSValue result = context.eval("(new String('hello')).concat(' ', 'world');");
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("hello world"));
+        assertThat(result).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("hello world"));
     }
 
     @Test
@@ -199,28 +206,33 @@ public class StringConstructorTest extends BaseJavetTest {
     @Test
     public void testStringObjectReplace() {
         JSValue result = context.eval("(new String('hello world')).replace('world', 'there');");
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("hello there"));
+        assertThat(result).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("hello there"));
     }
 
     @Test
     public void testStringObjectSlice() {
         JSValue result = context.eval("(new String('hello world')).slice(0, 5);");
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("hello"));
+        assertThat(result).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("hello"));
     }
 
     @Test
     public void testStringObjectToLowerCase() {
         JSValue result = context.eval("(new String('HELLO')).toLowerCase();");
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("hello"));
+        assertThat(result).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("hello"));
     }
 
     @Test
     public void testStringObjectToString() {
         JSValue result1 = context.eval("(new String('hello')).toString();");
-        assertThat(result1).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("hello"));
+        assertThat(result1).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("hello"));
 
         JSValue result2 = context.eval("(new String('world')).toString();");
-        assertThat(result2).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("world"));
+        assertThat(result2).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("world"));
 
         JSValue result3 = context.eval("(new String('')).toString();");
         assertThat(result3).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo(""));
@@ -229,13 +241,15 @@ public class StringConstructorTest extends BaseJavetTest {
     @Test
     public void testStringObjectToUpperCase() {
         JSValue result = context.eval("(new String('hello')).toUpperCase();");
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("HELLO"));
+        assertThat(result).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("HELLO"));
     }
 
     @Test
     public void testStringObjectTypeof() {
         JSValue result = context.eval("typeof new String('hello');");
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("object"));
+        assertThat(result).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("object"));
     }
 
     @Test
@@ -250,22 +264,27 @@ public class StringConstructorTest extends BaseJavetTest {
     public void testStringRaw() {
         // Test basic usage with template object
         JSValue result1 = context.eval("String.raw({ raw: ['Hello', ' ', 'World'] }, 'beautiful');");
-        assertThat(result1).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("Hellobeautiful World"));
+        assertThat(result1).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("Hellobeautiful World"));
 
         // Test with template object containing escape sequences
         // In JavaScript string literals, '\\n' becomes a newline character, not the literal \n
         JSValue result2 = context.eval("String.raw({ raw: ['Hello\\nWorld'] });");
-        assertThat(result2).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("Hello\nWorld"));
+        assertThat(result2).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("Hello\nWorld"));
 
         JSValue result3 = context.eval("String.raw({ raw: ['Line 1\\n', '\\tTabbed'] }, 'Line 2');");
-        assertThat(result3).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("Line 1\nLine 2\tTabbed"));
+        assertThat(result3).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("Line 1\nLine 2\tTabbed"));
 
         // Test with substitutions
         JSValue result4 = context.eval("String.raw({ raw: ['Hello ', '!'] }, 'World');");
-        assertThat(result4).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("Hello World!"));
+        assertThat(result4).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("Hello World!"));
 
         JSValue result5 = context.eval("String.raw({ raw: ['', '+', '=', ''] }, 1, 2, 3);");
-        assertThat(result5).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("1+2=3"));
+        assertThat(result5).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("1+2=3"));
 
         // Test with empty raw array
         JSValue result6 = context.eval("String.raw({ raw: [] });");
@@ -273,17 +292,21 @@ public class StringConstructorTest extends BaseJavetTest {
 
         // Test with single element
         JSValue result7 = context.eval("String.raw({ raw: ['Hello'] });");
-        assertThat(result7).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("Hello"));
+        assertThat(result7).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("Hello"));
 
         // Test error cases
         JSValue error1 = context.eval("try { String.raw(); 'no error'; } catch(e) { e.name; }");
-        assertThat(error1).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("TypeError"));
+        assertThat(error1).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("TypeError"));
 
         JSValue error2 = context.eval("try { String.raw(null); 'no error'; } catch(e) { e.name; }");
-        assertThat(error2).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("TypeError"));
+        assertThat(error2).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("TypeError"));
 
         JSValue error3 = context.eval("try { String.raw({}); 'no error'; } catch(e) { e.name; }");
-        assertThat(error3).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("TypeError"));
+        assertThat(error3).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("TypeError"));
 
         // Test with unicode escape sequences in raw strings
         JSValue result8 = context.eval("String.raw({ raw: ['\\u4E2D\\u6587'] });");
@@ -316,18 +339,18 @@ public class StringConstructorTest extends BaseJavetTest {
     public void testTaggedTemplateLiterals() {
         // Test String.raw with template literal
         JSValue result1 = context.eval("String.raw`Hello\nWorld`");
-        assertThat(result1).isInstanceOfSatisfying(JSString.class, jsStr ->
-                assertThat(jsStr.value()).isEqualTo("Hello\nWorld"));
+        assertThat(result1).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("Hello\nWorld"));
 
         // Test String.raw with expressions
         JSValue result2 = context.eval("String.raw`Hello ${'beautiful'} World`");
-        assertThat(result2).isInstanceOfSatisfying(JSString.class, jsStr ->
-                assertThat(jsStr.value()).isEqualTo("Hello beautiful World"));
+        assertThat(result2).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("Hello beautiful World"));
 
         // Test String.raw with multiple expressions
         JSValue result3 = context.eval("String.raw`${1}+${2}=${3}`");
-        assertThat(result3).isInstanceOfSatisfying(JSString.class, jsStr ->
-                assertThat(jsStr.value()).isEqualTo("1+2=3"));
+        assertThat(result3).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("1+2=3"));
 
         assertStringWithJavet("String.raw`Hello\nWorld`", "String.raw`Value: ${42}`");
     }
@@ -336,33 +359,32 @@ public class StringConstructorTest extends BaseJavetTest {
     public void testTemplateLiterals() {
         // Test basic template literal without expressions
         JSValue result1 = context.eval("`hello world`");
-        assertThat(result1).isInstanceOfSatisfying(JSString.class, jsStr ->
-                assertThat(jsStr.value()).isEqualTo("hello world"));
+        assertThat(result1).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("hello world"));
 
         // Test template literal with single expression
         JSValue result2 = context.eval("const name = 'Alice'; `Hello ${name}!`");
-        assertThat(result2).isInstanceOfSatisfying(JSString.class, jsStr ->
-                assertThat(jsStr.value()).isEqualTo("Hello Alice!"));
+        assertThat(result2).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("Hello Alice!"));
 
         // Test template literal with multiple expressions
         JSValue result3 = context.eval("`${1} + ${2} = ${1 + 2}`");
-        assertThat(result3).isInstanceOfSatisfying(JSString.class, jsStr ->
-                assertThat(jsStr.value()).isEqualTo("1 + 2 = 3"));
+        assertThat(result3).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("1 + 2 = 3"));
 
         // Test template literal with expressions and text
         JSValue result4 = context.eval("const x = 10; const y = 20; `x=${x}, y=${y}, sum=${x+y}`");
-        assertThat(result4).isInstanceOfSatisfying(JSString.class, jsStr ->
-                assertThat(jsStr.value()).isEqualTo("x=10, y=20, sum=30"));
+        assertThat(result4).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("x=10, y=20, sum=30"));
 
         // Test empty template literal
         JSValue result5 = context.eval("``");
-        assertThat(result5).isInstanceOfSatisfying(JSString.class, jsStr ->
-                assertThat(jsStr.value()).isEqualTo(""));
+        assertThat(result5).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo(""));
 
         // Test template literal with newlines
         JSValue result6 = context.eval("`line1\\nline2`");
-        assertThat(result6).isInstanceOfSatisfying(JSString.class, jsStr ->
-                assertThat(jsStr.value()).isEqualTo("line1\nline2"));
+        assertThat(result6).isInstanceOfSatisfying(JSString.class,
+                jsStr -> assertThat(jsStr.value()).isEqualTo("line1\nline2"));
 
         assertStringWithJavet("`Hello ${'World'}!`");
     }

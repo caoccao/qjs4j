@@ -92,11 +92,12 @@ final class ArrayExpressionDestructuringAssignmentCompiler extends AstNodeCompil
             emitDropIteratorStatePreservingTopValues(restTargetDepth + 1);
 
             // Assign collected array to rest target.
-            compilerContext.expressionDestructuringAssignmentCompiler.compileFromPreEvaluated(restTarget, restTargetDepth);
+            compilerContext.expressionDestructuringAssignmentCompiler.compileFromPreEvaluated(restTarget,
+                    restTargetDepth);
         } else {
             // No rest element - use iterator with done tracking and IteratorClose
-            int iteratorDoneLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
-                    "$arrayAssignIterDone" + compilerContext.emitter.currentOffset());
+            int iteratorDoneLocalIndex = compilerContext.scopeManager.currentScope()
+                    .declareLocal("$arrayAssignIterDone" + compilerContext.emitter.currentOffset());
             compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, iteratorDoneLocalIndex);
 
@@ -144,8 +145,8 @@ final class ArrayExpressionDestructuringAssignmentCompiler extends AstNodeCompil
 
         int[] preservedLocalIndexes = new int[preservedValueCount];
         for (int valueIndex = preservedValueCount - 1; valueIndex >= 0; valueIndex--) {
-            int localIndex = compilerContext.scopeManager.currentScope().declareLocal(
-                    "$iter_preserve_" + valueIndex + "_" + compilerContext.emitter.currentOffset());
+            int localIndex = compilerContext.scopeManager.currentScope()
+                    .declareLocal("$iter_preserve_" + valueIndex + "_" + compilerContext.emitter.currentOffset());
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
             preservedLocalIndexes[valueIndex] = localIndex;
         }

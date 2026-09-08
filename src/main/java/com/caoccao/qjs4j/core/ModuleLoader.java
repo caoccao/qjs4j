@@ -31,26 +31,25 @@ import java.util.regex.Matcher;
 /**
  * Loads modules, caches them, and decides when each one's body may run.
  * <p>
- * It owns the realm's module cache and the {@code import.meta} objects that go with it, resolves a
- * specifier against its referrer, and reads the three kinds of payload the engine understands:
- * JavaScript source, JSON, and the {@code type: 'text'} / {@code type: 'bytes'} attributes, whose
- * single {@code default} export it manufactures without compiling anything.
+ * It owns the realm's module cache and the {@code import.meta} objects that go with it, resolves a specifier against
+ * its referrer, and reads the three kinds of payload the engine understands: JavaScript source, JSON, and the
+ * {@code type: 'text'} / {@code type: 'bytes'} attributes, whose single {@code default} export it manufactures without
+ * compiling anything.
  * <p>
- * The harder half is ordering. A module whose body contains a top-level {@code await} finishes
- * asynchronously, and everything that imports it has to wait — so a dependent registers itself on
- * the modules it is waiting for, an {@code asyncEvaluationOrder} is stamped on each one as it is
- * deferred, and {@link #triggerPendingDependents} runs the ones that become ready in that order.
- * This is ES2024 16.2.1.5.2's AsyncModuleExecutionFulfilled / GatherAvailableAncestors, and
- * {@code import defer} adds ReadyForSyncExecution on top of it.
+ * The harder half is ordering. A module whose body contains a top-level {@code await} finishes asynchronously, and
+ * everything that imports it has to wait — so a dependent registers itself on the modules it is waiting for, an
+ * {@code asyncEvaluationOrder} is stamped on each one as it is deferred, and {@link #triggerPendingDependents} runs the
+ * ones that become ready in that order. This is ES2024 16.2.1.5.2's AsyncModuleExecutionFulfilled /
+ * GatherAvailableAncestors, and {@code import defer} adds ReadyForSyncExecution on top of it.
  */
 final class ModuleLoader {
+    // Counter for tracking the order modules have their async evaluation set
+    private int asyncEvaluationOrderCounter;
     private final JSContext context;
     private final Map<String, JSDynamicImportModule> dynamicImportModuleCache = new HashMap<>();
     private final Map<String, JSObject> importMetaCache = new HashMap<>();
     private final ModuleLinker linker;
     private final ModuleSourceTransformer transformer;
-    // Counter for tracking the order modules have their async evaluation set
-    private int asyncEvaluationOrderCounter;
 
     ModuleLoader(JSContext context, ModuleSourceTransformer transformer, ModuleLinker linker) {
         this.context = context;
@@ -60,89 +59,81 @@ final class ModuleLoader {
     }
 
     /**
-     * Put a module record in the cache.
-     * <p>
-     * Package-private so the eval pipeline can register the module it is about to evaluate, which
-     * is what lets a self-import see the re-entrancy.
-     *
-     * @param moduleCacheKey the resolved specifier, possibly qualified by an import type
-     * @param moduleRecord   the record to cache
-     */
-    void cacheModule(String moduleCacheKey, JSDynamicImportModule moduleRecord) {
-        dynamicImportModuleCache.put(moduleCacheKey, moduleRecord);
-    }
-
-    /**
      * The module record the dynamic-import cache holds for a key, or null.
      * <p>
      * Package-private so {@link ModuleLinker} can look a module up without owning the cache.
      *
-     * @param moduleCacheKey the resolved specifier, possibly qualified by an import type
+     * @param moduleCacheKey
+     *            the resolved specifier, possibly qualified by an import type
      * @return the cached record, or null when there is none
      */
     JSDynamicImportModule cachedModule(String moduleCacheKey) {
         return dynamicImportModuleCache.get(moduleCacheKey);
     }
 
-    void chainImportPromiseOntoAsyncDependencies(
-            List<JSPromise> dependencyPromises,
-            JSObject namespace,
-            JSPromise importPromise,
-            JSPromise.ResolveState resolveState) {
+    /**
+     * Put a module record in the cache.
+     * <p>
+     * Package-private so the eval pipeline can register the module it is about to evaluate, which is what lets a
+     * self-import see the re-entrancy.
+     *
+     * @param moduleCacheKey
+     *            the resolved specifier, possibly qualified by an import type
+     * @param moduleRecord
+     *            the record to cache
+     */
+    void cacheModule(String moduleCacheKey, JSDynamicImportModule moduleRecord) {
+        dynamicImportModuleCache.put(moduleCacheKey, moduleRecord);
+    }
+
+    void chainImportPromiseOntoAsyncDependencies(List<JSPromise> dependencyPromises, JSObject namespace,
+            JSPromise importPromise, JSPromise.ResolveState resolveState) {
         int[] remaining = new int[]{dependencyPromises.size()};
         for (JSPromise dependencyPromise : dependencyPromises) {
-            JSNativeFunction onFulfill = new JSNativeFunction(context, "", 0,
-                    (ctx, thisArg, args) -> {
-                        remaining[0]--;
-                        if (remaining[0] == 0 && !resolveState.alreadyResolved) {
-                            resolveState.alreadyResolved = true;
-                            importPromise.resolve(ctx, namespace);
-                        }
-                        return JSUndefined.INSTANCE;
-                    });
+            JSNativeFunction onFulfill = new JSNativeFunction(context, "", 0, (ctx, thisArg, args) -> {
+                remaining[0]--;
+                if (remaining[0] == 0 && !resolveState.alreadyResolved) {
+                    resolveState.alreadyResolved = true;
+                    importPromise.resolve(ctx, namespace);
+                }
+                return JSUndefined.INSTANCE;
+            });
             onFulfill.initializePrototypeChain(context);
-            JSNativeFunction onReject = new JSNativeFunction(context, "", 1,
-                    (ctx, thisArg, args) -> {
-                        if (!resolveState.alreadyResolved) {
-                            resolveState.alreadyResolved = true;
-                            JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                            importPromise.reject(reason);
-                        }
-                        return JSUndefined.INSTANCE;
-                    });
+            JSNativeFunction onReject = new JSNativeFunction(context, "", 1, (ctx, thisArg, args) -> {
+                if (!resolveState.alreadyResolved) {
+                    resolveState.alreadyResolved = true;
+                    JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                    importPromise.reject(reason);
+                }
+                return JSUndefined.INSTANCE;
+            });
             onReject.initializePrototypeChain(context);
-            dependencyPromise.addReactions(
-                    new JSPromise.ReactionRecord(onFulfill, context, null, null),
+            dependencyPromise.addReactions(new JSPromise.ReactionRecord(onFulfill, context, null, null),
                     new JSPromise.ReactionRecord(onReject, context, null, null));
         }
     }
 
-    void chainImportPromiseOntoAsyncModule(
-            JSDynamicImportModule moduleRecord,
-            JSPromise importPromise,
+    void chainImportPromiseOntoAsyncModule(JSDynamicImportModule moduleRecord, JSPromise importPromise,
             JSPromise.ResolveState resolveState) {
         JSObject namespace = moduleRecord.namespace();
-        JSNativeFunction onFulfill = new JSNativeFunction(context, "", 0,
-                (ctx, thisArg, args) -> {
-                    if (!resolveState.alreadyResolved) {
-                        resolveState.alreadyResolved = true;
-                        importPromise.resolve(ctx, namespace);
-                    }
-                    return JSUndefined.INSTANCE;
-                });
+        JSNativeFunction onFulfill = new JSNativeFunction(context, "", 0, (ctx, thisArg, args) -> {
+            if (!resolveState.alreadyResolved) {
+                resolveState.alreadyResolved = true;
+                importPromise.resolve(ctx, namespace);
+            }
+            return JSUndefined.INSTANCE;
+        });
         onFulfill.initializePrototypeChain(context);
-        JSNativeFunction onReject = new JSNativeFunction(context, "", 1,
-                (ctx, thisArg, args) -> {
-                    if (!resolveState.alreadyResolved) {
-                        resolveState.alreadyResolved = true;
-                        JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                        importPromise.reject(reason);
-                    }
-                    return JSUndefined.INSTANCE;
-                });
+        JSNativeFunction onReject = new JSNativeFunction(context, "", 1, (ctx, thisArg, args) -> {
+            if (!resolveState.alreadyResolved) {
+                resolveState.alreadyResolved = true;
+                JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                importPromise.reject(reason);
+            }
+            return JSUndefined.INSTANCE;
+        });
         onReject.initializePrototypeChain(context);
-        moduleRecord.asyncEvaluationPromise().addReactions(
-                new JSPromise.ReactionRecord(onFulfill, context, null, null),
+        moduleRecord.asyncEvaluationPromise().addReactions(new JSPromise.ReactionRecord(onFulfill, context, null, null),
                 new JSPromise.ReactionRecord(onReject, context, null, null));
     }
 
@@ -190,11 +181,10 @@ final class ModuleLoader {
     }
 
     /**
-     * ES2024 16.2.1.5.2.4 GatherAvailableAncestors.
-     * Collects all ancestor modules whose pending async dependencies have all resolved.
+     * ES2024 16.2.1.5.2.4 GatherAvailableAncestors. Collects all ancestor modules whose pending async dependencies have
+     * all resolved.
      */
-    void gatherAvailableAncestors(JSDynamicImportModule module,
-                                  List<JSDynamicImportModule> execList) {
+    void gatherAvailableAncestors(JSDynamicImportModule module, List<JSDynamicImportModule> execList) {
         List<JSDynamicImportModule> dependents = new ArrayList<>(module.pendingDependents());
         module.pendingDependents().clear();
         for (JSDynamicImportModule dependent : dependents) {
@@ -213,11 +203,8 @@ final class ModuleLoader {
         }
     }
 
-    void gatherDeferredAsyncDependencySpecifiers(
-            String resolvedSpecifier,
-            String sourceCode,
-            Set<String> visitedSpecifiers,
-            Set<String> asyncDependencySpecifiers) {
+    void gatherDeferredAsyncDependencySpecifiers(String resolvedSpecifier, String sourceCode,
+            Set<String> visitedSpecifiers, Set<String> asyncDependencySpecifiers) {
         if (!visitedSpecifiers.add(resolvedSpecifier)) {
             return;
         }
@@ -229,9 +216,7 @@ final class ModuleLoader {
         Matcher matcher = ModuleSourceTransformer.MODULE_STATIC_IMPORT_PATTERN.matcher(scanSourceCode);
         while (matcher.find()) {
             String childSpecifier = transformer.decodeModuleStringLiteralValue(matcher.group(1));
-            String resolvedChildSpecifier = resolveDynamicImportSpecifier(
-                    childSpecifier,
-                    resolvedSpecifier,
+            String resolvedChildSpecifier = resolveDynamicImportSpecifier(childSpecifier, resolvedSpecifier,
                     childSpecifier);
             String childSourceCode;
             try {
@@ -244,10 +229,7 @@ final class ModuleLoader {
             } catch (IOException ioException) {
                 throw new JSException(context.throwTypeError("Cannot find module '" + childSpecifier + "'"));
             }
-            gatherDeferredAsyncDependencySpecifiers(
-                    resolvedChildSpecifier,
-                    childSourceCode,
-                    visitedSpecifiers,
+            gatherDeferredAsyncDependencySpecifiers(resolvedChildSpecifier, childSourceCode, visitedSpecifiers,
                     asyncDependencySpecifiers);
         }
     }
@@ -268,13 +250,13 @@ final class ModuleLoader {
         Matcher matcher = ModuleSourceTransformer.MODULE_STATIC_IMPORT_PATTERN.matcher(scanSource);
         List<JSPromise> dependencyPromises = new ArrayList<>();
         Set<String> seenSpecifiers = new HashSet<>();
-        JSDynamicImportModule moduleCycleRoot =
-                moduleRecord.cycleRoot() != null ? moduleRecord.cycleRoot() : moduleRecord;
+        JSDynamicImportModule moduleCycleRoot = moduleRecord.cycleRoot() != null
+                ? moduleRecord.cycleRoot()
+                : moduleRecord;
         while (matcher.find()) {
             String specifier = transformer.decodeModuleStringLiteralValue(matcher.group(1));
             try {
-                String resolved = resolveDynamicImportSpecifier(
-                        specifier, moduleRecord.resolvedSpecifier(), specifier);
+                String resolved = resolveDynamicImportSpecifier(specifier, moduleRecord.resolvedSpecifier(), specifier);
                 JSDynamicImportModule depRecord = dynamicImportModuleCache.get(resolved);
                 if (depRecord == null) {
                     continue;
@@ -307,11 +289,9 @@ final class ModuleLoader {
         while (matcher.find()) {
             String specifier = transformer.decodeModuleStringLiteralValue(matcher.group(1));
             try {
-                String resolved = resolveDynamicImportSpecifier(
-                        specifier, moduleRecord.resolvedSpecifier(), specifier);
+                String resolved = resolveDynamicImportSpecifier(specifier, moduleRecord.resolvedSpecifier(), specifier);
                 JSDynamicImportModule depRecord = dynamicImportModuleCache.get(resolved);
-                if (depRecord != null
-                        && depRecord.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC) {
+                if (depRecord != null && depRecord.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC) {
                     return true;
                 }
             } catch (JSException ignored) {
@@ -324,16 +304,16 @@ final class ModuleLoader {
     }
 
     /**
-     * Whether the source about to be evaluated is a module's own generated source rather than the
-     * text an author wrote.
+     * Whether the source about to be evaluated is a module's own generated source rather than the text an author wrote.
      * <p>
-     * A module with exports is evaluated by handing its rewritten source back to {@code eval} under
-     * the same file name, and in that text the {@code export} declarations have already become
-     * ordinary assignments. Anything that reads it as a module therefore sees a module that
-     * exports nothing.
+     * A module with exports is evaluated by handing its rewritten source back to {@code eval} under the same file name,
+     * and in that text the {@code export} declarations have already become ordinary assignments. Anything that reads it
+     * as a module therefore sees a module that exports nothing.
      *
-     * @param code     the source about to be evaluated
-     * @param filename the name it is being evaluated under
+     * @param code
+     *            the source about to be evaluated
+     * @param filename
+     *            the name it is being evaluated under
      * @return true when this is a cached module's transformed source
      */
     boolean isTransformedModuleSource(String code, String filename) {
@@ -348,8 +328,7 @@ final class ModuleLoader {
             resolvedSpecifier = normalizeModuleSpecifier(filename);
         }
         JSDynamicImportModule moduleRecord = dynamicImportModuleCache.get(resolvedSpecifier);
-        return moduleRecord != null
-                && !Objects.equals(moduleRecord.rawSource(), code)
+        return moduleRecord != null && !Objects.equals(moduleRecord.rawSource(), code)
                 && Objects.equals(moduleRecord.transformedSource(), code);
     }
 
@@ -357,74 +336,55 @@ final class ModuleLoader {
         return loadDynamicImportModule(specifier, referrerFilename, null);
     }
 
-    JSObject loadDynamicImportModule(
-            String specifier,
-            String referrerFilename,
-            Map<String, String> importAttributes) {
+    JSObject loadDynamicImportModule(String specifier, String referrerFilename, Map<String, String> importAttributes) {
         return loadDynamicImportModule(specifier, referrerFilename, importAttributes, null, null);
     }
 
     /**
-     * Load a dynamic import module. When importPromise and resolveState are provided
-     * (from a dynamic import() expression), the method chains the import promise onto
-     * the module's async evaluation promise if the module has TLA.
-     * Returns null when the import promise is handled internally.
+     * Load a dynamic import module. When importPromise and resolveState are provided (from a dynamic import()
+     * expression), the method chains the import promise onto the module's async evaluation promise if the module has
+     * TLA. Returns null when the import promise is handled internally.
      */
-    JSObject loadDynamicImportModule(
-            String specifier,
-            String referrerFilename,
-            Map<String, String> importAttributes,
-            JSPromise importPromise,
-            JSPromise.ResolveState resolveState) {
+    JSObject loadDynamicImportModule(String specifier, String referrerFilename, Map<String, String> importAttributes,
+            JSPromise importPromise, JSPromise.ResolveState resolveState) {
         // Everything evaluated from here down is a module pulled in to satisfy an import,
         // not the module the host asked for. See getImportedModuleBodyEvaluationCount().
         boolean previouslyEvaluatingImportedModule = context.isEvaluatingImportedModule();
         context.setEvaluatingImportedModule(true);
         try {
-            return loadDynamicImportModuleInternal(
-                    specifier, referrerFilename, importAttributes, importPromise, resolveState);
+            return loadDynamicImportModuleInternal(specifier, referrerFilename, importAttributes, importPromise,
+                    resolveState);
         } finally {
             context.setEvaluatingImportedModule(previouslyEvaluatingImportedModule);
         }
     }
 
-    JSObject loadDynamicImportModuleDeferred(
-            String specifier,
-            String referrerFilename,
+    JSObject loadDynamicImportModuleDeferred(String specifier, String referrerFilename,
             Map<String, String> importAttributes) {
         return loadDynamicImportModuleDeferred(specifier, referrerFilename, importAttributes, null, null);
     }
 
     /**
-     * Load a module in deferred mode. When importPromise and resolveState are provided
-     * (dynamic import.defer() case), the method handles resolving the import promise
-     * internally — chaining it onto TLA evaluation promises if needed.
+     * Load a module in deferred mode. When importPromise and resolveState are provided (dynamic import.defer() case),
+     * the method handles resolving the import promise internally — chaining it onto TLA evaluation promises if needed.
      * Returns null when the import promise is handled internally.
      */
-    JSObject loadDynamicImportModuleDeferred(
-            String specifier,
-            String referrerFilename,
-            Map<String, String> importAttributes,
-            JSPromise importPromise,
-            JSPromise.ResolveState resolveState) {
+    JSObject loadDynamicImportModuleDeferred(String specifier, String referrerFilename,
+            Map<String, String> importAttributes, JSPromise importPromise, JSPromise.ResolveState resolveState) {
         // Everything evaluated from here down is a module pulled in to satisfy an import,
         // not the module the host asked for. See getImportedModuleBodyEvaluationCount().
         boolean previouslyEvaluatingImportedModule = context.isEvaluatingImportedModule();
         context.setEvaluatingImportedModule(true);
         try {
-            return loadDynamicImportModuleDeferredInternal(
-                    specifier, referrerFilename, importAttributes, importPromise, resolveState);
+            return loadDynamicImportModuleDeferredInternal(specifier, referrerFilename, importAttributes, importPromise,
+                    resolveState);
         } finally {
             context.setEvaluatingImportedModule(previouslyEvaluatingImportedModule);
         }
     }
 
-    JSObject loadDynamicImportModuleDeferredInternal(
-            String specifier,
-            String referrerFilename,
-            Map<String, String> importAttributes,
-            JSPromise importPromise,
-            JSPromise.ResolveState resolveState) {
+    JSObject loadDynamicImportModuleDeferredInternal(String specifier, String referrerFilename,
+            Map<String, String> importAttributes, JSPromise importPromise, JSPromise.ResolveState resolveState) {
         String resolvedSpecifier = resolveDynamicImportSpecifier(specifier, referrerFilename, specifier);
         String moduleCacheKey = getDynamicImportCacheKey(resolvedSpecifier, importAttributes);
         JSDynamicImportModule moduleRecord = dynamicImportModuleCache.get(moduleCacheKey);
@@ -443,7 +403,8 @@ final class ModuleLoader {
                     // was a SyntaxError instead of a string.
                     String sourceCode = Files.readString(Path.of(resolvedSpecifier));
                     moduleRecord.setRawSource(sourceCode);
-                    context.importBindingInstaller().defineDynamicImportNamespaceValue(moduleRecord, "default", new JSString(sourceCode));
+                    context.importBindingInstaller().defineDynamicImportNamespaceValue(moduleRecord, "default",
+                            new JSString(sourceCode));
                     moduleRecord.explicitExportNames().add("default");
                     moduleRecord.exportOrigins().put("default", resolvedSpecifier);
                     moduleRecord.namespace().finalizeNamespace();
@@ -458,7 +419,8 @@ final class ModuleLoader {
                     context.transferPrototype(arrayBuffer, JSArrayBuffer.NAME);
                     arrayBuffer.setImmutable(true);
                     JSUint8Array uint8Array = context.createJSUint8Array(arrayBuffer, 0, fileBytes.length);
-                    context.importBindingInstaller().defineDynamicImportNamespaceValue(moduleRecord, "default", uint8Array);
+                    context.importBindingInstaller().defineDynamicImportNamespaceValue(moduleRecord, "default",
+                            uint8Array);
                     moduleRecord.explicitExportNames().add("default");
                     moduleRecord.exportOrigins().put("default", resolvedSpecifier);
                     moduleRecord.namespace().finalizeNamespace();
@@ -472,7 +434,8 @@ final class ModuleLoader {
                         throw new JSException(context.throwTypeError("Import attribute type must be 'json'"));
                     }
                     JSValue jsonDefaultValue = parseJsonModuleSource(sourceCode);
-                    context.importBindingInstaller().defineDynamicImportNamespaceValue(moduleRecord, "default", jsonDefaultValue);
+                    context.importBindingInstaller().defineDynamicImportNamespaceValue(moduleRecord, "default",
+                            jsonDefaultValue);
                     moduleRecord.explicitExportNames().add("default");
                     moduleRecord.exportOrigins().put("default", resolvedSpecifier);
                     moduleRecord.namespace().finalizeNamespace();
@@ -504,10 +467,7 @@ final class ModuleLoader {
         }
 
         LinkedHashSet<String> asyncDependencySpecifiers = new LinkedHashSet<>();
-        gatherDeferredAsyncDependencySpecifiers(
-                resolvedSpecifier,
-                moduleRecord.rawSource(),
-                new HashSet<>(),
+        gatherDeferredAsyncDependencySpecifiers(resolvedSpecifier, moduleRecord.rawSource(), new HashSet<>(),
                 asyncDependencySpecifiers);
         List<JSPromise> tlaEvaluationPromises = new ArrayList<>();
         boolean prevSuppress = context.isSuppressingEvalMicrotasks();
@@ -531,8 +491,8 @@ final class ModuleLoader {
                         moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
                     }
                 } else {
-                    JSDynamicImportModule depRecord =
-                            loadJSDynamicImportModule(asyncDependencySpecifier, new HashSet<>(), importAttributes);
+                    JSDynamicImportModule depRecord = loadJSDynamicImportModule(asyncDependencySpecifier,
+                            new HashSet<>(), importAttributes);
                     if (depRecord.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC
                             && depRecord.asyncEvaluationPromise() != null) {
                         tlaEvaluationPromises.add(depRecord.asyncEvaluationPromise());
@@ -555,28 +515,25 @@ final class ModuleLoader {
             JSObject deferredNs = moduleRecord.deferredNamespace();
             int[] remaining = {tlaEvaluationPromises.size()};
             for (JSPromise tlaPromise : tlaEvaluationPromises) {
-                JSNativeFunction onFulfill = new JSNativeFunction(context, "", 0,
-                        (ctx, thisArg, args) -> {
-                            remaining[0]--;
-                            if (remaining[0] == 0 && !resolveState.alreadyResolved) {
-                                resolveState.alreadyResolved = true;
-                                importPromise.resolve(ctx, deferredNs);
-                            }
-                            return JSUndefined.INSTANCE;
-                        });
+                JSNativeFunction onFulfill = new JSNativeFunction(context, "", 0, (ctx, thisArg, args) -> {
+                    remaining[0]--;
+                    if (remaining[0] == 0 && !resolveState.alreadyResolved) {
+                        resolveState.alreadyResolved = true;
+                        importPromise.resolve(ctx, deferredNs);
+                    }
+                    return JSUndefined.INSTANCE;
+                });
                 onFulfill.initializePrototypeChain(context);
-                JSNativeFunction onReject = new JSNativeFunction(context, "", 1,
-                        (ctx, thisArg, args) -> {
-                            if (!resolveState.alreadyResolved) {
-                                resolveState.alreadyResolved = true;
-                                JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                                importPromise.reject(reason);
-                            }
-                            return JSUndefined.INSTANCE;
-                        });
+                JSNativeFunction onReject = new JSNativeFunction(context, "", 1, (ctx, thisArg, args) -> {
+                    if (!resolveState.alreadyResolved) {
+                        resolveState.alreadyResolved = true;
+                        JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                        importPromise.reject(reason);
+                    }
+                    return JSUndefined.INSTANCE;
+                });
                 onReject.initializePrototypeChain(context);
-                tlaPromise.addReactions(
-                        new JSPromise.ReactionRecord(onFulfill, context, null, null),
+                tlaPromise.addReactions(new JSPromise.ReactionRecord(onFulfill, context, null, null),
                         new JSPromise.ReactionRecord(onReject, context, null, null));
             }
             return null; // Import promise will be resolved via TLA promise chain
@@ -592,12 +549,8 @@ final class ModuleLoader {
         return moduleRecord.deferredNamespace();
     }
 
-    JSObject loadDynamicImportModuleInternal(
-            String specifier,
-            String referrerFilename,
-            Map<String, String> importAttributes,
-            JSPromise importPromise,
-            JSPromise.ResolveState resolveState) {
+    JSObject loadDynamicImportModuleInternal(String specifier, String referrerFilename,
+            Map<String, String> importAttributes, JSPromise importPromise, JSPromise.ResolveState resolveState) {
         String resolvedSpecifier = resolveDynamicImportSpecifier(specifier, referrerFilename, specifier);
         String moduleCacheKey = getDynamicImportCacheKey(resolvedSpecifier, importAttributes);
         // Check if the module was pre-loaded (deferred) but not yet evaluated.
@@ -616,8 +569,8 @@ final class ModuleLoader {
             }
             return preloaded.namespace();
         }
-        JSDynamicImportModule moduleRecord =
-                loadJSDynamicImportModule(resolvedSpecifier, new HashSet<>(), importAttributes);
+        JSDynamicImportModule moduleRecord = loadJSDynamicImportModule(resolvedSpecifier, new HashSet<>(),
+                importAttributes);
         // If the module is still completing async evaluation, chain the import promise
         // onto the module's async evaluation promise instead of resolving immediately.
         if (importPromise != null && resolveState != null
@@ -630,11 +583,8 @@ final class ModuleLoader {
                 && moduleRecord.status() != JSDynamicImportModule.Status.EVALUATED_ERROR) {
             List<JSPromise> asyncDependencyPromises = getEvaluatingAsyncDependencyPromises(moduleRecord);
             if (!asyncDependencyPromises.isEmpty()) {
-                chainImportPromiseOntoAsyncDependencies(
-                        asyncDependencyPromises,
-                        moduleRecord.namespace(),
-                        importPromise,
-                        resolveState);
+                chainImportPromiseOntoAsyncDependencies(asyncDependencyPromises, moduleRecord.namespace(),
+                        importPromise, resolveState);
                 return null;
             }
         }
@@ -645,9 +595,7 @@ final class ModuleLoader {
         return moduleRecord.namespace();
     }
 
-    JSDynamicImportModule loadJSDynamicImportModule(
-            String resolvedSpecifier,
-            Set<String> importResolutionStack,
+    JSDynamicImportModule loadJSDynamicImportModule(String resolvedSpecifier, Set<String> importResolutionStack,
             Map<String, String> importAttributes) {
         String moduleCacheKey = getDynamicImportCacheKey(resolvedSpecifier, importAttributes);
         JSDynamicImportModule cachedRecord = dynamicImportModuleCache.get(moduleCacheKey);
@@ -665,8 +613,8 @@ final class ModuleLoader {
             }
         }
 
-        JSDynamicImportModule moduleRecord =
-                new JSDynamicImportModule(resolvedSpecifier, createModuleNamespaceObject());
+        JSDynamicImportModule moduleRecord = new JSDynamicImportModule(resolvedSpecifier,
+                createModuleNamespaceObject());
         moduleRecord.setStatus(JSDynamicImportModule.Status.LOADING);
         dynamicImportModuleCache.put(moduleCacheKey, moduleRecord);
 
@@ -677,7 +625,8 @@ final class ModuleLoader {
                 // Data, not source — see the deferred path above.
                 String sourceCode = Files.readString(Path.of(resolvedSpecifier));
                 moduleRecord.setRawSource(sourceCode);
-                context.importBindingInstaller().defineDynamicImportNamespaceValue(moduleRecord, "default", new JSString(sourceCode));
+                context.importBindingInstaller().defineDynamicImportNamespaceValue(moduleRecord, "default",
+                        new JSString(sourceCode));
                 moduleRecord.explicitExportNames().add("default");
                 moduleRecord.exportOrigins().put("default", resolvedSpecifier);
                 moduleRecord.namespace().finalizeNamespace();
@@ -706,7 +655,8 @@ final class ModuleLoader {
                     throw new JSException(context.throwTypeError("Import attribute type must be 'json'"));
                 }
                 JSValue jsonDefaultValue = parseJsonModuleSource(sourceCode);
-                context.importBindingInstaller().defineDynamicImportNamespaceValue(moduleRecord, "default", jsonDefaultValue);
+                context.importBindingInstaller().defineDynamicImportNamespaceValue(moduleRecord, "default",
+                        jsonDefaultValue);
                 moduleRecord.explicitExportNames().add("default");
                 moduleRecord.exportOrigins().put("default", resolvedSpecifier);
                 moduleRecord.namespace().finalizeNamespace();
@@ -725,8 +675,7 @@ final class ModuleLoader {
             if (context.isSuppressingEvalMicrotasks()) {
                 preloadStaticImports(moduleRecord, importResolutionStack, importAttributes);
             }
-            if (context.isSuppressingEvalMicrotasks()
-                    && hasEvaluatingAsyncDependency(moduleRecord)) {
+            if (context.isSuppressingEvalMicrotasks() && hasEvaluatingAsyncDependency(moduleRecord)) {
                 // ES2024 16.2.1.5.2.1: Module depends on an EVALUATING_ASYNC module.
                 // Don't evaluate yet; register as a pending dependent.
                 // Set EVALUATING_ASYNC so transitive dependents also defer.
@@ -778,14 +727,14 @@ final class ModuleLoader {
             dynamicImportModuleCache.remove(moduleCacheKey);
             throw new JSException(context.throwTypeError("Cannot find module '" + resolvedSpecifier + "'"));
         } catch (JSSyntaxErrorException syntaxErrorException) {
-            JSValue error = context.throwSyntaxError(
-                    syntaxErrorException.getMessage(), syntaxErrorException.getSourceLocation());
+            JSValue error = context.throwSyntaxError(syntaxErrorException.getMessage(),
+                    syntaxErrorException.getSourceLocation());
             moduleRecord.setEvaluationError(error);
             moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
             throw new JSException(error);
         } catch (JSCompilerException compilerException) {
-            JSValue error = context.throwSyntaxError(
-                    compilerException.getMessage(), compilerException.getSourceLocation());
+            JSValue error = context.throwSyntaxError(compilerException.getMessage(),
+                    compilerException.getSourceLocation());
             moduleRecord.setEvaluationError(error);
             moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
             throw new JSException(error);
@@ -797,15 +746,16 @@ final class ModuleLoader {
             throw jsException;
         } catch (Exception exception) {
             dynamicImportModuleCache.remove(moduleCacheKey);
-            throw new JSException(context.throwError(exception.getMessage() != null ? exception.getMessage() : "Module load error"));
+            throw new JSException(
+                    context.throwError(exception.getMessage() != null ? exception.getMessage() : "Module load error"));
         }
     }
 
     /**
      * How many modules the dynamic-import cache holds.
      * <p>
-     * Read by {@link ModuleSourceTransformer} when it invents a name for a module's generated
-     * export binding, so two modules transformed in one realm cannot collide on it.
+     * Read by {@link ModuleSourceTransformer} when it invents a name for a module's generated export binding, so two
+     * modules transformed in one realm cannot collide on it.
      *
      * @return the number of cached module records
      */
@@ -817,8 +767,8 @@ final class ModuleLoader {
      * The order stamp for the next module to be deferred by an asynchronous dependency.
      * <p>
      * ES2024 16.2.1.5.2 gives every module deferred during the depth-first evaluation an
-     * {@code [[AsyncEvaluationOrder]]}, and {@link #triggerPendingDependents} runs the ones that
-     * become ready in that order.
+     * {@code [[AsyncEvaluationOrder]]}, and {@link #triggerPendingDependents} runs the ones that become ready in that
+     * order.
      *
      * @return the next order stamp
      */
@@ -873,13 +823,12 @@ final class ModuleLoader {
     }
 
     /**
-     * Pre-load all static imports of a module so that EVALUATING_ASYNC dependencies
-     * are discovered before we decide whether to defer or evaluate the module.
+     * Pre-load all static imports of a module so that EVALUATING_ASYNC dependencies are discovered before we decide
+     * whether to defer or evaluate the module.
      */
 
-    void preloadStaticImports(JSDynamicImportModule moduleRecord,
-                              Set<String> importResolutionStack,
-                              Map<String, String> importAttributes) {
+    void preloadStaticImports(JSDynamicImportModule moduleRecord, Set<String> importResolutionStack,
+            Map<String, String> importAttributes) {
         String scanSource = transformer.maskModuleComments(moduleRecord.rawSource());
         Matcher matcher = ModuleSourceTransformer.MODULE_STATIC_IMPORT_PATTERN.matcher(scanSource);
         while (matcher.find()) {
@@ -893,8 +842,7 @@ final class ModuleLoader {
             }
             String specifier = transformer.decodeModuleStringLiteralValue(matcher.group(1));
             try {
-                String resolved = resolveDynamicImportSpecifier(
-                        specifier, moduleRecord.resolvedSpecifier(), specifier);
+                String resolved = resolveDynamicImportSpecifier(specifier, moduleRecord.resolvedSpecifier(), specifier);
                 JSDynamicImportModule depRecord = dynamicImportModuleCache.get(resolved);
                 if (depRecord != null) {
                     // ES2024 16.2.1.5.2.1 step 11.d: If the dependency is still on the
@@ -903,13 +851,11 @@ final class ModuleLoader {
                     // itself if it has no cycle root).
                     if (depRecord.status() == JSDynamicImportModule.Status.LOADING
                             || depRecord.status() == JSDynamicImportModule.Status.EVALUATING) {
-                        JSDynamicImportModule root =
-                                depRecord.cycleRoot() != null ? depRecord.cycleRoot() : depRecord;
+                        JSDynamicImportModule root = depRecord.cycleRoot() != null ? depRecord.cycleRoot() : depRecord;
                         moduleRecord.setCycleRoot(root);
                     }
                 } else {
-                    loadJSDynamicImportModule(resolved,
-                            new HashSet<>(importResolutionStack), importAttributes);
+                    loadJSDynamicImportModule(resolved, new HashSet<>(importResolutionStack), importAttributes);
                 }
             } catch (JSException ignored) {
                 // Skip unresolvable specifiers. Clear the pending exception the matching
@@ -920,8 +866,8 @@ final class ModuleLoader {
     }
 
     /**
-     * Implements ReadyForSyncExecution(_module_, _seen_) from the import-defer spec.
-     * Returns true if the module and all its transitive dependencies can be evaluated synchronously.
+     * Implements ReadyForSyncExecution(_module_, _seen_) from the import-defer spec. Returns true if the module and all
+     * its transitive dependencies can be evaluated synchronously.
      */
     boolean readyForSyncExecution(String resolvedSpecifier, Set<String> seen) {
         if (!seen.add(resolvedSpecifier)) {
@@ -958,8 +904,8 @@ final class ModuleLoader {
             String childSpecifier = transformer.decodeModuleStringLiteralValue(matcher.group(1));
             String resolvedChildSpecifier;
             try {
-                resolvedChildSpecifier = resolveDynamicImportSpecifier(
-                        childSpecifier, resolvedSpecifier, childSpecifier);
+                resolvedChildSpecifier = resolveDynamicImportSpecifier(childSpecifier, resolvedSpecifier,
+                        childSpecifier);
             } catch (JSException jsException) {
                 continue;
             }
@@ -970,35 +916,30 @@ final class ModuleLoader {
         return true;
     }
 
-    void registerAsyncModuleCompletion(
-            JSDynamicImportModule moduleRecord,
-            JSPromise asyncPromise,
+    void registerAsyncModuleCompletion(JSDynamicImportModule moduleRecord, JSPromise asyncPromise,
             Set<String> importResolutionStack) {
-        JSNativeFunction onFulfill = new JSNativeFunction(context, "onFulfill", 0,
-                (ctx, thisArg, args) -> {
-                    linker.resolveDynamicImportReExports(moduleRecord, new HashSet<>());
-                    moduleRecord.namespace().finalizeNamespace();
-                    moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
-                    triggerPendingDependents(moduleRecord);
-                    return JSUndefined.INSTANCE;
-                });
+        JSNativeFunction onFulfill = new JSNativeFunction(context, "onFulfill", 0, (ctx, thisArg, args) -> {
+            linker.resolveDynamicImportReExports(moduleRecord, new HashSet<>());
+            moduleRecord.namespace().finalizeNamespace();
+            moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
+            triggerPendingDependents(moduleRecord);
+            return JSUndefined.INSTANCE;
+        });
         onFulfill.initializePrototypeChain(context);
-        JSNativeFunction onReject = new JSNativeFunction(context, "onReject", 1,
-                (ctx, thisArg, args) -> {
-                    JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                    // A top-level-await body that finished and then rejected still failed while
-                    // the graph was being evaluated. Counting it is what lets a host tell that
-                    // apart from a graph that never got past linking — see
-                    // hasModuleBodyEvaluationFailed().
-                    context.recordFailedModuleBodyEvaluation();
-                    moduleRecord.setEvaluationError(error);
-                    moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
-                    triggerPendingDependents(moduleRecord);
-                    return JSUndefined.INSTANCE;
-                });
+        JSNativeFunction onReject = new JSNativeFunction(context, "onReject", 1, (ctx, thisArg, args) -> {
+            JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            // A top-level-await body that finished and then rejected still failed while
+            // the graph was being evaluated. Counting it is what lets a host tell that
+            // apart from a graph that never got past linking — see
+            // hasModuleBodyEvaluationFailed().
+            context.recordFailedModuleBodyEvaluation();
+            moduleRecord.setEvaluationError(error);
+            moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
+            triggerPendingDependents(moduleRecord);
+            return JSUndefined.INSTANCE;
+        });
         onReject.initializePrototypeChain(context);
-        asyncPromise.addReactions(
-                new JSPromise.ReactionRecord(onFulfill, context, null, null),
+        asyncPromise.addReactions(new JSPromise.ReactionRecord(onFulfill, context, null, null),
                 new JSPromise.ReactionRecord(onReject, context, null, null));
     }
 
@@ -1008,13 +949,13 @@ final class ModuleLoader {
         int asyncDepCount = 0;
         Set<String> registeredOnSpecifiers = new HashSet<>();
         // Determine this module's effective cycle root for same-cycle detection.
-        JSDynamicImportModule moduleCycleRoot =
-                moduleRecord.cycleRoot() != null ? moduleRecord.cycleRoot() : moduleRecord;
+        JSDynamicImportModule moduleCycleRoot = moduleRecord.cycleRoot() != null
+                ? moduleRecord.cycleRoot()
+                : moduleRecord;
         while (matcher.find()) {
             String specifier = transformer.decodeModuleStringLiteralValue(matcher.group(1));
             try {
-                String resolved = resolveDynamicImportSpecifier(
-                        specifier, moduleRecord.resolvedSpecifier(), specifier);
+                String resolved = resolveDynamicImportSpecifier(specifier, moduleRecord.resolvedSpecifier(), specifier);
                 JSDynamicImportModule depRecord = dynamicImportModuleCache.get(resolved);
                 if (depRecord == null) {
                     continue;
@@ -1047,19 +988,17 @@ final class ModuleLoader {
     /**
      * Drop a module record from the cache.
      * <p>
-     * Package-private so the eval pipeline can evict the record it registered when the evaluation
-     * it registered it for did not complete.
+     * Package-private so the eval pipeline can evict the record it registered when the evaluation it registered it for
+     * did not complete.
      *
-     * @param moduleCacheKey the resolved specifier, possibly qualified by an import type
+     * @param moduleCacheKey
+     *            the resolved specifier, possibly qualified by an import type
      */
     void removeCachedModule(String moduleCacheKey) {
         dynamicImportModuleCache.remove(moduleCacheKey);
     }
 
-    String resolveDynamicImportSpecifier(
-            String specifier,
-            String referrerFilename,
-            String errorSpecifier) {
+    String resolveDynamicImportSpecifier(String specifier, String referrerFilename, String errorSpecifier) {
         final Path rawSpecifierPath;
         try {
             rawSpecifierPath = Paths.get(specifier);
@@ -1068,9 +1007,7 @@ final class ModuleLoader {
         }
 
         Path resolvedPath = rawSpecifierPath;
-        if (!resolvedPath.isAbsolute()
-                && referrerFilename != null
-                && !referrerFilename.isEmpty()
+        if (!resolvedPath.isAbsolute() && referrerFilename != null && !referrerFilename.isEmpty()
                 && !referrerFilename.startsWith("<")) {
             Path referrerPath = Paths.get(referrerFilename);
             Path parentPath = referrerPath.getParent();

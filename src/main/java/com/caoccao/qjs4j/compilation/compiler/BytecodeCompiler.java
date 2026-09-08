@@ -28,10 +28,10 @@ import java.util.Map;
 /**
  * Compiles AST into bytecode.
  * <p>
- * This is the public facade that delegates to specialized compiler classes:
- * {@link ExpressionCompiler}, {@link StatementCompiler}, {@link FunctionDeclarationCompiler},
- * {@link ClassDeclarationCompiler}, {@link PatternCompiler}, {@link EmitHelpers}, and {@link CompilerAnalysis}.
- * All shared mutable state and delegate references are held in {@link CompilerContext}.
+ * This is the public facade that delegates to specialized compiler classes: {@link ExpressionCompiler},
+ * {@link StatementCompiler}, {@link FunctionDeclarationCompiler}, {@link ClassDeclarationCompiler},
+ * {@link PatternCompiler}, {@link EmitHelpers}, and {@link CompilerAnalysis}. All shared mutable state and delegate
+ * references are held in {@link CompilerContext}.
  */
 public final class BytecodeCompiler {
     private final CompilerContext compilerContext;
@@ -51,16 +51,15 @@ public final class BytecodeCompiler {
     /**
      * Compile an AST into bytecode.
      *
-     * @param ast the AST to compile (must be a Program node)
+     * @param ast
+     *            the AST to compile (must be a Program node)
      * @return the compiled bytecode
      */
     public Bytecode compile(ASTNode ast) {
         if (ast instanceof Program program) {
             compilerContext.programCompiler.compile(program);
         } else {
-            throw new JSCompilerException(
-                    "Expected Program node",
-                    ast);
+            throw new JSCompilerException("Expected Program node", ast);
         }
 
         int localCount;
@@ -74,8 +73,7 @@ public final class BytecodeCompiler {
     }
 
     /**
-     * Get the CompilerContext for this compiler.
-     * Used by delegate classes to access nested compiler state.
+     * Get the CompilerContext for this compiler. Used by delegate classes to access nested compiler state.
      */
     CompilerContext context() {
         return compilerContext;

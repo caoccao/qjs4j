@@ -49,59 +49,48 @@ public class FinalizationRegistryConstructorTest extends BaseJavetTest {
 
     @Test
     public void testConstructorPrototypeDescriptor() {
-        assertBooleanWithJavet(
-                "Object.getOwnPropertyDescriptor(FinalizationRegistry, 'prototype').writable === false",
+        assertBooleanWithJavet("Object.getOwnPropertyDescriptor(FinalizationRegistry, 'prototype').writable === false",
                 "Object.getOwnPropertyDescriptor(FinalizationRegistry, 'prototype').enumerable === false",
                 "Object.getOwnPropertyDescriptor(FinalizationRegistry, 'prototype').configurable === false");
     }
 
     @Test
     public void testGlobalDescriptor() {
-        assertBooleanWithJavet(
-                "Object.getOwnPropertyDescriptor(globalThis, 'FinalizationRegistry').writable === true",
+        assertBooleanWithJavet("Object.getOwnPropertyDescriptor(globalThis, 'FinalizationRegistry').writable === true",
                 "Object.getOwnPropertyDescriptor(globalThis, 'FinalizationRegistry').enumerable === false",
                 "Object.getOwnPropertyDescriptor(globalThis, 'FinalizationRegistry').configurable === true");
     }
 
     @Test
     public void testNewWithNoArgs() {
-        assertThatThrownBy(() -> context.eval("new FinalizationRegistry()"))
-                .isInstanceOf(JSException.class)
+        assertThatThrownBy(() -> context.eval("new FinalizationRegistry()")).isInstanceOf(JSException.class)
                 .hasMessageContaining("TypeError");
     }
 
     @Test
     public void testNewWithNonFunction() {
-        for (String code : new String[]{
-                "new FinalizationRegistry(42)",
-                "new FinalizationRegistry('string')",
-                "new FinalizationRegistry(true)",
-                "new FinalizationRegistry(null)",
-                "new FinalizationRegistry(undefined)",
-                "new FinalizationRegistry({})",
+        for (String code : new String[]{"new FinalizationRegistry(42)", "new FinalizationRegistry('string')",
+                "new FinalizationRegistry(true)", "new FinalizationRegistry(null)",
+                "new FinalizationRegistry(undefined)", "new FinalizationRegistry({})",
                 "new FinalizationRegistry([])"}) {
-            assertThatThrownBy(() -> context.eval(code))
-                    .isInstanceOf(JSException.class)
+            assertThatThrownBy(() -> context.eval(code)).isInstanceOf(JSException.class)
                     .hasMessageContaining("TypeError");
         }
     }
 
     @Test
     public void testNewWithValidFunction() {
-        assertBooleanWithJavet(
-                "new FinalizationRegistry(function(){}) instanceof FinalizationRegistry");
+        assertBooleanWithJavet("new FinalizationRegistry(function(){}) instanceof FinalizationRegistry");
     }
 
     @Test
     public void testPrototypeChain() {
-        assertBooleanWithJavet(
-                "Object.getPrototypeOf(FinalizationRegistry.prototype) === Object.prototype");
+        assertBooleanWithJavet("Object.getPrototypeOf(FinalizationRegistry.prototype) === Object.prototype");
     }
 
     @Test
     public void testPrototypeConstructor() {
-        assertBooleanWithJavet(
-                "FinalizationRegistry.prototype.constructor === FinalizationRegistry");
+        assertBooleanWithJavet("FinalizationRegistry.prototype.constructor === FinalizationRegistry");
     }
 
     @Test

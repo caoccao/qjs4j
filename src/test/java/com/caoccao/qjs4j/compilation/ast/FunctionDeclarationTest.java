@@ -50,10 +50,11 @@ public class FunctionDeclarationTest extends BaseTest {
                 test;
                 """;
 
-        assertThat(context.eval(code)).as("Should return the function").isInstanceOfSatisfying(JSBytecodeFunction.class, func -> {
-            assertThat(func.getName()).isEqualTo("test");
-            assertThat(func.isAsync()).as("Function should be marked as async").isTrue();
-        });
+        assertThat(context.eval(code)).as("Should return the function").isInstanceOfSatisfying(JSBytecodeFunction.class,
+                func -> {
+                    assertThat(func.getName()).isEqualTo("test");
+                    assertThat(func.isAsync()).as("Function should be marked as async").isTrue();
+                });
     }
 
     @Test
@@ -65,7 +66,8 @@ public class FunctionDeclarationTest extends BaseTest {
                 test();
                 """;
 
-        assertThat(context.eval(code)).as("Should return 42").isInstanceOfSatisfying(JSNumber.class, jsNumber -> assertThat(jsNumber.value()).isEqualTo(42.0));
+        assertThat(context.eval(code)).as("Should return 42").isInstanceOfSatisfying(JSNumber.class,
+                jsNumber -> assertThat(jsNumber.value()).isEqualTo(42.0));
     }
 
     @Test
@@ -77,8 +79,9 @@ public class FunctionDeclarationTest extends BaseTest {
                 test;
                 """;
 
-        assertThat(context.eval(code)).as("Should return the function").isInstanceOfSatisfying(JSBytecodeFunction.class, func -> {
-            assertThat(func.getName()).isEqualTo("test");
-        });
+        assertThat(context.eval(code)).as("Should return the function").isInstanceOfSatisfying(JSBytecodeFunction.class,
+                func -> {
+                    assertThat(func.getName()).isEqualTo("test");
+                });
     }
 }

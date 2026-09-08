@@ -34,7 +34,8 @@ public class TemporalOptionResolverParityTest extends BaseJavetTest {
 
     @Test
     public void testPlainTimeToStringWithSmallestUnit() {
-        assertStringWithJavet("new Temporal.PlainTime(12, 34, 56, 987, 654, 321).toString({ smallestUnit: 'microsecond', roundingMode: 'trunc' })");
+        assertStringWithJavet(
+                "new Temporal.PlainTime(12, 34, 56, 987, 654, 321).toString({ smallestUnit: 'microsecond', roundingMode: 'trunc' })");
     }
 
     @Test

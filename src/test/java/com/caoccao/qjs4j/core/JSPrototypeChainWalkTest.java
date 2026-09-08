@@ -27,25 +27,23 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * Every prototype chain walk must terminate and must keep proxy traps in play.
  * <p>
- * The walk was recursive — so a proxy in the chain still gets its traps — and bounded by a depth
- * threshold, first 10,000 links and then 1,000. Neither number was right: 10,000 recursive frames
- * exhausted the Java stack before the guard fired, and 1,000 turned a valid program into a
- * {@code RangeError}, because {@code for (let i = 0; i < 1001; i++) o = Object.create(o)} is
- * legal and reading through it must work.
+ * The walk was recursive — so a proxy in the chain still gets its traps — and bounded by a depth threshold, first
+ * 10,000 links and then 1,000. Neither number was right: 10,000 recursive frames exhausted the Java stack before the
+ * guard fired, and 1,000 turned a valid program into a {@code RangeError}, because
+ * {@code for (let i = 0; i < 1001; i++) o = Object.create(o)} is legal and reading through it must work.
  * <p>
- * The walk is now a loop, so its length is bounded by memory rather than by a threshold, and only a
- * prototype that <em>replaces</em> the lookup — a Proxy, a deferred module namespace, a typed array
- * asked for a canonical numeric index — costs a Java frame. Termination on a corrupt graph comes
- * from Floyd's cycle detection rather than from a count.
+ * The walk is now a loop, so its length is bounded by memory rather than by a threshold, and only a prototype that
+ * <em>replaces</em> the lookup — a Proxy, a deferred module namespace, a typed array asked for a canonical numeric
+ * index — costs a Java frame. Termination on a corrupt graph comes from Floyd's cycle detection rather than from a
+ * count.
  * <p>
- * The loop first ran only while the link's class was exactly {@code JSObject}, which left arrays,
- * functions and every other ordinary built-in subclass on the recursive path with the old
- * thousand-link cutoff: a chain of {@code Object.create} worked while the same chain of arrays was
- * a {@code RangeError}. Own lookup is a virtual call now, so those links are walked like any other.
+ * The loop first ran only while the link's class was exactly {@code JSObject}, which left arrays, functions and every
+ * other ordinary built-in subclass on the recursive path with the old thousand-link cutoff: a chain of
+ * {@code Object.create} worked while the same chain of arrays was a {@code RangeError}. Own lookup is a virtual call
+ * now, so those links are walked like any other.
  * <p>
- * The script-observable walks are asserted against V8. The cyclic chains are not: they are built
- * with the raw {@code setPrototype} embedder API, which has no JavaScript equivalent — no script
- * can construct a prototype cycle.
+ * The script-observable walks are asserted against V8. The cyclic chains are not: they are built with the raw
+ * {@code setPrototype} embedder API, which has no JavaScript equivalent — no script can construct a prototype cycle.
  */
 public class JSPrototypeChainWalkTest extends BaseJavetTest {
 
@@ -75,8 +73,7 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
         first.setPrototype(second);
         second.setPrototype(first);
 
-        assertThatThrownBy(() -> first.get(PropertyKey.fromString("missing")))
-                .isInstanceOf(JSRangeErrorException.class)
+        assertThatThrownBy(() -> first.get(PropertyKey.fromString("missing"))).isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("Cyclic prototype chain");
     }
 
@@ -90,8 +87,7 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
         first.setPrototype(second);
         second.setPrototype(first);
 
-        assertThatThrownBy(() -> first.has(PropertyKey.fromString("missing")))
-                .isInstanceOf(JSRangeErrorException.class)
+        assertThatThrownBy(() -> first.has(PropertyKey.fromString("missing"))).isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("Cyclic prototype chain");
     }
 
@@ -185,44 +181,41 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
     public void testInstanceofInvokesTheGetPrototypeOfTrap() {
         // OrdinaryHasInstance step 4.b calls O.[[GetPrototypeOf]] on each step, so a Proxy in the
         // chain must be consulted rather than traversed as its target.
-        assertStringWithJavet(
-                """
-                        (function () {
-                          let trapCalls = 0;
-                          function Ctor() {}
-                          const proxyProto = new Proxy({}, {
-                            getPrototypeOf() { trapCalls++; return Ctor.prototype },
-                          });
-                          const obj = Object.create(proxyProto);
-                          const result = obj instanceof Ctor;
-                          return 'result=' + result + ' trapCalls=' + trapCalls;
-                        })()""");
+        assertStringWithJavet("""
+                (function () {
+                  let trapCalls = 0;
+                  function Ctor() {}
+                  const proxyProto = new Proxy({}, {
+                    getPrototypeOf() { trapCalls++; return Ctor.prototype },
+                  });
+                  const obj = Object.create(proxyProto);
+                  const result = obj instanceof Ctor;
+                  return 'result=' + result + ' trapCalls=' + trapCalls;
+                })()""");
     }
 
     @Test
     public void testProxyInThePrototypeChainStillSeesTheHasTrap() {
-        assertStringWithJavet(
-                """
-                        (function () {
-                          let trapKeys = [];
-                          const proxyProto = new Proxy({}, {
-                            has(target, key) { trapKeys.push(key); return key === 'viaTrap' },
-                          });
-                          const obj = Object.create(proxyProto);
-                          return ('viaTrap' in obj) + ',' + ('absent' in obj) + ',' + trapKeys.join('|');
-                        })()""");
+        assertStringWithJavet("""
+                (function () {
+                  let trapKeys = [];
+                  const proxyProto = new Proxy({}, {
+                    has(target, key) { trapKeys.push(key); return key === 'viaTrap' },
+                  });
+                  const obj = Object.create(proxyProto);
+                  return ('viaTrap' in obj) + ',' + ('absent' in obj) + ',' + trapKeys.join('|');
+                })()""");
     }
 
     @Test
     public void testSetPrototypeOfStillRejectsACycle() {
-        assertStringWithJavet(
-                """
-                        (function () {
-                          const a = {};
-                          const b = Object.create(a);
-                          try { Object.setPrototypeOf(a, b); return 'NO ERROR' }
-                          catch (e) { return 'CAUGHT ' + e.name }
-                        })()""");
+        assertStringWithJavet("""
+                (function () {
+                  const a = {};
+                  const b = Object.create(a);
+                  try { Object.setPrototypeOf(a, b); return 'NO ERROR' }
+                  catch (e) { return 'CAUGHT ' + e.name }
+                })()""");
     }
 
     @Test
@@ -257,11 +250,10 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
     @Test
     public void testTypedArrayInheritsTheDepthBoundedWalk() {
         // JSTypedArray overrides the walk; it must carry the depth through to super.
-        assertStringWithJavet(
-                """
-                        (function () {
-                          const a = new Int32Array([1, 2, 3]);
-                          return (0 in a) + ',' + (3 in a) + ',' + ('length' in a) + ',' + ('map' in a);
-                        })()""");
+        assertStringWithJavet("""
+                (function () {
+                  const a = new Int32Array([1, 2, 3]);
+                  return (0 in a) + ',' + (3 in a) + ',' + ('length' in a) + ',' + ('map' in a);
+                })()""");
     }
 }

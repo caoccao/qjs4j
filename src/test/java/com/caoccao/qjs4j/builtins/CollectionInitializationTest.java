@@ -7,10 +7,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.stream.Stream;
 
 public class CollectionInitializationTest extends BaseJavetTest {
-    private static Stream<String> collectionNames() {
-        return Stream.of("Map", "Set", "WeakMap", "WeakSet");
-    }
-
     @ParameterizedTest
     @MethodSource("collectionNames")
     public void testAdderAndIteratorMethodsAreCapturedOnce(String name) {
@@ -120,5 +116,9 @@ public class CollectionInitializationTest extends BaseJavetTest {
                   }).join(';');
                 })()
                 """.formatted(name));
+    }
+
+    private static Stream<String> collectionNames() {
+        return Stream.of("Map", "Set", "WeakMap", "WeakSet");
     }
 }

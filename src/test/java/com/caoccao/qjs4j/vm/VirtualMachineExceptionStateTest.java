@@ -25,11 +25,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * {@code VirtualMachine.execute} must not destroy the exception state of whoever called it.
  * <p>
- * {@code execute()} is re-entrant — opcode handlers, native functions and proxy traps all call it —
- * and it used to clear both its own {@code pendingException} field and the context's pending
- * exception unconditionally on entry. Any exception a native callee had set immediately before
- * invoking a bytecode function was destroyed, and a nested activation stamped on the outer one's
- * in-flight state.
+ * {@code execute()} is re-entrant — opcode handlers, native functions and proxy traps all call it — and it used to
+ * clear both its own {@code pendingException} field and the context's pending exception unconditionally on entry. Any
+ * exception a native callee had set immediately before invoking a bytecode function was destroyed, and a nested
+ * activation stamped on the outer one's in-flight state.
  */
 public class VirtualMachineExceptionStateTest extends BaseTest {
 
@@ -52,16 +51,11 @@ public class VirtualMachineExceptionStateTest extends BaseTest {
             nestedFailure = e;
         }
 
-        assertThat(nestedFailure)
-                .as("the nested activation propagates its own error to its caller")
-                .isNotNull()
+        assertThat(nestedFailure).as("the nested activation propagates its own error to its caller").isNotNull()
                 .hasMessageContaining("inner");
-        assertThat(context.hasPendingException())
-                .as("the caller's unhandled error is still pending")
-                .isTrue();
-        assertThat(context.getPendingException())
-                .isInstanceOfSatisfying(JSError.class,
-                        error -> assertThat(error.getMessage().value()).isEqualTo("outer"));
+        assertThat(context.hasPendingException()).as("the caller's unhandled error is still pending").isTrue();
+        assertThat(context.getPendingException()).isInstanceOfSatisfying(JSError.class,
+                error -> assertThat(error.getMessage().value()).isEqualTo("outer"));
         context.clearPendingException();
     }
 
@@ -71,8 +65,7 @@ public class VirtualMachineExceptionStateTest extends BaseTest {
         assertThat(context.hasPendingException()).isFalse();
         assertThat(context.eval("(function () { try { null.x } catch (e) { return 'caught' } })()").toString())
                 .isEqualTo("caught");
-        assertThat(context.hasPendingException())
-                .as("a caught error must not leave the context in an exception state")
+        assertThat(context.hasPendingException()).as("a caught error must not leave the context in an exception state")
                 .isFalse();
     }
 
@@ -86,14 +79,11 @@ public class VirtualMachineExceptionStateTest extends BaseTest {
         context.throwTypeError("set before the nested call");
         inner.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
 
-        assertThat(readGlobal("ran")).as("the nested bytecode function must still run")
-                .isEqualTo(JSBoolean.TRUE);
-        assertThat(context.hasPendingException())
-                .as("the exception set before the nested call must survive it")
+        assertThat(readGlobal("ran")).as("the nested bytecode function must still run").isEqualTo(JSBoolean.TRUE);
+        assertThat(context.hasPendingException()).as("the exception set before the nested call must survive it")
                 .isTrue();
-        assertThat(context.getPendingException())
-                .isInstanceOfSatisfying(JSError.class,
-                        error -> assertThat(error.getMessage().value()).isEqualTo("set before the nested call"));
+        assertThat(context.getPendingException()).isInstanceOfSatisfying(JSError.class,
+                error -> assertThat(error.getMessage().value()).isEqualTo("set before the nested call"));
         context.clearPendingException();
     }
 
@@ -103,16 +93,12 @@ public class VirtualMachineExceptionStateTest extends BaseTest {
         // the specifier speculatively. That failure is expected, and catching only the Java
         // exception used to leave the matching error pending on the context, where a later
         // activation reported it as its own failure.
-        JSValue result = context.eval(
-                """
-                        const f = async () => await Promise.resolve(5);
-                        await f();""",
-                "not-a-real-module.js",
-                true);
+        JSValue result = context.eval("""
+                const f = async () => await Promise.resolve(5);
+                await f();""", "not-a-real-module.js", true);
         assertThat(result).isNotNull();
         context.processMicrotasks();
-        assertThat(context.hasPendingException())
-                .as("a speculative module resolution failure must not linger")
+        assertThat(context.hasPendingException()).as("a speculative module resolution failure must not linger")
                 .isFalse();
     }
 }

@@ -36,6 +36,11 @@ public final class JSReferenceError extends JSError {
         super(context, message, sourceLocation);
     }
 
+    @Override
+    public String getErrorName() {
+        return NAME;
+    }
+
     public static JSValue create(JSContext context, JSValue... args) {
         String message = "";
         if (args.length > 0 && !args[0].isUndefined()) {
@@ -57,21 +62,18 @@ public final class JSReferenceError extends JSError {
         JSObject errorPrototype = new JSObject(context);
         context.transferPrototype(errorPrototype, JSError.NAME);
 
-        errorPrototype.defineProperty(PropertyKey.fromString("name"), new JSString(NAME), PropertyDescriptor.DataState.ConfigurableWritable);
-        errorPrototype.defineProperty(PropertyKey.fromString("message"), new JSString(""), PropertyDescriptor.DataState.ConfigurableWritable);
+        errorPrototype.defineProperty(PropertyKey.fromString("name"), new JSString(NAME),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        errorPrototype.defineProperty(PropertyKey.fromString("message"), new JSString(""),
+                PropertyDescriptor.DataState.ConfigurableWritable);
 
-        JSNativeFunction errorConstructor = new JSNativeFunction(context, NAME,
-                1,
-                (childContext, thisObj, childArgs) -> create(childContext, childArgs),
-                true);
-        errorConstructor.defineProperty(PropertyKey.fromString("prototype"), errorPrototype, PropertyDescriptor.DataState.None);
-        errorPrototype.defineProperty(PropertyKey.fromString("constructor"), errorConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        JSNativeFunction errorConstructor = new JSNativeFunction(context, NAME, 1,
+                (childContext, thisObj, childArgs) -> create(childContext, childArgs), true);
+        errorConstructor.defineProperty(PropertyKey.fromString("prototype"), errorPrototype,
+                PropertyDescriptor.DataState.None);
+        errorPrototype.defineProperty(PropertyKey.fromString("constructor"), errorConstructor,
+                PropertyDescriptor.DataState.ConfigurableWritable);
 
         return errorConstructor;
-    }
-
-    @Override
-    public String getErrorName() {
-        return NAME;
     }
 }

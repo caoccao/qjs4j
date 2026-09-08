@@ -44,9 +44,7 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
         } else {
             varDecl = (VariableDeclaration) forOfStmt.getLeft();
             if (varDecl.getDeclarations().size() != 1) {
-                throw new JSCompilerException(
-                        "for-of loop must have exactly one variable",
-                        varDecl);
+                throw new JSCompilerException("for-of loop must have exactly one variable", varDecl);
             }
             pattern = varDecl.getDeclarations().get(0).getId();
             isVar = varDecl.getKind() == VariableKind.VAR;
@@ -84,8 +82,7 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
 
         if (!isExpressionBased && !isVar) {
             compilerContext.patternCompiler.declarePatternVariables(pattern);
-            if (varDecl != null && (varDecl.getKind() == VariableKind.CONST
-                    || varDecl.getKind() == VariableKind.USING
+            if (varDecl != null && (varDecl.getKind() == VariableKind.CONST || varDecl.getKind() == VariableKind.USING
                     || varDecl.getKind() == VariableKind.AWAIT_USING)) {
                 compilerContext.patternCompiler.markPatternConstBindings(pattern);
             }
@@ -103,16 +100,14 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
         int forOfUsingStackLocal = -1;
         if (isUsingForOf) {
             boolean useAsyncStack = isAwaitUsingForOf || compilerContext.isInAsyncFunction;
-            forOfUsingStackLocal = compilerContext.scopeManager.currentScope().declareLocal(
-                    "$forof_using_stack_" + compilerContext.emitter.currentOffset());
+            forOfUsingStackLocal = compilerContext.scopeManager.currentScope()
+                    .declareLocal("$forof_using_stack_" + compilerContext.emitter.currentOffset());
             compilerContext.scopeManager.currentScope().setUsingStackLocal(forOfUsingStackLocal, useAsyncStack);
         }
 
         int loopStart = compilerContext.emitter.currentOffset();
-        LoopContext loop = compilerContext.loopManager.createLoopContext(
-                loopStart,
-                compilerContext.scopeManager.getScopeDepth() - 1,
-                compilerContext.scopeManager.getScopeDepth());
+        LoopContext loop = compilerContext.loopManager.createLoopContext(loopStart,
+                compilerContext.scopeManager.getScopeDepth() - 1, compilerContext.scopeManager.getScopeDepth());
         loop.hasIterator = true;
         compilerContext.loopManager.pushLoop(loop);
 

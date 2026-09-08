@@ -21,17 +21,13 @@ import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 import java.lang.ref.WeakReference;
 
 /**
- * Represents a WeakRef object in JavaScript.
- * Based on ES2021 WeakRef specification.
+ * Represents a WeakRef object in JavaScript. Based on ES2021 WeakRef specification.
  * <p>
- * WeakRef allows you to hold a weak reference to an object without preventing
- * its garbage collection. When the object is collected, deref() returns undefined.
+ * WeakRef allows you to hold a weak reference to an object without preventing its garbage collection. When the object
+ * is collected, deref() returns undefined.
  * <p>
- * Key characteristics:
- * - Does not prevent garbage collection of the target
- * - deref() returns the target if still alive, undefined if collected
- * - Works with objects and symbols
- * - Part of the WeakRefs proposal (ES2021)
+ * Key characteristics: - Does not prevent garbage collection of the target - deref() returns the target if still alive,
+ * undefined if collected - Works with objects and symbols - Part of the WeakRefs proposal (ES2021)
  */
 public final class JSWeakRef extends JSObject {
     public static final String NAME = "WeakRef";
@@ -40,7 +36,8 @@ public final class JSWeakRef extends JSObject {
     /**
      * Create a new WeakRef.
      *
-     * @param target The target object to weakly reference
+     * @param target
+     *            The target object to weakly reference
      */
     public JSWeakRef(JSContext context, JSValue target) {
         super(context);
@@ -48,6 +45,39 @@ public final class JSWeakRef extends JSObject {
             throw new JSTypeErrorException("WeakRef target cannot be null");
         }
         this.targetRef = new WeakReference<>(target);
+    }
+
+    /**
+     * Dereference the weak reference. ES2021 WeakRef.prototype.deref()
+     *
+     * @return The target object if still alive, undefined if collected
+     */
+    public JSValue deref() {
+        JSValue target = targetRef.get();
+        return target != null ? target : JSUndefined.INSTANCE;
+    }
+
+    /**
+     * Get the underlying weak reference. For internal use.
+     *
+     * @return The Java WeakReference
+     */
+    public WeakReference<JSValue> getWeakReference() {
+        return targetRef;
+    }
+
+    /**
+     * Check if the target has been collected.
+     *
+     * @return True if the target has been garbage collected
+     */
+    public boolean isCollected() {
+        return targetRef.get() == null;
+    }
+
+    @Override
+    public String toString() {
+        return "[object WeakRef]";
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
@@ -72,40 +102,5 @@ public final class JSWeakRef extends JSObject {
             return !s.isRegistered();
         }
         return false;
-    }
-
-    /**
-     * Dereference the weak reference.
-     * ES2021 WeakRef.prototype.deref()
-     *
-     * @return The target object if still alive, undefined if collected
-     */
-    public JSValue deref() {
-        JSValue target = targetRef.get();
-        return target != null ? target : JSUndefined.INSTANCE;
-    }
-
-    /**
-     * Get the underlying weak reference.
-     * For internal use.
-     *
-     * @return The Java WeakReference
-     */
-    public WeakReference<JSValue> getWeakReference() {
-        return targetRef;
-    }
-
-    /**
-     * Check if the target has been collected.
-     *
-     * @return True if the target has been garbage collected
-     */
-    public boolean isCollected() {
-        return targetRef.get() == null;
-    }
-
-    @Override
-    public String toString() {
-        return "[object WeakRef]";
     }
 }

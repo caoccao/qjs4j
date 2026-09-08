@@ -21,17 +21,10 @@ import com.caoccao.qjs4j.core.JSSymbol;
 import java.util.Map;
 
 /**
- * Snapshot of mutable CompilerContext flags, used by pushState/popState
- * to save and restore compiler state around nested compilation scopes.
+ * Snapshot of mutable CompilerContext flags, used by pushState/popState to save and restore compiler state around
+ * nested compilation scopes.
  */
-record CompilerStateFrame(
-        boolean strictMode,
-        boolean inGlobalScope,
-        boolean inClassBody,
-        boolean inClassFieldInitializer,
-        boolean emitTailCalls,
-        boolean varInGlobalProgram,
-        Map<String, JSSymbol> privateSymbols,
-        String inferredClassName
-) {
+record CompilerStateFrame(boolean strictMode, boolean inGlobalScope, boolean inClassBody,
+        boolean inClassFieldInitializer, boolean emitTailCalls, boolean varInGlobalProgram,
+        Map<String, JSSymbol> privateSymbols, String inferredClassName) {
 }

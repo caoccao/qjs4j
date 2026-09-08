@@ -19,19 +19,15 @@ package com.caoccao.qjs4j.compilation.ast;
 import java.util.List;
 
 /**
- * Represents a class expression (class used as an expression, not a declaration).
- * Example: const MyClass = class { ... } or new (class extends Base {})()
+ * Represents a class expression (class used as an expression, not a declaration). Example: const MyClass = class { ...
+ * } or new (class extends Base {})()
  */
 public final class ClassExpression extends Expression {
     private final List<ClassElement> body;
     private final Identifier id;
     private final Expression superClass;
 
-    public ClassExpression(
-            Identifier id,
-            Expression superClass,
-            List<ClassElement> body,
-            SourceLocation location) {
+    public ClassExpression(Identifier id, Expression superClass, List<ClassElement> body, SourceLocation location) {
         super(location);
         this.id = id;
         this.superClass = superClass;

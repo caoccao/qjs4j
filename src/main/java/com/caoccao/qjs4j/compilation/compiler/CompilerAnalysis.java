@@ -24,9 +24,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Delegate compiler for static analysis and hoisting operations.
- * Handles variable collection, pattern binding name extraction, Annex B function hoisting,
- * and global program binding registration.
+ * Delegate compiler for static analysis and hoisting operations. Handles variable collection, pattern binding name
+ * extraction, Annex B function hoisting, and global program binding registration.
  */
 final class CompilerAnalysis {
     private final CompilerContext compilerContext;
@@ -38,13 +37,15 @@ final class CompilerAnalysis {
     /**
      * Whether a function body declares a binding with the given name.
      * <p>
-     * Used to decide whether a named function expression's own name binding is shadowed. Per
-     * ES2024 15.2.5 the name lives in a separate environment that wraps the function's variable
-     * environment, so a {@code var}, {@code let}, {@code const}, {@code class} or {@code function}
-     * declaration of the same name in the body creates a <em>different</em> binding that hides it.
+     * Used to decide whether a named function expression's own name binding is shadowed. Per ES2024 15.2.5 the name
+     * lives in a separate environment that wraps the function's variable environment, so a {@code var}, {@code let},
+     * {@code const}, {@code class} or {@code function} declaration of the same name in the body creates a
+     * <em>different</em> binding that hides it.
      *
-     * @param body the function body statements
-     * @param name the name to look for
+     * @param body
+     *            the function body statements
+     * @param name
+     *            the name to look for
      * @return true when the body declares that name
      */
     boolean bodyDeclaresBinding(List<Statement> body, String name) {
@@ -62,8 +63,7 @@ final class CompilerAnalysis {
                 for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
                     collectPatternBindingNames(declarator.getId(), declaredNames);
                 }
-            } else if (statement instanceof ClassDeclaration classDeclaration
-                    && classDeclaration.getId() != null) {
+            } else if (statement instanceof ClassDeclaration classDeclaration && classDeclaration.getId() != null) {
                 declaredNames.add(classDeclaration.getId().getName());
             }
         }
@@ -72,7 +72,8 @@ final class CompilerAnalysis {
 
     void collectLexicalBindings(List<Statement> body, Set<String> lexicals) {
         for (Statement statement : body) {
-            if (statement instanceof VariableDeclaration variableDeclaration && variableDeclaration.getKind() != VariableKind.VAR) {
+            if (statement instanceof VariableDeclaration variableDeclaration
+                    && variableDeclaration.getKind() != VariableKind.VAR) {
                 for (VariableDeclarator variableDeclarator : variableDeclaration.getDeclarations()) {
                     collectPatternBindingNames(variableDeclarator.getId(), lexicals);
                 }
@@ -104,25 +105,22 @@ final class CompilerAnalysis {
     }
 
     /**
-     * Pre-declare all variable and function declaration names as locals in the current scope
-     * in a single pass over the function body.
+     * Pre-declare all variable and function declaration names as locals in the current scope in a single pass over the
+     * function body.
      * <p>
-     * This ensures bindings are visible during Phase 1 (function declaration hoisting),
-     * so nested function declarations can properly capture outer variables via VarRef,
-     * and sibling function declarations are visible to closure capture resolution.
+     * This ensures bindings are visible during Phase 1 (function declaration hoisting), so nested function declarations
+     * can properly capture outer variables via VarRef, and sibling function declarations are visible to closure capture
+     * resolution.
      * <p>
-     * Handles:
-     * - Function declarations: top-level names declared as locals
-     * - var declarations: function-scoped, recurse into blocks (they hoist)
-     * - let/const declarations: block-scoped, only top-level of function body
-     * (they don't hoist into nested blocks but ARE in scope at function level)
+     * Handles: - Function declarations: top-level names declared as locals - var declarations: function-scoped, recurse
+     * into blocks (they hoist) - let/const declarations: block-scoped, only top-level of function body (they don't
+     * hoist into nested blocks but ARE in scope at function level)
      */
 
     /**
-     * Recursively collect all var-declared names from a statement tree.
-     * var declarations are function/global-scoped, so they must be hoisted
-     * out of any block nesting (for, try, if, switch, etc.).
-     * Does NOT recurse into function declarations/expressions (they have their own scope).
+     * Recursively collect all var-declared names from a statement tree. var declarations are function/global-scoped, so
+     * they must be hoisted out of any block nesting (for, try, if, switch, etc.). Does NOT recurse into function
+     * declarations/expressions (they have their own scope).
      */
     void collectVarNamesFromStatement(Statement stmt, Set<String> varNames) {
         if (stmt instanceof VariableDeclaration varDecl && varDecl.getKind() == VariableKind.VAR) {
@@ -221,8 +219,7 @@ final class CompilerAnalysis {
                     collectPatternBindingNames(d.getId(), declarationNames);
                 }
                 lexicalNames.addAll(declarationNames);
-                if (vd.getKind() == VariableKind.CONST
-                        || vd.getKind() == VariableKind.USING
+                if (vd.getKind() == VariableKind.CONST || vd.getKind() == VariableKind.USING
                         || vd.getKind() == VariableKind.AWAIT_USING) {
                     constLexicalNames.addAll(declarationNames);
                 }
@@ -249,21 +246,22 @@ final class CompilerAnalysis {
     }
 
     /**
-     * Pre-declare top-level function declaration names as locals in the current function scope
-     * before compiling any hoisted function declarations.
+     * Pre-declare top-level function declaration names as locals in the current function scope before compiling any
+     * hoisted function declarations.
      * <p>
-     * This ensures sibling function declarations are visible to closure capture resolution while
-     * compiling earlier hoisted functions (e.g. function A capturing function B declared later in
-     * the same function body).
+     * This ensures sibling function declarations are visible to closure capture resolution while compiling earlier
+     * hoisted functions (e.g. function A capturing function B declared later in the same function body).
      */
 
     /**
-     * Annex B.3.3.1: Hoist eligible function declarations from blocks/if-statements
-     * to the function scope as var bindings (initialized to undefined).
+     * Annex B.3.3.1: Hoist eligible function declarations from blocks/if-statements to the function scope as var
+     * bindings (initialized to undefined).
      *
-     * @param body           the function body statements
-     * @param parameterNames the set of parameter names (BoundNames of argumentsList),
-     *                       including "arguments" when the function has an implicit arguments binding
+     * @param body
+     *            the function body statements
+     * @param parameterNames
+     *            the set of parameter names (BoundNames of argumentsList), including "arguments" when the function has
+     *            an implicit arguments binding
      */
     void hoistFunctionBodyAnnexBDeclarations(List<Statement> body, Set<String> parameterNames) {
         if (compilerContext.strictMode) {
@@ -296,7 +294,7 @@ final class CompilerAnalysis {
             // Per B.3.3.1 step ii: skip if F is an element of BoundNames of argumentsList
             // (including the implicit "arguments" binding).
             // QuickJS: !((func_idx = find_var(fd, func_name)) >= 0 && (func_idx & ARGUMENT_VAR_OFFSET))
-            //       && !(func_name == JS_ATOM_arguments && fd->has_arguments_binding)
+            // && !(func_name == JS_ATOM_arguments && fd->has_arguments_binding)
             if (parameterNames.contains(name)) {
                 continue;
             }
@@ -338,7 +336,8 @@ final class CompilerAnalysis {
         for (Statement s : body) {
             FunctionDeclaration unwrappedFunction = s.unwrapLabeledFunctionDeclaration();
             if (unwrappedFunction != null && unwrappedFunction.getId() != null) {
-                if (unwrappedFunction.isAnnexBSimpleDeclaration() && !blockLexicals.contains(unwrappedFunction.getId().getName())) {
+                if (unwrappedFunction.isAnnexBSimpleDeclaration()
+                        && !blockLexicals.contains(unwrappedFunction.getId().getName())) {
                     result.add(unwrappedFunction.getId().getName());
                 }
             }
@@ -374,11 +373,10 @@ final class CompilerAnalysis {
     }
 
     /**
-     * Recursively scan a statement for Annex B eligible function declarations.
-     * A function declaration is Annex B eligible if it appears inside a block, if-statement,
-     * catch clause, or switch case (not at the top level of the program).
-     * The early error check prevents hoisting when a let/const with the same name
-     * exists in the same block scope.
+     * Recursively scan a statement for Annex B eligible function declarations. A function declaration is Annex B
+     * eligible if it appears inside a block, if-statement, catch clause, or switch case (not at the top level of the
+     * program). The early error check prevents hoisting when a let/const with the same name exists in the same block
+     * scope.
      */
     void scanAnnexBStatement(Statement stmt, Set<String> lexicalBindings, Set<String> result) {
         if (stmt instanceof BlockStatement block) {
@@ -427,7 +425,8 @@ final class CompilerAnalysis {
                 for (Statement caseStatement : switchCase.getConsequent()) {
                     FunctionDeclaration unwrappedFunction = caseStatement.unwrapLabeledFunctionDeclaration();
                     if (unwrappedFunction != null && unwrappedFunction.getId() != null) {
-                        if (unwrappedFunction.isAnnexBSimpleDeclaration() && !switchLexicals.contains(unwrappedFunction.getId().getName())) {
+                        if (unwrappedFunction.isAnnexBSimpleDeclaration()
+                                && !switchLexicals.contains(unwrappedFunction.getId().getName())) {
                             result.add(unwrappedFunction.getId().getName());
                         }
                     }
@@ -471,7 +470,8 @@ final class CompilerAnalysis {
             // Per Annex B.3.2: labeled function declarations are Annex B eligible
             FunctionDeclaration labeledFunction = labeledStmt.getBody().unwrapLabeledFunctionDeclaration();
             if (labeledFunction != null && labeledFunction.getId() != null) {
-                if (labeledFunction.isAnnexBSimpleDeclaration() && !lexicalBindings.contains(labeledFunction.getId().getName())) {
+                if (labeledFunction.isAnnexBSimpleDeclaration()
+                        && !lexicalBindings.contains(labeledFunction.getId().getName())) {
                     result.add(labeledFunction.getId().getName());
                 }
             } else {

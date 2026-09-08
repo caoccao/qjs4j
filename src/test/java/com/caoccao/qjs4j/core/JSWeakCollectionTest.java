@@ -28,66 +28,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * Weak collections used a {@code WeakHashMap}, which gets both halves of the contract wrong.
  * <p>
- * It compares keys with {@code equals}, so {@link JSError}'s value equality — two errors with the
- * same {@code name} and {@code message} — made distinct objects collide, and computing the hash ran
- * a guest {@code message} accessor. And it holds values strongly, so a value that refers back to
- * its own key kept the key reachable through the map, which is the opposite of what a
- * specification-conforming {@code WeakMap} does.
+ * It compares keys with {@code equals}, so {@link JSError}'s value equality — two errors with the same {@code name} and
+ * {@code message} — made distinct objects collide, and computing the hash ran a guest {@code message} accessor. And it
+ * holds values strongly, so a value that refers back to its own key kept the key reachable through the map, which is
+ * the opposite of what a specification-conforming {@code WeakMap} does.
  * <p>
  * Entries now live on the key and name their collection by identity, so both properties follow.
  * <p>
- * Moving the entries onto the key introduced the mirror-image retention: an entry holds its value
- * strongly, and a dead collection's entry was only dropped when something else happened to touch
- * that key's table. A short-lived {@code WeakMap} could therefore leave a large value graph attached
- * to a long-lived key indefinitely. An entry is now itself the weak reference to its collection,
- * registered with a queue the runtime owns, so any weak-collection operation — or
- * {@code JSRuntime.gc()} — releases the values of every collection that has died, whichever keys
- * they were attached to.
+ * Moving the entries onto the key introduced the mirror-image retention: an entry holds its value strongly, and a dead
+ * collection's entry was only dropped when something else happened to touch that key's table. A short-lived
+ * {@code WeakMap} could therefore leave a large value graph attached to a long-lived key indefinitely. An entry is now
+ * itself the weak reference to its collection, registered with a queue the runtime owns, so any weak-collection
+ * operation — or {@code JSRuntime.gc()} — releases the values of every collection that has died, whichever keys they
+ * were attached to.
  */
 public class JSWeakCollectionTest extends BaseJavetTest {
-    /**
-     * Ask the collector for a while and report whether the reference cleared.
-     *
-     * @param reference the reference to watch
-     * @return true when it cleared
-     */
-    private static boolean awaitCleared(WeakReference<?> reference) {
-        for (int attempt = 0; attempt < 50; attempt++) {
-            if (reference.get() == null) {
-                return true;
-            }
-            System.gc();
-            try {
-                Thread.sleep(10);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return reference.get() == null;
-            }
-        }
-        return reference.get() == null;
-    }
-
-    /**
-     * Ask the collector for a while, running the engine-side drain between attempts.
-     *
-     * @param reference the reference to watch
-     * @param drain     the engine operation that reclaims dead entries
-     * @return true when it cleared
-     */
-    private static boolean awaitClearedWhile(WeakReference<?> reference, Runnable drain) {
-        for (int attempt = 0; attempt < 50 && reference.get() != null; attempt++) {
-            drain.run();
-            System.gc();
-            try {
-                Thread.sleep(10);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-        return reference.get() == null;
-    }
-
     @Test
     public void testDeadCollectionDoesNotPinItsEntriesOnALiveKey() {
         try (JSRuntime runtime = new JSRuntime()) {
@@ -98,9 +53,7 @@ public class JSWeakCollectionTest extends BaseJavetTest {
 
             WeakReference<JSWeakMap> mapReference = new WeakReference<>(weakMap);
             weakMap = null;
-            assertThat(awaitCleared(mapReference))
-                    .as("a key must hold its collection weakly")
-                    .isTrue();
+            assertThat(awaitCleared(mapReference)).as("a key must hold its collection weakly").isTrue();
             // Touching the table prunes the dead entry rather than leaving it forever.
             assertThat(new JSWeakMap(context).weakMapHas(key)).isFalse();
         }
@@ -127,8 +80,7 @@ public class JSWeakCollectionTest extends BaseJavetTest {
 
             assertThat(awaitCleared(mapReference)).isTrue();
             assertThat(awaitClearedWhile(valueReference, () -> unrelatedSet.weakSetHas(unrelatedKey)))
-                    .as("an operation on any weak collection releases every dead collection's values")
-                    .isTrue();
+                    .as("an operation on any weak collection releases every dead collection's values").isTrue();
             assertThat(key).isNotNull();
         }
     }
@@ -150,14 +102,11 @@ public class JSWeakCollectionTest extends BaseJavetTest {
             weakMap = null;
             value = null;
 
-            assertThat(awaitCleared(mapReference))
-                    .as("a key must hold its collection weakly")
-                    .isTrue();
+            assertThat(awaitCleared(mapReference)).as("a key must hold its collection weakly").isTrue();
             // gc() is the engine's documented "drain what the collector has already taken" poll,
             // and it reclaims on the calling thread rather than on a thread of its own.
             assertThat(awaitClearedWhile(valueReference, runtime::gc))
-                    .as("a value must not outlive the collection that held it")
-                    .isTrue();
+                    .as("a value must not outlive the collection that held it").isTrue();
             assertThat(key).isNotNull();
         }
     }
@@ -222,8 +171,7 @@ public class JSWeakCollectionTest extends BaseJavetTest {
 
             assertThatThrownBy(() -> weakMap.weakMapSet(registered, JSNumber.of(1)))
                     .isInstanceOf(JSTypeErrorException.class);
-            assertThatThrownBy(() -> weakSet.weakSetAdd(registered))
-                    .isInstanceOf(JSTypeErrorException.class);
+            assertThatThrownBy(() -> weakSet.weakSetAdd(registered)).isInstanceOf(JSTypeErrorException.class);
             assertThat(weakMap.weakMapHas(registered)).isFalse();
             assertThat(weakMap.weakMapDelete(registered)).isFalse();
             assertThat(weakSet.weakSetHas(registered)).isFalse();
@@ -290,11 +238,8 @@ public class JSWeakCollectionTest extends BaseJavetTest {
             key = null;
             value = null;
             assertThat(awaitCleared(keyReference))
-                    .as("a value's back-reference to its own key must not keep the key alive")
-                    .isTrue();
-            assertThat(valueReference.get())
-                    .as("the value dies with its key")
-                    .isNull();
+                    .as("a value's back-reference to its own key must not keep the key alive").isTrue();
+            assertThat(valueReference.get()).as("the value dies with its key").isNull();
             assertThat(weakMap).isNotNull();
         }
     }
@@ -313,5 +258,51 @@ public class JSWeakCollectionTest extends BaseJavetTest {
             assertThat(awaitCleared(memberReference)).isTrue();
             assertThat(weakSet).isNotNull();
         }
+    }
+
+    /**
+     * Ask the collector for a while and report whether the reference cleared.
+     *
+     * @param reference
+     *            the reference to watch
+     * @return true when it cleared
+     */
+    private static boolean awaitCleared(WeakReference<?> reference) {
+        for (int attempt = 0; attempt < 50; attempt++) {
+            if (reference.get() == null) {
+                return true;
+            }
+            System.gc();
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return reference.get() == null;
+            }
+        }
+        return reference.get() == null;
+    }
+
+    /**
+     * Ask the collector for a while, running the engine-side drain between attempts.
+     *
+     * @param reference
+     *            the reference to watch
+     * @param drain
+     *            the engine operation that reclaims dead entries
+     * @return true when it cleared
+     */
+    private static boolean awaitClearedWhile(WeakReference<?> reference, Runnable drain) {
+        for (int attempt = 0; attempt < 50 && reference.get() != null; attempt++) {
+            drain.run();
+            System.gc();
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        return reference.get() == null;
     }
 }

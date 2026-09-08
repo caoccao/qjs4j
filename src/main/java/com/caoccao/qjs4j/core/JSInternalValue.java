@@ -17,9 +17,8 @@
 package com.caoccao.qjs4j.core;
 
 /**
- * Internal value wrapper for VM-specific objects that shouldn't be exposed to JavaScript.
- * Used for things like for-in enumerators that need to be on the value stack but
- * aren't accessible from user code.
+ * Internal value wrapper for VM-specific objects that shouldn't be exposed to JavaScript. Used for things like for-in
+ * enumerators that need to be on the value stack but aren't accessible from user code.
  */
 public record JSInternalValue(Object value) implements JSStackValue {
 

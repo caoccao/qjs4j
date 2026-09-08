@@ -21,22 +21,22 @@ import java.math.BigInteger;
 /**
  * Represents a JavaScript BigInt object (wrapper) as opposed to a BigInt primitive.
  * <p>
- * In JavaScript, there's a distinction between:
- * - BigInt primitives: {@code 42n}, {@code BigInt(123)}, {@code 9007199254740991n}
- * - BigInt objects: {@code Object(42n)}, {@code Object(BigInt(123))}
+ * In JavaScript, there's a distinction between: - BigInt primitives: {@code 42n}, {@code BigInt(123)},
+ * {@code 9007199254740991n} - BigInt objects: {@code Object(42n)}, {@code Object(BigInt(123))}
  * <p>
- * Note: BigInt cannot be called with {@code new} operator - attempting {@code new BigInt(42)}
- * will throw a TypeError: "BigInt is not a constructor". Use {@code Object(BigInt(42))} instead.
+ * Note: BigInt cannot be called with {@code new} operator - attempting {@code new BigInt(42)} will throw a TypeError:
+ * "BigInt is not a constructor". Use {@code Object(BigInt(42))} instead.
  * <p>
- * This class represents the object form, which is necessary for use cases like {@link JSProxy Proxy},
- * since primitive BigInt values cannot be used as Proxy targets. A primitive BigInt value
- * is immutable and cannot have properties, so it cannot be wrapped by a Proxy. JSBigIntObject
- * provides an object wrapper that can be used with Proxy while maintaining the BigInt value.
+ * This class represents the object form, which is necessary for use cases like {@link JSProxy Proxy}, since primitive
+ * BigInt values cannot be used as Proxy targets. A primitive BigInt value is immutable and cannot have properties, so
+ * it cannot be wrapped by a Proxy. JSBigIntObject provides an object wrapper that can be used with Proxy while
+ * maintaining the BigInt value.
  * <p>
- * The wrapped BigInt value is stored in the {@code [[PrimitiveValue]]} internal slot,
- * following the ECMAScript specification pattern for BigInt wrapper objects.
+ * The wrapped BigInt value is stored in the {@code [[PrimitiveValue]]} internal slot, following the ECMAScript
+ * specification pattern for BigInt wrapper objects.
  * <p>
  * Example usage:
+ *
  * <pre>{@code
  * // Create a BigInt object for use with Proxy
  * JSBigIntObject bigIntObj = new JSBigIntObject(BigInteger.valueOf(42));
@@ -54,7 +54,8 @@ public final class JSBigIntObject extends JSObject {
     /**
      * Create a BigInt object wrapping the given BigInteger value.
      *
-     * @param value the primitive BigInteger value to wrap
+     * @param value
+     *            the primitive BigInteger value to wrap
      */
     public JSBigIntObject(JSContext context, BigInteger value) {
         this(context, new JSBigInt(value));
@@ -63,16 +64,13 @@ public final class JSBigIntObject extends JSObject {
     /**
      * Create a BigInt object wrapping the given JSBigInt value.
      *
-     * @param value the JSBigInt value to wrap
+     * @param value
+     *            the JSBigInt value to wrap
      */
     public JSBigIntObject(JSContext context, JSBigInt value) {
         super(context);
         this.value = value;
         this.setPrimitiveValue(value);
-    }
-
-    public static JSObject create(JSContext context, JSValue... args) {
-        return context.throwTypeError("BigInt is not a constructor");
     }
 
     /**
@@ -92,5 +90,9 @@ public final class JSBigIntObject extends JSObject {
     @Override
     public String toString() {
         return value.value().toString() + "n";
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        return context.throwTypeError("BigInt is not a constructor");
     }
 }

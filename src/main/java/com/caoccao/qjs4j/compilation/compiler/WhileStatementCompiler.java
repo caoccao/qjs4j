@@ -32,7 +32,8 @@ final class WhileStatementCompiler extends AstNodeCompiler<WhileStatement> {
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 
         int loopStart = compilerContext.emitter.currentOffset();
-        LoopContext loop = compilerContext.loopManager.createLoopContext(loopStart, compilerContext.scopeManager.getScopeDepth(), compilerContext.scopeManager.getScopeDepth());
+        LoopContext loop = compilerContext.loopManager.createLoopContext(loopStart,
+                compilerContext.scopeManager.getScopeDepth(), compilerContext.scopeManager.getScopeDepth());
         compilerContext.loopManager.pushLoop(loop);
 
         compilerContext.expressionCompiler.compile(whileStmt.getTest());

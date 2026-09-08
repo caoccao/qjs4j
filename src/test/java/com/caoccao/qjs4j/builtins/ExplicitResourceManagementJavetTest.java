@@ -210,35 +210,33 @@ public class ExplicitResourceManagementJavetTest extends BaseJavetTest {
 
     @Test
     public void testUsingDeclarationDisposesOnBlockExitAndReturn() {
-        assertStringWithJavet(
-                """
-                        (() => {
-                            const log = [];
-                            {
-                                using r = {
-                                    [Symbol.dispose]() {
-                                        log.push("d");
-                                    }
-                                };
-                                log.push("b");
+        assertStringWithJavet("""
+                (() => {
+                    const log = [];
+                    {
+                        using r = {
+                            [Symbol.dispose]() {
+                                log.push("d");
                             }
-                            return JSON.stringify(log);
-                        })();""",
-                """
-                        (() => {
-                            const log = [];
-                            function f() {
-                                using r = {
-                                    [Symbol.dispose]() {
-                                        log.push("d");
-                                    }
-                                };
-                                log.push("b");
-                                return 7;
+                        };
+                        log.push("b");
+                    }
+                    return JSON.stringify(log);
+                })();""", """
+                (() => {
+                    const log = [];
+                    function f() {
+                        using r = {
+                            [Symbol.dispose]() {
+                                log.push("d");
                             }
-                            const value = f();
-                            return JSON.stringify(log) + "|" + String(value);
-                        })();""");
+                        };
+                        log.push("b");
+                        return 7;
+                    }
+                    const value = f();
+                    return JSON.stringify(log) + "|" + String(value);
+                })();""");
     }
 
     @Test

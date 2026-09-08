@@ -29,39 +29,15 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Bytecode constant objects — array literals, regexp literals, tagged-template objects — must not
- * outlive the bytecode that owns them.
+ * Bytecode constant objects — array literals, regexp literals, tagged-template objects — must not outlive the bytecode
+ * that owns them.
  * <p>
- * The VM tracked "prototype already transferred" in a per-VM {@code Set<JSObject>} built on an
- * {@code IdentityHashMap}. Entries were added but never removed, so every constant object ever
- * evaluated stayed strongly reachable for the lifetime of the VM, along with everything it
- * transitively referenced. The bit now lives on the object itself, so it dies with the object.
+ * The VM tracked "prototype already transferred" in a per-VM {@code Set<JSObject>} built on an {@code IdentityHashMap}.
+ * Entries were added but never removed, so every constant object ever evaluated stayed strongly reachable for the
+ * lifetime of the VM, along with everything it transitively referenced. The bit now lives on the object itself, so it
+ * dies with the object.
  */
 public class VirtualMachineConstantObjectTest extends BaseTest {
-
-    private static boolean awaitCollection(WeakReference<?> reference) throws InterruptedException {
-        for (int attempt = 0; attempt < 20 && reference.get() != null; attempt++) {
-            System.gc();
-            Thread.sleep(25);
-        }
-        return reference.get() == null;
-    }
-
-    /**
-     * How many of these references still point at something, after asking the collector for a while.
-     *
-     * @param references the references to watch
-     * @return the number still live
-     */
-    private static long liveCount(List<WeakReference<JSValue>> references) throws InterruptedException {
-        long live = references.size();
-        for (int attempt = 0; attempt < 20 && live > 0; attempt++) {
-            System.gc();
-            Thread.sleep(25);
-            live = references.stream().filter(reference -> reference.get() != null).count();
-        }
-        return live;
-    }
 
     private WeakReference<JSValue> evalToWeakReference(String code) {
         return new WeakReference<>(context.eval(code));
@@ -82,33 +58,26 @@ public class VirtualMachineConstantObjectTest extends BaseTest {
             context.eval("1");
         }
         assertThat(awaitCollection(templateReference))
-                .as("a template object must not outlive the bytecode that owns it")
-                .isTrue();
+                .as("a template object must not outlive the bytecode that owns it").isTrue();
     }
 
     @Test
     public void testConstantObjectPrototypeIsStillTransferred() {
         // The side table existed to make the transfer happen exactly once. That must still hold.
-        assertThat(context.eval(
-                """
-                        function tag(strings) { return Object.getPrototypeOf(strings) === Array.prototype }
-                        tag`a ${1} b`""").toString())
-                .isEqualTo("true");
-        assertThat(context.eval("Object.getPrototypeOf(/x/g) === RegExp.prototype").toString())
-                .isEqualTo("true");
-        assertThat(context.eval(
-                """
-                        function tag(strings) { return Object.getPrototypeOf(strings.raw) === Array.prototype }
-                        tag`a ${1} b`""").toString())
-                .isEqualTo("true");
+        assertThat(context.eval("""
+                function tag(strings) { return Object.getPrototypeOf(strings) === Array.prototype }
+                tag`a ${1} b`""").toString()).isEqualTo("true");
+        assertThat(context.eval("Object.getPrototypeOf(/x/g) === RegExp.prototype").toString()).isEqualTo("true");
+        assertThat(context.eval("""
+                function tag(strings) { return Object.getPrototypeOf(strings.raw) === Array.prototype }
+                tag`a ${1} b`""").toString()).isEqualTo("true");
     }
 
     @Test
     public void testConstantObjectRecordsItsPrototypeInitialization() {
-        JSValue templateObject = context.eval(
-                """
-                        function tag(strings) { return strings }
-                        tag`a ${1} b`""");
+        JSValue templateObject = context.eval("""
+                function tag(strings) { return strings }
+                tag`a ${1} b`""");
         assertThat(templateObject).isInstanceOfSatisfying(JSObject.class,
                 object -> assertThat(object.isConstantPrototypeInitialized()).isTrue());
         // A plain runtime object is not a bytecode constant and carries no such marking.
@@ -157,5 +126,30 @@ public class VirtualMachineConstantObjectTest extends BaseTest {
                 .as("of %d template objects sampled across 20000 evaluations, none may outlive the"
                         + " bytecode that owns it", sampledTemplateObjects.size())
                 .isZero();
+    }
+
+    private static boolean awaitCollection(WeakReference<?> reference) throws InterruptedException {
+        for (int attempt = 0; attempt < 20 && reference.get() != null; attempt++) {
+            System.gc();
+            Thread.sleep(25);
+        }
+        return reference.get() == null;
+    }
+
+    /**
+     * How many of these references still point at something, after asking the collector for a while.
+     *
+     * @param references
+     *            the references to watch
+     * @return the number still live
+     */
+    private static long liveCount(List<WeakReference<JSValue>> references) throws InterruptedException {
+        long live = references.size();
+        for (int attempt = 0; attempt < 20 && live > 0; attempt++) {
+            System.gc();
+            Thread.sleep(25);
+            live = references.stream().filter(reference -> reference.get() != null).count();
+        }
+        return live;
     }
 }

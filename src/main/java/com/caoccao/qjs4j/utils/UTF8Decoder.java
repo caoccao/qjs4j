@@ -24,8 +24,7 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 
 /**
- * UTF-8 encoder/decoder utilities.
- * Based on QuickJS cutils.c implementation.
+ * UTF-8 encoder/decoder utilities. Based on QuickJS cutils.c implementation.
  */
 public final class UTF8Decoder {
 
@@ -76,8 +75,7 @@ public final class UTF8Decoder {
             return "";
         }
 
-        CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
-                .onMalformedInput(CodingErrorAction.REPLACE)
+        CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPLACE)
                 .onUnmappableCharacter(CodingErrorAction.REPLACE);
 
         try {
@@ -100,8 +98,7 @@ public final class UTF8Decoder {
     }
 
     /**
-     * Encode a Unicode code point to UTF-8.
-     * Returns the number of bytes written, or -1 on error.
+     * Encode a Unicode code point to UTF-8. Returns the number of bytes written, or -1 on error.
      */
     public static int encodeCodePoint(byte[] buf, int codePoint) {
         if (buf == null || codePoint < 0) {
@@ -154,8 +151,7 @@ public final class UTF8Decoder {
     }
 
     /**
-     * Get a Unicode code point from UTF-8 bytes at the specified offset.
-     * Returns -1 if invalid UTF-8 sequence.
+     * Get a Unicode code point from UTF-8 bytes at the specified offset. Returns -1 if invalid UTF-8 sequence.
      */
     public static int getCodePoint(byte[] bytes, int offset) {
         if (bytes == null || offset >= bytes.length) {
@@ -219,22 +215,22 @@ public final class UTF8Decoder {
 
         if ((b & 0x80) == 0) {
             return 1;
-        }        // 0xxxxxxx
+        } // 0xxxxxxx
         if ((b & 0xE0) == 0xC0) {
             return 2;
-        }     // 110xxxxx
+        } // 110xxxxx
         if ((b & 0xF0) == 0xE0) {
             return 3;
-        }     // 1110xxxx
+        } // 1110xxxx
         if ((b & 0xF8) == 0xF0) {
             return 4;
-        }     // 11110xxx
+        } // 11110xxx
         if ((b & 0xFC) == 0xF8) {
             return 5;
-        }     // 111110xx (invalid in current Unicode)
+        } // 111110xx (invalid in current Unicode)
         if ((b & 0xFE) == 0xFC) {
             return 6;
-        }     // 1111110x (invalid in current Unicode)
+        } // 1111110x (invalid in current Unicode)
 
         return -1; // Invalid UTF-8
     }

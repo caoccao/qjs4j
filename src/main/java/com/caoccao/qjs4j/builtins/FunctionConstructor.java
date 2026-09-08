@@ -26,8 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Implementation of the Function constructor.
- * This is a placeholder implementation - creating functions dynamically
+ * Implementation of the Function constructor. This is a placeholder implementation - creating functions dynamically
  * from strings would require the compiler.
  */
 public final class FunctionConstructor {
@@ -37,17 +36,13 @@ public final class FunctionConstructor {
     }
 
     /**
-     * Function constructor call.
-     * new Function(arg1, arg2, ..., argN, functionBody)
+     * Function constructor call. new Function(arg1, arg2, ..., argN, functionBody)
      * <p>
-     * Creates a new function from the given parameter names and function body.
-     * All arguments except the last are treated as parameter names.
-     * The last argument is the function body.
+     * Creates a new function from the given parameter names and function body. All arguments except the last are
+     * treated as parameter names. The last argument is the function body.
      * <p>
-     * Examples:
-     * - new Function('a', 'b', 'return a + b')
-     * - new Function('x', 'console.log(x)')
-     * - new Function('return 42')
+     * Examples: - new Function('a', 'b', 'return a + b') - new Function('x', 'console.log(x)') - new Function('return
+     * 42')
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         return callWithWrapper(context, args, "(function(", "function anonymous(", "\n) {\n", "\n})", "<Function>",
@@ -69,15 +64,8 @@ public final class FunctionConstructor {
                 "<GeneratorFunction>", "Failed to create generator function: ", "GeneratorFunction");
     }
 
-    private static JSValue callWithWrapper(
-            JSContext context,
-            JSValue[] args,
-            String sourcePrefix,
-            String toStringSourcePrefix,
-            String parameterSuffix,
-            String bodySuffix,
-            String filename,
-            String errorPrefix,
+    private static JSValue callWithWrapper(JSContext context, JSValue[] args, String sourcePrefix,
+            String toStringSourcePrefix, String parameterSuffix, String bodySuffix, String filename, String errorPrefix,
             String intrinsicDefaultPrototypeName) {
         // Extract parameter names and function body
         List<String> paramNames = new ArrayList<>();
@@ -139,7 +127,8 @@ public final class FunctionConstructor {
             new Compiler(parameterValidationSource.toString(), filename).setContext(context).parse(false);
 
             // Compile the function
-            JSBytecodeFunction func = new Compiler(functionSource.toString(), filename).setContext(context).compile(false).function();
+            JSBytecodeFunction func = new Compiler(functionSource.toString(), filename).setContext(context)
+                    .compile(false).function();
 
             // Initialize the function's prototype chain
             func.initializePrototypeChain(context);
@@ -151,14 +140,12 @@ public final class FunctionConstructor {
                     bytecodeFunction.setSourceCode(toStringSource.toString());
                 }
                 if (resultObject instanceof JSFunction) {
-                    resultObject.defineProperty(
-                            PropertyKey.NAME,
-                            PropertyDescriptor.dataDescriptor(new JSString("anonymous"), PropertyDescriptor.DataState.Configurable));
+                    resultObject.defineProperty(PropertyKey.NAME, PropertyDescriptor
+                            .dataDescriptor(new JSString("anonymous"), PropertyDescriptor.DataState.Configurable));
                 }
                 JSValue constructorNewTarget = context.getNativeConstructorNewTarget();
                 if (constructorNewTarget instanceof JSObject newTargetObject) {
-                    JSObject resolvedPrototype = context.getPrototypeFromConstructor(
-                            newTargetObject,
+                    JSObject resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject,
                             intrinsicDefaultPrototypeName);
                     if (context.hasPendingException()) {
                         return context.getPendingException();

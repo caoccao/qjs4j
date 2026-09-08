@@ -17,8 +17,8 @@
 package com.caoccao.qjs4j.core;
 
 /**
- * Abstract base class for JavaScript function types.
- * In JavaScript, functions are objects, so JSFunction extends JSObject.
+ * Abstract base class for JavaScript function types. In JavaScript, functions are objects, so JSFunction extends
+ * JSObject.
  */
 public abstract sealed class JSFunction extends JSObject
         permits JSBytecodeFunction, JSNativeFunction, JSBoundFunction, JSClass {
@@ -63,11 +63,11 @@ public abstract sealed class JSFunction extends JSObject
     }
 
     /**
-     * Initialize the function's prototype chain to inherit from Function.prototype.
-     * This should be called after creation when the context is available.
+     * Initialize the function's prototype chain to inherit from Function.prototype. This should be called after
+     * creation when the context is available.
      * <p>
-     * For generator functions, also sets up the function's own "prototype" property
-     * to inherit from Generator.prototype, matching QuickJS js_closure2 behavior.
+     * For generator functions, also sets up the function's own "prototype" property to inherit from
+     * Generator.prototype, matching QuickJS js_closure2 behavior.
      */
     public void initializePrototypeChain(JSContext context) {
         if (homeContext == null) {
@@ -86,8 +86,8 @@ public abstract sealed class JSFunction extends JSObject
                     if (asyncGenProto instanceof JSObject asyncGenProtoObj) {
                         JSObject funcPrototype = new JSObject(context);
                         funcPrototype.setPrototype(asyncGenProtoObj);
-                        this.defineProperty(PropertyKey.PROTOTYPE,
-                                PropertyDescriptor.dataDescriptor(funcPrototype, PropertyDescriptor.DataState.Writable));
+                        this.defineProperty(PropertyKey.PROTOTYPE, PropertyDescriptor.dataDescriptor(funcPrototype,
+                                PropertyDescriptor.DataState.Writable));
                     }
                     return;
                 }
@@ -104,8 +104,8 @@ public abstract sealed class JSFunction extends JSObject
                     if (genProto instanceof JSObject genProtoObj) {
                         JSObject funcPrototype = new JSObject(context);
                         funcPrototype.setPrototype(genProtoObj);
-                        this.defineProperty(PropertyKey.PROTOTYPE,
-                                PropertyDescriptor.dataDescriptor(funcPrototype, PropertyDescriptor.DataState.Writable));
+                        this.defineProperty(PropertyKey.PROTOTYPE, PropertyDescriptor.dataDescriptor(funcPrototype,
+                                PropertyDescriptor.DataState.Writable));
                     }
                     return;
                 }

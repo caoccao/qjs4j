@@ -26,11 +26,7 @@ public class BooleanPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testBooleanInArithmetic() {
-        assertBooleanWithJavet(
-                "true + true === 2",
-                "true + false === 1",
-                "false + false === 0",
-                "true - false === 1",
+        assertBooleanWithJavet("true + true === 2", "true + false === 1", "false + false === 0", "true - false === 1",
                 "true * 5 === 5");
     }
 
@@ -42,58 +38,46 @@ public class BooleanPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testBooleanPrototypeChain() {
-        assertBooleanWithJavet(
-                "Object.getPrototypeOf(Boolean.prototype) === Object.prototype");
+        assertBooleanWithJavet("Object.getPrototypeOf(Boolean.prototype) === Object.prototype");
     }
 
     @Test
     public void testBooleanPrototypeConstructor() {
-        assertBooleanWithJavet(
-                "Boolean.prototype.constructor === Boolean");
+        assertBooleanWithJavet("Boolean.prototype.constructor === Boolean");
     }
 
     @Test
     public void testBooleanPrototypeIsABooleanObject() {
         // Boolean.prototype has [[BooleanData]] = false per QuickJS
-        assertStringWithJavet(
-                "Boolean.prototype.valueOf.call(Boolean.prototype).toString()",
+        assertStringWithJavet("Boolean.prototype.valueOf.call(Boolean.prototype).toString()",
                 "Boolean.prototype.toString.call(Boolean.prototype)");
     }
 
     @Test
     public void testBooleanPrototypeMethodsNotEnumerable() {
         // for...in should not enumerate prototype methods
-        assertStringWithJavet(
-                "var keys = []; for (var k in Boolean.prototype) keys.push(k); keys.join(',')");
+        assertStringWithJavet("var keys = []; for (var k in Boolean.prototype) keys.push(k); keys.join(',')");
     }
 
     @Test
     public void testBooleanThisBooleanValueSemantics() {
-        assertErrorWithJavet(
-                "Boolean.prototype.toString.call(Object.create(Boolean.prototype))",
+        assertErrorWithJavet("Boolean.prototype.toString.call(Object.create(Boolean.prototype))",
                 "Boolean.prototype.valueOf.call(Object.create(Boolean.prototype))");
     }
 
     @Test
     public void testBooleanToNumber() {
-        assertBooleanWithJavet(
-                "+true === 1",
-                "+false === 0");
+        assertBooleanWithJavet("+true === 1", "+false === 0");
     }
 
     @Test
     public void testBooleanToString() {
-        assertStringWithJavet(
-                "'' + true",
-                "'' + false",
-                "String(true)",
-                "String(false)");
+        assertStringWithJavet("'' + true", "'' + false", "String(true)", "String(false)");
     }
 
     @Test
     public void testConstructorDescriptor() {
-        assertBooleanWithJavet(
-                "Object.getOwnPropertyDescriptor(Boolean.prototype, 'constructor').writable === true",
+        assertBooleanWithJavet("Object.getOwnPropertyDescriptor(Boolean.prototype, 'constructor').writable === true",
                 "Object.getOwnPropertyDescriptor(Boolean.prototype, 'constructor').enumerable === false",
                 "Object.getOwnPropertyDescriptor(Boolean.prototype, 'constructor').configurable === true");
     }
@@ -102,38 +86,25 @@ public class BooleanPrototypeTest extends BaseJavetTest {
     public void testLooseEquality() {
         assertBooleanWithJavet(
                 // Primitive vs primitive
-                "true == true",
-                "true == false",
-                "false == false",
-                "true == Boolean(true)",
-                "true == Boolean(false)",
-                "Boolean(true) == Boolean(true)",
-                "Boolean(true) == Boolean(false)",
+                "true == true", "true == false", "false == false", "true == Boolean(true)", "true == Boolean(false)",
+                "Boolean(true) == Boolean(true)", "Boolean(true) == Boolean(false)",
                 // Primitive vs object
-                "true == new Boolean(true)",
-                "true == new Boolean(false)",
-                "false == new Boolean(false)",
-                "Boolean(true) == new Boolean(true)",
-                "Boolean(true) == new Boolean(false)",
+                "true == new Boolean(true)", "true == new Boolean(false)", "false == new Boolean(false)",
+                "Boolean(true) == new Boolean(true)", "Boolean(true) == new Boolean(false)",
                 // Object vs object
                 "new Boolean(true) == new Boolean(true)");
     }
 
     @Test
     public void testReferenceEquality() {
-        assertBooleanWithJavet(
-                "var b = new Boolean(true); b == b",
-                "var b = new Boolean(true); b === b");
+        assertBooleanWithJavet("var b = new Boolean(true); b == b", "var b = new Boolean(true); b === b");
     }
 
     @Test
     public void testStrictEquality() {
         assertBooleanWithJavet(
                 // Primitive vs primitive
-                "true === true",
-                "true === false",
-                "false === false",
-                "true === Boolean(true)",
+                "true === true", "true === false", "false === false", "true === Boolean(true)",
                 "true === Boolean(false)",
                 // Primitive vs object
                 "true === new Boolean(true)",
@@ -143,8 +114,7 @@ public class BooleanPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testToStringDescriptor() {
-        assertBooleanWithJavet(
-                "Object.getOwnPropertyDescriptor(Boolean.prototype, 'toString').writable === true",
+        assertBooleanWithJavet("Object.getOwnPropertyDescriptor(Boolean.prototype, 'toString').writable === true",
                 "Object.getOwnPropertyDescriptor(Boolean.prototype, 'toString').enumerable === false",
                 "Object.getOwnPropertyDescriptor(Boolean.prototype, 'toString').configurable === true");
     }
@@ -161,55 +131,42 @@ public class BooleanPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testToStringOnNonBoolean() {
-        assertErrorWithJavet(
-                "Boolean.prototype.toString.call(42)",
-                "Boolean.prototype.toString.call('string')",
+        assertErrorWithJavet("Boolean.prototype.toString.call(42)", "Boolean.prototype.toString.call('string')",
                 "Boolean.prototype.toString.call({})");
     }
 
     @Test
     public void testToStringOnObject() {
-        assertStringWithJavet(
-                "(new Boolean(true)).toString()",
-                "(new Boolean(false)).toString()");
+        assertStringWithJavet("(new Boolean(true)).toString()", "(new Boolean(false)).toString()");
     }
 
     @Test
     public void testToStringOnPrimitive() {
-        assertStringWithJavet(
-                "true.toString()",
-                "false.toString()");
+        assertStringWithJavet("true.toString()", "false.toString()");
     }
 
     @Test
     public void testToStringTagForBooleanObjects() {
-        assertStringWithJavet(
-                "Object.prototype.toString.call(Boolean.prototype)",
+        assertStringWithJavet("Object.prototype.toString.call(Boolean.prototype)",
                 "Object.prototype.toString.call(new Boolean(true))",
                 "Object.prototype.toString.call(new Boolean(false))");
     }
 
     @Test
     public void testToStringViaCall() {
-        assertStringWithJavet(
-                "Boolean.prototype.toString.call(true)",
-                "Boolean.prototype.toString.call(false)",
+        assertStringWithJavet("Boolean.prototype.toString.call(true)", "Boolean.prototype.toString.call(false)",
                 "Boolean.prototype.toString.call(new Boolean(true))",
                 "Boolean.prototype.toString.call(new Boolean(false))");
     }
 
     @Test
     public void testTypeof() {
-        assertStringWithJavet(
-                "typeof true",
-                "typeof false",
-                "typeof new Boolean(true)");
+        assertStringWithJavet("typeof true", "typeof false", "typeof new Boolean(true)");
     }
 
     @Test
     public void testValueOfDescriptor() {
-        assertBooleanWithJavet(
-                "Object.getOwnPropertyDescriptor(Boolean.prototype, 'valueOf').writable === true",
+        assertBooleanWithJavet("Object.getOwnPropertyDescriptor(Boolean.prototype, 'valueOf').writable === true",
                 "Object.getOwnPropertyDescriptor(Boolean.prototype, 'valueOf').enumerable === false",
                 "Object.getOwnPropertyDescriptor(Boolean.prototype, 'valueOf').configurable === true");
     }
@@ -226,31 +183,23 @@ public class BooleanPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testValueOfOnNonBoolean() {
-        assertErrorWithJavet(
-                "Boolean.prototype.valueOf.call(42)",
-                "Boolean.prototype.valueOf.call('string')",
+        assertErrorWithJavet("Boolean.prototype.valueOf.call(42)", "Boolean.prototype.valueOf.call('string')",
                 "Boolean.prototype.valueOf.call({})");
     }
 
     @Test
     public void testValueOfOnObject() {
-        assertBooleanWithJavet(
-                "(new Boolean(true)).valueOf()",
-                "(new Boolean(false)).valueOf()");
+        assertBooleanWithJavet("(new Boolean(true)).valueOf()", "(new Boolean(false)).valueOf()");
     }
 
     @Test
     public void testValueOfOnPrimitive() {
-        assertBooleanWithJavet(
-                "true.valueOf()",
-                "false.valueOf()");
+        assertBooleanWithJavet("true.valueOf()", "false.valueOf()");
     }
 
     @Test
     public void testValueOfViaCall() {
-        assertBooleanWithJavet(
-                "Boolean.prototype.valueOf.call(true)",
-                "Boolean.prototype.valueOf.call(false)",
+        assertBooleanWithJavet("Boolean.prototype.valueOf.call(true)", "Boolean.prototype.valueOf.call(false)",
                 "Boolean.prototype.valueOf.call(new Boolean(true))",
                 "Boolean.prototype.valueOf.call(new Boolean(false))");
     }

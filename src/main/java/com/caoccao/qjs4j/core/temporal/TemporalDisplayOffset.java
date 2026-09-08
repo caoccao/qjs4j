@@ -17,17 +17,23 @@
 package com.caoccao.qjs4j.core.temporal;
 
 /**
- * Temporal offset display option enum (auto / never) used by
- * ZonedDateTime {@code toString()} to control UTC offset rendering.
+ * Temporal offset display option enum (auto / never) used by ZonedDateTime {@code toString()} to control UTC offset
+ * rendering.
  */
 public enum TemporalDisplayOffset {
-    AUTO("auto"),
-    NEVER("never");
+    AUTO("auto"), NEVER("never");
 
     private final String jsName;
 
     TemporalDisplayOffset(String jsName) {
         this.jsName = jsName;
+    }
+
+    /**
+     * Returns the JS-canonical name (e.g. "auto").
+     */
+    public String jsName() {
+        return jsName;
     }
 
     /**
@@ -42,12 +48,5 @@ public enum TemporalDisplayOffset {
             case "never" -> NEVER;
             default -> null;
         };
-    }
-
-    /**
-     * Returns the JS-canonical name (e.g. "auto").
-     */
-    public String jsName() {
-        return jsName;
     }
 }

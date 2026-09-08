@@ -135,6 +135,8 @@ try (JSContext context = new JSContext(new JSRuntime())) {
 ./gradlew build
 ```
 
+Java formatting is enforced by Spotless with Eclipse JDT. Run `./gradlew spotlessApply` to format sources and sort members, or `./gradlew spotlessCheck` to verify them without editing files. Both `build` and `check` include the formatting check. The formatter uses four-space indentation and the member order `SF,SI,F,I,C,M,SM,T`, with field sorting enabled; its settings are in `build.gradle.kts` and `config/eclipse-java-formatter.properties`.
+
 The Gradle toolchain compiles and tests against JDK 17 wherever the build is launched from, so a
 JDK 17 installation must be discoverable (Gradle will provision one if it is not). Gradle's Kotlin
 DSL compiles the build script before any toolchain is selected, so the *launching* JDK also has to

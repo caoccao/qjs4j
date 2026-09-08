@@ -54,8 +54,7 @@ public class PromiseConstructorTest extends BaseJavetTest {
                   }
                   return sum;
                 }
-                test()"""
-        );
+                test()""");
     }
 
     @Test
@@ -218,13 +217,8 @@ public class PromiseConstructorTest extends BaseJavetTest {
     @Test
     void testPromiseStaticMethods() {
         // Promise static methods should still exist and work
-        assertStringWithJavet(
-                "typeof Promise.resolve",
-                "typeof Promise.reject",
-                "typeof Promise.all",
-                "typeof Promise.race",
-                "typeof Promise.allSettled",
-                "typeof Promise.any");
+        assertStringWithJavet("typeof Promise.resolve", "typeof Promise.reject", "typeof Promise.all",
+                "typeof Promise.race", "typeof Promise.allSettled", "typeof Promise.any");
 
         // Test Promise.resolve
         assertStringWithJavet("""

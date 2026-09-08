@@ -24,15 +24,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Atom table for interned strings.
- * Provides fast string comparison using integer indices (atoms).
- * Based on QuickJS atom system in quickjs.c.
+ * Atom table for interned strings. Provides fast string comparison using integer indices (atoms). Based on QuickJS atom
+ * system in quickjs.c.
  * <p>
- * Atoms are used extensively in JavaScript engines for:
- * - Property names
- * - Variable names
- * - Built-in symbols
- * - Fast string comparison (compare integers instead of strings)
+ * Atoms are used extensively in JavaScript engines for: - Property names - Variable names - Built-in symbols - Fast
+ * string comparison (compare integers instead of strings)
  */
 public final class AtomTable {
     public static final int ATOM_ASYNC = 40;
@@ -63,6 +59,8 @@ public final class AtomTable {
     public static final int ATOM_NEW = 11;
     // Well-known atom indices for common JavaScript identifiers
     public static final int ATOM_NULL = 0;
+    // Reserved for future well-known atoms
+    private static final int ATOM_RESERVED_COUNT = 128;
     public static final int ATOM_RETURN = 5;
     public static final int ATOM_STATIC = 37;
     public static final int ATOM_SUPER = 35;
@@ -77,8 +75,6 @@ public final class AtomTable {
     public static final int ATOM_WHILE = 15;
     public static final int ATOM_WITH = 28;
     public static final int ATOM_YIELD = 38;
-    // Reserved for future well-known atoms
-    private static final int ATOM_RESERVED_COUNT = 128;
     private final List<String> atomToString;
     private final Map<String, Integer> stringToAtom;
 
@@ -100,8 +96,7 @@ public final class AtomTable {
     }
 
     /**
-     * Get the atom index for a string without interning it.
-     * Returns -1 if the string is not interned.
+     * Get the atom index for a string without interning it. Returns -1 if the string is not interned.
      */
     public int getAtom(String str) {
         Integer atom = stringToAtom.get(str);
@@ -172,8 +167,7 @@ public final class AtomTable {
     }
 
     /**
-     * Intern a string and return its atom index.
-     * If the string is already interned, returns the existing atom.
+     * Intern a string and return its atom index. If the string is already interned, returns the existing atom.
      */
     public int intern(String str) {
         if (str == null) {

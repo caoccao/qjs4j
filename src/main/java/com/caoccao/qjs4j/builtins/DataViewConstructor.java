@@ -21,8 +21,7 @@ import com.caoccao.qjs4j.core.JSDataView;
 import com.caoccao.qjs4j.core.JSValue;
 
 /**
- * Implementation of DataView constructor.
- * Based on ES2020 DataView specification.
+ * Implementation of DataView constructor. Based on ES2020 DataView specification.
  */
 public final class DataViewConstructor {
 
@@ -30,8 +29,7 @@ public final class DataViewConstructor {
     }
 
     /**
-     * DataView constructor call/new.
-     * Delegates to JSDataView.create().
+     * DataView constructor call/new. Delegates to JSDataView.create().
      * <p>
      * Based on ES2020 24.3.2.1
      */

@@ -27,14 +27,13 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * {@code import text from './x' with \{ type: 'text' \}} makes a synthetic module whose default
- * export is the file's contents, exactly as they are. The payload is data.
+ * {@code import text from './x' with \{ type: 'text' \}} makes a synthetic module whose default export is the file's
+ * contents, exactly as they are. The payload is data.
  * <p>
- * Both the eager and the deferred loader put it through the JavaScript module normaliser first, and
- * that normaliser compiles what it is given. A text file was therefore accepted or rejected
- * according to whether its bytes happened to resemble an ECMAScript declaration:
- * {@code export \{\}; this is arbitrary text} was a {@code SyntaxError} instead of a string, and an
- * innocuous edit to a data file could change whether the file loaded at all.
+ * Both the eager and the deferred loader put it through the JavaScript module normaliser first, and that normaliser
+ * compiles what it is given. A text file was therefore accepted or rejected according to whether its bytes happened to
+ * resemble an ECMAScript declaration: {@code export \{\}; this is arbitrary text} was a {@code SyntaxError} instead of
+ * a string, and an innocuous edit to a data file could change whether the file loaded at all.
  */
 public class JSTextModuleImportTest extends BaseTest {
     @TempDir
@@ -43,8 +42,10 @@ public class JSTextModuleImportTest extends BaseTest {
     /**
      * Import a payload as text and return what the default export was.
      *
-     * @param payloadName the payload's file name
-     * @param payload     the exact bytes of the payload
+     * @param payloadName
+     *            the payload's file name
+     * @param payload
+     *            the exact bytes of the payload
      * @return the imported string
      */
     private String importAsText(String payloadName, String payload) throws IOException {
@@ -53,11 +54,15 @@ public class JSTextModuleImportTest extends BaseTest {
         String entrySource = "import value from './" + payloadName + "' with { type: 'text' };\n"
                 + "globalThis.result = value;\n";
         Files.writeString(entry, entrySource);
-        try (JSRuntime runtime = new JSRuntime();
-             JSContext context = runtime.createContext()) {
+        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
             context.eval(entrySource, entry.toString(), true);
             return context.eval("globalThis.result", "probe.js", false).toString();
         }
+    }
+
+    @Test
+    public void testAnEmptyPayloadIsTheEmptyString() throws IOException {
+        assertThat(importAsText("empty.txt", "")).isEmpty();
     }
 
     @Test
@@ -68,12 +73,10 @@ public class JSTextModuleImportTest extends BaseTest {
         String entrySource = "import defer * as ns from './deferred.txt' with { type: 'text' };\n"
                 + "globalThis.result = ns.default;\n";
         Files.writeString(entry, entrySource);
-        try (JSRuntime runtime = new JSRuntime();
-             JSContext context = runtime.createContext()) {
+        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
             context.eval(entrySource, entry.toString(), true);
             context.processMicrotasks();
-            assertThat(context.eval("globalThis.result", "probe.js", false).toString())
-                    .isEqualTo(payload);
+            assertThat(context.eval("globalThis.result", "probe.js", false).toString()).isEqualTo(payload);
         }
     }
 
@@ -85,12 +88,10 @@ public class JSTextModuleImportTest extends BaseTest {
         String entrySource = "const m = await import('./dynamic.txt', "
                 + "{ with: { type: 'text' } });\nglobalThis.result = m.default;\n";
         Files.writeString(entry, entrySource);
-        try (JSRuntime runtime = new JSRuntime();
-             JSContext context = runtime.createContext()) {
+        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
             context.eval(entrySource, entry.toString(), true);
             context.processMicrotasks();
-            assertThat(context.eval("globalThis.result", "probe.js", false).toString())
-                    .isEqualTo(payload);
+            assertThat(context.eval("globalThis.result", "probe.js", false).toString()).isEqualTo(payload);
         }
     }
 
@@ -120,19 +121,13 @@ public class JSTextModuleImportTest extends BaseTest {
     }
 
     @Test
-    public void testAnEmptyPayloadIsTheEmptyString() throws IOException {
-        assertThat(importAsText("empty.txt", "")).isEmpty();
-    }
-
-    @Test
     public void testCarriageReturnsAndUnicodeSurviveExactly() throws IOException {
         // The NUL is written as an escape rather than as itself. A literal U+0000 byte in a .java
         // file makes the whole file binary to ordinary tooling: `file` reports `data`, git prints
         // no textual diff for it, and ripgrep skips it — so a test added to make a payload's exact
         // bytes reviewable stopped being reviewable.
         String payload = "first\r\nsecond\r\né中文\0tail";
-        assertThat(payload)
-                .as("the payload really does carry a NUL, whatever the source spells it as")
+        assertThat(payload).as("the payload really does carry a NUL, whatever the source spells it as")
                 .contains("文\0tail");
         assertThat(importAsText("crlf-unicode.txt", payload)).isEqualTo(payload);
     }

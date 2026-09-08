@@ -33,7 +33,8 @@ public class TemporalZonedDateTimeTest extends BaseJavetTest {
 
     @Test
     public void testCompare() {
-        assertIntegerWithJavet("Temporal.ZonedDateTime.compare('2024-01-15T12:00:00+00:00[UTC]', '2024-01-15T13:00:00+00:00[UTC]')");
+        assertIntegerWithJavet(
+                "Temporal.ZonedDateTime.compare('2024-01-15T12:00:00+00:00[UTC]', '2024-01-15T13:00:00+00:00[UTC]')");
     }
 
     @Test
@@ -57,13 +58,14 @@ public class TemporalZonedDateTimeTest extends BaseJavetTest {
     }
 
     @Test
-    public void testConstructorWithSubclass() {
-        assertBooleanWithJavet("(() => { class CustomZonedDateTime extends Temporal.ZonedDateTime {} const value = new CustomZonedDateTime(0n, 'UTC'); return value instanceof CustomZonedDateTime && value instanceof Temporal.ZonedDateTime; })()");
+    public void testConstructorWithoutNew() {
+        assertErrorWithJavet("Temporal.ZonedDateTime(0n, 'UTC')");
     }
 
     @Test
-    public void testConstructorWithoutNew() {
-        assertErrorWithJavet("Temporal.ZonedDateTime(0n, 'UTC')");
+    public void testConstructorWithSubclass() {
+        assertBooleanWithJavet(
+                "(() => { class CustomZonedDateTime extends Temporal.ZonedDateTime {} const value = new CustomZonedDateTime(0n, 'UTC'); return value instanceof CustomZonedDateTime && value instanceof Temporal.ZonedDateTime; })()");
     }
 
     @Test
@@ -128,7 +130,8 @@ public class TemporalZonedDateTimeTest extends BaseJavetTest {
 
     @Test
     public void testGetTimeZoneTransition() {
-        assertStringWithJavet("let z = new Temporal.ZonedDateTime(0n, 'America/New_York'); let t = z.getTimeZoneTransition('next'); t !== null ? t.toString() : 'null'");
+        assertStringWithJavet(
+                "let z = new Temporal.ZonedDateTime(0n, 'America/New_York'); let t = z.getTimeZoneTransition('next'); t !== null ? t.toString() : 'null'");
     }
 
     @Test
@@ -203,7 +206,8 @@ public class TemporalZonedDateTimeTest extends BaseJavetTest {
 
     @Test
     public void testSince() {
-        assertStringWithJavet("new Temporal.ZonedDateTime(3600000000000n, 'UTC').since('1970-01-01T00:00:00+00:00[UTC]').toString()");
+        assertStringWithJavet(
+                "new Temporal.ZonedDateTime(3600000000000n, 'UTC').since('1970-01-01T00:00:00+00:00[UTC]').toString()");
     }
 
     @Test
@@ -233,7 +237,8 @@ public class TemporalZonedDateTimeTest extends BaseJavetTest {
 
     @Test
     public void testToLocaleString() {
-        assertBooleanWithJavet("(() => { const value = new Temporal.ZonedDateTime(0n, 'UTC'); const result = value.toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }); return typeof result === 'string' && result.length > 0; })()");
+        assertBooleanWithJavet(
+                "(() => { const value = new Temporal.ZonedDateTime(0n, 'UTC'); const result = value.toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }); return typeof result === 'string' && result.length > 0; })()");
     }
 
     @Test
@@ -258,7 +263,8 @@ public class TemporalZonedDateTimeTest extends BaseJavetTest {
 
     @Test
     public void testUntil() {
-        assertStringWithJavet("new Temporal.ZonedDateTime(0n, 'UTC').until('1970-01-01T01:00:00+00:00[UTC]').toString()");
+        assertStringWithJavet(
+                "new Temporal.ZonedDateTime(0n, 'UTC').until('1970-01-01T01:00:00+00:00[UTC]').toString()");
     }
 
     @Test

@@ -196,19 +196,15 @@ public class RegExpEngineTest extends BaseJavetTest {
     @Test
     public void testLookbehindAssertionsSyntaxAndQuantifierRules() {
         RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        assertThatThrownBy(() -> compiler.compile("(?<=a", ""))
-                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+        assertThatThrownBy(() -> compiler.compile("(?<=a", "")).isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
                 .hasMessageContaining("Unclosed lookbehind");
-        assertThatThrownBy(() -> compiler.compile("(?<!a", ""))
-                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+        assertThatThrownBy(() -> compiler.compile("(?<!a", "")).isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
                 .hasMessageContaining("Unclosed lookbehind");
         assertThatThrownBy(() -> compiler.compile("(?<=a)+b", ""))
-                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
-                .hasMessageContaining("Nothing to repeat");
+                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class).hasMessageContaining("Nothing to repeat");
 
         // QuickJS allows quantified lookahead in non-unicode mode (Annex B).
-        assertThatCode(() -> compiler.compile("(?=a)+b", ""))
-                .doesNotThrowAnyException();
+        assertThatCode(() -> compiler.compile("(?=a)+b", "")).doesNotThrowAnyException();
     }
 
     @Test
@@ -262,17 +258,18 @@ public class RegExpEngineTest extends BaseJavetTest {
     }
 
     @Test
-    public void testNamedCaptureGroupsDuplicateNameThrows() {
-        assertErrorWithJavet("new RegExp('(?<x>a)(?<x>b)')");
+    public void testNamedCaptureGroupsDuplicateNamesAcrossAlternatives() {
+        assertObjectWithJavet(
+                """
+                        const dateRegex = /(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2})|(?<month>\\d{2})\\/(?<day>\\d{2})\\/(?<year>\\d{4})/;
+                        const match1 = '2025-03-15'.match(dateRegex);
+                        const match2 = '03/15/2025'.match(dateRegex);
+                        [match1.groups, match2.groups]""");
     }
 
     @Test
-    public void testNamedCaptureGroupsDuplicateNamesAcrossAlternatives() {
-        assertObjectWithJavet("""
-                const dateRegex = /(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2})|(?<month>\\d{2})\\/(?<day>\\d{2})\\/(?<year>\\d{4})/;
-                const match1 = '2025-03-15'.match(dateRegex);
-                const match2 = '03/15/2025'.match(dateRegex);
-                [match1.groups, match2.groups]""");
+    public void testNamedCaptureGroupsDuplicateNameThrows() {
+        assertErrorWithJavet("new RegExp('(?<x>a)(?<x>b)')");
     }
 
     @Test
@@ -305,8 +302,7 @@ public class RegExpEngineTest extends BaseJavetTest {
     @Test
     public void testNamedCaptureGroupsNotDefinedThrows() {
         assertThatThrownBy(() -> resetContext().eval("new RegExp('\\\\k<missing>(?<x>a)')"))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("group name not defined");
+                .isInstanceOf(JSException.class).hasMessageContaining("group name not defined");
     }
 
     @Test
@@ -460,15 +456,12 @@ public class RegExpEngineTest extends BaseJavetTest {
     public void testUnicodePropertyEscapesSyntaxErrors() {
         RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
 
-        assertThatThrownBy(() -> compiler.compile("\\p", "u"))
-                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+        assertThatThrownBy(() -> compiler.compile("\\p", "u")).isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
                 .hasMessageContaining("expecting '{' after \\p");
-        assertThatThrownBy(() -> compiler.compile("\\P", "u"))
-                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
+        assertThatThrownBy(() -> compiler.compile("\\P", "u")).isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
                 .hasMessageContaining("expecting '{' after \\p");
         assertThatThrownBy(() -> compiler.compile("\\p{L", "u"))
-                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
-                .hasMessageContaining("expecting '}'");
+                .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class).hasMessageContaining("expecting '}'");
         assertThatThrownBy(() -> compiler.compile("\\p{Greek}", "u"))
                 .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
                 .hasMessageContaining("unknown unicode property name");

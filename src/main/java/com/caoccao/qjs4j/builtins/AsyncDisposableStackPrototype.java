@@ -45,7 +45,8 @@ public final class AsyncDisposableStackPrototype {
     public static JSValue disposeAsync(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSAsyncDisposableStack stack)) {
             JSPromise rejectedPromise = context.createJSPromise();
-            JSValue error = context.throwTypeError("AsyncDisposableStack.prototype.disposeAsync called on non-AsyncDisposableStack");
+            JSValue error = context
+                    .throwTypeError("AsyncDisposableStack.prototype.disposeAsync called on non-AsyncDisposableStack");
             if (context.hasPendingException()) {
                 context.clearPendingException();
             }
@@ -58,7 +59,8 @@ public final class AsyncDisposableStackPrototype {
 
     public static JSValue getDisposed(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSAsyncDisposableStack stack)) {
-            return context.throwTypeError("get AsyncDisposableStack.prototype.disposed called on non-AsyncDisposableStack");
+            return context
+                    .throwTypeError("get AsyncDisposableStack.prototype.disposed called on non-AsyncDisposableStack");
         }
         return JSBoolean.valueOf(stack.isDisposed());
     }

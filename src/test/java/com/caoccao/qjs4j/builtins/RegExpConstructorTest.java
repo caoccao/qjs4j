@@ -46,14 +46,10 @@ public class RegExpConstructorTest extends BaseJavetTest {
     void testCaseInsensitiveNonAscii() {
         // Turkish dotless-i (U+0131) should NOT match [a-z] in non-Unicode mode
         // Per ES spec, if ch >= 128 and toUpperCase(ch) < 128, ch is not canonicalized
-        assertBooleanWithJavet(
-                "!/^[a-z]+$/i.test('\\u0131d')",
-                "!/^[a-z]$/i.test('\\u0131')");
+        assertBooleanWithJavet("!/^[a-z]+$/i.test('\\u0131d')", "!/^[a-z]$/i.test('\\u0131')");
 
         // But regular ASCII case-insensitive still works
-        assertBooleanWithJavet(
-                "/^[a-z]+$/i.test('Hello')",
-                "/^[a-z]+$/i.test('ABC')");
+        assertBooleanWithJavet("/^[a-z]+$/i.test('Hello')", "/^[a-z]+$/i.test('ABC')");
 
         // Kelvin sign (U+212A) should NOT match [a-z] in non-Unicode mode either
         assertBooleanWithJavet("!/^[a-z]$/i.test('\\u212A')");
@@ -106,6 +102,18 @@ public class RegExpConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    void testConstructorWithoutNew() {
+        // Calling RegExp as a function (without new)
+        assertStringWithJavet("RegExp('test').source");
+        assertStringWithJavet("RegExp('test', 'gi').flags");
+        assertBooleanWithJavet("RegExp('test', 'g').global");
+
+        // Both should create equivalent RegExp objects
+        assertBooleanWithJavet("RegExp('test').source === new RegExp('test').source");
+        assertStringWithJavet("RegExp('test', 'gi').toString()", "new RegExp('test', 'gi').toString()");
+    }
+
+    @Test
     void testConstructorWithRegExpArgument() {
         // Copying existing RegExp
         assertStringWithJavet("new RegExp(/test/gi).source");
@@ -116,18 +124,6 @@ public class RegExpConstructorTest extends BaseJavetTest {
         assertStringWithJavet("new RegExp(/test/gi, 'm').flags");
         assertBooleanWithJavet("new RegExp(/test/gi, 'm').multiline");
         assertBooleanWithJavet("!new RegExp(/test/gi, 'm').global");
-    }
-
-    @Test
-    void testConstructorWithoutNew() {
-        // Calling RegExp as a function (without new)
-        assertStringWithJavet("RegExp('test').source");
-        assertStringWithJavet("RegExp('test', 'gi').flags");
-        assertBooleanWithJavet("RegExp('test', 'g').global");
-
-        // Both should create equivalent RegExp objects
-        assertBooleanWithJavet("RegExp('test').source === new RegExp('test').source");
-        assertStringWithJavet("RegExp('test', 'gi').toString()", "new RegExp('test', 'gi').toString()");
     }
 
     @Test
@@ -166,15 +162,18 @@ public class RegExpConstructorTest extends BaseJavetTest {
         JSValue result = RegExpPrototype.exec(context, regexp, new JSValue[]{new JSString("hello world")});
         assertThat(result).isInstanceOfSatisfying(JSArray.class, arr -> {
             assertThat(arr.getLength()).isEqualTo(1); // Just the matched string, no captures
-            assertThat(arr.get(0)).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("hello"));
+            assertThat(arr.get(0)).isInstanceOfSatisfying(JSString.class,
+                    str -> assertThat(str.value()).isEqualTo("hello"));
 
             // Check index property
             JSValue indexValue = arr.get("index");
-            assertThat(indexValue).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(0.0));
+            assertThat(indexValue).isInstanceOfSatisfying(JSNumber.class,
+                    num -> assertThat(num.value()).isEqualTo(0.0));
 
             // Check input property
             JSValue inputValue = arr.get("input");
-            assertThat(inputValue).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("hello world"));
+            assertThat(inputValue).isInstanceOfSatisfying(JSString.class,
+                    str -> assertThat(str.value()).isEqualTo("hello world"));
         });
 
         // Normal case: no match
@@ -209,14 +208,16 @@ public class RegExpConstructorTest extends BaseJavetTest {
         // First exec
         JSValue result = RegExpPrototype.exec(context, regexp, new JSValue[]{new JSString("foo bar")});
         assertThat(result).isInstanceOfSatisfying(JSArray.class, arr -> {
-            assertThat(arr.get(0)).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("o"));
+            assertThat(arr.get(0)).isInstanceOfSatisfying(JSString.class,
+                    str -> assertThat(str.value()).isEqualTo("o"));
         });
         assertThat(regexp.getLastIndex() > 0).isTrue();
 
         // Second exec (should get next match)
         result = RegExpPrototype.exec(context, regexp, new JSValue[]{new JSString("foo bar")});
         assertThat(result).isInstanceOfSatisfying(JSArray.class, arr -> {
-            assertThat(arr.get(0)).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("o"));
+            assertThat(arr.get(0)).isInstanceOfSatisfying(JSString.class,
+                    str -> assertThat(str.value()).isEqualTo("o"));
         });
 
         // Third exec (no more matches, should return null and reset lastIndex)
@@ -381,25 +382,21 @@ public class RegExpConstructorTest extends BaseJavetTest {
     void testNestedOptionalGroupInStarLoop() {
         // Optional group with alternation inside a * quantifier
         // Previously failed due to advance-check register collision between nested quantifiers
-        assertBooleanWithJavet(
-                "/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-cd')",
+        assertBooleanWithJavet("/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-cd')",
                 "/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?(-(ef|gh))?)*$/.test('ab-t-cd')",
                 "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{2}|[0-9]{3}))?)*$/.test('en-t-en')",
                 "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{4}))?(-([a-z]{2}|[0-9]{3}))?)*$/.test('en-t-en')");
 
         // Should also match with actual extension content
-        assertBooleanWithJavet(
-                "/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-cd-ab')",
+        assertBooleanWithJavet("/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-cd-ab')",
                 "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{2}|[0-9]{3}))?)*$/.test('en-t-en-us')");
 
         // Zero iterations of * should still work
-        assertBooleanWithJavet(
-                "/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab')",
+        assertBooleanWithJavet("/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab')",
                 "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{2}|[0-9]{3}))?)*$/.test('en')");
 
         // Non-match should still return false
-        assertBooleanWithJavet(
-                "!/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-123')");
+        assertBooleanWithJavet("!/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-123')");
 
         // BCP 47 locale-like pattern: the original motivating case
         assertBooleanWithJavet("""
@@ -680,9 +677,7 @@ public class RegExpConstructorTest extends BaseJavetTest {
         // RegExp.name should be "RegExp"
         assertStringWithJavet("RegExp.name");
 
-        assertStringWithJavet(
-                "new RegExp().toString()",
-                "RegExp().toString()");
+        assertStringWithJavet("new RegExp().toString()", "RegExp().toString()");
     }
 
     @Test

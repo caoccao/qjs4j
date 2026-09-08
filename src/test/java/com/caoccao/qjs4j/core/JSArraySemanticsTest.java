@@ -22,10 +22,8 @@ import org.junit.jupiter.api.Test;
 public class JSArraySemanticsTest extends BaseJavetTest {
     @Test
     public void testArrayConstructorLengthBounds() {
-        assertStringWithJavet(
-                "(() => String(new Array(4294967295).length))()",
-                "(() => { try { new Array(4294967296); return 'no-error'; } catch (e) { return e.name; } })()"
-        );
+        assertStringWithJavet("(() => String(new Array(4294967295).length))()",
+                "(() => { try { new Array(4294967296); return 'no-error'; } catch (e) { return e.name; } })()");
     }
 
     @Test
@@ -33,30 +31,24 @@ public class JSArraySemanticsTest extends BaseJavetTest {
         assertStringWithJavet(
                 "(() => { const a = [1, 2, 3]; a.length = '2'; return JSON.stringify(a) + ':' + a.length; })()",
                 "(() => { const a = [1, 2, 3]; try { a.length = 1.5; return 'no-error'; } catch (e) { return e.name + ':' + a.length; } })()",
-                "(() => { const a = [1, 2, 3]; try { a.length = '1.5'; return 'no-error'; } catch (e) { return e.name + ':' + a.length; } })()"
-        );
+                "(() => { const a = [1, 2, 3]; try { a.length = '1.5'; return 'no-error'; } catch (e) { return e.name + ':' + a.length; } })()");
     }
 
     @Test
     public void testArrayNumericStringIndexAssignment() {
-        assertStringWithJavet(
-                "(() => { const a = []; a['1'] = 42; return a.length + ',' + a[1]; })()"
-        );
+        assertStringWithJavet("(() => { const a = []; a['1'] = 42; return a.length + ',' + a[1]; })()");
     }
 
     @Test
     public void testArraySparseUnshift() {
         assertStringWithJavet(
-                "(() => { const a = []; a[20000] = 1; a.unshift(0); return a[0] + ',' + a[20001] + ',' + a.length; })()"
-        );
+                "(() => { const a = []; a[20000] = 1; a.unshift(0); return a[0] + ',' + a[20001] + ',' + a.length; })()");
     }
 
     @Test
     public void testDenseArrayElementPropertySemantics() {
-        assertStringWithJavet(
-                "(() => JSON.stringify(Object.keys([1, 2])))()",
+        assertStringWithJavet("(() => JSON.stringify(Object.keys([1, 2])))()",
                 "(() => { const d = Object.getOwnPropertyDescriptor([1], '0'); return d ? [d.value, d.writable, d.enumerable, d.configurable].join(',') : 'undefined'; })()",
-                "(() => [1].hasOwnProperty('0') ? 'true' : 'false')()"
-        );
+                "(() => [1].hasOwnProperty('0') ? 'true' : 'false')()");
     }
 }

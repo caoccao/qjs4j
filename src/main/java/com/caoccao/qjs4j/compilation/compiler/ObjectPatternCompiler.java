@@ -57,7 +57,8 @@ final class ObjectPatternCompiler extends AstNodeCompiler<ObjectPattern> {
                 Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.getValue());
                 maybePreResolveBindingIdentifierReference(bindingIdentifier);
                 compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, identifier.getName());
-            } else if (!prop.isComputed() && propertyKey instanceof Literal literal && literal.getValue() instanceof String propertyName) {
+            } else if (!prop.isComputed() && propertyKey instanceof Literal literal
+                    && literal.getValue() instanceof String propertyName) {
                 Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.getValue());
                 maybePreResolveBindingIdentifierReference(bindingIdentifier);
                 compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propertyName);
@@ -100,12 +101,14 @@ final class ObjectPatternCompiler extends AstNodeCompiler<ObjectPattern> {
                 if (!prop.isComputed() && propertyKey instanceof Identifier identifier) {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, identifier.getName());
                     compilerContext.emitter.emitOpcode(Opcode.DROP); // drop duplicate excludeList
-                } else if (!prop.isComputed() && propertyKey instanceof Literal literal && literal.getValue() instanceof String propertyName) {
+                } else if (!prop.isComputed() && propertyKey instanceof Literal literal
+                        && literal.getValue() instanceof String propertyName) {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, propertyName);
                     compilerContext.emitter.emitOpcode(Opcode.DROP); // drop duplicate excludeList
                 } else if (!prop.isComputed() && propertyKey instanceof Literal literal
                         && (literal.getValue() instanceof Integer || literal.getValue() instanceof Long)) {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, String.valueOf(((Number) literal.getValue()).longValue()));
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD,
+                            String.valueOf(((Number) literal.getValue()).longValue()));
                     compilerContext.emitter.emitOpcode(Opcode.DROP); // drop duplicate excludeList
                 } else if (!prop.isComputed() && propertyKey instanceof Literal literal
                         && literal.getValue() instanceof BigInteger bigIntegerValue) {
@@ -191,16 +194,15 @@ final class ObjectPatternCompiler extends AstNodeCompiler<ObjectPattern> {
         String bindingName = bindingIdentifier.getName();
         compilerContext.assignmentExpressionCompiler.emitIdentifierReference(bindingName);
 
-        int propertyLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
-                "$preResolvedRefProp" + compilerContext.emitter.currentOffset());
+        int propertyLocalIndex = compilerContext.scopeManager.currentScope()
+                .declareLocal("$preResolvedRefProp" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, propertyLocalIndex);
 
-        int objectLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
-                "$preResolvedRefObj" + compilerContext.emitter.currentOffset());
+        int objectLocalIndex = compilerContext.scopeManager.currentScope()
+                .declareLocal("$preResolvedRefObj" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, objectLocalIndex);
 
-        compilerContext.preResolvedBindingReferences
-                .computeIfAbsent(bindingName, ignored -> new ArrayDeque<>())
+        compilerContext.preResolvedBindingReferences.computeIfAbsent(bindingName, ignored -> new ArrayDeque<>())
                 .addLast(new CompilerContext.PreResolvedReference(objectLocalIndex, propertyLocalIndex));
     }
 }

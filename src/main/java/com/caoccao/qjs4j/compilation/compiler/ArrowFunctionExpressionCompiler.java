@@ -40,7 +40,8 @@ final class ArrowFunctionExpressionCompiler extends AstNodeCompiler<ArrowFunctio
     void compile(ArrowFunctionExpression arrowExpr) {
         // Create a new compiler for the function body
         // Arrow functions inherit strict mode from parent (QuickJS behavior)
-        BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode, compilerContext.captureResolver, compilerContext.context);
+        BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode,
+                compilerContext.captureResolver, compilerContext.context);
         CompilerContext functionContext = functionCompiler.context();
 
         functionContext.sourceCode = compilerContext.sourceCode;
@@ -51,17 +52,17 @@ final class ArrowFunctionExpressionCompiler extends AstNodeCompiler<ArrowFunctio
         // Enter function scope and add parameters as locals
         functionContext.scopeManager.enterScope();
         functionContext.inGlobalScope = false;
-        functionContext.isInAsyncFunction = arrowExpr.isAsync();  // Track if this is an async function
-        functionContext.isInGeneratorFunction = false;  // Arrow functions cannot be generators
-        functionContext.isInArrowFunction = true;  // Arrow functions don't have their own arguments
+        functionContext.isInAsyncFunction = arrowExpr.isAsync(); // Track if this is an async function
+        functionContext.isInGeneratorFunction = false; // Arrow functions cannot be generators
+        functionContext.isInArrowFunction = true; // Arrow functions don't have their own arguments
         // Arrow functions inherit class field eval context (new.target resolves to undefined,
         // eval('arguments') should throw SyntaxError)
         functionContext.classFieldEvalContext = compilerContext.classFieldEvalContext
                 || compilerContext.inClassFieldInitializer;
         // Inherit class inner name so eval() inside nested arrows can resolve it.
         compilerContext.functionExpressionCompiler.inheritClassInnerNameCapture(functionContext);
-        Set<String> enclosingParameterScopeFunctionNames =
-                compilerContext.functionExpressionCompiler.inheritParameterScopeFunctionNameCapture(functionContext);
+        Set<String> enclosingParameterScopeFunctionNames = compilerContext.functionExpressionCompiler
+                .inheritParameterScopeFunctionNameCapture(functionContext);
         // Arrow functions inherit arguments from enclosing non-arrow function.
         // If the parent is a regular function (not arrow, not global program), it has arguments binding.
         // If the parent is also an arrow, inherit whatever it has.
@@ -73,8 +74,7 @@ final class ArrowFunctionExpressionCompiler extends AstNodeCompiler<ArrowFunctio
         }
 
         // Check for "use strict" directive if body is a block statement
-        if (arrowExpr.getBody() instanceof BlockStatement block
-                && block.hasUseStrictDirective()) {
+        if (arrowExpr.getBody() instanceof BlockStatement block && block.hasUseStrictDirective()) {
             functionContext.strictMode = true;
         }
 
@@ -90,20 +90,15 @@ final class ArrowFunctionExpressionCompiler extends AstNodeCompiler<ArrowFunctio
             hasArgumentsParameterBinding = arrowExpr.getRestParameter().getArgument().getBoundNames()
                     .contains(JSArguments.NAME);
         }
-        boolean hasDirectEvalVarArgumentsInDefaults = arrowExpr.getDefaults() != null
-                && arrowExpr.getDefaults().stream()
-                .filter(Objects::nonNull)
-                .anyMatch(Expression::containsDirectEvalVarArguments);
+        boolean hasDirectEvalVarArgumentsInDefaults = arrowExpr.getDefaults() != null && arrowExpr.getDefaults()
+                .stream().filter(Objects::nonNull).anyMatch(Expression::containsDirectEvalVarArguments);
         boolean needsSyntheticEvalArgumentsBinding = hasDirectEvalVarArgumentsInDefaults
-                && arrowExpr.getDefaults() != null
-                && !functionContext.hasEnclosingArgumentsBinding
+                && arrowExpr.getDefaults() != null && !functionContext.hasEnclosingArgumentsBinding
                 && !hasArgumentsParameterBinding;
 
         List<Integer> parameterSlotIndexes = new ArrayList<>();
-        List<int[]> destructuringParams = compilerContext.functionExpressionCompiler.declareParameters(
-                arrowExpr.getParams(),
-                functionContext,
-                parameterSlotIndexes);
+        List<int[]> destructuringParams = compilerContext.functionExpressionCompiler
+                .declareParameters(arrowExpr.getParams(), functionContext, parameterSlotIndexes);
 
         // For top-level arrows with parameter expressions, keep a local slot for dynamically
         // declared `arguments` from direct eval in parameter initializers.
@@ -117,11 +112,8 @@ final class ArrowFunctionExpressionCompiler extends AstNodeCompiler<ArrowFunctio
         // Emit default parameter initialization following QuickJS pattern:
         // GET_ARG idx, DUP, UNDEFINED, STRICT_EQ, IF_FALSE label, DROP, <default>, DUP, PUT_ARG idx, label:
         if (arrowExpr.getDefaults() != null) {
-            compilerContext.emitHelpers.emitDefaultParameterInit(
-                    functionCompiler,
-                    arrowExpr.getFunctionParams(),
-                    parameterSlotIndexes,
-                    arrowExpr);
+            compilerContext.emitHelpers.emitDefaultParameterInit(functionCompiler, arrowExpr.getFunctionParams(),
+                    parameterSlotIndexes, arrowExpr);
         }
 
         // Handle rest parameter if present
@@ -134,11 +126,13 @@ final class ArrowFunctionExpressionCompiler extends AstNodeCompiler<ArrowFunctio
             functionContext.emitter.emitOpcode(Opcode.REST);
             functionContext.emitter.emitU16(firstRestIndex);
 
-            compilerContext.functionExpressionCompiler.emitRestParameterBinding(arrowExpr.getRestParameter(), functionContext);
+            compilerContext.functionExpressionCompiler.emitRestParameterBinding(arrowExpr.getRestParameter(),
+                    functionContext);
         }
 
         // Emit destructuring for pattern parameters after defaults and rest
-        compilerContext.functionExpressionCompiler.emitParameterDestructuring(arrowExpr.getParams(), destructuringParams, functionContext);
+        compilerContext.functionExpressionCompiler.emitParameterDestructuring(arrowExpr.getParams(),
+                destructuringParams, functionContext);
 
         boolean enteredBodyScope = false;
         CompilerScope savedVarDeclarationScopeOverride = functionContext.varDeclarationScopeOverride;
@@ -169,8 +163,8 @@ final class ArrowFunctionExpressionCompiler extends AstNodeCompiler<ArrowFunctio
                     // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
                     // into function var bindings when allowed.
                     Set<String> declarationParameterNames = arrowExpr.getParameterNames();
-                    functionContext.compilerAnalysis.hoistFunctionBodyAnnexBDeclarations(
-                            block.getBody(), declarationParameterNames);
+                    functionContext.compilerAnalysis.hoistFunctionBodyAnnexBDeclarations(block.getBody(),
+                            declarationParameterNames);
 
                     // Compile block body statements.
                     for (Statement stmt : block.getBody()) {
@@ -182,9 +176,11 @@ final class ArrowFunctionExpressionCompiler extends AstNodeCompiler<ArrowFunctio
 
                     // If body doesn't end with return, add implicit return undefined
                     List<Statement> bodyStatements = block.getBody();
-                    if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
+                    if (bodyStatements.isEmpty()
+                            || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
                         functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                        int returnValueIndex = functionContext.scopeManager.currentScope().declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
+                        int returnValueIndex = functionContext.scopeManager.currentScope()
+                                .declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
                         functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
                         functionContext.emitHelpers.emitCurrentScopeUsingDisposal();
                         functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
@@ -199,7 +195,8 @@ final class ArrowFunctionExpressionCompiler extends AstNodeCompiler<ArrowFunctio
             } else if (arrowExpr.getBody() instanceof Expression expr) {
                 // Expression body - implicitly returns the expression value
                 functionContext.expressionCompiler.compile(expr);
-                int returnValueIndex = functionContext.scopeManager.currentScope().declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
+                int returnValueIndex = functionContext.scopeManager.currentScope()
+                        .declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
                 functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
                 functionContext.emitHelpers.emitCurrentScopeUsingDisposal();
                 functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
@@ -227,19 +224,13 @@ final class ArrowFunctionExpressionCompiler extends AstNodeCompiler<ArrowFunctio
         // Create JSBytecodeFunction
         // Arrow functions cannot be constructors
         int definedArgCount = arrowExpr.getFunctionParams().computeDefinedArgCount();
-        JSBytecodeFunction function = new JSBytecodeFunction(
-                compilerContext.context,
-                functionBytecode,
-                functionName,
-                definedArgCount,
-                JSValue.NO_ARGS,
-                null,            // prototype - arrow functions don't have prototype
-                false,           // isConstructor - arrow functions cannot be constructors
-                arrowExpr.isAsync(),
-                false,           // Arrow functions cannot be generators
-                true,            // isArrow - this is an arrow function
-                functionContext.strictMode,  // strict - inherit from enclosing scope
-                functionSource   // source code for toString()
+        JSBytecodeFunction function = new JSBytecodeFunction(compilerContext.context, functionBytecode, functionName,
+                definedArgCount, JSValue.NO_ARGS, null, // prototype - arrow functions don't have prototype
+                false, // isConstructor - arrow functions cannot be constructors
+                arrowExpr.isAsync(), false, // Arrow functions cannot be generators
+                true, // isArrow - this is an arrow function
+                functionContext.strictMode, // strict - inherit from enclosing scope
+                functionSource // source code for toString()
         );
         function.setHasParameterExpressions(hasNonSimpleParameters);
         function.setHasArgumentsParameterBinding(hasArgumentsParameterBinding);

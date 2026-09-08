@@ -51,7 +51,8 @@ final class SwitchStatementCompiler extends AstNodeCompiler<SwitchStatement> {
                         && variableDeclaration.getKind() != VariableKind.VAR) {
                     for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
                         Set<String> declarationNames = new HashSet<>();
-                        compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(), declarationNames);
+                        compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(),
+                                declarationNames);
                         for (String declarationName : declarationNames) {
                             Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(declarationName);
                             if (localIndex == null) {
@@ -134,7 +135,8 @@ final class SwitchStatementCompiler extends AstNodeCompiler<SwitchStatement> {
         // Jump to default or end
         int jumpToDefault = compilerContext.emitter.emitJump(Opcode.GOTO);
 
-        LoopContext loop = compilerContext.loopManager.createLoopContext(compilerContext.emitter.currentOffset(), compilerContext.scopeManager.getScopeDepth(), compilerContext.scopeManager.getScopeDepth());
+        LoopContext loop = compilerContext.loopManager.createLoopContext(compilerContext.emitter.currentOffset(),
+                compilerContext.scopeManager.getScopeDepth(), compilerContext.scopeManager.getScopeDepth());
         loop.isSwitchStatement = true;
         compilerContext.loopManager.pushLoop(loop);
 

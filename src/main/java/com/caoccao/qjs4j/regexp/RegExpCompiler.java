@@ -22,114 +22,49 @@ import com.caoccao.qjs4j.utils.DynamicBuffer;
 import java.util.*;
 
 /**
- * Compiles regex patterns to bytecode.
- * Based on QuickJS libregexp.c compiler.
+ * Compiles regex patterns to bytecode. Based on QuickJS libregexp.c compiler.
  * <p>
- * This is a simplified initial implementation that handles basic patterns.
- * Full ES2020 regex syntax support will be added incrementally.
+ * This is a simplified initial implementation that handles basic patterns. Full ES2020 regex syntax support will be
+ * added incrementally.
  */
 public final class RegExpCompiler {
 
     /**
-     * Maximum number of capture groups in one pattern, counting group 0 — QuickJS
-     * {@code CAPTURE_COUNT_MAX}, so 254 explicit groups.
+     * Maximum number of capture groups in one pattern, counting group 0 — QuickJS {@code CAPTURE_COUNT_MAX}, so 254
+     * explicit groups.
      * <p>
-     * Two reasons, beyond matching QuickJS: the compiled bytecode encodes capture indices as a
-     * single byte ({@code appendU8(captureCount - 1)}), so a 256th group silently wrapped and
-     * produced bytecode that reset the wrong capture range; and the matcher's backtrack entry grows
-     * by two ints per capture, so an unbounded capture count let a guest-supplied pattern set the
-     * size of every backtrack frame.
+     * Two reasons, beyond matching QuickJS: the compiled bytecode encodes capture indices as a single byte
+     * ({@code appendU8(captureCount - 1)}), so a 256th group silently wrapped and produced bytecode that reset the
+     * wrong capture range; and the matcher's backtrack entry grows by two ints per capture, so an unbounded capture
+     * count let a guest-supplied pattern set the size of every backtrack frame.
      */
     private static final int CAPTURE_COUNT_MAX = 255;
     /**
-     * JavaScript whitespace ranges for \s (differs from Unicode White_Space:
-     * includes U+FEFF which is not in the Unicode White_Space property).
-     * Pairs of [start, end] inclusive.
+     * JavaScript whitespace ranges for \s (differs from Unicode White_Space: includes U+FEFF which is not in the
+     * Unicode White_Space property). Pairs of [start, end] inclusive.
      */
-    private static final int[] JS_WHITESPACE_RANGES = {
-            0x0009, 0x000D,  // TAB, LF, VT, FF, CR
-            0x0020, 0x0020,  // SPACE
-            0x00A0, 0x00A0,  // NO-BREAK SPACE
-            0x1680, 0x1680,  // OGHAM SPACE MARK
-            0x2000, 0x200A,  // EN QUAD .. HAIR SPACE
-            0x2028, 0x2029,  // LINE SEPARATOR, PARAGRAPH SEPARATOR
-            0x202F, 0x202F,  // NARROW NO-BREAK SPACE
-            0x205F, 0x205F,  // MEDIUM MATHEMATICAL SPACE
-            0x3000, 0x3000,  // IDEOGRAPHIC SPACE
-            0xFEFF, 0xFEFF,  // ZERO WIDTH NO-BREAK SPACE (BOM)
+    private static final int[] JS_WHITESPACE_RANGES = {0x0009, 0x000D, // TAB, LF, VT, FF, CR
+            0x0020, 0x0020, // SPACE
+            0x00A0, 0x00A0, // NO-BREAK SPACE
+            0x1680, 0x1680, // OGHAM SPACE MARK
+            0x2000, 0x200A, // EN QUAD .. HAIR SPACE
+            0x2028, 0x2029, // LINE SEPARATOR, PARAGRAPH SEPARATOR
+            0x202F, 0x202F, // NARROW NO-BREAK SPACE
+            0x205F, 0x205F, // MEDIUM MATHEMATICAL SPACE
+            0x3000, 0x3000, // IDEOGRAPHIC SPACE
+            0xFEFF, 0xFEFF, // ZERO WIDTH NO-BREAK SPACE (BOM)
     };
     private static final long MAX_QUANTIFIER_BOUND = Integer.MAX_VALUE;
     private static final int MAX_UNICODE_CODE_POINT = 0x10FFFF;
     private static final int MAX_UNROLLED_QUANTIFIER_REPETITIONS = 4096;
-    private final UnicodePropertyResolver unicodePropertyResolver;
     private int captureCount;
     private List<String> groupNames;
     private Map<String, Integer> namedCaptureIndices;
     private int totalCaptureCount;
+    private final UnicodePropertyResolver unicodePropertyResolver;
 
     public RegExpCompiler(UnicodePropertyResolver unicodePropertyResolver) {
         this.unicodePropertyResolver = unicodePropertyResolver;
-    }
-
-    /**
-     * Emit everything a {@code RANGE}/{@code NOT_RANGE} opcode carries after its opcode byte: the
-     * byte length of the rest of the instruction, the number of ranges, and the ranges themselves
-     * as inclusive 32-bit code point pairs.
-     * <p>
-     * Both header fields are 32 bits. They were 16 bits and neither was checked, so a class of
-     * 8,192 disjoint ranges produced a 65,538-byte payload whose length field wrapped to 2: the
-     * matcher then resumed decoding opcodes in the middle of range data, and a valid pattern
-     * silently matched the wrong thing rather than being rejected. The arithmetic also lived at
-     * seven call sites, each with its own hand-written {@code 2 + n * 8}; it lives here now.
-     *
-     * @param context the compile context
-     * @param ranges  inclusive code point pairs, {@code [start0, end0, start1, end1, ...]}
-     */
-    private static void emitRangePayload(CompileContext context, int[] ranges) {
-        int numRanges = ranges.length / 2;
-        // Four bytes for the count field, eight per range.
-        long dataSize = 4L + (long) numRanges * 8L;
-        context.buffer.appendU32(dataSize);
-        context.buffer.appendU32(numRanges);
-        for (int range : ranges) {
-            context.buffer.appendU32(range);
-        }
-    }
-
-    /**
-     * The declared payload length of a {@code RANGE}-family instruction.
-     * <p>
-     * The compiler re-reads its own bytecode when it decides whether a quantifier body always
-     * advances and whether it needs per-iteration capture resets, so the header layout is known in
-     * two places besides the matcher. When the length field was widened from 16 to 32 bits these
-     * readers kept decoding two bytes, walked off the end of the instruction, and concluded that a
-     * body as ordinary as {@code \D} might not advance — which added an advance check and a
-     * register to every iteration and made a long subject exhaust the backtracking budget.
-     *
-     * @param code   the atom bytecode
-     * @param offset the offset of the opcode byte
-     * @return the number of payload bytes following the length field
-     */
-    private static int readRangePayloadLength(byte[] code, int offset) {
-        return (code[offset + 1] & 0xFF)
-                | ((code[offset + 2] & 0xFF) << 8)
-                | ((code[offset + 3] & 0xFF) << 16)
-                | ((code[offset + 4] & 0xFF) << 24);
-    }
-
-    /**
-     * The inclusive ranges {@code \w} matches.
-     *
-     * @param context the compile context
-     * @return code point pairs
-     */
-    private static int[] wordCharacterRanges(CompileContext context) {
-        if (context.isUnicodeMode() && context.isIgnoreCase()) {
-            // Unicode ignoreCase adds the two code points that canonicalize into [a-zA-Z]:
-            // U+017F LATIN SMALL LETTER LONG S and U+212A KELVIN SIGN.
-            return new int[]{'0', '9', 'A', 'Z', '_', '_', 'a', 'z', 0x017F, 0x017F, 0x212A, 0x212A};
-        }
-        return new int[]{'0', '9', 'A', 'Z', '_', '_', 'a', 'z'};
     }
 
     private long appendDecimalDigitWithClamp(long currentValue, int digit) {
@@ -170,10 +105,13 @@ public final class RegExpCompiler {
     /**
      * Compile a regex pattern to bytecode.
      *
-     * @param pattern The regex pattern string
-     * @param flags   The regex flags (g, i, m, s, u, y, d, v)
+     * @param pattern
+     *            The regex pattern string
+     * @param flags
+     *            The regex flags (g, i, m, s, u, y, d, v)
      * @return Compiled bytecode
-     * @throws RegExpSyntaxException if the pattern is invalid
+     * @throws RegExpSyntaxException
+     *             if the pattern is invalid
      */
     public RegExpBytecode compile(String pattern, String flags) {
         if (pattern == null) {
@@ -208,17 +146,13 @@ public final class RegExpCompiler {
                 }
             }
 
-            return new RegExpBytecode(
-                    buffer.toByteArray(),
-                    flagBits,
-                    captureCount,
+            return new RegExpBytecode(buffer.toByteArray(), flagBits, captureCount,
                     // Registers this pattern actually allocated. The matcher saves them on every
                     // backtrack point where state changed, so reporting the real count instead of
                     // the maximum is the difference between 12 and 76 bytes of saved state per
                     // point for a typical pattern.
                     Math.min(context.nextAdvanceCheckRegister, RegExpBytecode.ExecutionLimits.MAX_REGISTERS),
-                    compiledGroupNames
-            );
+                    compiledGroupNames);
         } catch (Exception e) {
             throw new RegExpSyntaxException("Failed to compile pattern: " + e.getMessage(), e);
         }
@@ -255,17 +189,16 @@ public final class RegExpCompiler {
         switch (ch) {
             case '^' -> {
                 context.lastAtomCanRepeat = false;
-                context.buffer.appendU8(context.isMultiline() ?
-                        RegExpOpcode.LINE_START_M.getCode() :
-                        RegExpOpcode.LINE_START.getCode());
+                context.buffer.appendU8(context.isMultiline()
+                        ? RegExpOpcode.LINE_START_M.getCode()
+                        : RegExpOpcode.LINE_START.getCode());
                 context.pos++;
             }
 
             case '$' -> {
                 context.lastAtomCanRepeat = false;
-                context.buffer.appendU8(context.isMultiline() ?
-                        RegExpOpcode.LINE_END_M.getCode() :
-                        RegExpOpcode.LINE_END.getCode());
+                context.buffer.appendU8(
+                        context.isMultiline() ? RegExpOpcode.LINE_END_M.getCode() : RegExpOpcode.LINE_END.getCode());
                 context.pos++;
             }
 
@@ -273,9 +206,7 @@ public final class RegExpCompiler {
                 if (isBackwardDirection) {
                     context.buffer.appendU8(RegExpOpcode.PREV.getCode());
                 }
-                context.buffer.appendU8(context.isDotAll() ?
-                        RegExpOpcode.ANY.getCode() :
-                        RegExpOpcode.DOT.getCode());
+                context.buffer.appendU8(context.isDotAll() ? RegExpOpcode.ANY.getCode() : RegExpOpcode.DOT.getCode());
                 if (isBackwardDirection) {
                     context.buffer.appendU8(RegExpOpcode.PREV.getCode());
                 }
@@ -385,11 +316,9 @@ public final class RegExpCompiler {
                     // It was a character class escape like \d, \w, \s, \p{...}
                     // The ranges were added by parseClassEscape
                     // In Unicode mode, character class escapes can't be used as range endpoints
-                    if (context.isUnicodeMode() &&
-                            context.pos < context.codePoints.length &&
-                            context.codePoints[context.pos] == '-' &&
-                            context.pos + 1 < context.codePoints.length &&
-                            context.codePoints[context.pos + 1] != ']') {
+                    if (context.isUnicodeMode() && context.pos < context.codePoints.length
+                            && context.codePoints[context.pos] == '-' && context.pos + 1 < context.codePoints.length
+                            && context.codePoints[context.pos + 1] != ']') {
                         throw new RegExpSyntaxException("Invalid range in character class");
                     }
                     continue;
@@ -402,10 +331,8 @@ public final class RegExpCompiler {
             int start = ch;
             int end = ch;
 
-            if (context.pos < context.codePoints.length &&
-                    context.codePoints[context.pos] == '-' &&
-                    context.pos + 1 < context.codePoints.length &&
-                    context.codePoints[context.pos + 1] != ']') {
+            if (context.pos < context.codePoints.length && context.codePoints[context.pos] == '-'
+                    && context.pos + 1 < context.codePoints.length && context.codePoints[context.pos + 1] != ']') {
 
                 context.pos++; // Skip '-'
 
@@ -450,13 +377,11 @@ public final class RegExpCompiler {
 
         // Emit RANGE/NOT_RANGE or RANGE_I/NOT_RANGE_I opcode based on inverted flag
         if (inverted) {
-            context.buffer.appendU8(context.isIgnoreCase() ?
-                    RegExpOpcode.NOT_RANGE_I.getCode() :
-                    RegExpOpcode.NOT_RANGE.getCode());
+            context.buffer.appendU8(
+                    context.isIgnoreCase() ? RegExpOpcode.NOT_RANGE_I.getCode() : RegExpOpcode.NOT_RANGE.getCode());
         } else {
-            context.buffer.appendU8(context.isIgnoreCase() ?
-                    RegExpOpcode.RANGE_I.getCode() :
-                    RegExpOpcode.RANGE.getCode());
+            context.buffer
+                    .appendU8(context.isIgnoreCase() ? RegExpOpcode.RANGE_I.getCode() : RegExpOpcode.RANGE.getCode());
         }
 
         // Range order is not observable, but the matcher relies on non-case-folded ranges being
@@ -587,15 +512,15 @@ public final class RegExpCompiler {
             }
             case 'b' -> {
                 // \b - match word boundary
-                context.buffer.appendU8(context.isIgnoreCase() && context.isUnicode() ?
-                        RegExpOpcode.WORD_BOUNDARY_I.getCode() :
-                        RegExpOpcode.WORD_BOUNDARY.getCode());
+                context.buffer.appendU8(context.isIgnoreCase() && context.isUnicode()
+                        ? RegExpOpcode.WORD_BOUNDARY_I.getCode()
+                        : RegExpOpcode.WORD_BOUNDARY.getCode());
             }
             case 'B' -> {
                 // \B - match non-word boundary
-                context.buffer.appendU8(context.isIgnoreCase() && context.isUnicode() ?
-                        RegExpOpcode.NOT_WORD_BOUNDARY_I.getCode() :
-                        RegExpOpcode.NOT_WORD_BOUNDARY.getCode());
+                context.buffer.appendU8(context.isIgnoreCase() && context.isUnicode()
+                        ? RegExpOpcode.NOT_WORD_BOUNDARY_I.getCode()
+                        : RegExpOpcode.NOT_WORD_BOUNDARY.getCode());
             }
             case 'k' -> {
                 // AnnexB: In non-unicode mode with no named capture groups,
@@ -621,8 +546,12 @@ public final class RegExpCompiler {
                 }
 
                 context.buffer.appendU8(context.isIgnoreCase()
-                        ? (isBackwardDirection ? RegExpOpcode.BACKWARD_BACK_REFERENCE_I.getCode() : RegExpOpcode.BACK_REFERENCE_I.getCode())
-                        : (isBackwardDirection ? RegExpOpcode.BACKWARD_BACK_REFERENCE.getCode() : RegExpOpcode.BACK_REFERENCE.getCode()));
+                        ? (isBackwardDirection
+                                ? RegExpOpcode.BACKWARD_BACK_REFERENCE_I.getCode()
+                                : RegExpOpcode.BACK_REFERENCE_I.getCode())
+                        : (isBackwardDirection
+                                ? RegExpOpcode.BACKWARD_BACK_REFERENCE.getCode()
+                                : RegExpOpcode.BACK_REFERENCE.getCode()));
                 context.buffer.appendU8(groupNum);
             }
             case 'p', 'P' -> {
@@ -668,8 +597,12 @@ public final class RegExpCompiler {
                 if (groupNum < totalCaptureCount) {
                     // Valid backreference (including forward references)
                     context.buffer.appendU8(context.isIgnoreCase()
-                            ? (isBackwardDirection ? RegExpOpcode.BACKWARD_BACK_REFERENCE_I.getCode() : RegExpOpcode.BACK_REFERENCE_I.getCode())
-                            : (isBackwardDirection ? RegExpOpcode.BACKWARD_BACK_REFERENCE.getCode() : RegExpOpcode.BACK_REFERENCE.getCode()));
+                            ? (isBackwardDirection
+                                    ? RegExpOpcode.BACKWARD_BACK_REFERENCE_I.getCode()
+                                    : RegExpOpcode.BACK_REFERENCE_I.getCode())
+                            : (isBackwardDirection
+                                    ? RegExpOpcode.BACKWARD_BACK_REFERENCE.getCode()
+                                    : RegExpOpcode.BACK_REFERENCE.getCode()));
                     context.buffer.appendU8(groupNum);
                 } else if (!context.isUnicodeMode()) {
                     // AnnexB: In non-unicode mode, invalid backreferences are
@@ -862,8 +795,8 @@ public final class RegExpCompiler {
                 context.lastAtomCanRepeat = !context.isUnicodeMode();
                 return;
             } else if (groupType == '<') {
-                if (context.pos < context.codePoints.length &&
-                        (context.codePoints[context.pos] == '=' || context.codePoints[context.pos] == '!')) {
+                if (context.pos < context.codePoints.length
+                        && (context.codePoints[context.pos] == '=' || context.codePoints[context.pos] == '!')) {
                     boolean isNegative = context.codePoints[context.pos] == '!';
                     context.pos++;
                     compileLookbehind(context, isNegative);
@@ -893,9 +826,8 @@ public final class RegExpCompiler {
                 groupNames.set(groupIndex, captureName);
             }
             // Save start
-            context.buffer.appendU8(isBackwardDirection
-                    ? RegExpOpcode.SAVE_END.getCode()
-                    : RegExpOpcode.SAVE_START.getCode());
+            context.buffer.appendU8(
+                    isBackwardDirection ? RegExpOpcode.SAVE_END.getCode() : RegExpOpcode.SAVE_START.getCode());
             context.buffer.appendU8(groupIndex);
         }
 
@@ -904,9 +836,8 @@ public final class RegExpCompiler {
 
         if (isCapturing) {
             // Save end
-            context.buffer.appendU8(isBackwardDirection
-                    ? RegExpOpcode.SAVE_START.getCode()
-                    : RegExpOpcode.SAVE_END.getCode());
+            context.buffer.appendU8(
+                    isBackwardDirection ? RegExpOpcode.SAVE_START.getCode() : RegExpOpcode.SAVE_END.getCode());
             context.buffer.appendU8(groupIndex);
         }
 
@@ -919,14 +850,12 @@ public final class RegExpCompiler {
 
     private void compileLiteralChar(CompileContext context, int ch) {
         if (ch <= 0xFFFF) {
-            context.buffer.appendU8(context.isIgnoreCase() ?
-                    RegExpOpcode.CHAR_I.getCode() :
-                    RegExpOpcode.CHAR.getCode());
+            context.buffer
+                    .appendU8(context.isIgnoreCase() ? RegExpOpcode.CHAR_I.getCode() : RegExpOpcode.CHAR.getCode());
             context.buffer.appendU16(ch);
         } else {
-            context.buffer.appendU8(context.isIgnoreCase() ?
-                    RegExpOpcode.CHAR32_I.getCode() :
-                    RegExpOpcode.CHAR32.getCode());
+            context.buffer
+                    .appendU8(context.isIgnoreCase() ? RegExpOpcode.CHAR32_I.getCode() : RegExpOpcode.CHAR32.getCode());
             context.buffer.appendU32(ch);
         }
     }
@@ -946,18 +875,16 @@ public final class RegExpCompiler {
         int lookaheadStart = context.buffer.size();
 
         // Emit LOOKAHEAD or NEGATIVE_LOOKAHEAD opcode
-        context.buffer.appendU8(isNegative ?
-                RegExpOpcode.NEGATIVE_LOOKAHEAD.getCode() :
-                RegExpOpcode.LOOKAHEAD.getCode());
+        context.buffer
+                .appendU8(isNegative ? RegExpOpcode.NEGATIVE_LOOKAHEAD.getCode() : RegExpOpcode.LOOKAHEAD.getCode());
         context.buffer.appendU32(0); // Placeholder for length
 
         // Compile lookahead contents (forward direction)
         compileDisjunction(context, false);
 
         // Emit LOOKAHEAD_MATCH or NEGATIVE_LOOKAHEAD_MATCH
-        context.buffer.appendU8(isNegative ?
-                RegExpOpcode.NEGATIVE_LOOKAHEAD_MATCH.getCode() :
-                RegExpOpcode.LOOKAHEAD_MATCH.getCode());
+        context.buffer.appendU8(
+                isNegative ? RegExpOpcode.NEGATIVE_LOOKAHEAD_MATCH.getCode() : RegExpOpcode.LOOKAHEAD_MATCH.getCode());
 
         // Patch the length
         int lookaheadLen = context.buffer.size() - (lookaheadStart + 5);
@@ -973,16 +900,15 @@ public final class RegExpCompiler {
         // (?<=...) positive lookbehind or (?<!...) negative lookbehind
         int lookbehindStart = context.buffer.size();
 
-        context.buffer.appendU8(isNegative ?
-                RegExpOpcode.NEGATIVE_LOOKBEHIND.getCode() :
-                RegExpOpcode.LOOKBEHIND.getCode());
+        context.buffer
+                .appendU8(isNegative ? RegExpOpcode.NEGATIVE_LOOKBEHIND.getCode() : RegExpOpcode.LOOKBEHIND.getCode());
         context.buffer.appendU32(0); // Placeholder for length
 
         compileDisjunction(context, true);
 
-        context.buffer.appendU8(isNegative ?
-                RegExpOpcode.NEGATIVE_LOOKBEHIND_MATCH.getCode() :
-                RegExpOpcode.LOOKBEHIND_MATCH.getCode());
+        context.buffer.appendU8(isNegative
+                ? RegExpOpcode.NEGATIVE_LOOKBEHIND_MATCH.getCode()
+                : RegExpOpcode.LOOKBEHIND_MATCH.getCode());
 
         int lookbehindLen = context.buffer.size() - (lookbehindStart + 5);
         context.buffer.setU32(lookbehindStart + 1, lookbehindLen);
@@ -1121,8 +1047,8 @@ public final class RegExpCompiler {
                 context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
                 context.buffer.appendU8(advReg);
             }
-            context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() :
-                    RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
+            context.buffer.appendU8(
+                    greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() : RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
             context.buffer.appendU32(atomSize + (addZeroAdvanceCheck ? 2 : 0));
             context.buffer.append(atomCode);
             if (addZeroAdvanceCheck) {
@@ -1135,8 +1061,8 @@ public final class RegExpCompiler {
             // CHECK_ADVANCE after atom to prevent infinite loops on zero-width patterns.
             int advCheckSize = addZeroAdvanceCheck ? 4 : 0; // SET_CHAR_POS(2) + CHECK_ADVANCE(2)
             int loopStart = context.buffer.size();
-            context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() :
-                    RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
+            context.buffer.appendU8(
+                    greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() : RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
             context.buffer.appendU32(atomSize + 5 + advCheckSize); // Skip atom + GOTO + advance checks
             if (addZeroAdvanceCheck) {
                 context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
@@ -1158,8 +1084,8 @@ public final class RegExpCompiler {
                 context.buffer.append(atomCode);
                 // Loop iterations with advance check
                 int loopStart = context.buffer.size();
-                context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() :
-                        RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
+                context.buffer.appendU8(
+                        greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() : RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
                 // Offset to skip: SET_CHAR_POS(2) + atom + CHECK_ADVANCE(2) + GOTO(5)
                 int skipSize = 2 + atomSize + 2 + 5;
                 context.buffer.appendU32(skipSize);
@@ -1174,8 +1100,8 @@ public final class RegExpCompiler {
             } else {
                 context.buffer.append(atomCode);
                 int loopStart = context.buffer.size() - atomSize;
-                context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_GOTO_FIRST.getCode() :
-                        RegExpOpcode.SPLIT_NEXT_FIRST.getCode());
+                context.buffer.appendU8(
+                        greedy ? RegExpOpcode.SPLIT_GOTO_FIRST.getCode() : RegExpOpcode.SPLIT_NEXT_FIRST.getCode());
                 int offset = loopStart - (context.buffer.size() + 4);
                 context.buffer.appendU32(offset);
             }
@@ -1189,8 +1115,8 @@ public final class RegExpCompiler {
                     // {n,} - unbounded: use loop with advance check if needed
                     int advCheckSize = addZeroAdvanceCheck ? 4 : 0;
                     int loopStart = context.buffer.size();
-                    context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() :
-                            RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
+                    context.buffer.appendU8(
+                            greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() : RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
                     context.buffer.appendU32(atomSize + 5 + advCheckSize);
                     if (addZeroAdvanceCheck) {
                         context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
@@ -1211,8 +1137,9 @@ public final class RegExpCompiler {
                             context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
                             context.buffer.appendU8(advReg);
                         }
-                        context.buffer.appendU8(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() :
-                                RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
+                        context.buffer.appendU8(greedy
+                                ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode()
+                                : RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
                         context.buffer.appendU32(atomSize + (addZeroAdvanceCheck ? 2 : 0));
                         context.buffer.append(atomCode);
                         if (addZeroAdvanceCheck) {
@@ -1236,8 +1163,8 @@ public final class RegExpCompiler {
         if (context.pos < context.codePoints.length) {
             int ch = context.codePoints[context.pos];
 
-            if (!context.lastAtomCanRepeat && (ch == '*' || ch == '+' || ch == '?' ||
-                    (ch == '{' && startsWithValidQuantifier(context)))) {
+            if (!context.lastAtomCanRepeat
+                    && (ch == '*' || ch == '+' || ch == '?' || (ch == '{' && startsWithValidQuantifier(context)))) {
                 throw new RegExpSyntaxException("Nothing to repeat at position " + context.pos);
             }
 
@@ -1248,8 +1175,7 @@ public final class RegExpCompiler {
     }
 
     /**
-     * Compile a \p{} or \P{} Unicode property escape.
-     * Handles both regular properties and sequence properties (v flag).
+     * Compile a \p{} or \P{} Unicode property escape. Handles both regular properties and sequence properties (v flag).
      * Based on QuickJS parse_unicode_property + re_emit_string_list.
      */
     private void compileUnicodePropertyEscape(CompileContext context, boolean isInverted, boolean isBackwardDirection) {
@@ -1268,7 +1194,8 @@ public final class RegExpCompiler {
                 }
                 context.pos++;
                 int nameStart = context.pos;
-                while (context.pos < context.codePoints.length && isUnicodePropertyChar(context.codePoints[context.pos])) {
+                while (context.pos < context.codePoints.length
+                        && isUnicodePropertyChar(context.codePoints[context.pos])) {
                     context.pos++;
                 }
                 String propertyName = new String(context.codePoints, nameStart, context.pos - nameStart);
@@ -1277,8 +1204,8 @@ public final class RegExpCompiler {
                 }
                 context.pos++;
 
-                UnicodePropertyResolver.SequencePropertyResult seqResult =
-                        UnicodePropertyResolver.resolveSequenceProperty(propertyName);
+                UnicodePropertyResolver.SequencePropertyResult seqResult = UnicodePropertyResolver
+                        .resolveSequenceProperty(propertyName);
                 if (seqResult == null) {
                     throw e;
                 }
@@ -1340,10 +1267,8 @@ public final class RegExpCompiler {
             emitRanges(context, extendedClassSet.ranges(), false);
             return;
         }
-        UnicodePropertyResolver.SequencePropertyResult sequencePropertyResult =
-                new UnicodePropertyResolver.SequencePropertyResult(
-                        extendedClassSet.ranges(),
-                        extendedClassSet.sequences());
+        UnicodePropertyResolver.SequencePropertyResult sequencePropertyResult = new UnicodePropertyResolver.SequencePropertyResult(
+                extendedClassSet.ranges(), extendedClassSet.sequences());
         emitStringList(context, sequencePropertyResult);
     }
 
@@ -1356,11 +1281,11 @@ public final class RegExpCompiler {
     }
 
     /**
-     * Emit bytecode for a string list (union of single code point ranges and multi-codepoint sequences).
-     * Ported from QuickJS re_emit_string_list in libregexp.c.
+     * Emit bytecode for a string list (union of single code point ranges and multi-codepoint sequences). Ported from
+     * QuickJS re_emit_string_list in libregexp.c.
      * <p>
-     * Emits alternatives: try longest sequences first, then shorter ones, then code point ranges.
-     * Uses SPLIT_NEXT_FIRST/GOTO to create a chain of alternatives.
+     * Emits alternatives: try longest sequences first, then shorter ones, then code point ranges. Uses
+     * SPLIT_NEXT_FIRST/GOTO to create a chain of alternatives.
      */
     private void emitStringList(CompileContext context, UnicodePropertyResolver.SequencePropertyResult stringList) {
         List<int[]> sequences = stringList.sequences();
@@ -1512,14 +1437,7 @@ public final class RegExpCompiler {
     }
 
     private boolean isInvalidUnicodeSetsClassSinglePunctuator(int ch) {
-        return ch == '('
-                || ch == ')'
-                || ch == '['
-                || ch == '{'
-                || ch == '}'
-                || ch == '/'
-                || ch == '-'
-                || ch == '|';
+        return ch == '(' || ch == ')' || ch == '[' || ch == '{' || ch == '}' || ch == '/' || ch == '-' || ch == '|';
     }
 
     private boolean isInvalidUnicodeSetsDoublePunctuator(CompileContext context, int ch) {
@@ -1531,8 +1449,8 @@ public final class RegExpCompiler {
     }
 
     private boolean isJsIdentifierPart(int codePoint) {
-        return codePoint == '$' || codePoint == '_' || codePoint == 0x200C || codePoint == 0x200D ||
-                Character.isUnicodeIdentifierPart(codePoint);
+        return codePoint == '$' || codePoint == '_' || codePoint == 0x200C || codePoint == 0x200D
+                || Character.isUnicodeIdentifierPart(codePoint);
     }
 
     private boolean isJsIdentifierStart(int codePoint) {
@@ -1540,23 +1458,16 @@ public final class RegExpCompiler {
     }
 
     /**
-     * Returns true if the character is a RegExp syntax character per ES2024 11.8.5.
-     * These are: ^ $ \ . * + ? ( ) [ ] { } | /
+     * Returns true if the character is a RegExp syntax character per ES2024 11.8.5. These are: ^ $ \ . * + ? ( ) [ ] {
+     * } | /
      */
     private boolean isSyntaxCharacter(int ch) {
-        return ch == '^' || ch == '$' || ch == '\\' || ch == '.' ||
-                ch == '*' || ch == '+' || ch == '?' ||
-                ch == '(' || ch == ')' ||
-                ch == '[' || ch == ']' ||
-                ch == '{' || ch == '}' ||
-                ch == '|' || ch == '/';
+        return ch == '^' || ch == '$' || ch == '\\' || ch == '.' || ch == '*' || ch == '+' || ch == '?' || ch == '('
+                || ch == ')' || ch == '[' || ch == ']' || ch == '{' || ch == '}' || ch == '|' || ch == '/';
     }
 
     private boolean isUnicodePropertyChar(int ch) {
-        return (ch >= '0' && ch <= '9') ||
-                (ch >= 'A' && ch <= 'Z') ||
-                (ch >= 'a' && ch <= 'z') ||
-                ch == '_';
+        return (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch == '_';
     }
 
     private boolean isUnicodeSetsOperatorAt(CompileContext context, String operator) {
@@ -1572,32 +1483,15 @@ public final class RegExpCompiler {
     }
 
     private boolean isUnicodeSetsReservedDoublePunctuator(int ch) {
-        return ch == '&'
-                || ch == '!'
-                || ch == '#'
-                || ch == '$'
-                || ch == '%'
-                || ch == '*'
-                || ch == '+'
-                || ch == ','
-                || ch == '.'
-                || ch == ':'
-                || ch == ';'
-                || ch == '<'
-                || ch == '='
-                || ch == '>'
-                || ch == '?'
-                || ch == '@'
-                || ch == '^'
-                || ch == '`'
-                || ch == '~';
+        return ch == '&' || ch == '!' || ch == '#' || ch == '$' || ch == '%' || ch == '*' || ch == '+' || ch == ','
+                || ch == '.' || ch == ':' || ch == ';' || ch == '<' || ch == '=' || ch == '>' || ch == '?' || ch == '@'
+                || ch == '^' || ch == '`' || ch == '~';
     }
 
     /**
-     * Following QuickJS re_need_check_adv_and_capture_init: determines if captures
-     * inside a quantifier body need explicit resetting at each iteration.
-     * Returns true if the atom contains complex opcodes (SPLIT, GOTO, back references)
-     * that might cause some captures to not be initialized on every iteration.
+     * Following QuickJS re_need_check_adv_and_capture_init: determines if captures inside a quantifier body need
+     * explicit resetting at each iteration. Returns true if the atom contains complex opcodes (SPLIT, GOTO, back
+     * references) that might cause some captures to not be initialized on every iteration.
      */
     private boolean needCaptureInit(byte[] atomCode) {
         int pos = 0;
@@ -1605,19 +1499,18 @@ public final class RegExpCompiler {
             int opcode = atomCode[pos] & 0xFF;
             RegExpOpcode op = RegExpOpcode.fromCode(opcode);
             switch (op) {
-                case CHAR, CHAR_I, CHAR32, CHAR32_I, DOT, ANY, SPACE, NOT_SPACE, PREV:
+                case CHAR, CHAR_I, CHAR32, CHAR32_I, DOT, ANY, SPACE, NOT_SPACE, PREV :
                     break;
-                case RANGE, RANGE_I, RANGE32, RANGE32_I, NOT_RANGE, NOT_RANGE_I: {
+                case RANGE, RANGE_I, RANGE32, RANGE32_I, NOT_RANGE, NOT_RANGE_I : {
                     pos += 5 + readRangePayloadLength(atomCode, pos);
                     continue;
                 }
-                case LINE_START, LINE_START_M, LINE_END, LINE_END_M,
-                     WORD_BOUNDARY, WORD_BOUNDARY_I, NOT_WORD_BOUNDARY, NOT_WORD_BOUNDARY_I,
-                     SAVE_START, SAVE_END, SAVE_RESET, SET_CHAR_POS, SET_I32:
+                case LINE_START, LINE_START_M, LINE_END, LINE_END_M, WORD_BOUNDARY, WORD_BOUNDARY_I, NOT_WORD_BOUNDARY,
+                        NOT_WORD_BOUNDARY_I, SAVE_START, SAVE_END, SAVE_RESET, SET_CHAR_POS, SET_I32 :
                     break;
-                case BACK_REFERENCE, BACK_REFERENCE_I, BACKWARD_BACK_REFERENCE, BACKWARD_BACK_REFERENCE_I:
+                case BACK_REFERENCE, BACK_REFERENCE_I, BACKWARD_BACK_REFERENCE, BACKWARD_BACK_REFERENCE_I :
                     return true;
-                default:
+                default :
                     // Complex opcode (SPLIT, GOTO, etc.) - captures may not be initialized
                     return true;
             }
@@ -1627,9 +1520,9 @@ public final class RegExpCompiler {
     }
 
     /**
-     * Determine whether a quantified atom needs a zero-advance check.
-     * Returns true if the atom might match without advancing the position (e.g., lookahead,
-     * anchors, word boundaries). Following QuickJS re_need_check_adv_and_capture_init.
+     * Determine whether a quantified atom needs a zero-advance check. Returns true if the atom might match without
+     * advancing the position (e.g., lookahead, anchors, word boundaries). Following QuickJS
+     * re_need_check_adv_and_capture_init.
      */
     private boolean needCheckAdvance(byte[] atomCode) {
         int pos = 0;
@@ -1638,36 +1531,35 @@ public final class RegExpCompiler {
             int opcode = atomCode[pos] & 0xFF;
             RegExpOpcode op = RegExpOpcode.fromCode(opcode);
             switch (op) {
-                case CHAR, CHAR_I, CHAR32, CHAR32_I, DOT, ANY, SPACE, NOT_SPACE:
+                case CHAR, CHAR_I, CHAR32, CHAR32_I, DOT, ANY, SPACE, NOT_SPACE :
                     // These always advance the position
                     needCheck = false;
                     break;
-                case PREV:
+                case PREV :
                     // PREV moves the position in backward-compiled lookbehind atoms.
                     needCheck = false;
                     break;
-                case RANGE, RANGE_I: {
+                case RANGE, RANGE_I : {
                     // Variable length - read the range data length
                     pos += 5 + readRangePayloadLength(atomCode, pos);
                     needCheck = false;
                     continue;
                 }
-                case RANGE32, RANGE32_I: {
+                case RANGE32, RANGE32_I : {
                     pos += 5 + readRangePayloadLength(atomCode, pos);
                     needCheck = false;
                     continue;
                 }
-                case NOT_RANGE, NOT_RANGE_I: {
+                case NOT_RANGE, NOT_RANGE_I : {
                     pos += 5 + readRangePayloadLength(atomCode, pos);
                     needCheck = false;
                     continue;
                 }
-                case LINE_START, LINE_START_M, LINE_END, LINE_END_M,
-                     WORD_BOUNDARY, WORD_BOUNDARY_I, NOT_WORD_BOUNDARY, NOT_WORD_BOUNDARY_I,
-                     SAVE_START, SAVE_END, SAVE_RESET, SET_CHAR_POS, SET_I32:
+                case LINE_START, LINE_START_M, LINE_END, LINE_END_M, WORD_BOUNDARY, WORD_BOUNDARY_I, NOT_WORD_BOUNDARY,
+                        NOT_WORD_BOUNDARY_I, SAVE_START, SAVE_END, SAVE_RESET, SET_CHAR_POS, SET_I32 :
                     // These don't advance - no effect on the check
                     break;
-                default:
+                default :
                     // Unknown or complex opcode - assume might not advance
                     return true;
             }
@@ -1685,8 +1577,7 @@ public final class RegExpCompiler {
                 continue;
             }
             if (sequence.length == 1) {
-                normalizedRanges = UnicodePropertyResolver.unionRanges(
-                        normalizedRanges,
+                normalizedRanges = UnicodePropertyResolver.unionRanges(normalizedRanges,
                         new int[]{sequence[0], sequence[0]});
                 continue;
             }
@@ -1709,8 +1600,7 @@ public final class RegExpCompiler {
         // in a character class.
         long[] sortedRanges = new long[ranges.length / 2];
         for (int i = 0; i < ranges.length; i += 2) {
-            sortedRanges[i / 2] = ((long) ranges[i] << Integer.SIZE)
-                    | (ranges[i + 1] & 0xFFFF_FFFFL);
+            sortedRanges[i / 2] = ((long) ranges[i] << Integer.SIZE) | (ranges[i + 1] & 0xFFFF_FFFFL);
         }
         Arrays.sort(sortedRanges);
 
@@ -1796,13 +1686,13 @@ public final class RegExpCompiler {
                     ranges.add(MAX_UNICODE_CODE_POINT);
                 } else {
                     ranges.add(0);
-                    ranges.add((int) '0' - 1);   // 0 .. '/'
+                    ranges.add((int) '0' - 1); // 0 .. '/'
                     ranges.add((int) '9' + 1);
-                    ranges.add((int) 'A' - 1);   // ':' .. '@'
+                    ranges.add((int) 'A' - 1); // ':' .. '@'
                     ranges.add((int) 'Z' + 1);
-                    ranges.add((int) '_' - 1);   // '[' .. '^'
+                    ranges.add((int) '_' - 1); // '[' .. '^'
                     ranges.add((int) '_' + 1);
-                    ranges.add((int) 'a' - 1);   // '`'
+                    ranges.add((int) 'a' - 1); // '`'
                     ranges.add((int) 'z' + 1);
                     ranges.add(MAX_UNICODE_CODE_POINT);
                 }
@@ -1840,8 +1730,7 @@ public final class RegExpCompiler {
                     }
                     // Annex B.1.4: In non-unicode mode, \c inside character class also
                     // accepts DecimalDigit (0-9) and _ as ClassControlLetter
-                    if (!context.isUnicodeMode() &&
-                            ((next >= '0' && next <= '9') || next == '_')) {
+                    if (!context.isUnicodeMode() && ((next >= '0' && next <= '9') || next == '_')) {
                         context.pos++;
                         yield next % 32;
                     }
@@ -1872,7 +1761,8 @@ public final class RegExpCompiler {
             }
             case 'u' -> {
                 // Unicode escape (backslash-u HHHH or braced) in character class
-                if (context.pos < context.codePoints.length && context.codePoints[context.pos] == '{' && context.isUnicodeMode()) {
+                if (context.pos < context.codePoints.length && context.codePoints[context.pos] == '{'
+                        && context.isUnicodeMode()) {
                     context.pos++;
                     int value = 0;
                     int digitCount = 0;
@@ -1975,9 +1865,9 @@ public final class RegExpCompiler {
                 pos = escapedCodePoint.nextPos();
                 if (Character.isHighSurrogate((char) codePoint) && pos < codePoints.length && codePoints[pos] == '\\') {
                     EscapedCodePoint trailingEscapedCodePoint = parseUnicodeEscapeInGroupName(codePoints, pos);
-                    if (trailingEscapedCodePoint != null && Character.isLowSurrogate((char) trailingEscapedCodePoint.codePoint())) {
-                        codePoint = Character.toCodePoint(
-                                (char) codePoint,
+                    if (trailingEscapedCodePoint != null
+                            && Character.isLowSurrogate((char) trailingEscapedCodePoint.codePoint())) {
+                        codePoint = Character.toCodePoint((char) codePoint,
                                 (char) trailingEscapedCodePoint.codePoint());
                         pos = trailingEscapedCodePoint.nextPos();
                     }
@@ -1985,8 +1875,7 @@ public final class RegExpCompiler {
             } else {
                 // In non-unicode mode, codePoints may be UTF-16 code units.
                 // Combine surrogate pairs for group names (which use Unicode ID_Start/ID_Continue).
-                if (Character.isHighSurrogate((char) codePoint)
-                        && pos + 1 < codePoints.length
+                if (Character.isHighSurrogate((char) codePoint) && pos + 1 < codePoints.length
                         && Character.isLowSurrogate((char) codePoints[pos + 1])) {
                     codePoint = Character.toCodePoint((char) codePoint, (char) codePoints[pos + 1]);
                     pos += 2;
@@ -2049,9 +1938,8 @@ public final class RegExpCompiler {
             context.pos++;
 
             // Check if there's a max value
-            if (context.pos < context.codePoints.length &&
-                    context.codePoints[context.pos] >= '0' &&
-                    context.codePoints[context.pos] <= '9') {
+            if (context.pos < context.codePoints.length && context.codePoints[context.pos] >= '0'
+                    && context.codePoints[context.pos] <= '9') {
                 long maxLong = 0;
                 while (context.pos < context.codePoints.length) {
                     int ch = context.codePoints[context.pos];
@@ -2254,10 +2142,8 @@ public final class RegExpCompiler {
         if (firstElement.singleCodePoint() == null) {
             return firstElement;
         }
-        if (context.pos < context.codePoints.length
-                && context.codePoints[context.pos] == '-'
-                && !isUnicodeSetsOperatorAt(context, "--")
-                && context.pos + 1 < context.codePoints.length
+        if (context.pos < context.codePoints.length && context.codePoints[context.pos] == '-'
+                && !isUnicodeSetsOperatorAt(context, "--") && context.pos + 1 < context.codePoints.length
                 && context.codePoints[context.pos + 1] != ']') {
             int rangeStart = firstElement.singleCodePoint();
             context.pos++;
@@ -2291,12 +2177,10 @@ public final class RegExpCompiler {
                 throw e;
             }
             context.pos = savedPos;
-            UnicodePropertyResolver.SequencePropertyResult sequencePropertyResult =
-                    parseUnicodeSetsSequenceProperty(context);
-            return normalizeExtendedClassSet(new ExtendedClassSet(
-                    sequencePropertyResult.codePointRanges(),
-                    new ArrayList<>(sequencePropertyResult.sequences()),
-                    null));
+            UnicodePropertyResolver.SequencePropertyResult sequencePropertyResult = parseUnicodeSetsSequenceProperty(
+                    context);
+            return normalizeExtendedClassSet(new ExtendedClassSet(sequencePropertyResult.codePointRanges(),
+                    new ArrayList<>(sequencePropertyResult.sequences()), null));
         }
     }
 
@@ -2314,8 +2198,8 @@ public final class RegExpCompiler {
             throw new RegExpSyntaxException("expecting '}'");
         }
         context.pos++;
-        UnicodePropertyResolver.SequencePropertyResult sequencePropertyResult =
-                UnicodePropertyResolver.resolveSequenceProperty(propertyName);
+        UnicodePropertyResolver.SequencePropertyResult sequencePropertyResult = UnicodePropertyResolver
+                .resolveSequenceProperty(propertyName);
         if (sequencePropertyResult == null) {
             throw new RegExpSyntaxException("unknown unicode property name");
         }
@@ -2342,7 +2226,8 @@ public final class RegExpCompiler {
                     if (context.pos >= context.codePoints.length) {
                         throw new RegExpSyntaxException("Invalid UnicodeSets string literal");
                     }
-                    UnicodeEscapeParseResult unicodeEscapeParseResult = tryParseUnicodeEscapeAt(context, context.pos - 1);
+                    UnicodeEscapeParseResult unicodeEscapeParseResult = tryParseUnicodeEscapeAt(context,
+                            context.pos - 1);
                     if (unicodeEscapeParseResult != null) {
                         sequenceCodePoints.add(unicodeEscapeParseResult.codePoint());
                         context.pos = unicodeEscapeParseResult.nextPos();
@@ -2486,17 +2371,13 @@ public final class RegExpCompiler {
                     continue;
                 }
                 int groupType = codePoints[i + 2];
-                if (groupType == ':'
-                        || groupType == '='
-                        || groupType == '!'
-                        || groupType == '>') {
+                if (groupType == ':' || groupType == '=' || groupType == '!' || groupType == '>') {
                     currentAltStack.push(new HashSet<>());
                     allAltStack.push(new HashSet<>());
                     continue;
                 }
                 if (groupType == '<') {
-                    if (i + 3 < codePoints.length &&
-                            (codePoints[i + 3] == '=' || codePoints[i + 3] == '!')) {
+                    if (i + 3 < codePoints.length && (codePoints[i + 3] == '=' || codePoints[i + 3] == '!')) {
                         currentAltStack.push(new HashSet<>());
                         allAltStack.push(new HashSet<>());
                         continue;
@@ -2557,7 +2438,8 @@ public final class RegExpCompiler {
         }
         if (pos < context.codePoints.length && context.codePoints[pos] == ',') {
             pos++;
-            while (pos < context.codePoints.length && context.codePoints[pos] >= '0' && context.codePoints[pos] <= '9') {
+            while (pos < context.codePoints.length && context.codePoints[pos] >= '0'
+                    && context.codePoints[pos] <= '9') {
                 pos++;
             }
         }
@@ -2602,12 +2484,11 @@ public final class RegExpCompiler {
     }
 
     /**
-     * Parse only a 4-digit \\uHHHH escape at the given position.
-     * Per QuickJS, surrogate pair combining only applies to 4-digit escapes.
+     * Parse only a 4-digit \\uHHHH escape at the given position. Per QuickJS, surrogate pair combining only applies to
+     * 4-digit escapes.
      */
     private UnicodeEscapeParseResult tryParseFourDigitUnicodeEscapeAt(CompileContext context, int startPos) {
-        if (startPos + 1 >= context.codePoints.length
-                || context.codePoints[startPos] != '\\'
+        if (startPos + 1 >= context.codePoints.length || context.codePoints[startPos] != '\\'
                 || context.codePoints[startPos + 1] != 'u') {
             return null;
         }
@@ -2687,8 +2568,7 @@ public final class RegExpCompiler {
     }
 
     private UnicodeEscapeParseResult tryParseUnicodeEscapeAt(CompileContext context, int startPos) {
-        if (startPos + 1 >= context.codePoints.length
-                || context.codePoints[startPos] != '\\'
+        if (startPos + 1 >= context.codePoints.length || context.codePoints[startPos] != '\\'
                 || context.codePoints[startPos + 1] != 'u') {
             return null;
         }
@@ -2709,9 +2589,7 @@ public final class RegExpCompiler {
                 }
                 currentPos++;
             }
-            if (digitCount == 0
-                    || currentPos >= context.codePoints.length
-                    || context.codePoints[currentPos] != '}') {
+            if (digitCount == 0 || currentPos >= context.codePoints.length || context.codePoints[currentPos] != '}') {
                 return null;
             }
             return new UnicodeEscapeParseResult(value, currentPos + 1);
@@ -2752,14 +2630,75 @@ public final class RegExpCompiler {
         return result;
     }
 
+    /**
+     * Emit everything a {@code RANGE}/{@code NOT_RANGE} opcode carries after its opcode byte: the byte length of the
+     * rest of the instruction, the number of ranges, and the ranges themselves as inclusive 32-bit code point pairs.
+     * <p>
+     * Both header fields are 32 bits. They were 16 bits and neither was checked, so a class of 8,192 disjoint ranges
+     * produced a 65,538-byte payload whose length field wrapped to 2: the matcher then resumed decoding opcodes in the
+     * middle of range data, and a valid pattern silently matched the wrong thing rather than being rejected. The
+     * arithmetic also lived at seven call sites, each with its own hand-written {@code 2 + n * 8}; it lives here now.
+     *
+     * @param context
+     *            the compile context
+     * @param ranges
+     *            inclusive code point pairs, {@code [start0, end0, start1, end1, ...]}
+     */
+    private static void emitRangePayload(CompileContext context, int[] ranges) {
+        int numRanges = ranges.length / 2;
+        // Four bytes for the count field, eight per range.
+        long dataSize = 4L + (long) numRanges * 8L;
+        context.buffer.appendU32(dataSize);
+        context.buffer.appendU32(numRanges);
+        for (int range : ranges) {
+            context.buffer.appendU32(range);
+        }
+    }
+
+    /**
+     * The declared payload length of a {@code RANGE}-family instruction.
+     * <p>
+     * The compiler re-reads its own bytecode when it decides whether a quantifier body always advances and whether it
+     * needs per-iteration capture resets, so the header layout is known in two places besides the matcher. When the
+     * length field was widened from 16 to 32 bits these readers kept decoding two bytes, walked off the end of the
+     * instruction, and concluded that a body as ordinary as {@code \D} might not advance — which added an advance check
+     * and a register to every iteration and made a long subject exhaust the backtracking budget.
+     *
+     * @param code
+     *            the atom bytecode
+     * @param offset
+     *            the offset of the opcode byte
+     * @return the number of payload bytes following the length field
+     */
+    private static int readRangePayloadLength(byte[] code, int offset) {
+        return (code[offset + 1] & 0xFF) | ((code[offset + 2] & 0xFF) << 8) | ((code[offset + 3] & 0xFF) << 16)
+                | ((code[offset + 4] & 0xFF) << 24);
+    }
+
+    /**
+     * The inclusive ranges {@code \w} matches.
+     *
+     * @param context
+     *            the compile context
+     * @return code point pairs
+     */
+    private static int[] wordCharacterRanges(CompileContext context) {
+        if (context.isUnicodeMode() && context.isIgnoreCase()) {
+            // Unicode ignoreCase adds the two code points that canonicalize into [a-zA-Z]:
+            // U+017F LATIN SMALL LETTER LONG S and U+212A KELVIN SIGN.
+            return new int[]{'0', '9', 'A', 'Z', '_', '_', 'a', 'z', 0x017F, 0x017F, 0x212A, 0x212A};
+        }
+        return new int[]{'0', '9', 'A', 'Z', '_', '_', 'a', 'z'};
+    }
+
     private static class CompileContext {
         final DynamicBuffer buffer;
         final int[] codePoints;
-        final int flags;
-        final String pattern;
         int currentFlags;
+        final int flags;
         boolean lastAtomCanRepeat;
         int nextAdvanceCheckRegister;
+        final String pattern;
         int pos;
 
         CompileContext(String pattern, int flags, DynamicBuffer buffer) {

@@ -22,81 +22,55 @@ import java.io.PrintStream;
 import java.util.*;
 
 /**
- * Implementation of the JavaScript console API.
- * Supports configurable output streams for stdout and stderr.
+ * Implementation of the JavaScript console API. Supports configurable output streams for stdout and stderr.
  */
 public final class JSConsole {
-    private static final Map<Class<?>, String> CLASS_NAMES = Map.ofEntries(
-            Map.entry(JSObject.class, JSObject.NAME),
-            Map.entry(JSArray.class, JSArray.NAME),
-            Map.entry(JSArguments.class, JSArguments.NAME),
+    private static final Map<Class<?>, String> CLASS_NAMES = Map.ofEntries(Map.entry(JSObject.class, JSObject.NAME),
+            Map.entry(JSArray.class, JSArray.NAME), Map.entry(JSArguments.class, JSArguments.NAME),
             Map.entry(JSArrayBuffer.class, JSArrayBuffer.NAME),
             Map.entry(JSSharedArrayBuffer.class, JSSharedArrayBuffer.NAME),
-            Map.entry(JSDataView.class, JSDataView.NAME),
-            Map.entry(JSBooleanObject.class, JSBooleanObject.NAME),
-            Map.entry(JSBigIntObject.class, JSBigIntObject.NAME),
-            Map.entry(JSNumberObject.class, JSNumberObject.NAME),
-            Map.entry(JSStringObject.class, JSStringObject.NAME),
-            Map.entry(JSSymbolObject.class, JSSymbolObject.NAME),
-            Map.entry(JSDate.class, JSDate.NAME),
-            Map.entry(JSError.class, JSError.NAME),
-            Map.entry(JSAggregateError.class, JSAggregateError.NAME),
-            Map.entry(JSEvalError.class, JSEvalError.NAME),
-            Map.entry(JSRangeError.class, JSRangeError.NAME),
-            Map.entry(JSReferenceError.class, JSReferenceError.NAME),
-            Map.entry(JSSyntaxError.class, JSSyntaxError.NAME),
-            Map.entry(JSTypeError.class, JSTypeError.NAME),
-            Map.entry(JSURIError.class, JSURIError.NAME),
-            Map.entry(JSSuppressedError.class, JSSuppressedError.NAME),
+            Map.entry(JSDataView.class, JSDataView.NAME), Map.entry(JSBooleanObject.class, JSBooleanObject.NAME),
+            Map.entry(JSBigIntObject.class, JSBigIntObject.NAME), Map.entry(JSNumberObject.class, JSNumberObject.NAME),
+            Map.entry(JSStringObject.class, JSStringObject.NAME), Map.entry(JSSymbolObject.class, JSSymbolObject.NAME),
+            Map.entry(JSDate.class, JSDate.NAME), Map.entry(JSError.class, JSError.NAME),
+            Map.entry(JSAggregateError.class, JSAggregateError.NAME), Map.entry(JSEvalError.class, JSEvalError.NAME),
+            Map.entry(JSRangeError.class, JSRangeError.NAME), Map.entry(JSReferenceError.class, JSReferenceError.NAME),
+            Map.entry(JSSyntaxError.class, JSSyntaxError.NAME), Map.entry(JSTypeError.class, JSTypeError.NAME),
+            Map.entry(JSURIError.class, JSURIError.NAME), Map.entry(JSSuppressedError.class, JSSuppressedError.NAME),
             Map.entry(JSFinalizationRegistry.class, JSFinalizationRegistry.NAME),
-            Map.entry(JSFunction.class, JSFunction.NAME),
-            Map.entry(JSBytecodeFunction.class, JSBytecodeFunction.NAME),
+            Map.entry(JSFunction.class, JSFunction.NAME), Map.entry(JSBytecodeFunction.class, JSBytecodeFunction.NAME),
             Map.entry(JSNativeFunction.class, JSNativeFunction.NAME),
-            Map.entry(JSBoundFunction.class, JSBoundFunction.NAME),
-            Map.entry(JSClass.class, JSClass.NAME),
-            Map.entry(JSGenerator.class, JSGenerator.NAME),
-            Map.entry(JSAsyncGenerator.class, JSAsyncGenerator.NAME),
-            Map.entry(JSAsyncIterator.class, JSAsyncIterator.NAME),
-            Map.entry(JSIterator.class, JSIterator.NAME),
-            Map.entry(JSMap.class, JSMap.NAME),
-            Map.entry(JSSet.class, JSSet.NAME),
-            Map.entry(JSWeakMap.class, JSWeakMap.NAME),
-            Map.entry(JSWeakSet.class, JSWeakSet.NAME),
-            Map.entry(JSWeakRef.class, JSWeakRef.NAME),
-            Map.entry(JSPromise.class, JSPromise.NAME),
-            Map.entry(JSProxy.class, JSProxy.NAME),
-            Map.entry(JSRegExp.class, JSRegExp.NAME),
+            Map.entry(JSBoundFunction.class, JSBoundFunction.NAME), Map.entry(JSClass.class, JSClass.NAME),
+            Map.entry(JSGenerator.class, JSGenerator.NAME), Map.entry(JSAsyncGenerator.class, JSAsyncGenerator.NAME),
+            Map.entry(JSAsyncIterator.class, JSAsyncIterator.NAME), Map.entry(JSIterator.class, JSIterator.NAME),
+            Map.entry(JSMap.class, JSMap.NAME), Map.entry(JSSet.class, JSSet.NAME),
+            Map.entry(JSWeakMap.class, JSWeakMap.NAME), Map.entry(JSWeakSet.class, JSWeakSet.NAME),
+            Map.entry(JSWeakRef.class, JSWeakRef.NAME), Map.entry(JSPromise.class, JSPromise.NAME),
+            Map.entry(JSProxy.class, JSProxy.NAME), Map.entry(JSRegExp.class, JSRegExp.NAME),
             Map.entry(JSDisposableStack.class, JSDisposableStack.NAME),
             Map.entry(JSAsyncDisposableStack.class, JSAsyncDisposableStack.NAME),
-            Map.entry(JSTypedArray.class, JSTypedArray.NAME),
-            Map.entry(JSInt8Array.class, JSInt8Array.NAME),
-            Map.entry(JSInt16Array.class, JSInt16Array.NAME),
-            Map.entry(JSInt32Array.class, JSInt32Array.NAME),
+            Map.entry(JSTypedArray.class, JSTypedArray.NAME), Map.entry(JSInt8Array.class, JSInt8Array.NAME),
+            Map.entry(JSInt16Array.class, JSInt16Array.NAME), Map.entry(JSInt32Array.class, JSInt32Array.NAME),
             Map.entry(JSUint8Array.class, JSUint8Array.NAME),
             Map.entry(JSUint8ClampedArray.class, JSUint8ClampedArray.NAME),
-            Map.entry(JSUint16Array.class, JSUint16Array.NAME),
-            Map.entry(JSUint32Array.class, JSUint32Array.NAME),
+            Map.entry(JSUint16Array.class, JSUint16Array.NAME), Map.entry(JSUint32Array.class, JSUint32Array.NAME),
             Map.entry(JSBigInt64Array.class, JSBigInt64Array.NAME),
             Map.entry(JSBigUint64Array.class, JSBigUint64Array.NAME),
-            Map.entry(JSFloat16Array.class, JSFloat16Array.NAME),
-            Map.entry(JSFloat32Array.class, JSFloat32Array.NAME),
-            Map.entry(JSFloat64Array.class, JSFloat64Array.NAME),
-            Map.entry(JSIntlCollator.class, JSIntlCollator.NAME),
+            Map.entry(JSFloat16Array.class, JSFloat16Array.NAME), Map.entry(JSFloat32Array.class, JSFloat32Array.NAME),
+            Map.entry(JSFloat64Array.class, JSFloat64Array.NAME), Map.entry(JSIntlCollator.class, JSIntlCollator.NAME),
             Map.entry(JSIntlDateTimeFormat.class, JSIntlDateTimeFormat.NAME),
-            Map.entry(JSIntlListFormat.class, JSIntlListFormat.NAME),
-            Map.entry(JSIntlLocale.class, JSIntlLocale.NAME),
+            Map.entry(JSIntlListFormat.class, JSIntlListFormat.NAME), Map.entry(JSIntlLocale.class, JSIntlLocale.NAME),
             Map.entry(JSIntlNumberFormat.class, JSIntlNumberFormat.NAME),
             Map.entry(JSIntlPluralRules.class, JSIntlPluralRules.NAME),
-            Map.entry(JSIntlRelativeTimeFormat.class, JSIntlRelativeTimeFormat.NAME)
-    );
+            Map.entry(JSIntlRelativeTimeFormat.class, JSIntlRelativeTimeFormat.NAME));
     private static final int MAX_PRINT_DEPTH = 2;
     private static final int MAX_PRINT_ITEM_COUNT = 100;
     private static final int MAX_PRINT_STRING_LENGTH = 1000;
     private final Map<String, Integer> counters = new HashMap<>();
-    private final Map<String, Long> timers = new HashMap<>();
     private PrintStream err;
     private int groupDepth = 0;
     private PrintStream out;
+    private final Map<String, Long> timers = new HashMap<>();
 
     public JSConsole() {
         this.err = System.err;
@@ -104,8 +78,7 @@ public final class JSConsole {
     }
 
     /**
-     * console.assert(condition, ...args)
-     * If condition is falsy, print "Assertion failed:" followed by remaining args.
+     * console.assert(condition, ...args) If condition is falsy, print "Assertion failed:" followed by remaining args.
      */
     public JSValue assert_(JSContext context, JSValue thisArg, JSValue[] args) {
         boolean condition = args.length > 0 && JSTypeConversions.toBoolean(args[0]).value();
@@ -122,16 +95,14 @@ public final class JSConsole {
     }
 
     /**
-     * console.clear()
-     * No-op in non-interactive environments.
+     * console.clear() No-op in non-interactive environments.
      */
     public JSValue clear(JSContext context, JSValue thisArg, JSValue[] args) {
         return JSUndefined.INSTANCE;
     }
 
     /**
-     * console.count(label)
-     * Increment and print the named counter.
+     * console.count(label) Increment and print the named counter.
      */
     public JSValue count(JSContext context, JSValue thisArg, JSValue[] args) {
         String label = args.length > 0 && !(args[0] instanceof JSUndefined)
@@ -144,8 +115,7 @@ public final class JSConsole {
     }
 
     /**
-     * console.countReset(label)
-     * Reset the named counter.
+     * console.countReset(label) Reset the named counter.
      */
     public JSValue countReset(JSContext context, JSValue thisArg, JSValue[] args) {
         String label = args.length > 0 && !(args[0] instanceof JSUndefined)
@@ -156,32 +126,28 @@ public final class JSConsole {
     }
 
     /**
-     * console.debug(...args)
-     * Same as console.log.
+     * console.debug(...args) Same as console.log.
      */
     public JSValue debug(JSContext context, JSValue thisArg, JSValue[] args) {
         return log(context, thisArg, args);
     }
 
     /**
-     * console.dir(obj)
-     * Print object representation.
+     * console.dir(obj) Print object representation.
      */
     public JSValue dir(JSContext context, JSValue thisArg, JSValue[] args) {
         return log(context, thisArg, args);
     }
 
     /**
-     * console.dirxml(...args)
-     * Same as console.dir.
+     * console.dirxml(...args) Same as console.dir.
      */
     public JSValue dirxml(JSContext context, JSValue thisArg, JSValue[] args) {
         return dir(context, thisArg, args);
     }
 
     /**
-     * console.error(...args)
-     * Print to stderr.
+     * console.error(...args) Print to stderr.
      */
     public JSValue error(JSContext context, JSValue thisArg, JSValue[] args) {
         err.print(getGroupIndent());
@@ -199,10 +165,7 @@ public final class JSConsole {
         return formatValue(context, value, true, new IdentityHashMap<>(), 0);
     }
 
-    private String formatArray(
-            JSContext context,
-            JSArray array,
-            IdentityHashMap<JSObject, Integer> printStack,
+    private String formatArray(JSContext context, JSArray array, IdentityHashMap<JSObject, Integer> printStack,
             int depth) {
         List<String> items = new ArrayList<>();
         long length = array.getLength();
@@ -261,11 +224,8 @@ public final class JSConsole {
         return "<" + count + " empty item" + (count > 1 ? "s" : "") + ">";
     }
 
-    private List<String> formatEnumerableProperties(
-            JSContext context,
-            JSObject object,
-            IdentityHashMap<JSObject, Integer> printStack,
-            int depth) {
+    private List<String> formatEnumerableProperties(JSContext context, JSObject object,
+            IdentityHashMap<JSObject, Integer> printStack, int depth) {
         List<String> entries = new ArrayList<>();
         int enumerableCount = 0;
         for (PropertyKey key : object.getOwnPropertyKeys()) {
@@ -314,11 +274,7 @@ public final class JSConsole {
         return "[Function " + functionName + "]";
     }
 
-    private String formatMap(
-            JSContext context,
-            JSMap map,
-            IdentityHashMap<JSObject, Integer> printStack,
-            int depth) {
+    private String formatMap(JSContext context, JSMap map, IdentityHashMap<JSObject, Integer> printStack, int depth) {
         int size = map.size();
         if (depth >= MAX_PRINT_DEPTH) {
             return "[Map]";
@@ -335,18 +291,14 @@ public final class JSConsole {
             items.add(key + " => " + value);
             count++;
         }
-        return "Map(" + size + ") " +
-                (items.isEmpty() ? "{  }" : "{ " + String.join(", ", items) + " }");
+        return "Map(" + size + ") " + (items.isEmpty() ? "{  }" : "{ " + String.join(", ", items) + " }");
     }
 
     private String formatMoreItems(long count) {
         return "... " + count + " more item" + (count > 1 ? "s" : "");
     }
 
-    private String formatObject(
-            JSContext context,
-            JSObject object,
-            IdentityHashMap<JSObject, Integer> printStack,
+    private String formatObject(JSContext context, JSObject object, IdentityHashMap<JSObject, Integer> printStack,
             int depth) {
         Integer stackIndex = printStack.get(object);
         if (stackIndex != null) {
@@ -408,21 +360,14 @@ public final class JSConsole {
             List<String> entries = formatEnumerableProperties(context, object, printStack, depth + 1);
 
             String prefix = "Object".equals(className) ? "" : className + " ";
-            return entries.isEmpty()
-                    ? prefix + "{  }"
-                    : prefix + "{ " + String.join(", ", entries) + " }";
+            return entries.isEmpty() ? prefix + "{  }" : prefix + "{ " + String.join(", ", entries) + " }";
         } finally {
             printStack.remove(object);
         }
     }
 
-    private String formatPropertyEntry(
-            JSContext context,
-            JSObject object,
-            PropertyKey key,
-            PropertyDescriptor descriptor,
-            IdentityHashMap<JSObject, Integer> printStack,
-            int depth) {
+    private String formatPropertyEntry(JSContext context, JSObject object, PropertyKey key,
+            PropertyDescriptor descriptor, IdentityHashMap<JSObject, Integer> printStack, int depth) {
         String keyString = formatPropertyKey(key);
         if (descriptor != null && descriptor.isAccessorDescriptor()) {
             if (descriptor.getGetter() != null && descriptor.getSetter() != null) {
@@ -433,9 +378,7 @@ public final class JSConsole {
             }
             return keyString + ": [Getter]";
         }
-        JSValue value = descriptor != null && descriptor.hasValue()
-                ? descriptor.getValue()
-                : object.get(key);
+        JSValue value = descriptor != null && descriptor.hasValue() ? descriptor.getValue() : object.get(key);
         return keyString + ": " + formatValue(context, value, false, printStack, depth);
     }
 
@@ -444,9 +387,7 @@ public final class JSConsole {
             return Integer.toString(key.asIndex());
         }
         String propertyString = key.toPropertyString();
-        return isAsciiIdentifier(propertyString)
-                ? propertyString
-                : quoteString(propertyString);
+        return isAsciiIdentifier(propertyString) ? propertyString : quoteString(propertyString);
     }
 
     private String formatRegExp(JSRegExp regexp) {
@@ -488,11 +429,7 @@ public final class JSConsole {
         return builder.toString();
     }
 
-    private String formatSet(
-            JSContext context,
-            JSSet set,
-            IdentityHashMap<JSObject, Integer> printStack,
-            int depth) {
+    private String formatSet(JSContext context, JSSet set, IdentityHashMap<JSObject, Integer> printStack, int depth) {
         int size = set.size();
         if (depth >= MAX_PRINT_DEPTH) {
             return "[Set]";
@@ -507,8 +444,7 @@ public final class JSConsole {
             items.add(formatValue(context, wrapper.value(), false, printStack, depth + 1));
             count++;
         }
-        return "Set(" + size + ") " +
-                (items.isEmpty() ? "{  }" : "{ " + String.join(", ", items) + " }");
+        return "Set(" + size + ") " + (items.isEmpty() ? "{  }" : "{ " + String.join(", ", items) + " }");
     }
 
     private String formatTypedArray(JSTypedArray typedArray) {
@@ -527,8 +463,7 @@ public final class JSConsole {
         if (length > max) {
             items.add(formatMoreItems(length - max));
         }
-        return className + "(" + length + ") " +
-                (items.isEmpty() ? "[ ]" : "[ " + String.join(", ", items) + " ]");
+        return className + "(" + length + ") " + (items.isEmpty() ? "[ ]" : "[ " + String.join(", ", items) + " ]");
     }
 
     /**
@@ -538,12 +473,8 @@ public final class JSConsole {
         return formatValue(context, value, false, new IdentityHashMap<>(), 0);
     }
 
-    private String formatValue(
-            JSContext context,
-            JSValue value,
-            boolean printTopLevelStringRaw,
-            IdentityHashMap<JSObject, Integer> printStack,
-            int depth) {
+    private String formatValue(JSContext context, JSValue value, boolean printTopLevelStringRaw,
+            IdentityHashMap<JSObject, Integer> printStack, int depth) {
         if (value == null || value instanceof JSNull) {
             return "null";
         }
@@ -551,12 +482,9 @@ public final class JSConsole {
             return "undefined";
         }
         if (value instanceof JSString jsString) {
-            return printTopLevelStringRaw
-                    ? jsString.value()
-                    : quoteString(jsString.value());
+            return printTopLevelStringRaw ? jsString.value() : quoteString(jsString.value());
         }
-        if (value instanceof JSNumber
-                || value instanceof JSBoolean) {
+        if (value instanceof JSNumber || value instanceof JSBoolean) {
             return value.toString();
         }
         if (value instanceof JSBigInt bigInt) {
@@ -588,8 +516,7 @@ public final class JSConsole {
     }
 
     /**
-     * console.group(label)
-     * Print label and increase indent level.
+     * console.group(label) Print label and increase indent level.
      */
     public JSValue group(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length > 0) {
@@ -601,16 +528,14 @@ public final class JSConsole {
     }
 
     /**
-     * console.groupCollapsed(label)
-     * Same as console.group.
+     * console.groupCollapsed(label) Same as console.group.
      */
     public JSValue groupCollapsed(JSContext context, JSValue thisArg, JSValue[] args) {
         return group(context, thisArg, args);
     }
 
     /**
-     * console.groupEnd()
-     * Decrease indent level.
+     * console.groupEnd() Decrease indent level.
      */
     public JSValue groupEnd(JSContext context, JSValue thisArg, JSValue[] args) {
         if (groupDepth > 0) {
@@ -620,8 +545,7 @@ public final class JSConsole {
     }
 
     /**
-     * console.info(...args)
-     * Same as console.log.
+     * console.info(...args) Same as console.log.
      */
     public JSValue info(JSContext context, JSValue thisArg, JSValue[] args) {
         return log(context, thisArg, args);
@@ -632,19 +556,12 @@ public final class JSConsole {
             return false;
         }
         char first = value.charAt(0);
-        if (!((first >= 'a' && first <= 'z')
-                || (first >= 'A' && first <= 'Z')
-                || first == '_'
-                || first == '$')) {
+        if (!((first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z') || first == '_' || first == '$')) {
             return false;
         }
         for (int i = 1; i < value.length(); i++) {
             char c = value.charAt(i);
-            if (!((c >= 'a' && c <= 'z')
-                    || (c >= 'A' && c <= 'Z')
-                    || (c >= '0' && c <= '9')
-                    || c == '_'
-                    || c == '$')) {
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '$')) {
                 return false;
             }
         }
@@ -652,8 +569,7 @@ public final class JSConsole {
     }
 
     /**
-     * console.log(...args)
-     * Print values to stdout.
+     * console.log(...args) Print values to stdout.
      */
     public JSValue log(JSContext context, JSValue thisArg, JSValue[] args) {
         out.print(getGroupIndent());
@@ -707,16 +623,14 @@ public final class JSConsole {
     }
 
     /**
-     * console.table(data)
-     * Simplified implementation: same as log.
+     * console.table(data) Simplified implementation: same as log.
      */
     public JSValue table(JSContext context, JSValue thisArg, JSValue[] args) {
         return log(context, thisArg, args);
     }
 
     /**
-     * console.time(label)
-     * Start a named timer.
+     * console.time(label) Start a named timer.
      */
     public JSValue time(JSContext context, JSValue thisArg, JSValue[] args) {
         String label = args.length > 0 && !(args[0] instanceof JSUndefined)
@@ -727,8 +641,7 @@ public final class JSConsole {
     }
 
     /**
-     * console.timeEnd(label)
-     * Print elapsed time and remove the timer.
+     * console.timeEnd(label) Print elapsed time and remove the timer.
      */
     public JSValue timeEnd(JSContext context, JSValue thisArg, JSValue[] args) {
         String label = args.length > 0 && !(args[0] instanceof JSUndefined)
@@ -744,8 +657,7 @@ public final class JSConsole {
     }
 
     /**
-     * console.timeLog(label)
-     * Print elapsed time without removing the timer.
+     * console.timeLog(label) Print elapsed time without removing the timer.
      */
     public JSValue timeLog(JSContext context, JSValue thisArg, JSValue[] args) {
         String label = args.length > 0 && !(args[0] instanceof JSUndefined)
@@ -766,8 +678,7 @@ public final class JSConsole {
     }
 
     /**
-     * console.trace(...args)
-     * Print "Trace:" followed by message.
+     * console.trace(...args) Print "Trace:" followed by message.
      */
     public JSValue trace(JSContext context, JSValue thisArg, JSValue[] args) {
         err.print(getGroupIndent());
@@ -781,8 +692,7 @@ public final class JSConsole {
     }
 
     /**
-     * console.warn(...args)
-     * Print to stderr.
+     * console.warn(...args) Print to stderr.
      */
     public JSValue warn(JSContext context, JSValue thisArg, JSValue[] args) {
         err.print(getGroupIndent());

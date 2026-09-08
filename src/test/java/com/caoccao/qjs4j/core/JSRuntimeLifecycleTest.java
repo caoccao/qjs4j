@@ -29,15 +29,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.*;
 
 /**
- * {@code JSRuntime.close()} had no closed state, so it was advisory: an embedder could create a
- * context afterwards and evaluate in it, enqueue jobs and drain them, and the global symbol
- * registries kept whatever they held. Closing is now terminal, and every operation is pinned before
- * close, after close, and after a second close.
+ * {@code JSRuntime.close()} had no closed state, so it was advisory: an embedder could create a context afterwards and
+ * evaluate in it, enqueue jobs and drain them, and the global symbol registries kept whatever they held. Closing is now
+ * terminal, and every operation is pinned before close, after close, and after a second close.
  * <p>
- * Terminal also has to mean terminal for the two operations the class documents as safe from
- * another thread. Both tested {@code closed} and then mutated as separate steps while {@code close}
- * cleared independently, so a producer could pass the check, be suspended, and deposit its job or
- * its symbol into a runtime that had already finished letting go of them.
+ * Terminal also has to mean terminal for the two operations the class documents as safe from another thread. Both
+ * tested {@code closed} and then mutated as separate steps while {@code close} cleared independently, so a producer
+ * could pass the check, be suspended, and deposit its job or its symbol into a runtime that had already finished
+ * letting go of them.
  */
 public class JSRuntimeLifecycleTest extends BaseTest {
     /**
@@ -102,8 +101,7 @@ public class JSRuntimeLifecycleTest extends BaseTest {
                 assertThat(producer.isAlive()).isFalse();
             }
             assertThat(runtime.hasPendingJobs())
-                    .as("round " + round + ": nothing may be deposited after close cleared the queue")
-                    .isFalse();
+                    .as("round " + round + ": nothing may be deposited after close cleared the queue").isFalse();
             acceptedAcrossRounds += accepted.get();
             refusedAcrossRounds += refused.get();
         }
@@ -157,8 +155,7 @@ public class JSRuntimeLifecycleTest extends BaseTest {
             }
             for (JSSymbol symbol : created) {
                 assertThat(runtime.getGlobalSymbolKey(symbol))
-                        .as("round " + round + ": no symbol may remain registered after close")
-                        .isNull();
+                        .as("round " + round + ": no symbol may remain registered after close").isNull();
             }
             createdAcrossRounds += created.size();
         }
@@ -236,8 +233,7 @@ public class JSRuntimeLifecycleTest extends BaseTest {
         JSRuntime runtime = new JSRuntime();
         runtime.close();
         // The review's reproducer: this used to return a working context that evaluated fine.
-        assertThatThrownBy(runtime::createContext)
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(runtime::createContext).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("closed");
     }
 
@@ -256,8 +252,7 @@ public class JSRuntimeLifecycleTest extends BaseTest {
     public void testGlobalSymbolRegistryIsRejectedAfterClose() {
         JSRuntime runtime = new JSRuntime();
         runtime.close();
-        assertThatThrownBy(() -> runtime.getOrCreateGlobalSymbol("late"))
-                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> runtime.getOrCreateGlobalSymbol("late")).isInstanceOf(IllegalStateException.class);
     }
 
     @Test

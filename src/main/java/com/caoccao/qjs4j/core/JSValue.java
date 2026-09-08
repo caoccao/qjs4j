@@ -19,13 +19,11 @@ package com.caoccao.qjs4j.core;
 import java.util.Optional;
 
 /**
- * Base sealed interface for all JavaScript values.
- * Implements the value representation using sealed interfaces for type safety.
- * Note: JSFunction extends JSObject, so it's not listed here separately.
+ * Base sealed interface for all JavaScript values. Implements the value representation using sealed interfaces for type
+ * safety. Note: JSFunction extends JSObject, so it's not listed here separately.
  */
-public sealed interface JSValue extends JSStackValue permits
-        JSUndefined, JSNull, JSBoolean, JSNumber, JSString,
-        JSObject, JSSymbol, JSBigInt {
+public sealed interface JSValue extends JSStackValue
+        permits JSUndefined, JSNull, JSBoolean, JSNumber, JSString, JSObject, JSSymbol, JSBigInt {
 
     JSValue[] NO_ARGS = new JSValue[0];
 

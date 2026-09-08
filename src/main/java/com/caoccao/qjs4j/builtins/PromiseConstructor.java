@@ -23,8 +23,7 @@ import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import java.util.Arrays;
 
 /**
- * Implementation of Promise constructor and static methods.
- * Based on QuickJS Promise behavior.
+ * Implementation of Promise constructor and static methods. Based on QuickJS Promise behavior.
  */
 public final class PromiseConstructor {
 
@@ -137,9 +136,7 @@ public final class PromiseConstructor {
         }
     }
 
-    private static JSValue closeIteratorAndRejectAbruptPromise(
-            JSContext context,
-            JSObject iteratorObject,
+    private static JSValue closeIteratorAndRejectAbruptPromise(JSContext context, JSObject iteratorObject,
             PromiseCapability promiseCapability) {
         JSValue pendingError = context.getPendingException();
         context.clearPendingException();
@@ -161,22 +158,15 @@ public final class PromiseConstructor {
         return rejectAbruptPromise(context, promiseCapability);
     }
 
-    static JSNativeFunction createBuiltinFunction(
-            JSContext context,
-            String functionName,
-            int length,
+    static JSNativeFunction createBuiltinFunction(JSContext context, String functionName, int length,
             JSNativeCallback callback) {
         JSNativeFunction function = new JSNativeFunction(context, functionName, length, callback);
         context.transferPrototype(function, JSFunction.NAME);
         return function;
     }
 
-    private static JSValue finalizePromiseCombinator(
-            JSContext context,
-            PromiseCapability promiseCapability,
-            PromiseCombinatorMode mode,
-            JSArray values,
-            boolean[] combinatorSettled) {
+    private static JSValue finalizePromiseCombinator(JSContext context, PromiseCapability promiseCapability,
+            PromiseCombinatorMode mode, JSArray values, boolean[] combinatorSettled) {
         if (combinatorSettled[0]) {
             return promiseCapability.promise();
         }
@@ -229,7 +219,8 @@ public final class PromiseConstructor {
             context.throwTypeError("Promise constructor did not return an object");
             return null;
         }
-        if (!JSTypeChecking.isCallable(promiseCapability.resolve()) || !JSTypeChecking.isCallable(promiseCapability.reject())) {
+        if (!JSTypeChecking.isCallable(promiseCapability.resolve())
+                || !JSTypeChecking.isCallable(promiseCapability.reject())) {
             context.throwTypeError("Promise constructor returned non-callable resolve or reject");
             return null;
         }
@@ -237,10 +228,7 @@ public final class PromiseConstructor {
         return promiseCapability;
     }
 
-    private static JSValue performPromiseCombinator(
-            JSContext context,
-            JSValue thisArg,
-            JSValue[] args,
+    private static JSValue performPromiseCombinator(JSContext context, JSValue thisArg, JSValue[] args,
             PromiseCombinatorMode mode) {
         String methodName = getPromiseCombinatorName(mode);
         if (!JSTypeChecking.isConstructor(thisArg)) {
@@ -360,8 +348,7 @@ public final class PromiseConstructor {
             boolean[] alreadyCalled = new boolean[]{false};
             JSValue resolveHandler = mode == PromiseCombinatorMode.ANY
                     ? promiseCapability.resolve()
-                    : createBuiltinFunction(context, "", 1,
-                    (childContext, thisValue, functionArgs) -> {
+                    : createBuiltinFunction(context, "", 1, (childContext, thisValue, functionArgs) -> {
                         if (alreadyCalled[0]) {
                             return JSUndefined.INSTANCE;
                         }
@@ -375,7 +362,8 @@ public final class PromiseConstructor {
                                 }
                                 remainingElementsCount[0]--;
                                 if (remainingElementsCount[0] == 0) {
-                                    finalizePromiseCombinator(childContext, promiseCapability, mode, values, combinatorSettled);
+                                    finalizePromiseCombinator(childContext, promiseCapability, mode, values,
+                                            combinatorSettled);
                                 }
                             }
                             case ALL_SETTLED -> {
@@ -388,12 +376,14 @@ public final class PromiseConstructor {
                                 }
                                 remainingElementsCount[0]--;
                                 if (remainingElementsCount[0] == 0) {
-                                    finalizePromiseCombinator(childContext, promiseCapability, mode, values, combinatorSettled);
+                                    finalizePromiseCombinator(childContext, promiseCapability, mode, values,
+                                            combinatorSettled);
                                 }
                             }
                             case ANY -> {
                                 combinatorSettled[0] = true;
-                                callCallable(childContext, promiseCapability.resolve(), JSUndefined.INSTANCE, new JSValue[]{settledValue});
+                                callCallable(childContext, promiseCapability.resolve(), JSUndefined.INSTANCE,
+                                        new JSValue[]{settledValue});
                                 if (childContext.hasPendingException()) {
                                     combinatorSettled[0] = false;
                                     rejectAbruptPromise(childContext, promiseCapability);
@@ -405,49 +395,47 @@ public final class PromiseConstructor {
 
             JSNativeFunction rejectElement = switch (mode) {
                 case ALL -> null;
-                case ALL_SETTLED -> createBuiltinFunction(context, "", 1,
-                        (childContext, thisValue, functionArgs) -> {
-                            if (alreadyCalled[0]) {
-                                return JSUndefined.INSTANCE;
-                            }
-                            alreadyCalled[0] = true;
-                            JSValue rejectionReason = functionArgs.length > 0 ? functionArgs[0] : JSUndefined.INSTANCE;
-                            JSObject resultObject = childContext.createJSObject();
-                            resultObject.set(PropertyKey.STATUS, new JSString("rejected"));
-                            resultObject.set(PropertyKey.REASON, rejectionReason);
-                            values.set(currentIndex, resultObject);
-                            if (childContext.hasPendingException()) {
-                                return JSUndefined.INSTANCE;
-                            }
-                            remainingElementsCount[0]--;
-                            if (remainingElementsCount[0] == 0) {
-                                finalizePromiseCombinator(childContext, promiseCapability, mode, values, combinatorSettled);
-                            }
-                            return JSUndefined.INSTANCE;
-                        });
-                case ANY -> createBuiltinFunction(context, "", 1,
-                        (childContext, thisValue, functionArgs) -> {
-                            if (alreadyCalled[0]) {
-                                return JSUndefined.INSTANCE;
-                            }
-                            alreadyCalled[0] = true;
-                            JSValue rejectionReason = functionArgs.length > 0 ? functionArgs[0] : JSUndefined.INSTANCE;
-                            values.set(currentIndex, rejectionReason);
-                            if (childContext.hasPendingException()) {
-                                return JSUndefined.INSTANCE;
-                            }
-                            remainingElementsCount[0]--;
-                            if (remainingElementsCount[0] == 0 && !combinatorSettled[0]) {
-                                combinatorSettled[0] = true;
-                                callCallable(childContext, promiseCapability.reject(), JSUndefined.INSTANCE,
-                                        new JSValue[]{JSAggregateError.create(childContext, values)});
-                                if (childContext.hasPendingException()) {
-                                    combinatorSettled[0] = false;
-                                    rejectAbruptPromise(childContext, promiseCapability);
-                                }
-                            }
-                            return JSUndefined.INSTANCE;
-                        });
+                case ALL_SETTLED -> createBuiltinFunction(context, "", 1, (childContext, thisValue, functionArgs) -> {
+                    if (alreadyCalled[0]) {
+                        return JSUndefined.INSTANCE;
+                    }
+                    alreadyCalled[0] = true;
+                    JSValue rejectionReason = functionArgs.length > 0 ? functionArgs[0] : JSUndefined.INSTANCE;
+                    JSObject resultObject = childContext.createJSObject();
+                    resultObject.set(PropertyKey.STATUS, new JSString("rejected"));
+                    resultObject.set(PropertyKey.REASON, rejectionReason);
+                    values.set(currentIndex, resultObject);
+                    if (childContext.hasPendingException()) {
+                        return JSUndefined.INSTANCE;
+                    }
+                    remainingElementsCount[0]--;
+                    if (remainingElementsCount[0] == 0) {
+                        finalizePromiseCombinator(childContext, promiseCapability, mode, values, combinatorSettled);
+                    }
+                    return JSUndefined.INSTANCE;
+                });
+                case ANY -> createBuiltinFunction(context, "", 1, (childContext, thisValue, functionArgs) -> {
+                    if (alreadyCalled[0]) {
+                        return JSUndefined.INSTANCE;
+                    }
+                    alreadyCalled[0] = true;
+                    JSValue rejectionReason = functionArgs.length > 0 ? functionArgs[0] : JSUndefined.INSTANCE;
+                    values.set(currentIndex, rejectionReason);
+                    if (childContext.hasPendingException()) {
+                        return JSUndefined.INSTANCE;
+                    }
+                    remainingElementsCount[0]--;
+                    if (remainingElementsCount[0] == 0 && !combinatorSettled[0]) {
+                        combinatorSettled[0] = true;
+                        callCallable(childContext, promiseCapability.reject(), JSUndefined.INSTANCE,
+                                new JSValue[]{JSAggregateError.create(childContext, values)});
+                        if (childContext.hasPendingException()) {
+                            combinatorSettled[0] = false;
+                            rejectAbruptPromise(childContext, promiseCapability);
+                        }
+                    }
+                    return JSUndefined.INSTANCE;
+                });
             };
 
             remainingElementsCount[0]++;
@@ -460,10 +448,7 @@ public final class PromiseConstructor {
         }
     }
 
-    private static JSValue performPromiseKeyedCombinator(
-            JSContext context,
-            JSValue thisArg,
-            JSValue[] args,
+    private static JSValue performPromiseKeyedCombinator(JSContext context, JSValue thisArg, JSValue[] args,
             PromiseCombinatorMode mode) {
         String methodName = mode == PromiseCombinatorMode.ALL ? "Promise.allKeyed" : "Promise.allSettledKeyed";
         if (!JSTypeChecking.isConstructor(thisArg)) {
@@ -526,7 +511,8 @@ public final class PromiseConstructor {
                     resultObject.set(PropertyKey.fromString(capturedKey), resolvedValue);
                     remainingCount[0]--;
                     if (remainingCount[0] == 0) {
-                        callCallable(ctx, promiseCapability.resolve(), JSUndefined.INSTANCE, new JSValue[]{resultObject});
+                        callCallable(ctx, promiseCapability.resolve(), JSUndefined.INSTANCE,
+                                new JSValue[]{resultObject});
                     }
                     return JSUndefined.INSTANCE;
                 });
@@ -539,7 +525,8 @@ public final class PromiseConstructor {
                     resultObject.set(PropertyKey.fromString(capturedKey), settledResult);
                     remainingCount[0]--;
                     if (remainingCount[0] == 0) {
-                        callCallable(ctx, promiseCapability.resolve(), JSUndefined.INSTANCE, new JSValue[]{resultObject});
+                        callCallable(ctx, promiseCapability.resolve(), JSUndefined.INSTANCE,
+                                new JSValue[]{resultObject});
                     }
                     return JSUndefined.INSTANCE;
                 });
@@ -561,7 +548,8 @@ public final class PromiseConstructor {
                     resultObject.set(PropertyKey.fromString(capturedKey), settledResult);
                     remainingCount[0]--;
                     if (remainingCount[0] == 0) {
-                        callCallable(ctx, promiseCapability.resolve(), JSUndefined.INSTANCE, new JSValue[]{resultObject});
+                        callCallable(ctx, promiseCapability.resolve(), JSUndefined.INSTANCE,
+                                new JSValue[]{resultObject});
                     }
                     return JSUndefined.INSTANCE;
                 });
@@ -724,11 +712,8 @@ public final class PromiseConstructor {
         return promiseCapability.promise();
     }
 
-    private static JSValue rejectAbruptPromiseMaybeClose(
-            JSContext context,
-            JSObject iteratorObject,
-            PromiseCapability promiseCapability,
-            boolean iteratorDone) {
+    private static JSValue rejectAbruptPromiseMaybeClose(JSContext context, JSObject iteratorObject,
+            PromiseCapability promiseCapability, boolean iteratorDone) {
         if (iteratorDone) {
             return rejectAbruptPromise(context, promiseCapability);
         }
@@ -840,12 +825,6 @@ public final class PromiseConstructor {
         return result;
     }
 
-    private enum PromiseCombinatorMode {
-        ALL,
-        ALL_SETTLED,
-        ANY
-    }
-
     static final class PromiseCapability {
         private JSValue promise;
         private JSValue reject;
@@ -880,5 +859,9 @@ public final class PromiseConstructor {
         public void setResolve(JSValue resolve) {
             this.resolve = resolve;
         }
+    }
+
+    private enum PromiseCombinatorMode {
+        ALL, ALL_SETTLED, ANY
     }
 }

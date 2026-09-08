@@ -70,8 +70,7 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
             return;
         }
 
-        if (callExpr.getCallee() instanceof MemberExpression memberExpr
-                && memberExpr.getObject().isSuperIdentifier()
+        if (callExpr.getCallee() instanceof MemberExpression memberExpr && memberExpr.getObject().isSuperIdentifier()
                 && (callExpr.isOptional() || memberExpr.isOptional())) {
             compileOptionalSuperMemberCallExpression(callExpr, memberExpr, isTailCall);
             return;
@@ -82,8 +81,7 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
             compileOptionalMemberCallExpression(callExpr, memberExpr, isTailCall);
             return;
         }
-        if (!callExpr.isOptional()
-                && !(callExpr.getCallee() instanceof MemberExpression)
+        if (!callExpr.isOptional() && !(callExpr.getCallee() instanceof MemberExpression)
                 && callExpr.isPartOfOptionalChain()) {
             // Non-optional continuation call after an optional chain segment
             // (for example, `a?.()()`): if the chained callee is nullish,
@@ -118,7 +116,9 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
             } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
                 String fieldName = privateId.getName();
-                JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
+                JSSymbol symbol = compilerContext.privateSymbols != null
+                        ? compilerContext.privateSymbols.get(fieldName)
+                        : null;
                 if (symbol != null) {
                     compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                     compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
@@ -138,7 +138,7 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
         } else {
             if (callExpr.getCallee() instanceof Identifier calleeId
                     && (compilerContext.withObjectManager.hasActiveWithObject()
-                    || !compilerContext.withObjectManager.getInheritedBindingNames().isEmpty())) {
+                            || !compilerContext.withObjectManager.getInheritedBindingNames().isEmpty())) {
                 compilerContext.identifierCompiler.emitWithAwareIdentifierLookupForCall(calleeId.getName());
             } else {
                 compilerContext.expressionCompiler.compile(callExpr.getCallee());
@@ -191,7 +191,9 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
             } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
                 String fieldName = privateId.getName();
-                JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
+                JSSymbol symbol = compilerContext.privateSymbols != null
+                        ? compilerContext.privateSymbols.get(fieldName)
+                        : null;
                 if (symbol != null) {
                     compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                     compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
@@ -202,7 +204,7 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
         } else {
             if (callExpr.getCallee() instanceof Identifier calleeId
                     && (compilerContext.withObjectManager.hasActiveWithObject()
-                    || !compilerContext.withObjectManager.getInheritedBindingNames().isEmpty())) {
+                            || !compilerContext.withObjectManager.getInheritedBindingNames().isEmpty())) {
                 compilerContext.identifierCompiler.emitWithAwareIdentifierLookupForCall(calleeId.getName());
                 compilerContext.emitter.emitOpcode(Opcode.SWAP);
             } else {
@@ -236,9 +238,7 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
         compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
     }
 
-    private void compileOptionalMemberCallExpression(
-            CallExpression callExpr,
-            MemberExpression calleeMemberExpression,
+    private void compileOptionalMemberCallExpression(CallExpression callExpr, MemberExpression calleeMemberExpression,
             boolean isTailCall) {
         Opcode callMethodOpcode = isTailCall ? Opcode.TAIL_CALL_METHOD : Opcode.CALL_METHOD;
 
@@ -313,10 +313,8 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
         }
     }
 
-    private void compileOptionalSuperMemberCallExpression(
-            CallExpression callExpression,
-            MemberExpression memberExpression,
-            boolean isTailCall) {
+    private void compileOptionalSuperMemberCallExpression(CallExpression callExpression,
+            MemberExpression memberExpression, boolean isTailCall) {
         Opcode callMethodOpcode = isTailCall ? Opcode.TAIL_CALL_METHOD : Opcode.CALL_METHOD;
         compilerContext.emitHelpers.emitGetSuperValue(memberExpression, true);
 
@@ -354,7 +352,9 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
         if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
             String fieldName = privateId.getName();
-            JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
+            JSSymbol symbol = compilerContext.privateSymbols != null
+                    ? compilerContext.privateSymbols.get(fieldName)
+                    : null;
             if (symbol == null) {
                 throw new JSSyntaxErrorException("Unexpected private field", privateId.getLocation());
             }
@@ -379,7 +379,9 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
             compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
         } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
             String fieldName = privateId.getName();
-            JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
+            JSSymbol symbol = compilerContext.privateSymbols != null
+                    ? compilerContext.privateSymbols.get(fieldName)
+                    : null;
             if (symbol != null) {
                 compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                 compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);

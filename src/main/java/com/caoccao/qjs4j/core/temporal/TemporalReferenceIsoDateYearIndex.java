@@ -22,8 +22,8 @@ import java.util.Map;
 /**
  * Per-(calendar, ISO year) lookup index for monthCode/day -> reference ISO date.
  * <p>
- * It preserves previous semantics where the last matching ISO date in the year
- * is selected when multiple dates map to the same monthCode/day.
+ * It preserves previous semantics where the last matching ISO date in the year is selected when multiple dates map to
+ * the same monthCode/day.
  */
 final class TemporalReferenceIsoDateYearIndex {
     private static final int MAX_DAY_OF_MONTH = 31;
@@ -33,6 +33,17 @@ final class TemporalReferenceIsoDateYearIndex {
 
     private TemporalReferenceIsoDateYearIndex(Map<String, IsoDate[]> isoDatesByMonthCode) {
         this.isoDatesByMonthCode = isoDatesByMonthCode;
+    }
+
+    IsoDate findExact(String monthCode, int dayOfMonth) {
+        if (dayOfMonth < MIN_DAY_OF_MONTH || dayOfMonth > MAX_DAY_OF_MONTH) {
+            return null;
+        }
+        IsoDate[] dayLookup = isoDatesByMonthCode.get(monthCode);
+        if (dayLookup == null) {
+            return null;
+        }
+        return dayLookup[dayOfMonth];
     }
 
     static TemporalReferenceIsoDateYearIndex create(TemporalCalendarId calendarId, int isoYear) {
@@ -46,23 +57,11 @@ final class TemporalReferenceIsoDateYearIndex {
                 if (dayOfMonth < MIN_DAY_OF_MONTH || dayOfMonth > MAX_DAY_OF_MONTH) {
                     continue;
                 }
-                IsoDate[] dayLookup = indexedIsoDates.computeIfAbsent(
-                        candidateCalendarDate.monthCode(),
+                IsoDate[] dayLookup = indexedIsoDates.computeIfAbsent(candidateCalendarDate.monthCode(),
                         key -> new IsoDate[MAX_DAY_OF_MONTH + 1]);
                 dayLookup[dayOfMonth] = candidateIsoDate;
             }
         }
         return new TemporalReferenceIsoDateYearIndex(indexedIsoDates);
-    }
-
-    IsoDate findExact(String monthCode, int dayOfMonth) {
-        if (dayOfMonth < MIN_DAY_OF_MONTH || dayOfMonth > MAX_DAY_OF_MONTH) {
-            return null;
-        }
-        IsoDate[] dayLookup = isoDatesByMonthCode.get(monthCode);
-        if (dayLookup == null) {
-            return null;
-        }
-        return dayLookup[dayOfMonth];
     }
 }

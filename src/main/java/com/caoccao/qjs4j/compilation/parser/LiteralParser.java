@@ -26,9 +26,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Delegate parser for literal expressions: arrays, objects, and template literals.
- * Also contains template scanning utility methods for finding expression boundaries
- * and processing escape sequences within template strings.
+ * Delegate parser for literal expressions: arrays, objects, and template literals. Also contains template scanning
+ * utility methods for finding expression boundaries and processing escape sequences within template strings.
  */
 record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
 
@@ -116,8 +115,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
             }
 
             if (c == '.') {
-                if (position + 2 < templateStr.length()
-                        && templateStr.charAt(position + 1) == '.'
+                if (position + 2 < templateStr.length() && templateStr.charAt(position + 1) == '.'
                         && templateStr.charAt(position + 2) == '.') {
                     position += 3;
                     regexAllowed = true;
@@ -133,15 +131,16 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
 
             if (parserContext.isIdentifierStartChar(c)) {
                 int start = position++;
-                while (position < templateStr.length() && parserContext.isIdentifierPartChar(templateStr.charAt(position))) {
+                while (position < templateStr.length()
+                        && parserContext.isIdentifierPartChar(templateStr.charAt(position))) {
                     position++;
                 }
                 String identifier = templateStr.substring(start, position);
                 regexAllowed = switch (identifier) {
                     case JSKeyword.RETURN, JSKeyword.THROW, JSKeyword.CASE, JSKeyword.DELETE, JSKeyword.VOID,
-                         JSKeyword.TYPEOF,
-                         JSKeyword.INSTANCEOF, JSKeyword.IN, JSKeyword.OF, JSKeyword.NEW, JSKeyword.DO, JSKeyword.ELSE,
-                         JSKeyword.YIELD, JSKeyword.AWAIT -> true;
+                            JSKeyword.TYPEOF, JSKeyword.INSTANCEOF, JSKeyword.IN, JSKeyword.OF, JSKeyword.NEW,
+                            JSKeyword.DO, JSKeyword.ELSE, JSKeyword.YIELD, JSKeyword.AWAIT ->
+                        true;
                     default -> false;
                 };
                 continue;
@@ -270,9 +269,8 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
             if (parserContext.match(TokenType.ASYNC)) {
                 // Peek ahead to determine if this is a modifier or property name
                 TokenType nextType = parserContext.nextToken.type();
-                if (nextType == TokenType.COLON || nextType == TokenType.COMMA
-                        || nextType == TokenType.RBRACE || nextType == TokenType.LPAREN
-                        || nextType == TokenType.ASSIGN) {
+                if (nextType == TokenType.COLON || nextType == TokenType.COMMA || nextType == TokenType.RBRACE
+                        || nextType == TokenType.LPAREN || nextType == TokenType.ASSIGN) {
                     // { async: value }, { async, ... }, { async }, { async() {} }, { async = x }
                     // async is a property name, not a modifier
                 } else if (parserContext.nextToken.line() == parserContext.currentToken.line()) {
@@ -295,20 +293,18 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
             // Similar to parseClassElement logic
             if (!isAsync && !isGenerator && parserContext.match(TokenType.IDENTIFIER)) {
                 String name = parserContext.currentToken.value();
-                if ((JSKeyword.GET.equals(name) || JSKeyword.SET.equals(name))
-                        && parserContext.currentToken.escaped()
+                if ((JSKeyword.GET.equals(name) || JSKeyword.SET.equals(name)) && parserContext.currentToken.escaped()
                         && parserContext.nextToken.type() != TokenType.COLON
                         && parserContext.nextToken.type() != TokenType.COMMA
                         && parserContext.nextToken.type() != TokenType.LPAREN
                         && parserContext.nextToken.type() != TokenType.RBRACE) {
                     throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
                 }
-                if ((JSKeyword.GET.equals(name) || JSKeyword.SET.equals(name)) &&
-                        !parserContext.currentToken.escaped() &&
-                        parserContext.nextToken.type() != TokenType.COLON &&
-                        parserContext.nextToken.type() != TokenType.COMMA &&
-                        parserContext.nextToken.type() != TokenType.LPAREN &&
-                        parserContext.nextToken.type() != TokenType.RBRACE) {
+                if ((JSKeyword.GET.equals(name) || JSKeyword.SET.equals(name)) && !parserContext.currentToken.escaped()
+                        && parserContext.nextToken.type() != TokenType.COLON
+                        && parserContext.nextToken.type() != TokenType.COMMA
+                        && parserContext.nextToken.type() != TokenType.LPAREN
+                        && parserContext.nextToken.type() != TokenType.RBRACE) {
                     String kind = name;
                     parserContext.advance(); // consume 'get' or 'set'
 
@@ -364,8 +360,8 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                 parserContext.advance();
                 Expression value = delegates.expressions.parseAssignmentExpression();
                 properties.add(new ObjectExpressionProperty(key, value, "init", computed, false, false));
-            } else if (!computed && key instanceof Identifier keyId
-                    && (parserContext.match(TokenType.COMMA) || parserContext.match(TokenType.RBRACE) || parserContext.match(TokenType.ASSIGN))) {
+            } else if (!computed && key instanceof Identifier keyId && (parserContext.match(TokenType.COMMA)
+                    || parserContext.match(TokenType.RBRACE) || parserContext.match(TokenType.ASSIGN))) {
                 // Shorthand property: {x} or CoverInitializedName: {x = defaultExpr}
                 // Following QuickJS: the shorthand value is an IdentifierReference,
                 // so yield/await must be valid identifiers in the current context.
@@ -393,9 +389,8 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                 if (parserContext.match(TokenType.ASSIGN)) {
                     parserContext.advance();
                     Expression defaultValue = delegates.expressions.parseAssignmentExpression();
-                    value = new AssignmentExpression(keyId,
-                            AssignmentOperator.ASSIGN,
-                            defaultValue, keyId.getLocation());
+                    value = new AssignmentExpression(keyId, AssignmentOperator.ASSIGN, defaultValue,
+                            keyId.getLocation());
                 } else {
                     value = keyId;
                 }
@@ -425,19 +420,11 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
 
         Lexer expressionLexer = new Lexer(expressionSource);
         expressionLexer.setStrictMode(parserContext.strictMode);
-        Parser expressionParser = new Parser(
-                expressionLexer,
-                parserContext.moduleMode,
-                parserContext.isEval,
-                parserContext.inheritedStrictMode,
-                parserContext.functionNesting,
-                parserContext.asyncFunctionNesting,
-                parserContext.generatorFunctionNesting,
-                parserContext.newTargetNesting,
-                parserContext.superPropertyAllowed,
-                parserContext.allowNewTargetInEval,
-                parserContext.inDerivedConstructor,
-                parserContext.evalPrivateNames);
+        Parser expressionParser = new Parser(expressionLexer, parserContext.moduleMode, parserContext.isEval,
+                parserContext.inheritedStrictMode, parserContext.functionNesting, parserContext.asyncFunctionNesting,
+                parserContext.generatorFunctionNesting, parserContext.newTargetNesting,
+                parserContext.superPropertyAllowed, parserContext.allowNewTargetInEval,
+                parserContext.inDerivedConstructor, parserContext.evalPrivateNames);
         Expression expression = expressionParser.parseExpression();
         if (expressionParser.currentToken().type() != TokenType.EOF) {
             throw new JSSyntaxErrorException("Invalid template expression");
@@ -559,8 +546,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                     throw new JSSyntaxErrorException("Malformed escape sequence in template literal");
                 }
                 case 'x' -> {
-                    if (i + 3 >= str.length()
-                            || Character.digit(str.charAt(i + 2), 16) < 0
+                    if (i + 3 >= str.length() || Character.digit(str.charAt(i + 2), 16) < 0
                             || Character.digit(str.charAt(i + 3), 16) < 0) {
                         if (tagged) {
                             return null;

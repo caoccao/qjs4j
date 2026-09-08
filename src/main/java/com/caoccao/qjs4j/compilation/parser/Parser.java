@@ -28,13 +28,11 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Recursive descent parser for JavaScript.
- * Converts tokens into an Abstract Syntax Tree (AST).
+ * Recursive descent parser for JavaScript. Converts tokens into an Abstract Syntax Tree (AST).
  * <p>
- * This is the public facade that delegates to specialized parser classes:
- * {@link ExpressionParser}, {@link StatementParser}, {@link FunctionClassParser},
- * {@link PatternParser}, and {@link LiteralParser}.
- * All shared mutable state is held in {@link ParserContext}.
+ * This is the public facade that delegates to specialized parser classes: {@link ExpressionParser},
+ * {@link StatementParser}, {@link FunctionClassParser}, {@link PatternParser}, and {@link LiteralParser}. All shared
+ * mutable state is held in {@link ParserContext}.
  */
 public final class Parser {
     private final ParserDelegates delegates;
@@ -56,113 +54,42 @@ public final class Parser {
         this(lexer, moduleMode, isEval, inheritedStrictMode, 0, 0, 0, 0, false, false, false, Set.of());
     }
 
-    public Parser(
-            Lexer lexer,
-            boolean moduleMode,
-            boolean isEval,
-            boolean inheritedStrictMode,
-            boolean initialSuperPropertyAllowed,
-            boolean allowNewTargetInEval) {
-        this(
-                lexer,
-                moduleMode,
-                isEval,
-                inheritedStrictMode,
-                0,
-                0,
-                0,
-                0,
-                initialSuperPropertyAllowed,
-                allowNewTargetInEval,
-                false,
-                Set.of());
+    public Parser(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode,
+            boolean initialSuperPropertyAllowed, boolean allowNewTargetInEval) {
+        this(lexer, moduleMode, isEval, inheritedStrictMode, 0, 0, 0, 0, initialSuperPropertyAllowed,
+                allowNewTargetInEval, false, Set.of());
     }
 
-    public Parser(
-            Lexer lexer,
-            boolean moduleMode,
-            boolean isEval,
-            boolean inheritedStrictMode,
-            boolean initialSuperPropertyAllowed,
-            boolean allowNewTargetInEval,
+    public Parser(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode,
+            boolean initialSuperPropertyAllowed, boolean allowNewTargetInEval, boolean allowSuperCallInEval,
             Set<String> evalPrivateNames) {
-        this(
-                lexer,
-                moduleMode,
-                isEval,
-                inheritedStrictMode,
-                0,
-                0,
-                0,
-                0,
-                initialSuperPropertyAllowed,
-                allowNewTargetInEval,
-                false,
-                evalPrivateNames);
+        this(lexer, moduleMode, isEval, inheritedStrictMode, 0, 0, 0, 0, initialSuperPropertyAllowed,
+                allowNewTargetInEval, allowSuperCallInEval, evalPrivateNames);
     }
 
-    public Parser(
-            Lexer lexer,
-            boolean moduleMode,
-            boolean isEval,
-            boolean inheritedStrictMode,
-            boolean initialSuperPropertyAllowed,
-            boolean allowNewTargetInEval,
-            boolean allowSuperCallInEval,
-            Set<String> evalPrivateNames) {
-        this(
-                lexer,
-                moduleMode,
-                isEval,
-                inheritedStrictMode,
-                0,
-                0,
-                0,
-                0,
-                initialSuperPropertyAllowed,
-                allowNewTargetInEval,
-                allowSuperCallInEval,
-                evalPrivateNames);
+    public Parser(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode,
+            boolean initialSuperPropertyAllowed, boolean allowNewTargetInEval, Set<String> evalPrivateNames) {
+        this(lexer, moduleMode, isEval, inheritedStrictMode, 0, 0, 0, 0, initialSuperPropertyAllowed,
+                allowNewTargetInEval, false, evalPrivateNames);
     }
 
     // Package-private: used by LiteralParser for nested template expression parsing
-    Parser(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode,
-           int functionNesting, int asyncFunctionNesting,
-           int generatorFunctionNesting,
-           int newTargetNesting,
-           boolean initialSuperPropertyAllowed,
-           boolean allowNewTargetInEval) {
-        this(
-                lexer,
-                moduleMode,
-                isEval,
-                inheritedStrictMode,
-                functionNesting,
-                asyncFunctionNesting,
-                generatorFunctionNesting,
-                newTargetNesting,
-                initialSuperPropertyAllowed,
-                allowNewTargetInEval,
-                false,
+    Parser(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode, int functionNesting,
+            int asyncFunctionNesting, int generatorFunctionNesting, int newTargetNesting,
+            boolean initialSuperPropertyAllowed, boolean allowNewTargetInEval) {
+        this(lexer, moduleMode, isEval, inheritedStrictMode, functionNesting, asyncFunctionNesting,
+                generatorFunctionNesting, newTargetNesting, initialSuperPropertyAllowed, allowNewTargetInEval, false,
                 Set.of());
     }
 
     // Package-private: used by Compiler / LiteralParser when eval private names are in scope.
-    Parser(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode,
-           int functionNesting, int asyncFunctionNesting,
-           int generatorFunctionNesting,
-           int newTargetNesting,
-           boolean initialSuperPropertyAllowed,
-           boolean allowNewTargetInEval,
-           boolean allowSuperCallInEval,
-           Set<String> evalPrivateNames) {
-        this.parserContext = new ParserContext(lexer, moduleMode, isEval, inheritedStrictMode,
-                functionNesting, asyncFunctionNesting,
-                generatorFunctionNesting,
-                newTargetNesting,
-                initialSuperPropertyAllowed,
-                allowNewTargetInEval,
-                evalPrivateNames);
+    Parser(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode, int functionNesting,
+            int asyncFunctionNesting, int generatorFunctionNesting, int newTargetNesting,
+            boolean initialSuperPropertyAllowed, boolean allowNewTargetInEval, boolean allowSuperCallInEval,
+            Set<String> evalPrivateNames) {
+        this.parserContext = new ParserContext(lexer, moduleMode, isEval, inheritedStrictMode, functionNesting,
+                asyncFunctionNesting, generatorFunctionNesting, newTargetNesting, initialSuperPropertyAllowed,
+                allowNewTargetInEval, evalPrivateNames);
         if (allowSuperCallInEval) {
             this.parserContext.inDerivedConstructor = true;
         }
@@ -225,10 +152,9 @@ public final class Parser {
     }
 
     /**
-     * Validate module-level early errors per ES2024 16.2.1.1.
-     * In modules, top-level function declarations are lexical (not var-hoisted),
-     * so duplicate function names are errors. Also checks for lex/var conflicts,
-     * duplicate lexical declarations, and unresolvable export bindings.
+     * Validate module-level early errors per ES2024 16.2.1.1. In modules, top-level function declarations are lexical
+     * (not var-hoisted), so duplicate function names are errors. Also checks for lex/var conflicts, duplicate lexical
+     * declarations, and unresolvable export bindings.
      */
     private void validateModuleEarlyErrors(List<Statement> body) {
         // Collect all top-level bound names (lex + var + import bindings)
@@ -244,14 +170,12 @@ public final class Parser {
                         allBoundNames.add(name);
                         if (isVar) {
                             if (lexicalNames.contains(name)) {
-                                throw new JSSyntaxErrorException(
-                                        "Identifier '" + name + "' has already been declared");
+                                throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
                             }
                             varNames.add(name);
                         } else {
                             if (varNames.contains(name) || !lexicalNames.add(name)) {
-                                throw new JSSyntaxErrorException(
-                                        "Identifier '" + name + "' has already been declared");
+                                throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
                             }
                         }
                     });
@@ -261,26 +185,22 @@ public final class Parser {
                 allBoundNames.add(name);
                 // In modules (always strict), all functions are lexical
                 if (varNames.contains(name) || !lexicalNames.add(name)) {
-                    throw new JSSyntaxErrorException(
-                            "Identifier '" + name + "' has already been declared");
+                    throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
                 }
             } else if (stmt instanceof ClassDeclaration classDecl && classDecl.getId() != null) {
                 String name = classDecl.getId().getName();
                 allBoundNames.add(name);
                 if (varNames.contains(name) || !lexicalNames.add(name)) {
-                    throw new JSSyntaxErrorException(
-                            "Identifier '" + name + "' has already been declared");
+                    throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
                 }
             } else if (stmt instanceof ExpressionStatement exprStmt
-                    && exprStmt.getExpression() instanceof ClassExpression classExpr
-                    && classExpr.getId() != null
+                    && exprStmt.getExpression() instanceof ClassExpression classExpr && classExpr.getId() != null
                     && !"default".equals(classExpr.getId().getName())) {
                 // export default class with explicit name
                 String name = classExpr.getId().getName();
                 allBoundNames.add(name);
                 if (varNames.contains(name) || !lexicalNames.add(name)) {
-                    throw new JSSyntaxErrorException(
-                            "Identifier '" + name + "' has already been declared");
+                    throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
                 }
             }
             // Note: import bindings are tracked via pendingExportBindings check only
@@ -295,8 +215,7 @@ public final class Parser {
         // it must be in the module's BoundNames.
         for (String exportBinding : parserContext.pendingExportBindings) {
             if (!allBoundNames.contains(exportBinding)) {
-                throw new JSSyntaxErrorException(
-                        "Export '" + exportBinding + "' is not defined in module");
+                throw new JSSyntaxErrorException("Export '" + exportBinding + "' is not defined in module");
             }
         }
     }

@@ -28,8 +28,7 @@ import java.util.List;
  * Represents an ISO 8601 date-time combining IsoDate and IsoTime.
  */
 public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoDateTime> {
-    public static final IsoDateTime MAX_SUPPORTED = new IsoDateTime(
-            IsoDate.MAX_SUPPORTED,
+    public static final IsoDateTime MAX_SUPPORTED = new IsoDateTime(IsoDate.MAX_SUPPORTED,
             new IsoTime(23, 59, 59, 999, 999, 999));
     public static final IsoDateTime MIN_SUPPORTED = new IsoDateTime(new IsoDate(-271821, 4, 20), IsoTime.MIDNIGHT);
     private static final BigInteger NS_MAX_INSTANT = new BigInteger("8640000000000000000000");
@@ -59,17 +58,10 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
         int millisecond = nanosecondOfSecond / 1_000_000;
         int microsecond = (nanosecondOfSecond / 1_000) % 1_000;
         int nanosecond = nanosecondOfSecond % 1_000;
-        IsoDate isoDate = new IsoDate(
-                localDateTime.getYear(),
-                localDateTime.getMonthValue(),
+        IsoDate isoDate = new IsoDate(localDateTime.getYear(), localDateTime.getMonthValue(),
                 localDateTime.getDayOfMonth());
-        IsoTime isoTime = new IsoTime(
-                localDateTime.getHour(),
-                localDateTime.getMinute(),
-                localDateTime.getSecond(),
-                millisecond,
-                microsecond,
-                nanosecond);
+        IsoTime isoTime = new IsoTime(localDateTime.getHour(), localDateTime.getMinute(), localDateTime.getSecond(),
+                millisecond, microsecond, nanosecond);
         return new IsoDateTime(isoDate, isoTime);
     }
 
@@ -77,15 +69,11 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
         return createFromLocalDateTime(zonedDateTime.toLocalDateTime());
     }
 
-    public static BigInteger zonedLocalDateTimeToEpochNanoseconds(
-            JSContext context,
-            TemporalRelativeToOption relativeToOption,
-            LocalDateTime localDateTime) {
+    public static BigInteger zonedLocalDateTimeToEpochNanoseconds(JSContext context,
+            TemporalRelativeToOption relativeToOption, LocalDateTime localDateTime) {
         IsoDateTime isoDateTime = IsoDateTime.createFromLocalDateTime(localDateTime);
         try {
-            return isoDateTime.toEpochNs(
-                    relativeToOption.timeZoneId(),
-                    "compatible");
+            return isoDateTime.toEpochNs(relativeToOption.timeZoneId(), "compatible");
         } catch (DateTimeException dateTimeException) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return null;
@@ -111,11 +99,8 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
     }
 
     public LocalDateTime addDurationToLocalDateTime(JSContext context, TemporalDuration durationRecord) {
-        LocalDateTime dateBalancedDateTime = toLocalDateTime()
-                .plusYears(durationRecord.years())
-                .plusMonths(durationRecord.months())
-                .plusWeeks(durationRecord.weeks())
-                .plusDays(durationRecord.days());
+        LocalDateTime dateBalancedDateTime = toLocalDateTime().plusYears(durationRecord.years())
+                .plusMonths(durationRecord.months()).plusWeeks(durationRecord.weeks()).plusDays(durationRecord.days());
         BigInteger timeNanoseconds = durationRecord.timeNanoseconds();
         BigInteger[] dayQuotientAndRemainder = timeNanoseconds.divideAndRemainder(TemporalConstants.BI_DAY_NANOSECONDS);
         long dayAdjustment;
@@ -153,9 +138,7 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
         return addFixedUnitsToLocalDateTime(parsedUnit, amount);
     }
 
-    public LocalDateTime addNanosecondsToDateTime(
-            JSContext context,
-            BigInteger nanoseconds) {
+    public LocalDateTime addNanosecondsToDateTime(JSContext context, BigInteger nanoseconds) {
         BigInteger[] dayQuotientAndRemainder = nanoseconds.divideAndRemainder(TemporalConstants.BI_DAY_NANOSECONDS);
         long dayAdjustment;
         try {
@@ -178,9 +161,7 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
         }
     }
 
-    public LocalDateTime addNanosecondsToDateTime(
-            JSContext context,
-            BigInteger nanoseconds,
+    public LocalDateTime addNanosecondsToDateTime(JSContext context, BigInteger nanoseconds,
             TemporalRelativeToOption relativeToOption) {
         if (relativeToOption == null || !relativeToOption.zoned()) {
             return addNanosecondsToDateTime(context, nanoseconds);
@@ -190,8 +171,7 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
         if (localDateTime.equals(relativeToOption.startDateTime())) {
             startEpochNanoseconds = relativeToOption.epochNanoseconds();
         } else {
-            startEpochNanoseconds =
-                    zonedLocalDateTimeToEpochNanoseconds(context, relativeToOption, localDateTime);
+            startEpochNanoseconds = zonedLocalDateTimeToEpochNanoseconds(context, relativeToOption, localDateTime);
         }
         if (context.hasPendingException() || startEpochNanoseconds == null) {
             return null;
@@ -202,8 +182,7 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
             context.throwRangeError("Temporal error: Duration field out of range.");
             return null;
         }
-        IsoDateTime isoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
-                resultEpochNanoseconds,
+        IsoDateTime isoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(resultEpochNanoseconds,
                 relativeToOption.timeZoneId());
         return isoDateTime.toLocalDateTime();
     }
@@ -225,10 +204,7 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
         return toEpochNs(timeZoneId, disambiguation, null);
     }
 
-    public BigInteger toEpochNs(
-            String timeZoneId,
-            String disambiguation,
-            Integer preferredOffsetSeconds) {
+    public BigInteger toEpochNs(String timeZoneId, String disambiguation, Integer preferredOffsetSeconds) {
         Integer fixedOffsetSeconds = TemporalTimeZone.parseFixedOffsetSeconds(timeZoneId);
         if (fixedOffsetSeconds != null) {
             return TemporalTimeZone.utcDateTimeToEpochNs(date, time, fixedOffsetSeconds);
@@ -306,26 +282,14 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
     }
 
     public LocalDateTime toLocalDateTime() {
-        return LocalDateTime.of(
-                date.year(),
-                date.month(),
-                date.day(),
-                time.hour(),
-                time.minute(),
-                time.second(),
+        return LocalDateTime.of(date.year(), date.month(), date.day(), time.hour(), time.minute(), time.second(),
                 time.totalNanosecondsWithinSecond());
     }
 
     public LocalDateTime toLocalDateTimeWithClampedSecond() {
         IsoTime clampedTime = time.clampSecondToValidRange();
-        return LocalDateTime.of(
-                date.year(),
-                date.month(),
-                date.day(),
-                clampedTime.hour(),
-                clampedTime.minute(),
-                clampedTime.second(),
-                clampedTime.totalNanosecondsWithinSecond());
+        return LocalDateTime.of(date.year(), date.month(), date.day(), clampedTime.hour(), clampedTime.minute(),
+                clampedTime.second(), clampedTime.totalNanosecondsWithinSecond());
     }
 
     @Override

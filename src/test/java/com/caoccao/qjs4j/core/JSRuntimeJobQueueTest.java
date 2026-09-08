@@ -21,29 +21,26 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The host job queue and a context's microtask queue are separate, and {@code runJobs()} drains only
- * the first.
+ * The host job queue and a context's microtask queue are separate, and {@code runJobs()} drains only the first.
  * <p>
- * The two Javadocs said opposite things: {@code enqueueJob()} claimed promise reactions go to the
- * context's microtask queue "which runJobs() also drains", while {@code runJobs()} said it
- * deliberately does not touch any context's microtask queue — which is what the code does. An
- * embedder following the first would omit {@link JSContext#processMicrotasks()} and leave promises
- * unsettled. These tests pin the real contract so the documentation cannot drift from it silently
- * again.
+ * The two Javadocs said opposite things: {@code enqueueJob()} claimed promise reactions go to the context's microtask
+ * queue "which runJobs() also drains", while {@code runJobs()} said it deliberately does not touch any context's
+ * microtask queue — which is what the code does. An embedder following the first would omit
+ * {@link JSContext#processMicrotasks()} and leave promises unsettled. These tests pin the real contract so the
+ * documentation cannot drift from it silently again.
  */
 public class JSRuntimeJobQueueTest {
 
     @Test
     public void testProcessMicrotasksSettlesWhatRunJobsLeaves() {
         try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
-            context.enqueueMicrotask(() -> context.getGlobalObject()
-                    .set(PropertyKey.fromString("microtaskRan"), JSBoolean.TRUE));
+            context.enqueueMicrotask(
+                    () -> context.getGlobalObject().set(PropertyKey.fromString("microtaskRan"), JSBoolean.TRUE));
             runtime.runJobs();
             context.processMicrotasks();
 
             assertThat(context.getMicrotaskQueue().hasPendingMicrotasks()).isFalse();
-            assertThat(context.getGlobalObject().get(PropertyKey.fromString("microtaskRan")))
-                    .isEqualTo(JSBoolean.TRUE);
+            assertThat(context.getGlobalObject().get(PropertyKey.fromString("microtaskRan"))).isEqualTo(JSBoolean.TRUE);
         }
     }
 
@@ -51,9 +48,7 @@ public class JSRuntimeJobQueueTest {
     public void testPromiseReactionsDoNotReachTheHostJobQueue() {
         try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
             context.eval("globalThis.settled = 'no'; Promise.resolve(1).then(() => { globalThis.settled = 'yes' })");
-            assertThat(runtime.hasPendingJobs())
-                    .as("a promise reaction is a microtask, not a host job")
-                    .isFalse();
+            assertThat(runtime.hasPendingJobs()).as("a promise reaction is a microtask, not a host job").isFalse();
             // eval() drains microtasks before returning, so the reaction has already run.
             assertThat(context.eval("settled").toString()).isEqualTo("yes");
         }
@@ -65,8 +60,8 @@ public class JSRuntimeJobQueueTest {
             boolean[] hostJobRan = {false};
             runtime.enqueueJob(() -> hostJobRan[0] = true);
             // enqueueMicrotask directly: eval() drains the queue itself before returning.
-            context.enqueueMicrotask(() -> context.getGlobalObject()
-                    .set(PropertyKey.fromString("microtaskRan"), JSBoolean.TRUE));
+            context.enqueueMicrotask(
+                    () -> context.getGlobalObject().set(PropertyKey.fromString("microtaskRan"), JSBoolean.TRUE));
 
             assertThat(runtime.hasPendingJobs()).isTrue();
             assertThat(runtime.runJobs()).isEqualTo(1);
@@ -74,8 +69,7 @@ public class JSRuntimeJobQueueTest {
             assertThat(hostJobRan[0]).isTrue();
             assertThat(runtime.hasPendingJobs()).isFalse();
             assertThat(context.getMicrotaskQueue().hasPendingMicrotasks())
-                    .as("runJobs() must not drain a context's microtask queue")
-                    .isTrue();
+                    .as("runJobs() must not drain a context's microtask queue").isTrue();
             assertThat(context.getGlobalObject().get(PropertyKey.fromString("microtaskRan")))
                     .isEqualTo(JSUndefined.INSTANCE);
         }

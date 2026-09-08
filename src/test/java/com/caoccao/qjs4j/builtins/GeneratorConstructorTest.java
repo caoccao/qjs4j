@@ -20,15 +20,14 @@ import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit tests for Generator and GeneratorFunction constructor/prototype chain.
- * Based on QuickJS JS_AddIntrinsicGenerator registration.
+ * Unit tests for Generator and GeneratorFunction constructor/prototype chain. Based on QuickJS JS_AddIntrinsicGenerator
+ * registration.
  */
 public class GeneratorConstructorTest extends BaseJavetTest {
 
     @Test
     public void testGeneratorFunctionHasPrototypeProperty() {
-        assertBooleanWithJavet(
-                "var gf = function*(){}; 'prototype' in gf");
+        assertBooleanWithJavet("var gf = function*(){}; 'prototype' in gf");
     }
 
     @Test
@@ -47,14 +46,12 @@ public class GeneratorConstructorTest extends BaseJavetTest {
 
     @Test
     public void testGeneratorFunctionPrototypePrototypeIsGeneratorPrototype() {
-        assertBooleanWithJavet(
-                "var gf = function*(){}; var gfp = Object.getPrototypeOf(gf); 'prototype' in gfp");
+        assertBooleanWithJavet("var gf = function*(){}; var gfp = Object.getPrototypeOf(gf); 'prototype' in gfp");
     }
 
     @Test
     public void testGeneratorFunctionPrototypeToStringTag() {
-        assertStringWithJavet(
-                "var gf = function*(){}; Object.getPrototypeOf(gf)[Symbol.toStringTag]");
+        assertStringWithJavet("var gf = function*(){}; Object.getPrototypeOf(gf)[Symbol.toStringTag]");
     }
 
     @Test
@@ -74,14 +71,12 @@ public class GeneratorConstructorTest extends BaseJavetTest {
     @Test
     public void testGeneratorObjectPrototypeChain() {
         // Generator object -> gf.prototype -> Generator.prototype -> Iterator.prototype -> Object.prototype
-        assertBooleanWithJavet(
-                "var gf = function*(){}; var g = gf(); Object.getPrototypeOf(g) === gf.prototype");
+        assertBooleanWithJavet("var gf = function*(){}; var g = gf(); Object.getPrototypeOf(g) === gf.prototype");
     }
 
     @Test
     public void testGeneratorObjectToString() {
-        assertStringWithJavet(
-                "function* gen() {} Object.prototype.toString.call(gen())");
+        assertStringWithJavet("function* gen() {} Object.prototype.toString.call(gen())");
     }
 
     @Test
@@ -101,8 +96,7 @@ public class GeneratorConstructorTest extends BaseJavetTest {
     @Test
     public void testGeneratorPrototypeInheritsFromIteratorPrototype() {
         // Generator.prototype inherits from Iterator.prototype (which has Symbol.iterator)
-        assertBooleanWithJavet(
-                "var gf = function*(){}; var g = gf(); typeof g[Symbol.iterator] === 'function'",
+        assertBooleanWithJavet("var gf = function*(){}; var g = gf(); typeof g[Symbol.iterator] === 'function'",
                 "var gf = function*(){}; var g = gf(); g[Symbol.iterator]() === g");
     }
 
@@ -132,44 +126,37 @@ public class GeneratorConstructorTest extends BaseJavetTest {
 
     @Test
     public void testGeneratorPrototypeMethodLengthNext() {
-        assertIntegerWithJavet(
-                "var gf = function*(){}; Object.getPrototypeOf(gf).prototype.next.length");
+        assertIntegerWithJavet("var gf = function*(){}; Object.getPrototypeOf(gf).prototype.next.length");
     }
 
     @Test
     public void testGeneratorPrototypeMethodLengthReturn() {
-        assertIntegerWithJavet(
-                "var gf = function*(){}; Object.getPrototypeOf(gf).prototype.return.length");
+        assertIntegerWithJavet("var gf = function*(){}; Object.getPrototypeOf(gf).prototype.return.length");
     }
 
     @Test
     public void testGeneratorPrototypeMethodLengthThrow() {
-        assertIntegerWithJavet(
-                "var gf = function*(){}; Object.getPrototypeOf(gf).prototype.throw.length");
+        assertIntegerWithJavet("var gf = function*(){}; Object.getPrototypeOf(gf).prototype.throw.length");
     }
 
     @Test
     public void testGeneratorPrototypeMethodNameNext() {
-        assertStringWithJavet(
-                "var gf = function*(){}; Object.getPrototypeOf(gf).prototype.next.name");
+        assertStringWithJavet("var gf = function*(){}; Object.getPrototypeOf(gf).prototype.next.name");
     }
 
     @Test
     public void testGeneratorPrototypeMethodNameReturn() {
-        assertStringWithJavet(
-                "var gf = function*(){}; Object.getPrototypeOf(gf).prototype.return.name");
+        assertStringWithJavet("var gf = function*(){}; Object.getPrototypeOf(gf).prototype.return.name");
     }
 
     @Test
     public void testGeneratorPrototypeMethodNameThrow() {
-        assertStringWithJavet(
-                "var gf = function*(){}; Object.getPrototypeOf(gf).prototype.throw.name");
+        assertStringWithJavet("var gf = function*(){}; Object.getPrototypeOf(gf).prototype.throw.name");
     }
 
     @Test
     public void testGeneratorPrototypeToStringTag() {
-        assertStringWithJavet(
-                "var gf = function*(){}; Object.getPrototypeOf(gf).prototype[Symbol.toStringTag]");
+        assertStringWithJavet("var gf = function*(){}; Object.getPrototypeOf(gf).prototype[Symbol.toStringTag]");
     }
 
     @Test
@@ -182,7 +169,6 @@ public class GeneratorConstructorTest extends BaseJavetTest {
 
     @Test
     public void testTypeofGeneratorFunction() {
-        assertStringWithJavet(
-                "typeof function*(){}");
+        assertStringWithJavet("typeof function*(){}");
     }
 }

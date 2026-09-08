@@ -34,11 +34,10 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class TemporalUtils {
     private static final LocalDate MAXIMUM_TEMPORAL_DATE = LocalDate.of(275760, 9, 13);
-    private static final LocalDateTime MAXIMUM_TEMPORAL_DATE_TIME = LocalDateTime.of(
-            275760, 9, 13, 23, 59, 59, 999_999_999);
+    private static final LocalDateTime MAXIMUM_TEMPORAL_DATE_TIME = LocalDateTime.of(275760, 9, 13, 23, 59, 59,
+            999_999_999);
     private static final LocalDate MINIMUM_TEMPORAL_DATE = LocalDate.of(-271821, 4, 19);
-    private static final LocalDateTime MINIMUM_TEMPORAL_DATE_TIME = LocalDateTime.of(
-            -271821, 4, 20, 0, 0, 0, 0);
+    private static final LocalDateTime MINIMUM_TEMPORAL_DATE_TIME = LocalDateTime.of(-271821, 4, 20, 0, 0, 0, 0);
     private static final BigInteger NS_MAX_INSTANT = new BigInteger("8640000000000000000000");
     private static final BigInteger NS_MIN_INSTANT = new BigInteger("-8640000000000000000000");
 
@@ -53,20 +52,19 @@ public final class TemporalUtils {
         long yearValue = calendarYear;
         long monthValue = calendarMonth;
         long dayValue = dayOfMonth;
-        return 365L * (yearValue - 1L)
-                + Math.floorDiv(yearValue, 4L)
-                + 30L * (monthValue - 1L)
-                + (dayValue - 1L);
+        return 365L * (yearValue - 1L) + Math.floorDiv(yearValue, 4L) + 30L * (monthValue - 1L) + (dayValue - 1L);
     }
 
     /**
-     * Generic receiver type check for Temporal prototype methods.
-     * Returns the cast value, or null after throwing TypeError.
+     * Generic receiver type check for Temporal prototype methods. Returns the cast value, or null after throwing
+     * TypeError.
      */
     @SuppressWarnings("unchecked")
-    public static <T> T checkReceiver(JSContext context, JSValue thisArg, Class<T> expectedType, String typeName, String methodName) {
+    public static <T> T checkReceiver(JSContext context, JSValue thisArg, Class<T> expectedType, String typeName,
+            String methodName) {
         if (!expectedType.isInstance(thisArg)) {
-            context.throwTypeError("Method " + typeName + ".prototype." + methodName + " called on incompatible receiver");
+            context.throwTypeError(
+                    "Method " + typeName + ".prototype." + methodName + " called on incompatible receiver");
             return null;
         }
         return (T) thisArg;
@@ -104,8 +102,7 @@ public final class TemporalUtils {
     }
 
     /**
-     * Gets a calendar name display option from options.
-     * Returns "auto", "always", "never", or "critical".
+     * Gets a calendar name display option from options. Returns "auto", "always", "never", or "critical".
      */
     public static String getCalendarNameOption(JSContext context, JSValue options) {
         if (options instanceof JSUndefined || options == null) {
@@ -154,8 +151,7 @@ public final class TemporalUtils {
     }
 
     /**
-     * Gets the overflow option from an options object.
-     * Returns "constrain" or "reject".
+     * Gets the overflow option from an options object. Returns "constrain" or "reject".
      */
     public static String getOverflowOption(JSContext context, JSValue options) {
         if (options instanceof JSUndefined || options == null) {
@@ -211,9 +207,7 @@ public final class TemporalUtils {
     public static long hebrewElapsedDays(long hebrewYear) {
         long monthsElapsed = Math.floorDiv(235L * hebrewYear - 234L, 19L);
         long partsElapsed = 204L + 793L * floorMod(monthsElapsed, 1080L);
-        long hoursElapsed = 5L
-                + 12L * monthsElapsed
-                + 793L * Math.floorDiv(monthsElapsed, 1080L)
+        long hoursElapsed = 5L + 12L * monthsElapsed + 793L * Math.floorDiv(monthsElapsed, 1080L)
                 + Math.floorDiv(partsElapsed, 1080L);
         long conjunctionParts = 1080L * floorMod(hoursElapsed, 24L) + floorMod(partsElapsed, 1080L);
         long dayNumber = 1L + 29L * monthsElapsed + Math.floorDiv(hoursElapsed, 24L);
@@ -248,6 +242,21 @@ public final class TemporalUtils {
         return hebrewElapsedDays(hebrewYear + 1L) - hebrewElapsedDays(hebrewYear);
     }
 
+    public static int islamicDaysBeforeYear(int islamicYear) {
+        return (int) (354L * (islamicYear - 1L) + Math.floorDiv(11L * islamicYear + 3L, 30L));
+    }
+
+    public static int islamicDaysInMonth(int islamicYear, int islamicMonth) {
+        if (islamicMonth < 1 || islamicMonth > 12) {
+            return 0;
+        }
+        if (islamicMonth == 12) {
+            long yearLength = islamicDaysBeforeYear(islamicYear + 1) - islamicDaysBeforeYear(islamicYear);
+            return (int) (yearLength - 325L);
+        }
+        return islamicMonth % 2 == 1 ? 30 : 29;
+    }
+
     public static boolean isLeapYear(int year) {
         if (year % 4 != 0) {
             return false;
@@ -256,6 +265,14 @@ public final class TemporalUtils {
             return true;
         }
         return year % 400 == 0;
+    }
+
+    /**
+     * Returns true if firstDate surpasses secondDate in the direction indicated by sign. Positive sign means firstDate
+     * is later; negative sign means firstDate is earlier.
+     */
+    public static boolean isoDateSurpasses(int sign, IsoDate firstDate, IsoDate secondDate) {
+        return sign * firstDate.compareTo(secondDate) > 0;
     }
 
     public static boolean isOffsetTimeZoneIdentifier(String timeZoneId) {
@@ -276,47 +293,23 @@ public final class TemporalUtils {
     }
 
     public static boolean isValidEpochNanoseconds(BigInteger epochNanoseconds) {
-        return epochNanoseconds.compareTo(NS_MIN_INSTANT) >= 0
-                && epochNanoseconds.compareTo(NS_MAX_INSTANT) <= 0;
-    }
-
-    public static int islamicDaysBeforeYear(int islamicYear) {
-        return (int) (354L * (islamicYear - 1L) + Math.floorDiv(11L * islamicYear + 3L, 30L));
-    }
-
-    public static int islamicDaysInMonth(int islamicYear, int islamicMonth) {
-        if (islamicMonth < 1 || islamicMonth > 12) {
-            return 0;
-        }
-        if (islamicMonth == 12) {
-            long yearLength = islamicDaysBeforeYear(islamicYear + 1)
-                    - islamicDaysBeforeYear(islamicYear);
-            return (int) (yearLength - 325L);
-        }
-        return islamicMonth % 2 == 1 ? 30 : 29;
-    }
-
-    /**
-     * Returns true if firstDate surpasses secondDate in the direction indicated by sign.
-     * Positive sign means firstDate is later; negative sign means firstDate is earlier.
-     */
-    public static boolean isoDateSurpasses(int sign, IsoDate firstDate, IsoDate secondDate) {
-        return sign * firstDate.compareTo(secondDate) > 0;
+        return epochNanoseconds.compareTo(NS_MIN_INSTANT) >= 0 && epochNanoseconds.compareTo(NS_MAX_INSTANT) <= 0;
     }
 
     /**
      * Appends calendar annotation to string if needed.
      */
-    public static String maybeAppendCalendar(String dateTimeString, TemporalCalendarId calendarId, String calendarNameOption) {
+    public static String maybeAppendCalendar(String dateTimeString, TemporalCalendarId calendarId,
+            String calendarNameOption) {
         switch (calendarNameOption) {
-            case "never":
+            case "never" :
                 return dateTimeString;
-            case "always":
+            case "always" :
                 return dateTimeString + "[u-ca=" + calendarId.identifier() + "]";
-            case "critical":
+            case "critical" :
                 return dateTimeString + "[!u-ca=" + calendarId.identifier() + "]";
-            case "auto":
-            default:
+            case "auto" :
+            default :
                 if (calendarId == TemporalCalendarId.ISO8601) {
                     return dateTimeString;
                 }
@@ -332,7 +325,8 @@ public final class TemporalUtils {
     public static BigInteger nanosecondsBetween(LocalDateTime startDateTime, LocalDateTime endDateTime) {
         BigInteger startSeconds = BigInteger.valueOf(startDateTime.toEpochSecond(ZoneOffset.UTC));
         BigInteger endSeconds = BigInteger.valueOf(endDateTime.toEpochSecond(ZoneOffset.UTC));
-        BigInteger secondDifference = endSeconds.subtract(startSeconds).multiply(TemporalConstants.BI_SECOND_NANOSECONDS);
+        BigInteger secondDifference = endSeconds.subtract(startSeconds)
+                .multiply(TemporalConstants.BI_SECOND_NANOSECONDS);
         long nanosecondDifference = endDateTime.getNano() - startDateTime.getNano();
         return secondDifference.add(BigInteger.valueOf(nanosecondDifference));
     }
@@ -354,12 +348,8 @@ public final class TemporalUtils {
         return sign * (hours * 3600 + minutes * 60);
     }
 
-    public static <Key, Value> void putBoundedMapEntry(
-            ConcurrentHashMap<Key, Value> cache,
-            Queue<Key> evictionQueue,
-            Key key,
-            Value value,
-            int maximumSize) {
+    public static <Key, Value> void putBoundedMapEntry(ConcurrentHashMap<Key, Value> cache, Queue<Key> evictionQueue,
+            Key key, Value value, int maximumSize) {
         Value previousValue = cache.put(key, value);
         if (previousValue == null) {
             evictionQueue.offer(key);
@@ -373,10 +363,7 @@ public final class TemporalUtils {
         }
     }
 
-    public static <Value> void putBoundedSetEntry(
-            Set<Value> cache,
-            Queue<Value> evictionQueue,
-            Value value,
+    public static <Value> void putBoundedSetEntry(Set<Value> cache, Queue<Value> evictionQueue, Value value,
             int maximumSize) {
         boolean inserted = cache.add(value);
         if (inserted) {
@@ -457,8 +444,8 @@ public final class TemporalUtils {
     }
 
     /**
-     * Converts a JSValue to a finite integer or throws a RangeError.
-     * Returns Integer.MIN_VALUE if a pending exception was set.
+     * Converts a JSValue to a finite integer or throws a RangeError. Returns Integer.MIN_VALUE if a pending exception
+     * was set.
      */
     public static int toIntegerThrowOnInfinity(JSContext context, JSValue value) {
         double numericValue = JSTypeConversions.toNumber(context, value).value();
@@ -473,9 +460,8 @@ public final class TemporalUtils {
     }
 
     /**
-     * Converts a JSValue to a finite integral long or throws a RangeError.
-     * Unlike toIntegerThrowOnInfinity, this rejects fractional values.
-     * Returns Long.MIN_VALUE if a pending exception was set.
+     * Converts a JSValue to a finite integral long or throws a RangeError. Unlike toIntegerThrowOnInfinity, this
+     * rejects fractional values. Returns Long.MIN_VALUE if a pending exception was set.
      */
     public static long toLongIfIntegral(JSContext context, JSValue value) {
         double numericValue = JSTypeConversions.toNumber(context, value).value();
@@ -493,10 +479,7 @@ public final class TemporalUtils {
         return (long) numericValue;
     }
 
-    public static JSObject toOptionalOptionsObject(
-            JSContext context,
-            JSValue optionsValue,
-            String invalidTypeMessage) {
+    public static JSObject toOptionalOptionsObject(JSContext context, JSValue optionsValue, String invalidTypeMessage) {
         if (optionsValue instanceof JSUndefined || optionsValue == null) {
             return null;
         }

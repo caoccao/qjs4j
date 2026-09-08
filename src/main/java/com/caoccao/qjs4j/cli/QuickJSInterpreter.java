@@ -28,6 +28,7 @@ import java.util.List;
 /**
  * Command-line JavaScript interpreter.
  * <p>
+ *
  * <pre>
  * qjs4j                        start the REPL
  * qjs4j script.js [args...]    run a script
@@ -35,9 +36,8 @@ import java.util.List;
  * qjs4j -e 'code'              evaluate the given source
  * </pre>
  * <p>
- * The script's own name and any trailing arguments are exposed to the script as
- * {@code globalThis.scriptArgs}. An uncaught error is reported on standard error and exits with
- * status 1.
+ * The script's own name and any trailing arguments are exposed to the script as {@code globalThis.scriptArgs}. An
+ * uncaught error is reported on standard error and exits with status 1.
  */
 public final class QuickJSInterpreter {
     private static final int EXIT_FAILURE = 1;
@@ -46,13 +46,13 @@ public final class QuickJSInterpreter {
     /**
      * Render a JavaScript error for the terminal, including its stack when it has one.
      * <p>
-     * The stack is read out of physical storage, never through {@code Get(error, "stack")}. An
-     * ordinary property read runs a {@code stack} getter or a Proxy trap on the thrown value, which
-     * means the failing script chooses what the interpreter prints while reporting its own crash:
-     * it can spoof the trace, do unbounded work, or throw a second error out of the reporting path.
-     * A thrown Proxy and an accessor {@code stack} both fall back to the headline.
+     * The stack is read out of physical storage, never through {@code Get(error, "stack")}. An ordinary property read
+     * runs a {@code stack} getter or a Proxy trap on the thrown value, which means the failing script chooses what the
+     * interpreter prints while reporting its own crash: it can spoof the trace, do unbounded work, or throw a second
+     * error out of the reporting path. A thrown Proxy and an accessor {@code stack} both fall back to the headline.
      *
-     * @param exception the uncaught exception
+     * @param exception
+     *            the uncaught exception
      * @return the text to print
      */
     private static String describe(JSException exception) {
@@ -76,7 +76,7 @@ public final class QuickJSInterpreter {
                 Usage: qjs4j [options] [script.js] [args...]
                        qjs4j -e <code>
                        qjs4j                       start the REPL
-                
+
                 Options:
                   -m, --module    evaluate the script as an ES module
                   -e, --eval      evaluate the given source instead of a file
@@ -86,7 +86,8 @@ public final class QuickJSInterpreter {
     /**
      * Run the interpreter.
      *
-     * @param args command-line arguments
+     * @param args
+     *            command-line arguments
      * @return the process exit status
      */
     static int run(String[] args) {
@@ -144,8 +145,7 @@ public final class QuickJSInterpreter {
             try {
                 source = Files.readString(Path.of(filename));
             } catch (IOException | RuntimeException e) {
-                System.err.println("qjs4j: cannot read " + filename
-                        + ": " + e.getClass().getSimpleName()
+                System.err.println("qjs4j: cannot read " + filename + ": " + e.getClass().getSimpleName()
                         + (e.getMessage() == null ? "" : " (" + e.getMessage() + ")"));
                 return EXIT_FAILURE;
             }
@@ -176,9 +176,12 @@ public final class QuickJSInterpreter {
     /**
      * Expose the script name and its trailing arguments as {@code globalThis.scriptArgs}.
      *
-     * @param context    the context to populate
-     * @param sourceName the script name, used as {@code scriptArgs[0]}
-     * @param scriptArgs the trailing arguments
+     * @param context
+     *            the context to populate
+     * @param sourceName
+     *            the script name, used as {@code scriptArgs[0]}
+     * @param scriptArgs
+     *            the trailing arguments
      */
     private static void setScriptArgs(JSContext context, String sourceName, List<String> scriptArgs) {
         JSArray argv = context.createJSArray();

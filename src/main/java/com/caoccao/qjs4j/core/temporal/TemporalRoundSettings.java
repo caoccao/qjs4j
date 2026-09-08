@@ -21,14 +21,14 @@ import com.caoccao.qjs4j.core.*;
 /**
  * Parsed and validated settings for Temporal round() operations.
  * <p>
- * The {@link #parse} factory method consolidates the duplicated round-option parsing
- * logic from PlainTime, PlainDateTime, and ZonedDateTime prototypes.
+ * The {@link #parse} factory method consolidates the duplicated round-option parsing logic from PlainTime,
+ * PlainDateTime, and ZonedDateTime prototypes.
  */
 public record TemporalRoundSettings(TemporalUnit smallestUnit, long roundingIncrement,
-                                    TemporalRoundingMode roundingMode) {
+        TemporalRoundingMode roundingMode) {
 
-    private static String getRequiredStringOption(
-            JSContext context, JSObject optionsObject, String optionName, String missingMessage) {
+    private static String getRequiredStringOption(JSContext context, JSObject optionsObject, String optionName,
+            String missingMessage) {
         JSValue optionValue = optionsObject.get(PropertyKey.fromString(optionName));
         if (context.hasPendingException()) {
             return null;
@@ -72,16 +72,17 @@ public record TemporalRoundSettings(TemporalUnit smallestUnit, long roundingIncr
     /**
      * Parses round options from a JS value (either a unit string or an options object).
      *
-     * @param context    the JS context
-     * @param roundTo    the raw JS argument (string or options object)
-     * @param allowedMin the largest allowed unit (e.g. HOUR for PlainTime, DAY for others)
-     * @param allowedMax the smallest allowed unit (typically NANOSECOND)
+     * @param context
+     *            the JS context
+     * @param roundTo
+     *            the raw JS argument (string or options object)
+     * @param allowedMin
+     *            the largest allowed unit (e.g. HOUR for PlainTime, DAY for others)
+     * @param allowedMax
+     *            the smallest allowed unit (typically NANOSECOND)
      * @return parsed settings, or null if a JS error was thrown
      */
-    public static TemporalRoundSettings parse(
-            JSContext context,
-            JSValue roundTo,
-            TemporalUnit allowedMin,
+    public static TemporalRoundSettings parse(JSContext context, JSValue roundTo, TemporalUnit allowedMin,
             TemporalUnit allowedMax) {
         long roundingIncrement = 1L;
         TemporalRoundingMode roundingMode = TemporalRoundingMode.HALF_EXPAND;
@@ -94,7 +95,8 @@ public record TemporalRoundSettings(TemporalUnit smallestUnit, long roundingIncr
             if (context.hasPendingException()) {
                 return null;
             }
-            String roundingModeText = TemporalUtils.getStringOption(context, optionsObject, "roundingMode", "halfExpand");
+            String roundingModeText = TemporalUtils.getStringOption(context, optionsObject, "roundingMode",
+                    "halfExpand");
             if (context.hasPendingException() || roundingModeText == null) {
                 return null;
             }
@@ -103,8 +105,7 @@ public record TemporalRoundSettings(TemporalUnit smallestUnit, long roundingIncr
                 context.throwRangeError("Temporal error: Invalid roundingMode option: " + roundingModeText);
                 return null;
             }
-            smallestUnitText = getRequiredStringOption(
-                    context, optionsObject, "smallestUnit",
+            smallestUnitText = getRequiredStringOption(context, optionsObject, "smallestUnit",
                     "Temporal error: smallestUnit is required.");
             if (context.hasPendingException() || smallestUnitText == null) {
                 return null;
@@ -115,8 +116,7 @@ public record TemporalRoundSettings(TemporalUnit smallestUnit, long roundingIncr
         }
 
         TemporalUnit smallestUnit = TemporalUnit.fromString(smallestUnitText).orElse(null);
-        if (smallestUnit == null
-                || smallestUnit.rank() < allowedMin.rank()
+        if (smallestUnit == null || smallestUnit.rank() < allowedMin.rank()
                 || smallestUnit.rank() > allowedMax.rank()) {
             context.throwRangeError("Temporal error: Invalid unit for rounding: " + smallestUnitText);
             return null;

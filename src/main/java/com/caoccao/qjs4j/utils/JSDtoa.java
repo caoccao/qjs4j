@@ -19,34 +19,24 @@ package com.caoccao.qjs4j.utils;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 
 /**
- * QuickJS-compatible dtoa (double-to-ASCII) implementation.
- * Based on QuickJS dtoa.c by Fabrice Bellard.
+ * QuickJS-compatible dtoa (double-to-ASCII) implementation. Based on QuickJS dtoa.c by Fabrice Bellard.
  * <p>
- * This implementation uses arbitrary precision arithmetic to match
- * JavaScript's Number.prototype.toString(radix) behavior exactly.
+ * This implementation uses arbitrary precision arithmetic to match JavaScript's Number.prototype.toString(radix)
+ * behavior exactly.
  */
 public final class JSDtoa {
 
     // Maximum number of digits for each radix (radix 2 to 36)
-    private static final int[] DTOA_MAX_DIGITS = {
-            54, 35, 28, 24, 22, 20, 19, 18, 17, 17, 16, 16, 15, 15, 15, 14, 14, 14, 14, 14, 13,
-            13, 13, 13, 13, 13, 13, 12, 12, 12, 12, 12, 12, 12, 12
-    };
+    private static final int[] DTOA_MAX_DIGITS = {54, 35, 28, 24, 22, 20, 19, 18, 17, 17, 16, 16, 15, 15, 15, 14, 14,
+            14, 14, 14, 13, 13, 13, 13, 13, 13, 13, 12, 12, 12, 12, 12, 12, 12, 12};
     private static final int MAX_LIMBS = 256;
     private static final int MAX_RADIX = 36;
     // MUL_LOG2_RADIX table (multiplier for floor(log_radix(2^n)))
     private static final int MUL_LOG2_BASE = 24;
-    private static final int[] MUL_LOG2_TABLE = {
-            0x000000, 0xa1849d, 0x000000, 0x6e40d2,
-            0x6308c9, 0x5b3065, 0x000000, 0x50c24e,
-            0x4d104d, 0x4a0027, 0x4768ce, 0x452e54,
-            0x433d00, 0x418677, 0x000000, 0x3ea16b,
-            0x3d645a, 0x3c43c2, 0x3b3b9a, 0x3a4899,
-            0x39680b, 0x3897b3, 0x37d5af, 0x372069,
-            0x367686, 0x35d6df, 0x354072, 0x34b261,
-            0x342bea, 0x33ac62, 0x000000, 0x32bfd9,
-            0x3251dd, 0x31e8d6, 0x318465
-    };
+    private static final int[] MUL_LOG2_TABLE = {0x000000, 0xa1849d, 0x000000, 0x6e40d2, 0x6308c9, 0x5b3065, 0x000000,
+            0x50c24e, 0x4d104d, 0x4a0027, 0x4768ce, 0x452e54, 0x433d00, 0x418677, 0x000000, 0x3ea16b, 0x3d645a,
+            0x3c43c2, 0x3b3b9a, 0x3a4899, 0x39680b, 0x3897b3, 0x37d5af, 0x372069, 0x367686, 0x35d6df, 0x354072,
+            0x34b261, 0x342bea, 0x33ac62, 0x000000, 0x32bfd9, 0x3251dd, 0x31e8d6, 0x318465};
 
     /**
      * Compute mantissa and adjust E so that mantissa < radix^P.
@@ -126,11 +116,13 @@ public final class JSDtoa {
 
         if (E <= 0) {
             result.append("0.");
-            for (int i = 0; i < -E; i++) result.append('0');
+            for (int i = 0; i < -E; i++)
+                result.append('0');
             result.append(digits);
         } else if (E >= P) {
             result.append(digits);
-            for (int i = 0; i < E - P; i++) result.append('0');
+            for (int i = 0; i < E - P; i++)
+                result.append('0');
         } else {
             result.append(digits, 0, E);
             result.append('.');
@@ -196,7 +188,8 @@ public final class JSDtoa {
     }
 
     private static int mpNormalize(int[] limbs, int len) {
-        while (len > 1 && limbs[len - 1] == 0) len--;
+        while (len > 1 && limbs[len - 1] == 0)
+            len--;
         return len;
     }
 
@@ -360,13 +353,14 @@ public final class JSDtoa {
 
     private static long pow(int base, int exp) {
         long r = 1;
-        for (int i = 0; i < exp; i++) r *= base;
+        for (int i = 0; i < exp; i++)
+            r *= base;
         return r;
     }
 
     /**
-     * Reconstruct double from mantissa in radix representation.
-     * d = m * radix^f where f = E - P (position of decimal point adjustment)
+     * Reconstruct double from mantissa in radix representation. d = m * radix^f where f = E - P (position of decimal
+     * point adjustment)
      */
     private static double reconstructDouble(long m, int radix, int f) {
         if (m == 0) {
@@ -409,7 +403,7 @@ public final class JSDtoa {
             return 0.0;
         }
 
-        int e = log2 + 1 + binaryExp;  // The true exponent
+        int e = log2 + 1 + binaryExp; // The true exponent
 
         // Handle denormals and overflow
         if (e < -1074) {
@@ -451,7 +445,7 @@ public final class JSDtoa {
             mant >>>= shift;
         } else {
             biasedExp = e + 1022;
-            mant &= 0x000FFFFFFFFFFFFFL;  // Remove implicit bit
+            mant &= 0x000FFFFFFFFFFFFFL; // Remove implicit bit
         }
 
         long bits = ((long) biasedExp << 52) | mant;

@@ -22,13 +22,10 @@ package com.caoccao.qjs4j.compilation.ast;
 public final class ConditionalExpression extends Expression {
     private final Expression alternate;
     private final Expression consequent;
-    private final Expression test;
     private Boolean directEvalVarArgumentsInside;
+    private final Expression test;
 
-    public ConditionalExpression(
-            Expression test,
-            Expression consequent,
-            Expression alternate,
+    public ConditionalExpression(Expression test, Expression consequent, Expression alternate,
             SourceLocation location) {
         super(location);
         this.test = test;
@@ -93,7 +90,6 @@ public final class ConditionalExpression extends Expression {
 
     @Override
     public boolean hasTailCallInTailPosition() {
-        return getConsequent().hasTailCallInTailPosition()
-                || getAlternate().hasTailCallInTailPosition();
+        return getConsequent().hasTailCallInTailPosition() || getAlternate().hasTailCallInTailPosition();
     }
 }

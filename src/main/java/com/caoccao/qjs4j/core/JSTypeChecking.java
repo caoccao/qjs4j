@@ -20,16 +20,14 @@ import com.caoccao.qjs4j.builtins.NumberPrototype;
 import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 
 /**
- * Type checking utilities for JavaScript values.
- * Based on QuickJS quickjs.c type checking macros.
+ * Type checking utilities for JavaScript values. Based on QuickJS quickjs.c type checking macros.
  * <p>
  * Provides fast type checking predicates for all JavaScript value types.
  */
 public final class JSTypeChecking {
 
     /**
-     * Get the JavaScript type name of a value.
-     * Matches the behavior of JavaScript's typeof operator.
+     * Get the JavaScript type name of a value. Matches the behavior of JavaScript's typeof operator.
      */
     public static String getTypeName(JSValue value) {
         if (value instanceof JSUndefined) {
@@ -64,9 +62,8 @@ public final class JSTypeChecking {
     }
 
     /**
-     * ES2024 7.2.2 IsArray(argument).
-     * Unwraps Proxy chains to check the target, following QuickJS JS_IsArray.
-     * Throws TypeError on revoked proxies via context.
+     * ES2024 7.2.2 IsArray(argument). Unwraps Proxy chains to check the target, following QuickJS JS_IsArray. Throws
+     * TypeError on revoked proxies via context.
      *
      * @return 1 if array, 0 if not, -1 if exception (revoked proxy)
      */
@@ -97,8 +94,7 @@ public final class JSTypeChecking {
     // Primitive type checks
 
     /**
-     * Check if value is an array. Simple version without context
-     * that cannot throw on revoked proxies.
+     * Check if value is an array. Simple version without context that cannot throw on revoked proxies.
      */
     public static boolean isArray(JSValue value) {
         if (value instanceof JSObject obj && obj.isArrayObject()) {
@@ -224,13 +220,9 @@ public final class JSTypeChecking {
      * Check if value is a primitive (not an object).
      */
     public static boolean isPrimitive(JSValue value) {
-        return value instanceof JSUndefined ||
-                value instanceof JSNull ||
-                value instanceof JSBoolean ||
-                value instanceof JSNumber ||
-                value instanceof JSString ||
-                value instanceof JSSymbol ||
-                value instanceof JSBigInt;
+        return value instanceof JSUndefined || value instanceof JSNull || value instanceof JSBoolean
+                || value instanceof JSNumber || value instanceof JSString || value instanceof JSSymbol
+                || value instanceof JSBigInt;
     }
 
     // Number-specific checks
@@ -243,9 +235,7 @@ public final class JSTypeChecking {
             return false;
         }
         double d = n.value();
-        return Double.isFinite(d) &&
-                d == Math.floor(d) &&
-                Math.abs(d) <= NumberPrototype.MAX_SAFE_INTEGER;
+        return Double.isFinite(d) && d == Math.floor(d) && Math.abs(d) <= NumberPrototype.MAX_SAFE_INTEGER;
     }
 
     /**
@@ -295,8 +285,10 @@ public final class JSTypeChecking {
     /**
      * One step of {@link #unwrapTargets(JSValue, boolean)}.
      *
-     * @param value                the current value
-     * @param unwrapBoundFunctions true to also follow {@code [[BoundTargetFunction]]}
+     * @param value
+     *            the current value
+     * @param unwrapBoundFunctions
+     *            true to also follow {@code [[BoundTargetFunction]]}
      * @return the next value, or {@code null} when this one is the end of the chain
      */
     private static JSValue nextTarget(JSValue value, boolean unwrapBoundFunctions) {
@@ -317,8 +309,7 @@ public final class JSTypeChecking {
     }
 
     /**
-     * Require that value is not null or undefined.
-     * Throws if value is nullish.
+     * Require that value is not null or undefined. Throws if value is nullish.
      */
     public static JSValue requireNotNullish(JSValue value, String message) {
         if (isNullish(value)) {
@@ -349,21 +340,20 @@ public final class JSTypeChecking {
     }
 
     /**
-     * Require that value is of a specific type.
-     * Throws if value is not of the expected type.
+     * Require that value is of a specific type. Throws if value is not of the expected type.
      */
     public static <T extends JSValue> T requireType(JSValue value, Class<T> expectedType, String message) {
         if (!expectedType.isInstance(value)) {
-            String msg = message != null ? message :
-                    "Expected " + expectedType.getSimpleName() + " but got " + getTypeName(value);
+            String msg = message != null
+                    ? message
+                    : "Expected " + expectedType.getSimpleName() + " but got " + getTypeName(value);
             throw new JSTypeErrorException(msg);
         }
         return expectedType.cast(value);
     }
 
     /**
-     * Get the typeof string for a value.
-     * ES2020 13.5.3
+     * Get the typeof string for a value. ES2020 13.5.3
      */
     public static String typeof(JSValue value) {
         if (value instanceof JSUndefined) {
@@ -400,22 +390,22 @@ public final class JSTypeChecking {
     }
 
     /**
-     * Follow a chain of {@code Proxy} targets — and optionally bound-function targets — to the
-     * value at the end of it.
+     * Follow a chain of {@code Proxy} targets — and optionally bound-function targets — to the value at the end of it.
      * <p>
-     * Iterative, and with no depth cutoff. Classification used to recurse with a limit of 1,000
-     * and then answer {@code false}, so wrapping a function in 1,002 proxies changed its
-     * {@code typeof} from {@code "function"} to {@code "object"} and made it unconstructable:
-     * a valid object's ECMAScript type depended on how many times it had been wrapped. A target
-     * is fixed when its {@code Proxy} is created, so the walk cannot see a chain change under it.
+     * Iterative, and with no depth cutoff. Classification used to recurse with a limit of 1,000 and then answer
+     * {@code false}, so wrapping a function in 1,002 proxies changed its {@code typeof} from {@code "function"} to
+     * {@code "object"} and made it unconstructable: a valid object's ECMAScript type depended on how many times it had
+     * been wrapped. A target is fixed when its {@code Proxy} is created, so the walk cannot see a chain change under
+     * it.
      * <p>
-     * Termination does not rely on the chain being acyclic. The {@code Proxy} constructor cannot
-     * build a cycle — the target must already exist — but the raw embedder API is not bound by
-     * that, so Floyd's algorithm runs alongside the walk and reports a cycle as "not found"
-     * instead of spinning.
+     * Termination does not rely on the chain being acyclic. The {@code Proxy} constructor cannot build a cycle — the
+     * target must already exist — but the raw embedder API is not bound by that, so Floyd's algorithm runs alongside
+     * the walk and reports a cycle as "not found" instead of spinning.
      *
-     * @param value                the value to unwrap
-     * @param unwrapBoundFunctions true to also follow {@code [[BoundTargetFunction]]}
+     * @param value
+     *            the value to unwrap
+     * @param unwrapBoundFunctions
+     *            true to also follow {@code [[BoundTargetFunction]]}
      * @return the value at the end of the chain, or {@code null} when the chain is cyclic
      */
     private static JSValue unwrapTargets(JSValue value, boolean unwrapBoundFunctions) {

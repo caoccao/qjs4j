@@ -19,19 +19,18 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 /**
- * Prototype methods for async generator objects.
- * Based on ES2018 AsyncGenerator.prototype specification.
+ * Prototype methods for async generator objects. Based on ES2018 AsyncGenerator.prototype specification.
  */
 public final class AsyncGeneratorPrototype {
     /**
-     * Create an async generator that yields values with a delay.
-     * Useful for simulating async operations.
+     * Create an async generator that yields values with a delay. Useful for simulating async operations.
      * <p>
-     * Note: This is a simplified version. A full implementation would use
-     * actual timers or scheduled microtasks.
+     * Note: This is a simplified version. A full implementation would use actual timers or scheduled microtasks.
      *
-     * @param context The execution context
-     * @param values  Values to yield
+     * @param context
+     *            The execution context
+     * @param values
+     *            Values to yield
      * @return An async generator that yields values "asynchronously"
      */
     public static JSAsyncGenerator createDelayedGenerator(JSContext context, JSValue[] values) {
@@ -80,11 +79,13 @@ public final class AsyncGeneratorPrototype {
     }
 
     /**
-     * Create an async generator that yields values from a promise array.
-     * Each promise is awaited before yielding its value.
+     * Create an async generator that yields values from a promise array. Each promise is awaited before yielding its
+     * value.
      *
-     * @param context  The execution context
-     * @param promises Array of promises to yield
+     * @param context
+     *            The execution context
+     * @param promises
+     *            Array of promises to yield
      * @return An async generator
      */
     public static JSAsyncGenerator createFromPromises(JSContext context, JSPromise[] promises) {
@@ -122,29 +123,20 @@ public final class AsyncGeneratorPrototype {
             JSPromise currentPromise = promises[currentIndex];
             JSPromise resultPromise = context.createJSPromise();
 
-            currentPromise.addReactions(
-                    new JSPromise.ReactionRecord(
-                            new JSNativeFunction(context, "onFulfilled", 1, (childContext, thisArg, args) -> {
-                                JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                                JSObject result = context.createJSObject();
-                                result.set(PropertyKey.VALUE, value);
-                                result.set(PropertyKey.DONE, JSBoolean.FALSE);
-                                resultPromise.fulfill(result);
-                                return JSUndefined.INSTANCE;
-                            }),
-                            resultPromise,
-                            context
-                    ),
-                    new JSPromise.ReactionRecord(
+            currentPromise.addReactions(new JSPromise.ReactionRecord(
+                    new JSNativeFunction(context, "onFulfilled", 1, (childContext, thisArg, args) -> {
+                        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                        JSObject result = context.createJSObject();
+                        result.set(PropertyKey.VALUE, value);
+                        result.set(PropertyKey.DONE, JSBoolean.FALSE);
+                        resultPromise.fulfill(result);
+                        return JSUndefined.INSTANCE;
+                    }), resultPromise, context), new JSPromise.ReactionRecord(
                             new JSNativeFunction(context, "onRejected", 1, (childContext, thisArg, args) -> {
                                 JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                                 resultPromise.reject(error);
                                 return JSUndefined.INSTANCE;
-                            }),
-                            resultPromise,
-                            context
-                    )
-            );
+                            }), resultPromise, context));
 
             return resultPromise;
         }, context);
@@ -154,15 +146,16 @@ public final class AsyncGeneratorPrototype {
      * Create a simple async generator that yields a sequence of promises.
      * <p>
      * Example usage:
+     *
      * <pre>
-     * JSAsyncGenerator gen = AsyncGeneratorPrototype.createFromValues(
-     *     context,
-     *     new JSValue[]{JSNumber.of(1), JSNumber.of(2), JSNumber.of(3)}
-     * );
+     * JSAsyncGenerator gen = AsyncGeneratorPrototype.createFromValues(context,
+     *         new JSValue[]{JSNumber.of(1), JSNumber.of(2), JSNumber.of(3)});
      * </pre>
      *
-     * @param context The execution context
-     * @param values  Values to yield (each wrapped in a promise)
+     * @param context
+     *            The execution context
+     * @param values
+     *            Values to yield (each wrapped in a promise)
      * @return An async generator that yields the values
      */
     public static JSAsyncGenerator createFromValues(JSContext context, JSValue[] values) {
@@ -216,10 +209,10 @@ public final class AsyncGeneratorPrototype {
     }
 
     /**
-     * AsyncGenerator.prototype.next(value)
-     * Get the next value from the async generator.
+     * AsyncGenerator.prototype.next(value) Get the next value from the async generator.
      *
-     * @see <a href="https://tc39.es/ecma262/#sec-asyncgenerator-prototype-next">ECMAScript AsyncGenerator.prototype.next</a>
+     * @see <a href="https://tc39.es/ecma262/#sec-asyncgenerator-prototype-next">ECMAScript
+     *      AsyncGenerator.prototype.next</a>
      */
     public static JSValue next(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSAsyncGenerator generator)) {
@@ -230,25 +223,20 @@ public final class AsyncGeneratorPrototype {
         return generator.next(value);
     }
 
-    private static JSValue rejectIncompatibleReceiver(
-            JSContext context,
-            String methodName,
-            JSValue receiver) {
+    private static JSValue rejectIncompatibleReceiver(JSContext context, String methodName, JSValue receiver) {
         JSPromise promise = context.createJSPromise();
-        JSValue typeError = context.throwTypeError(
-                "Method [AsyncGenerator].prototype." + methodName
-                        + " called on incompatible receiver "
-                        + formatIncompatibleReceiver(receiver));
+        JSValue typeError = context.throwTypeError("Method [AsyncGenerator].prototype." + methodName
+                + " called on incompatible receiver " + formatIncompatibleReceiver(receiver));
         context.clearAllPendingExceptions();
         promise.reject(typeError);
         return promise;
     }
 
     /**
-     * AsyncGenerator.prototype.return(value)
-     * Return a value and close the async generator.
+     * AsyncGenerator.prototype.return(value) Return a value and close the async generator.
      *
-     * @see <a href="https://tc39.es/ecma262/#sec-asyncgenerator-prototype-return">ECMAScript AsyncGenerator.prototype.return</a>
+     * @see <a href="https://tc39.es/ecma262/#sec-asyncgenerator-prototype-return">ECMAScript
+     *      AsyncGenerator.prototype.return</a>
      */
     public static JSValue return_(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSAsyncGenerator generator)) {
@@ -260,10 +248,10 @@ public final class AsyncGeneratorPrototype {
     }
 
     /**
-     * AsyncGenerator.prototype.throw(exception)
-     * Throw an exception into the async generator.
+     * AsyncGenerator.prototype.throw(exception) Throw an exception into the async generator.
      *
-     * @see <a href="https://tc39.es/ecma262/#sec-asyncgenerator-prototype-throw">ECMAScript AsyncGenerator.prototype.throw</a>
+     * @see <a href="https://tc39.es/ecma262/#sec-asyncgenerator-prototype-throw">ECMAScript
+     *      AsyncGenerator.prototype.throw</a>
      */
     public static JSValue throw_(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSAsyncGenerator generator)) {

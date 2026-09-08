@@ -33,7 +33,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.at on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.at on a typed array backed by a detached or out-of-bounds buffer");
         }
         // Step 3: Capture length before coercion
         int length = typedArray.getLength();
@@ -68,8 +69,8 @@ public final class TypedArrayPrototype {
     }
 
     /**
-     * CompareTypedArrayElements per ES2024 23.2.4.4.
-     * Default comparison for typed array sort when no compareFn is provided.
+     * CompareTypedArrayElements per ES2024 23.2.4.4. Default comparison for typed array sort when no compareFn is
+     * provided.
      */
     private static int compareTypedArrayElements(JSValue x, JSValue y) {
         if (x instanceof JSBigInt xBig && y instanceof JSBigInt yBig) {
@@ -112,7 +113,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.copyWithin on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.copyWithin on a typed array backed by a detached or out-of-bounds buffer");
         }
         // Step 3: Capture length before coercion
         int length = typedArray.getLength();
@@ -122,7 +124,9 @@ public final class TypedArrayPrototype {
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        int target = (int) (relativeTarget < 0 ? Math.max(length + relativeTarget, 0) : Math.min(relativeTarget, length));
+        int target = (int) (relativeTarget < 0
+                ? Math.max(length + relativeTarget, 0)
+                : Math.min(relativeTarget, length));
 
         // Steps 8-10: Coerce start (may resize buffer)
         double relativeStart = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
@@ -151,7 +155,8 @@ public final class TypedArrayPrototype {
 
         // Step 15: Check for OOB after all argument coercion
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.copyWithin on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.copyWithin on a typed array backed by a detached or out-of-bounds buffer");
         }
 
         // Steps 15d-i: Re-read length, clamp to/from/count
@@ -222,12 +227,14 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.entries on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.entries on a typed array backed by a detached or out-of-bounds buffer");
         }
         final int[] index = {0};
         return new JSIterator(context, () -> {
             if (typedArray.isOutOfBounds()) {
-                context.throwTypeError("Cannot perform Array Iterator.prototype.next on a typed array backed by a detached or out-of-bounds buffer");
+                context.throwTypeError(
+                        "Cannot perform Array Iterator.prototype.next on a typed array backed by a detached or out-of-bounds buffer");
                 return JSIterator.IteratorResult.done(context);
             }
             if (index[0] >= typedArray.getLength()) {
@@ -247,7 +254,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.every on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.every on a typed array backed by a detached or out-of-bounds buffer");
         }
         if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
             return context.throwTypeError(args.length == 0 || args[0].isUndefined()
@@ -276,7 +284,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.fill on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.fill on a typed array backed by a detached or out-of-bounds buffer");
         }
         JSValue rawValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
@@ -327,7 +336,8 @@ public final class TypedArrayPrototype {
 
         // Step 14: Check if buffer is now detached (after value/start/end coercion)
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.fill on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.fill on a typed array backed by a detached or out-of-bounds buffer");
         }
 
         // Step 15-17: Re-read length, clamp endIndex and startIndex
@@ -357,7 +367,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.filter on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.filter on a typed array backed by a detached or out-of-bounds buffer");
         }
         if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
             return context.throwTypeError(args.length == 0 || args[0].isUndefined()
@@ -402,7 +413,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.find on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.find on a typed array backed by a detached or out-of-bounds buffer");
         }
         if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
             return context.throwTypeError(args.length == 0 || args[0].isUndefined()
@@ -431,7 +443,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.findIndex on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.findIndex on a typed array backed by a detached or out-of-bounds buffer");
         }
         if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
             return context.throwTypeError(args.length == 0 || args[0].isUndefined()
@@ -460,7 +473,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.findLast on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.findLast on a typed array backed by a detached or out-of-bounds buffer");
         }
         if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
             return context.throwTypeError(args.length == 0 || args[0].isUndefined()
@@ -489,7 +503,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.findLastIndex on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.findLastIndex on a typed array backed by a detached or out-of-bounds buffer");
         }
         if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
             return context.throwTypeError(args.length == 0 || args[0].isUndefined()
@@ -518,7 +533,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.forEach on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.forEach on a typed array backed by a detached or out-of-bounds buffer");
         }
         if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
             return context.throwTypeError(args.length == 0 || args[0].isUndefined()
@@ -529,8 +545,7 @@ public final class TypedArrayPrototype {
         int length = typedArray.getLength();
         for (int k = 0; k < length; k++) {
             JSValue kValue = safeGetElement(typedArray, k);
-            callbackFn.call(context, callbackThisArg,
-                    new JSValue[]{kValue, JSNumber.of(k), typedArray});
+            callbackFn.call(context, callbackThisArg, new JSValue[]{kValue, JSNumber.of(k), typedArray});
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -596,7 +611,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.includes on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.includes on a typed array backed by a detached or out-of-bounds buffer");
         }
         int length = typedArray.getLength();
         if (length == 0) {
@@ -632,7 +648,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.indexOf on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.indexOf on a typed array backed by a detached or out-of-bounds buffer");
         }
         int length = typedArray.getLength();
         if (length == 0) {
@@ -677,7 +694,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.join on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.join on a typed array backed by a detached or out-of-bounds buffer");
         }
         // Step 3: Capture length BEFORE separator coercion
         int length = typedArray.getLength();
@@ -713,12 +731,14 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.keys on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.keys on a typed array backed by a detached or out-of-bounds buffer");
         }
         final int[] index = {0};
         return new JSIterator(context, () -> {
             if (typedArray.isOutOfBounds()) {
-                context.throwTypeError("Cannot perform Array Iterator.prototype.next on a typed array backed by a detached or out-of-bounds buffer");
+                context.throwTypeError(
+                        "Cannot perform Array Iterator.prototype.next on a typed array backed by a detached or out-of-bounds buffer");
                 return JSIterator.IteratorResult.done(context);
             }
             if (index[0] >= typedArray.getLength()) {
@@ -734,7 +754,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.lastIndexOf on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.lastIndexOf on a typed array backed by a detached or out-of-bounds buffer");
         }
         int length = typedArray.getLength();
         if (length == 0) {
@@ -771,7 +792,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.map on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.map on a typed array backed by a detached or out-of-bounds buffer");
         }
         if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
             return context.throwTypeError(args.length == 0 || args[0].isUndefined()
@@ -809,7 +831,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.reduce on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.reduce on a typed array backed by a detached or out-of-bounds buffer");
         }
         if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
             return context.throwTypeError(args.length == 0 || args[0].isUndefined()
@@ -845,7 +868,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.reduceRight on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.reduceRight on a typed array backed by a detached or out-of-bounds buffer");
         }
         if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
             return context.throwTypeError(args.length == 0 || args[0].isUndefined()
@@ -881,7 +905,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.reverse on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.reverse on a typed array backed by a detached or out-of-bounds buffer");
         }
         int length = typedArray.getLength();
         int middle = length / 2;
@@ -896,20 +921,19 @@ public final class TypedArrayPrototype {
     }
 
     /**
-     * Safe element access that returns undefined for detached/out-of-bounds typed arrays.
-     * Per ES spec, IntegerIndexedElementGet returns undefined when the buffer is detached
-     * or the index is out of bounds.
+     * Safe element access that returns undefined for detached/out-of-bounds typed arrays. Per ES spec,
+     * IntegerIndexedElementGet returns undefined when the buffer is detached or the index is out of bounds.
      */
     private static JSValue safeGetElement(JSTypedArray typedArray, int index) {
-        if (typedArray.getBuffer().isDetached() || typedArray.isOutOfBounds() || index < 0 || index >= typedArray.getLength()) {
+        if (typedArray.getBuffer().isDetached() || typedArray.isOutOfBounds() || index < 0
+                || index >= typedArray.getLength()) {
             return JSUndefined.INSTANCE;
         }
         return typedArray.getJSElement(index);
     }
 
     /**
-     * SameValueZero comparison per ES spec.
-     * Like === except NaN equals NaN, and +0 equals -0.
+     * SameValueZero comparison per ES spec. Like === except NaN equals NaN, and +0 equals -0.
      */
     private static boolean sameValueZero(JSValue x, JSValue y) {
         if (JSTypeConversions.strictEquals(x, y)) {
@@ -956,7 +980,8 @@ public final class TypedArrayPrototype {
         // Step 7: ToObject(source)
         JSObject src = JSTypeConversions.toObject(context, source);
         if (src == null || context.hasPendingException()) {
-            return context.hasPendingException() ? context.getPendingException()
+            return context.hasPendingException()
+                    ? context.getPendingException()
                     : context.throwTypeError("Cannot convert source to object");
         }
 
@@ -998,8 +1023,7 @@ public final class TypedArrayPrototype {
 
             // After value conversion, check if buffer is still valid before writing
             int targetIndex = (int) (targetOffset + k);
-            if (!target.getBuffer().isDetached() && !target.isOutOfBounds()
-                    && targetIndex < target.getLength()) {
+            if (!target.getBuffer().isDetached() && !target.isOutOfBounds() && targetIndex < target.getLength()) {
                 target.set(PropertyKey.fromIndex(targetIndex), convertedValue);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
@@ -1009,7 +1033,8 @@ public final class TypedArrayPrototype {
         return JSUndefined.INSTANCE;
     }
 
-    private static JSValue setFromTypedArray(JSContext context, JSTypedArray target, JSTypedArray source, JSValue[] args) {
+    private static JSValue setFromTypedArray(JSContext context, JSTypedArray target, JSTypedArray source,
+            JSValue[] args) {
         // Step 3: ToIntegerOrInfinity(offset) - may detach buffer
         double targetOffsetD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
         if (context.hasPendingException()) {
@@ -1096,7 +1121,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.slice on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.slice on a typed array backed by a detached or out-of-bounds buffer");
         }
         int length = typedArray.getLength();
 
@@ -1137,7 +1163,8 @@ public final class TypedArrayPrototype {
 
         if (count > 0) {
             if (typedArray.isOutOfBounds()) {
-                return context.throwTypeError("Cannot perform TypedArray.prototype.slice on a typed array backed by a detached or out-of-bounds buffer");
+                return context.throwTypeError(
+                        "Cannot perform TypedArray.prototype.slice on a typed array backed by a detached or out-of-bounds buffer");
             }
             // Re-read length after species constructor may have resized (step 14c)
             int currentLength = typedArray.getLength();
@@ -1198,7 +1225,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.some on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.some on a typed array backed by a detached or out-of-bounds buffer");
         }
         if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
             return context.throwTypeError(args.length == 0 || args[0].isUndefined()
@@ -1227,7 +1255,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.sort on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.sort on a typed array backed by a detached or out-of-bounds buffer");
         }
         JSValue compareArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         if (!(compareArg instanceof JSUndefined)) {
@@ -1273,8 +1302,7 @@ public final class TypedArrayPrototype {
                     return 0;
                 }
                 if (!(finalCompareArg instanceof JSUndefined)) {
-                    JSValue result = callCallable(context, finalCompareArg,
-                            JSUndefined.INSTANCE, new JSValue[]{a, b});
+                    JSValue result = callCallable(context, finalCompareArg, JSUndefined.INSTANCE, new JSValue[]{a, b});
                     if (context.hasPendingException()) {
                         hasError[0] = true;
                         return 0;
@@ -1351,7 +1379,8 @@ public final class TypedArrayPrototype {
 
         // SpeciesConstructor(O, defaultConstructor)
         IJSArrayBuffer buffer = typedArray.getBuffer();
-        JSValue defaultConstructor = context.getGlobalObject().get(PropertyKey.fromString(typedArray.getTypedArrayName()));
+        JSValue defaultConstructor = context.getGlobalObject()
+                .get(PropertyKey.fromString(typedArray.getTypedArrayName()));
         JSValue constructorValue = typedArray.get(PropertyKey.CONSTRUCTOR);
         if (context.hasPendingException()) {
             return context.getPendingException();
@@ -1406,7 +1435,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.toLocaleString on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.toLocaleString on a typed array backed by a detached or out-of-bounds buffer");
         }
         int length = typedArray.getLength();
 
@@ -1454,14 +1484,14 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.toReversed on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.toReversed on a typed array backed by a detached or out-of-bounds buffer");
         }
         int length = typedArray.getLength();
 
         // Create new typed array of same type (not species - ignores species per spec)
         JSValue constructor = context.getGlobalObject().get(PropertyKey.fromString(typedArray.getTypedArrayName()));
-        JSValue result = JSReflectObject.constructSimple(context, constructor,
-                new JSValue[]{JSNumber.of(length)});
+        JSValue result = JSReflectObject.constructSimple(context, constructor, new JSValue[]{JSNumber.of(length)});
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1490,14 +1520,14 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.toSorted on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.toSorted on a typed array backed by a detached or out-of-bounds buffer");
         }
         int length = typedArray.getLength();
 
         // Create new typed array of same type (not species - ignores species per spec)
         JSValue constructor = context.getGlobalObject().get(PropertyKey.fromString(typedArray.getTypedArrayName()));
-        JSValue result = JSReflectObject.constructSimple(context, constructor,
-                new JSValue[]{JSNumber.of(length)});
+        JSValue result = JSReflectObject.constructSimple(context, constructor, new JSValue[]{JSNumber.of(length)});
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1520,8 +1550,8 @@ public final class TypedArrayPrototype {
                     return 0;
                 }
                 if (!(finalCompareArg instanceof JSUndefined)) {
-                    JSValue cmpResult = callCallable(context, finalCompareArg,
-                            JSUndefined.INSTANCE, new JSValue[]{a, b});
+                    JSValue cmpResult = callCallable(context, finalCompareArg, JSUndefined.INSTANCE,
+                            new JSValue[]{a, b});
                     if (context.hasPendingException()) {
                         hasError[0] = true;
                         return 0;
@@ -1582,13 +1612,13 @@ public final class TypedArrayPrototype {
     }
 
     /**
-     * TypedArraySpeciesCreate per ES2024 23.2.4.1.
-     * Creates a new TypedArray using the species constructor pattern.
+     * TypedArraySpeciesCreate per ES2024 23.2.4.1. Creates a new TypedArray using the species constructor pattern.
      * Includes TypedArrayCreate length validation (step 3a).
      */
     private static JSValue typedArraySpeciesCreate(JSContext context, JSTypedArray exemplar, JSValue[] args) {
         // Get the default constructor for this typed array type
-        JSValue defaultConstructor = context.getGlobalObject().get(PropertyKey.fromString(exemplar.getTypedArrayName()));
+        JSValue defaultConstructor = context.getGlobalObject()
+                .get(PropertyKey.fromString(exemplar.getTypedArrayName()));
 
         // SpeciesConstructor(exemplar, defaultConstructor)
         JSValue constructorValue = exemplar.get(PropertyKey.CONSTRUCTOR);
@@ -1644,12 +1674,14 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.values on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.values on a typed array backed by a detached or out-of-bounds buffer");
         }
         final int[] index = {0};
         return new JSIterator(context, () -> {
             if (typedArray.isOutOfBounds()) {
-                context.throwTypeError("Cannot perform Array Iterator.prototype.next on a typed array backed by a detached or out-of-bounds buffer");
+                context.throwTypeError(
+                        "Cannot perform Array Iterator.prototype.next on a typed array backed by a detached or out-of-bounds buffer");
                 return JSIterator.IteratorResult.done(context);
             }
             if (index[0] >= typedArray.getLength()) {
@@ -1665,7 +1697,8 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.with on a typed array backed by a detached or out-of-bounds buffer");
+            return context.throwTypeError(
+                    "Cannot perform TypedArray.prototype.with on a typed array backed by a detached or out-of-bounds buffer");
         }
         // Step 3: Snapshot length
         int length = typedArray.getLength();
@@ -1703,8 +1736,7 @@ public final class TypedArrayPrototype {
 
         // Step 10: TypedArrayCreateSameType uses ORIGINAL length (not currentLength)
         JSValue constructor = context.getGlobalObject().get(PropertyKey.fromString(typedArray.getTypedArrayName()));
-        JSValue result = JSReflectObject.constructSimple(context, constructor,
-                new JSValue[]{JSNumber.of(length)});
+        JSValue result = JSReflectObject.constructSimple(context, constructor, new JSValue[]{JSNumber.of(length)});
         if (context.hasPendingException()) {
             return context.getPendingException();
         }

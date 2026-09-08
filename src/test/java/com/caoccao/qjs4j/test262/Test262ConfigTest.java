@@ -23,23 +23,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * The Test262 configurations must carry the thread ceiling each suite is meant to run under.
  * <p>
- * The full suite holds a runtime and a context per worker and includes tests that build strings and
- * backtrack stacks in the tens of megabytes, so it is capped; the short subsets are not, and take
- * the machine's core count.
+ * The full suite holds a runtime and a context per worker and includes tests that build strings and backtrack stacks in
+ * the tens of megabytes, so it is capped; the short subsets are not, and take the machine's core count.
  */
 public class Test262ConfigTest {
 
     @Test
     public void testDefaultConfigurationCapsThreads() {
-        assertThat(Test262Config.loadDefault().getMaxThreadCount())
-                .isEqualTo(Test262Config.DEFAULT_MAX_THREAD_COUNT)
+        assertThat(Test262Config.loadDefault().getMaxThreadCount()).isEqualTo(Test262Config.DEFAULT_MAX_THREAD_COUNT)
                 .isEqualTo(4);
     }
 
     @Test
     public void testLanguageConfigurationIsUnlimited() {
-        assertThat(Test262Config.forLanguageTests().getMaxThreadCount())
-                .isEqualTo(Test262Config.UNLIMITED_THREAD_COUNT)
+        assertThat(Test262Config.forLanguageTests().getMaxThreadCount()).isEqualTo(Test262Config.UNLIMITED_THREAD_COUNT)
                 .isZero();
     }
 
@@ -67,8 +64,7 @@ public class Test262ConfigTest {
 
     @Test
     public void testQuickConfigurationIsUnlimited() {
-        assertThat(Test262Config.forQuickTest().getMaxThreadCount())
-                .isEqualTo(Test262Config.UNLIMITED_THREAD_COUNT)
+        assertThat(Test262Config.forQuickTest().getMaxThreadCount()).isEqualTo(Test262Config.UNLIMITED_THREAD_COUNT)
                 .isZero();
     }
 }

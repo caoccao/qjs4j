@@ -27,8 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Comprehensive tests for DataView constructor functionality.
- * Tests various constructor call patterns.
+ * Comprehensive tests for DataView constructor functionality. Tests various constructor call patterns.
  */
 public class DataViewConstructorTest extends BaseJavetTest {
 
@@ -61,9 +60,7 @@ public class DataViewConstructorTest extends BaseJavetTest {
         assertThatThrownBy(() -> resetContext().eval("""
                 const dv = new DataView(new ArrayBuffer(8));
                 dv.setBigInt64(0, 1);
-                """))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("TypeError");
+                """)).isInstanceOf(JSException.class).hasMessageContaining("TypeError");
     }
 
     @Test
@@ -334,15 +331,11 @@ public class DataViewConstructorTest extends BaseJavetTest {
         assertThatThrownBy(() -> resetContext().eval("""
                 const dv = new DataView(new ArrayBuffer(8));
                 dv.getInt8(-1);
-                """))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("RangeError");
+                """)).isInstanceOf(JSException.class).hasMessageContaining("RangeError");
         assertThatThrownBy(() -> resetContext().eval("""
                 const dv = new DataView(new ArrayBuffer(8));
                 dv.getInt8(Symbol());
-                """))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("TypeError");
+                """)).isInstanceOf(JSException.class).hasMessageContaining("TypeError");
     }
 
     @Test
@@ -376,9 +369,7 @@ public class DataViewConstructorTest extends BaseJavetTest {
 
     @Test
     public void testTypeof() {
-        assertStringWithJavet(
-                "typeof DataView;");
-        assertIntegerWithJavet(
-                "DataView.length;");
+        assertStringWithJavet("typeof DataView;");
+        assertIntegerWithJavet("DataView.length;");
     }
 }

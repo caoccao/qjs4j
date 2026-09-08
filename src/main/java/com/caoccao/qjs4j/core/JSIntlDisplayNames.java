@@ -22,26 +22,20 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * Intl.DisplayNames instance object.
- * Stores all resolved options per ECMA-402 §12.
+ * Intl.DisplayNames instance object. Stores all resolved options per ECMA-402 §12.
  */
 public final class JSIntlDisplayNames extends JSObject {
-    public static final String NAME = "Intl.DisplayNames";
     private static final Pattern CALENDAR_KEY = Pattern.compile("^[a-zA-Z0-9]{3,8}(-[a-zA-Z0-9]{3,8})*$");
     private static final Pattern CURRENCY_CODE = Pattern.compile("^[a-zA-Z]{3}$");
-    private static final Set<String> KNOWN_CALENDARS = Set.of(
-            "buddhist", "chinese", "coptic", "dangi", "ethioaa", "ethiopic",
-            "gregory", "hebrew", "indian", "islamic-civil",
-            "islamic-tbla", "islamic-umalqura", "iso8601",
-            "japanese", "persian", "roc"
-    );
+    private static final Set<String> KNOWN_CALENDARS = Set.of("buddhist", "chinese", "coptic", "dangi", "ethioaa",
+            "ethiopic", "gregory", "hebrew", "indian", "islamic-civil", "islamic-tbla", "islamic-umalqura", "iso8601",
+            "japanese", "persian", "roc");
     private static final Pattern LANGUAGE_SUBTAG = Pattern.compile("^[a-zA-Z]{2,3}$|^[a-zA-Z]{5,8}$");
+    public static final String NAME = "Intl.DisplayNames";
     private static final Pattern REGION_SUBTAG = Pattern.compile("^[a-zA-Z]{2}$|^[0-9]{3}$");
     private static final Pattern SCRIPT_SUBTAG = Pattern.compile("^[a-zA-Z]{4}$");
-    private static final Set<String> VALID_DATE_TIME_FIELDS = Set.of(
-            "era", "year", "quarter", "month", "weekOfYear", "weekday",
-            "day", "dayPeriod", "hour", "minute", "second", "timeZoneName"
-    );
+    private static final Set<String> VALID_DATE_TIME_FIELDS = Set.of("era", "year", "quarter", "month", "weekOfYear",
+            "weekday", "day", "dayPeriod", "hour", "minute", "second", "timeZoneName");
     private static final Pattern VARIANT_SUBTAG = Pattern.compile("^[a-zA-Z0-9]{5,8}$|^[0-9][a-zA-Z0-9]{3}$");
     private final String fallback;
     private final String languageDisplay;
@@ -49,90 +43,14 @@ public final class JSIntlDisplayNames extends JSObject {
     private final String style;
     private final String type;
 
-    public JSIntlDisplayNames(JSContext context, Locale locale, String style, String type, String fallback, String languageDisplay) {
+    public JSIntlDisplayNames(JSContext context, Locale locale, String style, String type, String fallback,
+            String languageDisplay) {
         super(context);
         this.locale = locale;
         this.style = style;
         this.type = type;
         this.fallback = fallback;
         this.languageDisplay = languageDisplay;
-    }
-
-    /**
-     * Validates code as a structurally valid unicode_language_id per ECMA-402.
-     * Format: language ("-" script)? ("-" region)? ("-" variant)*
-     * Rejects: "root", bare script subtags, singletons, underscore separators.
-     */
-    private static boolean isStructurallyValidLanguageTag(String code) {
-        if (code == null || code.isEmpty()) {
-            return false;
-        }
-        // Reject underscore separator
-        if (code.contains("_")) {
-            return false;
-        }
-        // Reject leading/trailing separator or consecutive separators
-        if (code.endsWith("-")) {
-            return false;
-        }
-        // Reject "root"
-        if ("root".equalsIgnoreCase(code)) {
-            return false;
-        }
-        String[] parts = code.split("-");
-        int index = 0;
-
-        // First part must be a language subtag
-        if (index >= parts.length) {
-            return false;
-        }
-        String languagePart = parts[index];
-        if (!LANGUAGE_SUBTAG.matcher(languagePart).matches()) {
-            return false;
-        }
-        index++;
-
-        // Optional script subtag (4 alpha)
-        boolean hasScript = false;
-        if (index < parts.length && SCRIPT_SUBTAG.matcher(parts[index]).matches()) {
-            hasScript = true;
-            index++;
-            // Reject duplicate script
-            if (index < parts.length && SCRIPT_SUBTAG.matcher(parts[index]).matches()) {
-                return false;
-            }
-        }
-
-        // Optional region subtag (2 alpha or 3 digit)
-        boolean hasRegion = false;
-        if (index < parts.length && REGION_SUBTAG.matcher(parts[index]).matches()) {
-            hasRegion = true;
-            index++;
-            // Reject duplicate region
-            if (index < parts.length && REGION_SUBTAG.matcher(parts[index]).matches()) {
-                return false;
-            }
-        }
-
-        // Optional variant subtags
-        Set<String> seenVariants = new java.util.HashSet<>();
-        while (index < parts.length) {
-            String part = parts[index];
-            if (VARIANT_SUBTAG.matcher(part).matches()) {
-                String normalized = part.toLowerCase(java.util.Locale.ROOT);
-                if (!seenVariants.add(normalized)) {
-                    return false; // Duplicate variant
-                }
-                index++;
-            } else if (part.length() == 1) {
-                // Singleton - not allowed in unicode_language_id
-                return false;
-            } else {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     public String getFallback() {
@@ -156,8 +74,8 @@ public final class JSIntlDisplayNames extends JSObject {
     }
 
     /**
-     * Intl.DisplayNames.prototype.of(code)
-     * Returns a display name string for the given code, or undefined if fallback is "none" and no name found.
+     * Intl.DisplayNames.prototype.of(code) Returns a display name string for the given code, or undefined if fallback
+     * is "none" and no name found.
      */
     public JSValue of(JSContext context, String code) {
         if (code == null || code.isEmpty()) {
@@ -234,7 +152,8 @@ public final class JSIntlDisplayNames extends JSObject {
 
     private JSValue ofLanguage(JSContext context, String code) {
         // Validate: must be a structurally valid unicode_language_id
-        // unicode_language_id = unicode_language_subtag ("-" unicode_script_subtag)? ("-" unicode_region_subtag)? ("-" unicode_variant_subtag)*
+        // unicode_language_id = unicode_language_subtag ("-" unicode_script_subtag)? ("-" unicode_region_subtag)? ("-"
+        // unicode_variant_subtag)*
         if (!isStructurallyValidLanguageTag(code)) {
             context.throwRangeError("invalid language code for DisplayNames: " + code);
             return null;
@@ -289,5 +208,81 @@ public final class JSIntlDisplayNames extends JSObject {
             return new JSString(code);
         }
         return new JSString(displayName);
+    }
+
+    /**
+     * Validates code as a structurally valid unicode_language_id per ECMA-402. Format: language ("-" script)? ("-"
+     * region)? ("-" variant)* Rejects: "root", bare script subtags, singletons, underscore separators.
+     */
+    private static boolean isStructurallyValidLanguageTag(String code) {
+        if (code == null || code.isEmpty()) {
+            return false;
+        }
+        // Reject underscore separator
+        if (code.contains("_")) {
+            return false;
+        }
+        // Reject leading/trailing separator or consecutive separators
+        if (code.endsWith("-")) {
+            return false;
+        }
+        // Reject "root"
+        if ("root".equalsIgnoreCase(code)) {
+            return false;
+        }
+        String[] parts = code.split("-");
+        int index = 0;
+
+        // First part must be a language subtag
+        if (index >= parts.length) {
+            return false;
+        }
+        String languagePart = parts[index];
+        if (!LANGUAGE_SUBTAG.matcher(languagePart).matches()) {
+            return false;
+        }
+        index++;
+
+        // Optional script subtag (4 alpha)
+        boolean hasScript = false;
+        if (index < parts.length && SCRIPT_SUBTAG.matcher(parts[index]).matches()) {
+            hasScript = true;
+            index++;
+            // Reject duplicate script
+            if (index < parts.length && SCRIPT_SUBTAG.matcher(parts[index]).matches()) {
+                return false;
+            }
+        }
+
+        // Optional region subtag (2 alpha or 3 digit)
+        boolean hasRegion = false;
+        if (index < parts.length && REGION_SUBTAG.matcher(parts[index]).matches()) {
+            hasRegion = true;
+            index++;
+            // Reject duplicate region
+            if (index < parts.length && REGION_SUBTAG.matcher(parts[index]).matches()) {
+                return false;
+            }
+        }
+
+        // Optional variant subtags
+        Set<String> seenVariants = new java.util.HashSet<>();
+        while (index < parts.length) {
+            String part = parts[index];
+            if (VARIANT_SUBTAG.matcher(part).matches()) {
+                String normalized = part.toLowerCase(java.util.Locale.ROOT);
+                if (!seenVariants.add(normalized)) {
+                    return false; // Duplicate variant
+                }
+                index++;
+            } else if (part.length() == 1) {
+                // Singleton - not allowed in unicode_language_id
+                return false;
+            } else {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

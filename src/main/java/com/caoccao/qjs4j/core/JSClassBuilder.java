@@ -17,46 +17,44 @@
 package com.caoccao.qjs4j.core;
 
 /**
- * Builder for creating ES6 classes programmatically.
- * Simplifies class creation with a fluent API.
+ * Builder for creating ES6 classes programmatically. Simplifies class creation with a fluent API.
  * <p>
  * Example:
+ *
  * <pre>
- * JSClass myClass = new ClassBuilder("MyClass")
- *     .constructor((context, thisArg, args) -> {
- *         thisArg.set("x", args[0]);
- *         return JSUndefined.INSTANCE;
- *     })
- *     .instanceMethod("getValue", (context, thisArg, args) -> {
- *         return thisArg.get("x");
- *     })
- *     .staticMethod("create", (context, thisArg, args) -> {
- *         // Create and return new instance
- *     })
- *     .build();
+ * JSClass myClass = new ClassBuilder("MyClass").constructor((context, thisArg, args) -> {
+ *     thisArg.set("x", args[0]);
+ *     return JSUndefined.INSTANCE;
+ * }).instanceMethod("getValue", (context, thisArg, args) -> {
+ *     return thisArg.get("x");
+ * }).staticMethod("create", (context, thisArg, args) -> {
+ *     // Create and return new instance
+ * }).build();
  * </pre>
  * <p>
- * Builder-order violations ("Must call build() before ...") raise {@link IllegalStateException}
- * rather than a JavaScript error type. That is deliberate: they are embedder API misuse, not a
- * condition a script can reach or should be able to catch. Every error a script <em>can</em> reach
- * is raised as a {@code JSErrorException} subclass so it participates in the engine's error model.
+ * Builder-order violations ("Must call build() before ...") raise {@link IllegalStateException} rather than a
+ * JavaScript error type. That is deliberate: they are embedder API misuse, not a condition a script can reach or should
+ * be able to catch. Every error a script <em>can</em> reach is raised as a {@code JSErrorException} subclass so it
+ * participates in the engine's error model.
  */
 public final class JSClassBuilder {
     private final JSClass classObject;
+    private JSFunction constructor;
     private final JSContext context;
     private final String name;
-    private JSFunction constructor;
     private JSClass superClass;
 
     /**
      * Create a new class builder.
      *
-     * @param name Class name
+     * @param name
+     *            Class name
      */
     public JSClassBuilder(JSContext context, String name) {
         this.context = context;
         this.name = name;
-        this.constructor = new JSNativeFunction(this.context, "constructor", 0, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
+        this.constructor = new JSNativeFunction(this.context, "constructor", 0,
+                (childContext, thisArg, args) -> JSUndefined.INSTANCE);
         this.superClass = null;
         this.classObject = null; // Will be created in build()
     }
@@ -72,8 +70,7 @@ public final class JSClassBuilder {
     }
 
     /**
-     * Build the class and immediately add methods/fields.
-     * This variant allows method chaining after build().
+     * Build the class and immediately add methods/fields. This variant allows method chaining after build().
      *
      * @return A BuilderWithClass that allows adding methods/fields
      */
@@ -83,21 +80,12 @@ public final class JSClassBuilder {
     }
 
     /**
-     * Set the constructor function.
-     *
-     * @param constructor Constructor function
-     * @return This builder
-     */
-    public JSClassBuilder constructor(JSNativeCallback constructor) {
-        this.constructor = new JSNativeFunction(this.context, "constructor", 0, constructor, true);
-        return this;
-    }
-
-    /**
      * Set the constructor function with parameter count.
      *
-     * @param length      Number of parameters
-     * @param constructor Constructor function
+     * @param length
+     *            Number of parameters
+     * @param constructor
+     *            Constructor function
      * @return This builder
      */
     public JSClassBuilder constructor(int length, JSNativeCallback constructor) {
@@ -106,9 +94,22 @@ public final class JSClassBuilder {
     }
 
     /**
+     * Set the constructor function.
+     *
+     * @param constructor
+     *            Constructor function
+     * @return This builder
+     */
+    public JSClassBuilder constructor(JSNativeCallback constructor) {
+        this.constructor = new JSNativeFunction(this.context, "constructor", 0, constructor, true);
+        return this;
+    }
+
+    /**
      * Set the super class for inheritance.
      *
-     * @param superClass Parent class
+     * @param superClass
+     *            Parent class
      * @return This builder
      */
     public JSClassBuilder extends_(JSClass superClass) {
@@ -119,41 +120,33 @@ public final class JSClassBuilder {
     /**
      * Add an instance field with initial value.
      *
-     * @param fieldName    Field name
-     * @param initialValue Initial value
+     * @param fieldName
+     *            Field name
+     * @param initialValue
+     *            Initial value
      * @return This builder
      */
     public JSClassBuilder instanceField(String fieldName, JSValue initialValue) {
         if (classObject == null) {
             throw new IllegalStateException("Must call build() before adding fields");
         }
-        JSClass.PropertyDescriptor descriptor = new JSClass.PropertyDescriptor(
-                initialValue,
-                true,  // writable
-                true,  // enumerable
-                true   // configurable
+        JSClass.PropertyDescriptor descriptor = new JSClass.PropertyDescriptor(initialValue, true, // writable
+                true, // enumerable
+                true // configurable
         );
         classObject.addInstanceField(fieldName, descriptor);
         return this;
     }
 
     /**
-     * Add an instance method.
-     *
-     * @param methodName Method name
-     * @param callback   Method implementation
-     * @return This builder
-     */
-    public JSClassBuilder instanceMethod(String methodName, JSNativeCallback callback) {
-        return instanceMethod(methodName, 0, callback);
-    }
-
-    /**
      * Add an instance method with parameter count.
      *
-     * @param methodName Method name
-     * @param length     Number of parameters
-     * @param callback   Method implementation
+     * @param methodName
+     *            Method name
+     * @param length
+     *            Number of parameters
+     * @param callback
+     *            Method implementation
      * @return This builder
      */
     public JSClassBuilder instanceMethod(String methodName, int length, JSNativeCallback callback) {
@@ -166,43 +159,48 @@ public final class JSClassBuilder {
     }
 
     /**
+     * Add an instance method.
+     *
+     * @param methodName
+     *            Method name
+     * @param callback
+     *            Method implementation
+     * @return This builder
+     */
+    public JSClassBuilder instanceMethod(String methodName, JSNativeCallback callback) {
+        return instanceMethod(methodName, 0, callback);
+    }
+
+    /**
      * Add a static field with value.
      *
-     * @param fieldName Field name
-     * @param value     Field value
+     * @param fieldName
+     *            Field name
+     * @param value
+     *            Field value
      * @return This builder
      */
     public JSClassBuilder staticField(String fieldName, JSValue value) {
         if (classObject == null) {
             throw new IllegalStateException("Must call build() before adding fields");
         }
-        JSClass.PropertyDescriptor descriptor = new JSClass.PropertyDescriptor(
-                value,
-                true,  // writable
-                true,  // enumerable
-                true   // configurable
+        JSClass.PropertyDescriptor descriptor = new JSClass.PropertyDescriptor(value, true, // writable
+                true, // enumerable
+                true // configurable
         );
         classObject.addStaticField(fieldName, descriptor);
         return this;
     }
 
     /**
-     * Add a static method.
-     *
-     * @param methodName Method name
-     * @param callback   Method implementation
-     * @return This builder
-     */
-    public JSClassBuilder staticMethod(String methodName, JSNativeCallback callback) {
-        return staticMethod(methodName, 0, callback);
-    }
-
-    /**
      * Add a static method with parameter count.
      *
-     * @param methodName Method name
-     * @param length     Number of parameters
-     * @param callback   Method implementation
+     * @param methodName
+     *            Method name
+     * @param length
+     *            Number of parameters
+     * @param callback
+     *            Method implementation
      * @return This builder
      */
     public JSClassBuilder staticMethod(String methodName, int length, JSNativeCallback callback) {
@@ -212,6 +210,19 @@ public final class JSClassBuilder {
         JSNativeFunction method = new JSNativeFunction(this.context, methodName, length, callback);
         classObject.addStaticMethod(methodName, method);
         return this;
+    }
+
+    /**
+     * Add a static method.
+     *
+     * @param methodName
+     *            Method name
+     * @param callback
+     *            Method implementation
+     * @return This builder
+     */
+    public JSClassBuilder staticMethod(String methodName, JSNativeCallback callback) {
+        return staticMethod(methodName, 0, callback);
     }
 
     /**
@@ -229,16 +240,9 @@ public final class JSClassBuilder {
         }
 
         public BuilderWithClass instanceField(String fieldName, JSValue initialValue) {
-            JSClass.PropertyDescriptor descriptor = new JSClass.PropertyDescriptor(
-                    initialValue,
-                    true, true, true
-            );
+            JSClass.PropertyDescriptor descriptor = new JSClass.PropertyDescriptor(initialValue, true, true, true);
             classObject.addInstanceField(fieldName, descriptor);
             return this;
-        }
-
-        public BuilderWithClass instanceMethod(String methodName, JSNativeCallback callback) {
-            return instanceMethod(methodName, 0, callback);
         }
 
         public BuilderWithClass instanceMethod(String methodName, int length, JSNativeCallback callback) {
@@ -247,11 +251,12 @@ public final class JSClassBuilder {
             return this;
         }
 
+        public BuilderWithClass instanceMethod(String methodName, JSNativeCallback callback) {
+            return instanceMethod(methodName, 0, callback);
+        }
+
         public BuilderWithClass staticField(String fieldName, JSValue value) {
-            JSClass.PropertyDescriptor descriptor = new JSClass.PropertyDescriptor(
-                    value,
-                    true, true, true
-            );
+            JSClass.PropertyDescriptor descriptor = new JSClass.PropertyDescriptor(value, true, true, true);
             classObject.addStaticField(fieldName, descriptor);
             return this;
         }

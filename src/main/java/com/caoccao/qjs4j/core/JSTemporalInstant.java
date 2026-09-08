@@ -28,6 +28,10 @@ public final class JSTemporalInstant extends JSObject {
         this.epochNanoseconds = epochNanoseconds;
     }
 
+    public BigInteger getEpochNanoseconds() {
+        return epochNanoseconds;
+    }
+
     public static JSTemporalInstant create(JSContext context, BigInteger epochNanoseconds) {
         JSObject prototype = TemporalUtils.getTemporalPrototype(context, "Instant");
         return create(context, epochNanoseconds, prototype);
@@ -39,9 +43,5 @@ public final class JSTemporalInstant extends JSObject {
             instant.setPrototype(prototype);
         }
         return instant;
-    }
-
-    public BigInteger getEpochNanoseconds() {
-        return epochNanoseconds;
     }
 }

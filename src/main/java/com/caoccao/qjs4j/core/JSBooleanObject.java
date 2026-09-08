@@ -19,19 +19,19 @@ package com.caoccao.qjs4j.core;
 /**
  * Represents a JavaScript Boolean object (wrapper) as opposed to a boolean primitive.
  * <p>
- * In JavaScript, there's a distinction between:
- * - Boolean primitives: {@code true}, {@code false}
- * - Boolean objects: {@code new Boolean(true)}, {@code new Boolean(false)}
+ * In JavaScript, there's a distinction between: - Boolean primitives: {@code true}, {@code false} - Boolean objects:
+ * {@code new Boolean(true)}, {@code new Boolean(false)}
  * <p>
- * This class represents the object form, which is necessary for use cases like {@link JSProxy Proxy},
- * since primitive boolean values cannot be used as Proxy targets. A primitive boolean value
- * is immutable and cannot have properties, so it cannot be wrapped by a Proxy. JSBooleanObject
- * provides an object wrapper that can be used with Proxy while maintaining the boolean value.
+ * This class represents the object form, which is necessary for use cases like {@link JSProxy Proxy}, since primitive
+ * boolean values cannot be used as Proxy targets. A primitive boolean value is immutable and cannot have properties, so
+ * it cannot be wrapped by a Proxy. JSBooleanObject provides an object wrapper that can be used with Proxy while
+ * maintaining the boolean value.
  * <p>
- * The wrapped boolean value is stored in the {@code [[PrimitiveValue]]} internal slot,
- * following the ECMAScript specification pattern for Boolean wrapper objects.
+ * The wrapped boolean value is stored in the {@code [[PrimitiveValue]]} internal slot, following the ECMAScript
+ * specification pattern for Boolean wrapper objects.
  * <p>
  * Example usage:
+ *
  * <pre>{@code
  * // Create a boolean object for use with Proxy
  * JSBooleanObject boolObj = new JSBooleanObject(true);
@@ -49,7 +49,8 @@ public final class JSBooleanObject extends JSObject {
     /**
      * Create a Boolean object wrapping the given boolean value.
      *
-     * @param value the primitive boolean value to wrap
+     * @param value
+     *            the primitive boolean value to wrap
      */
     public JSBooleanObject(JSContext context, boolean value) {
         this(context, JSBoolean.valueOf(value));
@@ -58,20 +59,13 @@ public final class JSBooleanObject extends JSObject {
     /**
      * Create a Boolean object wrapping the given JSBoolean value.
      *
-     * @param value the JSBoolean value to wrap
+     * @param value
+     *            the JSBoolean value to wrap
      */
     public JSBooleanObject(JSContext context, JSBoolean value) {
         super(context);
         this.value = value;
         this.setPrimitiveValue(value);
-    }
-
-    public static JSObject create(JSContext context, JSValue... args) {
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSBoolean boolValue = JSTypeConversions.toBoolean(value);
-        JSObject jsObject = new JSBooleanObject(context, boolValue);
-        context.transferPrototype(jsObject, NAME);
-        return jsObject;
     }
 
     /**
@@ -91,5 +85,13 @@ public final class JSBooleanObject extends JSObject {
     @Override
     public String toString() {
         return Boolean.toString(value.value());
+    }
+
+    public static JSObject create(JSContext context, JSValue... args) {
+        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSBoolean boolValue = JSTypeConversions.toBoolean(value);
+        JSObject jsObject = new JSBooleanObject(context, boolValue);
+        context.transferPrototype(jsObject, NAME);
+        return jsObject;
     }
 }

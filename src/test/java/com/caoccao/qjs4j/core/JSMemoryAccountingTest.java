@@ -29,123 +29,27 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * {@code maxMemoryUsage} and {@code maxStackSize} were public setters that nothing read: an
- * embedder could configure a 1 KiB memory ceiling and a 1 byte stack, and guest code would still
- * allocate a megabyte and recurse a thousand deep. These cases pin that both options are now
- * enforced, that reservations are released, and that the boundary is a catchable guest error.
+ * {@code maxMemoryUsage} and {@code maxStackSize} were public setters that nothing read: an embedder could configure a
+ * 1 KiB memory ceiling and a 1 byte stack, and guest code would still allocate a megabyte and recurse a thousand deep.
+ * These cases pin that both options are now enforced, that reservations are released, and that the boundary is a
+ * catchable guest error.
  */
 public class JSMemoryAccountingTest extends BaseTest {
     /**
-     * How much larger than the largest data block a heap has to be before it could really satisfy
-     * one.
+     * How much larger than the largest data block a heap has to be before it could really satisfy one.
      * <p>
-     * A bare {@code maxMemory() < blockLength} comparison decides this on a knife edge, and the
-     * build's {@code -Xmx2g} lands on the wrong side of it by twelve bytes: G1 and ZGC report
-     * {@code maxMemory()} as exactly 2,147,483,648 while the largest block is 2,147,483,636, so the
-     * premise read as "the heap can satisfy it" — and ParallelGC and SerialGC, which report a
-     * little less than the nominal heap, read the opposite. Which collector the JVM picks depends on
-     * how many processors and how much memory it sees, so the same two tests ran on one machine and
-     * skipped on the next, and the suite quietly tested less on some runners than on others.
+     * A bare {@code maxMemory() < blockLength} comparison decides this on a knife edge, and the build's {@code -Xmx2g}
+     * lands on the wrong side of it by twelve bytes: G1 and ZGC report {@code maxMemory()} as exactly 2,147,483,648
+     * while the largest block is 2,147,483,636, so the premise read as "the heap can satisfy it" — and ParallelGC and
+     * SerialGC, which report a little less than the nominal heap, read the opposite. Which collector the JVM picks
+     * depends on how many processors and how much memory it sees, so the same two tests ran on one machine and skipped
+     * on the next, and the suite quietly tested less on some runners than on others.
      * <p>
-     * A heap only marginally larger than the block cannot satisfy it in any case: the array needs
-     * contiguous space and the heap is already holding the engine and the suite. Requiring real
-     * headroom before believing otherwise makes the premise mean what it says.
+     * A heap only marginally larger than the block cannot satisfy it in any case: the array needs contiguous space and
+     * the heap is already holding the engine and the suite. Requiring real headroom before believing otherwise makes
+     * the premise mean what it says.
      */
     private static final long HEAP_HEADROOM_BYTES = 256L * 1024 * 1024;
-
-    /**
-     * Accounting whose reservation registry refuses to register anything.
-     * <p>
-     * Nothing in the class as it stands can throw between the charge and the handle that owns it —
-     * the registry is a {@code ConcurrentHashMap} key set and the handle is a {@code WeakReference}
-     * — which is precisely why the rollback that guards the gap cannot be reached from the public
-     * API, and why it would otherwise ship untested until the day a change made it reachable.
-     * <p>
-     * Given to the constructor rather than written over the field afterwards. The reflective version
-     * of this erased the field's element type, depended on the field's name, and left the object in
-     * a state its own construction cannot produce; this is typed, so a change to how reservations
-     * are held stops compiling here instead of failing at runtime.
-     *
-     * @param limit the ceiling for the accounting
-     * @return accounting that throws {@code IllegalStateException} when a reservation is registered
-     */
-    private static JSMemoryAccounting accountingThatCannotRegisterReservations(long limit) {
-        return new JSMemoryAccounting(limit, new AbstractSet<>() {
-            @Override
-            public boolean add(JSMemoryAccounting.Reservation reservation) {
-                throw new IllegalStateException("injected registration failure");
-            }
-
-            @Override
-            public Iterator<JSMemoryAccounting.Reservation> iterator() {
-                return Collections.emptyIterator();
-            }
-
-            @Override
-            public int size() {
-                return 0;
-            }
-        });
-    }
-
-    /**
-     * Require that the JVM cannot satisfy the largest data block the engine will accept.
-     * <p>
-     * The largest block is capped near two gigabytes, so on a big enough heap the request succeeds
-     * and there is no allocation failure to roll back. That is a property of the build's
-     * {@code -Xmx}, not of the code, so it is stated as an assumption: a heap that grows past this
-     * point makes these two tests skip and say why, instead of leaving them green while they stop
-     * exercising anything.
-     */
-    private static void assumeTheJvmRefusesTheLargestBlock() {
-        assumeTrue(
-                Runtime.getRuntime().maxMemory() < (long) unallocatableByteLength() + HEAP_HEADROOM_BYTES,
-                "the JVM heap is large enough to allocate the biggest block the engine allows, so "
-                        + "there is no allocation failure to observe");
-    }
-
-    /**
-     * Ask the collector for a while and report whether the reference cleared.
-     *
-     * @param reference the reference to watch
-     * @return true when it cleared
-     */
-    private static boolean awaitCleared(WeakReference<?> reference) {
-        for (int attempt = 0; attempt < 50 && reference.get() != null; attempt++) {
-            System.gc();
-            try {
-                Thread.sleep(10);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-        return reference.get() == null;
-    }
-
-    private static String evalToString(JSRuntime runtime, String code) {
-        JSContext context = runtime.createContext();
-        try {
-            return context.eval(code, "limits.js", false).toString();
-        } catch (JSException e) {
-            return e.getMessage();
-        }
-    }
-
-    /**
-     * A data-block length the JVM will refuse outright.
-     * <p>
-     * The test tasks pin {@code -Xmx2g}, so a request of the largest array HotSpot supports fails
-     * immediately with {@code OutOfMemoryError} — without heap pressure, because the size exceeds
-     * the maximum heap before anything is committed.
-     *
-     * @return the length in bytes
-     */
-    private static int unallocatableByteLength() {
-        // Rounded down to a multiple of four so it survives the four-byte padding the engine adds
-        // for Atomics alignment; otherwise the length check refuses it before any allocation.
-        return JSArrayBuffer.MAX_DATA_BLOCK_BYTE_LENGTH & ~3;
-    }
 
     @Test
     public void testALimitedCeilingIsStillTheCeilingNearTheRangeOfALong() {
@@ -158,47 +62,6 @@ public class JSMemoryAccountingTest extends BaseTest {
         assertThat(accounting.reserve(owner, 1024)).isNotNull();
         assertThat(accounting.getReservedBytes()).isEqualTo(1024);
         assertThat(owner).isNotNull();
-    }
-
-    @Test
-    public void testAReservationThatCannotBeRegisteredGivesItsChargeBack() {
-        // The charge lands before the handle exists, deliberately — a reservation the limit would
-        // refuse has to be refused before any memory is touched. That leaves a gap: if registering
-        // the handle fails, nothing else holds the bytes, so they would stay charged for the
-        // runtime's whole life and permanently shrink the ceiling the embedder configured.
-        JSMemoryAccounting accounting = accountingThatCannotRegisterReservations(1024);
-
-        assertThatThrownBy(() -> accounting.reserve(new Object(), 256))
-                .as("the failure is reported, not swallowed into a null reservation")
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("injected registration failure");
-        assertThat(accounting.getReservedBytes())
-                .as("a charge whose handle never existed must not stay charged")
-                .isZero();
-    }
-
-    @Test
-    public void testAResizeThatFailsToAllocateGivesTheGrowthBackWhateverTheHeapIs() {
-        // The growth is charged before the copy, so a copy that fails has to hand it back. Driven
-        // by an allocator that fails on demand, so the test does not depend on the build's -Xmx.
-        try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setMaxMemoryUsage(64 * 1024))) {
-            JSContext context = runtime.createContext();
-            JSArrayBuffer buffer = new JSArrayBuffer(context, 1024, 32768);
-            long chargedBefore = runtime.getMemoryAccounting().getReservedBytes();
-
-            assertThatThrownBy(() -> buffer.growAccountedBlock(4096, () -> {
-                throw new OutOfMemoryError("injected");
-            })).isInstanceOf(OutOfMemoryError.class);
-
-            assertThat(runtime.getMemoryAccounting().getReservedBytes())
-                    .as("growth that failed to allocate must not stay charged")
-                    .isEqualTo(chargedBefore);
-            // The buffer is untouched and still resizes normally afterwards.
-            buffer.resize(2048);
-            assertThat(buffer.getByteLength()).isEqualTo(2048);
-            buffer.detach();
-            assertThat(runtime.getMemoryAccounting().getReservedBytes()).isZero();
-        }
     }
 
     @Test
@@ -216,8 +79,7 @@ public class JSMemoryAccountingTest extends BaseTest {
     public void testAllocationBeyondLimitRaisesCatchableRangeError() {
         try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setMaxMemoryUsage(1024))) {
             // The review's reproducer: a 1 MiB buffer under a 1 KiB ceiling.
-            assertThat(evalToString(runtime,
-                    "try { new ArrayBuffer(1048576); 'allocated'; } catch (e) { e.name; }"))
+            assertThat(evalToString(runtime, "try { new ArrayBuffer(1048576); 'allocated'; } catch (e) { e.name; }"))
                     .isEqualTo("RangeError");
             assertThat(runtime.getMemoryAccounting().getReservedBytes()).isZero();
         }
@@ -241,12 +103,49 @@ public class JSMemoryAccountingTest extends BaseTest {
             })).isInstanceOf(OutOfMemoryError.class);
 
             assertThat(runtime.getMemoryAccounting().getReservedBytes())
-                    .as("a block that never allocated must not stay charged")
-                    .isEqualTo(chargedBefore);
+                    .as("a block that never allocated must not stay charged").isEqualTo(chargedBefore);
             // The successful path still binds its reservation, so the two are not confusable.
             ByteBuffer allocated = buffer.accountBlock(context, 2048, () -> ByteBuffer.allocate(2048));
             assertThat(allocated.capacity()).isEqualTo(2048);
             assertThat(runtime.getMemoryAccounting().getReservedBytes()).isEqualTo(1024 + 2048);
+        }
+    }
+
+    @Test
+    public void testAReservationThatCannotBeRegisteredGivesItsChargeBack() {
+        // The charge lands before the handle exists, deliberately — a reservation the limit would
+        // refuse has to be refused before any memory is touched. That leaves a gap: if registering
+        // the handle fails, nothing else holds the bytes, so they would stay charged for the
+        // runtime's whole life and permanently shrink the ceiling the embedder configured.
+        JSMemoryAccounting accounting = accountingThatCannotRegisterReservations(1024);
+
+        assertThatThrownBy(() -> accounting.reserve(new Object(), 256))
+                .as("the failure is reported, not swallowed into a null reservation")
+                .isInstanceOf(IllegalStateException.class).hasMessage("injected registration failure");
+        assertThat(accounting.getReservedBytes()).as("a charge whose handle never existed must not stay charged")
+                .isZero();
+    }
+
+    @Test
+    public void testAResizeThatFailsToAllocateGivesTheGrowthBackWhateverTheHeapIs() {
+        // The growth is charged before the copy, so a copy that fails has to hand it back. Driven
+        // by an allocator that fails on demand, so the test does not depend on the build's -Xmx.
+        try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setMaxMemoryUsage(64 * 1024))) {
+            JSContext context = runtime.createContext();
+            JSArrayBuffer buffer = new JSArrayBuffer(context, 1024, 32768);
+            long chargedBefore = runtime.getMemoryAccounting().getReservedBytes();
+
+            assertThatThrownBy(() -> buffer.growAccountedBlock(4096, () -> {
+                throw new OutOfMemoryError("injected");
+            })).isInstanceOf(OutOfMemoryError.class);
+
+            assertThat(runtime.getMemoryAccounting().getReservedBytes())
+                    .as("growth that failed to allocate must not stay charged").isEqualTo(chargedBefore);
+            // The buffer is untouched and still resizes normally afterwards.
+            buffer.resize(2048);
+            assertThat(buffer.getByteLength()).isEqualTo(2048);
+            buffer.detach();
+            assertThat(runtime.getMemoryAccounting().getReservedBytes()).isZero();
         }
     }
 
@@ -269,8 +168,7 @@ public class JSMemoryAccountingTest extends BaseTest {
             assertThat(awaitCleared(bufferReference)).isTrue();
 
             assertThat(runtime.getMemoryAccounting().getReservedBytes())
-                    .as("a collected data block must stop counting against the limit")
-                    .isZero();
+                    .as("a collected data block must stop counting against the limit").isZero();
             // And the allocation that did not fit a moment ago now does.
             assertThat(evalToString(runtime, "new ArrayBuffer(49152).byteLength")).isEqualTo("49152");
         }
@@ -279,8 +177,7 @@ public class JSMemoryAccountingTest extends BaseTest {
     @Test
     public void testDefaultLimitIsTheDocumentedDefault() {
         try (JSRuntime runtime = new JSRuntime()) {
-            assertThat(runtime.getMemoryAccounting().getLimit())
-                    .isEqualTo(JSRuntimeOptions.DEFAULT_MAX_MEMORY_USAGE);
+            assertThat(runtime.getMemoryAccounting().getLimit()).isEqualTo(JSRuntimeOptions.DEFAULT_MAX_MEMORY_USAGE);
         }
     }
 
@@ -311,8 +208,7 @@ public class JSMemoryAccountingTest extends BaseTest {
             assertThatThrownBy(() -> new JSArrayBuffer(context, unallocatableByteLength()))
                     .isInstanceOf(OutOfMemoryError.class);
             assertThat(runtime.getMemoryAccounting().getReservedBytes())
-                    .as("a block the JVM refused must not stay charged")
-                    .isZero();
+                    .as("a block the JVM refused must not stay charged").isZero();
             // And the runtime is still usable for an allocation that does fit.
             assertThat(evalToString(runtime, "new ArrayBuffer(1024).byteLength")).isEqualTo("1024");
         }
@@ -327,12 +223,10 @@ public class JSMemoryAccountingTest extends BaseTest {
             buffer.getBuffer().put(0, (byte) 7);
             long reservedBeforeResize = runtime.getMemoryAccounting().getReservedBytes();
 
-            assertThatThrownBy(() -> buffer.resize(unallocatableByteLength()))
-                    .isInstanceOf(OutOfMemoryError.class);
+            assertThatThrownBy(() -> buffer.resize(unallocatableByteLength())).isInstanceOf(OutOfMemoryError.class);
 
             assertThat(runtime.getMemoryAccounting().getReservedBytes())
-                    .as("growth that failed to allocate must not stay charged")
-                    .isEqualTo(reservedBeforeResize);
+                    .as("growth that failed to allocate must not stay charged").isEqualTo(reservedBeforeResize);
             assertThat(buffer.getByteLength()).as("the original buffer is untouched").isEqualTo(16);
             assertThat(buffer.getBuffer().get(0)).isEqualTo((byte) 7);
             // The reservation still tracks the block that does exist, so releasing it balances.
@@ -348,9 +242,7 @@ public class JSMemoryAccountingTest extends BaseTest {
         JSMemoryAccounting.Reservation reservation = accounting.reserve(owner, Long.MAX_VALUE - 8);
         assertThat(reservation).isNotNull();
         assertThat(reservation.grow(8)).isTrue();
-        assertThat(reservation.grow(1))
-                .as("growth is charged through the same checked counter")
-                .isFalse();
+        assertThat(reservation.grow(1)).as("growth is charged through the same checked counter").isFalse();
         assertThat(accounting.getReservedBytes()).isEqualTo(Long.MAX_VALUE);
         assertThat(reservation.bytes()).isEqualTo(Long.MAX_VALUE);
         assertThat(owner).as("the owner stays reachable so nothing reclaims it mid-test").isNotNull();
@@ -412,15 +304,11 @@ public class JSMemoryAccountingTest extends BaseTest {
         JSMemoryAccounting.Reservation second = accounting.reserve(uncharged, 40);
         assertThat(second).isNotNull();
         second.release();
-        assertThat(accounting.getReservedBytes())
-                .as("releasing gives back exactly what was charged")
-                .isEqualTo(10);
+        assertThat(accounting.getReservedBytes()).as("releasing gives back exactly what was charged").isEqualTo(10);
         // Releasing the same handle again is a no-op rather than a second refund.
         second.release();
         assertThat(accounting.getReservedBytes()).isEqualTo(10);
-        assertThat(accounting.reserve(new Object(), 55))
-                .as("only 54 bytes are left under the ceiling")
-                .isNull();
+        assertThat(accounting.reserve(new Object(), 55)).as("only 54 bytes are left under the ceiling").isNull();
         assertThat(accounting.reserve(new Object(), 54)).isNotNull();
         assertThat(accounting.getReservedBytes()).isEqualTo(64);
         assertThat(accounting.reserve(new Object(), 1)).isNull();
@@ -431,7 +319,7 @@ public class JSMemoryAccountingTest extends BaseTest {
     @Test
     public void testReservationIsPerRuntime() {
         try (JSRuntime first = new JSRuntime(new JSRuntimeOptions().setMaxMemoryUsage(64 * 1024));
-             JSRuntime second = new JSRuntime(new JSRuntimeOptions().setMaxMemoryUsage(64 * 1024))) {
+                JSRuntime second = new JSRuntime(new JSRuntimeOptions().setMaxMemoryUsage(64 * 1024))) {
             evalToString(first, "globalThis.keep = new ArrayBuffer(32768);");
             assertThat(first.getMemoryAccounting().getReservedBytes()).isEqualTo(32768);
             assertThat(second.getMemoryAccounting().getReservedBytes()).isZero();
@@ -441,12 +329,10 @@ public class JSMemoryAccountingTest extends BaseTest {
     @Test
     public void testReservationRejectsNegativeAmountsAndAMissingOwner() {
         JSMemoryAccounting accounting = new JSMemoryAccounting(1024);
-        assertThatThrownBy(() -> accounting.reserve(new Object(), -1))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> accounting.reserve(new Object(), -1)).isInstanceOf(IllegalArgumentException.class);
         // A reservation with no owner would never be reclaimed, so its bytes would be charged for
         // the runtime's whole life.
-        assertThatThrownBy(() -> accounting.reserve(null, 16))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> accounting.reserve(null, 16)).isInstanceOf(IllegalArgumentException.class);
         assertThat(accounting.getReservedBytes()).isZero();
     }
 
@@ -455,8 +341,7 @@ public class JSMemoryAccountingTest extends BaseTest {
         try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setMaxMemoryUsage(8192))) {
             assertThat(evalToString(runtime, """
                     var b = new ArrayBuffer(16, { maxByteLength: 1048576 });
-                    try { b.resize(65536); 'resized'; } catch (e) { e.name; }"""))
-                    .isEqualTo("RangeError");
+                    try { b.resize(65536); 'resized'; } catch (e) { e.name; }""")).isEqualTo("RangeError");
         }
     }
 
@@ -476,28 +361,25 @@ public class JSMemoryAccountingTest extends BaseTest {
         try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setMaxMemoryUsage(64 * 1024))) {
             // A growable SharedArrayBuffer must keep one backing block for all agents, so its
             // maximum is charged up front — and refused when it does not fit.
-            assertThat(evalToString(runtime,
-                    "try { new SharedArrayBuffer(1, { maxByteLength: 1048576 }); 'allocated'; }"
+            assertThat(
+                    evalToString(runtime, "try { new SharedArrayBuffer(1, { maxByteLength: 1048576 }); 'allocated'; }"
                             + " catch (e) { e.name; }"))
                     .isEqualTo("RangeError");
-            assertThat(evalToString(runtime,
-                    "new SharedArrayBuffer(1, { maxByteLength: 4096 }).byteLength"))
+            assertThat(evalToString(runtime, "new SharedArrayBuffer(1, { maxByteLength: 4096 }).byteLength"))
                     .isEqualTo("1");
         }
     }
 
     @Test
     public void testStackSizeDerivesTheCallDepthLimit() {
-        JSRuntimeOptions options = new JSRuntimeOptions()
-                .setMaxStackSize(20 * JSRuntimeOptions.BYTES_PER_STACK_FRAME);
+        JSRuntimeOptions options = new JSRuntimeOptions().setMaxStackSize(20 * JSRuntimeOptions.BYTES_PER_STACK_FRAME);
         assertThat(options.getMaxStackDepth()).isEqualTo(20);
         try (JSRuntime runtime = new JSRuntime(options)) {
             JSContext context = runtime.createContext();
             assertThat(context.getMaxStackDepth()).isEqualTo(20);
             assertThat(evalToString(runtime, """
                     function recurse(n) { return n === 0 ? 0 : recurse(n - 1); }
-                    try { recurse(200); 'completed'; } catch (e) { e.name; }"""))
-                    .isEqualTo("RangeError");
+                    try { recurse(200); 'completed'; } catch (e) { e.name; }""")).isEqualTo("RangeError");
         }
     }
 
@@ -566,15 +448,10 @@ public class JSMemoryAccountingTest extends BaseTest {
         assertThat(accounting.reserve(first, Long.MAX_VALUE)).isNotNull();
         assertThat(accounting.getReservedBytes()).isEqualTo(Long.MAX_VALUE);
 
-        assertThat(accounting.reserve(second, 1))
-                .as("one more byte does not fit in a long")
-                .isNull();
-        assertThat(accounting.getReservedBytes())
-                .as("the refused reservation charged nothing")
+        assertThat(accounting.reserve(second, 1)).as("one more byte does not fit in a long").isNull();
+        assertThat(accounting.getReservedBytes()).as("the refused reservation charged nothing")
                 .isEqualTo(Long.MAX_VALUE);
-        assertThat(accounting.reserve(second, 0))
-                .as("nothing is still nothing")
-                .isNotNull();
+        assertThat(accounting.reserve(second, 0)).as("nothing is still nothing").isNotNull();
         assertThat(accounting.getReservedBytes()).isEqualTo(Long.MAX_VALUE);
         assertThat(first).as("owners stay reachable so nothing reclaims them mid-test").isNotNull();
         assertThat(second).isNotNull();
@@ -603,12 +480,8 @@ public class JSMemoryAccountingTest extends BaseTest {
         assertThat(accounting.wouldExceedLimit(Long.MAX_VALUE)).isFalse();
         assertThat(accounting.reserve(first, Long.MAX_VALUE)).isNotNull();
 
-        assertThat(accounting.wouldExceedLimit(0))
-                .as("nothing always fits")
-                .isFalse();
-        assertThat(accounting.wouldExceedLimit(1))
-                .as("and the preflight says so before reserve() proves it")
-                .isTrue();
+        assertThat(accounting.wouldExceedLimit(0)).as("nothing always fits").isFalse();
+        assertThat(accounting.wouldExceedLimit(1)).as("and the preflight says so before reserve() proves it").isTrue();
         assertThat(accounting.reserve(new Object(), 1)).isNull();
         assertThat(first).as("the owner stays reachable so nothing reclaims it mid-test").isNotNull();
     }
@@ -628,11 +501,103 @@ public class JSMemoryAccountingTest extends BaseTest {
     @Test
     public void testWouldExceedLimitRejectsANegativeSizeExactlyAsReserveDoes() {
         JSMemoryAccounting accounting = new JSMemoryAccounting(64);
-        assertThatThrownBy(() -> accounting.wouldExceedLimit(-1))
-                .isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> accounting.wouldExceedLimit(-1)).isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Cannot reserve a negative number of bytes: -1");
-        assertThatThrownBy(() -> accounting.reserve(new Object(), -1))
-                .isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> accounting.reserve(new Object(), -1)).isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Cannot reserve a negative number of bytes: -1");
+    }
+
+    /**
+     * Accounting whose reservation registry refuses to register anything.
+     * <p>
+     * Nothing in the class as it stands can throw between the charge and the handle that owns it — the registry is a
+     * {@code ConcurrentHashMap} key set and the handle is a {@code WeakReference} — which is precisely why the rollback
+     * that guards the gap cannot be reached from the public API, and why it would otherwise ship untested until the day
+     * a change made it reachable.
+     * <p>
+     * Given to the constructor rather than written over the field afterwards. The reflective version of this erased the
+     * field's element type, depended on the field's name, and left the object in a state its own construction cannot
+     * produce; this is typed, so a change to how reservations are held stops compiling here instead of failing at
+     * runtime.
+     *
+     * @param limit
+     *            the ceiling for the accounting
+     * @return accounting that throws {@code IllegalStateException} when a reservation is registered
+     */
+    private static JSMemoryAccounting accountingThatCannotRegisterReservations(long limit) {
+        return new JSMemoryAccounting(limit, new AbstractSet<>() {
+            @Override
+            public boolean add(JSMemoryAccounting.Reservation reservation) {
+                throw new IllegalStateException("injected registration failure");
+            }
+
+            @Override
+            public Iterator<JSMemoryAccounting.Reservation> iterator() {
+                return Collections.emptyIterator();
+            }
+
+            @Override
+            public int size() {
+                return 0;
+            }
+        });
+    }
+
+    /**
+     * Require that the JVM cannot satisfy the largest data block the engine will accept.
+     * <p>
+     * The largest block is capped near two gigabytes, so on a big enough heap the request succeeds and there is no
+     * allocation failure to roll back. That is a property of the build's {@code -Xmx}, not of the code, so it is stated
+     * as an assumption: a heap that grows past this point makes these two tests skip and say why, instead of leaving
+     * them green while they stop exercising anything.
+     */
+    private static void assumeTheJvmRefusesTheLargestBlock() {
+        assumeTrue(Runtime.getRuntime().maxMemory() < (long) unallocatableByteLength() + HEAP_HEADROOM_BYTES,
+                "the JVM heap is large enough to allocate the biggest block the engine allows, so "
+                        + "there is no allocation failure to observe");
+    }
+
+    /**
+     * Ask the collector for a while and report whether the reference cleared.
+     *
+     * @param reference
+     *            the reference to watch
+     * @return true when it cleared
+     */
+    private static boolean awaitCleared(WeakReference<?> reference) {
+        for (int attempt = 0; attempt < 50 && reference.get() != null; attempt++) {
+            System.gc();
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        return reference.get() == null;
+    }
+
+    private static String evalToString(JSRuntime runtime, String code) {
+        JSContext context = runtime.createContext();
+        try {
+            return context.eval(code, "limits.js", false).toString();
+        } catch (JSException e) {
+            return e.getMessage();
+        }
+    }
+
+    /**
+     * A data-block length the JVM will refuse outright.
+     * <p>
+     * The test tasks pin {@code -Xmx2g}, so a request of the largest array HotSpot supports fails immediately with
+     * {@code OutOfMemoryError} — without heap pressure, because the size exceeds the maximum heap before anything is
+     * committed.
+     *
+     * @return the length in bytes
+     */
+    private static int unallocatableByteLength() {
+        // Rounded down to a multiple of four so it survives the four-byte padding the engine adds
+        // for Atomics alignment; otherwise the length check refuses it before any allocation.
+        return JSArrayBuffer.MAX_DATA_BLOCK_BYTE_LENGTH & ~3;
     }
 }

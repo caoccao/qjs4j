@@ -42,32 +42,19 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         if (monthCodeData == null || monthCodeData.leapMonth()) {
             return null;
         }
-        long calendarOrdinalDay = TemporalUtils.alexandrianOrdinalDay(
-                calendarYear,
-                monthCodeData.month(),
-                dayOfMonth);
+        long calendarOrdinalDay = TemporalUtils.alexandrianOrdinalDay(calendarYear, monthCodeData.month(), dayOfMonth);
         long epochDay = calendarOrdinalDay + offsetEpochDay;
-        if (epochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY || epochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
+        if (epochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY
+                || epochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
             return null;
         }
         return createFromEpochDay(epochDay);
     }
 
-    public static IsoDate calendarDateToIsoDate(
-            JSContext context,
-            TemporalCalendarId calendarId,
-            int calendarYear,
-            Integer monthFromProperty,
-            String monthCodeFromProperty,
-            int dayFromProperty,
-            String overflow) {
-        IsoCalendarMonth monthSlot = IsoCalendarMonth.resolveMonthSlotForInput(
-                context,
-                calendarId,
-                calendarYear,
-                monthFromProperty,
-                monthCodeFromProperty,
-                overflow);
+    public static IsoDate calendarDateToIsoDate(JSContext context, TemporalCalendarId calendarId, int calendarYear,
+            Integer monthFromProperty, String monthCodeFromProperty, int dayFromProperty, String overflow) {
+        IsoCalendarMonth monthSlot = IsoCalendarMonth.resolveMonthSlotForInput(context, calendarId, calendarYear,
+                monthFromProperty, monthCodeFromProperty, overflow);
         if (context.hasPendingException() || monthSlot == null) {
             return null;
         }
@@ -79,28 +66,25 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
 
         IsoDate resultIsoDate = switch (calendarId) {
             case ISO8601, GREGORY, JAPANESE ->
-                    toIsoDateFromGregorianLike(calendarYear, monthSlot.monthCode(), regulatedDay);
+                toIsoDateFromGregorianLike(calendarYear, monthSlot.monthCode(), regulatedDay);
             case BUDDHIST -> toIsoDateFromGregorianLike(calendarYear - 543, monthSlot.monthCode(), regulatedDay);
             case ROC -> toIsoDateFromGregorianLike(calendarYear + 1911, monthSlot.monthCode(), regulatedDay);
-            case COPTIC ->
-                    alexandrianToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay, TemporalConstants.COPTIC_EPOCH_DAY_OFFSET);
-            case ETHIOPIC ->
-                    alexandrianToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay, TemporalConstants.ETHIOPIC_EPOCH_DAY_OFFSET);
-            case ETHIOAA -> alexandrianToIsoDate(
-                    calendarYear - 5500,
-                    monthSlot.monthCode(),
-                    regulatedDay,
+            case COPTIC -> alexandrianToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay,
+                    TemporalConstants.COPTIC_EPOCH_DAY_OFFSET);
+            case ETHIOPIC -> alexandrianToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay,
+                    TemporalConstants.ETHIOPIC_EPOCH_DAY_OFFSET);
+            case ETHIOAA -> alexandrianToIsoDate(calendarYear - 5500, monthSlot.monthCode(), regulatedDay,
                     TemporalConstants.ETHIOPIC_EPOCH_DAY_OFFSET);
             case INDIAN -> indianToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay);
-            case ISLAMIC_CIVIL ->
-                    islamicToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay, TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
-            case ISLAMIC_TBLA ->
-                    islamicToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay, TemporalConstants.ISLAMIC_TBLA_EPOCH_DAY_OFFSET);
+            case ISLAMIC_CIVIL -> islamicToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay,
+                    TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
+            case ISLAMIC_TBLA -> islamicToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay,
+                    TemporalConstants.ISLAMIC_TBLA_EPOCH_DAY_OFFSET);
             case ISLAMIC_UMALQURA -> umalquraToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay);
             case PERSIAN -> persianToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay);
             case HEBREW -> hebrewToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay);
             case CHINESE, DANGI ->
-                    lunisolarToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay, calendarId, overflow);
+                lunisolarToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay, calendarId, overflow);
             default -> toIsoDateFromGregorianLike(calendarYear, monthSlot.monthCode(), regulatedDay);
         };
         if (resultIsoDate == null || !resultIsoDate.isValid()) {
@@ -175,7 +159,8 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             return null;
         }
         long epochDay = hebrewAbsoluteDay + TemporalConstants.HEBREW_EPOCH_DAY_OFFSET;
-        if (epochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY || epochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
+        if (epochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY
+                || epochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
             return null;
         }
         return createFromEpochDay(epochDay);
@@ -208,7 +193,8 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             dayOffset += dayOfMonth - 1L;
         }
         long resultEpochDay = yearStartIsoDate.toEpochDay() + dayOffset;
-        if (resultEpochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
+        if (resultEpochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY
+                || resultEpochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
             return null;
         }
         return createFromEpochDay(resultEpochDay);
@@ -224,21 +210,16 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             return null;
         }
         long ordinalDay = TemporalUtils.islamicDaysBeforeYear(islamicYear)
-                + (int) (29L * (monthNumber - 1L) + Math.floorDiv(monthNumber, 2L))
-                + dayOfMonth
-                - 1L;
+                + (int) (29L * (monthNumber - 1L) + Math.floorDiv(monthNumber, 2L)) + dayOfMonth - 1L;
         long epochDay = ordinalDay + epochDayOffset;
-        if (epochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY || epochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
+        if (epochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY
+                || epochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
             return null;
         }
         return createFromEpochDay(epochDay);
     }
 
-    static IsoDate lunisolarToIsoDate(
-            int calendarYear,
-            String monthCode,
-            int dayOfMonth,
-            TemporalCalendarId calendarId,
+    static IsoDate lunisolarToIsoDate(int calendarYear, String monthCode, int dayOfMonth, TemporalCalendarId calendarId,
             String overflow) {
         IsoMonth monthCodeData = IsoMonth.parseByMonthCode(monthCode);
         if (monthCodeData == null) {
@@ -369,72 +350,53 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             return null;
         }
 
-        if (input.startsWith("--")
-                && input.length() >= 6
-                && IsoParsingState.isAsciiDigit(input.charAt(2))
+        if (input.startsWith("--") && input.length() >= 6 && IsoParsingState.isAsciiDigit(input.charAt(2))
                 && IsoParsingState.isAsciiDigit(input.charAt(3))) {
             int month = IsoParsingState.parseFixedTwoDigits(input, 2);
             int dayOfMonth = -1;
             int prefixLength = -1;
             if (input.length() >= 7 && input.charAt(4) == '-') {
-                if (input.length() >= 7
-                        && IsoParsingState.isAsciiDigit(input.charAt(5))
+                if (input.length() >= 7 && IsoParsingState.isAsciiDigit(input.charAt(5))
                         && IsoParsingState.isAsciiDigit(input.charAt(6))) {
                     dayOfMonth = IsoParsingState.parseFixedTwoDigits(input, 5);
                     prefixLength = 7;
                 }
-            } else if (input.length() >= 6
-                    && IsoParsingState.isAsciiDigit(input.charAt(4))
+            } else if (input.length() >= 6 && IsoParsingState.isAsciiDigit(input.charAt(4))
                     && IsoParsingState.isAsciiDigit(input.charAt(5))) {
                 dayOfMonth = IsoParsingState.parseFixedTwoDigits(input, 4);
                 prefixLength = 6;
             }
             if (prefixLength > 0) {
                 String remainder = input.substring(prefixLength);
-                String syntheticDateString = "1972-"
-                        + (month < 10 ? "0" : "") + month
-                        + "-"
-                        + (dayOfMonth < 10 ? "0" : "") + dayOfMonth
-                        + remainder;
+                String syntheticDateString = "1972-" + (month < 10 ? "0" : "") + month + "-"
+                        + (dayOfMonth < 10 ? "0" : "") + dayOfMonth + remainder;
                 IsoDate parsedDate = parseDateString(context, syntheticDateString, false);
                 if (parsedDate == null) {
                     return null;
                 }
                 return new IsoDate(1972, parsedDate.month(), parsedDate.day());
             }
-        } else if (input.length() >= 5
-                && IsoParsingState.isAsciiDigit(input.charAt(0))
-                && IsoParsingState.isAsciiDigit(input.charAt(1))
-                && input.charAt(2) == '-'
-                && IsoParsingState.isAsciiDigit(input.charAt(3))
-                && IsoParsingState.isAsciiDigit(input.charAt(4))) {
+        } else if (input.length() >= 5 && IsoParsingState.isAsciiDigit(input.charAt(0))
+                && IsoParsingState.isAsciiDigit(input.charAt(1)) && input.charAt(2) == '-'
+                && IsoParsingState.isAsciiDigit(input.charAt(3)) && IsoParsingState.isAsciiDigit(input.charAt(4))) {
             int month = IsoParsingState.parseFixedTwoDigits(input, 0);
             int dayOfMonth = IsoParsingState.parseFixedTwoDigits(input, 3);
             String remainder = input.substring(5);
-            String syntheticDateString = "1972-"
-                    + (month < 10 ? "0" : "") + month
-                    + "-"
-                    + (dayOfMonth < 10 ? "0" : "") + dayOfMonth
-                    + remainder;
+            String syntheticDateString = "1972-" + (month < 10 ? "0" : "") + month + "-" + (dayOfMonth < 10 ? "0" : "")
+                    + dayOfMonth + remainder;
             IsoDate parsedDate = parseDateString(context, syntheticDateString, false);
             if (parsedDate == null) {
                 return null;
             }
             return new IsoDate(1972, parsedDate.month(), parsedDate.day());
-        } else if (input.length() >= 4
-                && IsoParsingState.isAsciiDigit(input.charAt(0))
-                && IsoParsingState.isAsciiDigit(input.charAt(1))
-                && IsoParsingState.isAsciiDigit(input.charAt(2))
-                && IsoParsingState.isAsciiDigit(input.charAt(3))
-                && (input.length() == 4 || input.charAt(4) == '[')) {
+        } else if (input.length() >= 4 && IsoParsingState.isAsciiDigit(input.charAt(0))
+                && IsoParsingState.isAsciiDigit(input.charAt(1)) && IsoParsingState.isAsciiDigit(input.charAt(2))
+                && IsoParsingState.isAsciiDigit(input.charAt(3)) && (input.length() == 4 || input.charAt(4) == '[')) {
             int month = IsoParsingState.parseFixedTwoDigits(input, 0);
             int dayOfMonth = IsoParsingState.parseFixedTwoDigits(input, 2);
             String remainder = input.substring(4);
-            String syntheticDateString = "1972-"
-                    + (month < 10 ? "0" : "") + month
-                    + "-"
-                    + (dayOfMonth < 10 ? "0" : "") + dayOfMonth
-                    + remainder;
+            String syntheticDateString = "1972-" + (month < 10 ? "0" : "") + month + "-" + (dayOfMonth < 10 ? "0" : "")
+                    + dayOfMonth + remainder;
             IsoDate parsedDate = parseDateString(context, syntheticDateString, false);
             if (parsedDate == null) {
                 return null;
@@ -593,13 +555,15 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             IsoDate nowruzIsoDate = new IsoDate(persianYearInfo.gregorianYear(), 3, persianYearInfo.marchDay());
             long dayOfYearOffset = persianDayOfYearOffset(monthNumber, dayOfMonth);
             long resultEpochDay = nowruzIsoDate.toEpochDay() + dayOfYearOffset;
-            if (resultEpochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
+            if (resultEpochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY
+                    || resultEpochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
                 return null;
             }
             return createFromEpochDay(resultEpochDay);
         }
         long resultEpochDay = IsoGregorianYear.persianCorrectedEpochDay(persianYear, monthNumber, dayOfMonth);
-        if (resultEpochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
+        if (resultEpochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY
+                || resultEpochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
             return null;
         }
         return createFromEpochDay(resultEpochDay);
@@ -617,12 +581,8 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         return Math.min(dayOfMonth, daysInMonth);
     }
 
-    public static IsoDate resolveReferenceIsoDateForMonthDay(
-            JSContext context,
-            TemporalCalendarId calendarId,
-            String monthCode,
-            int dayOfMonth,
-            String overflow) {
+    public static IsoDate resolveReferenceIsoDateForMonthDay(JSContext context, TemporalCalendarId calendarId,
+            String monthCode, int dayOfMonth, String overflow) {
         if (dayOfMonth < 1) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
@@ -641,8 +601,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
 
         if (calendarId.isChineseOrDangiCalendar() && monthCodeData.leapMonth()) {
             if (TemporalOverflow.REJECT.matches(overflow)) {
-                IsoDate exactLeapReferenceIsoDate = calendarId.findReferenceIsoDateExact(
-                        normalizedMonthCode,
+                IsoDate exactLeapReferenceIsoDate = calendarId.findReferenceIsoDateExact(normalizedMonthCode,
                         searchDay);
                 if (exactLeapReferenceIsoDate == null) {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
@@ -653,8 +612,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             }
 
             int constrainedLeapDay = Math.min(searchDay, 30);
-            IsoDate exactLeapReferenceIsoDate = calendarId.findReferenceIsoDateExact(
-                    normalizedMonthCode,
+            IsoDate exactLeapReferenceIsoDate = calendarId.findReferenceIsoDateExact(normalizedMonthCode,
                     constrainedLeapDay);
             if (exactLeapReferenceIsoDate != null) {
                 return exactLeapReferenceIsoDate;
@@ -665,9 +623,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         }
 
         if (TemporalOverflow.REJECT.matches(overflow)) {
-            IsoDate exactReferenceIsoDate = calendarId.findReferenceIsoDateExact(
-                    normalizedMonthCode,
-                    searchDay);
+            IsoDate exactReferenceIsoDate = calendarId.findReferenceIsoDateExact(normalizedMonthCode, searchDay);
             if (exactReferenceIsoDate == null) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return null;
@@ -677,8 +633,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         }
 
         int constrainedSearchDay = Math.min(searchDay, 31);
-        IsoDate constrainedReferenceIsoDate = calendarId.findReferenceIsoDateAtOrBelow(
-                normalizedMonthCode,
+        IsoDate constrainedReferenceIsoDate = calendarId.findReferenceIsoDateAtOrBelow(normalizedMonthCode,
                 constrainedSearchDay);
         if (constrainedReferenceIsoDate != null) {
             return constrainedReferenceIsoDate;
@@ -710,10 +665,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             return null;
         }
         if (TemporalUtils.isUnsupportedUmalquraYear(islamicYear)) {
-            return islamicToIsoDate(
-                    islamicYear,
-                    monthCode,
-                    dayOfMonth,
+            return islamicToIsoDate(islamicYear, monthCode, dayOfMonth,
                     TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
         }
         try {
@@ -721,22 +673,13 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             LocalDate localDate = LocalDate.from(hijrahDate);
             return new IsoDate(localDate.getYear(), localDate.getMonthValue(), localDate.getDayOfMonth());
         } catch (DateTimeException dateTimeException) {
-            return islamicToIsoDate(
-                    islamicYear,
-                    monthCode,
-                    dayOfMonth,
+            return islamicToIsoDate(islamicYear, monthCode, dayOfMonth,
                     TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
         }
     }
 
-    public IsoDate addCalendarDate(
-            JSContext context,
-            TemporalCalendarId calendarId,
-            long yearsToAdd,
-            long monthsToAdd,
-            long weeksToAdd,
-            long daysToAdd,
-            String overflow) {
+    public IsoDate addCalendarDate(JSContext context, TemporalCalendarId calendarId, long yearsToAdd, long monthsToAdd,
+            long weeksToAdd, long daysToAdd, String overflow) {
         IsoCalendarDate baseCalendarDate = toIsoCalendarDate(calendarId);
         if (baseCalendarDate == null) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
@@ -760,23 +703,21 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         }
         int targetYear = (int) targetYearLong;
 
-        IsoCalendarMonth baseMonthSlot = calendarId.findMonthSlotByCode(
-                baseCalendarDate.year(),
+        IsoCalendarMonth baseMonthSlot = calendarId.findMonthSlotByCode(baseCalendarDate.year(),
                 baseCalendarDate.monthCode());
         if (baseMonthSlot == null) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
 
-        IsoCalendarMonth yearAdjustedMonthSlot = calendarId.findMonthSlotByCode(
-                targetYear,
-                baseMonthSlot.monthCode());
+        IsoCalendarMonth yearAdjustedMonthSlot = calendarId.findMonthSlotByCode(targetYear, baseMonthSlot.monthCode());
         if (yearAdjustedMonthSlot == null && baseMonthSlot.leapMonth()) {
             if (TemporalOverflow.REJECT.matches(overflow)) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return null;
             }
-            String fallbackMonthCode = calendarId.resolveFallbackMonthCodeForMissingLeapMonth(baseMonthSlot.monthCode());
+            String fallbackMonthCode = calendarId
+                    .resolveFallbackMonthCodeForMissingLeapMonth(baseMonthSlot.monthCode());
             if (fallbackMonthCode != null) {
                 yearAdjustedMonthSlot = calendarId.findMonthSlotByCode(targetYear, fallbackMonthCode);
             }
@@ -797,31 +738,20 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
                 remainingMonthsToMove++;
             }
         }
-        IsoCalendarMonth targetMonthSlot = calendarId.findMonthSlotByNumber(
-                yearMonthIndex.year(),
+        IsoCalendarMonth targetMonthSlot = calendarId.findMonthSlotByNumber(yearMonthIndex.year(),
                 yearMonthIndex.monthNumber());
         if (targetMonthSlot == null) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
 
-        int monthAdjustedDay = regulateDay(
-                context,
-                baseCalendarDate.day(),
-                targetMonthSlot.daysInMonth(),
-                overflow);
+        int monthAdjustedDay = regulateDay(context, baseCalendarDate.day(), targetMonthSlot.daysInMonth(), overflow);
         if (context.hasPendingException()) {
             return null;
         }
 
-        IsoDate intermediateIsoDate = calendarDateToIsoDate(
-                context,
-                calendarId,
-                yearMonthIndex.year(),
-                yearMonthIndex.monthNumber(),
-                targetMonthSlot.monthCode(),
-                monthAdjustedDay,
-                "reject");
+        IsoDate intermediateIsoDate = calendarDateToIsoDate(context, calendarId, yearMonthIndex.year(),
+                yearMonthIndex.monthNumber(), targetMonthSlot.monthCode(), monthAdjustedDay, "reject");
         if (context.hasPendingException() || intermediateIsoDate == null) {
             return null;
         }
@@ -842,7 +772,8 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
-        if (resultEpochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
+        if (resultEpochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY
+                || resultEpochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
@@ -854,12 +785,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         return createFromEpochDay(epochDay);
     }
 
-    public IsoDate addDurationToIsoDate(
-            JSContext context,
-            long years,
-            long months,
-            long weeks,
-            long days,
+    public IsoDate addDurationToIsoDate(JSContext context, long years, long months, long weeks, long days,
             String overflow) {
         long totalDays;
         try {
@@ -910,12 +836,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         return isoDate;
     }
 
-    public IsoDate addIsoDateWithOverflow(
-            JSContext context,
-            long years,
-            long months,
-            long weeks,
-            long days,
+    public IsoDate addIsoDateWithOverflow(JSContext context, long years, long months, long weeks, long days,
             String overflow) {
         long monthIndex;
         long balancedYear;
@@ -974,27 +895,14 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         return new IsoDateTime(this, isoTime);
     }
 
-    public IsoDate calendarDateAddConstrain(
-            JSContext context,
-            TemporalCalendarId calendarId,
+    public IsoDate calendarDateAddConstrain(JSContext context, TemporalCalendarId calendarId,
             TemporalDurationDateWeek dateDuration) {
         if (calendarId == TemporalCalendarId.ISO8601) {
-            return addDurationToIsoDate(
-                    context,
-                    dateDuration.years(),
-                    dateDuration.months(),
-                    dateDuration.weeks(),
-                    dateDuration.days(),
-                    "constrain");
+            return addDurationToIsoDate(context, dateDuration.years(), dateDuration.months(), dateDuration.weeks(),
+                    dateDuration.days(), "constrain");
         } else {
-            return addCalendarDate(
-                    context,
-                    calendarId,
-                    dateDuration.years(),
-                    dateDuration.months(),
-                    dateDuration.weeks(),
-                    dateDuration.days(),
-                    "constrain");
+            return addCalendarDate(context, calendarId, dateDuration.years(), dateDuration.months(),
+                    dateDuration.weeks(), dateDuration.days(), "constrain");
         }
     }
 
@@ -1043,8 +951,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
 
     public int daysInMonth(TemporalCalendarId calendarId) {
         IsoCalendarDate calendarDateFields = toIsoCalendarDate(calendarId);
-        IsoCalendarMonth monthSlot = calendarId.findMonthSlotByCode(
-                calendarDateFields.year(),
+        IsoCalendarMonth monthSlot = calendarId.findMonthSlotByCode(calendarDateFields.year(),
                 calendarDateFields.monthCode());
         if (monthSlot == null) {
             return 0;
@@ -1189,7 +1096,8 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             dayInYear -= monthSlot.daysInMonth();
         }
         IsoCalendarMonth lastMonthSlot = monthSlots.get(monthSlots.size() - 1);
-        return new IsoCalendarDate(hebrewYear, lastMonthSlot.monthNumber(), lastMonthSlot.monthCode(), lastMonthSlot.daysInMonth());
+        return new IsoCalendarDate(hebrewYear, lastMonthSlot.monthNumber(), lastMonthSlot.monthCode(),
+                lastMonthSlot.daysInMonth());
     }
 
     private IsoCalendarDate toIndianCalendarDate() {
@@ -1217,7 +1125,8 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             remainingDays -= monthSlot.daysInMonth();
         }
         IsoCalendarMonth fallbackMonthSlot = monthSlots.get(monthSlots.size() - 1);
-        return new IsoCalendarDate(indianYear, fallbackMonthSlot.monthNumber(), fallbackMonthSlot.monthCode(), fallbackMonthSlot.daysInMonth());
+        return new IsoCalendarDate(indianYear, fallbackMonthSlot.monthNumber(), fallbackMonthSlot.monthCode(),
+                fallbackMonthSlot.daysInMonth());
     }
 
     private IsoCalendarDate toIslamicCalendarDate(long epochDayOffset) {
@@ -1246,21 +1155,9 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
 
     public IsoCalendarDate toIsoCalendarDate(TemporalCalendarId calendarId) {
         return switch (calendarId) {
-            case ISO8601, GREGORY, JAPANESE -> new IsoCalendarDate(
-                    year,
-                    month,
-                    IsoMonth.toMonthCode(month),
-                    day);
-            case BUDDHIST -> new IsoCalendarDate(
-                    year + 543,
-                    month,
-                    IsoMonth.toMonthCode(month),
-                    day);
-            case ROC -> new IsoCalendarDate(
-                    year - 1911,
-                    month,
-                    IsoMonth.toMonthCode(month),
-                    day);
+            case ISO8601, GREGORY, JAPANESE -> new IsoCalendarDate(year, month, IsoMonth.toMonthCode(month), day);
+            case BUDDHIST -> new IsoCalendarDate(year + 543, month, IsoMonth.toMonthCode(month), day);
+            case ROC -> new IsoCalendarDate(year - 1911, month, IsoMonth.toMonthCode(month), day);
             default -> toNonIsoCalendarDate(calendarId);
         };
     }
@@ -1348,10 +1245,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             case ETHIOPIC -> toAlexandrianCalendarDate(TemporalConstants.ETHIOPIC_EPOCH_DAY_OFFSET);
             case ETHIOAA -> {
                 IsoCalendarDate ethiopicDate = toAlexandrianCalendarDate(TemporalConstants.ETHIOPIC_EPOCH_DAY_OFFSET);
-                yield new IsoCalendarDate(
-                        ethiopicDate.year() + 5500,
-                        ethiopicDate.month(),
-                        ethiopicDate.monthCode(),
+                yield new IsoCalendarDate(ethiopicDate.year() + 5500, ethiopicDate.month(), ethiopicDate.monthCode(),
                         ethiopicDate.day());
             }
             case INDIAN -> toIndianCalendarDate();
@@ -1386,10 +1280,12 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         long epochDay = toEpochDay();
         int estimatedPersianYear = year - 621;
         int estimatedArithmeticPersianYear = TemporalUtils.toArithmeticPersianYear(estimatedPersianYear);
-        while (epochDay < IsoGregorianYear.persianCorrectedEpochDay(fromArithmeticPersianYear(estimatedArithmeticPersianYear), 1, 1)) {
+        while (epochDay < IsoGregorianYear
+                .persianCorrectedEpochDay(fromArithmeticPersianYear(estimatedArithmeticPersianYear), 1, 1)) {
             estimatedArithmeticPersianYear--;
         }
-        while (epochDay >= IsoGregorianYear.persianCorrectedEpochDay(fromArithmeticPersianYear(estimatedArithmeticPersianYear + 1), 1, 1)) {
+        while (epochDay >= IsoGregorianYear
+                .persianCorrectedEpochDay(fromArithmeticPersianYear(estimatedArithmeticPersianYear + 1), 1, 1)) {
             estimatedArithmeticPersianYear++;
         }
         int persianYear = fromArithmeticPersianYear(estimatedArithmeticPersianYear);
@@ -1410,8 +1306,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             return null;
         }
 
-        while (persianYear > IsoGregorianYear.MIN_SUPPORTED_PERSIAN_YEAR
-                && this.compareTo(nowruzIsoDate) < 0) {
+        while (persianYear > IsoGregorianYear.MIN_SUPPORTED_PERSIAN_YEAR && this.compareTo(nowruzIsoDate) < 0) {
             persianYear--;
             nowruzIsoDate = persianNowruzIsoDate(persianYear);
             if (nowruzIsoDate == null) {
@@ -1421,8 +1316,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
 
         while (persianYear < IsoGregorianYear.MAX_SUPPORTED_PERSIAN_YEAR) {
             IsoDate nextNowruzIsoDate = persianNowruzIsoDate(persianYear + 1);
-            if (nextNowruzIsoDate == null
-                    || this.compareTo(nextNowruzIsoDate) < 0) {
+            if (nextNowruzIsoDate == null || this.compareTo(nextNowruzIsoDate) < 0) {
                 break;
             }
             persianYear++;

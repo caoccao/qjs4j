@@ -20,16 +20,12 @@ package com.caoccao.qjs4j.compilation.ast;
  * Represents a binary expression.
  */
 public final class BinaryExpression extends Expression {
+    private Boolean directEvalVarArgumentsInside;
     private final Expression left;
     private final BinaryOperator operator;
     private final Expression right;
-    private Boolean directEvalVarArgumentsInside;
 
-    public BinaryExpression(
-            BinaryOperator operator,
-            Expression left,
-            Expression right,
-            SourceLocation location) {
+    public BinaryExpression(BinaryOperator operator, Expression left, Expression right, SourceLocation location) {
         super(location);
         this.operator = operator;
         this.left = left;
@@ -84,8 +80,7 @@ public final class BinaryExpression extends Expression {
 
     @Override
     public boolean hasTailCallInTailPosition() {
-        if (operator == BinaryOperator.NULLISH_COALESCING
-                || operator == BinaryOperator.LOGICAL_AND
+        if (operator == BinaryOperator.NULLISH_COALESCING || operator == BinaryOperator.LOGICAL_AND
                 || operator == BinaryOperator.LOGICAL_OR) {
             return right.hasTailCallInTailPosition();
         }

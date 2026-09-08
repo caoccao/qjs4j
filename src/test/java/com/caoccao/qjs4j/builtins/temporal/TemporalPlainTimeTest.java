@@ -62,13 +62,14 @@ public class TemporalPlainTimeTest extends BaseJavetTest {
     }
 
     @Test
-    public void testConstructorWithSubclass() {
-        assertBooleanWithJavet("(() => { class CustomPlainTime extends Temporal.PlainTime {} const value = new CustomPlainTime(12, 30); return value instanceof CustomPlainTime && value instanceof Temporal.PlainTime; })()");
+    public void testConstructorWithoutNew() {
+        assertErrorWithJavet("Temporal.PlainTime(12, 30)");
     }
 
     @Test
-    public void testConstructorWithoutNew() {
-        assertErrorWithJavet("Temporal.PlainTime(12, 30)");
+    public void testConstructorWithSubclass() {
+        assertBooleanWithJavet(
+                "(() => { class CustomPlainTime extends Temporal.PlainTime {} const value = new CustomPlainTime(12, 30); return value instanceof CustomPlainTime && value instanceof Temporal.PlainTime; })()");
     }
 
     @Test
@@ -143,7 +144,8 @@ public class TemporalPlainTimeTest extends BaseJavetTest {
 
     @Test
     public void testToLocaleString() {
-        assertBooleanWithJavet("(() => { const value = new Temporal.PlainTime(12, 30, 45); const locales = 'en-US'; const options = { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }; return value.toLocaleString(locales, options) === new Intl.DateTimeFormat(locales, options).format(value); })()");
+        assertBooleanWithJavet(
+                "(() => { const value = new Temporal.PlainTime(12, 30, 45); const locales = 'en-US'; const options = { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }; return value.toLocaleString(locales, options) === new Intl.DateTimeFormat(locales, options).format(value); })()");
     }
 
     @Test

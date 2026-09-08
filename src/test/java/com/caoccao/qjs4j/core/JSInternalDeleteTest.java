@@ -22,11 +22,10 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * {@code [[Delete]]} and the {@code delete} operator are not the same thing. Only the operator
- * raises a {@code TypeError} when the property survives, and only when the <em>calling script</em>
- * is strict. Specification algorithms that call {@code [[Delete]]} internally must not inherit
- * that: {@code InternalizeJSONProperty} discards the result, so a strict caller made
- * {@code JSON.parse} throw where the specification says nothing happens.
+ * {@code [[Delete]]} and the {@code delete} operator are not the same thing. Only the operator raises a
+ * {@code TypeError} when the property survives, and only when the <em>calling script</em> is strict. Specification
+ * algorithms that call {@code [[Delete]]} internally must not inherit that: {@code InternalizeJSONProperty} discards
+ * the result, so a strict caller made {@code JSON.parse} throw where the specification says nothing happens.
  */
 public class JSInternalDeleteTest extends BaseJavetTest {
     @Test
@@ -63,8 +62,7 @@ public class JSInternalDeleteTest extends BaseJavetTest {
         try (JSRuntime runtime = new JSRuntime()) {
             JSContext context = runtime.createContext();
             JSObject object = context.createJSObject();
-            object.defineProperty(
-                    PropertyKey.fromString("a"),
+            object.defineProperty(PropertyKey.fromString("a"),
                     PropertyDescriptor.dataDescriptor(JSNumber.of(1), PropertyDescriptor.DataState.None));
             assertThat(object.delete(PropertyKey.fromString("a"), false)).isFalse();
             assertThat(context.hasPendingException()).isFalse();

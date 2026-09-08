@@ -21,12 +21,8 @@ import com.caoccao.qjs4j.core.JSContext;
 public record TemporalDurationDateWeek(long years, long months, long weeks, long days) {
     public static final TemporalDurationDateWeek ZERO = new TemporalDurationDateWeek(0, 0, 0, 0);
 
-    public static TemporalDurationDateWeek calendarDateUntil(
-            JSContext context,
-            IsoDate firstDate,
-            IsoDate secondDate,
-            TemporalCalendarId calendarId,
-            TemporalUnit largestUnit) {
+    public static TemporalDurationDateWeek calendarDateUntil(JSContext context, IsoDate firstDate, IsoDate secondDate,
+            TemporalCalendarId calendarId, TemporalUnit largestUnit) {
         if (calendarId == TemporalCalendarId.ISO8601) {
             return calendarDateUntilIso(firstDate, secondDate, largestUnit);
         }
@@ -46,26 +42,20 @@ public record TemporalDurationDateWeek(long years, long months, long weeks, long
             }
             while (true) {
                 TemporalDurationDateWeek candidateYearDuration = new TemporalDurationDateWeek(candidateYears, 0, 0, 0);
-                IsoDate candidateYearDate = firstDate.calendarDateAddConstrain(context, calendarId, candidateYearDuration);
+                IsoDate candidateYearDate = firstDate.calendarDateAddConstrain(context, calendarId,
+                        candidateYearDuration);
                 if (context.hasPendingException() || candidateYearDate == null) {
                     return null;
                 }
                 if (TemporalUtils.isoDateSurpasses(sign, candidateYearDate, secondDate)) {
                     break;
                 }
-                if (doesConceptualYearDateSurpassSecondDate(
-                        sign,
-                        firstCalendarDateFields,
-                        candidateYears,
+                if (doesConceptualYearDateSurpassSecondDate(sign, firstCalendarDateFields, candidateYears,
                         secondCalendarDateFields)) {
                     break;
                 }
-                if (doesConstrainedCalendarDaySurpassSecondDate(
-                        sign,
-                        firstCalendarDateFields,
-                        candidateYearDate,
-                        secondCalendarDateFields,
-                        calendarId)) {
+                if (doesConstrainedCalendarDaySurpassSecondDate(sign, firstCalendarDateFields, candidateYearDate,
+                        secondCalendarDateFields, calendarId)) {
                     break;
                 }
                 years = candidateYears;
@@ -74,20 +64,18 @@ public record TemporalDurationDateWeek(long years, long months, long weeks, long
 
             long candidateMonths = sign;
             while (true) {
-                TemporalDurationDateWeek candidateMonthDuration = new TemporalDurationDateWeek(years, candidateMonths, 0, 0);
-                IsoDate candidateMonthDate = firstDate.calendarDateAddConstrain(context, calendarId, candidateMonthDuration);
+                TemporalDurationDateWeek candidateMonthDuration = new TemporalDurationDateWeek(years, candidateMonths,
+                        0, 0);
+                IsoDate candidateMonthDate = firstDate.calendarDateAddConstrain(context, calendarId,
+                        candidateMonthDuration);
                 if (context.hasPendingException() || candidateMonthDate == null) {
                     return null;
                 }
                 if (TemporalUtils.isoDateSurpasses(sign, candidateMonthDate, secondDate)) {
                     break;
                 }
-                if (doesConstrainedCalendarDaySurpassSecondDate(
-                        sign,
-                        firstCalendarDateFields,
-                        candidateMonthDate,
-                        secondCalendarDateFields,
-                        calendarId)) {
+                if (doesConstrainedCalendarDaySurpassSecondDate(sign, firstCalendarDateFields, candidateMonthDate,
+                        secondCalendarDateFields, calendarId)) {
                     break;
                 }
                 months = candidateMonths;
@@ -108,7 +96,8 @@ public record TemporalDurationDateWeek(long years, long months, long weeks, long
                 }
                 while (true) {
                     TemporalDurationDateWeek totalMonthDuration = new TemporalDurationDateWeek(0, totalMonths, 0, 0);
-                    IsoDate totalMonthDate = firstDate.calendarDateAddConstrain(context, calendarId, totalMonthDuration);
+                    IsoDate totalMonthDate = firstDate.calendarDateAddConstrain(context, calendarId,
+                            totalMonthDuration);
                     if (context.hasPendingException() || totalMonthDate == null) {
                         return null;
                     }
@@ -116,12 +105,8 @@ public record TemporalDurationDateWeek(long years, long months, long weeks, long
                         totalMonths -= sign;
                         continue;
                     }
-                    if (doesConstrainedCalendarDaySurpassSecondDate(
-                            sign,
-                            firstCalendarDateFields,
-                            totalMonthDate,
-                            secondCalendarDateFields,
-                            calendarId)) {
+                    if (doesConstrainedCalendarDaySurpassSecondDate(sign, firstCalendarDateFields, totalMonthDate,
+                            secondCalendarDateFields, calendarId)) {
                         totalMonths -= sign;
                         continue;
                     }
@@ -132,20 +117,18 @@ public record TemporalDurationDateWeek(long years, long months, long weeks, long
                     } catch (ArithmeticException arithmeticException) {
                         break;
                     }
-                    TemporalDurationDateWeek nextTotalMonthDuration = new TemporalDurationDateWeek(0, nextTotalMonths, 0, 0);
-                    IsoDate nextTotalMonthDate = firstDate.calendarDateAddConstrain(context, calendarId, nextTotalMonthDuration);
+                    TemporalDurationDateWeek nextTotalMonthDuration = new TemporalDurationDateWeek(0, nextTotalMonths,
+                            0, 0);
+                    IsoDate nextTotalMonthDate = firstDate.calendarDateAddConstrain(context, calendarId,
+                            nextTotalMonthDuration);
                     if (context.hasPendingException() || nextTotalMonthDate == null) {
                         return null;
                     }
                     if (TemporalUtils.isoDateSurpasses(sign, nextTotalMonthDate, secondDate)) {
                         break;
                     }
-                    if (doesConstrainedCalendarDaySurpassSecondDate(
-                            sign,
-                            firstCalendarDateFields,
-                            nextTotalMonthDate,
-                            secondCalendarDateFields,
-                            calendarId)) {
+                    if (doesConstrainedCalendarDaySurpassSecondDate(sign, firstCalendarDateFields, nextTotalMonthDate,
+                            secondCalendarDateFields, calendarId)) {
                         break;
                     }
                     totalMonths = nextTotalMonths;
@@ -169,9 +152,7 @@ public record TemporalDurationDateWeek(long years, long months, long weeks, long
         return new TemporalDurationDateWeek(years, months, weeks, dayDifference);
     }
 
-    private static TemporalDurationDateWeek calendarDateUntilIso(
-            IsoDate firstDate,
-            IsoDate secondDate,
+    private static TemporalDurationDateWeek calendarDateUntilIso(IsoDate firstDate, IsoDate secondDate,
             TemporalUnit largestUnit) {
         int sign = -Integer.signum(firstDate.compareTo(secondDate));
         if (sign == 0) {
@@ -185,19 +166,20 @@ public record TemporalDurationDateWeek(long years, long months, long weeks, long
             if (candidateYears != 0) {
                 candidateYears -= sign;
             }
-            while (!secondDate.isSurpassedBy(sign, firstDate.year() + candidateYears, firstDate.month(), firstDate.day())) {
+            while (!secondDate.isSurpassedBy(sign, firstDate.year() + candidateYears, firstDate.month(),
+                    firstDate.day())) {
                 years = candidateYears;
                 candidateYears += sign;
             }
 
             long candidateMonths = sign;
-            TemporalYearMonth intermediateYearMonth =
-                    TemporalYearMonth.createBalanced(firstDate.year() + years, firstDate.month() + candidateMonths);
-            while (!secondDate.isSurpassedBy(sign, intermediateYearMonth.year(), intermediateYearMonth.month(), firstDate.day())) {
+            TemporalYearMonth intermediateYearMonth = TemporalYearMonth.createBalanced(firstDate.year() + years,
+                    firstDate.month() + candidateMonths);
+            while (!secondDate.isSurpassedBy(sign, intermediateYearMonth.year(), intermediateYearMonth.month(),
+                    firstDate.day())) {
                 months = candidateMonths;
                 candidateMonths += sign;
-                intermediateYearMonth = TemporalYearMonth.createBalanced(
-                        intermediateYearMonth.year(),
+                intermediateYearMonth = TemporalYearMonth.createBalanced(intermediateYearMonth.year(),
                         intermediateYearMonth.month() + sign);
             }
 
@@ -207,11 +189,9 @@ public record TemporalDurationDateWeek(long years, long months, long weeks, long
             }
         }
 
-        TemporalYearMonth intermediateYearMonth =
-                TemporalYearMonth.createBalanced(firstDate.year() + years, firstDate.month() + months);
-        IsoDate constrainedDate = IsoDate.createConstrained(
-                intermediateYearMonth.year(),
-                intermediateYearMonth.month(),
+        TemporalYearMonth intermediateYearMonth = TemporalYearMonth.createBalanced(firstDate.year() + years,
+                firstDate.month() + months);
+        IsoDate constrainedDate = IsoDate.createConstrained(intermediateYearMonth.year(), intermediateYearMonth.month(),
                 firstDate.day());
         long dayDifference = secondDate.toEpochDay() - constrainedDate.toEpochDay();
         long weeks = 0;
@@ -222,13 +202,8 @@ public record TemporalDurationDateWeek(long years, long months, long weeks, long
         return new TemporalDurationDateWeek(years, months, weeks, dayDifference);
     }
 
-    private static int compareCalendarDateFields(
-            long firstYear,
-            String firstMonthCode,
-            int firstDay,
-            int secondYear,
-            String secondMonthCode,
-            int secondDay) {
+    private static int compareCalendarDateFields(long firstYear, String firstMonthCode, int firstDay, int secondYear,
+            String secondMonthCode, int secondDay) {
         int yearComparison = Long.compare(firstYear, secondYear);
         if (yearComparison != 0) {
             return yearComparison;
@@ -246,9 +221,7 @@ public record TemporalDurationDateWeek(long years, long months, long weeks, long
         if (firstMonthCodeParts == null || secondMonthCodeParts == null) {
             return firstMonthCode.compareTo(secondMonthCode);
         }
-        int monthNumberComparison = Integer.compare(
-                firstMonthCodeParts.month(),
-                secondMonthCodeParts.month());
+        int monthNumberComparison = Integer.compare(firstMonthCodeParts.month(), secondMonthCodeParts.month());
         if (monthNumberComparison != 0) {
             return monthNumberComparison;
         }
@@ -259,28 +232,18 @@ public record TemporalDurationDateWeek(long years, long months, long weeks, long
         }
     }
 
-    private static boolean doesConceptualYearDateSurpassSecondDate(
-            int sign,
-            IsoCalendarDate firstCalendarDateFields,
-            long candidateYears,
-            IsoCalendarDate secondCalendarDateFields) {
+    private static boolean doesConceptualYearDateSurpassSecondDate(int sign, IsoCalendarDate firstCalendarDateFields,
+            long candidateYears, IsoCalendarDate secondCalendarDateFields) {
         long candidateYear = firstCalendarDateFields.year() + candidateYears;
-        int comparison = compareCalendarDateFields(
-                candidateYear,
-                firstCalendarDateFields.monthCode(),
-                firstCalendarDateFields.day(),
-                secondCalendarDateFields.year(),
-                secondCalendarDateFields.monthCode(),
+        int comparison = compareCalendarDateFields(candidateYear, firstCalendarDateFields.monthCode(),
+                firstCalendarDateFields.day(), secondCalendarDateFields.year(), secondCalendarDateFields.monthCode(),
                 secondCalendarDateFields.day());
         return sign * comparison > 0;
     }
 
-    private static boolean doesConstrainedCalendarDaySurpassSecondDate(
-            int sign,
-            IsoCalendarDate firstCalendarDateFields,
-            IsoDate constrainedCandidateDate,
-            IsoCalendarDate secondCalendarDateFields,
-            TemporalCalendarId calendarId) {
+    private static boolean doesConstrainedCalendarDaySurpassSecondDate(int sign,
+            IsoCalendarDate firstCalendarDateFields, IsoDate constrainedCandidateDate,
+            IsoCalendarDate secondCalendarDateFields, TemporalCalendarId calendarId) {
         IsoCalendarDate candidateCalendarDateFields = constrainedCandidateDate.toIsoCalendarDate(calendarId);
         if (candidateCalendarDateFields.day() == firstCalendarDateFields.day()) {
             return false;
@@ -294,16 +257,12 @@ public record TemporalDurationDateWeek(long years, long months, long weeks, long
         return sign * Integer.compare(firstCalendarDateFields.day(), secondCalendarDateFields.day()) > 0;
     }
 
-    private static long monthsForYearDelta(
-            JSContext context,
-            IsoDate firstDate,
-            TemporalCalendarId calendarId,
+    private static long monthsForYearDelta(JSContext context, IsoDate firstDate, TemporalCalendarId calendarId,
             long yearDelta) {
         if (yearDelta == 0L) {
             return 0L;
         }
-        if (calendarId == TemporalCalendarId.COPTIC
-                || calendarId == TemporalCalendarId.ETHIOPIC
+        if (calendarId == TemporalCalendarId.COPTIC || calendarId == TemporalCalendarId.ETHIOPIC
                 || calendarId == TemporalCalendarId.ETHIOAA) {
             try {
                 return Math.multiplyExact(yearDelta, 13L);
@@ -312,16 +271,11 @@ public record TemporalDurationDateWeek(long years, long months, long weeks, long
                 return 0L;
             }
         }
-        if (calendarId == TemporalCalendarId.ISO8601
-                || calendarId == TemporalCalendarId.GREGORY
-                || calendarId == TemporalCalendarId.JAPANESE
-                || calendarId == TemporalCalendarId.BUDDHIST
-                || calendarId == TemporalCalendarId.ROC
-                || calendarId == TemporalCalendarId.INDIAN
-                || calendarId == TemporalCalendarId.PERSIAN
-                || calendarId == TemporalCalendarId.ISLAMIC_CIVIL
-                || calendarId == TemporalCalendarId.ISLAMIC_TBLA
-                || calendarId == TemporalCalendarId.ISLAMIC_UMALQURA) {
+        if (calendarId == TemporalCalendarId.ISO8601 || calendarId == TemporalCalendarId.GREGORY
+                || calendarId == TemporalCalendarId.JAPANESE || calendarId == TemporalCalendarId.BUDDHIST
+                || calendarId == TemporalCalendarId.ROC || calendarId == TemporalCalendarId.INDIAN
+                || calendarId == TemporalCalendarId.PERSIAN || calendarId == TemporalCalendarId.ISLAMIC_CIVIL
+                || calendarId == TemporalCalendarId.ISLAMIC_TBLA || calendarId == TemporalCalendarId.ISLAMIC_UMALQURA) {
             try {
                 return Math.multiplyExact(yearDelta, 12L);
             } catch (ArithmeticException arithmeticException) {
@@ -357,14 +311,8 @@ public record TemporalDurationDateWeek(long years, long months, long weeks, long
         return new TemporalDurationDateWeek(years, adjustedMonths, adjustedWeeks, newDays);
     }
 
-    public TemporalDurationDateWeek bubbleRelativeDuration(
-            JSContext context,
-            int sign,
-            long nudgedEpochDay,
-            IsoDate originDate,
-            TemporalCalendarId calendarId,
-            TemporalUnit largestUnit,
-            TemporalUnit smallestUnit) {
+    public TemporalDurationDateWeek bubbleRelativeDuration(JSContext context, int sign, long nudgedEpochDay,
+            IsoDate originDate, TemporalCalendarId calendarId, TemporalUnit largestUnit, TemporalUnit smallestUnit) {
         TemporalDurationDateWeek duration = this;
         if (smallestUnit == largestUnit) {
             return duration;

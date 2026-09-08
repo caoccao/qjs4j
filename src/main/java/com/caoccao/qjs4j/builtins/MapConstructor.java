@@ -19,18 +19,19 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 /**
- * Implementation of Map constructor static methods.
- * Based on ES2024 Map specification.
+ * Implementation of Map constructor static methods. Based on ES2024 Map specification.
  */
 public final class MapConstructor {
 
     /**
-     * Map constructor call handler.
-     * Creates a new Map object.
+     * Map constructor call handler. Creates a new Map object.
      *
-     * @param context The execution context
-     * @param thisArg The this value (unused for constructor)
-     * @param args    The arguments array (optional iterable)
+     * @param context
+     *            The execution context
+     * @param thisArg
+     *            The this value (unused for constructor)
+     * @param args
+     *            The arguments array (optional iterable)
      * @return New Map object
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -52,10 +53,8 @@ public final class MapConstructor {
     }
 
     /**
-     * Map.groupBy(items, callbackFn)
-     * ES2024 24.1.2.2
-     * Groups array elements by a key returned from the callback function,
-     * returning a Map where keys are callback results and values are arrays.
+     * Map.groupBy(items, callbackFn) ES2024 24.1.2.2 Groups array elements by a key returned from the callback
+     * function, returning a Map where keys are callback results and values are arrays.
      */
     public static JSValue groupBy(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length < 2 || !(args[1] instanceof JSFunction callback)) {
@@ -99,9 +98,7 @@ public final class MapConstructor {
             }
 
             JSValue existingGroup = groups.mapGet(key);
-            JSArray group = existingGroup instanceof JSArray existingArray
-                    ? existingArray
-                    : context.createJSArray();
+            JSArray group = existingGroup instanceof JSArray existingArray ? existingArray : context.createJSArray();
             if (!(existingGroup instanceof JSArray)) {
                 groups.mapSet(key, group);
             }

@@ -22,29 +22,29 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * The realm's global lexical environment, and the declaration tables that
- * GlobalDeclarationInstantiation checks against.
+ * The realm's global lexical environment, and the declaration tables that GlobalDeclarationInstantiation checks
+ * against.
  * <p>
- * Following QuickJS's {@code global_var_obj} pattern: {@code let}, {@code const} and {@code class}
- * at the top level of a script do not become properties of the global object, so they live here
- * instead; {@code var} and function declarations do become properties, and only their names are
- * tracked, so a later script's {@code let} of the same name can be rejected.
+ * Following QuickJS's {@code global_var_obj} pattern: {@code let}, {@code const} and {@code class} at the top level of
+ * a script do not become properties of the global object, so they live here instead; {@code var} and function
+ * declarations do become properties, and only their names are tracked, so a later script's {@code let} of the same name
+ * can be rejected.
  * <p>
- * A plain state holder with no reference back to the context. {@link JSContext} keeps the public
- * accessors the VM and {@code JSGlobalObject} already call and delegates to this class.
+ * A plain state holder with no reference back to the context. {@link JSContext} keeps the public accessors the VM and
+ * {@code JSGlobalObject} already call and delegates to this class.
  */
 final class GlobalLexicalScope {
     /**
-     * The value a {@code let}/{@code const} binding holds between its declaration being registered
-     * and its initializer running — the temporal dead zone, as a value.
+     * The value a {@code let}/{@code const} binding holds between its declaration being registered and its initializer
+     * running — the temporal dead zone, as a value.
      */
     private static final JSValue UNINITIALIZED = new JSSymbol("GlobalLexicalUninitialized");
+    private boolean activeFunctionBindingConfigurable;
+    private Set<String> activeFunctionBindingInitializations;
     private final Set<String> constDeclarations = new HashSet<>();
     private final Set<String> lexDeclarations = new HashSet<>();
     private final Map<String, JSValue> lexicalBindings = new HashMap<>();
     private final Set<String> varDeclarations = new HashSet<>();
-    private boolean activeFunctionBindingConfigurable;
-    private Set<String> activeFunctionBindingInitializations;
 
     GlobalLexicalScope() {
         activeFunctionBindingConfigurable = false;
@@ -54,8 +54,8 @@ final class GlobalLexicalScope {
     /**
      * Drop everything this holds.
      * <p>
-     * Called from {@link JSContext#close()}: a closed context must own nothing, and the binding
-     * tables reach every value a script bound at the top level.
+     * Called from {@link JSContext#close()}: a closed context must own nothing, and the binding tables reach every
+     * value a script bound at the top level.
      */
     void clear() {
         lexicalBindings.clear();
@@ -66,25 +66,23 @@ final class GlobalLexicalScope {
     }
 
     boolean consumeFunctionBindingInitialization(String name) {
-        return activeFunctionBindingInitializations != null
-                && activeFunctionBindingInitializations.remove(name);
+        return activeFunctionBindingInitializations != null && activeFunctionBindingInitializations.remove(name);
     }
 
     /**
-     * Register the declarations of a top-level script, after
-     * GlobalDeclarationInstantiation's checks have passed.
+     * Register the declarations of a top-level script, after GlobalDeclarationInstantiation's checks have passed.
      * <p>
-     * Each {@code let}/{@code const} name starts in the temporal dead zone, and {@code putIfAbsent}
-     * is what keeps a redeclaration check that has already run from resetting a binding that a
-     * previous script initialized.
+     * Each {@code let}/{@code const} name starts in the temporal dead zone, and {@code putIfAbsent} is what keeps a
+     * redeclaration check that has already run from resetting a binding that a previous script initialized.
      *
-     * @param newConstDeclarations the {@code const} names
-     * @param newLexDeclarations   the {@code let}, {@code const} and {@code class} names
-     * @param newVarDeclarations   the {@code var} and function names
+     * @param newConstDeclarations
+     *            the {@code const} names
+     * @param newLexDeclarations
+     *            the {@code let}, {@code const} and {@code class} names
+     * @param newVarDeclarations
+     *            the {@code var} and function names
      */
-    void declareScriptGlobals(
-            Set<String> newConstDeclarations,
-            Set<String> newLexDeclarations,
+    void declareScriptGlobals(Set<String> newConstDeclarations, Set<String> newLexDeclarations,
             Set<String> newVarDeclarations) {
         constDeclarations.addAll(newConstDeclarations);
         lexDeclarations.addAll(newLexDeclarations);

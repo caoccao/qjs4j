@@ -29,88 +29,34 @@ import java.util.*;
  * Intl.NumberFormat instance object.
  */
 public final class JSIntlNumberFormat extends JSObject {
-    public static final String NAME = "Intl.NumberFormat";
-    private static final Map<String, Integer> CONTIGUOUS_ZERO_CODE_POINTS = Map.ofEntries(
-            Map.entry("adlm", 0x1E950),
-            Map.entry("ahom", 0x11730),
-            Map.entry("arab", 0x660),
-            Map.entry("arabext", 0x6F0),
-            Map.entry("bali", 0x1B50),
-            Map.entry("beng", 0x9E6),
-            Map.entry("bhks", 0x11C50),
-            Map.entry("brah", 0x11066),
-            Map.entry("cakm", 0x11136),
-            Map.entry("cham", 0xAA50),
-            Map.entry("deva", 0x966),
-            Map.entry("diak", 0x11950),
-            Map.entry("fullwide", 0xFF10),
-            Map.entry("gara", 0x10D40),
-            Map.entry("gong", 0x11DA0),
-            Map.entry("gonm", 0x11D50),
-            Map.entry("gujr", 0xAE6),
-            Map.entry("gukh", 0x16130),
-            Map.entry("guru", 0xA66),
-            Map.entry("hmng", 0x16B50),
-            Map.entry("hmnp", 0x1E140),
-            Map.entry("java", 0xA9D0),
-            Map.entry("kali", 0xA900),
-            Map.entry("kawi", 0x11F50),
-            Map.entry("khmr", 0x17E0),
-            Map.entry("knda", 0xCE6),
-            Map.entry("krai", 0x16D70),
-            Map.entry("lana", 0x1A80),
-            Map.entry("lanatham", 0x1A90),
-            Map.entry("laoo", 0xED0),
-            Map.entry("latn", 0x30),
-            Map.entry("lepc", 0x1C40),
-            Map.entry("limb", 0x1946),
-            Map.entry("nagm", 0x1E4F0),
-            Map.entry("mathbold", 0x1D7CE),
-            Map.entry("mathdbl", 0x1D7D8),
-            Map.entry("mathmono", 0x1D7F6),
-            Map.entry("mathsanb", 0x1D7EC),
-            Map.entry("mathsans", 0x1D7E2),
-            Map.entry("mlym", 0xD66),
-            Map.entry("modi", 0x11650),
-            Map.entry("mong", 0x1810),
-            Map.entry("mroo", 0x16A60),
-            Map.entry("mtei", 0xABF0),
-            Map.entry("mymr", 0x1040),
-            Map.entry("mymrepka", 0x116DA),
-            Map.entry("mymrpao", 0x116D0),
-            Map.entry("mymrshan", 0x1090),
-            Map.entry("mymrtlng", 0xA9F0),
-            Map.entry("newa", 0x11450),
-            Map.entry("nkoo", 0x7C0),
-            Map.entry("olck", 0x1C50),
-            Map.entry("onao", 0x1E5F1),
-            Map.entry("orya", 0xB66),
-            Map.entry("osma", 0x104A0),
-            Map.entry("outlined", 0x1CCF0),
-            Map.entry("rohg", 0x10D30),
-            Map.entry("saur", 0xA8D0),
-            Map.entry("segment", 0x1FBF0),
-            Map.entry("shrd", 0x111D0),
-            Map.entry("sind", 0x112F0),
-            Map.entry("sinh", 0xDE6),
-            Map.entry("sora", 0x110F0),
-            Map.entry("sund", 0x1BB0),
-            Map.entry("sunu", 0x11BF0),
-            Map.entry("takr", 0x116C0),
-            Map.entry("talu", 0x19D0),
-            Map.entry("tamldec", 0xBE6),
-            Map.entry("tnsa", 0x16AC0),
-            Map.entry("tols", 0x11DE0),
-            Map.entry("telu", 0xC66),
-            Map.entry("thai", 0xE50),
-            Map.entry("tibt", 0xF20),
-            Map.entry("tirh", 0x114D0),
-            Map.entry("vaii", 0xA620),
-            Map.entry("wara", 0x118E0),
-            Map.entry("wcho", 0x1E2F0)
-    );
+    private static final Map<String, Integer> CONTIGUOUS_ZERO_CODE_POINTS = Map.ofEntries(Map.entry("adlm", 0x1E950),
+            Map.entry("ahom", 0x11730), Map.entry("arab", 0x660), Map.entry("arabext", 0x6F0),
+            Map.entry("bali", 0x1B50), Map.entry("beng", 0x9E6), Map.entry("bhks", 0x11C50), Map.entry("brah", 0x11066),
+            Map.entry("cakm", 0x11136), Map.entry("cham", 0xAA50), Map.entry("deva", 0x966), Map.entry("diak", 0x11950),
+            Map.entry("fullwide", 0xFF10), Map.entry("gara", 0x10D40), Map.entry("gong", 0x11DA0),
+            Map.entry("gonm", 0x11D50), Map.entry("gujr", 0xAE6), Map.entry("gukh", 0x16130), Map.entry("guru", 0xA66),
+            Map.entry("hmng", 0x16B50), Map.entry("hmnp", 0x1E140), Map.entry("java", 0xA9D0),
+            Map.entry("kali", 0xA900), Map.entry("kawi", 0x11F50), Map.entry("khmr", 0x17E0), Map.entry("knda", 0xCE6),
+            Map.entry("krai", 0x16D70), Map.entry("lana", 0x1A80), Map.entry("lanatham", 0x1A90),
+            Map.entry("laoo", 0xED0), Map.entry("latn", 0x30), Map.entry("lepc", 0x1C40), Map.entry("limb", 0x1946),
+            Map.entry("nagm", 0x1E4F0), Map.entry("mathbold", 0x1D7CE), Map.entry("mathdbl", 0x1D7D8),
+            Map.entry("mathmono", 0x1D7F6), Map.entry("mathsanb", 0x1D7EC), Map.entry("mathsans", 0x1D7E2),
+            Map.entry("mlym", 0xD66), Map.entry("modi", 0x11650), Map.entry("mong", 0x1810), Map.entry("mroo", 0x16A60),
+            Map.entry("mtei", 0xABF0), Map.entry("mymr", 0x1040), Map.entry("mymrepka", 0x116DA),
+            Map.entry("mymrpao", 0x116D0), Map.entry("mymrshan", 0x1090), Map.entry("mymrtlng", 0xA9F0),
+            Map.entry("newa", 0x11450), Map.entry("nkoo", 0x7C0), Map.entry("olck", 0x1C50), Map.entry("onao", 0x1E5F1),
+            Map.entry("orya", 0xB66), Map.entry("osma", 0x104A0), Map.entry("outlined", 0x1CCF0),
+            Map.entry("rohg", 0x10D30), Map.entry("saur", 0xA8D0), Map.entry("segment", 0x1FBF0),
+            Map.entry("shrd", 0x111D0), Map.entry("sind", 0x112F0), Map.entry("sinh", 0xDE6),
+            Map.entry("sora", 0x110F0), Map.entry("sund", 0x1BB0), Map.entry("sunu", 0x11BF0),
+            Map.entry("takr", 0x116C0), Map.entry("talu", 0x19D0), Map.entry("tamldec", 0xBE6),
+            Map.entry("tnsa", 0x16AC0), Map.entry("tols", 0x11DE0), Map.entry("telu", 0xC66), Map.entry("thai", 0xE50),
+            Map.entry("tibt", 0xF20), Map.entry("tirh", 0x114D0), Map.entry("vaii", 0xA620), Map.entry("wara", 0x118E0),
+            Map.entry("wcho", 0x1E2F0));
     private static final BigDecimal DECIMAL_ONE_HALF = new BigDecimal("0.5");
     private static final String[] HANIDEC_DIGITS = {"〇", "一", "二", "三", "四", "五", "六", "七", "八", "九"};
+    public static final String NAME = "Intl.NumberFormat";
+    private JSFunction boundFormatFunction;
     private final String compactDisplay;
     private final String currency;
     private final String currencyDisplay;
@@ -133,45 +79,25 @@ public final class JSIntlNumberFormat extends JSObject {
     private final String unitDisplay;
     private final String useGroupingMode;
     private final boolean useSignificantDigits;
-    private JSFunction boundFormatFunction;
 
     public JSIntlNumberFormat(JSContext context, Locale locale, String style, String currency) {
-        this(context, locale, style, currency, "auto", 1, -1, -1, false, 0,
-                null, null, "auto", "halfExpand", null);
+        this(context, locale, style, currency, "auto", 1, -1, -1, false, 0, null, null, "auto", "halfExpand", null);
     }
 
-    public JSIntlNumberFormat(JSContext context, Locale locale, String style, String currency,
-                              boolean useGrouping, int minimumIntegerDigits,
-                              int minimumFractionDigits, int maximumFractionDigits,
-                              boolean useSignificantDigits, int maximumSignificantDigits) {
+    public JSIntlNumberFormat(JSContext context, Locale locale, String style, String currency, boolean useGrouping,
+            int minimumIntegerDigits, int minimumFractionDigits, int maximumFractionDigits,
+            boolean useSignificantDigits, int maximumSignificantDigits) {
         this(context, locale, style, currency, useGrouping ? "always" : "false", minimumIntegerDigits,
-                minimumFractionDigits, maximumFractionDigits, useSignificantDigits, maximumSignificantDigits,
-                null, null, "auto", "halfExpand", null);
+                minimumFractionDigits, maximumFractionDigits, useSignificantDigits, maximumSignificantDigits, null,
+                null, "auto", "halfExpand", null);
     }
 
-    public JSIntlNumberFormat(JSContext context, Locale locale, String style, String currency,
-                              String useGroupingMode, int minimumIntegerDigits,
-                              int minimumFractionDigits, int maximumFractionDigits,
-                              boolean useSignificantDigits, int maximumSignificantDigits,
-                              String unit, String unitDisplay, String signDisplay,
-                              String roundingMode, String numberingSystem) {
-        this(context, locale, style, currency,
-                useGroupingMode, minimumIntegerDigits, minimumFractionDigits, maximumFractionDigits,
-                useSignificantDigits, useSignificantDigits ? 1 : 0, maximumSignificantDigits,
-                unit, unitDisplay, signDisplay, roundingMode, numberingSystem,
-                "standard", null, "symbol", "standard", 1, "auto", "auto");
-    }
-
-    public JSIntlNumberFormat(JSContext context, Locale locale, String style, String currency,
-                              String useGroupingMode, int minimumIntegerDigits,
-                              int minimumFractionDigits, int maximumFractionDigits,
-                              boolean useSignificantDigits, int minimumSignificantDigits, int maximumSignificantDigits,
-                              String unit, String unitDisplay, String signDisplay,
-                              String roundingMode, String numberingSystem,
-                              String notation, String compactDisplay,
-                              String currencyDisplay, String currencySign,
-                              int roundingIncrement, String roundingPriority,
-                              String trailingZeroDisplay) {
+    public JSIntlNumberFormat(JSContext context, Locale locale, String style, String currency, String useGroupingMode,
+            int minimumIntegerDigits, int minimumFractionDigits, int maximumFractionDigits,
+            boolean useSignificantDigits, int minimumSignificantDigits, int maximumSignificantDigits, String unit,
+            String unitDisplay, String signDisplay, String roundingMode, String numberingSystem, String notation,
+            String compactDisplay, String currencyDisplay, String currencySign, int roundingIncrement,
+            String roundingPriority, String trailingZeroDisplay) {
         super(context);
         this.locale = locale;
         this.style = style;
@@ -195,6 +121,16 @@ public final class JSIntlNumberFormat extends JSObject {
         this.roundingIncrement = roundingIncrement;
         this.roundingPriority = roundingPriority != null ? roundingPriority : "auto";
         this.trailingZeroDisplay = trailingZeroDisplay != null ? trailingZeroDisplay : "auto";
+    }
+
+    public JSIntlNumberFormat(JSContext context, Locale locale, String style, String currency, String useGroupingMode,
+            int minimumIntegerDigits, int minimumFractionDigits, int maximumFractionDigits,
+            boolean useSignificantDigits, int maximumSignificantDigits, String unit, String unitDisplay,
+            String signDisplay, String roundingMode, String numberingSystem) {
+        this(context, locale, style, currency, useGroupingMode, minimumIntegerDigits, minimumFractionDigits,
+                maximumFractionDigits, useSignificantDigits, useSignificantDigits ? 1 : 0, maximumSignificantDigits,
+                unit, unitDisplay, signDisplay, roundingMode, numberingSystem, "standard", null, "symbol", "standard",
+                1, "auto", "auto");
     }
 
     private void appendAffixWithType(List<PartToken> tokens, String affix, String type) {
@@ -534,8 +470,8 @@ public final class JSIntlNumberFormat extends JSObject {
         return applyFractionRounding(value);
     }
 
-    private String applySignDisplayAndDigits(String formatted, boolean isNegativeAfterRounding,
-                                             boolean isRoundedZero, boolean shouldAddPlus) {
+    private String applySignDisplayAndDigits(String formatted, boolean isNegativeAfterRounding, boolean isRoundedZero,
+            boolean shouldAddPlus) {
         String result = formatted;
         if ("never".equals(signDisplay)) {
             result = removeLeadingSign(result);
@@ -764,8 +700,7 @@ public final class JSIntlNumberFormat extends JSObject {
         char groupingSeparator = symbols.getGroupingSeparator();
         for (int index = 0; index < text.length(); index++) {
             char character = text.charAt(index);
-            boolean numericCharacter = Character.isDigit(character)
-                    || character == decimalSeparator
+            boolean numericCharacter = Character.isDigit(character) || character == decimalSeparator
                     || character == groupingSeparator;
             if (numericCharacter) {
                 if (start < 0) {
@@ -783,6 +718,31 @@ public final class JSIntlNumberFormat extends JSObject {
             }
         }
         return new int[]{start, end};
+    }
+
+    public String format(BigInteger value) {
+        BigDecimal original = new BigDecimal(value);
+        BigDecimal valueForRounding = original;
+        if ("percent".equals(style)) {
+            valueForRounding = original.multiply(BigDecimal.valueOf(100));
+        }
+        BigDecimal roundedForRoundingDomain = applyRounding(valueForRounding);
+        BigDecimal rounded = roundedForRoundingDomain;
+        if ("percent".equals(style)) {
+            rounded = roundedForRoundingDomain.divide(BigDecimal.valueOf(100), MathContext.DECIMAL128);
+        }
+        boolean originalNegative = value.signum() < 0;
+        boolean roundedZero = rounded.compareTo(BigDecimal.ZERO) == 0;
+        boolean roundedNegative = rounded.signum() < 0 || (roundedZero && originalNegative);
+        boolean displayNegative = shouldDisplayNegativeSign(roundedNegative, roundedZero);
+        boolean displayPlus = shouldDisplayPositivePlus(displayNegative, roundedZero);
+
+        String formattedNumber = formatRoundedNumber(rounded, displayNegative, roundedZero, originalNegative);
+        String result = applySignDisplayAndDigits(formattedNumber, roundedNegative, roundedZero, displayPlus);
+        if ("unit".equals(style) && unit != null) {
+            return applyUnitStyle(result);
+        }
+        return result;
     }
 
     public String format(double value) {
@@ -809,31 +769,6 @@ public final class JSIntlNumberFormat extends JSObject {
             rounded = roundedForRoundingDomain.divide(BigDecimal.valueOf(100), MathContext.DECIMAL128);
         }
         boolean originalNegative = value < 0 || isOriginalNegativeZero(value);
-        boolean roundedZero = rounded.compareTo(BigDecimal.ZERO) == 0;
-        boolean roundedNegative = rounded.signum() < 0 || (roundedZero && originalNegative);
-        boolean displayNegative = shouldDisplayNegativeSign(roundedNegative, roundedZero);
-        boolean displayPlus = shouldDisplayPositivePlus(displayNegative, roundedZero);
-
-        String formattedNumber = formatRoundedNumber(rounded, displayNegative, roundedZero, originalNegative);
-        String result = applySignDisplayAndDigits(formattedNumber, roundedNegative, roundedZero, displayPlus);
-        if ("unit".equals(style) && unit != null) {
-            return applyUnitStyle(result);
-        }
-        return result;
-    }
-
-    public String format(BigInteger value) {
-        BigDecimal original = new BigDecimal(value);
-        BigDecimal valueForRounding = original;
-        if ("percent".equals(style)) {
-            valueForRounding = original.multiply(BigDecimal.valueOf(100));
-        }
-        BigDecimal roundedForRoundingDomain = applyRounding(valueForRounding);
-        BigDecimal rounded = roundedForRoundingDomain;
-        if ("percent".equals(style)) {
-            rounded = roundedForRoundingDomain.divide(BigDecimal.valueOf(100), MathContext.DECIMAL128);
-        }
-        boolean originalNegative = value.signum() < 0;
         boolean roundedZero = rounded.compareTo(BigDecimal.ZERO) == 0;
         boolean roundedNegative = rounded.signum() < 0 || (roundedZero && originalNegative);
         boolean displayNegative = shouldDisplayNegativeSign(roundedNegative, roundedZero);
@@ -882,8 +817,8 @@ public final class JSIntlNumberFormat extends JSObject {
         }
     }
 
-    private String formatCompactNumber(BigDecimal absoluteValue, boolean displayNegative,
-                                       boolean groupingEnabled, int minimumGroupingDigits) {
+    private String formatCompactNumber(BigDecimal absoluteValue, boolean displayNegative, boolean groupingEnabled,
+            int minimumGroupingDigits) {
         String localeTag = locale.toLanguageTag();
         CompactSpec compactSpec = resolveCompactSpec(localeTag, absoluteValue);
         if (compactSpec == null) {
@@ -905,8 +840,8 @@ public final class JSIntlNumberFormat extends JSObject {
         return compactText;
     }
 
-    private String formatCompactPlain(BigDecimal absoluteValue, boolean groupingEnabled,
-                                      int minimumGroupingDigits, boolean displayNegative) {
+    private String formatCompactPlain(BigDecimal absoluteValue, boolean groupingEnabled, int minimumGroupingDigits,
+            boolean displayNegative) {
         int maximumFractionDigits = computeCompactPlainMaximumFractionDigits(absoluteValue);
         String plainText = formatLocalizedNumber(absoluteValue, 0, maximumFractionDigits, groupingEnabled);
         if ("en-IN".equals(locale.toLanguageTag()) || locale.toLanguageTag().startsWith("en-IN")) {
@@ -918,8 +853,8 @@ public final class JSIntlNumberFormat extends JSObject {
         return plainText;
     }
 
-    private String formatLocalizedNumber(BigDecimal value, int minimumFractionDigits,
-                                         int maximumFractionDigits, boolean grouping) {
+    private String formatLocalizedNumber(BigDecimal value, int minimumFractionDigits, int maximumFractionDigits,
+            boolean grouping) {
         NumberFormat numberFormat = NumberFormat.getNumberInstance(locale);
         if (numberFormat instanceof DecimalFormat decimalFormat) {
             decimalFormat.setGroupingUsed(grouping);
@@ -934,8 +869,8 @@ public final class JSIntlNumberFormat extends JSObject {
         return numberFormat.format(value);
     }
 
-    private String formatRoundedNumber(BigDecimal rounded, boolean displayNegative,
-                                       boolean roundedZero, boolean originalNegative) {
+    private String formatRoundedNumber(BigDecimal rounded, boolean displayNegative, boolean roundedZero,
+            boolean originalNegative) {
         BigDecimal absoluteRounded = rounded.abs();
         int minimumGroupingDigits = "min2".equals(useGroupingMode) ? 5 : 1;
         int integerDigits = computeIntegerDigits(absoluteRounded);
@@ -951,13 +886,14 @@ public final class JSIntlNumberFormat extends JSObject {
         boolean useFractionMode = useSignificantDigits
                 && ("morePrecision".equals(roundingPriority) || "lessPrecision".equals(roundingPriority))
                 && shouldUseFractionRoundingForPriority();
-        if (formatter instanceof DecimalFormat decimalFormat && useSignificantDigits
-                && !"compact".equals(notation) && !useFractionMode) {
+        if (formatter instanceof DecimalFormat decimalFormat && useSignificantDigits && !"compact".equals(notation)
+                && !useFractionMode) {
             int integerDigitsForSignificant = computeIntegerDigitsForSignificant(absoluteRounded);
             int minimumFractionDigits = Math.max(0, minimumSignificantDigits - integerDigitsForSignificant);
             int maximumFractionDigits = Math.max(0, maximumSignificantDigits - integerDigitsForSignificant);
             decimalFormat.setMinimumFractionDigits(Math.min(minimumFractionDigits, 100));
-            decimalFormat.setMaximumFractionDigits(Math.min(Math.max(maximumFractionDigits, minimumFractionDigits), 100));
+            decimalFormat
+                    .setMaximumFractionDigits(Math.min(Math.max(maximumFractionDigits, minimumFractionDigits), 100));
         } else if (formatter instanceof DecimalFormat decimalFormat && useFractionMode) {
             decimalFormat.setMinimumFractionDigits(Math.max(0, minimumFractionDigits));
             decimalFormat.setMaximumFractionDigits(Math.max(0, maximumFractionDigits));
@@ -1154,9 +1090,7 @@ public final class JSIntlNumberFormat extends JSObject {
         if (Character.isLetterOrDigit(character)) {
             return true;
         }
-        return type == Character.CURRENCY_SYMBOL
-                || type == Character.OTHER_SYMBOL
-                || type == Character.MATH_SYMBOL;
+        return type == Character.CURRENCY_SYMBOL || type == Character.OTHER_SYMBOL || type == Character.MATH_SYMBOL;
     }
 
     private boolean isGroupingActiveForMagnitude(int magnitudeDigits) {
@@ -1335,24 +1269,24 @@ public final class JSIntlNumberFormat extends JSObject {
 
     private BigDecimal roundToInteger(BigDecimal value, String mode) {
         switch (mode) {
-            case "ceil":
+            case "ceil" :
                 return value.setScale(0, RoundingMode.CEILING);
-            case "floor":
+            case "floor" :
                 return value.setScale(0, RoundingMode.FLOOR);
-            case "expand":
+            case "expand" :
                 return value.setScale(0, RoundingMode.UP);
-            case "trunc":
+            case "trunc" :
                 return value.setScale(0, RoundingMode.DOWN);
-            case "halfExpand":
+            case "halfExpand" :
                 return value.setScale(0, RoundingMode.HALF_UP);
-            case "halfTrunc":
+            case "halfTrunc" :
                 return value.setScale(0, RoundingMode.HALF_DOWN);
-            case "halfEven":
+            case "halfEven" :
                 return value.setScale(0, RoundingMode.HALF_EVEN);
-            case "halfCeil":
-            case "halfFloor":
+            case "halfCeil" :
+            case "halfFloor" :
                 return roundHalfCeilOrFloor(value, mode);
-            default:
+            default :
                 return value.setScale(0, RoundingMode.HALF_UP);
         }
     }
@@ -1376,13 +1310,13 @@ public final class JSIntlNumberFormat extends JSObject {
             return false;
         }
         switch (signDisplay) {
-            case "never":
+            case "never" :
                 return false;
-            case "exceptZero":
+            case "exceptZero" :
                 return !roundedZero;
-            case "negative":
+            case "negative" :
                 return !roundedZero;
-            default:
+            default :
                 return true;
         }
     }

@@ -20,15 +20,13 @@ import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.utils.DtoaConverter;
 
 /**
- * Implementation of JavaScript Number.prototype methods.
- * Based on ES2020 Number.prototype specification.
+ * Implementation of JavaScript Number.prototype methods. Based on ES2020 Number.prototype specification.
  */
 public final class NumberPrototype {
     public static final long MAX_SAFE_INTEGER = 9007199254740991L; // 2^53 - 1
 
     /**
-     * Number.isFinite(value)
-     * ES2020 20.1.2.2
+     * Number.isFinite(value) ES2020 20.1.2.2
      */
     public static JSValue isFinite(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -39,8 +37,7 @@ public final class NumberPrototype {
     }
 
     /**
-     * Number.isInteger(value)
-     * ES2020 20.1.2.3
+     * Number.isInteger(value) ES2020 20.1.2.3
      */
     public static JSValue isInteger(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -55,8 +52,7 @@ public final class NumberPrototype {
     }
 
     /**
-     * Number.isNaN(value)
-     * ES2020 20.1.2.4
+     * Number.isNaN(value) ES2020 20.1.2.4
      */
     public static JSValue isNaN(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -67,8 +63,7 @@ public final class NumberPrototype {
     }
 
     /**
-     * Number.isSafeInteger(value)
-     * ES2020 20.1.2.5
+     * Number.isSafeInteger(value) ES2020 20.1.2.5
      */
     public static JSValue isSafeInteger(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -79,176 +74,154 @@ public final class NumberPrototype {
             return JSBoolean.FALSE;
         }
         double doubleValue = n.value();
-        return JSBoolean.valueOf(
-                Double.isFinite(doubleValue) &&
-                        doubleValue == Math.floor(doubleValue) &&
-                        Math.abs(doubleValue) <= MAX_SAFE_INTEGER
-        );
+        return JSBoolean.valueOf(Double.isFinite(doubleValue) && doubleValue == Math.floor(doubleValue)
+                && Math.abs(doubleValue) <= MAX_SAFE_INTEGER);
     }
 
     /**
-     * Number.parseFloat(string)
-     * ES2020 20.1.2.12
+     * Number.parseFloat(string) ES2020 20.1.2.12
      */
     public static JSValue parseFloat(JSContext context, JSValue thisArg, JSValue[] args) {
         return JSGlobalObject.GlobalFunction.parseFloat(context, thisArg, args);
     }
 
     /**
-     * Number.parseInt(string, radix)
-     * ES2020 20.1.2.13
+     * Number.parseInt(string, radix) ES2020 20.1.2.13
      */
     public static JSValue parseInt(JSContext context, JSValue thisArg, JSValue[] args) {
         return JSGlobalObject.GlobalFunction.parseInt(context, thisArg, args);
     }
 
     /**
-     * Number.prototype.toExponential(fractionDigits)
-     * ES2020 20.1.3.2
+     * Number.prototype.toExponential(fractionDigits) ES2020 20.1.3.2
      */
     public static JSValue toExponential(JSContext context, JSValue thisArg, JSValue[] args) {
-        return thisArg.asNumberWithDownCast()
-                .map(jsNumber -> {
-                    double value = jsNumber.value();
-                    // Per ES spec: compute f (step 2), check NaN (step 4),
-                    // check Infinity (step 7), then validate range (step 8)
-                    boolean hasDigitsArg = args.length > 0 && !args[0].isUndefined();
-                    double fractionDigitsRaw = hasDigitsArg
-                            ? JSTypeConversions.toInteger(context, args[0]) : 0;
-                    if (Double.isNaN(value)) {
-                        return new JSString("NaN");
-                    }
-                    if (Double.isInfinite(value)) {
-                        return new JSString(value > 0 ? "Infinity" : "-Infinity");
-                    }
-                    if (!hasDigitsArg) {
-                        return new JSString(DtoaConverter.convertExponentialWithoutFractionDigits(value));
-                    }
-                    int fractionDigits = (int) fractionDigitsRaw;
-                    if (fractionDigits < 0 || fractionDigits > DtoaConverter.MAX_DIGITS) {
-                        return context.throwRangeError("toExponential() argument must be between 0 and 100");
-                    }
-                    return new JSString(DtoaConverter.convertExponentialWithFractionDigits(value, fractionDigits));
-                })
-                .orElseGet(() -> context.throwTypeError("Number.prototype.toExponential requires that 'this' be a Number"));
+        return thisArg.asNumberWithDownCast().map(jsNumber -> {
+            double value = jsNumber.value();
+            // Per ES spec: compute f (step 2), check NaN (step 4),
+            // check Infinity (step 7), then validate range (step 8)
+            boolean hasDigitsArg = args.length > 0 && !args[0].isUndefined();
+            double fractionDigitsRaw = hasDigitsArg ? JSTypeConversions.toInteger(context, args[0]) : 0;
+            if (Double.isNaN(value)) {
+                return new JSString("NaN");
+            }
+            if (Double.isInfinite(value)) {
+                return new JSString(value > 0 ? "Infinity" : "-Infinity");
+            }
+            if (!hasDigitsArg) {
+                return new JSString(DtoaConverter.convertExponentialWithoutFractionDigits(value));
+            }
+            int fractionDigits = (int) fractionDigitsRaw;
+            if (fractionDigits < 0 || fractionDigits > DtoaConverter.MAX_DIGITS) {
+                return context.throwRangeError("toExponential() argument must be between 0 and 100");
+            }
+            return new JSString(DtoaConverter.convertExponentialWithFractionDigits(value, fractionDigits));
+        }).orElseGet(() -> context.throwTypeError("Number.prototype.toExponential requires that 'this' be a Number"));
     }
 
     /**
-     * Number.prototype.toFixed(fractionDigits)
-     * ES2020 20.1.3.3
+     * Number.prototype.toFixed(fractionDigits) ES2020 20.1.3.3
      */
     public static JSValue toFixed(JSContext context, JSValue thisArg, JSValue[] args) {
-        return thisArg.asNumberWithDownCast()
-                .map(jsNumber -> {
-                    double value = jsNumber.value();
-                    int fractionDigits = 0;
-                    // Get fractionDigits
-                    if (args.length > 0 && !args[0].isUndefined()) {
-                        fractionDigits = (int) JSTypeConversions.toInteger(context, args[0]);
-                    }
-                    // RangeError if out of bounds [0, 100]
-                    if (fractionDigits < 0 || fractionDigits > DtoaConverter.MAX_DIGITS) {
-                        return context.throwRangeError("toFixed() digits argument must be between 0 and 100");
-                    }
-                    return new JSString(DtoaConverter.convertFixed(value, fractionDigits));
-                })
-                .orElseGet(() -> context.throwTypeError("Number.prototype.toPrecision requires that 'this' be a Number"));
+        return thisArg.asNumberWithDownCast().map(jsNumber -> {
+            double value = jsNumber.value();
+            int fractionDigits = 0;
+            // Get fractionDigits
+            if (args.length > 0 && !args[0].isUndefined()) {
+                fractionDigits = (int) JSTypeConversions.toInteger(context, args[0]);
+            }
+            // RangeError if out of bounds [0, 100]
+            if (fractionDigits < 0 || fractionDigits > DtoaConverter.MAX_DIGITS) {
+                return context.throwRangeError("toFixed() digits argument must be between 0 and 100");
+            }
+            return new JSString(DtoaConverter.convertFixed(value, fractionDigits));
+        }).orElseGet(() -> context.throwTypeError("Number.prototype.toPrecision requires that 'this' be a Number"));
     }
 
     /**
-     * Number.prototype.toLocaleString()
-     * ES2020 20.1.3.4 (simplified)
+     * Number.prototype.toLocaleString() ES2020 20.1.3.4 (simplified)
      */
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
-        return thisArg.asNumberWithDownCast()
-                .map(jsNumber -> {
-                    if (args.length == 0) {
-                        return new JSString(DtoaConverter.convert(jsNumber.value()));
-                    }
-                    JSValue numberFormatValue = JSIntlObject.createNumberFormat(context, null, args);
-                    if (context.hasPendingException()) {
-                        return JSUndefined.INSTANCE;
-                    }
-                    if (!(numberFormatValue instanceof JSIntlNumberFormat numberFormat)) {
-                        return context.throwTypeError("Intl.NumberFormat.prototype.format called on incompatible receiver");
-                    }
-                    return new JSString(numberFormat.format(jsNumber.value()));
-                })
-                .orElseGet(() -> context.throwTypeError("Number.prototype.toLocaleString requires that 'this' be a Number"));
+        return thisArg.asNumberWithDownCast().map(jsNumber -> {
+            if (args.length == 0) {
+                return new JSString(DtoaConverter.convert(jsNumber.value()));
+            }
+            JSValue numberFormatValue = JSIntlObject.createNumberFormat(context, null, args);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (!(numberFormatValue instanceof JSIntlNumberFormat numberFormat)) {
+                return context.throwTypeError("Intl.NumberFormat.prototype.format called on incompatible receiver");
+            }
+            return new JSString(numberFormat.format(jsNumber.value()));
+        }).orElseGet(() -> context.throwTypeError("Number.prototype.toLocaleString requires that 'this' be a Number"));
     }
 
     /**
-     * Number.prototype.toPrecision(precision)
-     * ES2020 20.1.3.5
+     * Number.prototype.toPrecision(precision) ES2020 20.1.3.5
      */
     public static JSValue toPrecision(JSContext context, JSValue thisArg, JSValue[] args) {
-        return thisArg.asNumberWithDownCast()
-                .map(jsNumber -> {
-                    double value = jsNumber.value();
-                    // Per ES spec: if precision is undefined, use toString (step 2)
-                    if (args.length == 0 || args[0] instanceof JSUndefined) {
-                        return new JSString(DtoaConverter.convert(value));
-                    }
-                    // Compute p (step 3), then check NaN (step 4), Infinity (step 7),
-                    // then validate range (step 8)
-                    double precisionRaw = JSTypeConversions.toInteger(context, args[0]);
-                    if (context.hasPendingException()) {
-                        return JSUndefined.INSTANCE;
-                    }
-                    if (Double.isNaN(value)) {
-                        return new JSString("NaN");
-                    }
-                    if (Double.isInfinite(value)) {
-                        return new JSString(value > 0 ? "Infinity" : "-Infinity");
-                    }
-                    int precision = (int) precisionRaw;
-                    if (precision < 1 || precision > DtoaConverter.MAX_PRECISION) {
-                        return context.throwRangeError("toPrecision() precision must be between 1 and 100");
-                    }
-                    return new JSString(DtoaConverter.convertWithPrecision(value, precision));
-                })
-                .orElseGet(() -> context.throwTypeError("Number.prototype.toPrecision requires that 'this' be a Number"));
+        return thisArg.asNumberWithDownCast().map(jsNumber -> {
+            double value = jsNumber.value();
+            // Per ES spec: if precision is undefined, use toString (step 2)
+            if (args.length == 0 || args[0] instanceof JSUndefined) {
+                return new JSString(DtoaConverter.convert(value));
+            }
+            // Compute p (step 3), then check NaN (step 4), Infinity (step 7),
+            // then validate range (step 8)
+            double precisionRaw = JSTypeConversions.toInteger(context, args[0]);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (Double.isNaN(value)) {
+                return new JSString("NaN");
+            }
+            if (Double.isInfinite(value)) {
+                return new JSString(value > 0 ? "Infinity" : "-Infinity");
+            }
+            int precision = (int) precisionRaw;
+            if (precision < 1 || precision > DtoaConverter.MAX_PRECISION) {
+                return context.throwRangeError("toPrecision() precision must be between 1 and 100");
+            }
+            return new JSString(DtoaConverter.convertWithPrecision(value, precision));
+        }).orElseGet(() -> context.throwTypeError("Number.prototype.toPrecision requires that 'this' be a Number"));
     }
 
     /**
-     * Number.prototype.toString(radix)
-     * ES2020 20.1.3.6
+     * Number.prototype.toString(radix) ES2020 20.1.3.6
      */
     public static JSValue toString(JSContext context, JSValue thisArg, JSValue[] args) {
-        return thisArg.asNumberWithDownCast()
-                .map(jsNumber -> {
-                    double value = jsNumber.value();
-                    // Per ES spec: compute radix (step 2-3), validate range (step 4),
-                    // then handle special values (steps 6+)
-                    int radix = args.length > 0 && !(args[0] instanceof JSUndefined)
-                            ? (int) JSTypeConversions.toInteger(context, args[0]) : 10;
-                    if (context.hasPendingException()) {
-                        return JSUndefined.INSTANCE;
-                    }
-                    if (radix < 2 || radix > 36) {
-                        return context.throwRangeError("toString() radix must be between 2 and 36");
-                    }
-                    if (Double.isNaN(value)) {
-                        return new JSString("NaN");
-                    }
-                    if (Double.isInfinite(value)) {
-                        return new JSString(value > 0 ? "Infinity" : "-Infinity");
-                    }
-                    if (radix == 10) {
-                        return new JSString(DtoaConverter.convert(value));
-                    }
-                    return new JSString(DtoaConverter.convertToRadix(value, radix));
-                })
-                .orElseGet(() -> context.throwTypeError("Number.prototype.toString requires that 'this' be a Number"));
+        return thisArg.asNumberWithDownCast().map(jsNumber -> {
+            double value = jsNumber.value();
+            // Per ES spec: compute radix (step 2-3), validate range (step 4),
+            // then handle special values (steps 6+)
+            int radix = args.length > 0 && !(args[0] instanceof JSUndefined)
+                    ? (int) JSTypeConversions.toInteger(context, args[0])
+                    : 10;
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (radix < 2 || radix > 36) {
+                return context.throwRangeError("toString() radix must be between 2 and 36");
+            }
+            if (Double.isNaN(value)) {
+                return new JSString("NaN");
+            }
+            if (Double.isInfinite(value)) {
+                return new JSString(value > 0 ? "Infinity" : "-Infinity");
+            }
+            if (radix == 10) {
+                return new JSString(DtoaConverter.convert(value));
+            }
+            return new JSString(DtoaConverter.convertToRadix(value, radix));
+        }).orElseGet(() -> context.throwTypeError("Number.prototype.toString requires that 'this' be a Number"));
     }
 
     /**
-     * Number.prototype.valueOf()
-     * ES2020 20.1.3.7
+     * Number.prototype.valueOf() ES2020 20.1.3.7
      */
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        return thisArg.asNumberWithDownCast()
-                .map(jsNumber -> (JSValue) jsNumber)
+        return thisArg.asNumberWithDownCast().map(jsNumber -> (JSValue) jsNumber)
                 .orElseGet(() -> context.throwTypeError("Number.prototype.valueOf requires that 'this' be a Number"));
     }
 }

@@ -23,17 +23,16 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Test cases for invalid left-hand side assignment target validation.
- * Reserved words and literals cannot appear on the left side of an assignment.
+ * Test cases for invalid left-hand side assignment target validation. Reserved words and literals cannot appear on the
+ * left side of an assignment.
  */
 public class InvalidAssignmentTargetTest extends BaseJavetTest {
     @Test
     public void testArrayDestructuringIsValidTarget() {
-        assertIntegerWithJavet(
-                """
-                        var x;
-                        ([x] = [42]);
-                        x""");
+        assertIntegerWithJavet("""
+                var x;
+                ([x] = [42]);
+                x""");
     }
 
     @Test
@@ -65,12 +64,10 @@ public class InvalidAssignmentTargetTest extends BaseJavetTest {
     public void testAssignToFunctionCall() {
         // Non-strict: ReferenceError at runtime (foo is not defined)
         assertThatThrownBy(() -> resetContext().eval("foo() = 1", FILE_NAME, moduleMode))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("ReferenceError");
+                .isInstanceOf(JSException.class).hasMessageContaining("ReferenceError");
         // Strict: SyntaxError at parse time (follows QuickJS; V8 uses web-compat runtime error)
         assertThatThrownBy(() -> resetContext().eval("'use strict';\nfoo() = 1", FILE_NAME, moduleMode))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("SyntaxError");
+                .isInstanceOf(JSException.class).hasMessageContaining("SyntaxError");
     }
 
     @Test
@@ -135,10 +132,9 @@ public class InvalidAssignmentTargetTest extends BaseJavetTest {
 
     @Test
     public void testObjectDestructuringIsValidTarget() {
-        assertIntegerWithJavet(
-                """
-                        var x;
-                        ({x} = {x: 42});
-                        x""");
+        assertIntegerWithJavet("""
+                var x;
+                ({x} = {x: 42});
+                x""");
     }
 }

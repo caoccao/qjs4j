@@ -30,108 +30,54 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class LiteralTest extends BaseJavetTest {
     @Test
     public void testBinaryNumbers() {
-        assertIntegerWithJavet(
-                "0b0",
-                "0b1",
-                "0b10",
-                "0b1111",
-                "0B0",
-                "0B1010");
+        assertIntegerWithJavet("0b0", "0b1", "0b10", "0b1111", "0B0", "0B1010");
     }
 
     @Test
     public void testDecimalNumbers() {
-        assertIntegerWithJavet(
-                "1.0");
-        assertDoubleWithJavet(
-                "0.5",
-                "123.456",
-                "3.14159");
+        assertIntegerWithJavet("1.0");
+        assertDoubleWithJavet("0.5", "123.456", "3.14159");
     }
 
     @Test
     public void testExponentNumbers() {
-        assertIntegerWithJavet(
-                "1e3",
-                "1.5e3",
-                "1E3",
-                "1e+3",
-                "0.1e10");
-        assertDoubleWithJavet(
-                "1e-3",
-                "2.5E-2");
+        assertIntegerWithJavet("1e3", "1.5e3", "1E3", "1e+3", "0.1e10");
+        assertDoubleWithJavet("1e-3", "2.5E-2");
     }
 
     @Test
     public void testHexNumbers() {
-        assertIntegerWithJavet(
-                "0x0",
-                "0x1",
-                "0xF",
-                "0xFF",
-                "0x123",
-                "0xABC",
-                "0xabc",
-                "0X0",
-                "0XFF");
+        assertIntegerWithJavet("0x0", "0x1", "0xF", "0xFF", "0x123", "0xABC", "0xabc", "0X0", "0XFF");
     }
 
     @Test
     public void testIntegerNumbers() {
-        assertIntegerWithJavet(
-                "0",
-                "1",
-                "42",
-                "123",
-                "999");
+        assertIntegerWithJavet("0", "1", "42", "123", "999");
     }
 
     @Test
     public void testInvalidBinaryNumbers() {
-        assertErrorWithJavet(
-                "0b",
-                "0bn",
-                "0b2",
-                "0bg");
+        assertErrorWithJavet("0b", "0bn", "0b2", "0bg");
     }
 
     @Test
     public void testInvalidDecimalNumbers() {
-        assertErrorWithJavet(
-                "1..",
-                "1e",
-                "1E",
-                "1e+",
-                "1e-");
+        assertErrorWithJavet("1..", "1e", "1E", "1e+", "1e-");
     }
 
     @Test
     public void testInvalidHexNumbers() {
-        assertErrorWithJavet(
-                "0x",
-                "0xn",
-                "0xg",
-                "0xGG");
+        assertErrorWithJavet("0x", "0xn", "0xg", "0xGG");
     }
 
     @Test
     public void testInvalidOctalNumbers() {
-        assertErrorWithJavet(
-                "0o",
-                "0on",
-                "0o8",
-                "0o9",
-                "0og");
+        assertErrorWithJavet("0o", "0on", "0o8", "0o9", "0og");
     }
 
     @Test
     public void testLegacyOctalValues() {
-        assertIntegerWithJavet(
-                "070",
-                "07",
-                "00",
-                "077",
-                "001");
+        assertIntegerWithJavet("070", "07", "00", "077", "001");
     }
 
     @Test
@@ -141,12 +87,7 @@ public class LiteralTest extends BaseJavetTest {
         assertThat(token.type()).isEqualTo(TokenType.BIGINT);
         assertThat(token.value()).isEqualTo("123");
 
-        assertLongWithJavet(
-                "123n",
-                "123.456n",
-                "1abcn",
-                "1en",
-                "1e3n");
+        assertLongWithJavet("123n", "123.456n", "1abcn", "1en", "1e3n");
     }
 
     @Test
@@ -156,12 +97,7 @@ public class LiteralTest extends BaseJavetTest {
         assertThat(token.type()).isEqualTo(TokenType.BIGINT);
         assertThat(token.value()).isEqualTo("0b1111");
 
-        assertLongWithJavet(
-                "0b1010n",
-                "0b123n",
-                "0b1.0n",
-                "0babcn",
-                "0b1e1n");
+        assertLongWithJavet("0b1010n", "0b123n", "0b1.0n", "0babcn", "0b1e1n");
     }
 
     @Test
@@ -171,14 +107,7 @@ public class LiteralTest extends BaseJavetTest {
         assertThat(token.type()).isEqualTo(TokenType.BIGINT);
         assertThat(token.value()).isEqualTo("0xFF");
 
-        assertLongWithJavet(
-                "0x1234n",
-                "0x123n",
-                "0x1.0n",
-                "0xabcn",
-                "0xABCn",
-                "0xxyxn",
-                "0x1e1n");
+        assertLongWithJavet("0x1234n", "0x123n", "0x1.0n", "0xabcn", "0xABCn", "0xxyxn", "0x1e1n");
     }
 
     @Test
@@ -188,55 +117,28 @@ public class LiteralTest extends BaseJavetTest {
         assertThat(token.type()).isEqualTo(TokenType.BIGINT);
         assertThat(token.value()).isEqualTo("0o77");
 
-        assertLongWithJavet(
-                "0o1234n",
-                "0o123n",
-                "0o1.0n",
-                "0oabcn",
-                "0oABCn",
-                "0oxyxn",
-                "0o1e1n");
+        assertLongWithJavet("0o1234n", "0o123n", "0o1.0n", "0oabcn", "0oABCn", "0oxyxn", "0o1e1n");
     }
 
     @Test
     public void testNegativeNumbers() {
-        assertIntegerWithJavet(
-                "-1",
-                "-1e3");
-        assertDoubleWithJavet(
-                "-0.5",
-                "-123.456",
-                "-1.5e-2");
+        assertIntegerWithJavet("-1", "-1e3");
+        assertDoubleWithJavet("-0.5", "-123.456", "-1.5e-2");
     }
 
     @Test
     public void testNumbersWithIdentifiers() {
-        assertErrorWithJavet(
-                "123abc",
-                "456xyz");
+        assertErrorWithJavet("123abc", "456xyz");
     }
 
     @Test
     public void testNumericSeparatorInLegacyOctal() {
-        assertErrorWithJavet(
-                "00_0",
-                "01_0",
-                "07_0",
-                "08_0",
-                "09_0");
+        assertErrorWithJavet("00_0", "01_0", "07_0", "08_0", "09_0");
     }
 
     @Test
     public void testOctalNumbers() {
-        assertIntegerWithJavet(
-                "0o0",
-                "0o1",
-                "0o7",
-                "0o77",
-                "0o123",
-                "0o567",
-                "0O0",
-                "0O77");
+        assertIntegerWithJavet("0o0", "0o1", "0o7", "0o77", "0o123", "0o567", "0O0", "0O77");
     }
 
     @Test
@@ -262,9 +164,15 @@ public class LiteralTest extends BaseJavetTest {
 
         assertThat(program.getBody()).hasSize(1);
         assertThat(program.getBody().get(0)).isInstanceOfSatisfying(ExpressionStatement.class, exprStmt -> {
-            assertThat(exprStmt.getExpression()).isInstanceOfSatisfying(Literal.class, literal ->
-                    assertThat(literal.getValue()).isEqualTo(BigInteger.valueOf(255)));
+            assertThat(exprStmt.getExpression()).isInstanceOfSatisfying(Literal.class,
+                    literal -> assertThat(literal.getValue()).isEqualTo(BigInteger.valueOf(255)));
         });
+    }
+
+    @Test
+    public void testRegexBackslashLineTerminator() {
+        assertErrorWithJavet("eval('/' + String.fromCharCode(92, 10) + '/')",
+                "eval('/' + String.fromCharCode(92, 13) + '/')");
     }
 
     @Test
@@ -280,84 +188,49 @@ public class LiteralTest extends BaseJavetTest {
     }
 
     @Test
-    public void testRegexBackslashLineTerminator() {
-        assertErrorWithJavet(
-                "eval('/' + String.fromCharCode(92, 10) + '/')",
-                "eval('/' + String.fromCharCode(92, 13) + '/')");
-    }
-
-    @Test
     public void testStrictModeOctalLiterals() {
-        assertErrorWithJavet(
-                "'use strict'; 010",
-                "'use strict'; 01",
-                "'use strict'; 07");
+        assertErrorWithJavet("'use strict'; 010", "'use strict'; 01", "'use strict'; 07");
     }
 
     @Test
     public void testStrictModeOctalLiteralsInEval() {
-        assertErrorWithJavet(
-                "'use strict'; eval('010')",
-                "'use strict'; eval('01')");
+        assertErrorWithJavet("'use strict'; eval('010')", "'use strict'; eval('01')");
     }
 
     @Test
     public void testUnicodeEscapedAsyncNotKeyword() {
         // \u0061sync is not the async keyword — it's just an identifier "async"
-        assertIntegerWithJavet(
-                "var \\u0061sync = 42; \\u0061sync");
+        assertIntegerWithJavet("var \\u0061sync = 42; \\u0061sync");
     }
 
     @Test
     public void testUnicodeEscapedKeywordsAsStatements() {
         // ES2024 12.7.1: Keywords with Unicode escapes are identifiers, not keywords.
         // \u0061sync = async, \u0066or = for, \u0069f = if, \u0072eturn = return
-        assertErrorWithJavet(
-                "\\u0061sync function f(){}",
-                "\\u0066or (;;) {}",
-                "\\u0069f (true) {}",
-                "\\u0077hile (false) {}",
-                "\\u0072eturn",
-                "\\u0074hrow 1");
+        assertErrorWithJavet("\\u0061sync function f(){}", "\\u0066or (;;) {}", "\\u0069f (true) {}",
+                "\\u0077hile (false) {}", "\\u0072eturn", "\\u0074hrow 1");
     }
 
     @Test
     public void testUnicodeEscapedKeywordsInExpressions() {
         // Escaped contextual keywords become plain identifiers in expressions
-        assertErrorWithJavet(
-                "var \\u{69}f = 1",
-                "var \\u{66}or = 1",
-                "var \\u0074rue = 1",
-                "var \\u006eull = 1");
+        assertErrorWithJavet("var \\u{69}f = 1", "var \\u{66}or = 1", "var \\u0074rue = 1", "var \\u006eull = 1");
     }
 
     @Test
     public void testUnicodeEscapedReservedWords() {
-        assertErrorWithJavet(
-                "tru\\u{65}",
-                "f\\u{61}lse",
-                "n\\u{75}ll");
+        assertErrorWithJavet("tru\\u{65}", "f\\u{61}lse", "n\\u{75}ll");
     }
 
     @Test
     public void testValidBigIntLiterals() {
-        assertLongWithJavet(
-                "0n",
-                "0b1111111111111111111111111111111n");
-        assertBigIntegerWithJavet(
-                "999999999999999999999999999999n",
-                "0o777777777777777777777777777n",
+        assertLongWithJavet("0n", "0b1111111111111111111111111111111n");
+        assertBigIntegerWithJavet("999999999999999999999999999999n", "0o777777777777777777777777777n",
                 "0xFFFFFFFFFFFFFFFFFFFFFFFFFFn");
     }
 
     @Test
     public void testZeroVariants() {
-        assertIntegerWithJavet(
-                "0",
-                "0x0",
-                "0b0",
-                "0o0",
-                "0.0",
-                "0e0");
+        assertIntegerWithJavet("0", "0x0", "0b0", "0o0", "0.0", "0e0");
     }
 }
