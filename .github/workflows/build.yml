@@ -46,6 +46,12 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
+    # Configure Git before checkout so Windows preserves the LF endings required by Spotless.
+    - name: Enforce LF line endings
+      run: |
+        git config --global core.autocrlf false
+        git config --global core.eol lf
+
     - name: Checkout
       uses: actions/checkout@v4
 
@@ -76,6 +82,11 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     steps:
+    - name: Enforce LF line endings
+      run: |
+        git config --global core.autocrlf false
+        git config --global core.eol lf
+
     - name: Checkout
       uses: actions/checkout@v4
 
@@ -116,6 +127,11 @@ jobs:
     env:
       TZ: UTC
     steps:
+    - name: Enforce LF line endings
+      run: |
+        git config --global core.autocrlf false
+        git config --global core.eol lf
+
     - name: Checkout qjs4j
       uses: actions/checkout@v4
       with:
