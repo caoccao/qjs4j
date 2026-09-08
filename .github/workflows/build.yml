@@ -53,17 +53,18 @@ jobs:
         git config --global core.eol lf
 
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Set up JDK ${{ matrix.java }}
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v6
       with:
         java-version: ${{ matrix.java }}
         distribution: 'temurin'
 
     - name: Set up Gradle
-      uses: gradle/actions/setup-gradle@v3
+      uses: gradle/actions/setup-gradle@v6
       with:
+        cache-provider: basic
         gradle-version: '9.4.1'
 
     - name: Check Java formatting
@@ -74,7 +75,7 @@ jobs:
 
     - name: Upload JAR
       if: matrix.os == 'ubuntu-latest' && matrix.java == '17'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: qjs4j-jar
         path: build/libs/*.jar
@@ -88,17 +89,18 @@ jobs:
         git config --global core.eol lf
 
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Set up JDK 17
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v6
       with:
         java-version: '17'
         distribution: 'temurin'
 
     - name: Set up Gradle
-      uses: gradle/actions/setup-gradle@v3
+      uses: gradle/actions/setup-gradle@v6
       with:
+        cache-provider: basic
         gradle-version: '9.4.1'
 
     - name: Check Java formatting
@@ -110,7 +112,7 @@ jobs:
       run: gradle jacocoTestReport jacocoTestCoverageVerification
 
     - name: Upload coverage report
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: jacoco-report
         path: build/reports/jacoco/test/
@@ -133,7 +135,7 @@ jobs:
         git config --global core.eol lf
 
     - name: Checkout qjs4j
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         path: qjs4j
 
@@ -145,21 +147,22 @@ jobs:
     # happened here, and it fails identically on every branch and on main. Bumping the pin is then
     # a deliberate, reviewable act that says which new tests are being taken on.
     - name: Checkout test262
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         repository: tc39/test262
         ref: 5c8206929d81b2d3d727ca6aac56c18358c8d790
         path: test262
 
     - name: Set up JDK 17
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v6
       with:
         java-version: '17'
         distribution: 'temurin'
 
     - name: Set up Gradle
-      uses: gradle/actions/setup-gradle@v3
+      uses: gradle/actions/setup-gradle@v6
       with:
+        cache-provider: basic
         gradle-version: '9.4.1'
 
     - name: Check Java formatting
@@ -177,7 +180,7 @@ jobs:
 
     - name: Upload Test262 report
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: test262-quick-log
         path: test262-quick.log
