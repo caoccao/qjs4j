@@ -1549,26 +1549,15 @@ public final class JSONObject {
         }
     }
 
-    private static class ParseResult {
-        final int endIndex;
-        final int sourceEnd;
-        final int sourceStart;
-        final JSValue value;
+    private record ParseResult(int endIndex, int sourceEnd, int sourceStart, JSValue value) {
+            ParseResult(JSValue value, int endIndex) {
+                this(endIndex, -1, -1, value);
+            }
 
-        ParseResult(JSValue value, int endIndex) {
-            this.value = value;
-            this.endIndex = endIndex;
-            this.sourceStart = -1;
-            this.sourceEnd = -1;
+            ParseResult(JSValue value, int endIndex, int sourceStart, int sourceEnd) {
+                this(endIndex, sourceEnd, sourceStart, value);
+            }
         }
-
-        ParseResult(JSValue value, int endIndex, int sourceStart, int sourceEnd) {
-            this.value = value;
-            this.endIndex = endIndex;
-            this.sourceStart = sourceStart;
-            this.sourceEnd = sourceEnd;
-        }
-    }
 
     /**
      * Tracks the source text and original parsed value for a property.

@@ -1019,7 +1019,7 @@ final class ModuleLinker {
             String reportedMessage = importerIsEntryModule || requestLocation == null
                     ? message
                     : message + " (imported by " + importerSpecifier
-                      + ":" + requestLocation.line() + ":" + requestLocation.column() + ")";
+                    + ":" + requestLocation.line() + ":" + requestLocation.column() + ")";
             JSError error = typeError
                     ? context.throwTypeError(reportedMessage, requestLocation)
                     : context.throwSyntaxError(reportedMessage, requestLocation);

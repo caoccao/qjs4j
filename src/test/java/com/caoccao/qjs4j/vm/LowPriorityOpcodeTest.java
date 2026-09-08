@@ -47,6 +47,35 @@ public class LowPriorityOpcodeTest extends BaseTest {
     }
 
     @Test
+    public void testClosureOpcodesCaptureArrowLexicalState() {
+        JSBytecodeFunction template = (JSBytecodeFunction) context.eval(
+                "(function () { return () => this.tag + arguments[0]; })()");
+        JSObject receiver = context.createJSObject();
+        receiver.set("tag", JSNumber.of(40));
+        for (Opcode opcode : new Opcode[]{Opcode.FCLOSURE, Opcode.FCLOSURE8}) {
+            BytecodeEmitter emitter = new BytecodeEmitter();
+            emitter.emitOpcodeConstant(Opcode.PUSH_CONST, template);
+            emitter.emitOpcode(Opcode.DROP);
+            emitter.emitOpcode(opcode);
+            if (opcode == Opcode.FCLOSURE8) {
+                emitter.emitU8(0);
+            } else {
+                emitter.emitU32(0);
+            }
+            emitter.emitOpcode(Opcode.RETURN);
+
+            JSValue result = execute(emitter, 0, JSValue.NO_ARGS, receiver, JSNumber.of(2));
+            assertThat(result).isInstanceOf(JSBytecodeFunction.class).isNotSameAs(template);
+            JSBytecodeFunction closure = (JSBytecodeFunction) result;
+            assertThat(closure.getCapturedThisArg()).isSameAs(receiver);
+            assertThat(closure.getPrototype()).isSameAs(template.getPrototype());
+            JSValue value = closure.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+            assertThat(value).isInstanceOfSatisfying(JSNumber.class,
+                    number -> assertThat(number.value()).isEqualTo(42));
+        }
+    }
+
+    @Test
     public void testLowLocAndArrayOpcodes() {
         BytecodeEmitter locEmitter = new BytecodeEmitter();
         locEmitter.emitOpcodeU32(Opcode.PUSH_I32, 1);

@@ -465,7 +465,7 @@ public class Test262Executor {
             return negative.getType().equals(actualType)
                     ? TestResult.pass(test)
                     : TestResult.fail(test, "Expected a parse-phase " + negative.getType()
-                                            + " but compilation failed with " + describeThrown(e));
+                    + " but compilation failed with " + describeThrown(e));
         } finally {
             // A failed compilation can leave the error on the context; the next activation would
             // otherwise report this test's expected error as its own failure.

@@ -53,7 +53,7 @@ public class Test262ExecutorNegativeTest {
                 "$DONE(new TypeError('this mentions SyntaxError'));", "runtime", "SyntaxError", "async");
         TestResult misleadingResult = executor.execute(misleading);
         assertThat(misleadingResult.isPassed()).isFalse();
-        assertThat(misleadingResult.getMessage()).contains("Expected SyntaxError but got TypeError");
+        assertThat(misleadingResult.message()).contains("Expected SyntaxError but got TypeError");
 
         Test262TestCase matching = negativeCase(
                 "$DONE(new TypeError('boom'));", "runtime", "TypeError", "async");
@@ -65,7 +65,7 @@ public class Test262ExecutorNegativeTest {
         Test262TestCase testCase = negativeCase("$DONE('SyntaxError');", "runtime", "SyntaxError", "async");
         TestResult result = executor.execute(testCase);
         assertThat(result.isPassed()).isFalse();
-        assertThat(result.getMessage()).contains("a thrown string");
+        assertThat(result.message()).contains("a thrown string");
     }
 
     @Test
@@ -88,7 +88,7 @@ public class Test262ExecutorNegativeTest {
                 "throw new SyntaxError('runtime, not parse');", "parse", "SyntaxError");
         TestResult result = executor.execute(testCase);
         assertThat(result.isPassed()).isFalse();
-        assertThat(result.getMessage()).contains("the source compiled successfully");
+        assertThat(result.message()).contains("the source compiled successfully");
     }
 
     @Test
@@ -96,7 +96,7 @@ public class Test262ExecutorNegativeTest {
         Test262TestCase testCase = negativeCase("var 1x = 2;", "parse", "TypeError");
         TestResult result = executor.execute(testCase);
         assertThat(result.isPassed()).isFalse();
-        assertThat(result.getMessage()).contains("Expected a parse-phase TypeError");
+        assertThat(result.message()).contains("Expected a parse-phase TypeError");
     }
 
     @Test
@@ -113,7 +113,7 @@ public class Test262ExecutorNegativeTest {
         Test262TestCase testCase = negativeCase("var 1x = 2;", "runtime", "SyntaxError");
         TestResult result = executor.execute(testCase);
         assertThat(result.isPassed()).isFalse();
-        assertThat(result.getMessage()).contains("failed to compile");
+        assertThat(result.message()).contains("failed to compile");
     }
 
     @Test
@@ -122,7 +122,7 @@ public class Test262ExecutorNegativeTest {
         Test262TestCase testCase = negativeCase("throw 'SyntaxError';", "runtime", "SyntaxError");
         TestResult result = executor.execute(testCase);
         assertThat(result.isPassed()).isFalse();
-        assertThat(result.getMessage()).contains("a thrown string");
+        assertThat(result.message()).contains("a thrown string");
     }
 
     @Test

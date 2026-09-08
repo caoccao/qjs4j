@@ -107,7 +107,7 @@ public class Test262NegativeTypeIdentityTest {
         TestResult result = executor.execute(
                 rawCase("throw { constructor: { name: 'TypeError' } };", "TypeError"));
         assertThat(result.isPassed()).isFalse();
-        assertThat(result.getMessage()).contains("Expected TypeError");
+        assertThat(result.message()).contains("Expected TypeError");
     }
 
     @Test
@@ -125,7 +125,7 @@ public class Test262NegativeTypeIdentityTest {
                 "Object.defineProperty(TypeError, 'name', { value: 'RangeError' });\n"
                         + "throw new TypeError('still a TypeError');",
                 "TypeError"));
-        assertThat(result.isPassed()).as(result.getMessage()).isTrue();
+        assertThat(result.isPassed()).as(result.message()).isTrue();
     }
 
     @Test
@@ -141,7 +141,7 @@ public class Test262NegativeTypeIdentityTest {
         TestResult result = executor.execute(rawCase(
                 "var e = new TypeError('real'); e.constructor = { name: 'RangeError' }; throw e;",
                 "TypeError"));
-        assertThat(result.isPassed()).as(result.getMessage()).isTrue();
+        assertThat(result.isPassed()).as(result.message()).isTrue();
 
         TestResult mislabelled = executor.execute(rawCase(
                 "var e = new TypeError('real'); e.constructor = { name: 'RangeError' }; throw e;",
@@ -157,7 +157,7 @@ public class Test262NegativeTypeIdentityTest {
                         + "Sub.prototype = Object.create(Test262Error.prototype);\n"
                         + "throw new Sub();",
                 "Test262Error"));
-        assertThat(result.isPassed()).as(result.getMessage()).isTrue();
+        assertThat(result.isPassed()).as(result.message()).isTrue();
     }
 
     @Test
@@ -173,7 +173,7 @@ public class Test262NegativeTypeIdentityTest {
                 {"AggregateError", "new AggregateError([], 'e')"}}) {
             TestResult result = executor.execute(rawCase("throw " + nativeError[1] + ";", nativeError[0]));
             assertThat(result.isPassed())
-                    .as(nativeError[0] + ": " + result.getMessage())
+                    .as(nativeError[0] + ": " + result.message())
                     .isTrue();
         }
     }
@@ -194,6 +194,6 @@ public class Test262NegativeTypeIdentityTest {
     void testTheHarnessErrorIsRecognisedByItsPrototype() {
         TestResult result = executor.execute(
                 harnessCase("throw new Test262Error('real');", "Test262Error"));
-        assertThat(result.isPassed()).as(result.getMessage()).isTrue();
+        assertThat(result.isPassed()).as(result.message()).isTrue();
     }
 }

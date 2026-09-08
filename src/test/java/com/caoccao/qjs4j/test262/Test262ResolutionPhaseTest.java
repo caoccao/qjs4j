@@ -87,7 +87,7 @@ public class Test262ResolutionPhaseTest {
                 "$DONOTEVALUATE();\n\nimport { missing } from './empty_FIXTURE.js';\n",
                 "resolution",
                 "SyntaxError"));
-        assertThat(result.isPassed()).as(result.getMessage()).isTrue();
+        assertThat(result.isPassed()).as(result.message()).isTrue();
     }
 
     @Test
@@ -103,7 +103,7 @@ public class Test262ResolutionPhaseTest {
                 "resolution",
                 "TypeError"));
         assertThat(result.isPassed()).isFalse();
-        assertThat(result.getMessage())
+        assertThat(result.message())
                 .contains("Expected a resolution-phase TypeError")
                 .contains("a module body was evaluated");
     }
@@ -120,7 +120,7 @@ public class Test262ResolutionPhaseTest {
                 "resolution",
                 "TypeError"));
         assertThat(result.isPassed()).isFalse();
-        assertThat(result.getMessage()).contains("a module body was evaluated");
+        assertThat(result.message()).contains("a module body was evaluated");
     }
 
     @Test
@@ -131,7 +131,7 @@ public class Test262ResolutionPhaseTest {
                 "resolution",
                 "TypeError"));
         assertThat(result.isPassed()).isFalse();
-        assertThat(result.getMessage()).contains("Expected TypeError");
+        assertThat(result.message()).contains("Expected TypeError");
     }
 
     @Test
@@ -143,7 +143,7 @@ public class Test262ResolutionPhaseTest {
                 "resolution",
                 "SyntaxError"));
         assertThat(result.isPassed()).isFalse();
-        assertThat(result.getMessage())
+        assertThat(result.message())
                 .contains("Expected a resolution-phase SyntaxError")
                 .contains("the test body was evaluated");
     }
@@ -160,7 +160,7 @@ public class Test262ResolutionPhaseTest {
                 "resolution",
                 "TypeError"));
         assertThat(result.isPassed()).isFalse();
-        assertThat(result.getMessage()).contains("a module body was evaluated");
+        assertThat(result.message()).contains("a module body was evaluated");
     }
 
     @Test
@@ -173,7 +173,7 @@ public class Test262ResolutionPhaseTest {
                 "import './throws_FIXTURE.js';\n",
                 "runtime",
                 "TypeError"));
-        assertThat(result.isPassed()).as(result.getMessage()).isTrue();
+        assertThat(result.isPassed()).as(result.message()).isTrue();
     }
 
     @Test
@@ -190,7 +190,7 @@ public class Test262ResolutionPhaseTest {
                         + "throw new Error('this should be unreachable');\n",
                 "runtime",
                 "TypeError"));
-        assertThat(result.isPassed()).as(result.getMessage()).isTrue();
+        assertThat(result.isPassed()).as(result.message()).isTrue();
     }
 
     @Test
@@ -214,7 +214,7 @@ public class Test262ResolutionPhaseTest {
                 "runtime",
                 "SyntaxError"));
         assertThat(result.isPassed()).isFalse();
-        assertThat(result.getMessage())
+        assertThat(result.message())
                 .contains("Expected a runtime-phase SyntaxError")
                 .contains("no module body was evaluated");
     }
@@ -227,7 +227,7 @@ public class Test262ResolutionPhaseTest {
                 "runtime",
                 "TypeError"));
         assertThat(result.isPassed()).isFalse();
-        assertThat(result.getMessage()).contains("no module body was evaluated");
+        assertThat(result.message()).contains("no module body was evaluated");
     }
 
     @Test

@@ -457,8 +457,8 @@ public final class VirtualMachine {
             pendingException = errorValue != null
                     ? errorValue
                     : context.throwError(jsException.getMessage() != null
-                                         ? jsException.getMessage()
-                                         : "Unhandled exception");
+                    ? jsException.getMessage()
+                    : "Unhandled exception");
             context.clearPendingException();
             return true;
         }

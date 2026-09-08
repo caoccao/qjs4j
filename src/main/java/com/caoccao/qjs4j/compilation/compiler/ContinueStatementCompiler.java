@@ -54,7 +54,7 @@ final class ContinueStatementCompiler extends AstNodeCompiler<ContinueStatement>
                 throw new JSCompilerException(
                         labelExists
                                 ? "Illegal continue statement: '" + labelName
-                                  + "' does not denote an iteration statement"
+                                + "' does not denote an iteration statement"
                                 : "Undefined label '" + labelName + "'",
                         contStmt);
             }

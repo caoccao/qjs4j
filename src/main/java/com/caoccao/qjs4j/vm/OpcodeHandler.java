@@ -1807,76 +1807,7 @@ public final class OpcodeHandler {
                     capturedClosureVars[selfIndex] = closureFunction;
                 }
             }
-            if (symbolRemap != null && !symbolRemap.isEmpty()) {
-                closureFunction.setClassPrivateSymbolRemap(symbolRemap);
-            }
-            StackFrame evalDynamicScopeFrame = internalResolveEvalDynamicScopeFrame(executionContext);
-            if (evalDynamicScopeFrame == null
-                    && internalHasDirectEvalCall(closureTemplate)
-                    && executionContext.frame != null) {
-                evalDynamicScopeFrame = executionContext.frame;
-            }
-            if (evalDynamicScopeFrame != null) {
-                closureFunction.setEvalDynamicScopeLookupEnabled(true);
-                closureFunction.setEvalDynamicScopeFrame(evalDynamicScopeFrame);
-            }
-            String importMetaFilename = null;
-            JSFunction enclosingFunction = executionContext.frame.getFunction();
-            if (enclosingFunction != null) {
-                importMetaFilename = enclosingFunction.getImportMetaFilename();
-            }
-            if (importMetaFilename == null || importMetaFilename.isEmpty()) {
-                JSStackFrame currentStackFrame = executionContext.virtualMachine.context.getCurrentStackFrame();
-                if (currentStackFrame != null) {
-                    importMetaFilename = currentStackFrame.filename();
-                }
-            }
-            closureFunction.setImportMetaFilename(importMetaFilename);
-            // Arrow functions capture this, arguments, new.target, active function, and home object from the enclosing scope
-            if (closureFunction.isArrow()) {
-                VarRef derivedThisRef = executionContext.frame.getDerivedThisRef();
-                if (derivedThisRef != null) {
-                    closureFunction.setCapturedDerivedThisRef(derivedThisRef);
-                }
-                closureFunction.setCapturedThisArg(executionContext.frame.getThisArg());
-                // Capture new.target and active function lexically from enclosing function
-                JSFunction enclosingFunc = executionContext.frame.getFunction();
-                if (enclosingFunc instanceof JSBytecodeFunction enclosingBf
-                        && (enclosingBf.isArrow() || enclosingBf.isEvalSuperCallAllowed())) {
-                    // Nested arrow or arrow inside eval: propagate captured values from parent
-                    closureFunction.setCapturedArguments(enclosingBf.getCapturedArguments());
-                    closureFunction.setCapturedNewTarget(enclosingBf.getCapturedNewTarget());
-                    closureFunction.setCapturedActiveFunction(enclosingBf.getCapturedActiveFunction());
-                    // Propagate home object for super access
-                    if (enclosingBf.getHomeObject() != null) {
-                        closureFunction.setHomeObject(enclosingBf.getHomeObject());
-                    }
-                } else if (enclosingFunc != null) {
-                    // Direct arrow inside a regular function: capture from current frame
-                    boolean mapped = executionContext.virtualMachine.shouldUseMappedArguments(enclosingFunc);
-                    closureFunction.setCapturedArguments(
-                            executionContext.virtualMachine.createArgumentsObject(
-                                    executionContext.frame, enclosingFunc, mapped));
-                    closureFunction.setCapturedNewTarget(executionContext.frame.getNewTarget());
-                    closureFunction.setCapturedActiveFunction(enclosingFunc);
-                    // Capture home object for super property access
-                    if (enclosingFunc.getHomeObject() != null) {
-                        closureFunction.setHomeObject(enclosingFunc.getHomeObject());
-                    }
-                } else {
-                    closureFunction.setCapturedNewTarget(executionContext.frame.getNewTarget());
-                }
-            }
-            // Set newTargetAllowed: regular functions always allow new.target,
-            // arrows inherit from enclosing function (for eval() to check).
-            if (closureFunction.isArrow()) {
-                if (enclosingFunction instanceof JSBytecodeFunction enclosingBf) {
-                    closureFunction.setNewTargetAllowed(enclosingBf.isNewTargetAllowed());
-                }
-            } else {
-                closureFunction.setNewTargetAllowed(true);
-            }
-            closureFunction.initializePrototypeChain(executionContext.virtualMachine.context);
+            internalInitializeClosure(executionContext, closureTemplate, closureFunction, symbolRemap);
             stack[sp++] = closureFunction;
         } else {
             if (functionValue instanceof JSFunction function) {
@@ -1919,71 +1850,7 @@ public final class OpcodeHandler {
                 }
                 closureFunction = closureTemplate.copyWithClosureVars(capturedClosureVars);
             }
-            if (symbolRemap != null && !symbolRemap.isEmpty()) {
-                closureFunction.setClassPrivateSymbolRemap(symbolRemap);
-            }
-            StackFrame evalDynamicScopeFrame = internalResolveEvalDynamicScopeFrame(executionContext);
-            if (evalDynamicScopeFrame == null
-                    && internalHasDirectEvalCall(closureTemplate)
-                    && executionContext.frame != null) {
-                evalDynamicScopeFrame = executionContext.frame;
-            }
-            if (evalDynamicScopeFrame != null) {
-                closureFunction.setEvalDynamicScopeLookupEnabled(true);
-                closureFunction.setEvalDynamicScopeFrame(evalDynamicScopeFrame);
-            }
-            String importMetaFilename = null;
-            JSFunction enclosingFunction = executionContext.frame.getFunction();
-            if (enclosingFunction != null) {
-                importMetaFilename = enclosingFunction.getImportMetaFilename();
-            }
-            if (importMetaFilename == null || importMetaFilename.isEmpty()) {
-                JSStackFrame currentStackFrame = executionContext.virtualMachine.context.getCurrentStackFrame();
-                if (currentStackFrame != null) {
-                    importMetaFilename = currentStackFrame.filename();
-                }
-            }
-            closureFunction.setImportMetaFilename(importMetaFilename);
-            // Arrow functions capture this, arguments, new.target, active function, and home object from the enclosing scope
-            if (closureFunction.isArrow()) {
-                VarRef derivedThisRef = executionContext.frame.getDerivedThisRef();
-                if (derivedThisRef != null) {
-                    closureFunction.setCapturedDerivedThisRef(derivedThisRef);
-                }
-                closureFunction.setCapturedThisArg(executionContext.frame.getThisArg());
-                JSFunction enclosingFunc = executionContext.frame.getFunction();
-                if (enclosingFunc instanceof JSBytecodeFunction enclosingBf
-                        && (enclosingBf.isArrow() || enclosingBf.isEvalSuperCallAllowed())) {
-                    closureFunction.setCapturedArguments(enclosingBf.getCapturedArguments());
-                    closureFunction.setCapturedNewTarget(enclosingBf.getCapturedNewTarget());
-                    closureFunction.setCapturedActiveFunction(enclosingBf.getCapturedActiveFunction());
-                    if (enclosingBf.getHomeObject() != null) {
-                        closureFunction.setHomeObject(enclosingBf.getHomeObject());
-                    }
-                } else if (enclosingFunc != null) {
-                    boolean mapped = executionContext.virtualMachine.shouldUseMappedArguments(enclosingFunc);
-                    closureFunction.setCapturedArguments(
-                            executionContext.virtualMachine.createArgumentsObject(
-                                    executionContext.frame, enclosingFunc, mapped));
-                    closureFunction.setCapturedNewTarget(executionContext.frame.getNewTarget());
-                    closureFunction.setCapturedActiveFunction(enclosingFunc);
-                    if (enclosingFunc.getHomeObject() != null) {
-                        closureFunction.setHomeObject(enclosingFunc.getHomeObject());
-                    }
-                } else {
-                    closureFunction.setCapturedNewTarget(executionContext.frame.getNewTarget());
-                }
-            }
-            // Set newTargetAllowed: regular functions always allow new.target,
-            // arrows inherit from enclosing function (for eval() to check).
-            if (closureFunction.isArrow()) {
-                if (enclosingFunction instanceof JSBytecodeFunction enclosingBf) {
-                    closureFunction.setNewTargetAllowed(enclosingBf.isNewTargetAllowed());
-                }
-            } else {
-                closureFunction.setNewTargetAllowed(true);
-            }
-            closureFunction.initializePrototypeChain(executionContext.virtualMachine.context);
+            internalInitializeClosure(executionContext, closureTemplate, closureFunction, symbolRemap);
             stack[sp++] = closureFunction;
         } else {
             if (functionValue instanceof JSFunction function) {
@@ -3649,7 +3516,7 @@ public final class OpcodeHandler {
                     // Extract the original JS error value from the VM exception
                     JSValue errorValue = vme.getJsValue() != null ? vme.getJsValue()
                             : vme.getJsError() != null ? vme.getJsError()
-                              : new JSString(vme.getMessage() != null ? vme.getMessage() : "Unknown error");
+                            : new JSString(vme.getMessage() != null ? vme.getMessage() : "Unknown error");
                     if (!resolveState.alreadyResolved) {
                         resolveState.alreadyResolved = true;
                         promise.reject(errorValue);
@@ -6646,6 +6513,87 @@ public final class OpcodeHandler {
             }
         }
         return false;
+    }
+
+    /**
+     * Attach lexical state and realm metadata shared by both closure opcodes.
+     * Stack: unchanged; the caller pushes the initialized closure.
+     */
+    private static void internalInitializeClosure(
+            ExecutionContext executionContext,
+            JSBytecodeFunction closureTemplate,
+            JSBytecodeFunction closureFunction,
+            IdentityHashMap<JSSymbol, JSSymbol> symbolRemap) {
+        if (symbolRemap != null && !symbolRemap.isEmpty()) {
+            closureFunction.setClassPrivateSymbolRemap(symbolRemap);
+        }
+        StackFrame evalDynamicScopeFrame = internalResolveEvalDynamicScopeFrame(executionContext);
+        if (evalDynamicScopeFrame == null
+                && internalHasDirectEvalCall(closureTemplate)
+                && executionContext.frame != null) {
+            evalDynamicScopeFrame = executionContext.frame;
+        }
+        if (evalDynamicScopeFrame != null) {
+            closureFunction.setEvalDynamicScopeLookupEnabled(true);
+            closureFunction.setEvalDynamicScopeFrame(evalDynamicScopeFrame);
+        }
+        String importMetaFilename = null;
+        JSFunction enclosingFunction = executionContext.frame.getFunction();
+        if (enclosingFunction != null) {
+            importMetaFilename = enclosingFunction.getImportMetaFilename();
+        }
+        if (importMetaFilename == null || importMetaFilename.isEmpty()) {
+            JSStackFrame currentStackFrame = executionContext.virtualMachine.context.getCurrentStackFrame();
+            if (currentStackFrame != null) {
+                importMetaFilename = currentStackFrame.filename();
+            }
+        }
+        closureFunction.setImportMetaFilename(importMetaFilename);
+        // Arrow functions capture this, arguments, new.target, active function, and home object from the enclosing scope
+        if (closureFunction.isArrow()) {
+            VarRef derivedThisRef = executionContext.frame.getDerivedThisRef();
+            if (derivedThisRef != null) {
+                closureFunction.setCapturedDerivedThisRef(derivedThisRef);
+            }
+            closureFunction.setCapturedThisArg(executionContext.frame.getThisArg());
+            // Capture new.target and active function lexically from enclosing function
+            JSFunction enclosingFunc = executionContext.frame.getFunction();
+            if (enclosingFunc instanceof JSBytecodeFunction enclosingBf
+                    && (enclosingBf.isArrow() || enclosingBf.isEvalSuperCallAllowed())) {
+                // Nested arrow or arrow inside eval: propagate captured values from parent
+                closureFunction.setCapturedArguments(enclosingBf.getCapturedArguments());
+                closureFunction.setCapturedNewTarget(enclosingBf.getCapturedNewTarget());
+                closureFunction.setCapturedActiveFunction(enclosingBf.getCapturedActiveFunction());
+                // Propagate home object for super access
+                if (enclosingBf.getHomeObject() != null) {
+                    closureFunction.setHomeObject(enclosingBf.getHomeObject());
+                }
+            } else if (enclosingFunc != null) {
+                // Direct arrow inside a regular function: capture from current frame
+                boolean mapped = executionContext.virtualMachine.shouldUseMappedArguments(enclosingFunc);
+                closureFunction.setCapturedArguments(
+                        executionContext.virtualMachine.createArgumentsObject(
+                                executionContext.frame, enclosingFunc, mapped));
+                closureFunction.setCapturedNewTarget(executionContext.frame.getNewTarget());
+                closureFunction.setCapturedActiveFunction(enclosingFunc);
+                // Capture home object for super property access
+                if (enclosingFunc.getHomeObject() != null) {
+                    closureFunction.setHomeObject(enclosingFunc.getHomeObject());
+                }
+            } else {
+                closureFunction.setCapturedNewTarget(executionContext.frame.getNewTarget());
+            }
+        }
+        // Set newTargetAllowed: regular functions always allow new.target,
+        // arrows inherit from enclosing function (for eval() to check).
+        if (closureFunction.isArrow()) {
+            if (enclosingFunction instanceof JSBytecodeFunction enclosingBf) {
+                closureFunction.setNewTargetAllowed(enclosingBf.isNewTargetAllowed());
+            }
+        } else {
+            closureFunction.setNewTargetAllowed(true);
+        }
+        closureFunction.initializePrototypeChain(executionContext.virtualMachine.context);
     }
 
     private static StackFrame internalResolveEvalDynamicScopeFrame(ExecutionContext executionContext) {

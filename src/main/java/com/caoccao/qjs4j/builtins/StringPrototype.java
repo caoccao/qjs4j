@@ -61,116 +61,29 @@ public final class StringPrototype {
         if (context.hasPendingException()) {
             return null;
         }
-        return applyRegExpReplacementPattern(replacementTemplate, input, matchStart, matchEnd, captures, groupNames);
+        return applyRegExpReplacementPattern(context, replacementTemplate, input, matchStart, matchEnd,
+                captures, groupNames, null);
     }
 
+    /**
+     * Scan replacement tokens for both internal capture arrays and observable groups objects.
+     * Named-group property access and conversion stay lazy and in template order.
+     */
     private static String applyRegExpReplacementPattern(
-            String replacementTemplate,
-            String input,
-            int matchStart,
-            int matchEnd,
-            String[] captures,
-            String[] groupNames
-    ) {
-        StringBuilder resultBuilder = new StringBuilder(replacementTemplate.length() + 16);
-        int replacementIndex = 0;
-        while (replacementIndex < replacementTemplate.length()) {
-            char currentChar = replacementTemplate.charAt(replacementIndex);
-            if (currentChar != '$' || replacementIndex + 1 >= replacementTemplate.length()) {
-                resultBuilder.append(currentChar);
-                replacementIndex++;
-                continue;
-            }
-            char nextChar = replacementTemplate.charAt(replacementIndex + 1);
-            if (nextChar == '$') {
-                resultBuilder.append('$');
-                replacementIndex += 2;
-                continue;
-            }
-            if (nextChar == '&') {
-                resultBuilder.append(captures != null && captures.length > 0 && captures[0] != null ? captures[0] : "");
-                replacementIndex += 2;
-                continue;
-            }
-            if (nextChar == '`') {
-                resultBuilder.append(input, 0, matchStart);
-                replacementIndex += 2;
-                continue;
-            }
-            if (nextChar == '\'') {
-                resultBuilder.append(input.substring(matchEnd));
-                replacementIndex += 2;
-                continue;
-            }
-            if (nextChar == '<') {
-                if (!hasNamedCaptures(groupNames)) {
-                    // Per GetSubstitution, when namedCaptures is undefined, "$<" is treated
-                    // as a literal and parsing continues after '<' (do not consume to '>').
-                    resultBuilder.append("$<");
-                    replacementIndex += 2;
-                    continue;
-                }
-                int closeIndex = replacementTemplate.indexOf('>', replacementIndex + 2);
-                if (closeIndex >= 0) {
-                    String groupName = replacementTemplate.substring(replacementIndex + 2, closeIndex);
-                    String namedCaptureValue = getNamedCaptureReplacement(groupName, captures, groupNames);
-                    if (namedCaptureValue != null) {
-                        resultBuilder.append(namedCaptureValue);
-                    } else {
-                        // namedCaptures exists but property lookup produced undefined
-                        // => substitute empty string.
-                    }
-                    replacementIndex = closeIndex + 1;
-                    continue;
-                }
-            }
-            if (nextChar == '0') {
-                if (replacementIndex + 2 < replacementTemplate.length()) {
-                    char secondDigit = replacementTemplate.charAt(replacementIndex + 2);
-                    if (secondDigit >= '1' && secondDigit <= '9') {
-                        int captureIndex = secondDigit - '0';
-                        if (captures != null && captureIndex < captures.length) {
-                            resultBuilder.append(captures[captureIndex] != null ? captures[captureIndex] : "");
-                            replacementIndex += 3;
-                            continue;
-                        }
-                    }
-                }
-            }
-            if (nextChar >= '1' && nextChar <= '9') {
-                int captureIndex = nextChar - '0';
-                int consumedDigits = 1;
-                if (replacementIndex + 2 < replacementTemplate.length()) {
-                    char secondDigit = replacementTemplate.charAt(replacementIndex + 2);
-                    if (secondDigit >= '0' && secondDigit <= '9') {
-                        int twoDigitCaptureIndex = captureIndex * 10 + (secondDigit - '0');
-                        if (captures != null && twoDigitCaptureIndex < captures.length) {
-                            captureIndex = twoDigitCaptureIndex;
-                            consumedDigits = 2;
-                        }
-                    }
-                }
-                if (captures != null && captureIndex < captures.length) {
-                    resultBuilder.append(captures[captureIndex] != null ? captures[captureIndex] : "");
-                    replacementIndex += 1 + consumedDigits;
-                    continue;
-                }
-            }
-            resultBuilder.append('$');
-            replacementIndex++;
-        }
-        return resultBuilder.toString();
-    }
-
-    private static String applyRegExpReplacementPatternWithNamedCapturesObject(
             JSContext context,
             String replacementTemplate,
             String input,
             int matchStart,
             int matchEnd,
             String[] captures,
+            String[] groupNames,
             JSValue namedCapturesValue
     ) {
+        boolean hasNamedCaptures = groupNames != null
+                ? hasNamedCaptures(groupNames)
+                : namedCapturesValue != null
+                && !(namedCapturesValue instanceof JSUndefined)
+                && !(namedCapturesValue instanceof JSNull);
         StringBuilder resultBuilder = new StringBuilder(replacementTemplate.length() + 16);
         int replacementIndex = 0;
         while (replacementIndex < replacementTemplate.length()) {
@@ -202,9 +115,8 @@ public final class StringPrototype {
                 continue;
             }
             if (nextChar == '<') {
-                if (namedCapturesValue == null
-                        || namedCapturesValue instanceof JSUndefined
-                        || namedCapturesValue instanceof JSNull) {
+                if (!hasNamedCaptures) {
+                    // Without named captures, consume only "$<" so later substitutions still run.
                     resultBuilder.append("$<");
                     replacementIndex += 2;
                     continue;
@@ -212,22 +124,29 @@ public final class StringPrototype {
                 int closeIndex = replacementTemplate.indexOf('>', replacementIndex + 2);
                 if (closeIndex >= 0) {
                     String groupName = replacementTemplate.substring(replacementIndex + 2, closeIndex);
-                    JSObject namedCapturesObject = JSTypeConversions.toObject(context, namedCapturesValue);
-                    if (namedCapturesObject == null) {
-                        resultBuilder.append("$<");
-                        replacementIndex += 2;
-                        continue;
-                    }
-                    JSValue groupValue = namedCapturesObject.get(PropertyKey.fromString(groupName));
-                    if (context.hasPendingException()) {
-                        return null;
-                    }
-                    if (!(groupValue instanceof JSUndefined)) {
-                        String replacement = JSTypeConversions.toString(context, groupValue).value();
+                    if (groupNames != null) {
+                        String replacement = getNamedCaptureReplacement(groupName, captures, groupNames);
+                        if (replacement != null) {
+                            resultBuilder.append(replacement);
+                        }
+                    } else {
+                        JSObject namedCapturesObject = JSTypeConversions.toObject(context, namedCapturesValue);
+                        if (namedCapturesObject == null) {
+                            resultBuilder.append("$<");
+                            replacementIndex += 2;
+                            continue;
+                        }
+                        JSValue groupValue = namedCapturesObject.get(PropertyKey.fromString(groupName));
                         if (context.hasPendingException()) {
                             return null;
                         }
-                        resultBuilder.append(replacement);
+                        if (!(groupValue instanceof JSUndefined)) {
+                            String replacement = JSTypeConversions.toString(context, groupValue).value();
+                            if (context.hasPendingException()) {
+                                return null;
+                            }
+                            resultBuilder.append(replacement);
+                        }
                     }
                     replacementIndex = closeIndex + 1;
                     continue;
@@ -295,13 +214,14 @@ public final class StringPrototype {
         if (context.hasPendingException()) {
             return null;
         }
-        return applyRegExpReplacementPatternWithNamedCapturesObject(
+        return applyRegExpReplacementPattern(
                 context,
                 replacementTemplate,
                 input,
                 matchStart,
                 matchEnd,
                 captures,
+                null,
                 namedCapturesValue);
     }
 
@@ -743,10 +663,10 @@ public final class StringPrototype {
     /**
      * ES2024 GetSubstitution for string replace/replaceAll.
      */
-    private static String getSubstitution(String matched, String str, int position,
+    private static String getSubstitution(JSContext context, String matched, String str, int position,
                                           String[] captures, String[] groupNames, String replacement) {
-        return applyRegExpReplacementPattern(replacement, str, position, position + matched.length(),
-                captures != null ? captures : new String[]{matched}, groupNames);
+        return applyRegExpReplacementPattern(context, replacement, str, position, position + matched.length(),
+                captures != null ? captures : new String[]{matched}, groupNames, null);
     }
 
     private static boolean hasNamedCaptures(String[] groupNames) {
@@ -1397,7 +1317,7 @@ public final class StringPrototype {
             }
             replacement = JSTypeConversions.toString(context, replResult).value();
         } else {
-            replacement = getSubstitution(searchStr, s, index, null, null, replaceStr);
+            replacement = getSubstitution(context, searchStr, s, index, null, null, replaceStr);
         }
         return new JSString(s.substring(0, index) + replacement + s.substring(index + searchStr.length()));
     }
@@ -1497,7 +1417,7 @@ public final class StringPrototype {
                 }
                 replacement = JSTypeConversions.toString(context, replResult).value();
             } else {
-                replacement = getSubstitution(searchStr, s, matchPosition, null, null, replaceStr);
+                replacement = getSubstitution(context, searchStr, s, matchPosition, null, null, replaceStr);
             }
             result.append(replacement);
             endOfLastMatch = matchPosition + searchLen;

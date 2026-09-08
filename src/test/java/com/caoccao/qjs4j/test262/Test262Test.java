@@ -100,7 +100,7 @@ public class Test262Test {
                             TestResult result = executor.execute(testCase);
 
                             if (result.isFailed()) {
-                                fail(result.getMessage());
+                                fail(result.message());
                             } else if (result.isTimeout()) {
                                 fail("Test timeout after " + config.getAsyncTimeoutMs() + "ms");
                             }

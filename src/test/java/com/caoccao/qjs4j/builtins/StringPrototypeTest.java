@@ -766,6 +766,54 @@ public class StringPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testReplacementNamedGroupAccessOrder() {
+        assertStringWithJavet("""
+                (() => {
+                  const log = [];
+                  const groups = {
+                    get word() {
+                      log.push('get');
+                      return { toString() { log.push('string'); return 'A'; } };
+                    },
+                    get unused() { throw new Error('must stay lazy'); }
+                  };
+                  const re = /a/;
+                  re.exec = () => Object.assign(['a'], { index: 1, groups });
+                  const result = 'xay'.replace(re, '$<word>:$<missing>:$<word>:$<unterminated');
+                  return result + '|' + log.join(',');
+                })()
+                """);
+        assertStringWithJavet("""
+                (() => {
+                  const log = [];
+                  const marker = {};
+                  const groups = {
+                    get first() {
+                      log.push('get');
+                      return { toString() { log.push('string'); throw marker; } };
+                    },
+                    get later() { log.push('later'); return 'bad'; }
+                  };
+                  const re = /a/;
+                  re.exec = () => Object.assign(['a'], { index: 0, groups });
+                  try { 'a'.replace(re, '$<first>$<later>'); }
+                  catch (e) { return (e === marker) + '|' + log.join(','); }
+                  return 'missing exception';
+                })()
+                """);
+    }
+
+    @Test
+    public void testReplacementTokens() {
+        assertStringWithJavet(
+                "\"xaby\".replace('ab', \"$$:$&:$`:$':$0:$01:$10:$99:$<word>:$<$&>:$\")",
+                "\"xabyab\".replaceAll('ab', \"$$:$&:$`:$':$0:$01:$10:$99:$<word>:$<$&>:$\")",
+                "\"xaby\".replace(/(?<word>a)(b)?/, \"$$:$&:$`:$':$0:$01:$10:$99:$<word>:$<missing>:$\")",
+                "\"xay\".replace(/(?<word>a)(b)?/, \"$2:$02:$20:$<word>:$<missing>:$<unterminated\")",
+                "\"abcdefghij\".replace(/(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)/, '$01:$10:$11:$99')");
+    }
+
+    @Test
     public void testSearch() {
         assertIntegerWithJavet(
                 // Search with string

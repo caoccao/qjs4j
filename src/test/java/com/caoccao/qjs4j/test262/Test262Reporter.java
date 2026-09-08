@@ -165,12 +165,12 @@ public class Test262Reporter {
         if (!failures.isEmpty()) {
             List<TestResult> sortedFailures = new ArrayList<>(failures.size());
             sortedFailures.addAll(failures);
-            sortedFailures.sort(Comparator.comparingInt(r -> r.getTestCase().getIndex()));
+            sortedFailures.sort(Comparator.comparingInt(r -> r.testCase().getIndex()));
             System.out.println("\nFailed Tests:");
             for (TestResult failure : sortedFailures) {
-                System.out.printf("  ❌ %s%n", failure.getTestCase());
-                if (failure.getMessage() != null) {
-                    System.out.printf("     %s%n", failure.getMessage());
+                System.out.printf("  ❌ %s%n", failure.testCase());
+                if (failure.message() != null) {
+                    System.out.printf("     %s%n", failure.message());
                 }
             }
         }
@@ -178,7 +178,7 @@ public class Test262Reporter {
         if (!timeouts.isEmpty()) {
             System.out.println("\nTimeout Tests:");
             for (TestResult timeout : timeouts) {
-                System.out.printf("  ⏱️  %s%n", timeout.getTestCase());
+                System.out.printf("  ⏱️  %s%n", timeout.testCase());
             }
         }
 
@@ -204,14 +204,14 @@ public class Test262Reporter {
             List<TestResult> sortedByTime = new ArrayList<>(allResults.size());
             sortedByTime.addAll(allResults);
             sortedByTime.sort((a, b) -> Long.compare(
-                    b.getTestCase().getTimeElapsed(),
-                    a.getTestCase().getTimeElapsed()));
+                    b.testCase().getTimeElapsed(),
+                    a.testCase().getTimeElapsed()));
 
             int topCount = Math.min(TOP_SLOW_TEST_COUNT, sortedByTime.size());
             if (topCount > 0) {
                 System.out.println("Top " + topCount + " Slowest Tests:");
                 for (int i = 0; i < topCount; i++) {
-                    Test262TestCase testCase = sortedByTime.get(i).getTestCase();
+                    Test262TestCase testCase = sortedByTime.get(i).testCase();
                     System.out.printf("  %d. %s (%d ms)%n", i + 1, testCase, testCase.getTimeElapsed());
                 }
             }
@@ -229,7 +229,7 @@ public class Test262Reporter {
             }
             onAdmitting();
             allResults.add(result);
-            switch (result.getStatus()) {
+            switch (result.status()) {
                 case PASS:
                     passed.incrementAndGet();
                     break;
