@@ -578,6 +578,10 @@ tasks {
     withType<Test> {
         javaLauncher.set(testJavaLauncher)
         systemProperty("file.encoding", "UTF-8")
+        // With --info, retain the last started test even if its worker never finishes.
+        testLogging.info {
+            events("started", "passed", "skipped", "failed")
+        }
         // Javet's i18n runtime loads this external data file, so replacing it must rerun the tests.
         inputs.file(layout.projectDirectory.file("icu/icudtl.dat")).withPropertyName("icuData")
         // The one authoritative test heap. Gradle's default of 512 MB is below what the engine's
