@@ -120,6 +120,50 @@ public class MediumPriorityOpcodeTest extends BaseTest {
     }
 
     @Test
+    public void testDefineClassComputedPreservesHeritageAndStack() {
+        JSBytecodeFunction constructor = (JSBytecodeFunction) context.eval("(function () {})");
+        JSFunction parent = (JSFunction) context.eval("(class Parent {})");
+        JSSymbol name = new JSSymbol("DynamicClass");
+        BytecodeEmitter emitter = new BytecodeEmitter();
+        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, name);
+        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, parent);
+        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, constructor);
+        emitter.emitOpcode(Opcode.DEFINE_CLASS_COMPUTED);
+        emitter.emitAtom("FallbackClass");
+        emitter.emitU8(1);
+        emitter.emitOpcode(Opcode.DROP);
+        emitter.emitOpcode(Opcode.DROP);
+        emitter.emitOpcode(Opcode.RETURN);
+
+        assertThat(execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE)).isSameAs(name);
+        assertThat(constructor.getPrototype()).isSameAs(parent);
+        JSObject prototype = (JSObject) constructor.get("prototype");
+        assertThat(prototype.getPrototype()).isSameAs(parent.get("prototype"));
+        assertThat(prototype.get("constructor")).isSameAs(constructor);
+        assertThat(constructor.getHomeObject()).isSameAs(prototype);
+        assertThat(constructor.isClassConstructor()).isTrue();
+        assertThat(constructor.isDerivedConstructor()).isTrue();
+        assertThat(((JSString) constructor.get("name")).value()).isEqualTo("[DynamicClass]");
+    }
+
+    @Test
+    public void testDefineClassComputedRejectsUndefinedHeritage() {
+        JSNativeFunction constructor = new JSNativeFunction(context, "old", 0,
+                (ctx, thisArg, args) -> JSUndefined.INSTANCE);
+        BytecodeEmitter emitter = new BytecodeEmitter();
+        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("DynamicClass"));
+        emitter.emitOpcode(Opcode.UNDEFINED);
+        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, constructor);
+        emitter.emitOpcode(Opcode.DEFINE_CLASS_COMPUTED);
+        emitter.emitAtom("FallbackClass");
+        emitter.emitU8(1);
+        emitter.emitOpcode(Opcode.RETURN);
+
+        assertThatThrownBy(() -> execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE))
+                .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("parent class must be constructor");
+    }
+
+    @Test
     public void testDefineMethodComputed() {
         JSObject target = context.createJSObject();
         JSNativeFunction method = new JSNativeFunction(context, "m", 0, (ctx, thisArg, args) -> new JSNumber(1));

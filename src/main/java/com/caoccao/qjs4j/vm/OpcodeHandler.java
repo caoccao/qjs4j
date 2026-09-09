@@ -176,6 +176,28 @@ public final class OpcodeHandler {
         return null;
     }
 
+    private static VarRef findClosureVarRef(ExecutionContext executionContext, String variableName) {
+        StackFrame checkFrame = executionContext.frame;
+        int scannedFrameCount = 0;
+        while (checkFrame != null && scannedFrameCount < MAX_CLOSURE_SCAN_FRAME_COUNT) {
+            JSFunction checkFunction = checkFrame.getFunction();
+            if (checkFunction instanceof JSBytecodeFunction checkBytecodeFunction) {
+                VarRef[] closureVarRefs = checkBytecodeFunction.getVarRefs();
+                String[] closureVarNames = checkBytecodeFunction.getCapturedVarNames();
+                if (closureVarRefs != null && closureVarNames != null) {
+                    for (int i = 0; i < closureVarNames.length && i < closureVarRefs.length; i++) {
+                        if (variableName.equals(closureVarNames[i]) && closureVarRefs[i] != null) {
+                            return closureVarRefs[i];
+                        }
+                    }
+                }
+            }
+            checkFrame = checkFrame.getCaller();
+            scannedFrameCount++;
+        }
+        return null;
+    }
+
     private static StackFrame findDynamicVarBindingFrame(ExecutionContext executionContext, String variableName) {
         if (variableName == null || executionContext.frame == null) {
             return null;
@@ -1071,103 +1093,31 @@ public final class OpcodeHandler {
     }
 
     static void handleDefineClass(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
-        int sp = executionContext.sp;
-        int classNameAtom = executionContext.bytecode.readU32(pc + 1);
-        String className = executionContext.bytecode.getAtoms()[classNameAtom];
-        JSValue constructorValue = (JSValue) stack[--sp];
-        JSValue superClassValue = (JSValue) stack[--sp];
-
-        if (!(constructorValue instanceof JSFunction constructorFunction)) {
-            throw new JSVirtualMachineException("DEFINE_CLASS: constructor must be a function");
-        }
-
-        JSObject prototypeObject = executionContext.virtualMachine.context.createJSObject();
-        if (superClassValue instanceof JSNull) {
-            prototypeObject.setPrototype(null);
-        } else if (superClassValue != JSUndefined.INSTANCE) {
-            if (!(superClassValue instanceof JSObject superClassObject)
-                    || !JSTypeChecking.isConstructor(superClassValue)) {
-                executionContext.virtualMachine.context.throwTypeError("parent class must be constructor");
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                        .getPendingException();
-                stack[sp++] = JSUndefined.INSTANCE;
-                stack[sp++] = JSUndefined.INSTANCE;
-                executionContext.sp = sp;
-                executionContext.pc = pc + op.getSize();
-                return;
-            }
-            JSValue superPrototypeValue = superClassObject.get(PropertyKey.PROTOTYPE);
-            if (executionContext.virtualMachine.context.hasPendingException()) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                        .getPendingException();
-                executionContext.virtualMachine.context.clearPendingException();
-                stack[sp++] = JSUndefined.INSTANCE;
-                stack[sp++] = JSUndefined.INSTANCE;
-                executionContext.sp = sp;
-                executionContext.pc = pc + op.getSize();
-                return;
-            }
-            if (superPrototypeValue instanceof JSObject superPrototypeObject) {
-                prototypeObject.setPrototype(superPrototypeObject);
-            } else if (superPrototypeValue instanceof JSNull) {
-                prototypeObject.setPrototype(null);
-            } else {
-                executionContext.virtualMachine.context
-                        .throwTypeError("parent class prototype is not an object or null");
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                        .getPendingException();
-                stack[sp++] = JSUndefined.INSTANCE;
-                stack[sp++] = JSUndefined.INSTANCE;
-                executionContext.sp = sp;
-                executionContext.pc = pc + op.getSize();
-                return;
-            }
-            constructorFunction.setPrototype(superClassObject);
-        }
-
-        JSObject constructorObject = constructorFunction;
-        constructorObject.defineProperty(PropertyKey.fromString("prototype"), prototypeObject,
-                PropertyDescriptor.DataState.None);
-
-        prototypeObject.defineProperty(PropertyKey.CONSTRUCTOR, constructorValue,
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        executionContext.virtualMachine.setObjectName(constructorValue, new JSString(className));
-
-        // Set home object on constructor for super property access in constructors
-        constructorFunction.setHomeObject(prototypeObject);
-
-        if (constructorFunction instanceof JSBytecodeFunction bytecodeConstructor) {
-            bytecodeConstructor.setClassConstructor(true);
-            if (superClassValue != JSUndefined.INSTANCE) {
-                bytecodeConstructor.setDerivedConstructor(true);
-            }
-        }
-
-        stack[sp++] = prototypeObject;
-        stack[sp++] = constructorValue;
-        executionContext.sp = sp;
-        executionContext.pc = pc + op.getSize();
+        handleDefineClass(op, executionContext, false);
     }
 
-    static void handleDefineClassComputed(Opcode op, ExecutionContext executionContext) {
+    /**
+     * Stack: [computedName,] superClass, constructor -> [computedName,] prototype, constructor. Computed definitions
+     * keep the name on the stack and carry an explicit heritage flag.
+     */
+    private static void handleDefineClass(Opcode op, ExecutionContext executionContext, boolean computed) {
         int pc = executionContext.pc;
         JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
         int sp = executionContext.sp;
         int classNameAtom = executionContext.bytecode.readU32(pc + 1);
-        int classFlags = executionContext.bytecode.readU8(pc + 5);
+        int classFlags = computed ? executionContext.bytecode.readU8(pc + 5) : 0;
         String className = executionContext.bytecode.getAtoms()[classNameAtom];
         JSValue constructorValue = (JSValue) stack[--sp];
         JSValue superClassValue = (JSValue) stack[--sp];
-        JSValue computedClassNameValue = (JSValue) stack[sp - 1];
+        JSValue computedClassNameValue = computed ? (JSValue) stack[sp - 1] : JSUndefined.INSTANCE;
 
         if (!(constructorValue instanceof JSFunction constructorFunction)) {
-            throw new JSVirtualMachineException("DEFINE_CLASS_COMPUTED: constructor must be a function");
+            throw new JSVirtualMachineException(
+                    (computed ? "DEFINE_CLASS_COMPUTED" : "DEFINE_CLASS") + ": constructor must be a function");
         }
 
         JSObject prototypeObject = executionContext.virtualMachine.context.createJSObject();
-        boolean hasHeritage = (classFlags & 1) != 0;
+        boolean hasHeritage = computed ? (classFlags & 1) != 0 : superClassValue != JSUndefined.INSTANCE;
         if (hasHeritage) {
             if (superClassValue instanceof JSNull) {
                 prototypeObject.setPrototype(null);
@@ -1217,11 +1167,13 @@ public final class OpcodeHandler {
                 PropertyDescriptor.DataState.None);
         prototypeObject.defineProperty(PropertyKey.CONSTRUCTOR, constructorValue,
                 PropertyDescriptor.DataState.ConfigurableWritable);
-        JSString computedClassName = executionContext.virtualMachine.getComputedNameString(computedClassNameValue);
-        if (computedClassName.value().isEmpty()) {
-            computedClassName = new JSString(className);
+        JSString constructorName = computed
+                ? executionContext.virtualMachine.getComputedNameString(computedClassNameValue)
+                : new JSString(className);
+        if (computed && constructorName.value().isEmpty()) {
+            constructorName = new JSString(className);
         }
-        executionContext.virtualMachine.setObjectName(constructorValue, computedClassName);
+        executionContext.virtualMachine.setObjectName(constructorValue, constructorName);
 
         // Set home object on constructor for super property access in constructors
         constructorFunction.setHomeObject(prototypeObject);
@@ -1237,6 +1189,10 @@ public final class OpcodeHandler {
         stack[sp++] = constructorValue;
         executionContext.sp = sp;
         executionContext.pc = pc + op.getSize();
+    }
+
+    static void handleDefineClassComputed(Opcode op, ExecutionContext executionContext) {
+        handleDefineClass(op, executionContext, true);
     }
 
     static void handleDefineField(Opcode op, ExecutionContext executionContext) {
@@ -2888,6 +2844,14 @@ public final class OpcodeHandler {
     }
 
     static void handleGetVar(Opcode op, ExecutionContext executionContext) {
+        handleGetVar(op, executionContext, false);
+    }
+
+    /**
+     * Stack: ... -> ..., value. Both opcodes resolve the same binding kinds; GET_VAR_UNDEF permits an absent name for
+     * typeof, but still rejects an uninitialized lexical binding.
+     */
+    private static void handleGetVar(Opcode op, ExecutionContext executionContext, boolean allowMissing) {
         int pc = executionContext.pc;
         int sp = executionContext.sp;
         JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
@@ -2910,44 +2874,23 @@ public final class OpcodeHandler {
             executionContext.pc = pc + op.getSize();
             return;
         }
-        // A name the eval overlay already resolved is not up for reinterpretation: the overlay was
+        // For ordinary reads, a name the eval overlay resolved is not up for reinterpretation: the overlay was
         // built from the caller's locals, captures and parameter environments in the order the
         // grammar gives them, and this scan knows only names. Letting the scan win meant a captured
         // outer binding beat a nearer one of the same name — a function expression named `n` nested
         // in the default initializer of another named `n` saw the outer function, not itself.
+        // GET_VAR_UNDEF retains its closure-first lookup when that scan is enabled.
         if (shouldScanClosureVarRefsForGetVar(executionContext)
-                && !executionContext.virtualMachine.context.hasEvalOverlayBinding(variableName)) {
+                && (allowMissing || !executionContext.virtualMachine.context.hasEvalOverlayBinding(variableName))) {
             // Check closure VarRefs in current frame and caller frames.
             // VarRef-based closure variables are checked so that eval() inside class
             // member functions can resolve the class inner name binding.
-            StackFrame checkFrame = executionContext.frame;
-            int scannedFrameCount = 0;
-            while (checkFrame != null && scannedFrameCount < MAX_CLOSURE_SCAN_FRAME_COUNT) {
-                JSFunction checkFunction = checkFrame.getFunction();
-                if (checkFunction instanceof JSBytecodeFunction checkBytecodeFunction) {
-                    VarRef[] closureVarRefs = checkBytecodeFunction.getVarRefs();
-                    String[] closureVarNames = checkBytecodeFunction.getCapturedVarNames();
-                    if (closureVarRefs != null && closureVarNames != null) {
-                        for (int i = 0; i < closureVarNames.length && i < closureVarRefs.length; i++) {
-                            if (variableName.equals(closureVarNames[i]) && closureVarRefs[i] != null) {
-                                JSValue closureValue = closureVarRefs[i].get();
-                                if (closureValue == VirtualMachine.UNINITIALIZED_MARKER) {
-                                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                                            .throwReferenceError(
-                                                    "Cannot access '" + variableName + "' before initialization");
-                                    stack[sp++] = JSUndefined.INSTANCE;
-                                } else {
-                                    stack[sp++] = closureValue;
-                                }
-                                executionContext.sp = sp;
-                                executionContext.pc = pc + op.getSize();
-                                return;
-                            }
-                        }
-                    }
-                }
-                checkFrame = checkFrame.getCaller();
-                scannedFrameCount++;
+            VarRef closureVarRef = findClosureVarRef(executionContext, variableName);
+            if (closureVarRef != null) {
+                stack[sp++] = readNamedBindingValue(executionContext, variableName, closureVarRef.get());
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
             }
         }
         JSContext context = executionContext.virtualMachine.context;
@@ -2958,7 +2901,7 @@ public final class OpcodeHandler {
             variableValue = globalObject.get(propertyKey);
             hasProperty = !(variableValue instanceof JSUndefined) || globalObject.has(propertyKey);
             if (hasProperty) {
-                if (executionContext.virtualMachine.trackPropertyAccess
+                if (!allowMissing && executionContext.virtualMachine.trackPropertyAccess
                         && !executionContext.virtualMachine.propertyAccessLock) {
                     executionContext.virtualMachine.resetPropertyAccessTracking();
                     executionContext.virtualMachine.propertyAccessChain.append(variableName);
@@ -2971,13 +2914,8 @@ public final class OpcodeHandler {
         }
         EvalScopedLocalBinding localBinding = findEvalScopedLocalBinding(executionContext, variableName);
         if (localBinding != null) {
-            if (localBinding.value() == VirtualMachine.UNINITIALIZED_MARKER) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                        .throwReferenceError("Cannot access '" + variableName + "' before initialization");
-                stack[sp++] = JSUndefined.INSTANCE;
-            } else {
-                stack[sp++] = localBinding.value() != null ? localBinding.value() : JSUndefined.INSTANCE;
-            }
+            JSValue localValue = localBinding.value() != null ? localBinding.value() : JSUndefined.INSTANCE;
+            stack[sp++] = readNamedBindingValue(executionContext, variableName, localValue);
             executionContext.sp = sp;
             executionContext.pc = pc + op.getSize();
             return;
@@ -3001,42 +2939,20 @@ public final class OpcodeHandler {
             hasProperty = globalObject.has(propertyKey);
         }
         if (!hasProperty && !shouldScanClosureVarRefsForGetVar(executionContext)) {
-            StackFrame checkFrame = executionContext.frame;
-            int scannedFrameCount = 0;
-            while (checkFrame != null && scannedFrameCount < MAX_CLOSURE_SCAN_FRAME_COUNT) {
-                JSFunction checkFunction = checkFrame.getFunction();
-                if (checkFunction instanceof JSBytecodeFunction checkBytecodeFunction) {
-                    VarRef[] closureVarRefs = checkBytecodeFunction.getVarRefs();
-                    String[] closureVarNames = checkBytecodeFunction.getCapturedVarNames();
-                    if (closureVarRefs != null && closureVarNames != null) {
-                        for (int i = 0; i < closureVarNames.length && i < closureVarRefs.length; i++) {
-                            if (variableName.equals(closureVarNames[i]) && closureVarRefs[i] != null) {
-                                JSValue closureValue = closureVarRefs[i].get();
-                                if (closureValue == VirtualMachine.UNINITIALIZED_MARKER) {
-                                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                                            .throwReferenceError(
-                                                    "Cannot access '" + variableName + "' before initialization");
-                                    stack[sp++] = JSUndefined.INSTANCE;
-                                } else {
-                                    stack[sp++] = closureValue;
-                                }
-                                executionContext.sp = sp;
-                                executionContext.pc = pc + op.getSize();
-                                return;
-                            }
-                        }
-                    }
-                }
-                checkFrame = checkFrame.getCaller();
-                scannedFrameCount++;
+            VarRef closureVarRef = findClosureVarRef(executionContext, variableName);
+            if (closureVarRef != null) {
+                stack[sp++] = readNamedBindingValue(executionContext, variableName, closureVarRef.get());
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
             }
         }
-        if (!hasProperty) {
+        if (!hasProperty && !allowMissing) {
             executionContext.virtualMachine.pendingException = context
                     .throwReferenceError(variableName + " is not defined");
             stack[sp++] = JSUndefined.INSTANCE;
         } else {
-            if (executionContext.virtualMachine.trackPropertyAccess
+            if (!allowMissing && executionContext.virtualMachine.trackPropertyAccess
                     && !executionContext.virtualMachine.propertyAccessLock) {
                 executionContext.virtualMachine.resetPropertyAccessTracking();
                 executionContext.virtualMachine.propertyAccessChain.append(variableName);
@@ -3079,139 +2995,7 @@ public final class OpcodeHandler {
     }
 
     static void handleGetVarUndef(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
-        String[] atomPool = executionContext.bytecode.getAtoms();
-        if (atomPool.length == 0 || atomIndex < 0 || atomIndex >= atomPool.length) {
-            int varRefIndex = executionContext.bytecode.readU16(pc + 1);
-            stack[sp++] = readVarRefValue(executionContext, varRefIndex);
-            executionContext.sp = sp;
-            executionContext.pc = pc + op.getSize();
-            return;
-        }
-        String variableName = atomPool[atomIndex];
-        PropertyKey propertyKey = executionContext.bytecode.getCachedPropertyKey(atomIndex);
-        StackFrame dynamicBindingFrame = findDynamicVarBindingFrame(executionContext, variableName);
-        if (dynamicBindingFrame != null) {
-            JSValue variableValue = dynamicBindingFrame.getDynamicVarBinding(variableName);
-            stack[sp++] = variableValue != null ? variableValue : JSUndefined.INSTANCE;
-            executionContext.sp = sp;
-            executionContext.pc = pc + op.getSize();
-            return;
-        }
-        if (shouldScanClosureVarRefsForGetVar(executionContext)) {
-            // Check closure VarRefs in current frame and caller frames.
-            StackFrame checkFrame = executionContext.frame;
-            int scannedFrameCount = 0;
-            while (checkFrame != null && scannedFrameCount < MAX_CLOSURE_SCAN_FRAME_COUNT) {
-                JSFunction checkFunction = checkFrame.getFunction();
-                if (checkFunction instanceof JSBytecodeFunction checkBytecodeFunction) {
-                    VarRef[] closureVarRefs = checkBytecodeFunction.getVarRefs();
-                    String[] closureVarNames = checkBytecodeFunction.getCapturedVarNames();
-                    if (closureVarRefs != null && closureVarNames != null) {
-                        for (int i = 0; i < closureVarNames.length && i < closureVarRefs.length; i++) {
-                            if (variableName.equals(closureVarNames[i]) && closureVarRefs[i] != null) {
-                                JSValue closureValue = closureVarRefs[i].get();
-                                if (closureValue == VirtualMachine.UNINITIALIZED_MARKER) {
-                                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                                            .throwReferenceError(
-                                                    "Cannot access '" + variableName + "' before initialization");
-                                    stack[sp++] = JSUndefined.INSTANCE;
-                                } else {
-                                    stack[sp++] = closureValue;
-                                }
-                                executionContext.sp = sp;
-                                executionContext.pc = pc + op.getSize();
-                                return;
-                            }
-                        }
-                    }
-                }
-                checkFrame = checkFrame.getCaller();
-                scannedFrameCount++;
-            }
-        }
-        JSContext context = executionContext.virtualMachine.context;
-        JSObject globalObject = context.getGlobalObject();
-        if (context.hasEvalOverlayBinding(variableName)) {
-            JSValue value = globalObject.get(propertyKey);
-            boolean hasProperty = !(value instanceof JSUndefined) || globalObject.has(propertyKey);
-            if (hasProperty) {
-                stack[sp++] = value;
-                executionContext.sp = sp;
-                executionContext.pc = pc + op.getSize();
-                return;
-            }
-        }
-        EvalScopedLocalBinding localBinding = findEvalScopedLocalBinding(executionContext, variableName);
-        if (localBinding != null) {
-            if (localBinding.value() == VirtualMachine.UNINITIALIZED_MARKER) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                        .throwReferenceError("Cannot access '" + variableName + "' before initialization");
-                stack[sp++] = JSUndefined.INSTANCE;
-            } else {
-                stack[sp++] = localBinding.value() != null ? localBinding.value() : JSUndefined.INSTANCE;
-            }
-            executionContext.sp = sp;
-            executionContext.pc = pc + op.getSize();
-            return;
-        }
-        if (context.hasGlobalLexicalBinding(variableName)) {
-            if (!context.isGlobalLexicalBindingInitialized(variableName)) {
-                executionContext.virtualMachine.pendingException = context
-                        .throwReferenceError("Cannot access '" + variableName + "' before initialization");
-                stack[sp++] = JSUndefined.INSTANCE;
-            } else {
-                stack[sp++] = context.readGlobalLexicalBinding(variableName);
-            }
-            executionContext.sp = sp;
-            executionContext.pc = pc + op.getSize();
-            return;
-        }
-
-        JSValue globalValue = globalObject.get(propertyKey);
-        boolean hasGlobalProperty;
-        if (!(globalValue instanceof JSUndefined)) {
-            hasGlobalProperty = true;
-        } else {
-            hasGlobalProperty = globalObject.has(propertyKey);
-        }
-        if (!hasGlobalProperty && !shouldScanClosureVarRefsForGetVar(executionContext)) {
-            StackFrame checkFrame = executionContext.frame;
-            int scannedFrameCount = 0;
-            while (checkFrame != null && scannedFrameCount < MAX_CLOSURE_SCAN_FRAME_COUNT) {
-                JSFunction checkFunction = checkFrame.getFunction();
-                if (checkFunction instanceof JSBytecodeFunction checkBytecodeFunction) {
-                    VarRef[] closureVarRefs = checkBytecodeFunction.getVarRefs();
-                    String[] closureVarNames = checkBytecodeFunction.getCapturedVarNames();
-                    if (closureVarRefs != null && closureVarNames != null) {
-                        for (int i = 0; i < closureVarNames.length && i < closureVarRefs.length; i++) {
-                            if (variableName.equals(closureVarNames[i]) && closureVarRefs[i] != null) {
-                                JSValue closureValue = closureVarRefs[i].get();
-                                if (closureValue == VirtualMachine.UNINITIALIZED_MARKER) {
-                                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                                            .throwReferenceError(
-                                                    "Cannot access '" + variableName + "' before initialization");
-                                    stack[sp++] = JSUndefined.INSTANCE;
-                                } else {
-                                    stack[sp++] = closureValue;
-                                }
-                                executionContext.sp = sp;
-                                executionContext.pc = pc + op.getSize();
-                                return;
-                            }
-                        }
-                    }
-                }
-                checkFrame = checkFrame.getCaller();
-                scannedFrameCount++;
-            }
-        }
-        stack[sp++] = globalValue;
-        executionContext.sp = sp;
-        executionContext.pc = pc + op.getSize();
+        handleGetVar(op, executionContext, true);
     }
 
     static void handleGosub(Opcode op, ExecutionContext executionContext) {
@@ -6615,6 +6399,16 @@ public final class OpcodeHandler {
         }
         Opcode nextOpcode = executionContext.decodedOpcodes[nextPc];
         return nextOpcode == Opcode.DEFINE_CLASS || nextOpcode == Opcode.DEFINE_CLASS_COMPUTED;
+    }
+
+    private static JSValue readNamedBindingValue(ExecutionContext executionContext, String variableName,
+            JSValue value) {
+        if (value == VirtualMachine.UNINITIALIZED_MARKER) {
+            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
+                    .throwReferenceError("Cannot access '" + variableName + "' before initialization");
+            return JSUndefined.INSTANCE;
+        }
+        return value;
     }
 
     private static JSValue readVarRefValue(ExecutionContext executionContext, int varRefIndex) {
