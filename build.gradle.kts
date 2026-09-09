@@ -75,7 +75,7 @@ object Config {
         const val ASSERTJ_CORE = "3.27.6"
         const val COMMONS_IO = "2.18.0"
         const val JAVA_VERSION = "17"
-        const val JAVET = "5.0.5"
+        const val JAVET = "6.0.0"
         const val JMH = "1.37"
         const val JSON_UNIT_ASSERTJ = "5.1.0"
         const val JUNIT = "6.0.1"
@@ -578,6 +578,8 @@ tasks {
     withType<Test> {
         javaLauncher.set(testJavaLauncher)
         systemProperty("file.encoding", "UTF-8")
+        // Javet's i18n runtime loads this external data file, so replacing it must rerun the tests.
+        inputs.file(layout.projectDirectory.file("icu/icudtl.dat")).withPropertyName("icuData")
         // The one authoritative test heap. Gradle's default of 512 MB is below what the engine's
         // own resource limits need to be reachable: a string-length or array-join limit only fires
         // after the builder has grown past it, so a smaller heap runs out first and the JVM dies
