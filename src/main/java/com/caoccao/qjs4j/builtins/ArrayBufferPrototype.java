@@ -278,55 +278,13 @@ public final class ArrayBufferPrototype {
      * content as this buffer, then detaches this buffer.
      */
     public static JSValue transfer(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArrayBuffer buffer)) {
-            return context.throwTypeError("ArrayBuffer.prototype.transfer called on non-ArrayBuffer");
-        }
-
-        // QuickJS ordering: ToIndex before detach check (valueOf could detach)
-        long newByteLength;
-        if (args.length < 1 || args[0] instanceof JSUndefined) {
-            newByteLength = buffer.getByteLength();
-        } else {
-            try {
-                newByteLength = JSTypeConversions.toIndex(context, args[0]);
-            } catch (JSRangeErrorException e) {
-                return context.throwRangeError(e.getMessage());
-            }
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-        }
-
-        if (buffer.isDetached()) {
-            return context.throwTypeError("Cannot perform ArrayBuffer.prototype.transfer on a detached ArrayBuffer");
-        }
-
-        // Step 6: If IsImmutableBuffer(arrayBuffer) is true, throw a TypeError
-        if (buffer.isImmutable()) {
-            return context.throwTypeError("Cannot transfer an immutable ArrayBuffer");
-        }
-
-        if (newByteLength > Integer.MAX_VALUE) {
-            return context.throwRangeError("invalid array buffer length");
-        }
-
-        try {
-            return buffer.transfer(context, (int) newByteLength);
-        } catch (JSErrorException e) {
-            // Preserve the error's own type. Collapsing every JSErrorException to one type turned
-            // a RangeError into a TypeError (or the reverse) whenever a precheck above missed a
-            // case, which is precisely when the type matters.
-            return context.throwError(e);
-        }
+        return transfer(context, thisArg, args, false);
     }
 
-    /**
-     * ArrayBuffer.prototype.transferToFixedLength([newByteLength]) ES2024 25.1.5.5 Creates a new non-resizable
-     * ArrayBuffer with the same byte content as this buffer, then detaches this buffer.
-     */
-    public static JSValue transferToFixedLength(JSContext context, JSValue thisArg, JSValue[] args) {
+    private static JSValue transfer(JSContext context, JSValue thisArg, JSValue[] args, boolean fixedLength) {
+        String methodName = fixedLength ? "transferToFixedLength" : "transfer";
         if (!(thisArg instanceof JSArrayBuffer buffer)) {
-            return context.throwTypeError("ArrayBuffer.prototype.transferToFixedLength called on non-ArrayBuffer");
+            return context.throwTypeError("ArrayBuffer.prototype." + methodName + " called on non-ArrayBuffer");
         }
 
         // QuickJS ordering: ToIndex before detach check (valueOf could detach)
@@ -346,7 +304,7 @@ public final class ArrayBufferPrototype {
 
         if (buffer.isDetached()) {
             return context.throwTypeError(
-                    "Cannot perform ArrayBuffer.prototype.transferToFixedLength on a detached ArrayBuffer");
+                    "Cannot perform ArrayBuffer.prototype." + methodName + " on a detached ArrayBuffer");
         }
 
         // Step 6: If IsImmutableBuffer(arrayBuffer) is true, throw a TypeError
@@ -359,13 +317,23 @@ public final class ArrayBufferPrototype {
         }
 
         try {
-            return buffer.transferToFixedLength(context, (int) newByteLength);
+            return fixedLength
+                    ? buffer.transferToFixedLength(context, (int) newByteLength)
+                    : buffer.transfer(context, (int) newByteLength);
         } catch (JSErrorException e) {
             // Preserve the error's own type. Collapsing every JSErrorException to one type turned
             // a RangeError into a TypeError (or the reverse) whenever a precheck above missed a
             // case, which is precisely when the type matters.
             return context.throwError(e);
         }
+    }
+
+    /**
+     * ArrayBuffer.prototype.transferToFixedLength([newByteLength]) ES2024 25.1.5.5 Creates a new non-resizable
+     * ArrayBuffer with the same byte content as this buffer, then detaches this buffer.
+     */
+    public static JSValue transferToFixedLength(JSContext context, JSValue thisArg, JSValue[] args) {
+        return transfer(context, thisArg, args, true);
     }
 
     /**

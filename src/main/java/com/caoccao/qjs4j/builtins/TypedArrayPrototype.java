@@ -249,33 +249,7 @@ public final class TypedArrayPrototype {
     }
 
     public static JSValue every(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.every");
-        if (typedArray == null) {
-            return context.getPendingException();
-        }
-        if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError(
-                    "Cannot perform TypedArray.prototype.every on a typed array backed by a detached or out-of-bounds buffer");
-        }
-        if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
-            return context.throwTypeError(args.length == 0 || args[0].isUndefined()
-                    ? "undefined is not a function"
-                    : JSTypeConversions.toString(context, args[0]).value() + " is not a function");
-        }
-        JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        int length = typedArray.getLength();
-        for (int k = 0; k < length; k++) {
-            JSValue kValue = safeGetElement(typedArray, k);
-            JSValue testResult = callbackFn.call(context, callbackThisArg,
-                    new JSValue[]{kValue, JSNumber.of(k), typedArray});
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (JSTypeConversions.toBoolean(testResult) == JSBoolean.FALSE) {
-                return JSBoolean.FALSE;
-            }
-        }
-        return JSBoolean.TRUE;
+        return testPredicate(context, thisArg, args, true);
     }
 
     public static JSValue fill(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -362,19 +336,11 @@ public final class TypedArrayPrototype {
     }
 
     public static JSValue filter(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.filter");
+        JSTypedArray typedArray = toTypedArrayForCallback(context, thisArg, args, "TypedArray.prototype.filter");
         if (typedArray == null) {
             return context.getPendingException();
         }
-        if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError(
-                    "Cannot perform TypedArray.prototype.filter on a typed array backed by a detached or out-of-bounds buffer");
-        }
-        if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
-            return context.throwTypeError(args.length == 0 || args[0].isUndefined()
-                    ? "undefined is not a function"
-                    : JSTypeConversions.toString(context, args[0]).value() + " is not a function");
-        }
+        JSFunction callbackFn = (JSFunction) args[0];
         JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
         int length = typedArray.getLength();
 
@@ -408,112 +374,33 @@ public final class TypedArrayPrototype {
     }
 
     public static JSValue find(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.find");
-        if (typedArray == null) {
-            return context.getPendingException();
-        }
-        if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError(
-                    "Cannot perform TypedArray.prototype.find on a typed array backed by a detached or out-of-bounds buffer");
-        }
-        if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
-            return context.throwTypeError(args.length == 0 || args[0].isUndefined()
-                    ? "undefined is not a function"
-                    : JSTypeConversions.toString(context, args[0]).value() + " is not a function");
-        }
-        JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        int length = typedArray.getLength();
-        for (int k = 0; k < length; k++) {
-            JSValue kValue = safeGetElement(typedArray, k);
-            JSValue testResult = callbackFn.call(context, callbackThisArg,
-                    new JSValue[]{kValue, JSNumber.of(k), typedArray});
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (JSTypeConversions.toBoolean(testResult) == JSBoolean.TRUE) {
-                return kValue;
-            }
-        }
-        return JSUndefined.INSTANCE;
+        return findViaPredicate(context, thisArg, args, "TypedArray.prototype.find", false, false);
     }
 
     public static JSValue findIndex(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.findIndex");
-        if (typedArray == null) {
-            return context.getPendingException();
-        }
-        if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError(
-                    "Cannot perform TypedArray.prototype.findIndex on a typed array backed by a detached or out-of-bounds buffer");
-        }
-        if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
-            return context.throwTypeError(args.length == 0 || args[0].isUndefined()
-                    ? "undefined is not a function"
-                    : JSTypeConversions.toString(context, args[0]).value() + " is not a function");
-        }
-        JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        int length = typedArray.getLength();
-        for (int k = 0; k < length; k++) {
-            JSValue kValue = safeGetElement(typedArray, k);
-            JSValue testResult = callbackFn.call(context, callbackThisArg,
-                    new JSValue[]{kValue, JSNumber.of(k), typedArray});
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (JSTypeConversions.toBoolean(testResult) == JSBoolean.TRUE) {
-                return JSNumber.of(k);
-            }
-        }
-        return JSNumber.of(-1);
+        return findViaPredicate(context, thisArg, args, "TypedArray.prototype.findIndex", false, true);
     }
 
     public static JSValue findLast(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.findLast");
-        if (typedArray == null) {
-            return context.getPendingException();
-        }
-        if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError(
-                    "Cannot perform TypedArray.prototype.findLast on a typed array backed by a detached or out-of-bounds buffer");
-        }
-        if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
-            return context.throwTypeError(args.length == 0 || args[0].isUndefined()
-                    ? "undefined is not a function"
-                    : JSTypeConversions.toString(context, args[0]).value() + " is not a function");
-        }
-        JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        int length = typedArray.getLength();
-        for (int k = length - 1; k >= 0; k--) {
-            JSValue kValue = safeGetElement(typedArray, k);
-            JSValue testResult = callbackFn.call(context, callbackThisArg,
-                    new JSValue[]{kValue, JSNumber.of(k), typedArray});
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (JSTypeConversions.toBoolean(testResult) == JSBoolean.TRUE) {
-                return kValue;
-            }
-        }
-        return JSUndefined.INSTANCE;
+        return findViaPredicate(context, thisArg, args, "TypedArray.prototype.findLast", true, false);
     }
 
     public static JSValue findLastIndex(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.findLastIndex");
+        return findViaPredicate(context, thisArg, args, "TypedArray.prototype.findLastIndex", true, true);
+    }
+
+    private static JSValue findViaPredicate(JSContext context, JSValue thisArg, JSValue[] args, String methodName,
+            boolean reverse, boolean returnIndex) {
+        JSTypedArray typedArray = toTypedArrayForCallback(context, thisArg, args, methodName);
         if (typedArray == null) {
             return context.getPendingException();
         }
-        if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError(
-                    "Cannot perform TypedArray.prototype.findLastIndex on a typed array backed by a detached or out-of-bounds buffer");
-        }
-        if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
-            return context.throwTypeError(args.length == 0 || args[0].isUndefined()
-                    ? "undefined is not a function"
-                    : JSTypeConversions.toString(context, args[0]).value() + " is not a function");
-        }
+        JSFunction callbackFn = (JSFunction) args[0];
         JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
         int length = typedArray.getLength();
-        for (int k = length - 1; k >= 0; k--) {
+        int step = reverse ? -1 : 1;
+        int end = reverse ? -1 : length;
+        for (int k = reverse ? length - 1 : 0; k != end; k += step) {
             JSValue kValue = safeGetElement(typedArray, k);
             JSValue testResult = callbackFn.call(context, callbackThisArg,
                     new JSValue[]{kValue, JSNumber.of(k), typedArray});
@@ -521,26 +408,18 @@ public final class TypedArrayPrototype {
                 return context.getPendingException();
             }
             if (JSTypeConversions.toBoolean(testResult) == JSBoolean.TRUE) {
-                return JSNumber.of(k);
+                return returnIndex ? JSNumber.of(k) : kValue;
             }
         }
-        return JSNumber.of(-1);
+        return returnIndex ? JSNumber.of(-1) : JSUndefined.INSTANCE;
     }
 
     public static JSValue forEach(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.forEach");
+        JSTypedArray typedArray = toTypedArrayForCallback(context, thisArg, args, "TypedArray.prototype.forEach");
         if (typedArray == null) {
             return context.getPendingException();
         }
-        if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError(
-                    "Cannot perform TypedArray.prototype.forEach on a typed array backed by a detached or out-of-bounds buffer");
-        }
-        if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
-            return context.throwTypeError(args.length == 0 || args[0].isUndefined()
-                    ? "undefined is not a function"
-                    : JSTypeConversions.toString(context, args[0]).value() + " is not a function");
-        }
+        JSFunction callbackFn = (JSFunction) args[0];
         JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
         int length = typedArray.getLength();
         for (int k = 0; k < length; k++) {
@@ -787,19 +666,11 @@ public final class TypedArrayPrototype {
     }
 
     public static JSValue map(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.map");
+        JSTypedArray typedArray = toTypedArrayForCallback(context, thisArg, args, "TypedArray.prototype.map");
         if (typedArray == null) {
             return context.getPendingException();
         }
-        if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError(
-                    "Cannot perform TypedArray.prototype.map on a typed array backed by a detached or out-of-bounds buffer");
-        }
-        if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
-            return context.throwTypeError(args.length == 0 || args[0].isUndefined()
-                    ? "undefined is not a function"
-                    : JSTypeConversions.toString(context, args[0]).value() + " is not a function");
-        }
+        JSFunction callbackFn = (JSFunction) args[0];
         JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
         int length = typedArray.getLength();
 
@@ -826,21 +697,20 @@ public final class TypedArrayPrototype {
     }
 
     public static JSValue reduce(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.reduce");
+        return reduce(context, thisArg, args, "TypedArray.prototype.reduce", false);
+    }
+
+    private static JSValue reduce(JSContext context, JSValue thisArg, JSValue[] args, String methodName,
+            boolean reverse) {
+        JSTypedArray typedArray = toTypedArrayForCallback(context, thisArg, args, methodName);
         if (typedArray == null) {
             return context.getPendingException();
         }
-        if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError(
-                    "Cannot perform TypedArray.prototype.reduce on a typed array backed by a detached or out-of-bounds buffer");
-        }
-        if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
-            return context.throwTypeError(args.length == 0 || args[0].isUndefined()
-                    ? "undefined is not a function"
-                    : JSTypeConversions.toString(context, args[0]).value() + " is not a function");
-        }
+        JSFunction callbackFn = (JSFunction) args[0];
         int length = typedArray.getLength();
-        int k = 0;
+        int step = reverse ? -1 : 1;
+        int end = reverse ? -1 : length;
+        int k = reverse ? length - 1 : 0;
         JSValue accumulator;
         if (args.length > 1) {
             accumulator = args[1];
@@ -848,10 +718,10 @@ public final class TypedArrayPrototype {
             if (length == 0) {
                 return context.throwTypeError("Reduce of empty array with no initial value");
             }
-            accumulator = safeGetElement(typedArray, 0);
-            k = 1;
+            accumulator = safeGetElement(typedArray, k);
+            k += step;
         }
-        for (; k < length; k++) {
+        for (; k != end; k += step) {
             JSValue kValue = safeGetElement(typedArray, k);
             accumulator = callbackFn.call(context, JSUndefined.INSTANCE,
                     new JSValue[]{accumulator, kValue, JSNumber.of(k), typedArray});
@@ -863,40 +733,7 @@ public final class TypedArrayPrototype {
     }
 
     public static JSValue reduceRight(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.reduceRight");
-        if (typedArray == null) {
-            return context.getPendingException();
-        }
-        if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError(
-                    "Cannot perform TypedArray.prototype.reduceRight on a typed array backed by a detached or out-of-bounds buffer");
-        }
-        if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
-            return context.throwTypeError(args.length == 0 || args[0].isUndefined()
-                    ? "undefined is not a function"
-                    : JSTypeConversions.toString(context, args[0]).value() + " is not a function");
-        }
-        int length = typedArray.getLength();
-        int k = length - 1;
-        JSValue accumulator;
-        if (args.length > 1) {
-            accumulator = args[1];
-        } else {
-            if (length == 0) {
-                return context.throwTypeError("Reduce of empty array with no initial value");
-            }
-            accumulator = safeGetElement(typedArray, k);
-            k--;
-        }
-        for (; k >= 0; k--) {
-            JSValue kValue = safeGetElement(typedArray, k);
-            accumulator = callbackFn.call(context, JSUndefined.INSTANCE,
-                    new JSValue[]{accumulator, kValue, JSNumber.of(k), typedArray});
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-        }
-        return accumulator;
+        return reduce(context, thisArg, args, "TypedArray.prototype.reduceRight", true);
     }
 
     public static JSValue reverse(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1220,33 +1057,7 @@ public final class TypedArrayPrototype {
     }
 
     public static JSValue some(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.some");
-        if (typedArray == null) {
-            return context.getPendingException();
-        }
-        if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError(
-                    "Cannot perform TypedArray.prototype.some on a typed array backed by a detached or out-of-bounds buffer");
-        }
-        if (args.length == 0 || !(args[0] instanceof JSFunction callbackFn)) {
-            return context.throwTypeError(args.length == 0 || args[0].isUndefined()
-                    ? "undefined is not a function"
-                    : JSTypeConversions.toString(context, args[0]).value() + " is not a function");
-        }
-        JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        int length = typedArray.getLength();
-        for (int k = 0; k < length; k++) {
-            JSValue kValue = safeGetElement(typedArray, k);
-            JSValue testResult = callbackFn.call(context, callbackThisArg,
-                    new JSValue[]{kValue, JSNumber.of(k), typedArray});
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (JSTypeConversions.toBoolean(testResult) == JSBoolean.TRUE) {
-                return JSBoolean.TRUE;
-            }
-        }
-        return JSBoolean.FALSE;
+        return testPredicate(context, thisArg, args, false);
     }
 
     public static JSValue sort(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1429,6 +1240,29 @@ public final class TypedArrayPrototype {
         return result;
     }
 
+    private static JSValue testPredicate(JSContext context, JSValue thisArg, JSValue[] args, boolean every) {
+        JSTypedArray typedArray = toTypedArrayForCallback(context, thisArg, args,
+                every ? "TypedArray.prototype.every" : "TypedArray.prototype.some");
+        if (typedArray == null) {
+            return context.getPendingException();
+        }
+        JSFunction callbackFn = (JSFunction) args[0];
+        JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        int length = typedArray.getLength();
+        for (int k = 0; k < length; k++) {
+            JSValue kValue = safeGetElement(typedArray, k);
+            JSValue testResult = callbackFn.call(context, callbackThisArg,
+                    new JSValue[]{kValue, JSNumber.of(k), typedArray});
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (JSTypeConversions.toBoolean(testResult).isBooleanTrue() != every) {
+                return JSBoolean.valueOf(!every);
+            }
+        }
+        return JSBoolean.valueOf(every);
+    }
+
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.toLocaleString");
         if (typedArray == null) {
@@ -1606,6 +1440,30 @@ public final class TypedArrayPrototype {
     private static JSTypedArray toTypedArray(JSContext context, JSValue thisArg, String methodName) {
         if (!(thisArg instanceof JSTypedArray typedArray)) {
             context.throwTypeError(methodName + " called on non-TypedArray");
+            return null;
+        }
+        return typedArray;
+    }
+
+    /**
+     * Validate the receiver and buffer before checking the callback, as required by the typed-array methods. Callers
+     * capture the iteration length after this validation and retain it across callback side effects.
+     */
+    private static JSTypedArray toTypedArrayForCallback(JSContext context, JSValue thisArg, JSValue[] args,
+            String methodName) {
+        JSTypedArray typedArray = toTypedArray(context, thisArg, methodName);
+        if (typedArray == null) {
+            return null;
+        }
+        if (typedArray.isOutOfBounds()) {
+            context.throwTypeError(
+                    "Cannot perform " + methodName + " on a typed array backed by a detached or out-of-bounds buffer");
+            return null;
+        }
+        if (args.length == 0 || !(args[0] instanceof JSFunction)) {
+            context.throwTypeError(args.length == 0 || args[0].isUndefined()
+                    ? "undefined is not a function"
+                    : JSTypeConversions.toString(context, args[0]).value() + " is not a function");
             return null;
         }
         return typedArray;

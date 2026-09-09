@@ -416,6 +416,11 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      *             if newByteLength is negative
      */
     public JSArrayBuffer transfer(JSContext context, int newByteLength) {
+        return transferContents(context, newByteLength, true, false);
+    }
+
+    private JSArrayBuffer transferContents(JSContext context, int newByteLength, boolean preserveResizability,
+            boolean immutableResult) {
         if (detached) {
             throw new JSTypeErrorException("Cannot transfer a detached ArrayBuffer");
         }
@@ -429,7 +434,8 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
         }
 
         // Create new buffer with proper prototype, preserving resizability
-        JSArrayBuffer newBuffer = context.createJSArrayBuffer(targetLength, resizable ? maxByteLength : -1);
+        JSArrayBuffer newBuffer = context.createJSArrayBuffer(targetLength,
+                preserveResizability && resizable ? maxByteLength : -1);
 
         // Copy data up to the minimum of current and target length
         int copyLength = Math.min(currentLength, targetLength);
@@ -443,7 +449,9 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
             newBuffer.getBuffer().position(0);
         }
 
-        // Detach this buffer
+        newBuffer.immutable = immutableResult;
+
+        // Detach only after allocation and copying succeed.
         detach();
 
         return newBuffer;
@@ -461,37 +469,7 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      *             if newByteLength is negative
      */
     public JSArrayBuffer transferToFixedLength(JSContext context, int newByteLength) {
-        if (detached) {
-            throw new JSTypeErrorException("Cannot transfer a detached ArrayBuffer");
-        }
-
-        int currentLength = getByteLength();
-        int targetLength = (newByteLength == -1) ? currentLength : newByteLength;
-
-        // An invalid length is a range condition, not a receiver-state one.
-        if (targetLength < 0) {
-            throw new JSRangeErrorException("New byte length must be non-negative");
-        }
-
-        // Create new fixed-length buffer with proper prototype
-        JSArrayBuffer newBuffer = context.createJSArrayBuffer(targetLength);
-
-        // Copy data up to the minimum of current and target length
-        int copyLength = Math.min(currentLength, targetLength);
-        if (copyLength > 0) {
-            byte[] bytes = new byte[copyLength];
-            int oldPosition = buffer.position();
-            buffer.position(0);
-            buffer.get(bytes, 0, copyLength);
-            buffer.position(oldPosition);
-            newBuffer.getBuffer().put(bytes);
-            newBuffer.getBuffer().position(0);
-        }
-
-        // Detach this buffer
-        detach();
-
-        return newBuffer;
+        return transferContents(context, newByteLength, false, false);
     }
 
     /**
@@ -505,33 +483,7 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      *             if the buffer is already detached
      */
     public JSArrayBuffer transferToImmutable(JSContext context) {
-        if (detached) {
-            throw new JSTypeErrorException("Cannot transfer a detached ArrayBuffer");
-        }
-
-        int currentLength = getByteLength();
-
-        // Create new fixed-length buffer with proper prototype
-        JSArrayBuffer newBuffer = context.createJSArrayBuffer(currentLength);
-
-        // Copy data
-        if (currentLength > 0) {
-            byte[] bytes = new byte[currentLength];
-            int oldPosition = buffer.position();
-            buffer.position(0);
-            buffer.get(bytes, 0, currentLength);
-            buffer.position(oldPosition);
-            newBuffer.getBuffer().put(bytes);
-            newBuffer.getBuffer().position(0);
-        }
-
-        // Mark as immutable
-        newBuffer.immutable = true;
-
-        // Detach this buffer
-        detach();
-
-        return newBuffer;
+        return transferContents(context, -1, false, true);
     }
 
     /**
