@@ -99,7 +99,7 @@ public final class RegExpEngine {
             // In unicode mode, the engine works with code point indices internally.
             // Convert startIndex from UTF-16 units to code point index.
             int codePointStart = input.codePointCount(0, startIndex);
-            int codePointEnd = bytecode.isSticky() ? codePointStart + 1 : executionContext.codePoints.length + 1;
+            int codePointEnd = bytecode.isSticky() ? codePointStart + 1 : executionContext.inputLength + 1;
             for (int pos = codePointStart; pos < codePointEnd; pos++) {
                 executionContext.reset(pos);
                 if (execute(executionContext)) {
@@ -623,6 +623,7 @@ public final class RegExpEngine {
         final String[] groupNames;
         final boolean ignoreCase;
         final String input;
+        final int inputLength;
         private int lastStateOffset;
         final boolean multiline;
         int pos; // Current position in code points
@@ -652,7 +653,11 @@ public final class RegExpEngine {
             this.registerCount = Math.max(0, Math.min(registerCount, MAX_REGISTERS));
             this.input = input;
             this.bytecode = bytecode;
-            this.codePoints = unicode ? input.codePoints().toArray() : input.chars().toArray();
+            // Non-Unicode matching already uses UTF-16 offsets, so read the original string
+            // as QuickJS does. Copying it for every exec and lookaround makes repeated sticky
+            // matches (including String.prototype.split) allocate quadratically in input size.
+            this.codePoints = unicode ? input.codePoints().toArray() : null;
+            this.inputLength = unicode ? codePoints.length : input.length();
             this.captureCount = captureCount;
             this.groupNames = groupNames;
             this.ignoreCase = ignoreCase;
@@ -730,13 +735,13 @@ public final class RegExpEngine {
                     if (unicode) {
                         // Convert code point indices to UTF-16 indices in /u mode.
                         charStart = 0;
-                        for (int j = 0; j < start && j < codePoints.length; j++) {
-                            charStart += Character.charCount(codePoints[j]);
+                        for (int j = 0; j < start && j < inputLength; j++) {
+                            charStart += Character.charCount(inputAt(j));
                         }
 
                         charEnd = charStart;
-                        for (int j = start; j < end && j < codePoints.length; j++) {
-                            charEnd += Character.charCount(codePoints[j]);
+                        for (int j = start; j < end && j < inputLength; j++) {
+                            charEnd += Character.charCount(inputAt(j));
                         }
                     } else {
                         // In non-/u mode, positions are already UTF-16 code unit indices.
@@ -788,6 +793,10 @@ public final class RegExpEngine {
             return backtrackTop > 0;
         }
 
+        private int inputAt(int index) {
+            return unicode ? codePoints[index] : input.charAt(index);
+        }
+
         /**
          * Test a code point against sorted, disjoint inclusive ranges encoded in bytecode.
          */
@@ -824,7 +833,7 @@ public final class RegExpEngine {
         }
 
         boolean matchAny() {
-            if (pos >= codePoints.length) {
+            if (pos >= inputLength) {
                 return false;
             }
             pos++;
@@ -844,14 +853,14 @@ public final class RegExpEngine {
 
             // Check if we have enough characters left to match
             int refLen = refEnd - refStart;
-            if (pos + refLen > codePoints.length) {
+            if (pos + refLen > inputLength) {
                 return false;
             }
 
             // Match the captured text
             for (int i = 0; i < refLen; i++) {
-                int refCh = codePoints[refStart + i];
-                int currCh = codePoints[pos + i];
+                int refCh = inputAt(refStart + i);
+                int currCh = inputAt(pos + i);
 
                 if (ignoreCase) {
                     if (canonicalize(refCh) != canonicalize(currCh)) {
@@ -886,8 +895,8 @@ public final class RegExpEngine {
             }
 
             for (int referenceIndex = referenceEnd - 1; referenceIndex >= referenceStart; referenceIndex--) {
-                int referenceChar = codePoints[referenceIndex];
-                int currentChar = codePoints[pos - 1];
+                int referenceChar = inputAt(referenceIndex);
+                int currentChar = inputAt(pos - 1);
                 if (ignoreCase) {
                     if (canonicalize(referenceChar) != canonicalize(currentChar)) {
                         return false;
@@ -901,21 +910,21 @@ public final class RegExpEngine {
         }
 
         boolean matchChar(int ch) {
-            if (pos >= codePoints.length) {
+            if (pos >= inputLength) {
                 return false;
             }
             if (!unicode && ch > 0xFFFF) {
-                if (pos + 1 >= codePoints.length) {
+                if (pos + 1 >= inputLength) {
                     return false;
                 }
                 char[] surrogatePair = Character.toChars(ch);
-                if (codePoints[pos] == surrogatePair[0] && codePoints[pos + 1] == surrogatePair[1]) {
+                if (inputAt(pos) == surrogatePair[0] && inputAt(pos + 1) == surrogatePair[1]) {
                     pos += 2;
                     return true;
                 }
                 return false;
             }
-            if (codePoints[pos] == ch) {
+            if (inputAt(pos) == ch) {
                 pos++;
                 return true;
             }
@@ -923,21 +932,21 @@ public final class RegExpEngine {
         }
 
         boolean matchCharIgnoreCase(int ch) {
-            if (pos >= codePoints.length) {
+            if (pos >= inputLength) {
                 return false;
             }
             if (!unicode && ch > 0xFFFF) {
-                if (pos + 1 >= codePoints.length) {
+                if (pos + 1 >= inputLength) {
                     return false;
                 }
                 char[] surrogatePair = Character.toChars(ch);
-                if (codePoints[pos] == surrogatePair[0] && codePoints[pos + 1] == surrogatePair[1]) {
+                if (inputAt(pos) == surrogatePair[0] && inputAt(pos + 1) == surrogatePair[1]) {
                     pos += 2;
                     return true;
                 }
                 return false;
             }
-            int current = codePoints[pos];
+            int current = inputAt(pos);
             if (current == ch || canonicalize(current) == canonicalize(ch)) {
                 pos++;
                 return true;
@@ -946,10 +955,10 @@ public final class RegExpEngine {
         }
 
         boolean matchDot() {
-            if (pos >= codePoints.length) {
+            if (pos >= inputLength) {
                 return false;
             }
-            int ch = codePoints[pos];
+            int ch = inputAt(pos);
             // Dot matches everything except line terminators
             if (ch == '\n' || ch == '\r' || ch == 0x2028 || ch == 0x2029) {
                 return false;
@@ -959,11 +968,11 @@ public final class RegExpEngine {
         }
 
         boolean matchLineEnd(boolean multilineMode) {
-            if (pos >= codePoints.length) {
+            if (pos >= inputLength) {
                 return true;
             }
             if (multilineMode) {
-                int ch = codePoints[pos];
+                int ch = inputAt(pos);
                 return ch == '\n' || ch == '\r' || ch == 0x2028 || ch == 0x2029;
             }
             return false;
@@ -973,18 +982,18 @@ public final class RegExpEngine {
             if (pos == 0) {
                 return true;
             }
-            if (multilineMode && pos < codePoints.length) {
-                int prevCh = codePoints[pos - 1];
+            if (multilineMode && pos < inputLength) {
+                int prevCh = inputAt(pos - 1);
                 return prevCh == '\n' || prevCh == '\r' || prevCh == 0x2028 || prevCh == 0x2029;
             }
             return false;
         }
 
         boolean matchNotRange(byte[] bc, int offset, int len, boolean ignoreCase) {
-            if (pos >= codePoints.length) {
+            if (pos >= inputLength) {
                 return false;
             }
-            int ch = codePoints[pos];
+            int ch = inputAt(pos);
 
             // Read number of ranges
             int numRanges = readU32(bc, offset);
@@ -1019,10 +1028,10 @@ public final class RegExpEngine {
         }
 
         boolean matchNotSpace() {
-            if (pos >= codePoints.length) {
+            if (pos >= inputLength) {
                 return false;
             }
-            int ch = codePoints[pos];
+            int ch = inputAt(pos);
             // JavaScript whitespace: space, tab, line terminators, Unicode Zs category
             if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == 0x0B || ch == 0x00A0
                     || ch == 0xFEFF || ch == 0x2028 || ch == 0x2029
@@ -1038,10 +1047,10 @@ public final class RegExpEngine {
         }
 
         boolean matchRange(byte[] bc, int offset, int len, boolean ignoreCase) {
-            if (pos >= codePoints.length) {
+            if (pos >= inputLength) {
                 return false;
             }
-            int ch = codePoints[pos];
+            int ch = inputAt(pos);
 
             // Read number of ranges
             int numRanges = readU32(bc, offset);
@@ -1074,10 +1083,10 @@ public final class RegExpEngine {
         }
 
         boolean matchSpace() {
-            if (pos >= codePoints.length) {
+            if (pos >= inputLength) {
                 return false;
             }
-            int ch = codePoints[pos];
+            int ch = inputAt(pos);
             // JavaScript whitespace: space, tab, line terminators, Unicode Zs category
             if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == 0x0B || ch == 0x00A0
                     || ch == 0xFEFF || ch == 0x2028 || ch == 0x2029
@@ -1095,16 +1104,16 @@ public final class RegExpEngine {
             if (pos == 0) {
                 prevIsWord = false;
             } else {
-                int prevCh = codePoints[pos - 1];
+                int prevCh = inputAt(pos - 1);
                 prevIsWord = isWordChar(prevCh, ignoreCase);
             }
 
             // Check character at current position
             boolean currIsWord;
-            if (pos >= codePoints.length) {
+            if (pos >= inputLength) {
                 currIsWord = false;
             } else {
-                int currCh = codePoints[pos];
+                int currCh = inputAt(pos);
                 currIsWord = isWordChar(currCh, ignoreCase);
             }
 
@@ -1271,13 +1280,13 @@ public final class RegExpEngine {
         }
 
         int toCharIndex(int codePointIndex) {
-            int bounded = Math.max(0, Math.min(codePointIndex, codePoints.length));
+            int bounded = Math.max(0, Math.min(codePointIndex, inputLength));
             if (!unicode) {
                 return bounded;
             }
             int charIndex = 0;
             for (int i = 0; i < bounded; i++) {
-                charIndex += Character.charCount(codePoints[i]);
+                charIndex += Character.charCount(inputAt(i));
             }
             return charIndex;
         }
