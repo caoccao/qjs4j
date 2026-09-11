@@ -46,7 +46,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     # Successful builds take 4–6 minutes. Bound stalls so a failed runner cannot
     # hold the main-branch concurrency group for the default six-hour timeout.
-    timeout-minutes: 60
+    timeout-minutes: 20
 
     steps:
     # Configure Git before checkout so Windows preserves the LF endings required by Spotless.
