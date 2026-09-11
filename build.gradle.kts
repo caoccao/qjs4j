@@ -242,17 +242,8 @@ tasks.register<Test>("performanceTest") {
     }
 }
 
-// The performance-tagged cases that assert an outcome rather than measure one.
-//
-// `performanceTest` is two different things under one tag: an end-to-end Octane v7 regression and
-// three Temporal hot-path cases, which assert a result and either pass or fail — and two JMH
-// wrappers, which report a number that only means something on a quiet machine. The first kind
-// belongs on a shared CI runner and the second does not, so a continuous-integration job that
-// wanted the regressions had to pay for a benchmark it could not trust, and consequently neither
-// ran: the Octane case is the regression for issue 7 and nothing gates it.
-//
-// This is the selection such a job runs. It is about eleven seconds; `performanceTest` is ninety,
-// almost all of it JMH.
+// Standalone functional regressions, excluding the JMH benchmarks. CI runs this task in a
+// separate step after build, so test JVM startup cannot overlap coverage report generation.
 tasks.register<Test>("slowRegressionTest") {
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
@@ -260,9 +251,17 @@ tasks.register<Test>("slowRegressionTest") {
         includeTags("performance & !benchmark")
     }
     exclude("**/jmh_generated/**")
+    // Octane retains a large object graph. Keep the slow cases in one JVM, and avoid coverage
+    // instrumentation whose output is not consumed by the unit-test coverage report or gate.
+    maxParallelForks = 1
+    configure<JacocoTaskExtension> {
+        isEnabled = false
+    }
     group = "verification"
     description = "Runs the slow functional regressions, without the JMH benchmarks"
-    shouldRunAfter(tasks.test)
+    // Also prevent overlap when callers request these tasks in one invocation. Ordering does
+    // not add dependencies: slowRegressionTest alone still runs only the slow regressions.
+    mustRunAfter(tasks.test, tasks.withType<JacocoReport>(), tasks.withType<JacocoCoverageVerification>())
 }
 
 // The zone every conformance run reads dates in.
@@ -529,19 +528,6 @@ tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
 
 tasks.named("check") {
     dependsOn(tasks.named("jacocoTestCoverageVerification"))
-    // And the slow functional regressions, which nothing ran.
-    //
-    // Registering the task was only half of it: `test` excludes the `performance` tag, `check` did
-    // not name this one, and no job invoked it — so the end-to-end regression for issue 7 and the
-    // three Temporal hot-path assertions were absent from every gate while every gate stayed green.
-    // A task nothing depends on is a task that can also break without anything noticing.
-    //
-    // Here rather than as a step in the workflow, so `./gradlew build` means the same thing on a
-    // contributor's machine as it does in CI, and so the guarantee does not depend on a file the
-    // build cannot see. The cost is about thirteen seconds per invocation. It buys a gate on the
-    // one bug this repository has an end-to-end regression for; the ninety-second JMH half stays
-    // out, which is what the `benchmark` tag separates.
-    dependsOn(tasks.named("slowRegressionTest"))
 }
 
 tasks.register("sourceJar") {
@@ -602,12 +588,9 @@ tasks {
         // busy suite, reporting the same RangeError for a quite different reason. A larger stack
         // makes the engine's limit the one being observed.
         jvmArgs("-Xss8m")
-        // Every Test task but the performance one. That task sets its own single fork and says why;
-        // this block is configured second, so an unconditional assignment here silently replaced it
-        // with a machine-dependent number — twelve executors on the reviewed machine, benchmarks
-        // overlapping each other, and a result that varied with the host's CPU count. Named rather
-        // than ordered so the two cannot be put back the wrong way round.
-        if (name != "performanceTest") {
+        // These two tasks own their single-fork settings; do not overwrite them with the
+        // CPU-based unit-test parallelism when this shared configuration runs later.
+        if (name != "performanceTest" && name != "slowRegressionTest") {
             val cpuCount = Runtime.getRuntime().availableProcessors()
             maxParallelForks = maxOf(
                 1,

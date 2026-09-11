@@ -44,9 +44,13 @@ Always run `./gradlew spotlessApply` after making changes, before final validati
 
 `performance` covers two different kinds of case. `slowRegressionTest` is the correctness half —
 the end-to-end Octane v7 regression for issue 7 and the Temporal hot-path assertions, which pass or
-fail and are worth running anywhere; `check` depends on it, so `./gradlew build` runs it. The other
-half is the JMH benchmarks, tagged `benchmark`, which report a number that only means something on a
-quiet machine: `performanceTest` runs both and takes about ninety seconds, almost all of it JMH.
+fail and are worth running anywhere. It is a standalone task: `check` and `build` do not run it.
+CI invokes it in a separate step after `build`, preventing overlap with coverage report generation.
+When requested in the same Gradle invocation, it must run after the unit tests and coverage tasks.
+It uses one test JVM without JaCoCo instrumentation to limit the memory used by the Octane workload.
+The other half is the JMH benchmarks, tagged `benchmark`, which report a number that only means
+something on a quiet machine: `performanceTest` runs both and takes about ninety seconds, almost
+all of it JMH.
 
 Every `test262*` task pins the two things a conformance count depends on, so the commands above
 mean the same thing on every machine:

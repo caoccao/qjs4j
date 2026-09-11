@@ -76,6 +76,9 @@ jobs:
     - name: Build with Gradle
       run: gradle build -PtestJavaVersion=${{ matrix.java }} --info --console=plain
 
+    - name: Run slow regression tests
+      run: gradle slowRegressionTest -PtestJavaVersion=${{ matrix.java }} --info --console=plain
+
     - name: Upload build diagnostics
       if: failure() || cancelled()
       uses: actions/upload-artifact@v7
