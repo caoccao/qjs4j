@@ -345,53 +345,7 @@ public final class ArrayPrototype {
      * Array.prototype.every(callbackFn[, thisArg]) Tests whether all elements pass the test.
      */
     public static JSValue every(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.every called on null or undefined");
-        }
-        JSObject obj = toObjectChecked(context, thisArg);
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        // Step 2: Get length BEFORE checking callback (step 3) per ES2024 spec
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
-            return context.throwTypeError("Callback must be a function");
-        }
-
-        JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-
-        for (long i = 0; i < length; i++) {
-            // Step 7b: Let kPresent be ? HasProperty(O, key)
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            if (!obj.has(key)) {
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                continue;
-            }
-            // Step 7c.i: Let kValue be ? Get(O, key)
-            // Use context-aware get so getters are properly invoked
-            JSValue element = obj.get(key);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
-            JSValue result = callback.call(context, callbackThis, callbackArgs);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-
-            if (JSTypeConversions.toBoolean(result) == JSBoolean.FALSE) {
-                return JSBoolean.FALSE;
-            }
-        }
-
-        return JSBoolean.TRUE;
+        return testPredicate(context, thisArg, args, true);
     }
 
     /**
@@ -528,86 +482,14 @@ public final class ArrayPrototype {
      * Array.prototype.find(callbackFn[, thisArg]) Returns the first element that satisfies the test.
      */
     public static JSValue find(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.find called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
-            return context.throwTypeError("Callback must be a function");
-        }
-
-        JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-
-        for (long i = 0; i < length; i++) {
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            JSValue element = obj.get(key);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
-            JSValue result = callback.call(context, callbackThis, callbackArgs);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-
-            if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
-                return element;
-            }
-        }
-
-        return JSUndefined.INSTANCE;
+        return findMatchingElement(context, thisArg, args, "find", false, false);
     }
 
     /**
      * Array.prototype.findIndex(callbackFn[, thisArg]) Returns the index of the first element that satisfies the test.
      */
     public static JSValue findIndex(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.findIndex called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
-            return context.throwTypeError("Callback must be a function");
-        }
-
-        JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-
-        for (long i = 0; i < length; i++) {
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            JSValue element = obj.get(key);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
-            JSValue result = callback.call(context, callbackThis, callbackArgs);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-
-            if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
-                return JSNumber.of(i);
-            }
-        }
-
-        return JSNumber.of(-1);
+        return findMatchingElement(context, thisArg, args, "findIndex", false, true);
     }
 
     /**
@@ -615,44 +497,7 @@ public final class ArrayPrototype {
      * (iterates backwards).
      */
     public static JSValue findLast(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.findLast called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
-            return context.throwTypeError("Callback must be a function");
-        }
-
-        JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-
-        // Iterate backwards
-        for (long i = length - 1; i >= 0; i--) {
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            JSValue element = obj.get(key);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
-            JSValue result = callback.call(context, callbackThis, callbackArgs);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-
-            if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
-                return element;
-            }
-        }
-
-        return JSUndefined.INSTANCE;
+        return findMatchingElement(context, thisArg, args, "findLast", true, false);
     }
 
     /**
@@ -660,44 +505,43 @@ public final class ArrayPrototype {
      * satisfies the test (iterates backwards).
      */
     public static JSValue findLastIndex(JSContext context, JSValue thisArg, JSValue[] args) {
+        return findMatchingElement(context, thisArg, args, "findLastIndex", true, true);
+    }
+
+    private static JSValue findMatchingElement(JSContext context, JSValue thisArg, JSValue[] args, String methodName,
+            boolean fromEnd, boolean returnIndex) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.findLastIndex called on null or undefined");
+            return context.throwTypeError("Array.prototype." + methodName + " called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
         if (obj == null) {
             return context.getPendingException();
         }
-
         long length = lengthOfArrayLike(context, obj);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
             return context.throwTypeError("Callback must be a function");
         }
-
         JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-
-        // Iterate backwards
-        for (long i = length - 1; i >= 0; i--) {
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            JSValue element = obj.get(key);
+        long end = fromEnd ? -1 : length;
+        long step = fromEnd ? -1 : 1;
+        for (long i = fromEnd ? length - 1 : 0; i != end; i += step) {
+            // Find visits holes with Get, without the HasProperty used by every/some/reduce.
+            JSValue element = obj.get(PropertyKey.fromString(Long.toString(i)));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
-            JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
-            JSValue result = callback.call(context, callbackThis, callbackArgs);
+            JSValue result = callback.call(context, callbackThis, new JSValue[]{element, JSNumber.of(i), obj});
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
-
             if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
-                return JSNumber.of(i);
+                return returnIndex ? JSNumber.of(i) : element;
             }
         }
-
-        return JSNumber.of(-1);
+        return returnIndex ? JSNumber.of(-1) : JSUndefined.INSTANCE;
     }
 
     /**
@@ -1378,75 +1222,57 @@ public final class ArrayPrototype {
      * element.
      */
     public static JSValue reduce(JSContext context, JSValue thisArg, JSValue[] args) {
+        return reduceElements(context, thisArg, args, false);
+    }
+
+    private static JSValue reduceElements(JSContext context, JSValue thisArg, JSValue[] args, boolean fromEnd) {
+        String methodName = fromEnd ? "reduceRight" : "reduce";
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.reduce called on null or undefined");
+            return context.throwTypeError("Array.prototype." + methodName + " called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
         if (obj == null) {
             return context.getPendingException();
         }
-
         long length = lengthOfArrayLike(context, obj);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-
         if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
             return context.throwTypeError("Callback must be a function");
         }
-
-        if (length == 0 && args.length < 2) {
-            return context.throwTypeError("Reduce of empty array with no initial value");
-        }
-
-        long startIndex = 0;
-        JSValue accumulator = JSUndefined.INSTANCE;
-
-        if (args.length >= 2) {
-            accumulator = args[1];
-        } else {
-            // Find first present element per ES2024 spec
-            boolean found = false;
-            for (long k = 0; k < length; k++) {
-                PropertyKey key = PropertyKey.fromString(Long.toString(k));
-                boolean kPresent = obj.has(key);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                if (kPresent) {
-                    accumulator = obj.get(key);
-                    if (context.hasPendingException()) {
-                        return context.getPendingException();
-                    }
-                    startIndex = k + 1;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                return context.throwTypeError("Reduce of empty array with no initial value");
-            }
-        }
-
-        for (long i = startIndex; i < length; i++) {
+        // An explicit undefined initial value is different from omitting the argument.
+        boolean hasAccumulator = args.length >= 2;
+        JSValue accumulator = hasAccumulator ? args[1] : JSUndefined.INSTANCE;
+        long end = fromEnd ? -1 : length;
+        long step = fromEnd ? -1 : 1;
+        for (long i = fromEnd ? length - 1 : 0; i != end; i += step) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            if (!obj.has(key)) {
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
+            boolean present = obj.has(key);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (!present) {
                 continue;
             }
             JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
-            JSValue[] callbackArgs = {accumulator, element, JSNumber.of(i), obj};
-            accumulator = callback.call(context, JSUndefined.INSTANCE, callbackArgs);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
+            if (!hasAccumulator) {
+                accumulator = element;
+                hasAccumulator = true;
+            } else {
+                accumulator = callback.call(context, JSUndefined.INSTANCE,
+                        new JSValue[]{accumulator, element, JSNumber.of(i), obj});
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
             }
         }
-
+        if (!hasAccumulator) {
+            return context.throwTypeError("Reduce of empty array with no initial value");
+        }
         return accumulator;
     }
 
@@ -1454,76 +1280,7 @@ public final class ArrayPrototype {
      * Array.prototype.reduceRight(callbackFn[, initialValue]) Reduces array from right to left.
      */
     public static JSValue reduceRight(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.reduceRight called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
-            return context.throwTypeError("Callback must be a function");
-        }
-
-        if (length == 0 && args.length < 2) {
-            return context.throwTypeError("Reduce of empty array with no initial value");
-        }
-
-        long startIndex = length - 1;
-        JSValue accumulator = JSUndefined.INSTANCE;
-
-        if (args.length >= 2) {
-            accumulator = args[1];
-        } else {
-            // Find last present element per ES2024 spec
-            boolean found = false;
-            for (long k = length - 1; k >= 0; k--) {
-                PropertyKey key = PropertyKey.fromString(Long.toString(k));
-                boolean kPresent = obj.has(key);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                if (kPresent) {
-                    accumulator = obj.get(key);
-                    if (context.hasPendingException()) {
-                        return context.getPendingException();
-                    }
-                    startIndex = k - 1;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                return context.throwTypeError("Reduce of empty array with no initial value");
-            }
-        }
-
-        for (long i = startIndex; i >= 0; i--) {
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            if (!obj.has(key)) {
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                continue;
-            }
-            JSValue element = obj.get(key);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            JSValue[] callbackArgs = {accumulator, element, JSNumber.of(i), obj};
-            accumulator = callback.call(context, JSUndefined.INSTANCE, callbackArgs);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-        }
-
-        return accumulator;
+        return reduceElements(context, thisArg, args, true);
     }
 
     /**
@@ -1769,49 +1526,7 @@ public final class ArrayPrototype {
      * Array.prototype.some(callbackFn[, thisArg]) Tests whether at least one element passes the test.
      */
     public static JSValue some(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.some called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
-            return context.throwTypeError("Callback must be a function");
-        }
-
-        JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-
-        for (long i = 0; i < length; i++) {
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            if (!obj.has(key)) {
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                continue;
-            }
-            JSValue element = obj.get(key);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
-            JSValue result = callback.call(context, callbackThis, callbackArgs);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-
-            if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
-                return JSBoolean.TRUE;
-            }
-        }
-
-        return JSBoolean.FALSE;
+        return testPredicate(context, thisArg, args, false);
     }
 
     /**
@@ -2067,6 +1782,49 @@ public final class ArrayPrototype {
             return context.getPendingException();
         }
         return deletedObj;
+    }
+
+    private static JSValue testPredicate(JSContext context, JSValue thisArg, JSValue[] args, boolean every) {
+        String methodName = every ? "every" : "some";
+        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
+            return context.throwTypeError("Array.prototype." + methodName + " called on null or undefined");
+        }
+        JSObject obj = toObjectChecked(context, thisArg);
+        if (obj == null) {
+            return context.getPendingException();
+        }
+        // Read length before validating the callback, including when the length is zero.
+        long length = lengthOfArrayLike(context, obj);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        if (args.length == 0 || !(args[0] instanceof JSFunction callback)) {
+            return context.throwTypeError("Callback must be a function");
+        }
+        JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSBoolean stopResult = every ? JSBoolean.FALSE : JSBoolean.TRUE;
+        for (long i = 0; i < length; i++) {
+            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            boolean present = obj.has(key);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (!present) {
+                continue;
+            }
+            JSValue element = obj.get(key);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            JSValue result = callback.call(context, callbackThis, new JSValue[]{element, JSNumber.of(i), obj});
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (JSTypeConversions.toBoolean(result) == stopResult) {
+                return stopResult;
+            }
+        }
+        return JSBoolean.valueOf(every);
     }
 
     /**

@@ -161,6 +161,9 @@ public final class IteratorPrototype {
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
+        if (!(result instanceof JSObject)) {
+            return context.throwTypeError("not an object");
+        }
         return result;
     }
 
@@ -706,43 +709,7 @@ public final class IteratorPrototype {
      * Iterator.prototype.every(predicate) Tests whether all elements satisfy the predicate.
      */
     public static JSValue every(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSObject iteratorObject = requireObject(context, thisArg);
-        if (iteratorObject == null) {
-            return context.getPendingException();
-        }
-        JSFunction predicate = requireFunction(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (predicate == null) {
-            closeIteratorIgnoringResult(context, iteratorObject);
-            return context.getPendingException();
-        }
-        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        long index = 0;
-        while (true) {
-            IteratorStep step = iteratorStep(context, iteratorObject, nextMethod);
-            if (step == null) {
-                return context.getPendingException();
-            }
-            if (step.done()) {
-                return JSBoolean.TRUE;
-            }
-            JSValue result = callSafe(context, predicate, JSUndefined.INSTANCE,
-                    new JSValue[]{step.value(), JSNumber.of(index++)});
-            if (context.hasPendingException()) {
-                closeIteratorIgnoringResult(context, iteratorObject);
-                return context.getPendingException();
-            }
-            if (JSTypeConversions.toBoolean(result) == JSBoolean.FALSE) {
-                JSValue closeResult = closeIterator(context, iteratorObject);
-                if (closeResult != JSUndefined.INSTANCE && context.hasPendingException()) {
-                    return closeResult;
-                }
-                return JSBoolean.FALSE;
-            }
-        }
+        return testPredicate(context, thisArg, args, PredicateOperation.EVERY);
     }
 
     /**
@@ -811,43 +778,7 @@ public final class IteratorPrototype {
      * Iterator.prototype.find(predicate) Returns the first element that satisfies the predicate.
      */
     public static JSValue find(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSObject iteratorObject = requireObject(context, thisArg);
-        if (iteratorObject == null) {
-            return context.getPendingException();
-        }
-        JSFunction predicate = requireFunction(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (predicate == null) {
-            closeIteratorIgnoringResult(context, iteratorObject);
-            return context.getPendingException();
-        }
-        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        long index = 0;
-        while (true) {
-            IteratorStep step = iteratorStep(context, iteratorObject, nextMethod);
-            if (step == null) {
-                return context.getPendingException();
-            }
-            if (step.done()) {
-                return JSUndefined.INSTANCE;
-            }
-            JSValue selected = callSafe(context, predicate, JSUndefined.INSTANCE,
-                    new JSValue[]{step.value(), JSNumber.of(index++)});
-            if (context.hasPendingException()) {
-                closeIteratorIgnoringResult(context, iteratorObject);
-                return context.getPendingException();
-            }
-            if (JSTypeConversions.toBoolean(selected) == JSBoolean.TRUE) {
-                JSValue closeResult = closeIterator(context, iteratorObject);
-                if (closeResult != JSUndefined.INSTANCE && context.hasPendingException()) {
-                    return closeResult;
-                }
-                return step.value();
-            }
-        }
+        return testPredicate(context, thisArg, args, PredicateOperation.FIND);
     }
 
     /**
@@ -1556,43 +1487,7 @@ public final class IteratorPrototype {
      * Iterator.prototype.some(predicate) Tests whether any element satisfies the predicate.
      */
     public static JSValue some(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSObject iteratorObject = requireObject(context, thisArg);
-        if (iteratorObject == null) {
-            return context.getPendingException();
-        }
-        JSFunction predicate = requireFunction(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (predicate == null) {
-            closeIteratorIgnoringResult(context, iteratorObject);
-            return context.getPendingException();
-        }
-        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        long index = 0;
-        while (true) {
-            IteratorStep step = iteratorStep(context, iteratorObject, nextMethod);
-            if (step == null) {
-                return context.getPendingException();
-            }
-            if (step.done()) {
-                return JSBoolean.FALSE;
-            }
-            JSValue result = callSafe(context, predicate, JSUndefined.INSTANCE,
-                    new JSValue[]{step.value(), JSNumber.of(index++)});
-            if (context.hasPendingException()) {
-                closeIteratorIgnoringResult(context, iteratorObject);
-                return context.getPendingException();
-            }
-            if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
-                JSValue closeResult = closeIterator(context, iteratorObject);
-                if (closeResult != JSUndefined.INSTANCE && context.hasPendingException()) {
-                    return closeResult;
-                }
-                return JSBoolean.TRUE;
-            }
-        }
+        return testPredicate(context, thisArg, args, PredicateOperation.SOME);
     }
 
     /**
@@ -1690,6 +1585,50 @@ public final class IteratorPrototype {
 
         JSNativeFunction returnFunction = createHelperReturnFunction(iteratorObject, running, done);
         return createIteratorObject(context, nextFunction, returnFunction, "Iterator Helper");
+    }
+
+    private static JSValue testPredicate(JSContext context, JSValue thisArg, JSValue[] args,
+            PredicateOperation operation) {
+        JSObject iteratorObject = requireObject(context, thisArg);
+        if (iteratorObject == null) {
+            return context.getPendingException();
+        }
+        JSFunction predicate = requireFunction(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        if (predicate == null) {
+            closeIteratorIgnoringResult(context, iteratorObject);
+            return context.getPendingException();
+        }
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        JSBoolean stopResult = operation == PredicateOperation.EVERY ? JSBoolean.FALSE : JSBoolean.TRUE;
+        long index = 0;
+        while (true) {
+            IteratorStep step = iteratorStep(context, iteratorObject, nextMethod);
+            if (step == null) {
+                return context.getPendingException();
+            }
+            if (step.done()) {
+                return operation == PredicateOperation.FIND
+                        ? JSUndefined.INSTANCE
+                        : JSBoolean.valueOf(operation == PredicateOperation.EVERY);
+            }
+            JSValue result = callSafe(context, predicate, JSUndefined.INSTANCE,
+                    new JSValue[]{step.value(), JSNumber.of(index++)});
+            if (context.hasPendingException()) {
+                // A callback error takes precedence over any error from return().
+                closeIteratorIgnoringResult(context, iteratorObject);
+                return context.getPendingException();
+            }
+            if (JSTypeConversions.toBoolean(result) == stopResult) {
+                closeIterator(context, iteratorObject);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                return operation == PredicateOperation.FIND ? step.value() : stopResult;
+            }
+        }
     }
 
     /**
@@ -2281,5 +2220,9 @@ public final class IteratorPrototype {
             super.set(propertyName, value);
         }
 
+    }
+
+    private enum PredicateOperation {
+        EVERY, FIND, SOME
     }
 }
