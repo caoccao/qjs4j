@@ -18,13 +18,16 @@ package com.caoccao.qjs4j.vm;
 
 import com.caoccao.qjs4j.BaseTest;
 import com.caoccao.qjs4j.core.JSObject;
+import com.caoccao.qjs4j.core.JSRuntime;
 import com.caoccao.qjs4j.core.JSValue;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.io.TempDir;
 
-import java.lang.ref.WeakReference;
-import java.util.ArrayList;
-import java.util.List;
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -38,27 +41,42 @@ import static org.assertj.core.api.Assertions.assertThat;
  * dies with the object.
  */
 public class VirtualMachineConstantObjectTest extends BaseTest {
+    @TempDir
+    Path temporaryDirectory;
 
-    private WeakReference<JSValue> evalToWeakReference(String code) {
-        return new WeakReference<>(context.eval(code));
+    private void assertConstantObjectsAreCollected(int count) throws Exception {
+        Path java = Path.of(System.getProperty("java.home"), "bin", isWindows() ? "java.exe" : "java");
+        // Only the probe and engine classes: the child does not load Javet or the coverage agent.
+        String classpath = Path
+                .of(ConstantObjectGcProbe.class.getProtectionDomain().getCodeSource().getLocation().toURI())
+                + File.pathSeparator
+                + Path.of(JSRuntime.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+        Path outputFile = temporaryDirectory.resolve("constant-object-gc.log");
+        Process process = new ProcessBuilder(java.toString(), "-Xms16m", "-Xmx128m", "-XX:+UseSerialGC",
+                "-XX:+ExitOnOutOfMemoryError", "-cp", classpath, ConstantObjectGcProbe.class.getName(),
+                Integer.toString(count)).redirectErrorStream(true).redirectOutput(outputFile.toFile()).start();
+        boolean finished;
+        try {
+            finished = process.waitFor(30, TimeUnit.SECONDS);
+        } finally {
+            // A JUnit timeout interrupts a thread, which cannot stop a blocked System.gc().
+            // Bound collection with a process lifetime and reap the child even on interruption.
+            if (process.isAlive()) {
+                process.destroyForcibly();
+                assertThat(process.waitFor(5, TimeUnit.SECONDS)).as("GC probe must terminate after being killed")
+                        .isTrue();
+            }
+        }
+        String output = Files.readString(outputFile);
+        assertThat(finished).as("GC probe must finish within 30 seconds:%n%s", output).isTrue();
+        assertThat(process.exitValue()).as("GC probe must collect all %d template objects:%n%s", count, output)
+                .isZero();
     }
 
     @Test
     @Timeout(60)
-    public void testConstantObjectIsCollectableAfterItsBytecodeIsDropped() throws InterruptedException {
-        context.eval("function tag(strings) { return strings }");
-        // Built in a separate frame so the only strong reference to the result dies with that
-        // frame; a local in this method would stay live in its stack slot.
-        WeakReference<JSValue> templateReference = evalToWeakReference("tag`hello ${1} world`");
-        // Evaluate a second tagged template so the engine's single-slot hold on the most recently
-        // compiled program is released. With the side table this was still not enough: the set
-        // held every constant object ever seen.
-        context.eval("tag`goodbye ${2} world`");
-        for (int index = 0; index < 20; index++) {
-            context.eval("1");
-        }
-        assertThat(awaitCollection(templateReference))
-                .as("a template object must not outlive the bytecode that owns it").isTrue();
+    public void testConstantObjectIsCollectableAfterItsBytecodeIsDropped() throws Exception {
+        assertConstantObjectsAreCollected(1);
     }
 
     @Test
@@ -86,70 +104,10 @@ public class VirtualMachineConstantObjectTest extends BaseTest {
     }
 
     @Test
-    @Timeout(120)
-    public void testRepeatedConstantObjectEvaluationDoesNotRetainMemory() throws InterruptedException {
-        // Sampled weak references rather than a heap measurement.
-        //
-        // This used to compare `totalMemory() - freeMemory()` before and against a 16 MB budget,
-        // which was measured at ~46 MB with the leak and ~20 KB without — a threshold with three
-        // orders of magnitude of headroom that still failed intermittently on CI, and only there.
-        // The reason is that those two numbers are JVM-wide: they count every live object in the
-        // process, and this suite deliberately leaves worker threads running — the abandoned-worker
-        // cases in Test262RunnerOutcomeTest keep interpreting JavaScript on purpose, so a fork that
-        // schedules them alongside this class measures their allocation as this class's retention.
-        // Which classes share a fork depends on the host's processor count, which is why this failed
-        // on macOS runners and passed everywhere else.
-        //
-        // Sampling the objects themselves states the invariant directly and cannot be moved by
-        // anything else in the process: a constant object must not outlive the bytecode that owns
-        // it, whatever else the JVM is doing. With the side table that leaked, every one of these
-        // stays strongly reachable, so the failure is 200 live references rather than a number over
-        // a budget.
-        context.eval("function tag(strings) { return strings }");
-        List<WeakReference<JSValue>> sampledTemplateObjects = new ArrayList<>();
-        JSValue templateObject = null;
-        for (int index = 0; index < 20000; index++) {
-            templateObject = context.eval("tag`payload" + index + " ${1} ${2} ${3}`");
-            if (index % 100 == 0) {
-                sampledTemplateObjects.add(new WeakReference<>(templateObject));
-            }
-        }
-        // The last one is still held by the local and by the engine's single-slot hold on the most
-        // recently compiled program; drop both, the way the case above does.
-        templateObject = null;
-        for (int index = 0; index < 20; index++) {
-            context.eval("1");
-        }
-        assertThat(templateObject).isNull();
-
-        assertThat(liveCount(sampledTemplateObjects))
-                .as("of %d template objects sampled across 20000 evaluations, none may outlive the"
-                        + " bytecode that owns it", sampledTemplateObjects.size())
-                .isZero();
-    }
-
-    private static boolean awaitCollection(WeakReference<?> reference) throws InterruptedException {
-        for (int attempt = 0; attempt < 20 && reference.get() != null; attempt++) {
-            System.gc();
-            Thread.sleep(25);
-        }
-        return reference.get() == null;
-    }
-
-    /**
-     * How many of these references still point at something, after asking the collector for a while.
-     *
-     * @param references
-     *            the references to watch
-     * @return the number still live
-     */
-    private static long liveCount(List<WeakReference<JSValue>> references) throws InterruptedException {
-        long live = references.size();
-        for (int attempt = 0; attempt < 20 && live > 0; attempt++) {
-            System.gc();
-            Thread.sleep(25);
-            live = references.stream().filter(reference -> reference.get() != null).count();
-        }
-        return live;
+    @Timeout(60)
+    public void testRepeatedConstantObjectEvaluationDoesNotRetainMemory() throws Exception {
+        // Observe all 200 objects directly instead of sampling 200 out of 20,000 evaluations.
+        // The original strong-reference side table would retain every one of them.
+        assertConstantObjectsAreCollected(200);
     }
 }
