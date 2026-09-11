@@ -74,7 +74,8 @@ jobs:
       run: gradle spotlessCheck
 
     - name: Build with Gradle
-      run: gradle build -PtestJavaVersion=${{ matrix.java }} --info --console=plain
+      # Coverage reporting and verification run in the dedicated coverage job.
+      run: gradle build -x jacocoTestReport -x jacocoTestCoverageVerification -PtestJavaVersion=${{ matrix.java }} --info --console=plain
 
     - name: Run slow regression tests
       run: gradle slowRegressionTest -PtestJavaVersion=${{ matrix.java }} --info --console=plain
