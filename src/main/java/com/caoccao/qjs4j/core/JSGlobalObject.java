@@ -5338,9 +5338,11 @@ public final class JSGlobalObject {
             rememberOverlayKey(global, name, savedGlobals, savedDescriptors, absentKeys, touchedOverlayKeys);
             PropertyKey key = PropertyKey.fromString(name);
             JSValue overlayValue = value != null ? value : JSUndefined.INSTANCE;
-            if (global.getContext().hasEvalOverlayBinding(name)) {
-                global.defineProperty(key, overlayValue, PropertyDescriptor.DataState.All);
-            } else {
+            // A name an earlier overlay already holds may be non-writable or an accessor there, so it is redefined.
+            // A non-configurable global (a top-level `var` or function) rejects that redefinition; its value is still
+            // writable, so it falls back to an ordinary assignment instead of silently keeping the stale value.
+            if (!global.getContext().hasEvalOverlayBinding(name)
+                    || !global.defineProperty(key, overlayValue, PropertyDescriptor.DataState.All)) {
                 global.set(key, overlayValue);
             }
         }

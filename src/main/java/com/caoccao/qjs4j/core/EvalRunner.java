@@ -897,7 +897,9 @@ final class EvalRunner {
                 // Script-called eval, direct or indirect: its frames read as V8's
                 // `eval (eval at caller (file:line:col), <anonymous>:line:col)`.
                 func.setEvalOrigin(context.describeEvalOrigin());
-                func.setEvalEnvironment(context.takePendingDirectEvalEnvironment());
+                JSEvalEnvironment evalEnvironment = context.takePendingDirectEvalEnvironment();
+                func.setEvalEnvironment(evalEnvironment);
+                func.setDirectEvalBody(evalEnvironment != null);
             }
         }
 

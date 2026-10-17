@@ -6377,6 +6377,11 @@ public final class OpcodeHandler {
         JSContext context = executionContext.virtualMachine.context;
         if (context.hasEvalOverlayFrames()) {
             StackFrame callerFrame = executionContext.frame != null ? executionContext.frame.getCaller() : null;
+            if (currentBytecodeFunction.isDirectEvalBody()) {
+                // Direct eval code: its own lexical declarations live in this frame, so a closure it creates must
+                // reach them, and the caller's bindings after them, when a nested direct eval runs inside it.
+                return executionContext.frame;
+            }
             if (callerFrame != null) {
                 return callerFrame;
             }

@@ -781,7 +781,7 @@ public final class JSIntlObject {
                 StringBuilder extValue = new StringBuilder();
                 idx++;
                 while (idx < parts.size() && parts.get(idx).length() > 1) {
-                    if (!extValue.isEmpty()) {
+                    if (extValue.length() > 0) {
                         extValue.append("-");
                     }
                     extValue.append(parts.get(idx).toLowerCase(Locale.ROOT));
@@ -1237,7 +1237,7 @@ public final class JSIntlObject {
             result.append(tlang);
         }
         for (Map.Entry<String, List<String>> entry : tfields.entrySet()) {
-            if (!result.isEmpty()) {
+            if (result.length() > 0) {
                 result.append("-");
             }
             result.append(entry.getKey());
@@ -1325,13 +1325,13 @@ public final class JSIntlObject {
         // Reconstruct
         StringBuilder result = new StringBuilder();
         for (String attr : attributes) {
-            if (!result.isEmpty()) {
+            if (result.length() > 0) {
                 result.append("-");
             }
             result.append(attr);
         }
         for (Map.Entry<String, List<String>> entry : sortedKeywords.entrySet()) {
-            if (!result.isEmpty()) {
+            if (result.length() > 0) {
                 result.append("-");
             }
             result.append(entry.getKey());
@@ -2508,7 +2508,7 @@ public final class JSIntlObject {
                     uExt.append("-").append(value);
                 }
             }
-            if (!uExt.isEmpty()) {
+            if (uExt.length() > 0) {
                 builder.setExtension('u', uExt.substring(1)); // remove leading '-'
             }
 
@@ -5366,7 +5366,7 @@ public final class JSIntlObject {
                 currentValue.setLength(0);
             } else if (currentKey != null) {
                 // Value part: concatenate multi-segment values (e.g., "islamic-civil")
-                if (!currentValue.isEmpty()) {
+                if (currentValue.length() > 0) {
                     currentValue.append("-");
                 }
                 currentValue.append(part);
@@ -5990,14 +5990,14 @@ public final class JSIntlObject {
         for (String part : parts) {
             if (!inPrivateUse && part.length() == 1 && "x".equalsIgnoreCase(part)) {
                 inPrivateUse = true;
-                if (!builder.isEmpty()) {
+                if (builder.length() > 0) {
                     builder.append("-");
                 }
                 builder.append(part);
                 continue;
             }
             if (inPrivateUse) {
-                if (!builder.isEmpty()) {
+                if (builder.length() > 0) {
                     builder.append("-");
                 }
                 builder.append(part);
@@ -6010,14 +6010,14 @@ public final class JSIntlObject {
             if (inUnicodeExt) {
                 if (part.length() == 1) {
                     inUnicodeExt = false;
-                    if (!builder.isEmpty()) {
+                    if (builder.length() > 0) {
                         builder.append("-");
                     }
                     builder.append(part);
                 }
                 continue;
             }
-            if (!builder.isEmpty()) {
+            if (builder.length() > 0) {
                 builder.append("-");
             }
             builder.append(part);

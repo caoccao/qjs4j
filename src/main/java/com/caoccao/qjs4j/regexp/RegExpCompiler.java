@@ -1878,7 +1878,7 @@ public final class RegExpCompiler {
         while (pos < codePoints.length) {
             int codePoint = codePoints[pos];
             if (codePoint == '>') {
-                if (name.isEmpty()) {
+                if (name.length() == 0) {
                     return null;
                 }
                 return new GroupNameParseResult(name.toString(), pos + 1);
@@ -1912,7 +1912,7 @@ public final class RegExpCompiler {
                 }
             }
 
-            if (name.isEmpty()) {
+            if (name.length() == 0) {
                 if (!isJsIdentifierStart(codePoint)) {
                     return null;
                 }

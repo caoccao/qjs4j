@@ -1910,7 +1910,7 @@ final class ModuleSourceTransformer {
             StringBuilder exportPreamble = new StringBuilder();
             appendDynamicImportExportAssignments(exportPreamble, generatedNamePrefix, exportBindingName,
                     localExportBindings, importedBindingNames, moduleRecord.resolvedSpecifier());
-            if (!defaultExportNameFixups.isEmpty()) {
+            if (defaultExportNameFixups.length() > 0) {
                 exportPreamble.append(defaultExportNameFixups);
             }
             // Imports are indirect environment bindings, never snapshots passed as IIFE parameters.

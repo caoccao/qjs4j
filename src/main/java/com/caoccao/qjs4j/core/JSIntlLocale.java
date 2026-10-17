@@ -71,7 +71,7 @@ public final class JSIntlLocale extends JSObject {
             if (part.length() == 1) {
                 break; // singleton extension
             }
-            if (!sb.isEmpty()) {
+            if (sb.length() > 0) {
                 sb.append("-");
             }
             sb.append(part);
@@ -176,7 +176,7 @@ public final class JSIntlLocale extends JSObject {
         }
         StringBuilder sb = new StringBuilder();
         for (int i = variantStart; i < parts.length; i++) {
-            if (!sb.isEmpty()) {
+            if (sb.length() > 0) {
                 sb.append("-");
             }
             sb.append(parts[i]);

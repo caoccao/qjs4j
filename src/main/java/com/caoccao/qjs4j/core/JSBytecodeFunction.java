@@ -58,6 +58,11 @@ public final class JSBytecodeFunction extends JSFunction {
     private Set<JSSymbol> classPrivateSymbols;
     private final JSValue[] closureVars;
     private boolean derivedConstructor;
+    /**
+     * Whether this function is the compiled body of a direct eval, as opposed to a function created by eval code. Only
+     * the body's frame holds the eval's own lexical declarations.
+     */
+    private boolean directEvalBody;
     private boolean displaysAsArgumentsObjectInToString;
     private StackFrame evalDynamicScopeFrame;
     private boolean evalDynamicScopeLookupEnabled;
@@ -951,6 +956,10 @@ public final class JSBytecodeFunction extends JSFunction {
         return derivedConstructor;
     }
 
+    public boolean isDirectEvalBody() {
+        return directEvalBody;
+    }
+
     public boolean isEvalDynamicScopeLookupEnabled() {
         return evalDynamicScopeLookupEnabled;
     }
@@ -1072,6 +1081,10 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public void setDerivedConstructor(boolean derivedConstructor) {
         this.derivedConstructor = derivedConstructor;
+    }
+
+    public void setDirectEvalBody(boolean directEvalBody) {
+        this.directEvalBody = directEvalBody;
     }
 
     public void setDisplaysAsArgumentsObjectInToString(boolean displaysAsArgumentsObjectInToString) {
