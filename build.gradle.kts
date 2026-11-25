@@ -77,6 +77,7 @@ object Config {
         const val JAVA_VERSION = "17"
         const val JAVET = "6.0.0"
         const val JMH = "1.37"
+        const val JSCPD = "5.4.3"
         const val JSON_UNIT_ASSERTJ = "5.1.0"
         const val JUNIT = "6.0.1"
         const val QJS4J = "0.2.0"
@@ -154,6 +155,13 @@ val osType = if (os.isWindows) "windows" else
     if (os.isMacOsX) "macos" else
         if (os.isLinux) "linux" else ""
 val archType = if (arch == "aarch64" || arch == "arm64") "arm64" else "x86_64"
+
+tasks.register<Exec>("jscpd") {
+    group = "verification"
+    description = "Report duplicate code in production and test Java sources."
+    commandLine(if (os.isWindows) listOf("cmd", "/c", "npx") else listOf("npx"))
+    args("--yes", "jscpd@${Config.Versions.JSCPD}")
+}
 
 dependencies {
     // https://mvnrepository.com/artifact/org.assertj/assertj-core

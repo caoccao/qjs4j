@@ -1,0 +1,10 @@
+{
+  "path": ["."],
+  "pattern": "src/{main,test}/java/**/*.java",
+  "format": ["java"],
+  "ignore": ["**/core/PluralRulesData.java"],
+  "mode": "weak",
+  "failOnEmpty": true,
+  "reporters": ["silent", "html", "json"],
+  "output": "build/reports/jscpd"
+}

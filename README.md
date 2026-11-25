@@ -156,6 +156,15 @@ Test JVM: `./gradlew test -PtestJavaVersion=21` runs the suite on JDK 21 instead
 matters, because their behaviour differs: JDK 25 withdrew the atomic access modes from byte-array
 view `VarHandle`s, which `Atomics` depends on.
 
+### Finding duplicate Java code
+
+With Node.js 18+ and npm on your PATH, run `./gradlew jscpd`. The task uses `npx` to fetch
+the pinned version on first use and scans production and test Java sources. The rules in
+`.jscpd.json` skip comments and the generated CLDR plural-rules file.
+
+Open `build/reports/jscpd/jscpd-report.html` to inspect matching code side by side.
+The same directory contains `jscpd-report.json` for scripted analysis.
+
 ## Architecture
 
 qjs4j is organized into modular packages:
