@@ -149,74 +149,71 @@ public final class ArrayBufferPrototype {
             return context.throwTypeError("ArrayBuffer.prototype.slice called on non-ArrayBuffer");
         }
 
-        if (buffer.isDetached()) {
+        return sliceBuffer(context, buffer, args);
+    }
+
+    static <T extends JSObject & IJSArrayBuffer> JSValue sliceBuffer(JSContext context, T source, JSValue[] args) {
+        boolean shared = source.isShared();
+        if (!shared && source.isDetached()) {
             return context.throwTypeError("Cannot slice a detached ArrayBuffer");
         }
-
-        long len = buffer.getByteLength();
-
-        // Compute first (start) per spec using ToIntegerOrInfinity + clamp
-        long first = ArrayPrototype.relativeIndex(context, args, 0, len, 0);
+        long length = source.getByteLength();
+        long start = ArrayPrototype.relativeIndex(context, args, 0, length, 0);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        long fin = ArrayPrototype.relativeIndex(context, args, 1, len, len);
+        long end = ArrayPrototype.relativeIndex(context, args, 1, length, length);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-
-        long newLen = Math.max(fin - first, 0);
-
-        // SpeciesConstructor: get constructor, check species
-        JSValue ctor = speciesConstructor(context, buffer);
+        long newLength = Math.max(end - start, 0);
+        JSValue constructor = speciesConstructor(context, source, shared);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-
-        JSArrayBuffer newBuffer;
-        if (ctor instanceof JSUndefined) {
-            // Use default ArrayBuffer constructor
-            newBuffer = context.createJSArrayBuffer(newLen);
-        } else {
-            // Call the species constructor via Reflect.construct
-            JSValue newObj = JSReflectObject.construct(context, JSUndefined.INSTANCE,
-                    new JSValue[]{ctor, new JSArray(context, JSNumber.of(newLen))});
+        JSValue result;
+        if (!(constructor instanceof JSUndefined)) {
+            result = JSReflectObject.construct(context, JSUndefined.INSTANCE,
+                    new JSValue[]{constructor, new JSArray(context, JSNumber.of(newLength))});
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
-            if (!(newObj instanceof JSArrayBuffer buf)) {
-                return context.throwTypeError("Species constructor did not return an ArrayBuffer");
-            }
-            newBuffer = buf;
+        } else if (shared) {
+            JSSharedArrayBuffer buffer = new JSSharedArrayBuffer(context, newLength);
+            context.transferPrototype(buffer, JSSharedArrayBuffer.NAME);
+            result = buffer;
+        } else {
+            result = context.createJSArrayBuffer(newLength);
         }
-
-        // Validate the new buffer
-        if (newBuffer == buffer) {
-            return context.throwTypeError("cannot use identical ArrayBuffer");
+        if (!(result instanceof IJSArrayBuffer target) || target.isShared() != shared) {
+            return context.throwTypeError(shared
+                    ? "Species constructor did not return a SharedArrayBuffer"
+                    : "Species constructor did not return an ArrayBuffer");
         }
-        if (newBuffer.isDetached()) {
+        String name = shared ? JSSharedArrayBuffer.NAME : JSArrayBuffer.NAME;
+        if (target == source) {
+            return context.throwTypeError("cannot use identical " + name);
+        }
+        if (!shared && target.isDetached()) {
             return context.throwTypeError("Species constructor returned a detached ArrayBuffer");
         }
-        if (newBuffer.getByteLength() < newLen) {
-            return context.throwTypeError("new ArrayBuffer is too small");
+        if (target.getByteLength() < newLength) {
+            return context.throwTypeError("new " + name + " is too small");
         }
-
-        // Re-check source after side effects
-        if (buffer.isDetached()) {
+        if (!shared && source.isDetached()) {
             return context.throwTypeError("ArrayBuffer was detached during slice");
         }
-
-        if (newLen > 0) {
-            buffer.getBuffer().copyTo(newBuffer.getBuffer(), first, 0, newLen);
+        if (newLength > 0) {
+            source.getBuffer().copyTo(target.getBuffer(), start, 0, newLength);
         }
-        return newBuffer;
+        return result;
     }
 
     /**
      * SpeciesConstructor(O, defaultConstructor) per ES2020 7.3.20. Returns JSUndefined.INSTANCE to use the default
      * constructor, or the species constructor function. Sets pending exception on error.
      */
-    private static JSValue speciesConstructor(JSContext context, JSObject obj) {
+    private static JSValue speciesConstructor(JSContext context, JSObject obj, boolean shared) {
         JSValue ctor = obj.get(PropertyKey.CONSTRUCTOR);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -235,7 +232,7 @@ public final class ArrayBufferPrototype {
         if (species instanceof JSUndefined || species instanceof JSNull) {
             return JSUndefined.INSTANCE;
         }
-        if (JSTypeChecking.isConstructor(species)) {
+        if (shared ? species instanceof JSFunction : JSTypeChecking.isConstructor(species)) {
             return species;
         }
         context.throwTypeError("Species is not a constructor");

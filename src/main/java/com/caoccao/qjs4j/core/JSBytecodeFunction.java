@@ -1365,8 +1365,7 @@ public final class JSBytecodeFunction extends JSFunction {
             // Per ES spec PromiseResolve: access .constructor for observable side effects
             promiseValue.get(PropertyKey.CONSTRUCTOR);
             if (context.hasPendingException()) {
-                JSValue error = context.getPendingException();
-                context.clearPendingException();
+                JSValue error = context.takePendingException();
                 promise.reject(error);
                 return;
             }
@@ -1406,8 +1405,7 @@ public final class JSBytecodeFunction extends JSFunction {
         if (value instanceof JSObject obj) {
             JSValue thenMethod = obj.get(PropertyKey.THEN);
             if (context.hasPendingException()) {
-                JSValue error = context.getPendingException();
-                context.clearPendingException();
+                JSValue error = context.takePendingException();
                 promise.reject(error);
                 return;
             }

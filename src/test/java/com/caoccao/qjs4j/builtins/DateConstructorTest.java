@@ -407,7 +407,7 @@ public class DateConstructorTest extends BaseJavetTest {
         });
 
         // Edge case: only year
-        result = DateConstructor.UTC(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(2025)});
+        result = DateConstructor.UTC(context, JSUndefined.INSTANCE, numberArgs(2025));
         assertThat(result).isInstanceOf(JSNumber.class);
 
         // Edge case: year and month
@@ -423,8 +423,7 @@ public class DateConstructorTest extends BaseJavetTest {
         });
 
         // Edge case: overflow fields should normalize instead of returning NaN.
-        result = DateConstructor.UTC(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSNumber(2025), new JSNumber(12), new JSNumber(32)});
+        result = DateConstructor.UTC(context, JSUndefined.INSTANCE, numberArgs(2025, 12, 32));
         assertThat(result).isInstanceOf(JSNumber.class);
         assertDoubleWithJavet("Date.UTC(2025, 12, 32);");
     }

@@ -89,23 +89,11 @@ public final class JSDataView extends JSObject {
     }
 
     public JSBigInt getBigInt64(long byteOffset, boolean littleEndian) {
-        checkOffset(byteOffset, 8);
-        JSByteBuffer buf = buffer.getBuffer();
-        ByteOrder originalOrder = buf.order();
-        buf.order(littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
-        long value = buf.getLong(this.byteOffset + byteOffset);
-        buf.order(originalOrder);
-        return new JSBigInt(value);
+        return new JSBigInt(getInt64(byteOffset, littleEndian));
     }
 
     public JSBigInt getBigUint64(long byteOffset, boolean littleEndian) {
-        checkOffset(byteOffset, 8);
-        JSByteBuffer buf = buffer.getBuffer();
-        ByteOrder originalOrder = buf.order();
-        buf.order(littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
-        long value = buf.getLong(this.byteOffset + byteOffset);
-        buf.order(originalOrder);
-        return new JSBigInt(toUnsignedBigInteger(value));
+        return new JSBigInt(toUnsignedBigInteger(getInt64(byteOffset, littleEndian)));
     }
 
     public JSObject getBuffer() {
@@ -137,46 +125,35 @@ public final class JSDataView extends JSObject {
     }
 
     public float getFloat32(long byteOffset, boolean littleEndian) {
-        checkOffset(byteOffset, 4);
-        JSByteBuffer buf = buffer.getBuffer();
-        ByteOrder originalOrder = buf.order();
-        buf.order(littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
-        float value = buf.getFloat(this.byteOffset + byteOffset);
-        buf.order(originalOrder);
-        return value;
+        return Float.intBitsToFloat(getInt32(byteOffset, littleEndian));
     }
 
     // Float64 operations
     public double getFloat64(long byteOffset, boolean littleEndian) {
-        checkOffset(byteOffset, 8);
-        JSByteBuffer buf = buffer.getBuffer();
-        ByteOrder originalOrder = buf.order();
-        buf.order(littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
-        double value = buf.getDouble(this.byteOffset + byteOffset);
-        buf.order(originalOrder);
-        return value;
+        return Double.longBitsToDouble(getInt64(byteOffset, littleEndian));
     }
 
     // Int16 operations
     public short getInt16(long byteOffset, boolean littleEndian) {
         checkOffset(byteOffset, 2);
         JSByteBuffer buf = buffer.getBuffer();
-        ByteOrder originalOrder = buf.order();
-        buf.order(littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
-        short value = buf.getShort(this.byteOffset + byteOffset);
-        buf.order(originalOrder);
-        return value;
+        short bits = buf.getShort(this.byteOffset + byteOffset);
+        return littleEndian == (buf.order() == ByteOrder.LITTLE_ENDIAN) ? bits : Short.reverseBytes(bits);
     }
 
     // Int32 operations
     public int getInt32(long byteOffset, boolean littleEndian) {
         checkOffset(byteOffset, 4);
         JSByteBuffer buf = buffer.getBuffer();
-        ByteOrder originalOrder = buf.order();
-        buf.order(littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
-        int value = buf.getInt(this.byteOffset + byteOffset);
-        buf.order(originalOrder);
-        return value;
+        int bits = buf.getInt(this.byteOffset + byteOffset);
+        return littleEndian == (buf.order() == ByteOrder.LITTLE_ENDIAN) ? bits : Integer.reverseBytes(bits);
+    }
+
+    private long getInt64(long byteOffset, boolean littleEndian) {
+        checkOffset(byteOffset, 8);
+        JSByteBuffer buf = buffer.getBuffer();
+        long bits = buf.getLong(this.byteOffset + byteOffset);
+        return littleEndian == (buf.order() == ByteOrder.LITTLE_ENDIAN) ? bits : Long.reverseBytes(bits);
     }
 
     // Int8 operations
@@ -219,21 +196,11 @@ public final class JSDataView extends JSObject {
     }
 
     public void setBigInt64(long byteOffset, JSBigInt value, boolean littleEndian) {
-        checkOffset(byteOffset, 8);
-        JSByteBuffer buf = buffer.getBuffer();
-        ByteOrder originalOrder = buf.order();
-        buf.order(littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
-        buf.putLong(this.byteOffset + byteOffset, value.value().longValue());
-        buf.order(originalOrder);
+        setInt64(byteOffset, value.value().longValue(), littleEndian);
     }
 
     public void setBigUint64(long byteOffset, JSBigInt value, boolean littleEndian) {
-        checkOffset(byteOffset, 8);
-        JSByteBuffer buf = buffer.getBuffer();
-        ByteOrder originalOrder = buf.order();
-        buf.order(littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
-        buf.putLong(this.byteOffset + byteOffset, value.value().longValue());
-        buf.order(originalOrder);
+        setBigInt64(byteOffset, value, littleEndian);
     }
 
     public void setFloat16(long byteOffset, double value, boolean littleEndian) {
@@ -241,39 +208,32 @@ public final class JSDataView extends JSObject {
     }
 
     public void setFloat32(long byteOffset, float value, boolean littleEndian) {
-        checkOffset(byteOffset, 4);
-        JSByteBuffer buf = buffer.getBuffer();
-        ByteOrder originalOrder = buf.order();
-        buf.order(littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
-        buf.putFloat(this.byteOffset + byteOffset, value);
-        buf.order(originalOrder);
+        setInt32(byteOffset, Float.floatToRawIntBits(value), littleEndian);
     }
 
     public void setFloat64(long byteOffset, double value, boolean littleEndian) {
-        checkOffset(byteOffset, 8);
-        JSByteBuffer buf = buffer.getBuffer();
-        ByteOrder originalOrder = buf.order();
-        buf.order(littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
-        buf.putDouble(this.byteOffset + byteOffset, value);
-        buf.order(originalOrder);
+        setInt64(byteOffset, Double.doubleToRawLongBits(value), littleEndian);
     }
 
     public void setInt16(long byteOffset, short value, boolean littleEndian) {
         checkOffset(byteOffset, 2);
         JSByteBuffer buf = buffer.getBuffer();
-        ByteOrder originalOrder = buf.order();
-        buf.order(littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
-        buf.putShort(this.byteOffset + byteOffset, value);
-        buf.order(originalOrder);
+        buf.putShort(this.byteOffset + byteOffset,
+                littleEndian == (buf.order() == ByteOrder.LITTLE_ENDIAN) ? value : Short.reverseBytes(value));
     }
 
     public void setInt32(long byteOffset, int value, boolean littleEndian) {
         checkOffset(byteOffset, 4);
         JSByteBuffer buf = buffer.getBuffer();
-        ByteOrder originalOrder = buf.order();
-        buf.order(littleEndian ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN);
-        buf.putInt(this.byteOffset + byteOffset, value);
-        buf.order(originalOrder);
+        buf.putInt(this.byteOffset + byteOffset,
+                littleEndian == (buf.order() == ByteOrder.LITTLE_ENDIAN) ? value : Integer.reverseBytes(value));
+    }
+
+    private void setInt64(long byteOffset, long value, boolean littleEndian) {
+        checkOffset(byteOffset, 8);
+        JSByteBuffer buf = buffer.getBuffer();
+        buf.putLong(this.byteOffset + byteOffset,
+                littleEndian == (buf.order() == ByteOrder.LITTLE_ENDIAN) ? value : Long.reverseBytes(value));
     }
 
     public void setInt8(long byteOffset, byte value) {

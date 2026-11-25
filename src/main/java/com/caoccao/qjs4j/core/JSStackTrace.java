@@ -59,8 +59,7 @@ final class JSStackTrace {
             messageText = JSTypeConversions.toString(context, message).value();
         }
         if (context.hasPendingException()) {
-            JSValue exception = context.getPendingException();
-            context.clearPendingException();
+            JSValue exception = context.takePendingException();
             JSValue description = JSError.errorToString(context, exception, JSValue.NO_ARGS);
             if (context.hasPendingException()) {
                 context.clearPendingException();

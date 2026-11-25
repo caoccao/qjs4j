@@ -45,14 +45,6 @@ public final class TemporalPlainYearMonthPrototype {
         return addOrSubtract(context, plainYearMonth, args, 1);
     }
 
-    private static IsoDate addCalendarDateConstrain(JSContext context, IsoDate baseIsoDate,
-            TemporalCalendarId calendarId, long years, long months) {
-        if (calendarId == TemporalCalendarId.ISO8601) {
-            return addDateDurationToPlainYearMonth(context, baseIsoDate, years, months, "constrain");
-        }
-        return baseIsoDate.addCalendarDate(context, calendarId, years, months, 0L, 0L, "constrain");
-    }
-
     private static IsoDate addDateDurationToPlainYearMonth(JSContext context, IsoDate baseDate, long yearsToAdd,
             long monthsToAdd, String overflow) {
         long monthIndex = (long) baseDate.month() - 1L + monthsToAdd;
@@ -145,38 +137,6 @@ public final class TemporalPlainYearMonthPrototype {
                 plainYearMonth -> new JSString(plainYearMonth.getCalendarId().identifier()));
     }
 
-    private static int compareCalendarDateFields(long firstYear, String firstMonthCode, int firstDay, int secondYear,
-            String secondMonthCode, int secondDay) {
-        int yearComparison = Long.compare(firstYear, secondYear);
-        if (yearComparison != 0) {
-            return yearComparison;
-        }
-        int monthComparison = compareMonthCodes(firstMonthCode, secondMonthCode);
-        if (monthComparison != 0) {
-            return monthComparison;
-        }
-        return Integer.compare(firstDay, secondDay);
-    }
-
-    private static int compareMonthCodes(String firstMonthCode, String secondMonthCode) {
-        IsoMonth firstMonthCodeParts = IsoMonth.parseByMonthCode(firstMonthCode);
-        IsoMonth secondMonthCodeParts = IsoMonth.parseByMonthCode(secondMonthCode);
-        if (firstMonthCodeParts == null || secondMonthCodeParts == null) {
-            return firstMonthCode.compareTo(secondMonthCode);
-        }
-        int monthNumberComparison = Integer.compare(firstMonthCodeParts.month(), secondMonthCodeParts.month());
-        if (monthNumberComparison != 0) {
-            return monthNumberComparison;
-        }
-        if (firstMonthCodeParts.leapMonth() == secondMonthCodeParts.leapMonth()) {
-            return 0;
-        }
-        if (firstMonthCodeParts.leapMonth()) {
-            return 1;
-        }
-        return -1;
-    }
-
     private static IsoDate createDifferenceIsoDate(JSContext context, JSTemporalPlainYearMonth plainYearMonth) {
         IsoDate isoDate = plainYearMonth.getIsoDate();
         IsoDate differenceIsoDate = new IsoDate(isoDate.year(), isoDate.month(), isoDate.day());
@@ -203,113 +163,6 @@ public final class TemporalPlainYearMonthPrototype {
             return JSUndefined.INSTANCE;
         }
         return differenceTemporalPlainYearMonth(context, plainYearMonth, args, since);
-    }
-
-    private static TemporalDurationYearMonth differenceCalendarYearMonth(JSContext context, IsoDate firstDate,
-            IsoDate secondDate, TemporalCalendarId calendarId, TemporalUnit largestUnit) {
-        int sign = -Integer.signum(firstDate.compareTo(secondDate));
-        if (sign == 0) {
-            return TemporalDurationYearMonth.ZERO;
-        }
-
-        long years = 0L;
-        long months = 0L;
-        IsoCalendarDate firstCalendarDateFields = firstDate.toIsoCalendarDate(calendarId);
-        IsoCalendarDate secondCalendarDateFields = secondDate.toIsoCalendarDate(calendarId);
-
-        long candidateYears = (long) secondCalendarDateFields.year() - firstCalendarDateFields.year();
-        if (candidateYears != 0L) {
-            candidateYears -= sign;
-        }
-        while (true) {
-            IsoDate candidateYearDate = addCalendarDateConstrain(context, firstDate, calendarId, candidateYears, 0L);
-            if (context.hasPendingException() || candidateYearDate == null) {
-                return null;
-            }
-            if (TemporalUtils.isoDateSurpasses(sign, candidateYearDate, secondDate)) {
-                break;
-            }
-            if (doesConceptualYearDateSurpassTarget(sign, firstCalendarDateFields, candidateYears,
-                    secondCalendarDateFields)) {
-                break;
-            }
-            if (doesConstrainedCalendarDaySurpassTarget(sign, firstCalendarDateFields, candidateYearDate,
-                    secondCalendarDateFields, calendarId)) {
-                break;
-            }
-            years = candidateYears;
-            candidateYears += sign;
-        }
-
-        long candidateMonths = sign;
-        while (true) {
-            IsoDate candidateMonthDate = addCalendarDateConstrain(context, firstDate, calendarId, years,
-                    candidateMonths);
-            if (context.hasPendingException() || candidateMonthDate == null) {
-                return null;
-            }
-            if (TemporalUtils.isoDateSurpasses(sign, candidateMonthDate, secondDate)) {
-                break;
-            }
-            if (doesConstrainedCalendarDaySurpassTarget(sign, firstCalendarDateFields, candidateMonthDate,
-                    secondCalendarDateFields, calendarId)) {
-                break;
-            }
-            months = candidateMonths;
-            candidateMonths += sign;
-        }
-
-        if (largestUnit == TemporalUnit.MONTH) {
-            long monthsFromYears = monthsForYearDelta(context, firstDate, calendarId, years);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            long totalMonths;
-            try {
-                totalMonths = Math.addExact(months, monthsFromYears);
-            } catch (ArithmeticException arithmeticException) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
-                return null;
-            }
-
-            while (true) {
-                IsoDate totalMonthDate = addCalendarDateConstrain(context, firstDate, calendarId, 0L, totalMonths);
-                if (context.hasPendingException() || totalMonthDate == null) {
-                    return null;
-                }
-                if (TemporalUtils.isoDateSurpasses(sign, totalMonthDate, secondDate)) {
-                    totalMonths -= sign;
-                    continue;
-                }
-                if (doesConstrainedCalendarDaySurpassTarget(sign, firstCalendarDateFields, totalMonthDate,
-                        secondCalendarDateFields, calendarId)) {
-                    totalMonths -= sign;
-                    continue;
-                }
-
-                long nextTotalMonths;
-                try {
-                    nextTotalMonths = Math.addExact(totalMonths, sign);
-                } catch (ArithmeticException arithmeticException) {
-                    break;
-                }
-                IsoDate nextTotalMonthDate = addCalendarDateConstrain(context, firstDate, calendarId, 0L,
-                        nextTotalMonths);
-                if (context.hasPendingException() || nextTotalMonthDate == null) {
-                    return null;
-                }
-                if (TemporalUtils.isoDateSurpasses(sign, nextTotalMonthDate, secondDate)) {
-                    break;
-                }
-                if (doesConstrainedCalendarDaySurpassTarget(sign, firstCalendarDateFields, nextTotalMonthDate,
-                        secondCalendarDateFields, calendarId)) {
-                    break;
-                }
-                totalMonths = nextTotalMonths;
-            }
-            return new TemporalDurationYearMonth(0L, totalMonths);
-        }
-        return new TemporalDurationYearMonth(years, months);
     }
 
     private static JSValue differenceTemporalPlainYearMonth(JSContext context, JSTemporalPlainYearMonth plainYearMonth,
@@ -358,13 +211,13 @@ public final class TemporalPlainYearMonthPrototype {
             durationFields = TemporalDurationYearMonth.fromTotalMonths(totalMonthsDifference,
                     differenceSettings.largestUnit());
         } else {
-            durationFields = differenceCalendarYearMonth(context, thisDifferenceDate, otherDifferenceDate, calendarId,
-                    differenceSettings.largestUnit());
+            durationFields = TemporalDurationYearMonth.betweenCalendarDates(context, thisDifferenceDate,
+                    otherDifferenceDate, calendarId, differenceSettings.largestUnit());
             if (context.hasPendingException() || durationFields == null) {
                 return JSUndefined.INSTANCE;
             }
-            TemporalDurationYearMonth monthDifferenceFields = differenceCalendarYearMonth(context, thisDifferenceDate,
-                    otherDifferenceDate, calendarId, TemporalUnit.MONTH);
+            TemporalDurationYearMonth monthDifferenceFields = TemporalDurationYearMonth.betweenCalendarDates(context,
+                    thisDifferenceDate, otherDifferenceDate, calendarId, TemporalUnit.MONTH);
             if (context.hasPendingException() || monthDifferenceFields == null) {
                 return JSUndefined.INSTANCE;
             }
@@ -386,30 +239,6 @@ public final class TemporalPlainYearMonthPrototype {
             resultDuration = resultDuration.negated();
         }
         return JSTemporalDuration.create(context, resultDuration);
-    }
-
-    private static boolean doesConceptualYearDateSurpassTarget(int sign, IsoCalendarDate firstCalendarDateFields,
-            long candidateYears, IsoCalendarDate secondCalendarDateFields) {
-        long candidateYear = firstCalendarDateFields.year() + candidateYears;
-        int comparison = compareCalendarDateFields(candidateYear, firstCalendarDateFields.monthCode(),
-                firstCalendarDateFields.day(), secondCalendarDateFields.year(), secondCalendarDateFields.monthCode(),
-                secondCalendarDateFields.day());
-        return sign * comparison > 0;
-    }
-
-    private static boolean doesConstrainedCalendarDaySurpassTarget(int sign, IsoCalendarDate firstCalendarDateFields,
-            IsoDate constrainedCandidateDate, IsoCalendarDate secondCalendarDateFields, TemporalCalendarId calendarId) {
-        IsoCalendarDate candidateCalendarDateFields = constrainedCandidateDate.toIsoCalendarDate(calendarId);
-        if (candidateCalendarDateFields.day() == firstCalendarDateFields.day()) {
-            return false;
-        }
-        if (candidateCalendarDateFields.year() != secondCalendarDateFields.year()) {
-            return false;
-        }
-        if (!candidateCalendarDateFields.monthCode().equals(secondCalendarDateFields.monthCode())) {
-            return false;
-        }
-        return sign * Integer.compare(firstCalendarDateFields.day(), secondCalendarDateFields.day()) > 0;
     }
 
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -506,58 +335,6 @@ public final class TemporalPlainYearMonthPrototype {
     public static JSValue monthCode(JSContext context, JSValue thisArg, JSValue[] args) {
         return RECEIVER.read(context, thisArg, "monthCode",
                 plainYearMonth -> new JSString(resolveCalendarMonthCode(plainYearMonth)));
-    }
-
-    private static long monthsForYearDelta(JSContext context, IsoDate firstDate, TemporalCalendarId calendarId,
-            long yearDelta) {
-        if (yearDelta == 0L) {
-            return 0L;
-        }
-        if (calendarId == TemporalCalendarId.COPTIC || calendarId == TemporalCalendarId.ETHIOPIC
-                || calendarId == TemporalCalendarId.ETHIOAA) {
-            try {
-                return Math.multiplyExact(yearDelta, 13L);
-            } catch (ArithmeticException arithmeticException) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
-                return 0L;
-            }
-        }
-        if (calendarId == TemporalCalendarId.ISO8601 || calendarId == TemporalCalendarId.GREGORY
-                || calendarId == TemporalCalendarId.JAPANESE || calendarId == TemporalCalendarId.BUDDHIST
-                || calendarId == TemporalCalendarId.ROC || calendarId == TemporalCalendarId.INDIAN
-                || calendarId == TemporalCalendarId.PERSIAN || calendarId == TemporalCalendarId.ISLAMIC_CIVIL
-                || calendarId == TemporalCalendarId.ISLAMIC_TBLA || calendarId == TemporalCalendarId.ISLAMIC_UMALQURA) {
-            try {
-                return Math.multiplyExact(yearDelta, 12L);
-            } catch (ArithmeticException arithmeticException) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
-                return 0L;
-            }
-        }
-
-        int yearSign;
-        if (yearDelta > 0L) {
-            yearSign = 1;
-        } else {
-            yearSign = -1;
-        }
-        long absoluteYearDelta = Math.abs(yearDelta);
-        long totalMonths = 0L;
-        IsoDate cursorDate = firstDate;
-        for (long yearIndex = 0L; yearIndex < absoluteYearDelta; yearIndex++) {
-            int monthsInYear = TemporalUtils.monthsInYear(cursorDate, calendarId);
-            try {
-                totalMonths = Math.addExact(totalMonths, (long) yearSign * monthsInYear);
-            } catch (ArithmeticException arithmeticException) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
-                return 0L;
-            }
-            cursorDate = addCalendarDateConstrain(context, cursorDate, calendarId, yearSign, 0L);
-            if (context.hasPendingException() || cursorDate == null) {
-                return 0L;
-            }
-        }
-        return totalMonths;
     }
 
     public static JSValue monthsInYear(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -235,7 +235,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: numeric property
-        result = ObjectPrototype.hasOwnProperty(context, obj, new JSValue[]{new JSNumber(1)});
+        result = ObjectPrototype.hasOwnProperty(context, obj, numberArgs(1));
         assertThat(result).isEqualTo(JSBoolean.FALSE); // "1" != "a"
 
         // Edge case: no arguments
@@ -590,7 +590,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         assertPendingException(context);
 
         // Edge case: primitive
-        result = ObjectPrototype.values(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42)});
+        result = ObjectPrototype.values(context, JSUndefined.INSTANCE, numberArgs(42));
         assertThat(result).isInstanceOfSatisfying(JSArray.class,
                 primitiveValues -> assertThat(primitiveValues.getLength()).isEqualTo(0));
     }

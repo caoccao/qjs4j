@@ -398,32 +398,6 @@ public final class TemporalDurationConstructor {
         return JSTemporalDuration.create(context, record);
     }
 
-    private static String extractOffsetText(String text) {
-        int timeSeparatorIndex = Math.max(text.indexOf('T'), text.indexOf('t'));
-        if (timeSeparatorIndex < 0) {
-            return null;
-        }
-        int offsetStart = -1;
-        for (int index = timeSeparatorIndex + 1; index < text.length(); index++) {
-            char character = text.charAt(index);
-            if (character == '[' || character == 'Z' || character == 'z') {
-                break;
-            }
-            if (character == '+' || character == '-' || character == '\u2212') {
-                offsetStart = index;
-                break;
-            }
-        }
-        if (offsetStart < 0) {
-            return null;
-        }
-        int offsetEnd = text.indexOf('[', offsetStart);
-        if (offsetEnd < 0) {
-            offsetEnd = text.length();
-        }
-        return text.substring(offsetStart, offsetEnd);
-    }
-
     /**
      * Temporal.Duration.from(item)
      */
@@ -452,23 +426,6 @@ public final class TemporalDurationConstructor {
         }
         BigInteger numericValue = TemporalUtils.toBigIntegerFromIntegralDouble(numericValueAsDouble);
         return Optional.of(numericValue);
-    }
-
-    private static boolean hasOffsetDesignator(String text) {
-        int timeSeparatorIndex = Math.max(text.indexOf('T'), text.indexOf('t'));
-        if (timeSeparatorIndex < 0) {
-            return false;
-        }
-        for (int index = timeSeparatorIndex + 1; index < text.length(); index++) {
-            char character = text.charAt(index);
-            if (character == '[') {
-                break;
-            }
-            if (character == 'Z' || character == 'z' || character == '+' || character == '-' || character == '\u2212') {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static boolean hasZuluDesignator(String text) {
@@ -839,7 +796,7 @@ public final class TemporalDurationConstructor {
         String constrainedRelativeToText = constrainLeapSecond(relativeToText);
         boolean hasTimeZoneAnnotation = relativeToText.contains("[");
         boolean hasTimeComponent = relativeToText.contains("T") || relativeToText.contains("t");
-        boolean hasOffsetDesignator = hasOffsetDesignator(relativeToText);
+        boolean hasOffsetDesignator = TemporalTimeZone.hasOffsetDesignator(relativeToText);
 
         if (hasTimeZoneAnnotation || (hasTimeComponent && hasOffsetDesignator)) {
             if (!hasTimeZoneAnnotation && hasZuluDesignator(relativeToText)) {
@@ -847,7 +804,7 @@ public final class TemporalDurationConstructor {
                 return null;
             }
             if (!hasTimeZoneAnnotation) {
-                String offsetText = extractOffsetText(relativeToText);
+                String offsetText = TemporalTimeZone.extractOffsetText(relativeToText);
                 if (offsetText != null && !TemporalTimeZone.isValidOffsetString(offsetText)) {
                     context.throwRangeError("Temporal error: Invalid offset string.");
                     return null;
@@ -864,7 +821,7 @@ public final class TemporalDurationConstructor {
                 return new RelativeToReference(parsedDateTime.date(), parsedDateTime.time(), null, null, null);
             }
 
-            String offsetText = extractOffsetText(relativeToText);
+            String offsetText = TemporalTimeZone.extractOffsetText(relativeToText);
             if (offsetText != null && !TemporalTimeZone.isValidOffsetString(offsetText)) {
                 context.throwRangeError("Temporal error: Invalid offset string.");
                 return null;

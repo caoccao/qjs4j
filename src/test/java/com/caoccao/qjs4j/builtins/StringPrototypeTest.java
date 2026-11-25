@@ -65,10 +65,10 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testCharAt() {
         // Normal case
-        JSValue result = StringPrototype.charAt(context, str, new JSValue[]{new JSNumber(0)});
+        JSValue result = StringPrototype.charAt(context, str, numberArgs(0));
         assertStringValue(result, "h");
 
-        result = StringPrototype.charAt(context, str, new JSValue[]{new JSNumber(4)});
+        result = StringPrototype.charAt(context, str, numberArgs(4));
         assertStringValue(result, "o");
 
         // Default index 0
@@ -76,10 +76,10 @@ public class StringPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "h");
 
         // Out of bounds
-        result = StringPrototype.charAt(context, str, new JSValue[]{new JSNumber(-1)});
+        result = StringPrototype.charAt(context, str, numberArgs(-1));
         assertStringValue(result, "");
 
-        result = StringPrototype.charAt(context, str, new JSValue[]{new JSNumber(20)});
+        result = StringPrototype.charAt(context, str, numberArgs(20));
         assertStringValue(result, "");
 
         // Non-integer index
@@ -88,21 +88,21 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.charAt(context, empty, new JSValue[]{new JSNumber(0)});
+        result = StringPrototype.charAt(context, empty, numberArgs(0));
         assertStringValue(result, "");
 
         // Non-string thisArg
-        result = StringPrototype.charAt(context, new JSNumber(42), new JSValue[]{new JSNumber(0)});
+        result = StringPrototype.charAt(context, new JSNumber(42), numberArgs(0));
         assertStringValue(result, "4");
     }
 
     @Test
     public void testCharCodeAt() {
         // Normal case
-        JSValue result = StringPrototype.charCodeAt(context, str, new JSValue[]{new JSNumber(0)});
+        JSValue result = StringPrototype.charCodeAt(context, str, numberArgs(0));
         assertNumberValue(result, 104.0);
 
-        result = StringPrototype.charCodeAt(context, str, new JSValue[]{new JSNumber(4)});
+        result = StringPrototype.charCodeAt(context, str, numberArgs(4));
         assertNumberValue(result, 111.0);
 
         // Default index 0
@@ -110,34 +110,34 @@ public class StringPrototypeTest extends BaseJavetTest {
         assertNumberValue(result, 104.0);
 
         // Out of bounds
-        result = StringPrototype.charCodeAt(context, str, new JSValue[]{new JSNumber(-1)});
+        result = StringPrototype.charCodeAt(context, str, numberArgs(-1));
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isNaN());
 
-        result = StringPrototype.charCodeAt(context, str, new JSValue[]{new JSNumber(20)});
+        result = StringPrototype.charCodeAt(context, str, numberArgs(20));
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isNaN());
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.charCodeAt(context, empty, new JSValue[]{new JSNumber(0)});
+        result = StringPrototype.charCodeAt(context, empty, numberArgs(0));
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isNaN());
     }
 
     @Test
     public void testCodePointAt() {
         // Normal case
-        JSValue result = StringPrototype.codePointAt(context, str, new JSValue[]{new JSNumber(0)});
+        JSValue result = StringPrototype.codePointAt(context, str, numberArgs(0));
         assertNumberValue(result, 104.0);
 
         // Surrogate pair (if applicable)
         JSString surrogate = new JSString("😀");
-        result = StringPrototype.codePointAt(context, surrogate, new JSValue[]{new JSNumber(0)});
+        result = StringPrototype.codePointAt(context, surrogate, numberArgs(0));
         assertNumberValue(result, 128512.0);
 
         // Out of bounds
-        result = StringPrototype.codePointAt(context, str, new JSValue[]{new JSNumber(-1)});
+        result = StringPrototype.codePointAt(context, str, numberArgs(-1));
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
-        result = StringPrototype.codePointAt(context, str, new JSValue[]{new JSNumber(20)});
+        result = StringPrototype.codePointAt(context, str, numberArgs(20));
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
     }
 
@@ -156,7 +156,7 @@ public class StringPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "hello world");
 
         // Non-string args
-        result = StringPrototype.concat(context, str, new JSValue[]{new JSNumber(42)});
+        result = StringPrototype.concat(context, str, numberArgs(42));
         assertStringValue(result, "hello world42");
 
         // Empty string
@@ -535,11 +535,11 @@ public class StringPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "hello world****");
 
         // Shorter target length
-        result = StringPrototype.padEnd(context, str, new JSValue[]{new JSNumber(5)});
+        result = StringPrototype.padEnd(context, str, numberArgs(5));
         assertStringValue(result, "hello world");
 
         // Default filler
-        result = StringPrototype.padEnd(context, str, new JSValue[]{new JSNumber(15)});
+        result = StringPrototype.padEnd(context, str, numberArgs(15));
         assertStringValue(result, "hello world    ");
 
         // Empty filler
@@ -563,11 +563,11 @@ public class StringPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "****hello world");
 
         // Shorter target length
-        result = StringPrototype.padStart(context, str, new JSValue[]{new JSNumber(5)});
+        result = StringPrototype.padStart(context, str, numberArgs(5));
         assertStringValue(result, "hello world");
 
         // Default filler
-        result = StringPrototype.padStart(context, str, new JSValue[]{new JSNumber(15)});
+        result = StringPrototype.padStart(context, str, numberArgs(15));
         assertStringValue(result, "    hello world");
 
         // Empty filler
@@ -592,24 +592,24 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testRepeat() {
         // Normal case
-        JSValue result = StringPrototype.repeat(context, str, new JSValue[]{new JSNumber(2)});
+        JSValue result = StringPrototype.repeat(context, str, numberArgs(2));
         assertStringValue(result, "hello worldhello world");
 
         // Zero count
-        result = StringPrototype.repeat(context, str, new JSValue[]{new JSNumber(0)});
+        result = StringPrototype.repeat(context, str, numberArgs(0));
         assertStringValue(result, "");
 
         // One count
-        result = StringPrototype.repeat(context, str, new JSValue[]{new JSNumber(1)});
+        result = StringPrototype.repeat(context, str, numberArgs(1));
         assertStringValue(result, "hello world");
 
         // Negative count
-        StringPrototype.repeat(context, str, new JSValue[]{new JSNumber(-1)});
+        StringPrototype.repeat(context, str, numberArgs(-1));
         assertPendingException(context);
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.repeat(context, empty, new JSValue[]{new JSNumber(3)});
+        result = StringPrototype.repeat(context, empty, numberArgs(3));
         assertStringValue(result, "");
     }
 
@@ -768,26 +768,26 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testSlice() {
         // Normal case
-        JSValue result = StringPrototype.slice(context, str, new JSValue[]{new JSNumber(6)});
+        JSValue result = StringPrototype.slice(context, str, numberArgs(6));
         assertStringValue(result, "world");
 
-        result = StringPrototype.slice(context, str, new JSValue[]{new JSNumber(0), new JSNumber(5)});
+        result = StringPrototype.slice(context, str, numberArgs(0, 5));
         assertStringValue(result, "hello");
 
         // Negative indices
-        result = StringPrototype.slice(context, str, new JSValue[]{new JSNumber(-5)});
+        result = StringPrototype.slice(context, str, numberArgs(-5));
         assertStringValue(result, "world");
 
-        result = StringPrototype.slice(context, str, new JSValue[]{new JSNumber(0), new JSNumber(-6)});
+        result = StringPrototype.slice(context, str, numberArgs(0, -6));
         assertStringValue(result, "hello");
 
         // Out of bounds
-        result = StringPrototype.slice(context, str, new JSValue[]{new JSNumber(50)});
+        result = StringPrototype.slice(context, str, numberArgs(50));
         assertStringValue(result, "");
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.slice(context, empty, new JSValue[]{new JSNumber(0)});
+        result = StringPrototype.slice(context, empty, numberArgs(0));
         assertStringValue(result, "");
     }
 
@@ -901,44 +901,44 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testSubstr() {
         // Normal case
-        JSValue result = StringPrototype.substr(context, str, new JSValue[]{new JSNumber(6), new JSNumber(5)});
+        JSValue result = StringPrototype.substr(context, str, numberArgs(6, 5));
         assertStringValue(result, "world");
 
         // No length
-        result = StringPrototype.substr(context, str, new JSValue[]{new JSNumber(6)});
+        result = StringPrototype.substr(context, str, numberArgs(6));
         assertStringValue(result, "world");
 
         // Negative start
-        result = StringPrototype.substr(context, str, new JSValue[]{new JSNumber(-5), new JSNumber(5)});
+        result = StringPrototype.substr(context, str, numberArgs(-5, 5));
         assertStringValue(result, "world");
 
         // Negative length
-        result = StringPrototype.substr(context, str, new JSValue[]{new JSNumber(0), new JSNumber(-1)});
+        result = StringPrototype.substr(context, str, numberArgs(0, -1));
         assertStringValue(result, "");
 
         // Out of bounds
-        result = StringPrototype.substr(context, str, new JSValue[]{new JSNumber(50)});
+        result = StringPrototype.substr(context, str, numberArgs(50));
         assertStringValue(result, "");
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.substr(context, empty, new JSValue[]{new JSNumber(0)});
+        result = StringPrototype.substr(context, empty, numberArgs(0));
         assertStringValue(result, "");
 
         // Chinese characters
         JSString chinese = new JSString("你好世界");
-        result = StringPrototype.substr(context, chinese, new JSValue[]{new JSNumber(0), new JSNumber(2)});
+        result = StringPrototype.substr(context, chinese, numberArgs(0, 2));
         assertStringValue(result, "你好");
 
-        result = StringPrototype.substr(context, chinese, new JSValue[]{new JSNumber(1), new JSNumber(2)});
+        result = StringPrototype.substr(context, chinese, numberArgs(1, 2));
         assertStringValue(result, "好世");
 
         // Emoji characters
         JSString emoji = new JSString("😀🌟🚀");
-        result = StringPrototype.substr(context, emoji, new JSValue[]{new JSNumber(0), new JSNumber(2)});
+        result = StringPrototype.substr(context, emoji, numberArgs(0, 2));
         assertStringValue(result, "😀");
 
-        result = StringPrototype.substr(context, emoji, new JSValue[]{new JSNumber(2), new JSNumber(2)});
+        result = StringPrototype.substr(context, emoji, numberArgs(2, 2));
         assertStringValue(result, "🌟");
     }
 
@@ -971,43 +971,43 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testSubstring() {
         // Normal case
-        JSValue result = StringPrototype.substring(context, str, new JSValue[]{new JSNumber(6)});
+        JSValue result = StringPrototype.substring(context, str, numberArgs(6));
         assertStringValue(result, "world");
 
-        result = StringPrototype.substring(context, str, new JSValue[]{new JSNumber(0), new JSNumber(5)});
+        result = StringPrototype.substring(context, str, numberArgs(0, 5));
         assertStringValue(result, "hello");
 
         // Swapped indices
-        result = StringPrototype.substring(context, str, new JSValue[]{new JSNumber(5), new JSNumber(0)});
+        result = StringPrototype.substring(context, str, numberArgs(5, 0));
         assertStringValue(result, "hello");
 
         // Negative indices
-        result = StringPrototype.substring(context, str, new JSValue[]{new JSNumber(-5)});
+        result = StringPrototype.substring(context, str, numberArgs(-5));
         assertStringValue(result, "hello world");
 
         // Out of bounds
-        result = StringPrototype.substring(context, str, new JSValue[]{new JSNumber(50)});
+        result = StringPrototype.substring(context, str, numberArgs(50));
         assertStringValue(result, "");
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.substring(context, empty, new JSValue[]{new JSNumber(0)});
+        result = StringPrototype.substring(context, empty, numberArgs(0));
         assertStringValue(result, "");
 
         // Chinese characters
         JSString chinese = new JSString("你好世界");
-        result = StringPrototype.substring(context, chinese, new JSValue[]{new JSNumber(0), new JSNumber(2)});
+        result = StringPrototype.substring(context, chinese, numberArgs(0, 2));
         assertStringValue(result, "你好");
 
-        result = StringPrototype.substring(context, chinese, new JSValue[]{new JSNumber(1), new JSNumber(3)});
+        result = StringPrototype.substring(context, chinese, numberArgs(1, 3));
         assertStringValue(result, "好世");
 
         // Emoji characters
         JSString emoji = new JSString("😀🌟🚀");
-        result = StringPrototype.substring(context, emoji, new JSValue[]{new JSNumber(0), new JSNumber(2)});
+        result = StringPrototype.substring(context, emoji, numberArgs(0, 2));
         assertStringValue(result, "😀");
 
-        result = StringPrototype.substring(context, emoji, new JSValue[]{new JSNumber(2), new JSNumber(4)});
+        result = StringPrototype.substring(context, emoji, numberArgs(2, 4));
         assertStringValue(result, "🌟");
     }
 

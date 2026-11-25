@@ -197,7 +197,7 @@ public final class TemporalZonedDateTimeConstructor {
             }
         }
 
-        boolean hasExplicitOffset = hasOffsetDesignator(input);
+        boolean hasExplicitOffset = TemporalTimeZone.hasOffsetDesignator(input, findDateTimeSeparatorIndex(input));
         boolean hasZuluOffset = hasZuluDesignator(input);
         boolean hasTimeComponent = findDateTimeSeparatorIndex(input) >= 0;
         if (!hasTimeComponent && !hasExplicitOffset) {
@@ -216,7 +216,7 @@ public final class TemporalZonedDateTimeConstructor {
         }
         boolean offsetIncludesSecondsOrFraction = false;
         if (hasExplicitOffset && !hasZuluOffset) {
-            String offsetText = extractOffsetText(input);
+            String offsetText = TemporalTimeZone.extractOffsetText(input, findDateTimeSeparatorIndex(input));
             if (offsetText != null) {
                 offsetIncludesSecondsOrFraction = offsetTextIncludesSecondsOrFraction(offsetText);
             }
@@ -230,32 +230,6 @@ public final class TemporalZonedDateTimeConstructor {
         }
 
         return JSTemporalZonedDateTime.create(context, epochNanoseconds, timeZoneId, parsed.calendarId());
-    }
-
-    private static String extractOffsetText(String text) {
-        int timeSeparatorIndex = findDateTimeSeparatorIndex(text);
-        if (timeSeparatorIndex < 0) {
-            return null;
-        }
-        int offsetStart = -1;
-        for (int index = timeSeparatorIndex + 1; index < text.length(); index++) {
-            char character = text.charAt(index);
-            if (character == '[' || character == 'Z' || character == 'z') {
-                break;
-            }
-            if (character == '+' || character == '-' || character == '\u2212') {
-                offsetStart = index;
-                break;
-            }
-        }
-        if (offsetStart < 0) {
-            return null;
-        }
-        int offsetEnd = text.indexOf('[', offsetStart);
-        if (offsetEnd < 0) {
-            offsetEnd = text.length();
-        }
-        return text.substring(offsetStart, offsetEnd);
     }
 
     private static int findDateTimeSeparatorIndex(String text) {
@@ -341,23 +315,6 @@ public final class TemporalZonedDateTimeConstructor {
 
         context.throwTypeError("Temporal error: DateTime argument must be object or string.");
         return JSUndefined.INSTANCE;
-    }
-
-    private static boolean hasOffsetDesignator(String text) {
-        int timeSeparatorIndex = findDateTimeSeparatorIndex(text);
-        if (timeSeparatorIndex < 0) {
-            return false;
-        }
-        for (int index = timeSeparatorIndex + 1; index < text.length(); index++) {
-            char character = text.charAt(index);
-            if (character == '[') {
-                break;
-            }
-            if (character == 'Z' || character == 'z' || character == '+' || character == '-' || character == '\u2212') {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static boolean hasZuluDesignator(String text) {

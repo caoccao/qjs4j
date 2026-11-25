@@ -56,7 +56,7 @@ public class BigIntConstructorTest extends BaseJavetTest {
         assertThat(bigInt.value()).isEqualTo(BigInteger.valueOf(127));
 
         // Edge case: insufficient arguments
-        result = BigIntConstructor.asIntN(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(8)});
+        result = BigIntConstructor.asIntN(context, JSUndefined.INSTANCE, numberArgs(8));
         assertTypeError(result);
         assertPendingException(context);
 
@@ -67,8 +67,7 @@ public class BigIntConstructorTest extends BaseJavetTest {
         assertThat(bigInt.value()).isEqualTo(BigInteger.ONE);
 
         // Edge case: second argument not a BigInt
-        result = BigIntConstructor.asIntN(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSNumber(8), new JSNumber(123)});
+        result = BigIntConstructor.asIntN(context, JSUndefined.INSTANCE, numberArgs(8, 123));
         assertTypeError(result);
         assertPendingException(context);
 
@@ -106,7 +105,7 @@ public class BigIntConstructorTest extends BaseJavetTest {
         assertThat(bigInt.value()).isEqualTo(BigInteger.valueOf(255));
 
         // Edge case: insufficient arguments
-        result = BigIntConstructor.asUintN(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(8)});
+        result = BigIntConstructor.asUintN(context, JSUndefined.INSTANCE, numberArgs(8));
         assertTypeError(result);
         assertPendingException(context);
 
@@ -117,8 +116,7 @@ public class BigIntConstructorTest extends BaseJavetTest {
         assertThat(bigInt.value()).isEqualTo(BigInteger.ONE);
 
         // Edge case: second argument not a BigInt
-        result = BigIntConstructor.asUintN(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSNumber(8), new JSNumber(123)});
+        result = BigIntConstructor.asUintN(context, JSUndefined.INSTANCE, numberArgs(8, 123));
         assertTypeError(result);
         assertPendingException(context);
 
@@ -197,7 +195,7 @@ public class BigIntConstructorTest extends BaseJavetTest {
     @Test
     public void testCall() {
         // Normal case: from number
-        JSValue result = BigIntConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(123)});
+        JSValue result = BigIntConstructor.call(context, JSUndefined.INSTANCE, numberArgs(123));
         JSBigInt bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.valueOf(123));
 
@@ -242,18 +240,17 @@ public class BigIntConstructorTest extends BaseJavetTest {
         assertPendingException(context);
 
         // Edge case: non-integer number
-        result = BigIntConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(1.5)});
+        result = BigIntConstructor.call(context, JSUndefined.INSTANCE, numberArgs(1.5));
         assertRangeError(result);
         assertPendingException(context);
 
         // Edge case: Infinity
-        result = BigIntConstructor.call(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSNumber(Double.POSITIVE_INFINITY)});
+        result = BigIntConstructor.call(context, JSUndefined.INSTANCE, numberArgs(Double.POSITIVE_INFINITY));
         assertRangeError(result);
         assertPendingException(context);
 
         // Edge case: NaN
-        result = BigIntConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(Double.NaN)});
+        result = BigIntConstructor.call(context, JSUndefined.INSTANCE, numberArgs(Double.NaN));
         assertRangeError(result);
         assertPendingException(context);
 

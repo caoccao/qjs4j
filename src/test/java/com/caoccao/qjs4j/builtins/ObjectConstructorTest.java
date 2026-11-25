@@ -188,7 +188,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertStringValue(result, "string");
 
         // Edge case: freeze number primitive
-        result = ObjectPrototype.freeze(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42)});
+        result = ObjectPrototype.freeze(context, JSUndefined.INSTANCE, numberArgs(42));
         assertNumberValue(result, 42.0);
 
         // Edge case: freeze boolean primitive
@@ -366,19 +366,15 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertPendingException(context);
 
         // Edge case: non-iterable argument
-        assertTypeError(ObjectConstructor.fromEntries(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42)}));
+        assertTypeError(ObjectConstructor.fromEntries(context, JSUndefined.INSTANCE, numberArgs(42)));
         assertPendingException(context);
 
         // Test with string keys and various value types - use manual creation
         JSArray mixedEntries = new JSArray(context);
-        JSArray mixedEntry1 = new JSArray(context);
-        mixedEntry1.push(new JSString("key1"));
-        mixedEntry1.push(new JSString("value1"));
+        JSArray mixedEntry1 = new JSArray(context, new JSString("key1"), new JSString("value1"));
         mixedEntries.push(mixedEntry1);
 
-        JSArray mixedEntry2 = new JSArray(context);
-        mixedEntry2.push(new JSString("key2"));
-        mixedEntry2.push(JSBoolean.TRUE);
+        JSArray mixedEntry2 = new JSArray(context, new JSString("key2"), JSBoolean.TRUE);
         mixedEntries.push(mixedEntry2);
 
         // Set prototype for the arrays
@@ -732,6 +728,11 @@ public class ObjectConstructorTest extends BaseJavetTest {
         // Edge case: non-object
         assertTypeError(ObjectConstructor.keys(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE}));
         assertPendingException(context);
+
+        JSObject negativeKey = context.createJSObject();
+        negativeKey.set(PropertyKey.fromIndex(-1), JSBoolean.TRUE);
+        JSArray keys = (JSArray) ObjectConstructor.keys(context, JSUndefined.INSTANCE, new JSValue[]{negativeKey});
+        assertThat(keys.get(0)).isEqualTo(new JSString("-1"));
 
         assertStringWithJavet("var obj = {a: 1, b: 2, c: 3}; JSON.stringify(Object.keys(obj))");
     }

@@ -84,8 +84,7 @@ final class ImportBindingInstaller {
         JSNativeFunction getter = new JSNativeFunction(context, "get " + bindingName, 0, (context, thisArg, args) -> {
             JSValue val = namespaceObject.get(importKey);
             if (context != null && context.hasPendingException()) {
-                JSValue exception = context.getPendingException();
-                context.clearPendingException();
+                JSValue exception = context.takePendingException();
                 throw new JSException(exception);
             }
             if (val == JSUndefined.INSTANCE && namespaceObject instanceof JSImportNamespaceObject namespace) {
@@ -236,8 +235,7 @@ final class ImportBindingInstaller {
             PropertyKey localKey = PropertyKey.fromString(hoistedBinding.localName());
             JSValue functionValue = functionBindingsObject.get(localKey);
             if (context.hasPendingException()) {
-                JSValue pendingError = context.getPendingException();
-                context.clearPendingException();
+                JSValue pendingError = context.takePendingException();
                 throw new JSException(pendingError);
             }
             if (!(functionValue instanceof JSFunction)) {

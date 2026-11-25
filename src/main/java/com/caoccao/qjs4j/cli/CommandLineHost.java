@@ -144,8 +144,7 @@ final class CommandLineHost {
             thrown = e.getJsValue();
         }
         if (context.hasPendingException()) {
-            thrown = context.getPendingException();
-            context.clearPendingException();
+            thrown = context.takePendingException();
         }
         return thrown;
     }

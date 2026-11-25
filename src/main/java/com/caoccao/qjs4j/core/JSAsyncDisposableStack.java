@@ -84,8 +84,7 @@ public final class JSAsyncDisposableStack extends JSObject {
 
         JSValue initialError = completionError;
         if (initialError == null && context.hasPendingException()) {
-            initialError = context.getPendingException();
-            context.clearPendingException();
+            initialError = context.takePendingException();
         }
 
         if (disposed) {
@@ -145,23 +144,20 @@ public final class JSAsyncDisposableStack extends JSObject {
             disposerResult = record.function().call(context, record.thisArg(), record.args());
         } catch (JSException e) {
             if (context.hasPendingException()) {
-                currentError = context.getPendingException();
-                context.clearPendingException();
+                currentError = context.takePendingException();
             } else {
                 currentError = e.getErrorValue();
             }
         } catch (JSVirtualMachineException e) {
             if (context.hasPendingException()) {
-                currentError = context.getPendingException();
-                context.clearPendingException();
+                currentError = context.takePendingException();
             } else if (e.getJsValue() != null) {
                 currentError = e.getJsValue();
             } else if (e.getJsError() != null) {
                 currentError = e.getJsError();
             } else {
                 JSValue error = context.throwError("Error during async disposal: " + e.getMessage());
-                JSValue pending = context.getPendingException();
-                context.clearPendingException();
+                JSValue pending = context.takePendingException();
                 currentError = pending != null ? pending : error;
             }
         }
@@ -169,8 +165,7 @@ public final class JSAsyncDisposableStack extends JSObject {
         // virtual machine, which reports it to the embedder uncatchably.
 
         if (currentError == null && context.hasPendingException()) {
-            currentError = context.getPendingException();
-            context.clearPendingException();
+            currentError = context.takePendingException();
         }
         JSValue nextAccumulatedError = mergeDisposalError(context, currentError, accumulatedError);
         if (currentError != null) {

@@ -122,36 +122,36 @@ public class ArrayBufferPrototypeTest extends BaseTest {
     public void testResize() {
         // Normal case: resize to larger size
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16, 64);
-        JSValue result = ArrayBufferPrototype.resize(context, buffer, new JSValue[]{new JSNumber(32)});
+        JSValue result = ArrayBufferPrototype.resize(context, buffer, numberArgs(32));
         assertThat(result.isUndefined()).isTrue();
         assertThat(buffer.getByteLength()).isEqualTo(32);
 
         // Normal case: resize to smaller size
-        result = ArrayBufferPrototype.resize(context, buffer, new JSValue[]{new JSNumber(8)});
+        result = ArrayBufferPrototype.resize(context, buffer, numberArgs(8));
         assertThat(result.isUndefined()).isTrue();
         assertThat(buffer.getByteLength()).isEqualTo(8);
 
         // Edge case: resize non-resizable buffer (TypeError per ES2024 spec)
         JSArrayBuffer fixedBuffer = new JSArrayBuffer(context, 16);
-        result = ArrayBufferPrototype.resize(context, fixedBuffer, new JSValue[]{new JSNumber(32)});
+        result = ArrayBufferPrototype.resize(context, fixedBuffer, numberArgs(32));
         assertTypeError(result);
         assertPendingException(context);
 
         // Edge case: resize detached buffer (TypeError per ES2024 spec)
         buffer.detach();
-        result = ArrayBufferPrototype.resize(context, buffer, new JSValue[]{new JSNumber(16)});
+        result = ArrayBufferPrototype.resize(context, buffer, numberArgs(16));
         assertTypeError(result);
         assertPendingException(context);
 
         // Edge case: resize beyond maxByteLength
         JSArrayBuffer buffer2 = new JSArrayBuffer(context, 16, 64);
-        result = ArrayBufferPrototype.resize(context, buffer2, new JSValue[]{new JSNumber(128)});
+        result = ArrayBufferPrototype.resize(context, buffer2, numberArgs(128));
         assertRangeError(result);
         assertPendingException(context);
 
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
-        result = ArrayBufferPrototype.resize(context, nonBuffer, new JSValue[]{new JSNumber(16)});
+        result = ArrayBufferPrototype.resize(context, nonBuffer, numberArgs(16));
         assertTypeError(result);
         assertPendingException(context);
 
@@ -172,37 +172,37 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         assertThat(sliced.getByteLength()).isEqualTo(16);
 
         // Normal case: slice with begin only
-        result = ArrayBufferPrototype.slice(context, buffer, new JSValue[]{new JSNumber(4)});
+        result = ArrayBufferPrototype.slice(context, buffer, numberArgs(4));
         sliced = result.asArrayBuffer().orElseThrow();
         assertThat(sliced.getByteLength()).isEqualTo(12);
 
         // Normal case: slice with begin and end
-        result = ArrayBufferPrototype.slice(context, buffer, new JSValue[]{new JSNumber(4), new JSNumber(8)});
+        result = ArrayBufferPrototype.slice(context, buffer, numberArgs(4, 8));
         sliced = result.asArrayBuffer().orElseThrow();
         assertThat(sliced.getByteLength()).isEqualTo(4);
 
         // Normal case: negative begin
-        result = ArrayBufferPrototype.slice(context, buffer, new JSValue[]{new JSNumber(-4)});
+        result = ArrayBufferPrototype.slice(context, buffer, numberArgs(-4));
         sliced = result.asArrayBuffer().orElseThrow();
         assertThat(sliced.getByteLength()).isEqualTo(4);
 
         // Normal case: negative end
-        result = ArrayBufferPrototype.slice(context, buffer, new JSValue[]{new JSNumber(0), new JSNumber(-4)});
+        result = ArrayBufferPrototype.slice(context, buffer, numberArgs(0, -4));
         sliced = result.asArrayBuffer().orElseThrow();
         assertThat(sliced.getByteLength()).isEqualTo(12);
 
         // Normal case: begin > end (empty slice)
-        result = ArrayBufferPrototype.slice(context, buffer, new JSValue[]{new JSNumber(8), new JSNumber(4)});
+        result = ArrayBufferPrototype.slice(context, buffer, numberArgs(8, 4));
         sliced = result.asArrayBuffer().orElseThrow();
         assertThat(sliced.getByteLength()).isEqualTo(0);
 
         // Normal case: begin out of bounds
-        result = ArrayBufferPrototype.slice(context, buffer, new JSValue[]{new JSNumber(20)});
+        result = ArrayBufferPrototype.slice(context, buffer, numberArgs(20));
         sliced = result.asArrayBuffer().orElseThrow();
         assertThat(sliced.getByteLength()).isEqualTo(0);
 
         // Normal case: end out of bounds
-        result = ArrayBufferPrototype.slice(context, buffer, new JSValue[]{new JSNumber(0), new JSNumber(20)});
+        result = ArrayBufferPrototype.slice(context, buffer, numberArgs(0, 20));
         sliced = result.asArrayBuffer().orElseThrow();
         assertThat(sliced.getByteLength()).isEqualTo(16);
 
@@ -231,21 +231,21 @@ public class ArrayBufferPrototypeTest extends BaseTest {
 
         // Normal case: transfer to larger size
         JSArrayBuffer buffer2 = new JSArrayBuffer(context, 16);
-        result = ArrayBufferPrototype.transfer(context, buffer2, new JSValue[]{new JSNumber(32)});
+        result = ArrayBufferPrototype.transfer(context, buffer2, numberArgs(32));
         transferred = result.asArrayBuffer().orElseThrow();
         assertThat(transferred.getByteLength()).isEqualTo(32);
         assertThat(buffer2.isDetached()).isTrue();
 
         // Normal case: transfer to smaller size
         JSArrayBuffer buffer3 = new JSArrayBuffer(context, 16);
-        result = ArrayBufferPrototype.transfer(context, buffer3, new JSValue[]{new JSNumber(8)});
+        result = ArrayBufferPrototype.transfer(context, buffer3, numberArgs(8));
         transferred = result.asArrayBuffer().orElseThrow();
         assertThat(transferred.getByteLength()).isEqualTo(8);
         assertThat(buffer3.isDetached()).isTrue();
 
         // Normal case: transfer resizable buffer maintains resizability
         JSArrayBuffer resizableBuffer = new JSArrayBuffer(context, 16, 64);
-        result = ArrayBufferPrototype.transfer(context, resizableBuffer, new JSValue[]{new JSNumber(24)});
+        result = ArrayBufferPrototype.transfer(context, resizableBuffer, numberArgs(24));
         transferred = result.asArrayBuffer().orElseThrow();
         assertThat(transferred.getByteLength()).isEqualTo(24);
         assertThat(transferred.getMaxByteLength()).isEqualTo(64);
@@ -277,7 +277,7 @@ public class ArrayBufferPrototypeTest extends BaseTest {
 
         // Normal case: transfer to larger size
         JSArrayBuffer buffer2 = new JSArrayBuffer(context, 16);
-        result = ArrayBufferPrototype.transferToFixedLength(context, buffer2, new JSValue[]{new JSNumber(32)});
+        result = ArrayBufferPrototype.transferToFixedLength(context, buffer2, numberArgs(32));
         transferred = result.asArrayBuffer().orElseThrow();
         assertThat(transferred.getByteLength()).isEqualTo(32);
         assertThat(transferred.isResizable()).isFalse();
@@ -285,7 +285,7 @@ public class ArrayBufferPrototypeTest extends BaseTest {
 
         // Normal case: transfer to smaller size
         JSArrayBuffer buffer3 = new JSArrayBuffer(context, 16);
-        result = ArrayBufferPrototype.transferToFixedLength(context, buffer3, new JSValue[]{new JSNumber(8)});
+        result = ArrayBufferPrototype.transferToFixedLength(context, buffer3, numberArgs(8));
         transferred = result.asArrayBuffer().orElseThrow();
         assertThat(transferred.getByteLength()).isEqualTo(8);
         assertThat(transferred.isResizable()).isFalse();
@@ -293,7 +293,7 @@ public class ArrayBufferPrototypeTest extends BaseTest {
 
         // Normal case: transfer resizable buffer to fixed-length
         JSArrayBuffer resizableBuffer = new JSArrayBuffer(context, 16, 64);
-        result = ArrayBufferPrototype.transferToFixedLength(context, resizableBuffer, new JSValue[]{new JSNumber(24)});
+        result = ArrayBufferPrototype.transferToFixedLength(context, resizableBuffer, numberArgs(24));
         transferred = result.asArrayBuffer().orElseThrow();
         assertThat(transferred.getByteLength()).isEqualTo(24);
         assertThat(transferred.getMaxByteLength()).isEqualTo(24);

@@ -44,6 +44,42 @@ public final class SetPrototype {
         return JSTypeConversions.toBoolean(result).isBooleanTrue();
     }
 
+    private static JSValue checkOtherKeys(JSContext context, JSSet set, SetRecord record, boolean expectPresent) {
+        IteratorRecord iteratorRecord = getKeysIteratorRecord(context, record);
+        if (iteratorRecord == null) {
+            return JSUndefined.INSTANCE;
+        }
+        while (iteratorRecord.advance(context)) {
+            if (set.setHas(iteratorRecord.value) != expectPresent) {
+                closeIterator(context, iteratorRecord.iteratorObject);
+                return JSBoolean.FALSE;
+            }
+        }
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return JSBoolean.TRUE;
+    }
+
+    private static JSValue checkOwnKeys(JSContext context, JSSet set, SetRecord record, boolean expectPresent) {
+        JSSet.IterationCursor cursor = set.createIterationCursor();
+        while (true) {
+            context.getVirtualMachine().checkExecutionInterruptForNative();
+            JSValue item = set.nextIterationValue(cursor);
+            if (item == null) {
+                break;
+            }
+            Boolean found = callHas(context, record, item);
+            if (found == null) {
+                return JSUndefined.INSTANCE;
+            }
+            if (found != expectPresent) {
+                return JSBoolean.FALSE;
+            }
+        }
+        return JSBoolean.TRUE;
+    }
+
     /**
      * Set.prototype.clear() ES2020 23.2.3.2 Removes all values from the Set.
      */
@@ -128,16 +164,11 @@ public final class SetPrototype {
             if (iteratorRecord == null) {
                 return JSUndefined.INSTANCE;
             }
-            while (true) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
-                IteratorStep step = iteratorStep(context, iteratorRecord);
-                if (step == null) {
-                    return JSUndefined.INSTANCE;
-                }
-                if (step.done) {
-                    break;
-                }
-                newSet.setDelete(step.value);
+            while (iteratorRecord.advance(context)) {
+                newSet.setDelete(iteratorRecord.value);
+            }
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
             }
         }
         return newSet;
@@ -312,18 +343,13 @@ public final class SetPrototype {
             if (iteratorRecord == null) {
                 return JSUndefined.INSTANCE;
             }
-            while (true) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
-                IteratorStep step = iteratorStep(context, iteratorRecord);
-                if (step == null) {
-                    return JSUndefined.INSTANCE;
+            while (iteratorRecord.advance(context)) {
+                if (set.setHas(iteratorRecord.value) && !newSet.setHas(iteratorRecord.value)) {
+                    newSet.setAdd(iteratorRecord.value);
                 }
-                if (step.done) {
-                    break;
-                }
-                if (set.setHas(step.value) && !newSet.setHas(step.value)) {
-                    newSet.setAdd(step.value);
-                }
+            }
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
             }
         } else {
             JSSet.IterationCursor cursor = set.createIterationCursor();
@@ -358,42 +384,9 @@ public final class SetPrototype {
         }
 
         if (set.size() <= record.size) {
-            JSSet.IterationCursor cursor = set.createIterationCursor();
-            while (true) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
-                JSValue item = set.nextIterationValue(cursor);
-                if (item == null) {
-                    break;
-                }
-                Boolean found = callHas(context, record, item);
-                if (found == null) {
-                    return JSUndefined.INSTANCE;
-                }
-                if (found) {
-                    return JSBoolean.FALSE;
-                }
-            }
-        } else {
-            IteratorRecord iteratorRecord = getKeysIteratorRecord(context, record);
-            if (iteratorRecord == null) {
-                return JSUndefined.INSTANCE;
-            }
-            while (true) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
-                IteratorStep step = iteratorStep(context, iteratorRecord);
-                if (step == null) {
-                    return JSUndefined.INSTANCE;
-                }
-                if (step.done) {
-                    break;
-                }
-                if (set.setHas(step.value)) {
-                    closeIterator(context, iteratorRecord.iteratorObject);
-                    return JSBoolean.FALSE;
-                }
-            }
+            return checkOwnKeys(context, set, record, false);
         }
-        return JSBoolean.TRUE;
+        return checkOtherKeys(context, set, record, false);
     }
 
     /**
@@ -411,22 +404,7 @@ public final class SetPrototype {
         if (set.size() > record.size) {
             return JSBoolean.FALSE;
         }
-        JSSet.IterationCursor cursor = set.createIterationCursor();
-        while (true) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            JSValue item = set.nextIterationValue(cursor);
-            if (item == null) {
-                break;
-            }
-            Boolean found = callHas(context, record, item);
-            if (found == null) {
-                return JSUndefined.INSTANCE;
-            }
-            if (!found) {
-                return JSBoolean.FALSE;
-            }
-        }
-        return JSBoolean.TRUE;
+        return checkOwnKeys(context, set, record, true);
     }
 
     /**
@@ -444,51 +422,7 @@ public final class SetPrototype {
         if (set.size() < record.size) {
             return JSBoolean.FALSE;
         }
-        IteratorRecord iteratorRecord = getKeysIteratorRecord(context, record);
-        if (iteratorRecord == null) {
-            return JSUndefined.INSTANCE;
-        }
-        while (true) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            IteratorStep step = iteratorStep(context, iteratorRecord);
-            if (step == null) {
-                return JSUndefined.INSTANCE;
-            }
-            if (step.done) {
-                break;
-            }
-            if (!set.setHas(step.value)) {
-                closeIterator(context, iteratorRecord.iteratorObject);
-                return JSBoolean.FALSE;
-            }
-        }
-        return JSBoolean.TRUE;
-    }
-
-    private static IteratorStep iteratorStep(JSContext context, IteratorRecord iteratorRecord) {
-        // Call the cached next method
-        JSValue nextResult = JSCall.call(context, iteratorRecord.nextFunction, iteratorRecord.iteratorObject,
-                JSValue.NO_ARGS);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (!(nextResult instanceof JSObject nextResultObject)) {
-            context.throwTypeError("Iterator result must be an object");
-            return null;
-        }
-        // Use context-aware get to trigger getters
-        JSValue done = nextResultObject.get(PropertyKey.DONE);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
-            return new IteratorStep(JSUndefined.INSTANCE, true);
-        }
-        JSValue value = nextResultObject.get(PropertyKey.VALUE);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        return new IteratorStep(value, false);
+        return checkOtherKeys(context, set, record, true);
     }
 
     /**
@@ -499,12 +433,11 @@ public final class SetPrototype {
         return values(context, thisArg, args);
     }
 
-    /**
-     * Set.prototype.symmetricDifference(other) QuickJS extension.
-     */
-    public static JSValue symmetricDifference(JSContext context, JSValue thisArg, JSValue[] args) {
+    private static JSValue merge(JSContext context, JSValue thisArg, JSValue[] args, boolean symmetric) {
         if (!(thisArg instanceof JSSet set)) {
-            return context.throwTypeError("Set.prototype.symmetricDifference called on non-Set");
+            return context.throwTypeError(symmetric
+                    ? "Set.prototype.symmetricDifference called on non-Set"
+                    : "Set.prototype.union called on non-Set");
         }
         SetRecord record = getSetRecord(context, JSValue.argumentOrUndefined(args, 0));
         if (record == null) {
@@ -518,57 +451,32 @@ public final class SetPrototype {
             return JSUndefined.INSTANCE;
         }
         JSSet newSet = copySet(context, set);
-        while (true) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            IteratorStep step = iteratorStep(context, iteratorRecord);
-            if (step == null) {
-                return JSUndefined.INSTANCE;
-            }
-            if (step.done) {
-                break;
-            }
-            boolean presentInThis = set.setHas(step.value);
-            boolean presentInNewSet = newSet.setHas(step.value);
-            if (presentInThis) {
-                newSet.setDelete(step.value);
-            } else if (!presentInNewSet) {
-                newSet.setAdd(step.value);
+        while (iteratorRecord.advance(context)) {
+            JSValue value = iteratorRecord.value;
+            if (symmetric && set.setHas(value)) {
+                newSet.setDelete(value);
+            } else {
+                newSet.setAdd(value);
             }
         }
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         return newSet;
+    }
+
+    /**
+     * Set.prototype.symmetricDifference(other) QuickJS extension.
+     */
+    public static JSValue symmetricDifference(JSContext context, JSValue thisArg, JSValue[] args) {
+        return merge(context, thisArg, args, true);
     }
 
     /**
      * Set.prototype.union(other) QuickJS extension.
      */
     public static JSValue union(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSSet set)) {
-            return context.throwTypeError("Set.prototype.union called on non-Set");
-        }
-        SetRecord record = getSetRecord(context, JSValue.argumentOrUndefined(args, 0));
-        if (record == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        // Per ES2024: GetKeysIterator (step 4) before copying SetData (step 5).
-        // The iterator's next getter may modify the set.
-        IteratorRecord iteratorRecord = getKeysIteratorRecord(context, record);
-        if (iteratorRecord == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSSet newSet = copySet(context, set);
-        while (true) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            IteratorStep step = iteratorStep(context, iteratorRecord);
-            if (step == null) {
-                return JSUndefined.INSTANCE;
-            }
-            if (step.done) {
-                break;
-            }
-            newSet.setAdd(step.value);
-        }
-        return newSet;
+        return merge(context, thisArg, args, false);
     }
 
     /**
@@ -582,10 +490,33 @@ public final class SetPrototype {
         return JSIterator.setValuesIterator(context, set);
     }
 
-    private record IteratorRecord(JSObject iteratorObject, JSValue nextFunction) {
-    }
+    private static final class IteratorRecord {
+        private final JSObject iteratorObject;
+        private final JSValue nextFunction;
+        private JSValue value;
 
-    private record IteratorStep(JSValue value, boolean done) {
+        IteratorRecord(JSObject iteratorObject, JSValue nextFunction) {
+            this.iteratorObject = iteratorObject;
+            this.nextFunction = nextFunction;
+        }
+
+        boolean advance(JSContext context) {
+            context.getVirtualMachine().checkExecutionInterruptForNative();
+            JSValue next = JSCall.call(context, nextFunction, iteratorObject, JSValue.NO_ARGS);
+            if (context.hasPendingException()) {
+                return false;
+            }
+            if (!(next instanceof JSObject result)) {
+                context.throwTypeError("Iterator result must be an object");
+                return false;
+            }
+            JSValue done = result.get(PropertyKey.DONE);
+            if (context.hasPendingException() || JSTypeConversions.toBoolean(done).isBooleanTrue()) {
+                return false;
+            }
+            value = result.get(PropertyKey.VALUE);
+            return !context.hasPendingException();
+        }
     }
 
     private record SetRecord(JSValue objectValue, long size, JSValue hasFunction, JSValue keysFunction) {

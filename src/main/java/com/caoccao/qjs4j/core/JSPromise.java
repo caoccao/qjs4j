@@ -183,8 +183,7 @@ public final class JSPromise extends JSObject {
 
         JSValue thenValue = resolutionObject.get(PropertyKey.THEN);
         if (context.hasPendingException()) {
-            JSValue error = context.getPendingException();
-            context.clearPendingException();
+            JSValue error = context.takePendingException();
             reject(error);
             return;
         }
@@ -222,8 +221,7 @@ public final class JSPromise extends JSObject {
                     ((JSFunction) thenValue).call(context, resolutionObject, new JSValue[]{resolveFunc, rejectFunc});
                 }
                 if (context.hasPendingException() && !resolveState.alreadyResolved) {
-                    JSValue error = context.getPendingException();
-                    context.clearPendingException();
+                    JSValue error = context.takePendingException();
                     resolveState.alreadyResolved = true;
                     reject(error);
                 }
@@ -243,8 +241,7 @@ public final class JSPromise extends JSObject {
                     } else if (e.getJsError() != null) {
                         reject(e.getJsError());
                     } else if (context.hasPendingException()) {
-                        JSValue error = context.getPendingException();
-                        context.clearPendingException();
+                        JSValue error = context.takePendingException();
                         reject(error);
                     } else {
                         reject(new JSString("Error in promise resolution: "
@@ -258,8 +255,7 @@ public final class JSPromise extends JSObject {
                 if (!resolveState.alreadyResolved) {
                     resolveState.alreadyResolved = true;
                     if (context.hasPendingException()) {
-                        JSValue error = context.getPendingException();
-                        context.clearPendingException();
+                        JSValue error = context.takePendingException();
                         reject(error);
                     } else {
                         reject(new JSString("Error in promise resolution: " + e.getMessage()));
@@ -298,8 +294,7 @@ public final class JSPromise extends JSObject {
                     JSValue[] args = new JSValue[]{value};
                     JSValue handlerResult = reaction.handler.call(reaction.context, JSUndefined.INSTANCE, args);
                     if (reaction.context.hasPendingException()) {
-                        JSValue error = reaction.context.getPendingException();
-                        reaction.context.clearPendingException();
+                        JSValue error = reaction.context.takePendingException();
                         rejectReactionTarget(reaction, error);
                         return;
                     }
@@ -315,8 +310,7 @@ public final class JSPromise extends JSObject {
                     // If handler throws, reject the chained promise with the JS error value
                     JSValue errorValue = null;
                     if (reaction.context.hasPendingException()) {
-                        errorValue = reaction.context.getPendingException();
-                        reaction.context.clearPendingException();
+                        errorValue = reaction.context.takePendingException();
                     } else if (e instanceof JSVirtualMachineException vmException && vmException.getJsValue() != null) {
                         errorValue = vmException.getJsValue();
                     }
@@ -382,8 +376,7 @@ public final class JSPromise extends JSObject {
             JSValue[] executorArgs = new JSValue[]{resolveFunc, rejectFunc};
             JSCall.call(context, executor, JSUndefined.INSTANCE, executorArgs);
             if (context.hasPendingException()) {
-                JSValue error = context.getPendingException();
-                context.clearPendingException();
+                JSValue error = context.takePendingException();
                 if (!resolveState.alreadyResolved) {
                     resolveState.alreadyResolved = true;
                     jsPromise.reject(error);
@@ -405,8 +398,7 @@ public final class JSPromise extends JSObject {
                 } else if (e.getJsError() != null) {
                     jsPromise.reject(e.getJsError());
                 } else if (context.hasPendingException()) {
-                    JSValue error = context.getPendingException();
-                    context.clearPendingException();
+                    JSValue error = context.takePendingException();
                     jsPromise.reject(error);
                 } else {
                     jsPromise.reject(new JSString(e.getMessage() != null ? e.getMessage() : "Unhandled exception"));

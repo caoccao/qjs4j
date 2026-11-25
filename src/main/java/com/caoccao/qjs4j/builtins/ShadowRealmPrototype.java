@@ -113,8 +113,7 @@ public final class ShadowRealmPrototype {
                     for (int i = 0; i < args.length; i++) {
                         JSValue wrappedArgument = getWrappedValue(targetContext, callerContext, args[i]);
                         if (targetContext.hasPendingException()) {
-                            JSValue ignored = targetContext.getPendingException();
-                            targetContext.clearPendingException();
+                            JSValue ignored = targetContext.takePendingException();
                             return callerContext.throwTypeError("Cross-realm argument is not wrappable");
                         }
                         wrappedArguments[i] = wrappedArgument;
@@ -281,8 +280,7 @@ public final class ShadowRealmPrototype {
             JSValue exportValue = exportsObject.get(PropertyKey.fromString(exportName));
             JSValue wrappedExportValue = getWrappedValue(callerContext, shadowContext, exportValue);
             if (callerContext.hasPendingException()) {
-                JSValue error = callerContext.getPendingException();
-                callerContext.clearPendingException();
+                JSValue error = callerContext.takePendingException();
                 promise.reject(error);
                 return promise;
             }

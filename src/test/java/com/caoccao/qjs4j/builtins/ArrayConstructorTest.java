@@ -30,10 +30,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
     @Test
     public void testFrom() {
         // Normal case: from array
-        JSArray sourceArr = new JSArray(context);
-        sourceArr.push(new JSNumber(1));
-        sourceArr.push(new JSNumber(2));
-        sourceArr.push(new JSNumber(3));
+        JSArray sourceArr = new JSArray(context, numberArgs(1, 2, 3));
 
         JSValue result = ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{sourceArr});
         JSArray arr = result.asArray().orElseThrow();
@@ -59,9 +56,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
             return args[0];
         });
 
-        JSArray sourceArr2 = new JSArray(context);
-        sourceArr2.push(new JSNumber(1));
-        sourceArr2.push(new JSNumber(2));
+        JSArray sourceArr2 = new JSArray(context, numberArgs(1, 2));
 
         result = ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{sourceArr2, mapFn});
         arr = result.asArray().orElseThrow();
@@ -99,7 +94,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertPendingException(context);
 
         // Edge case: non-iterable number → empty array (per spec, ToObject(123) has no length)
-        result = ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(123)});
+        result = ArrayConstructor.from(context, JSUndefined.INSTANCE, numberArgs(123));
         arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(0);
 
@@ -112,10 +107,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
     @Test
     public void testFromAsync() {
         // Normal case: from async iterator (array)
-        JSArray sourceArr = new JSArray(context);
-        sourceArr.push(new JSNumber(1));
-        sourceArr.push(new JSNumber(2));
-        sourceArr.push(new JSNumber(3));
+        JSArray sourceArr = new JSArray(context, numberArgs(1, 2, 3));
 
         JSAsyncIterator asyncIterator = JSAsyncIterator.fromArray(sourceArr, context);
         JSValue result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{asyncIterator});
@@ -130,9 +122,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertNumberValue(arr.get(2), 3.0);
 
         // Normal case: from regular array (sync fallback)
-        JSArray sourceArr2 = new JSArray(context);
-        sourceArr2.push(new JSNumber(10));
-        sourceArr2.push(new JSNumber(20));
+        JSArray sourceArr2 = new JSArray(context, numberArgs(10, 20));
 
         result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{sourceArr2});
         promise = result.asPromise().orElseThrow();
@@ -152,9 +142,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
             return args[0];
         });
 
-        JSArray sourceArr3 = new JSArray(context);
-        sourceArr3.push(new JSNumber(1));
-        sourceArr3.push(new JSNumber(2));
+        JSArray sourceArr3 = new JSArray(context, numberArgs(1, 2));
 
         result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{sourceArr3, mapFn});
         promise = result.asPromise().orElseThrow();
@@ -195,7 +183,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
 
         // Edge case: number input treated as array-like with length 0 (per ES2024 spec)
-        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(123)});
+        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, numberArgs(123));
         promise = result.asPromise().orElseThrow();
         awaitPromise(promise);
         assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.FULFILLED);
@@ -304,8 +292,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
     @Test
     public void testOf() {
         // Normal case: create array with elements
-        JSValue result = ArrayConstructor.of(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSNumber(1), new JSNumber(2), new JSNumber(3)});
+        JSValue result = ArrayConstructor.of(context, JSUndefined.INSTANCE, numberArgs(1, 2, 3));
         JSArray arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(3);
         assertNumberValue(arr.get(0), 1.0);

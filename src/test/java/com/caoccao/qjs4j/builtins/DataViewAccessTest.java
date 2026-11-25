@@ -6,7 +6,9 @@ import com.caoccao.qjs4j.core.JSDataView;
 import com.caoccao.qjs4j.core.JSString;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.nio.ByteOrder;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -59,6 +61,27 @@ public class DataViewAccessTest extends BaseJavetTest {
                 })()
                 """.formatted(type));
         assertThat(result.value()).isEqualTo("TypeError:");
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testRawNaNPayloadsAndBackingByteOrder(boolean littleEndian) {
+        JSDataView view = (JSDataView) context.eval("new DataView(new ArrayBuffer(16), 1)");
+        var bytes = ((JSArrayBuffer) view.getBuffer()).getBuffer();
+        int floatBits = 0x7fc12345;
+        long doubleBits = 0xfff8123456789abcL;
+        for (ByteOrder order : new ByteOrder[]{ByteOrder.BIG_ENDIAN, ByteOrder.LITTLE_ENDIAN}) {
+            bytes.order(order);
+            view.setFloat32(0, Float.intBitsToFloat(floatBits), littleEndian);
+            view.setFloat64(4, Double.longBitsToDouble(doubleBits), littleEndian);
+            assertThat(bytes.order()).isEqualTo(order);
+            boolean sameOrder = littleEndian == (order == ByteOrder.LITTLE_ENDIAN);
+            assertThat(bytes.getInt(1)).isEqualTo(sameOrder ? floatBits : Integer.reverseBytes(floatBits));
+            assertThat(bytes.getLong(5)).isEqualTo(sameOrder ? doubleBits : Long.reverseBytes(doubleBits));
+            assertThat(Float.floatToRawIntBits(view.getFloat32(0, littleEndian))).isEqualTo(floatBits);
+            assertThat(Double.doubleToRawLongBits(view.getFloat64(4, littleEndian))).isEqualTo(doubleBits);
+            assertThat(bytes.order()).isEqualTo(order);
+        }
     }
 
     @ParameterizedTest

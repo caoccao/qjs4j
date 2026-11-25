@@ -252,6 +252,22 @@ public final class PropertyDescriptor {
         this.writable = Optional.of(writable);
     }
 
+    public JSObject toDescriptorObject(JSContext context) {
+        JSObject descriptorObject = context.createJSObject();
+
+        if (isDataDescriptor()) {
+            descriptorObject.set(PropertyKey.VALUE, getValue() != null ? getValue() : JSUndefined.INSTANCE);
+            descriptorObject.set(PropertyKey.WRITABLE, JSBoolean.valueOf(isWritable()));
+        } else if (isAccessorDescriptor()) {
+            descriptorObject.set(PropertyKey.GET, getGetter() != null ? getGetter() : JSUndefined.INSTANCE);
+            descriptorObject.set(PropertyKey.SET, getSetter() != null ? getSetter() : JSUndefined.INSTANCE);
+        }
+
+        descriptorObject.set(PropertyKey.ENUMERABLE, JSBoolean.valueOf(isEnumerable()));
+        descriptorObject.set(PropertyKey.CONFIGURABLE, JSBoolean.valueOf(isConfigurable()));
+        return descriptorObject;
+    }
+
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder("PropertyDescriptor{");
@@ -313,6 +329,96 @@ public final class PropertyDescriptor {
      */
     public static PropertyDescriptor defaultData(JSValue value) {
         return dataDescriptor(value, DataState.All);
+    }
+
+    public static PropertyDescriptor fromDescriptorObject(JSContext context, JSObject descObj,
+            boolean describeInvalidAccessor) {
+        PropertyDescriptor desc = new PropertyDescriptor();
+        boolean hasAccessor = false;
+        boolean hasData = false;
+
+        // Step 2: If HasProperty(Obj, "enumerable"), set [[Enumerable]] to ToBoolean(Get(Obj, "enumerable"))
+        if (descObj.has(PropertyKey.ENUMERABLE)) {
+            JSValue enumerable = descObj.get(PropertyKey.ENUMERABLE);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            desc.setEnumerable(JSTypeChecking.isTruthy(enumerable));
+        }
+
+        // Step 3: If HasProperty(Obj, "configurable"), set [[Configurable]] to ToBoolean(Get(Obj, "configurable"))
+        if (descObj.has(PropertyKey.CONFIGURABLE)) {
+            JSValue configurable = descObj.get(PropertyKey.CONFIGURABLE);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            desc.setConfigurable(JSTypeChecking.isTruthy(configurable));
+        }
+
+        // Step 4: If HasProperty(Obj, "value"), set [[Value]] to Get(Obj, "value")
+        if (descObj.has(PropertyKey.VALUE)) {
+            JSValue value = descObj.get(PropertyKey.VALUE);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            desc.setValue(value);
+            hasData = true;
+        }
+
+        // Step 5: If HasProperty(Obj, "writable"), set [[Writable]] to ToBoolean(Get(Obj, "writable"))
+        if (descObj.has(PropertyKey.WRITABLE)) {
+            JSValue writable = descObj.get(PropertyKey.WRITABLE);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            desc.setWritable(JSTypeChecking.isTruthy(writable));
+            hasData = true;
+        }
+
+        if (descObj.has(PropertyKey.GET)) {
+            if (!readAccessor(context, descObj, desc, true, describeInvalidAccessor)) {
+                return null;
+            }
+            hasAccessor = true;
+        }
+        if (descObj.has(PropertyKey.SET)) {
+            if (!readAccessor(context, descObj, desc, false, describeInvalidAccessor)) {
+                return null;
+            }
+            hasAccessor = true;
+        }
+
+        // Step 8: If accessor and data properties are both present, throw TypeError
+        if (hasAccessor && hasData) {
+            context.throwTypeError(
+                    "Invalid property descriptor. Cannot both specify accessors and a value or writable attribute, #<Object>");
+            return null;
+        }
+
+        return desc;
+    }
+
+    private static boolean readAccessor(JSContext context, JSObject source, PropertyDescriptor descriptor,
+            boolean getter, boolean describeInvalidAccessor) {
+        JSValue value = source.get(getter ? PropertyKey.GET : PropertyKey.SET);
+        if (context.hasPendingException()) {
+            return false;
+        }
+        if (!(value instanceof JSUndefined) && !JSTypeChecking.isCallable(value)) {
+            String message = getter ? "Getter must be a function" : "Setter must be a function";
+            if (describeInvalidAccessor) {
+                message += ": " + JSTypeConversions.toString(context, value).value();
+            }
+            context.throwTypeError(message);
+            return false;
+        }
+        JSFunction function = value instanceof JSFunction fn ? fn : null;
+        if (getter) {
+            descriptor.setGetter(function);
+        } else {
+            descriptor.setSetter(function);
+        }
+        return true;
     }
 
     public enum AccessorState {

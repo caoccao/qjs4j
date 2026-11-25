@@ -138,8 +138,7 @@ public final class PromiseConstructor {
 
     private static JSValue closeIteratorAndRejectAbruptPromise(JSContext context, JSObject iteratorObject,
             PromiseCapability promiseCapability) {
-        JSValue pendingError = context.getPendingException();
-        context.clearPendingException();
+        JSValue pendingError = context.takePendingException();
         try {
             JSIteratorHelper.closeIterator(context, iteratorObject);
         } catch (JSException e) {

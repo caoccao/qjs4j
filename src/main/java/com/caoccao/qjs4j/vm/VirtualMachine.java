@@ -170,34 +170,7 @@ public final class VirtualMachine {
         if (allowNullOrUndefined && argsArrayValue.isNullOrUndefined()) {
             return JSValue.NO_ARGS;
         }
-        if (!(argsArrayValue instanceof JSObject arrayLike)) {
-            context.throwTypeError("CreateListFromArrayLike called on non-object");
-            return null;
-        }
-
-        JSValue lengthValue = arrayLike.get(PropertyKey.LENGTH);
-        if (context.hasPendingException()) {
-            return null;
-        }
-
-        long length = JSTypeConversions.toLength(context, lengthValue);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (length > Integer.MAX_VALUE) {
-            context.throwRangeError("too many arguments in function call");
-            return null;
-        }
-
-        JSValue[] args = new JSValue[(int) length];
-        for (int i = 0; i < args.length; i++) {
-            JSValue argValue = arrayLike.get(PropertyKey.fromIndex(i));
-            if (context.hasPendingException()) {
-                return null;
-            }
-            args[i] = argValue;
-        }
-        return args;
+        return JSCall.argumentsFromArrayLike(context, argsArrayValue);
     }
 
     /**
@@ -241,8 +214,7 @@ public final class VirtualMachine {
 
     void capturePendingExceptionFromContext(JSContext sourceContext) {
         if (sourceContext != null && sourceContext != context && sourceContext.hasPendingException()) {
-            JSValue sourceException = sourceContext.getPendingException();
-            sourceContext.clearPendingException();
+            JSValue sourceException = sourceContext.takePendingException();
             if (sourceException instanceof JSError sourceError) {
                 pendingException = context.throwError(sourceError.getErrorName(), sourceError.getMessage().value());
                 context.clearPendingException();
@@ -252,8 +224,7 @@ public final class VirtualMachine {
             return;
         }
         if (context.hasPendingException()) {
-            pendingException = context.getPendingException();
-            context.clearPendingException();
+            pendingException = context.takePendingException();
         }
     }
 
@@ -569,8 +540,7 @@ public final class VirtualMachine {
             }
             JSValue propertyValue = sourceObject.get(key);
             if (context.hasPendingException()) {
-                pendingException = context.getPendingException();
-                context.clearPendingException();
+                pendingException = context.takePendingException();
                 return;
             }
             // ES2024 7.3.25 CopyDataProperties step 4.c.ii is CreateDataPropertyOrThrow, an own
@@ -579,8 +549,7 @@ public final class VirtualMachine {
             // and the property would never land on the result object.
             boolean created = targetObject.defineProperty(key, propertyValue, PropertyDescriptor.DataState.All);
             if (context.hasPendingException()) {
-                pendingException = context.getPendingException();
-                context.clearPendingException();
+                pendingException = context.takePendingException();
                 return;
             }
             if (!created) {

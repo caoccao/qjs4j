@@ -176,7 +176,7 @@ public class JSONObjectTest extends BaseJavetTest {
         assertPendingException(context);
 
         // Edge case: non-string argument (should be converted to string)
-        result = jsonObject().parse(JSUndefined.INSTANCE, new JSValue[]{new JSNumber(123)});
+        result = jsonObject().parse(JSUndefined.INSTANCE, numberArgs(123));
         assertNumberValue(result, 123.0);
     }
 
@@ -579,9 +579,7 @@ public class JSONObjectTest extends BaseJavetTest {
         original.set("boolean", JSBoolean.TRUE);
         original.set("null", JSNull.INSTANCE);
 
-        JSArray arr = new JSArray(context);
-        arr.push(new JSString("item1"));
-        arr.push(new JSNumber(2));
+        JSArray arr = new JSArray(context, new JSString("item1"), new JSNumber(2));
         original.set("array", arr);
 
         // Stringify
@@ -871,10 +869,7 @@ public class JSONObjectTest extends BaseJavetTest {
         assertThat(jsonStr.contains("\nabcdefghij")).isTrue(); // Should have first 10 chars
 
         // Test indentation with arrays
-        JSArray testArr = new JSArray(context);
-        testArr.push(new JSNumber(1));
-        testArr.push(new JSString("test"));
-        testArr.push(JSBoolean.TRUE);
+        JSArray testArr = new JSArray(context, new JSNumber(1), new JSString("test"), JSBoolean.TRUE);
 
         result = jsonObject().stringify(JSUndefined.INSTANCE,
                 new JSValue[]{testArr, JSUndefined.INSTANCE, new JSNumber(2)});
@@ -906,10 +901,7 @@ public class JSONObjectTest extends BaseJavetTest {
         assertStringValue(result, "[]");
 
         // Normal case: stringify array with values
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSString("two"));
-        arr.push(JSBoolean.TRUE);
+        JSArray arr = new JSArray(context, new JSNumber(1), new JSString("two"), JSBoolean.TRUE);
         result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{arr});
         assertStringValue(result, "[1,\"two\",true]");
 
@@ -975,11 +967,11 @@ public class JSONObjectTest extends BaseJavetTest {
         assertStringValue(result, "false");
 
         // Normal case: stringify number
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42)});
+        result = jsonObject().stringify(JSUndefined.INSTANCE, numberArgs(42));
         assertStringValue(result, "42");
 
         // Normal case: stringify negative number
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{new JSNumber(-123.45)});
+        result = jsonObject().stringify(JSUndefined.INSTANCE, numberArgs(-123.45));
         assertStringValue(result, "-123.45");
 
         // Normal case: stringify string
@@ -1170,9 +1162,7 @@ public class JSONObjectTest extends BaseJavetTest {
         obj.set("password", new JSString("12345"));
 
         // Create a replacer array with only allowed properties
-        JSArray replacer = new JSArray(context);
-        replacer.push(new JSString("name"));
-        replacer.push(new JSString("age"));
+        JSArray replacer = new JSArray(context, new JSString("name"), new JSString("age"));
 
         JSValue result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj, replacer});
         String jsonStr = result.asString().map(JSString::value).orElseThrow();
@@ -1196,10 +1186,7 @@ public class JSONObjectTest extends BaseJavetTest {
         outer.set("extra", new JSString("value"));
 
         // Only allow "data" and "x", "y" properties
-        JSArray replacer = new JSArray(context);
-        replacer.push(new JSString("data"));
-        replacer.push(new JSString("x"));
-        replacer.push(new JSString("y"));
+        JSArray replacer = new JSArray(context, new JSString("data"), new JSString("x"), new JSString("y"));
 
         JSValue result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{outer, replacer});
         String jsonStr = result.asString().map(JSString::value).orElseThrow();
@@ -1229,10 +1216,7 @@ public class JSONObjectTest extends BaseJavetTest {
     @Test
     public void testStringifyWithReplacerArrayNumbers() {
         // Test that replacer array can contain numbers (for array indices)
-        JSArray arr = new JSArray(context);
-        arr.push(new JSString("a"));
-        arr.push(new JSString("b"));
-        arr.push(new JSString("c"));
+        JSArray arr = new JSArray(context, new JSString("a"), new JSString("b"), new JSString("c"));
 
         JSObject obj = new JSObject(context);
         obj.set("0", new JSString("zero"));
@@ -1240,9 +1224,7 @@ public class JSONObjectTest extends BaseJavetTest {
         obj.set("2", new JSString("two"));
 
         // Replacer array with numbers
-        JSArray replacer = new JSArray(context);
-        replacer.push(new JSNumber(0));
-        replacer.push(new JSNumber(2));
+        JSArray replacer = new JSArray(context, numberArgs(0, 2));
 
         JSValue result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj, replacer});
         String jsonStr = result.asString().map(JSString::value).orElseThrow();

@@ -41,10 +41,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         });
 
         // Normal case: apply with array of arguments
-        JSArray argsArray = new JSArray(context);
-        argsArray.push(new JSNumber(1));
-        argsArray.push(new JSNumber(2));
-        argsArray.push(new JSNumber(3));
+        JSArray argsArray = new JSArray(context, numberArgs(1, 2, 3));
 
         JSValue result = FunctionPrototype.apply(context, testFunc, new JSValue[]{JSUndefined.INSTANCE, // thisArg
                 argsArray});
@@ -109,7 +106,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         JSBoundFunction boundFunc = result.asBoundFunction().orElseThrow();
 
         // Call the bound function
-        JSValue callResult = boundFunc.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(3)});
+        JSValue callResult = boundFunc.call(context, JSUndefined.INSTANCE, numberArgs(3));
         assertNumberValue(callResult, 16.0); // 10
                                              // +
                                              // 1
@@ -122,7 +119,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         result = FunctionPrototype.bind(context, testFunc, new JSValue[]{boundThis});
         boundFunc = result.asBoundFunction().orElseThrow();
 
-        callResult = boundFunc.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(5)});
+        callResult = boundFunc.call(context, JSUndefined.INSTANCE, numberArgs(5));
         assertNumberValue(callResult, 15.0); // 10
                                              // +
                                              // 5
@@ -212,8 +209,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         JSValue result = FunctionConstructor.call(context, JSUndefined.INSTANCE,
                 new JSValue[]{new JSString("a"), new JSString("b"), new JSString("return a + b;")});
         assertThat(result).isInstanceOfSatisfying(JSFunction.class, func -> {
-            JSValue callResult = func.call(context, JSUndefined.INSTANCE,
-                    new JSValue[]{new JSNumber(2), new JSNumber(3)});
+            JSValue callResult = func.call(context, JSUndefined.INSTANCE, numberArgs(2, 3));
             assertNumberValue(callResult, 5.0);
         });
 
@@ -235,8 +231,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         result = FunctionConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("x"),
                 new JSString("y"), new JSString("z"), new JSString("return x * y + z;")});
         assertThat(result).isInstanceOfSatisfying(JSFunction.class, func -> {
-            JSValue callResult = func.call(context, JSUndefined.INSTANCE,
-                    new JSValue[]{new JSNumber(3), new JSNumber(4), new JSNumber(5)});
+            JSValue callResult = func.call(context, JSUndefined.INSTANCE, numberArgs(3, 4, 5));
             assertNumberValue(callResult, 17.0);
         });
 

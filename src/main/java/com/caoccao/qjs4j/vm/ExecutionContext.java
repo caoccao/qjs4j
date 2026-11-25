@@ -40,6 +40,17 @@ final class ExecutionContext {
         this.sp = 0;
     }
 
+    /** Publish the next instruction and the operand stack depth after a handler completes. */
+    void finishOpcode(int nextPc, int stackPointer) {
+        sp = stackPointer;
+        pc = nextPc;
+    }
+
+    /** A handler using CallStack.push/pop takes its final depth from that stack. */
+    void finishStackOpcode(int nextPc) {
+        finishOpcode(nextPc, virtualMachine.valueStack.stackTop);
+    }
+
     JSValue peek(int offset) {
         return (JSValue) virtualMachine.valueStack.stack[sp - 1 - offset];
     }

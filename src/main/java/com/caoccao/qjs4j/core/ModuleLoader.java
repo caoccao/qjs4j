@@ -788,8 +788,7 @@ final class ModuleLoader {
     JSValue parseJsonModuleSource(String sourceCode) {
         JSValue jsonValue = context.getGlobalObject().get(PropertyKey.fromString("JSON"));
         if (context.hasPendingException()) {
-            JSValue error = context.getPendingException();
-            context.clearPendingException();
+            JSValue error = context.takePendingException();
             throw new JSException(error);
         }
         if (!(jsonValue instanceof JSObject jsonObject)) {
@@ -798,8 +797,7 @@ final class ModuleLoader {
 
         JSValue parseValue = jsonObject.get(PropertyKey.fromString("parse"));
         if (context.hasPendingException()) {
-            JSValue error = context.getPendingException();
-            context.clearPendingException();
+            JSValue error = context.takePendingException();
             throw new JSException(error);
         }
 
@@ -813,8 +811,7 @@ final class ModuleLoader {
             throw new JSException(context.throwTypeError("JSON.parse is not a function"));
         }
         if (context.hasPendingException()) {
-            JSValue error = context.getPendingException();
-            context.clearPendingException();
+            JSValue error = context.takePendingException();
             throw new JSException(error);
         }
         return parsedValue;

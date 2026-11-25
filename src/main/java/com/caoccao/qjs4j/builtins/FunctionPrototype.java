@@ -150,37 +150,7 @@ public final class FunctionPrototype {
         if (arrayArg == null || arrayArg instanceof JSUndefined || arrayArg instanceof JSNull) {
             return JSValue.NO_ARGS;
         }
-        if (!(arrayArg instanceof JSObject arrayLike)) {
-            context.throwTypeError("CreateListFromArrayLike called on non-object");
-            return null;
-        }
-
-        JSValue lengthValue = arrayLike.get(PropertyKey.LENGTH);
-        if (context.hasPendingException()) {
-            return null;
-        }
-
-        long length = JSTypeConversions.toLength(context, lengthValue);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (length > Integer.MAX_VALUE) {
-            context.throwRangeError("too many arguments in function call");
-            return null;
-        }
-
-        JSValue[] callArgs = new JSValue[(int) length];
-        for (int i = 0; i < callArgs.length; i++) {
-            JSValue argumentValue = arrayLike.get(PropertyKey.fromIndex(i));
-            if (context.hasPendingException()) {
-                return null;
-            }
-            callArgs[i] = argumentValue;
-            if (context.hasPendingException()) {
-                return null;
-            }
-        }
-        return callArgs;
+        return JSCall.argumentsFromArrayLike(context, arrayArg);
     }
 
     /**

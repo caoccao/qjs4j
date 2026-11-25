@@ -129,10 +129,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testNext() {
         // Create a simple generator from array
-        JSArray array = new JSArray(context);
-        array.push(new JSNumber(1));
-        array.push(new JSNumber(2));
-        array.push(new JSNumber(3));
+        JSArray array = new JSArray(context, numberArgs(1, 2, 3));
         JSGenerator generator = JSGenerator.fromArray(context, array);
 
         // Normal case: first next() call
@@ -196,10 +193,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testReturn() {
         // Create a generator
-        JSArray array = new JSArray(context);
-        array.push(new JSNumber(1));
-        array.push(new JSNumber(2));
-        array.push(new JSNumber(3));
+        JSArray array = new JSArray(context, numberArgs(1, 2, 3));
         JSGenerator generator = JSGenerator.fromArray(context, array);
 
         // Normal case: return with value
@@ -223,12 +217,12 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
 
         // Edge case: called on non-generator
-        result = GeneratorPrototype.returnMethod(context, new JSObject(context), new JSValue[]{new JSNumber(42)});
+        result = GeneratorPrototype.returnMethod(context, new JSObject(context), numberArgs(42));
         assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
 
         // Edge case: called on undefined
-        result = GeneratorPrototype.returnMethod(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42)});
+        result = GeneratorPrototype.returnMethod(context, JSUndefined.INSTANCE, numberArgs(42));
         assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
     }
@@ -263,9 +257,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testThrow() {
         // Create a generator
-        JSArray array = new JSArray(context);
-        array.push(new JSNumber(1));
-        array.push(new JSNumber(2));
+        JSArray array = new JSArray(context, numberArgs(1, 2));
         JSGenerator generator = JSGenerator.fromArray(context, array);
 
         // Normal case: throw with exception

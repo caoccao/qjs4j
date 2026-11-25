@@ -36,7 +36,7 @@ public final class JSReflectObject {
 
         JSValue funcThisArg = JSValue.argumentOrUndefined(args, 1);
         JSValue arrayArg = JSValue.argumentOrUndefined(args, 2);
-        JSValue[] funcArgs = buildArgumentList(context, arrayArg);
+        JSValue[] funcArgs = JSCall.argumentsFromArrayLike(context, arrayArg);
         if (funcArgs == null) {
             return context.getPendingException();
         }
@@ -45,37 +45,6 @@ public final class JSReflectObject {
             return callableProxy.apply(context, funcThisArg, funcArgs);
         }
         return ((JSFunction) args[0]).call(context, funcThisArg, funcArgs);
-    }
-
-    private static JSValue[] buildArgumentList(JSContext context, JSValue arrayArg) {
-        if (!(arrayArg instanceof JSObject arrayLike)) {
-            context.throwTypeError("CreateListFromArrayLike called on non-object");
-            return null;
-        }
-
-        JSValue lengthValue = arrayLike.get(PropertyKey.LENGTH);
-        if (context.hasPendingException()) {
-            return null;
-        }
-
-        long length = JSTypeConversions.toLength(context, lengthValue);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (length > Integer.MAX_VALUE) {
-            context.throwRangeError("too many arguments in function call");
-            return null;
-        }
-
-        JSValue[] callArgs = new JSValue[(int) length];
-        for (int i = 0; i < callArgs.length; i++) {
-            JSValue argumentValue = arrayLike.get(PropertyKey.fromIndex(i));
-            if (context.hasPendingException()) {
-                return null;
-            }
-            callArgs[i] = argumentValue;
-        }
-        return callArgs;
     }
 
     /**
@@ -88,7 +57,7 @@ public final class JSReflectObject {
         }
 
         JSValue arrayArg = JSValue.argumentOrUndefined(args, 1);
-        JSValue[] constructorArgs = buildArgumentList(context, arrayArg);
+        JSValue[] constructorArgs = JSCall.argumentsFromArrayLike(context, arrayArg);
         if (constructorArgs == null) {
             return context.getPendingException();
         }
@@ -444,25 +413,6 @@ public final class JSReflectObject {
         }
     }
 
-    private static JSObject fromPropertyDescriptor(JSContext context, PropertyDescriptor descriptor) {
-        JSObject descriptorObject = context.createJSObject();
-
-        if (descriptor.isDataDescriptor()) {
-            descriptorObject.set(PropertyKey.VALUE,
-                    descriptor.getValue() != null ? descriptor.getValue() : JSUndefined.INSTANCE);
-            descriptorObject.set(PropertyKey.WRITABLE, JSBoolean.valueOf(descriptor.isWritable()));
-        } else if (descriptor.isAccessorDescriptor()) {
-            descriptorObject.set(PropertyKey.GET,
-                    descriptor.getGetter() != null ? descriptor.getGetter() : JSUndefined.INSTANCE);
-            descriptorObject.set(PropertyKey.SET,
-                    descriptor.getSetter() != null ? descriptor.getSetter() : JSUndefined.INSTANCE);
-        }
-
-        descriptorObject.set(PropertyKey.ENUMERABLE, JSBoolean.valueOf(descriptor.isEnumerable()));
-        descriptorObject.set(PropertyKey.CONFIGURABLE, JSBoolean.valueOf(descriptor.isConfigurable()));
-        return descriptorObject;
-    }
-
     /**
      * Reflect.get(target, propertyKey, receiver) ES2020 26.1.6 Gets the value of a property on an object.
      */
@@ -503,7 +453,7 @@ public final class JSReflectObject {
         if (descriptor == null) {
             return JSUndefined.INSTANCE;
         }
-        return fromPropertyDescriptor(context, descriptor);
+        return descriptor.toDescriptorObject(context);
     }
 
     /**

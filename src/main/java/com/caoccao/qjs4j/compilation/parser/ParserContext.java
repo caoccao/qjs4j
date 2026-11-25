@@ -219,15 +219,6 @@ final class ParserContext {
         };
     }
 
-    boolean isAssignmentOperator(TokenType type) {
-        return type == TokenType.ASSIGN || type == TokenType.PLUS_ASSIGN || type == TokenType.MINUS_ASSIGN
-                || type == TokenType.MUL_ASSIGN || type == TokenType.DIV_ASSIGN || type == TokenType.MOD_ASSIGN
-                || type == TokenType.EXP_ASSIGN || type == TokenType.LSHIFT_ASSIGN || type == TokenType.RSHIFT_ASSIGN
-                || type == TokenType.URSHIFT_ASSIGN || type == TokenType.AND_ASSIGN || type == TokenType.OR_ASSIGN
-                || type == TokenType.XOR_ASSIGN || type == TokenType.LOGICAL_AND_ASSIGN
-                || type == TokenType.LOGICAL_OR_ASSIGN || type == TokenType.NULLISH_ASSIGN;
-    }
-
     boolean isAwaitExpressionAllowed() {
         if (inClassFieldInitializer || inClassStaticInit) {
             return false;
@@ -577,6 +568,28 @@ final class ParserContext {
 
     Token peek() {
         return nextToken;
+    }
+
+    static AssignmentOperator assignmentOperator(TokenType type) {
+        return switch (type) {
+            case ASSIGN -> AssignmentOperator.ASSIGN;
+            case AND_ASSIGN -> AssignmentOperator.AND_ASSIGN;
+            case DIV_ASSIGN -> AssignmentOperator.DIV_ASSIGN;
+            case EXP_ASSIGN -> AssignmentOperator.EXP_ASSIGN;
+            case LOGICAL_AND_ASSIGN -> AssignmentOperator.LOGICAL_AND_ASSIGN;
+            case LOGICAL_OR_ASSIGN -> AssignmentOperator.LOGICAL_OR_ASSIGN;
+            case LSHIFT_ASSIGN -> AssignmentOperator.LSHIFT_ASSIGN;
+            case MINUS_ASSIGN -> AssignmentOperator.MINUS_ASSIGN;
+            case MOD_ASSIGN -> AssignmentOperator.MOD_ASSIGN;
+            case MUL_ASSIGN -> AssignmentOperator.MUL_ASSIGN;
+            case NULLISH_ASSIGN -> AssignmentOperator.NULLISH_ASSIGN;
+            case OR_ASSIGN -> AssignmentOperator.OR_ASSIGN;
+            case PLUS_ASSIGN -> AssignmentOperator.PLUS_ASSIGN;
+            case RSHIFT_ASSIGN -> AssignmentOperator.RSHIFT_ASSIGN;
+            case URSHIFT_ASSIGN -> AssignmentOperator.URSHIFT_ASSIGN;
+            case XOR_ASSIGN -> AssignmentOperator.XOR_ASSIGN;
+            default -> null;
+        };
     }
 
     /**

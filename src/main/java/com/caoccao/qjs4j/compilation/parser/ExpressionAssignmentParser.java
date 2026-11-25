@@ -481,7 +481,8 @@ final class ExpressionAssignmentParser {
                     fullLocation);
         }
 
-        if (parserContext.isAssignmentOperator(parserContext.currentToken.type())) {
+        AssignmentOperator operator = ParserContext.assignmentOperator(parserContext.currentToken.type());
+        if (operator != null) {
             if (!(left instanceof Identifier) && !(left instanceof MemberExpression)
                     && !(left instanceof ArrayExpression) && !(left instanceof ObjectExpression)
                     && !(left instanceof CallExpression)) {
@@ -518,35 +519,15 @@ final class ExpressionAssignmentParser {
                 }
             }
 
-            TokenType op = parserContext.currentToken.type();
             location = parserContext.getLocation();
             int assignmentOperatorOffset = location.offset();
             parserContext.advance();
             Expression right = parseAssignmentExpression();
 
-            if (op == TokenType.ASSIGN && (left instanceof ArrayExpression || left instanceof ObjectExpression)) {
+            if (operator == AssignmentOperator.ASSIGN
+                    && (left instanceof ArrayExpression || left instanceof ObjectExpression)) {
                 validateAssignmentPatternTarget(left, assignmentOperatorOffset);
             }
-
-            AssignmentOperator operator = switch (op) {
-                case ASSIGN -> AssignmentOperator.ASSIGN;
-                case AND_ASSIGN -> AssignmentOperator.AND_ASSIGN;
-                case DIV_ASSIGN -> AssignmentOperator.DIV_ASSIGN;
-                case EXP_ASSIGN -> AssignmentOperator.EXP_ASSIGN;
-                case LOGICAL_AND_ASSIGN -> AssignmentOperator.LOGICAL_AND_ASSIGN;
-                case LOGICAL_OR_ASSIGN -> AssignmentOperator.LOGICAL_OR_ASSIGN;
-                case LSHIFT_ASSIGN -> AssignmentOperator.LSHIFT_ASSIGN;
-                case MINUS_ASSIGN -> AssignmentOperator.MINUS_ASSIGN;
-                case MOD_ASSIGN -> AssignmentOperator.MOD_ASSIGN;
-                case MUL_ASSIGN -> AssignmentOperator.MUL_ASSIGN;
-                case NULLISH_ASSIGN -> AssignmentOperator.NULLISH_ASSIGN;
-                case OR_ASSIGN -> AssignmentOperator.OR_ASSIGN;
-                case PLUS_ASSIGN -> AssignmentOperator.PLUS_ASSIGN;
-                case RSHIFT_ASSIGN -> AssignmentOperator.RSHIFT_ASSIGN;
-                case URSHIFT_ASSIGN -> AssignmentOperator.URSHIFT_ASSIGN;
-                case XOR_ASSIGN -> AssignmentOperator.XOR_ASSIGN;
-                default -> AssignmentOperator.ASSIGN;
-            };
 
             boolean isIdentifierRef = lhsStartsWithIdentifier && left instanceof Identifier;
             return new AssignmentExpression(left, operator, right, isIdentifierRef, location);

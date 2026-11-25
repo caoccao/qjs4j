@@ -1455,6 +1455,13 @@ public final class JSContext implements AutoCloseable {
         return environment;
     }
 
+    /** Read and clear this context's pending exception. */
+    public JSValue takePendingException() {
+        JSValue exception = pendingException;
+        pendingException = null;
+        return exception;
+    }
+
     public JSError throwAggregateError(String message) {
         return errorReporter.throwAggregateError(message);
     }

@@ -42,9 +42,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testArrayEntries() {
         // Create test array
-        JSArray array = new JSArray(context);
-        array.push(new JSString("a"));
-        array.push(new JSString("b"));
+        JSArray array = new JSArray(context, new JSString("a"), new JSString("b"));
 
         // Normal case: get entries iterator
         JSValue result = IteratorPrototype.arrayEntries(context, array, JSValue.NO_ARGS);
@@ -97,9 +95,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testArrayKeys() {
         // Create test array
-        JSArray array = new JSArray(context);
-        array.push(new JSNumber(10));
-        array.push(new JSNumber(20));
+        JSArray array = new JSArray(context, numberArgs(10, 20));
 
         // Normal case: get keys iterator
         JSValue result = IteratorPrototype.arrayKeys(context, array, JSValue.NO_ARGS);
@@ -143,10 +139,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testArrayValues() {
         // Create test array
-        JSArray array = new JSArray(context);
-        array.push(new JSNumber(1));
-        array.push(new JSString("hello"));
-        array.push(JSBoolean.TRUE);
+        JSArray array = new JSArray(context, new JSNumber(1), new JSString("hello"), JSBoolean.TRUE);
 
         // Normal case: get values iterator
         JSValue result = IteratorPrototype.arrayValues(context, array, JSValue.NO_ARGS);
@@ -342,9 +335,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testNext() {
         // Create an array iterator
-        JSArray array = new JSArray(context);
-        array.push(new JSNumber(1));
-        array.push(new JSNumber(2));
+        JSArray array = new JSArray(context, numberArgs(1, 2));
         JSIterator iterator = JSIterator.arrayIterator(context, array);
 
         // Normal case: next() on iterator

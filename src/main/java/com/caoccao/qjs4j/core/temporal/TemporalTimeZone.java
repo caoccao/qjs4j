@@ -194,30 +194,17 @@ public final class TemporalTimeZone {
         return Map.copyOf(availableTimeZoneIdentifiersByLowercase);
     }
 
-    private static String extractOffsetText(String text) {
-        int timeSeparatorIndex = Math.max(text.indexOf('T'), text.indexOf('t'));
-        if (timeSeparatorIndex < 0) {
+    public static String extractOffsetText(String text) {
+        return extractOffsetText(text, Math.max(text.indexOf('T'), text.indexOf('t')));
+    }
+
+    public static String extractOffsetText(String text, int timeSeparatorIndex) {
+        int start = offsetDesignatorIndex(text, timeSeparatorIndex);
+        if (start < 0 || text.charAt(start) == 'Z' || text.charAt(start) == 'z') {
             return null;
         }
-        int offsetStart = -1;
-        for (int index = timeSeparatorIndex + 1; index < text.length(); index++) {
-            char character = text.charAt(index);
-            if (character == '[' || character == 'Z' || character == 'z') {
-                break;
-            }
-            if (character == '+' || character == '-' || character == '\u2212') {
-                offsetStart = index;
-                break;
-            }
-        }
-        if (offsetStart < 0) {
-            return null;
-        }
-        int offsetEnd = text.indexOf('[', offsetStart);
-        if (offsetEnd < 0) {
-            offsetEnd = text.length();
-        }
-        return text.substring(offsetStart, offsetEnd);
+        int end = text.indexOf('[', start);
+        return text.substring(start, end < 0 ? text.length() : end);
     }
 
     /**
@@ -300,21 +287,12 @@ public final class TemporalTimeZone {
                 .add(BigInteger.valueOf(transInstant.getNano()));
     }
 
-    private static boolean hasOffsetDesignator(String text) {
-        int timeSeparatorIndex = Math.max(text.indexOf('T'), text.indexOf('t'));
-        if (timeSeparatorIndex < 0) {
-            return false;
-        }
-        for (int index = timeSeparatorIndex + 1; index < text.length(); index++) {
-            char character = text.charAt(index);
-            if (character == '[') {
-                break;
-            }
-            if (character == 'Z' || character == 'z' || character == '+' || character == '-' || character == '\u2212') {
-                return true;
-            }
-        }
-        return false;
+    public static boolean hasOffsetDesignator(String text) {
+        return hasOffsetDesignator(text, Math.max(text.indexOf('T'), text.indexOf('t')));
+    }
+
+    public static boolean hasOffsetDesignator(String text, int timeSeparatorIndex) {
+        return offsetDesignatorIndex(text, timeSeparatorIndex) >= 0;
     }
 
     public static boolean isValidOffsetString(String offsetText) {
@@ -349,6 +327,21 @@ public final class TemporalTimeZone {
             return false;
         }
         return secondsText == null && fractionText == null;
+    }
+
+    private static int offsetDesignatorIndex(String text, int separator) {
+        if (separator >= 0) {
+            for (int i = separator + 1; i < text.length(); i++) {
+                char ch = text.charAt(i);
+                if (ch == '[') {
+                    break;
+                }
+                if (ch == 'Z' || ch == 'z' || ch == '+' || ch == '-' || ch == '\u2212') {
+                    return i;
+                }
+            }
+        }
+        return -1;
     }
 
     public static boolean offsetTextIncludesSecondsOrFraction(String offsetText) {
@@ -540,5 +533,4 @@ public final class TemporalTimeZone {
     public static BigInteger utcDateTimeToEpochNs(IsoDate date, IsoTime time, int offsetSeconds) {
         return utcDateTimeToEpochNs(date, time, BigInteger.valueOf(offsetSeconds).multiply(BILLION));
     }
-
 }

@@ -172,8 +172,7 @@ final class EvalRunner {
      */
     JSValue evalOrThrow(JSValue result) {
         if (result == null) {
-            JSValue error = context.getPendingException();
-            context.clearPendingException();
+            JSValue error = context.takePendingException();
             throw new JSException(error);
         }
         return result;

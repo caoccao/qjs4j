@@ -30,190 +30,28 @@ public final class ObjectPrototype {
      * Object.prototype.__defineGetter__(prop, func) Legacy method for defining getter
      */
     public static JSValue __defineGetter__(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length < 2) {
-            return context.throwTypeError("__defineGetter__ requires 2 arguments");
-        }
-
-        // ES B.2.2.2: Step 1: Let O be ? ToObject(this)
-        if (thisArg.isNullOrUndefined()) {
-            return context.throwTypeError("__defineGetter__ called on null or undefined");
-        }
-        JSObject obj;
-        if (thisArg instanceof JSObject jsObj) {
-            obj = jsObj;
-        } else {
-            obj = JSTypeConversions.toObject(context, thisArg);
-            if (obj == null || context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-
-        JSValue getter = args[1];
-
-        // Step 2: If IsCallable(getter) is false, throw TypeError
-        if (!(getter instanceof JSFunction)) {
-            return context.throwTypeError("Getter must be a function");
-        }
-
-        // Step 4: Let key be ? ToPropertyKey(P)
-        JSValue prop = args[0];
-        PropertyKey key = PropertyKey.fromValue(context, prop);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        // Step 3: Let desc be { [[Get]]: getter, [[Enumerable]]: true, [[Configurable]]: true }
-        PropertyDescriptor desc = new PropertyDescriptor();
-        desc.setGetter((JSFunction) getter);
-        desc.setEnumerable(true);
-        desc.setConfigurable(true);
-
-        // Step 5: Perform ? DefinePropertyOrThrow(O, key, desc)
-        if (!obj.defineProperty(key, desc)) {
-            if (!context.hasPendingException()) {
-                context.throwTypeError("Cannot define property: " + key.toPropertyString());
-            }
-            return JSUndefined.INSTANCE;
-        }
-        return JSUndefined.INSTANCE;
+        return defineAccessor(context, thisArg, args, true);
     }
 
     /**
      * Object.prototype.__defineSetter__(prop, func) Legacy method for defining setter
      */
     public static JSValue __defineSetter__(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length < 2) {
-            return context.throwTypeError("__defineSetter__ requires 2 arguments");
-        }
-
-        // ES B.2.2.3: Step 1: Let O be ? ToObject(this)
-        if (thisArg.isNullOrUndefined()) {
-            return context.throwTypeError("__defineSetter__ called on null or undefined");
-        }
-        JSObject obj;
-        if (thisArg instanceof JSObject jsObj) {
-            obj = jsObj;
-        } else {
-            obj = JSTypeConversions.toObject(context, thisArg);
-            if (obj == null || context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-
-        JSValue setter = args[1];
-
-        // Step 2: If IsCallable(setter) is false, throw TypeError
-        if (!(setter instanceof JSFunction)) {
-            return context.throwTypeError("Setter must be a function");
-        }
-
-        // Step 4: Let key be ? ToPropertyKey(P)
-        JSValue prop = args[0];
-        PropertyKey key = PropertyKey.fromValue(context, prop);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        // Step 3: Let desc be { [[Set]]: setter, [[Enumerable]]: true, [[Configurable]]: true }
-        PropertyDescriptor desc = new PropertyDescriptor();
-        desc.setSetter((JSFunction) setter);
-        desc.setEnumerable(true);
-        desc.setConfigurable(true);
-
-        // Step 5: Perform ? DefinePropertyOrThrow(O, key, desc)
-        if (!obj.defineProperty(key, desc)) {
-            if (!context.hasPendingException()) {
-                context.throwTypeError("Cannot define property: " + key.toPropertyString());
-            }
-            return JSUndefined.INSTANCE;
-        }
-        return JSUndefined.INSTANCE;
+        return defineAccessor(context, thisArg, args, false);
     }
 
     /**
      * Object.prototype.__lookupGetter__(prop) Legacy method for looking up getter
      */
     public static JSValue __lookupGetter__(JSContext context, JSValue thisArg, JSValue[] args) {
-        // ES B.2.2.4: Step 1: Let O be ? ToObject(this)
-        if (thisArg.isNullOrUndefined()) {
-            return context.throwTypeError("__lookupGetter__ called on null or undefined");
-        }
-        if (args.length < 1) {
-            return JSUndefined.INSTANCE;
-        }
-        JSObject obj;
-        if (thisArg instanceof JSObject jsObj) {
-            obj = jsObj;
-        } else {
-            obj = JSTypeConversions.toObject(context, thisArg);
-            if (obj == null || context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-
-        JSValue prop = args[0];
-        PropertyKey key = PropertyKey.fromValue(context, prop);
-
-        // Walk up the prototype chain per spec B.2.2.4
-        JSObject current = obj;
-        while (current != null) {
-            PropertyDescriptor desc = current.getOwnPropertyDescriptor(key);
-            if (desc != null) {
-                // Step 3.b.i: If IsAccessorDescriptor(desc), return desc.[[Get]]
-                if (desc.isAccessorDescriptor()) {
-                    JSFunction getter = desc.getGetter();
-                    return getter != null ? getter : JSUndefined.INSTANCE;
-                }
-                // Step 3.b.ii: Return undefined (data property found - stop)
-                return JSUndefined.INSTANCE;
-            }
-            current = current.getPrototype();
-        }
-
-        return JSUndefined.INSTANCE;
+        return lookupAccessor(context, thisArg, args, true);
     }
 
     /**
      * Object.prototype.__lookupSetter__(prop) Legacy method for looking up setter
      */
     public static JSValue __lookupSetter__(JSContext context, JSValue thisArg, JSValue[] args) {
-        // ES B.2.2.5: Step 1: Let O be ? ToObject(this)
-        if (thisArg.isNullOrUndefined()) {
-            return context.throwTypeError("__lookupSetter__ called on null or undefined");
-        }
-        if (args.length < 1) {
-            return JSUndefined.INSTANCE;
-        }
-        JSObject obj;
-        if (thisArg instanceof JSObject jsObj) {
-            obj = jsObj;
-        } else {
-            obj = JSTypeConversions.toObject(context, thisArg);
-            if (obj == null || context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-
-        JSValue prop = args[0];
-        PropertyKey key = PropertyKey.fromValue(context, prop);
-
-        // Walk up the prototype chain per spec B.2.2.5
-        JSObject current = obj;
-        while (current != null) {
-            PropertyDescriptor desc = current.getOwnPropertyDescriptor(key);
-            if (desc != null) {
-                // Step 3.b.i: If IsAccessorDescriptor(desc), return desc.[[Set]]
-                if (desc.isAccessorDescriptor()) {
-                    JSFunction setter = desc.getSetter();
-                    return setter != null ? setter : JSUndefined.INSTANCE;
-                }
-                // Step 3.b.ii: Return undefined (data property found - stop)
-                return JSUndefined.INSTANCE;
-            }
-            current = current.getPrototype();
-        }
-
-        return JSUndefined.INSTANCE;
+        return lookupAccessor(context, thisArg, args, false);
     }
 
     /**
@@ -408,6 +246,55 @@ public final class ObjectPrototype {
         }
 
         return newObj;
+    }
+
+    private static JSValue defineAccessor(JSContext context, JSValue thisArg, JSValue[] args, boolean getter) {
+        String method = getter ? "__defineGetter__" : "__defineSetter__";
+        if (args.length < 2) {
+            return context.throwTypeError(method + " requires 2 arguments");
+        }
+
+        if (thisArg.isNullOrUndefined()) {
+            return context.throwTypeError(method + " called on null or undefined");
+        }
+        JSObject obj;
+        if (thisArg instanceof JSObject jsObj) {
+            obj = jsObj;
+        } else {
+            obj = JSTypeConversions.toObject(context, thisArg);
+            if (obj == null || context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        JSValue accessor = args[1];
+
+        if (!(accessor instanceof JSFunction function)) {
+            return context.throwTypeError(getter ? "Getter must be a function" : "Setter must be a function");
+        }
+
+        JSValue prop = args[0];
+        PropertyKey key = PropertyKey.fromValue(context, prop);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        PropertyDescriptor desc = new PropertyDescriptor();
+        if (getter) {
+            desc.setGetter(function);
+        } else {
+            desc.setSetter(function);
+        }
+        desc.setEnumerable(true);
+        desc.setConfigurable(true);
+
+        if (!obj.defineProperty(key, desc)) {
+            if (!context.hasPendingException()) {
+                context.throwTypeError("Cannot define property: " + key.toPropertyString());
+            }
+            return JSUndefined.INSTANCE;
+        }
+        return JSUndefined.INSTANCE;
     }
 
     /**
@@ -643,6 +530,44 @@ public final class ObjectPrototype {
         }
 
         return context.createJSArray(keyStrings, true);
+    }
+
+    private static JSValue lookupAccessor(JSContext context, JSValue thisArg, JSValue[] args, boolean getter) {
+        String method = getter ? "__lookupGetter__" : "__lookupSetter__";
+        if (thisArg.isNullOrUndefined()) {
+            return context.throwTypeError(method + " called on null or undefined");
+        }
+        if (args.length < 1) {
+            return JSUndefined.INSTANCE;
+        }
+        JSObject obj;
+        if (thisArg instanceof JSObject jsObj) {
+            obj = jsObj;
+        } else {
+            obj = JSTypeConversions.toObject(context, thisArg);
+            if (obj == null || context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        JSValue prop = args[0];
+        PropertyKey key = PropertyKey.fromValue(context, prop);
+
+        // Walk up the prototype chain per spec B.2.2.4
+        JSObject current = obj;
+        while (current != null) {
+            PropertyDescriptor desc = current.getOwnPropertyDescriptor(key);
+            if (desc != null) {
+                if (desc.isAccessorDescriptor()) {
+                    JSFunction accessor = getter ? desc.getGetter() : desc.getSetter();
+                    return accessor != null ? accessor : JSUndefined.INSTANCE;
+                }
+                return JSUndefined.INSTANCE;
+            }
+            current = current.getPrototype();
+        }
+
+        return JSUndefined.INSTANCE;
     }
 
     /**

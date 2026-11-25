@@ -21,6 +21,37 @@ public final class JSCall {
     private JSCall() {
     }
 
+    public static JSValue[] argumentsFromArrayLike(JSContext context, JSValue arrayArg) {
+        if (!(arrayArg instanceof JSObject arrayLike)) {
+            context.throwTypeError("CreateListFromArrayLike called on non-object");
+            return null;
+        }
+
+        JSValue lengthValue = arrayLike.get(PropertyKey.LENGTH);
+        if (context.hasPendingException()) {
+            return null;
+        }
+
+        long length = JSTypeConversions.toLength(context, lengthValue);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (length > Integer.MAX_VALUE) {
+            context.throwRangeError("too many arguments in function call");
+            return null;
+        }
+
+        JSValue[] callArgs = new JSValue[(int) length];
+        for (int i = 0; i < callArgs.length; i++) {
+            JSValue argumentValue = arrayLike.get(PropertyKey.fromIndex(i));
+            if (context.hasPendingException()) {
+                return null;
+            }
+            callArgs[i] = argumentValue;
+        }
+        return callArgs;
+    }
+
     public static JSValue call(JSContext context, JSValue callable, JSValue thisArg, JSValue[] args) {
         if (callable instanceof JSProxy proxy) {
             return proxy.apply(context, thisArg, args);

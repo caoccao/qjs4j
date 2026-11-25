@@ -62,9 +62,9 @@ public class AtomicsObjectTest extends BaseJavetTest {
         assertTypeError(error);
         context.clearPendingException();
 
-        error = atomics().add(context, null, new JSValue[]{new JSNumber(1), new JSNumber(0), new JSNumber(5)}); // not
-                                                                                                                // typed
-                                                                                                                // array
+        error = atomics().add(context, null, numberArgs(1, 0, 5)); // not
+                                                                   // typed
+                                                                   // array
         assertTypeError(error);
         context.clearPendingException();
 
@@ -162,20 +162,20 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testIsLockFree() {
         // Test various sizes
-        JSValue result = atomics().isLockFree(context, null, new JSValue[]{new JSNumber(1)});
+        JSValue result = atomics().isLockFree(context, null, numberArgs(1));
         assertThat(result.isBoolean()).isTrue(); // Implementation dependent
 
-        result = atomics().isLockFree(context, null, new JSValue[]{new JSNumber(2)});
+        result = atomics().isLockFree(context, null, numberArgs(2));
         assertThat(result.isBoolean()).isTrue();
 
-        result = atomics().isLockFree(context, null, new JSValue[]{new JSNumber(4)});
+        result = atomics().isLockFree(context, null, numberArgs(4));
         assertThat(result.isBoolean()).isTrue();
 
-        result = atomics().isLockFree(context, null, new JSValue[]{new JSNumber(8)});
+        result = atomics().isLockFree(context, null, numberArgs(8));
         assertThat(result.isBoolean()).isTrue();
 
         // Test invalid size
-        result = atomics().isLockFree(context, null, new JSValue[]{new JSNumber(3)});
+        result = atomics().isLockFree(context, null, numberArgs(3));
         assertThat(result.isBooleanFalse()).isTrue(); // Should be false for unsupported sizes
     }
 
@@ -187,7 +187,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         // premise guest code picks a lock-free algorithm on.
         boolean lockFree = ByteArrayAtomics.isLockFree();
         for (int size : new int[]{1, 2, 4, 8}) {
-            assertThat(atomics().isLockFree(context, null, new JSValue[]{new JSNumber(size)})).as("size " + size)
+            assertThat(atomics().isLockFree(context, null, numberArgs(size))).as("size " + size)
                     .isEqualTo(JSBoolean.valueOf(lockFree));
             assertThat(context.eval("Atomics.isLockFree(" + size + ")").toString()).as("guest-visible size " + size)
                     .isEqualTo(String.valueOf(lockFree));
@@ -242,7 +242,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         context.clearPendingException();
 
         // Test 3: Non-TypedArray argument
-        error = atomics().notify(context, null, new JSValue[]{new JSNumber(1)});
+        error = atomics().notify(context, null, numberArgs(1));
         assertTypeError(error);
         context.clearPendingException();
 
@@ -451,7 +451,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         context.clearPendingException();
 
         // Test 4: Non-TypedArray argument
-        error = atomics().wait(context, null, new JSValue[]{new JSNumber(1), new JSNumber(0), new JSNumber(0)});
+        error = atomics().wait(context, null, numberArgs(1, 0, 0));
         assertTypeError(error);
         context.clearPendingException();
 
@@ -551,7 +551,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         context.clearPendingException();
 
         // Test 4: Non-TypedArray argument
-        error = atomics().waitAsync(context, null, new JSValue[]{new JSNumber(1), new JSNumber(0), new JSNumber(0)});
+        error = atomics().waitAsync(context, null, numberArgs(1, 0, 0));
         assertTypeError(error);
         context.clearPendingException();
 

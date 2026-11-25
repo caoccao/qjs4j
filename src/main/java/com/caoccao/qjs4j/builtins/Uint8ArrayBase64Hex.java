@@ -58,6 +58,45 @@ public final class Uint8ArrayBase64Hex {
         return result;
     }
 
+    private static JSValue decodeBase64(JSContext context, String input, JSValue options, JSUint8Array target) {
+        String alphabet = getAlphabetOption(context, options);
+        if (alphabet == null) {
+            return context.getPendingException();
+        }
+        String lastChunkHandling = getLastChunkHandlingOption(context, options);
+        if (lastChunkHandling == null || context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        // Option getters can detach or resize the target buffer.
+        if (target != null && target.isOutOfBounds()) {
+            return context.throwTypeError("cannot perform setFromBase64 on a detached or out-of-bounds buffer");
+        }
+        int[] decodeTable = "base64url".equals(alphabet) ? BASE64URL_DECODE : BASE64_DECODE;
+        int limit = target == null ? Integer.MAX_VALUE : (int) Math.min(target.getLength(), Integer.MAX_VALUE);
+        return finishDecode(context, fromBase64Core(input, decodeTable, lastChunkHandling, limit), target);
+    }
+
+    private static JSValue finishDecode(JSContext context, DecodeResult result, JSUint8Array target) {
+        if (target == null && result.error != null) {
+            return context.throwSyntaxError(result.error);
+        }
+        JSUint8Array array = target == null ? context.createJSUint8Array(result.bytes.length) : target;
+        for (int i = 0; i < result.bytes.length; i++) {
+            array.setElement(i, result.bytes[i] & 0xFF);
+        }
+        // The setters must write the valid prefix before reporting a syntax error.
+        if (result.error != null) {
+            return context.throwSyntaxError(result.error);
+        }
+        if (target == null) {
+            return array;
+        }
+        JSObject counts = context.createJSObject();
+        counts.set(PropertyKey.fromString("read"), JSNumber.of(result.read));
+        counts.set(PropertyKey.fromString("written"), JSNumber.of(result.bytes.length));
+        return counts;
+    }
+
     /**
      * Uint8Array.fromBase64(string [, options])
      */
@@ -66,32 +105,7 @@ public final class Uint8ArrayBase64Hex {
             return context.throwTypeError("input argument must be a string");
         }
 
-        JSValue options = JSValue.argumentOrUndefined(args, 1);
-
-        String alphabet = getAlphabetOption(context, options);
-        if (alphabet == null) {
-            return context.getPendingException();
-        }
-
-        String lastChunkHandling = getLastChunkHandlingOption(context, options);
-        if (lastChunkHandling == null) {
-            return context.getPendingException();
-        }
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        int[] decodeTable = "base64url".equals(alphabet) ? BASE64URL_DECODE : BASE64_DECODE;
-        DecodeResult result = fromBase64Core(inputStr.value(), decodeTable, lastChunkHandling, Integer.MAX_VALUE);
-        if (result.error != null) {
-            return context.throwSyntaxError(result.error);
-        }
-
-        JSUint8Array array = context.createJSUint8Array(result.bytes.length);
-        for (int i = 0; i < result.bytes.length; i++) {
-            array.setElement(i, result.bytes[i] & 0xFF);
-        }
-        return array;
+        return decodeBase64(context, inputStr.value(), JSValue.argumentOrUndefined(args, 1), null);
     }
 
     /**
@@ -268,16 +282,7 @@ public final class Uint8ArrayBase64Hex {
             return context.throwTypeError("input argument must be a string");
         }
 
-        DecodeResult result = fromHexCore(inputStr.value(), Integer.MAX_VALUE);
-        if (result.error != null) {
-            return context.throwSyntaxError(result.error);
-        }
-
-        JSUint8Array array = context.createJSUint8Array(result.bytes.length);
-        for (int i = 0; i < result.bytes.length; i++) {
-            array.setElement(i, result.bytes[i] & 0xFF);
-        }
-        return array;
+        return finishDecode(context, fromHexCore(inputStr.value(), Integer.MAX_VALUE), null);
     }
 
     /**
@@ -425,45 +430,7 @@ public final class Uint8ArrayBase64Hex {
             return context.throwTypeError("expected first argument to be a string");
         }
 
-        JSValue options = JSValue.argumentOrUndefined(args, 1);
-
-        String alphabet = getAlphabetOption(context, options);
-        if (alphabet == null) {
-            return context.getPendingException();
-        }
-
-        String lastChunkHandling = getLastChunkHandlingOption(context, options);
-        if (lastChunkHandling == null) {
-            return context.getPendingException();
-        }
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        // Check for detached buffer AFTER reading options (per spec)
-        if (uint8Array.isOutOfBounds()) {
-            return context.throwTypeError("cannot perform setFromBase64 on a detached or out-of-bounds buffer");
-        }
-
-        int[] decodeTable = "base64url".equals(alphabet) ? BASE64URL_DECODE : BASE64_DECODE;
-        int maxLength = (int) Math.min(uint8Array.getLength(), Integer.MAX_VALUE);
-        DecodeResult result = fromBase64Core(inputStr.value(), decodeTable, lastChunkHandling, maxLength);
-
-        // Write decoded bytes to the array (even if there's an error, partial data is written)
-        for (int i = 0; i < result.bytes.length; i++) {
-            uint8Array.setElement(i, result.bytes[i] & 0xFF);
-        }
-
-        // Throw error after writing partial data
-        if (result.error != null) {
-            return context.throwSyntaxError(result.error);
-        }
-
-        // Return { read, written }
-        JSObject resultObj = context.createJSObject();
-        resultObj.set(PropertyKey.fromString("read"), JSNumber.of(result.read));
-        resultObj.set(PropertyKey.fromString("written"), JSNumber.of(result.bytes.length));
-        return resultObj;
+        return decodeBase64(context, inputStr.value(), JSValue.argumentOrUndefined(args, 1), uint8Array);
     }
 
     /**
@@ -481,24 +448,8 @@ public final class Uint8ArrayBase64Hex {
             return context.throwTypeError("expected first argument to be a string");
         }
 
-        int maxLength = (int) Math.min(uint8Array.getLength(), Integer.MAX_VALUE);
-        DecodeResult result = fromHexCore(inputStr.value(), maxLength);
-
-        // Write decoded bytes to the array (even if there's an error, partial data is written)
-        for (int i = 0; i < result.bytes.length; i++) {
-            uint8Array.setElement(i, result.bytes[i] & 0xFF);
-        }
-
-        // Throw error after writing partial data
-        if (result.error != null) {
-            return context.throwSyntaxError(result.error);
-        }
-
-        // Return { read, written }
-        JSObject resultObj = context.createJSObject();
-        resultObj.set(PropertyKey.fromString("read"), JSNumber.of(result.read));
-        resultObj.set(PropertyKey.fromString("written"), JSNumber.of(result.bytes.length));
-        return resultObj;
+        return finishDecode(context,
+                fromHexCore(inputStr.value(), (int) Math.min(uint8Array.getLength(), Integer.MAX_VALUE)), uint8Array);
     }
 
     /**

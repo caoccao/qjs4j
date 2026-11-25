@@ -392,42 +392,10 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Fast path for own enumerable string property names as JS strings. Returns null when generic property ordering or
-     * accessor semantics are required.
+     * Fast path for own enumerable string property names as JS strings. Returns null when generic lookup is required.
      */
     public JSValue[] enumerableStringKeyValuesFastPath() {
-        if (getClass() != JSObject.class) {
-            return null;
-        }
-        if (sparseProperties != null || shape.getDeletedPropCount() != 0) {
-            return null;
-        }
-        int propertyCount = shape.getPropertyCount();
-        JSValue[] keyValues = new JSValue[propertyCount];
-        int keyCount = 0;
-        for (int index = 0; index < propertyCount; index++) {
-            PropertyKey propertyKey = shape.getPropertyKeyAt(index);
-            if (propertyKey == null) {
-                return null;
-            }
-            if (propertyKey.isSymbol() || propertyKey.toArrayIndex() >= 0) {
-                return null;
-            }
-            PropertyDescriptor descriptor = shape.getDescriptorAt(index);
-            if (descriptor == null) {
-                return null;
-            }
-            if (descriptor.isAccessorDescriptor()) {
-                return null;
-            }
-            if (descriptor.isEnumerable()) {
-                keyValues[keyCount++] = new JSString(propertyKey.asString());
-            }
-        }
-        if (keyCount == keyValues.length) {
-            return keyValues;
-        }
-        return Arrays.copyOf(keyValues, keyCount);
+        return enumerableStringsFromShape(true);
     }
 
     /**
@@ -435,6 +403,10 @@ public non-sealed class JSObject implements JSValue {
      * semantics are required.
      */
     public JSValue[] enumerableStringPropertyValuesFastPath() {
+        return enumerableStringsFromShape(false);
+    }
+
+    private JSValue[] enumerableStringsFromShape(boolean keys) {
         if (getClass() != JSObject.class) {
             return null;
         }
@@ -456,12 +428,16 @@ public non-sealed class JSObject implements JSValue {
             if (descriptor == null) {
                 return null;
             }
-            if (descriptor.isAccessorDescriptor()) {
+            if (!keys && descriptor.isAccessorDescriptor()) {
                 return null;
             }
             if (descriptor.isEnumerable()) {
-                JSValue propertyValue = index < propertyValues.length ? propertyValues[index] : null;
-                values[valueCount++] = propertyValue != null ? propertyValue : JSUndefined.INSTANCE;
+                if (keys) {
+                    values[valueCount++] = new JSString(propertyKey.toPropertyString());
+                } else {
+                    JSValue propertyValue = index < propertyValues.length ? propertyValues[index] : null;
+                    values[valueCount++] = propertyValue != null ? propertyValue : JSUndefined.INSTANCE;
+                }
             }
         }
         if (valueCount == values.length) {
@@ -1582,6 +1558,8 @@ public non-sealed class JSObject implements JSValue {
         immutablePrototype = true;
     }
 
+    // Prototype chain
+
     /**
      * SetIntegrityLevel(O, level) ES2024 7.3.16.
      *
@@ -1649,8 +1627,6 @@ public non-sealed class JSObject implements JSValue {
         }
         return true;
     }
-
-    // Prototype chain
 
     private boolean setInternal(PropertyKey key, JSValue value, JSObject receiver, boolean throwOnFailure) {
         // Check if property already exists
@@ -1731,6 +1707,8 @@ public non-sealed class JSObject implements JSValue {
         return setOnReceiver(key, value, receiver, throwOnFailure);
     }
 
+    // Object integrity levels (ES5)
+
     private boolean setOnReceiver(PropertyKey key, JSValue value, JSObject receiver, boolean throwOnFailure) {
         if (receiver instanceof JSImportNamespaceObject || receiver instanceof JSDeferredModuleNamespace) {
             return failSet(key, throwOnFailure);
@@ -1795,8 +1773,6 @@ public non-sealed class JSObject implements JSValue {
         }
         return receiver.defineProperty(key, value, PropertyDescriptor.DataState.All);
     }
-
-    // Object integrity levels (ES5)
 
     /**
      * Set the [[PrimitiveValue]] internal slot. This is for internal use only - not accessible from JavaScript.
@@ -2012,12 +1988,12 @@ public non-sealed class JSObject implements JSValue {
         return "[object Object]";
     }
 
+    // JSValue implementation
+
     @Override
     public JSValueType type() {
         return JSValueType.OBJECT;
     }
-
-    // JSValue implementation
 
     /**
      * Whether this object's {@code toString} is still the realm's {@code Object.prototype.toString}.

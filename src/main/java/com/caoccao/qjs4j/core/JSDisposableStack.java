@@ -72,8 +72,7 @@ public final class JSDisposableStack extends JSObject {
     public JSValue dispose(JSContext context, JSValue completionError) {
         JSValue initialError = completionError;
         if (initialError == null && context.hasPendingException()) {
-            initialError = context.getPendingException();
-            context.clearPendingException();
+            initialError = context.takePendingException();
         }
 
         if (disposed) {
@@ -110,15 +109,13 @@ public final class JSDisposableStack extends JSObject {
             record.function().call(context, record.thisArg(), record.args());
         } catch (JSException e) {
             if (context.hasPendingException()) {
-                JSValue pending = context.getPendingException();
-                context.clearPendingException();
+                JSValue pending = context.takePendingException();
                 return pending;
             }
             return e.getErrorValue();
         } catch (JSVirtualMachineException e) {
             if (context.hasPendingException()) {
-                JSValue pending = context.getPendingException();
-                context.clearPendingException();
+                JSValue pending = context.takePendingException();
                 return pending;
             }
             if (e.getJsValue() != null) {
@@ -128,16 +125,14 @@ public final class JSDisposableStack extends JSObject {
                 return e.getJsError();
             }
             JSValue error = context.throwError("Error during disposal: " + e.getMessage());
-            JSValue pending = context.getPendingException();
-            context.clearPendingException();
+            JSValue pending = context.takePendingException();
             return pending != null ? pending : error;
         }
         // Anything else — a host defect, OutOfMemoryError, termination — is not a JavaScript error: it reaches the
         // virtual machine, which reports it to the embedder uncatchably. It used to become an "Error during disposal"
         // that the script could catch, and execution went on in a JVM that had just failed an allocation.
         if (context.hasPendingException()) {
-            JSValue pending = context.getPendingException();
-            context.clearPendingException();
+            JSValue pending = context.takePendingException();
             return pending;
         }
         return null;

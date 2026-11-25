@@ -59,21 +59,19 @@ public class NumberPrototypeTest extends BaseJavetTest {
     @Test
     public void testIsFinite() {
         // Normal case: finite number
-        JSValue result = NumberPrototype.isFinite(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42)});
+        JSValue result = NumberPrototype.isFinite(context, JSUndefined.INSTANCE, numberArgs(42));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: NaN
-        result = NumberPrototype.isFinite(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(Double.NaN)});
+        result = NumberPrototype.isFinite(context, JSUndefined.INSTANCE, numberArgs(Double.NaN));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: positive Infinity
-        result = NumberPrototype.isFinite(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSNumber(Double.POSITIVE_INFINITY)});
+        result = NumberPrototype.isFinite(context, JSUndefined.INSTANCE, numberArgs(Double.POSITIVE_INFINITY));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: negative Infinity
-        result = NumberPrototype.isFinite(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSNumber(Double.NEGATIVE_INFINITY)});
+        result = NumberPrototype.isFinite(context, JSUndefined.INSTANCE, numberArgs(Double.NEGATIVE_INFINITY));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: non-number value
@@ -88,28 +86,27 @@ public class NumberPrototypeTest extends BaseJavetTest {
     @Test
     public void testIsInteger() {
         // Normal case: integer
-        JSValue result = NumberPrototype.isInteger(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42)});
+        JSValue result = NumberPrototype.isInteger(context, JSUndefined.INSTANCE, numberArgs(42));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: negative integer
-        result = NumberPrototype.isInteger(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(-17)});
+        result = NumberPrototype.isInteger(context, JSUndefined.INSTANCE, numberArgs(-17));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: zero
-        result = NumberPrototype.isInteger(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(0)});
+        result = NumberPrototype.isInteger(context, JSUndefined.INSTANCE, numberArgs(0));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: float
-        result = NumberPrototype.isInteger(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42.5)});
+        result = NumberPrototype.isInteger(context, JSUndefined.INSTANCE, numberArgs(42.5));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: NaN
-        result = NumberPrototype.isInteger(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(Double.NaN)});
+        result = NumberPrototype.isInteger(context, JSUndefined.INSTANCE, numberArgs(Double.NaN));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: Infinity
-        result = NumberPrototype.isInteger(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSNumber(Double.POSITIVE_INFINITY)});
+        result = NumberPrototype.isInteger(context, JSUndefined.INSTANCE, numberArgs(Double.POSITIVE_INFINITY));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: non-number value
@@ -124,16 +121,15 @@ public class NumberPrototypeTest extends BaseJavetTest {
     @Test
     public void testIsNaN() {
         // Normal case: NaN number
-        JSValue result = NumberPrototype.isNaN(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(Double.NaN)});
+        JSValue result = NumberPrototype.isNaN(context, JSUndefined.INSTANCE, numberArgs(Double.NaN));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: finite number
-        result = NumberPrototype.isNaN(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42)});
+        result = NumberPrototype.isNaN(context, JSUndefined.INSTANCE, numberArgs(42));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: Infinity
-        result = NumberPrototype.isNaN(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSNumber(Double.POSITIVE_INFINITY)});
+        result = NumberPrototype.isNaN(context, JSUndefined.INSTANCE, numberArgs(Double.POSITIVE_INFINITY));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: non-number value
@@ -148,17 +144,17 @@ public class NumberPrototypeTest extends BaseJavetTest {
     @Test
     public void testIsSafeInteger() {
         // Normal case: safe integer
-        JSValue result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42)});
+        JSValue result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE, numberArgs(42));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: maximum safe integer
         result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSNumber(NumberPrototype.MAX_SAFE_INTEGER)});
+                numberArgs(NumberPrototype.MAX_SAFE_INTEGER));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: minimum safe integer
         result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSNumber(-NumberPrototype.MAX_SAFE_INTEGER)});
+                numberArgs(-NumberPrototype.MAX_SAFE_INTEGER));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: unsafe integer (too large)
@@ -167,16 +163,15 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: float
-        result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42.5)});
+        result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE, numberArgs(42.5));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: NaN
-        result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(Double.NaN)});
+        result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE, numberArgs(Double.NaN));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: Infinity
-        result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSNumber(Double.POSITIVE_INFINITY)});
+        result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE, numberArgs(Double.POSITIVE_INFINITY));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: non-number value
@@ -290,7 +285,7 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Edge case: non-string argument (should coerce)
-        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42.5)});
+        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, numberArgs(42.5));
         assertNumberValue(result, 42.5);
     }
 
@@ -353,7 +348,7 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Edge case: non-string argument (should coerce)
-        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42.9)});
+        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, numberArgs(42.9));
         assertNumberValue(result, 42.0);
     }
 
@@ -377,15 +372,15 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "1.2312312312312312e+17");
 
         // Normal case: specific precision
-        result = NumberPrototype.toExponential(context, num, new JSValue[]{new JSNumber(2)});
+        result = NumberPrototype.toExponential(context, num, numberArgs(2));
         assertStringValue(result, "1.23e+2");
 
         // Normal case: zero
-        result = NumberPrototype.toExponential(context, new JSNumber(0), new JSValue[]{new JSNumber(1)});
+        result = NumberPrototype.toExponential(context, new JSNumber(0), numberArgs(1));
         assertStringValue(result, "0.0e+0");
 
         // Normal case: negative number
-        result = NumberPrototype.toExponential(context, new JSNumber(-42.7), new JSValue[]{new JSNumber(3)});
+        result = NumberPrototype.toExponential(context, new JSNumber(-42.7), numberArgs(3));
         assertStringValue(result, "-4.270e+1");
 
         // Special case: NaN
@@ -401,11 +396,11 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "-Infinity");
 
         // Edge case: precision too low - skip error check due to JSObject implementation
-        assertRangeError(NumberPrototype.toExponential(context, num, new JSValue[]{new JSNumber(-1)}));
+        assertRangeError(NumberPrototype.toExponential(context, num, numberArgs(-1)));
         assertPendingException(context);
 
         // Edge case: precision too high - skip error check due to JSObject implementation
-        assertRangeError(NumberPrototype.toExponential(context, num, new JSValue[]{new JSNumber(101)}));
+        assertRangeError(NumberPrototype.toExponential(context, num, numberArgs(101)));
         assertPendingException(context);
     }
 
@@ -430,8 +425,7 @@ public class NumberPrototypeTest extends BaseJavetTest {
             IntStream.range(0, 101).forEach(fractionDigits -> assertWithJavet(
                     () -> v8Runtime.getExecutor("Number(" + number + ").toExponential(" + fractionDigits + ")")
                             .executeString(),
-                    () -> NumberPrototype
-                            .toExponential(context, new JSNumber(number), new JSValue[]{new JSNumber(fractionDigits)})
+                    () -> NumberPrototype.toExponential(context, new JSNumber(number), numberArgs(fractionDigits))
                             .asString().map(JSString::value).orElseThrow()));
             assertWithJavet(() -> v8Runtime.getExecutor("Number(" + number + ").toExponential()").executeString(),
                     () -> NumberPrototype.toExponential(context, new JSNumber(number), JSValue.NO_ARGS).asString()
@@ -446,24 +440,24 @@ public class NumberPrototypeTest extends BaseJavetTest {
         // Normal case: default precision (0)
         JSValue result = NumberPrototype.toFixed(context, num, JSValue.NO_ARGS);
         assertStringValue(result, "123");
-        result = NumberPrototype.toFixed(context, num, new JSValue[]{new JSNumber(2)});
+        result = NumberPrototype.toFixed(context, num, numberArgs(2));
         assertStringValue(result, "123.46");
-        result = NumberPrototype.toFixed(context, num, new JSValue[]{new JSNumber(3)});
+        result = NumberPrototype.toFixed(context, num, numberArgs(3));
         assertStringValue(result, "123.456");
-        result = NumberPrototype.toFixed(context, num, new JSValue[]{new JSNumber(10)});
+        result = NumberPrototype.toFixed(context, num, numberArgs(10));
         assertStringValue(result, "123.4560000000");
 
         // Normal case: rounding - 1.005 is actually ~1.0049999... in binary
         // so it rounds down to 1.00, not up to 1.01 (this matches JavaScript behavior)
-        result = NumberPrototype.toFixed(context, new JSNumber(1.005), new JSValue[]{new JSNumber(2)});
+        result = NumberPrototype.toFixed(context, new JSNumber(1.005), numberArgs(2));
         assertStringValue(result, "1.00");
 
         // Normal case: zero
-        result = NumberPrototype.toFixed(context, new JSNumber(0), new JSValue[]{new JSNumber(2)});
+        result = NumberPrototype.toFixed(context, new JSNumber(0), numberArgs(2));
         assertStringValue(result, "0.00");
 
         // Normal case: negative number
-        result = NumberPrototype.toFixed(context, new JSNumber(-42.7), new JSValue[]{new JSNumber(1)});
+        result = NumberPrototype.toFixed(context, new JSNumber(-42.7), numberArgs(1));
         assertStringValue(result, "-42.7");
 
         // Special case: NaN
@@ -480,11 +474,11 @@ public class NumberPrototypeTest extends BaseJavetTest {
                 .satisfies(s -> assertThat(s.contains("e")).isTrue());
 
         // Edge case: precision too low - skip error check due to JSObject implementation
-        assertRangeError(NumberPrototype.toFixed(context, num, new JSValue[]{new JSNumber(-1)}));
+        assertRangeError(NumberPrototype.toFixed(context, num, numberArgs(-1)));
         assertPendingException(context);
 
         // Edge case: precision too high - skip error check due to JSObject implementation
-        assertRangeError(NumberPrototype.toFixed(context, num, new JSValue[]{new JSNumber(101)}));
+        assertRangeError(NumberPrototype.toFixed(context, num, numberArgs(101)));
         assertPendingException(context);
     }
 
@@ -505,8 +499,7 @@ public class NumberPrototypeTest extends BaseJavetTest {
                     .forEach(fractionDigits -> assertWithJavet(
                             () -> v8Runtime.getExecutor("Number(" + number + ").toFixed(" + fractionDigits + ")")
                                     .executeString(),
-                            () -> NumberPrototype
-                                    .toFixed(context, new JSNumber(number), new JSValue[]{new JSNumber(fractionDigits)})
+                            () -> NumberPrototype.toFixed(context, new JSNumber(number), numberArgs(fractionDigits))
                                     .asString().map(JSString::value).orElseThrow()));
             assertWithJavet(() -> v8Runtime.getExecutor("Number(" + number + ").toFixed()").executeString(),
                     () -> NumberPrototype.toFixed(context, new JSNumber(number), JSValue.NO_ARGS).asString()
@@ -541,19 +534,19 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "123.456");
 
         // Normal case: specific precision
-        result = NumberPrototype.toPrecision(context, num, new JSValue[]{new JSNumber(4)});
+        result = NumberPrototype.toPrecision(context, num, numberArgs(4));
         assertStringValue(result, "123.5");
 
         // Normal case: exponential notation for small numbers
-        result = NumberPrototype.toPrecision(context, new JSNumber(0.000123), new JSValue[]{new JSNumber(3)});
+        result = NumberPrototype.toPrecision(context, new JSNumber(0.000123), numberArgs(3));
         assertStringValue(result, "0.000123");
 
         // Normal case: exponential notation for large numbers
-        result = NumberPrototype.toPrecision(context, new JSNumber(123456789), new JSValue[]{new JSNumber(4)});
+        result = NumberPrototype.toPrecision(context, new JSNumber(123456789), numberArgs(4));
         assertStringValue(result, "1.235e+8");
 
         // Normal case: zero
-        result = NumberPrototype.toPrecision(context, new JSNumber(0), new JSValue[]{new JSNumber(3)});
+        result = NumberPrototype.toPrecision(context, new JSNumber(0), numberArgs(3));
         assertStringValue(result, "0.00");
 
         // Special case: NaN
@@ -565,11 +558,11 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "Infinity");
 
         // Edge case: precision too low - skip error check due to JSObject implementation
-        assertRangeError(NumberPrototype.toPrecision(context, num, new JSValue[]{new JSNumber(0)}));
+        assertRangeError(NumberPrototype.toPrecision(context, num, numberArgs(0)));
         assertPendingException(context);
 
         // Edge case: precision too high - skip error check due to JSObject implementation
-        assertRangeError(NumberPrototype.toPrecision(context, num, new JSValue[]{new JSNumber(101)}));
+        assertRangeError(NumberPrototype.toPrecision(context, num, numberArgs(101)));
         assertPendingException(context);
     }
 
@@ -582,8 +575,7 @@ public class NumberPrototypeTest extends BaseJavetTest {
                     .forEach(precision -> assertWithJavet(
                             () -> v8Runtime.getExecutor("Number(" + number + ").toPrecision(" + precision + ")")
                                     .executeString(),
-                            () -> NumberPrototype
-                                    .toPrecision(context, new JSNumber(number), new JSValue[]{new JSNumber(precision)})
+                            () -> NumberPrototype.toPrecision(context, new JSNumber(number), numberArgs(precision))
                                     .asString().map(JSString::value).orElseThrow()));
             assertWithJavet(() -> v8Runtime.getExecutor("Number(" + number + ").toPrecision()").executeString(),
                     () -> NumberPrototype.toPrecision(context, new JSNumber(number), JSValue.NO_ARGS).asString()
@@ -604,15 +596,15 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "123.456");
 
         // Normal case: different radix
-        result = NumberPrototype.toString(context, num, new JSValue[]{new JSNumber(16)});
+        result = NumberPrototype.toString(context, num, numberArgs(16));
         assertStringValue(result, "2a");
 
         // Normal case: binary
-        result = NumberPrototype.toString(context, num, new JSValue[]{new JSNumber(2)});
+        result = NumberPrototype.toString(context, num, numberArgs(2));
         assertStringValue(result, "101010");
 
         // Normal case: negative number
-        result = NumberPrototype.toString(context, new JSNumber(-42), new JSValue[]{new JSNumber(16)});
+        result = NumberPrototype.toString(context, new JSNumber(-42), numberArgs(16));
         assertStringValue(result, "-2a");
 
         // Special case: NaN
@@ -628,15 +620,15 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "0");
 
         // Edge case: radix too low - skip error check due to JSObject implementation
-        assertRangeError(NumberPrototype.toString(context, num, new JSValue[]{new JSNumber(1)}));
+        assertRangeError(NumberPrototype.toString(context, num, numberArgs(1)));
         assertPendingException(context);
 
         // Edge case: radix too high - skip error check due to JSObject implementation
-        assertRangeError(NumberPrototype.toString(context, num, new JSValue[]{new JSNumber(37)}));
+        assertRangeError(NumberPrototype.toString(context, num, numberArgs(37)));
         assertPendingException(context);
 
         // Edge case: non-integer with non-10 radix (now supported for floating-point conversion)
-        result = NumberPrototype.toString(context, new JSNumber(42.5), new JSValue[]{new JSNumber(16)});
+        result = NumberPrototype.toString(context, new JSNumber(42.5), numberArgs(16));
         assertStringValue(result, "2a.8");
     }
 
@@ -684,8 +676,7 @@ public class NumberPrototypeTest extends BaseJavetTest {
         testNumbers.forEach(number -> IntStream.range(2, 37)
                 .forEach(radix -> assertWithJavet(
                         () -> v8Runtime.getExecutor("Number(" + number + ").toString(" + radix + ")").executeString(),
-                        () -> NumberPrototype
-                                .toString(context, new JSNumber(number), new JSValue[]{new JSNumber(radix)}).asString()
+                        () -> NumberPrototype.toString(context, new JSNumber(number), numberArgs(radix)).asString()
                                 .map(JSString::value).orElseThrow())));
     }
 

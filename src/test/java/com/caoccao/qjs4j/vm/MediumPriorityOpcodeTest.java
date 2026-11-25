@@ -268,7 +268,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         varRefRefEmitter.emitOpcodeU16(Opcode.GET_VAR_REF, 0);
         varRefRefEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue[] closureVars = new JSValue[]{new JSNumber(1)};
+        JSValue[] closureVars = numberArgs(1);
         JSValue varRefRefResult = execute(varRefRefEmitter, 0, closureVars, JSUndefined.INSTANCE);
         assertNumberValue(varRefRefResult, 15);
 

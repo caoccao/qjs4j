@@ -35,7 +35,7 @@ public class SymbolConstructorTest extends BaseJavetTest {
         assertThat(symbol.getDescription()).isEqualTo("test");
 
         // Normal case: with numeric description
-        result = SymbolConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42)});
+        result = SymbolConstructor.call(context, JSUndefined.INSTANCE, numberArgs(42));
         symbol = result.asSymbol().orElseThrow();
         assertThat(symbol.getDescription()).isEqualTo("42");
 
@@ -165,7 +165,7 @@ public class SymbolConstructorTest extends BaseJavetTest {
         assertThat(symbol3.getDescription()).isEqualTo("other");
 
         // Normal case: numeric key
-        result = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(123)});
+        result = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, numberArgs(123));
         JSSymbol symbol4 = result.asSymbol().orElseThrow();
         assertThat(symbol4.getDescription()).isEqualTo("123");
 

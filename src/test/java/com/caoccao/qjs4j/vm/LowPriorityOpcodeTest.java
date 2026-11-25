@@ -167,7 +167,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
                 new JSNumber(2), new JSNumber(3), new JSNumber(4));
         assertNumberValue(argResult, 389);
 
-        JSValue[] closureVars = new JSValue[]{new JSNumber(1), new JSNumber(2), new JSNumber(3), new JSNumber(4)};
+        JSValue[] closureVars = numberArgs(1, 2, 3, 4);
         BytecodeEmitter varRefEmitter = new BytecodeEmitter();
         varRefEmitter.emitOpcode(Opcode.GET_VAR_REF0);
         varRefEmitter.emitOpcode(Opcode.GET_VAR_REF1);

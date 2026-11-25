@@ -35,30 +35,27 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testAt() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3));
 
         // Normal case: positive index
-        JSValue result = ArrayPrototype.at(context, arr, new JSValue[]{new JSNumber(0)});
+        JSValue result = ArrayPrototype.at(context, arr, numberArgs(0));
         assertNumberValue(result, 1.0);
 
-        result = ArrayPrototype.at(context, arr, new JSValue[]{new JSNumber(2)});
+        result = ArrayPrototype.at(context, arr, numberArgs(2));
         assertNumberValue(result, 3.0);
 
         // Negative index
-        result = ArrayPrototype.at(context, arr, new JSValue[]{new JSNumber(-1)});
+        result = ArrayPrototype.at(context, arr, numberArgs(-1));
         assertNumberValue(result, 3.0);
 
-        result = ArrayPrototype.at(context, arr, new JSValue[]{new JSNumber(-2)});
+        result = ArrayPrototype.at(context, arr, numberArgs(-2));
         assertNumberValue(result, 2.0);
 
         // Out of bounds
-        result = ArrayPrototype.at(context, arr, new JSValue[]{new JSNumber(3)});
+        result = ArrayPrototype.at(context, arr, numberArgs(3));
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
-        result = ArrayPrototype.at(context, arr, new JSValue[]{new JSNumber(-4)});
+        result = ArrayPrototype.at(context, arr, numberArgs(-4));
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
         // No arguments: ToIntegerOrInfinity(undefined) = 0, so returns arr[0]
@@ -67,24 +64,20 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
         // Edge case: empty array
         JSArray emptyArr = new JSArray(context);
-        result = ArrayPrototype.at(context, emptyArr, new JSValue[]{new JSNumber(0)});
+        result = ArrayPrototype.at(context, emptyArr, numberArgs(0));
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
         // Generic: at works on non-array objects via ToObject + LengthOfArrayLike
         JSValue nonArray = new JSString("abc");
-        result = ArrayPrototype.at(context, nonArray, new JSValue[]{new JSNumber(0)});
+        result = ArrayPrototype.at(context, nonArray, numberArgs(0));
         assertStringValue(result, "a");
     }
 
     @Test
     public void testConcat() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
+        JSArray arr = new JSArray(context, numberArgs(1, 2));
 
-        JSArray arr2 = new JSArray(context);
-        arr2.push(new JSNumber(3));
-        arr2.push(new JSNumber(4));
+        JSArray arr2 = new JSArray(context, numberArgs(3, 4));
 
         // Normal case: concat arrays
         JSValue result = ArrayPrototype.concat(context, arr, new JSValue[]{arr2});
@@ -117,15 +110,9 @@ public class ArrayPrototypeTest extends BaseJavetTest {
     @Test
     public void testCopyWithin() {
         // Normal case: copyWithin(0, 3, 5)
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
-        arr.push(new JSNumber(4));
-        arr.push(new JSNumber(5));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3, 4, 5));
 
-        JSValue result = ArrayPrototype.copyWithin(context, arr,
-                new JSValue[]{new JSNumber(0), new JSNumber(3), new JSNumber(5)});
+        JSValue result = ArrayPrototype.copyWithin(context, arr, numberArgs(0, 3, 5));
         assertThat(result).isSameAs(arr);
         assertThat(arr.getLength()).isEqualTo(5);
         assertNumberValue(arr.get(0), 4.0);
@@ -135,15 +122,9 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertNumberValue(arr.get(4), 5.0);
 
         // With negative indices
-        JSArray arr2 = new JSArray(context);
-        arr2.push(new JSNumber(1));
-        arr2.push(new JSNumber(2));
-        arr2.push(new JSNumber(3));
-        arr2.push(new JSNumber(4));
-        arr2.push(new JSNumber(5));
+        JSArray arr2 = new JSArray(context, numberArgs(1, 2, 3, 4, 5));
 
-        result = ArrayPrototype.copyWithin(context, arr2,
-                new JSValue[]{new JSNumber(-2), new JSNumber(0), new JSNumber(2)});
+        result = ArrayPrototype.copyWithin(context, arr2, numberArgs(-2, 0, 2));
         assertThat(result).isSameAs(arr2);
         assertThat(arr2.getLength()).isEqualTo(5);
         assertNumberValue(arr2.get(0), 1.0);
@@ -154,18 +135,17 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
         // Edge case: empty array
         JSArray emptyArr = new JSArray(context);
-        result = ArrayPrototype.copyWithin(context, emptyArr, new JSValue[]{new JSNumber(0), new JSNumber(1)});
+        result = ArrayPrototype.copyWithin(context, emptyArr, numberArgs(0, 1));
         assertThat(result).isSameAs(emptyArr);
 
         // Edge case: no arguments
-        JSArray arr3 = new JSArray(context);
-        arr3.push(new JSNumber(1));
+        JSArray arr3 = new JSArray(context, numberArgs(1));
         result = ArrayPrototype.copyWithin(context, arr3, JSValue.NO_ARGS);
         assertThat(result).isSameAs(arr3);
 
         // Edge case: copyWithin on non-array
         JSValue nonArray = new JSString("not an array");
-        assertTypeError(ArrayPrototype.copyWithin(context, nonArray, new JSValue[]{new JSNumber(0), new JSNumber(1)}));
+        assertTypeError(ArrayPrototype.copyWithin(context, nonArray, numberArgs(0, 1)));
         assertPendingException(context);
 
         assertObjectWithJavet("[1,2,3,4,5].copyWithin(0,3,5)", "[1,2,3,4,5].copyWithin(-2,0,2)",
@@ -179,10 +159,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testEvery() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(4));
-        arr.push(new JSNumber(6));
+        JSArray arr = new JSArray(context, numberArgs(2, 4, 6));
 
         // Normal case: all even
         JSFunction isEvenFn = createTestFunction(args -> {
@@ -194,10 +171,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(result.isBooleanTrue()).isTrue();
 
         // Not all pass
-        JSArray arr2 = new JSArray(context);
-        arr2.push(new JSNumber(2));
-        arr2.push(new JSNumber(3));
-        arr2.push(new JSNumber(4));
+        JSArray arr2 = new JSArray(context, numberArgs(2, 3, 4));
 
         result = ArrayPrototype.every(context, arr2, new JSValue[]{isEvenFn});
         assertThat(result).isEqualTo(JSBoolean.FALSE);
@@ -253,13 +227,9 @@ public class ArrayPrototypeTest extends BaseJavetTest {
     @Test
     public void testFill() {
         // Normal case: fill entire array
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
-        arr.push(new JSNumber(4));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3, 4));
 
-        JSValue result = ArrayPrototype.fill(context, arr, new JSValue[]{new JSNumber(0)});
+        JSValue result = ArrayPrototype.fill(context, arr, numberArgs(0));
         assertThat(result).isSameAs(arr);
         assertThat(arr.getLength()).isEqualTo(4);
         assertNumberValue(arr.get(0), 0.0);
@@ -268,13 +238,9 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertNumberValue(arr.get(3), 0.0);
 
         // Fill with start index
-        JSArray arr2 = new JSArray(context);
-        arr2.push(new JSNumber(1));
-        arr2.push(new JSNumber(2));
-        arr2.push(new JSNumber(3));
-        arr2.push(new JSNumber(4));
+        JSArray arr2 = new JSArray(context, numberArgs(1, 2, 3, 4));
 
-        result = ArrayPrototype.fill(context, arr2, new JSValue[]{new JSNumber(0), new JSNumber(2)});
+        result = ArrayPrototype.fill(context, arr2, numberArgs(0, 2));
         assertThat(result).isSameAs(arr2);
         assertThat(arr2.getLength()).isEqualTo(4);
         assertNumberValue(arr2.get(0), 1.0);
@@ -283,13 +249,9 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertNumberValue(arr2.get(3), 0.0);
 
         // Fill with start and end
-        JSArray arr3 = new JSArray(context);
-        arr3.push(new JSNumber(1));
-        arr3.push(new JSNumber(2));
-        arr3.push(new JSNumber(3));
-        arr3.push(new JSNumber(4));
+        JSArray arr3 = new JSArray(context, numberArgs(1, 2, 3, 4));
 
-        result = ArrayPrototype.fill(context, arr3, new JSValue[]{new JSNumber(0), new JSNumber(1), new JSNumber(3)});
+        result = ArrayPrototype.fill(context, arr3, numberArgs(0, 1, 3));
         assertThat(result).isSameAs(arr3);
         assertThat(arr3.getLength()).isEqualTo(4);
         assertNumberValue(arr3.get(0), 1.0);
@@ -298,13 +260,9 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertNumberValue(arr3.get(3), 4.0);
 
         // With negative indices
-        JSArray arr4 = new JSArray(context);
-        arr4.push(new JSNumber(1));
-        arr4.push(new JSNumber(2));
-        arr4.push(new JSNumber(3));
-        arr4.push(new JSNumber(4));
+        JSArray arr4 = new JSArray(context, numberArgs(1, 2, 3, 4));
 
-        result = ArrayPrototype.fill(context, arr4, new JSValue[]{new JSNumber(0), new JSNumber(-3), new JSNumber(-1)});
+        result = ArrayPrototype.fill(context, arr4, numberArgs(0, -3, -1));
         assertThat(result).isSameAs(arr4);
         assertThat(arr4.getLength()).isEqualTo(4);
         assertNumberValue(arr4.get(0), 1.0);
@@ -314,11 +272,11 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
         // Edge case: empty array
         JSArray emptyArr = new JSArray(context);
-        result = ArrayPrototype.fill(context, emptyArr, new JSValue[]{new JSNumber(1)});
+        result = ArrayPrototype.fill(context, emptyArr, numberArgs(1));
         assertThat(result).isSameAs(emptyArr);
 
         // Edge case: fill on null/undefined should throw TypeError
-        assertTypeError(ArrayPrototype.fill(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(0)}));
+        assertTypeError(ArrayPrototype.fill(context, JSNull.INSTANCE, numberArgs(0)));
         assertPendingException(context);
     }
 
@@ -338,11 +296,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testFilter() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
-        arr.push(new JSNumber(4));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3, 4));
 
         // Normal case: filter even numbers
         JSFunction evenFn = createTestFunction(args -> {
@@ -394,10 +348,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testFind() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3));
 
         // Normal case: find even number
         JSFunction findEvenFn = createTestFunction(args -> {
@@ -433,10 +384,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testFindIndex() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3));
 
         // Normal case: find index of even number
         JSFunction findEvenFn = createTestFunction(args -> {
@@ -472,11 +420,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testFindLast() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
-        arr.push(new JSNumber(2));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3, 2));
 
         // Normal case: find last even number
         JSFunction findEvenFn = createTestFunction(args -> {
@@ -512,11 +456,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testFindLastIndex() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
-        arr.push(new JSNumber(2));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3, 2));
 
         // Normal case: find last index of even number
         JSFunction findEvenFn = createTestFunction(args -> {
@@ -553,17 +493,13 @@ public class ArrayPrototypeTest extends BaseJavetTest {
     @Test
     public void testFlat() {
         // Create nested arrays
-        JSArray nested = new JSArray(context);
-        nested.push(new JSNumber(1));
-        nested.push(new JSNumber(2));
+        JSArray nested = new JSArray(context, numberArgs(1, 2));
 
-        JSArray arr2 = new JSArray(context);
-        arr2.push(new JSNumber(3));
+        JSArray arr2 = new JSArray(context, numberArgs(3));
         arr2.push(nested);
         arr2.push(new JSNumber(4));
 
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(0));
+        JSArray arr = new JSArray(context, numberArgs(0));
         arr.push(arr2);
         arr.push(new JSNumber(5));
 
@@ -580,7 +516,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertNumberValue(flattened.get(4), 5.0);
 
         // With depth
-        result = ArrayPrototype.flat(context, arr, new JSValue[]{new JSNumber(0)});
+        result = ArrayPrototype.flat(context, arr, numberArgs(0));
         flattened = result.asArray().orElseThrow();
         assertThat(flattened.getLength()).isEqualTo(3); // No flattening
 
@@ -597,16 +533,12 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testFlatMap() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3));
 
         // Normal case: flatMap with function that returns arrays
         JSFunction doubleAndWrapFn = createTestFunction(args -> {
             double val = args[0].asNumber().map(JSNumber::value).orElseThrow();
-            JSArray result = new JSArray(context);
-            result.push(new JSNumber(val));
+            JSArray result = new JSArray(context, numberArgs(val));
             result.push(new JSNumber(val * 2));
             return result;
         });
@@ -647,10 +579,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testForEach() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3));
 
         // Normal case
         final int[] count = {0};
@@ -688,10 +617,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
     @Test
     public void testGetLength() {
         // Normal case: non-empty array
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3));
 
         JSValue result = ArrayPrototype.getLength(context, arr, JSValue.NO_ARGS);
         assertNumberValue(result, 3.0);
@@ -773,26 +699,22 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testIncludes() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(JSUndefined.INSTANCE);
-        arr.push(new JSNumber(4));
+        JSArray arr = new JSArray(context, new JSNumber(1), new JSNumber(2), JSUndefined.INSTANCE, new JSNumber(4));
 
         // Normal case
-        JSValue result = ArrayPrototype.includes(context, arr, new JSValue[]{new JSNumber(2)});
+        JSValue result = ArrayPrototype.includes(context, arr, numberArgs(2));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Not found
-        result = ArrayPrototype.includes(context, arr, new JSValue[]{new JSNumber(3)});
+        result = ArrayPrototype.includes(context, arr, numberArgs(3));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // With fromIndex
-        result = ArrayPrototype.includes(context, arr, new JSValue[]{new JSNumber(2), new JSNumber(2)});
+        result = ArrayPrototype.includes(context, arr, numberArgs(2, 2));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Negative fromIndex
-        result = ArrayPrototype.includes(context, arr, new JSValue[]{new JSNumber(2), new JSNumber(-3)});
+        result = ArrayPrototype.includes(context, arr, numberArgs(2, -3));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Edge case: includes undefined
@@ -800,14 +722,13 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Edge case: includes NaN (special case)
-        JSArray nanArr = new JSArray(context);
-        nanArr.push(new JSNumber(Double.NaN));
-        result = ArrayPrototype.includes(context, nanArr, new JSValue[]{new JSNumber(Double.NaN)});
+        JSArray nanArr = new JSArray(context, numberArgs(Double.NaN));
+        result = ArrayPrototype.includes(context, nanArr, numberArgs(Double.NaN));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Edge case: empty array
         JSArray emptyArr = new JSArray(context);
-        result = ArrayPrototype.includes(context, emptyArr, new JSValue[]{new JSNumber(1)});
+        result = ArrayPrototype.includes(context, emptyArr, numberArgs(1));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: no search element (searches for undefined, which is in arr)
@@ -815,37 +736,33 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Edge case: includes on null/undefined
-        assertTypeError(ArrayPrototype.includes(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(1)}));
+        assertTypeError(ArrayPrototype.includes(context, JSNull.INSTANCE, numberArgs(1)));
         assertPendingException(context);
     }
 
     @Test
     public void testIndexOf() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
-        arr.push(new JSNumber(2));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3, 2));
 
         // Normal case
-        JSValue result = ArrayPrototype.indexOf(context, arr, new JSValue[]{new JSNumber(2)});
+        JSValue result = ArrayPrototype.indexOf(context, arr, numberArgs(2));
         assertNumberValue(result, 1.0);
 
         // With fromIndex
-        result = ArrayPrototype.indexOf(context, arr, new JSValue[]{new JSNumber(2), new JSNumber(2)});
+        result = ArrayPrototype.indexOf(context, arr, numberArgs(2, 2));
         assertNumberValue(result, 3.0);
 
         // Not found
-        result = ArrayPrototype.indexOf(context, arr, new JSValue[]{new JSNumber(4)});
+        result = ArrayPrototype.indexOf(context, arr, numberArgs(4));
         assertNumberValue(result, -1.0);
 
         // Negative fromIndex
-        result = ArrayPrototype.indexOf(context, arr, new JSValue[]{new JSNumber(2), new JSNumber(-2)});
+        result = ArrayPrototype.indexOf(context, arr, numberArgs(2, -2));
         assertNumberValue(result, 3.0);
 
         // Edge case: empty array
         JSArray emptyArr = new JSArray(context);
-        result = ArrayPrototype.indexOf(context, emptyArr, new JSValue[]{new JSNumber(1)});
+        result = ArrayPrototype.indexOf(context, emptyArr, numberArgs(1));
         assertNumberValue(result, -1.0);
 
         // Edge case: no search element
@@ -853,16 +770,13 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(((JSNumber) result).value()).isEqualTo(-1.0);
 
         // Edge case: indexOf on null/undefined
-        assertTypeError(ArrayPrototype.indexOf(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(1)}));
+        assertTypeError(ArrayPrototype.indexOf(context, JSNull.INSTANCE, numberArgs(1)));
         assertPendingException(context);
     }
 
     @Test
     public void testJoin() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSString("a"));
-        arr.push(new JSString("b"));
-        arr.push(new JSString("c"));
+        JSArray arr = new JSArray(context, new JSString("a"), new JSString("b"), new JSString("c"));
 
         // Normal case
         JSValue result = ArrayPrototype.join(context, arr, new JSValue[]{new JSString("-")});
@@ -882,11 +796,8 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "");
 
         // Edge case: array with null/undefined
-        JSArray mixedArr = new JSArray(context);
-        mixedArr.push(new JSString("a"));
-        mixedArr.push(JSNull.INSTANCE);
-        mixedArr.push(JSUndefined.INSTANCE);
-        mixedArr.push(new JSString("b"));
+        JSArray mixedArr = new JSArray(context, new JSString("a"), JSNull.INSTANCE, JSUndefined.INSTANCE,
+                new JSString("b"));
         result = ArrayPrototype.join(context, mixedArr, JSValue.NO_ARGS);
         assertStringValue(result, "a,,,b");
 
@@ -910,31 +821,27 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testLastIndexOf() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
-        arr.push(new JSNumber(2));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3, 2));
 
         // Normal case
-        JSValue result = ArrayPrototype.lastIndexOf(context, arr, new JSValue[]{new JSNumber(2)});
+        JSValue result = ArrayPrototype.lastIndexOf(context, arr, numberArgs(2));
         assertNumberValue(result, 3.0);
 
         // With fromIndex
-        result = ArrayPrototype.lastIndexOf(context, arr, new JSValue[]{new JSNumber(2), new JSNumber(2)});
+        result = ArrayPrototype.lastIndexOf(context, arr, numberArgs(2, 2));
         assertNumberValue(result, 1.0);
 
         // Not found
-        result = ArrayPrototype.lastIndexOf(context, arr, new JSValue[]{new JSNumber(4)});
+        result = ArrayPrototype.lastIndexOf(context, arr, numberArgs(4));
         assertNumberValue(result, -1.0);
 
         // Negative fromIndex
-        result = ArrayPrototype.lastIndexOf(context, arr, new JSValue[]{new JSNumber(2), new JSNumber(-1)});
+        result = ArrayPrototype.lastIndexOf(context, arr, numberArgs(2, -1));
         assertNumberValue(result, 3.0);
 
         // Edge case: empty array
         JSArray emptyArr = new JSArray(context);
-        result = ArrayPrototype.lastIndexOf(context, emptyArr, new JSValue[]{new JSNumber(1)});
+        result = ArrayPrototype.lastIndexOf(context, emptyArr, numberArgs(1));
         assertNumberValue(result, -1.0);
 
         // Edge case: no search element
@@ -942,16 +849,13 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(((JSNumber) result).value()).isEqualTo(-1.0);
 
         // Edge case: lastIndexOf on null/undefined
-        assertTypeError(ArrayPrototype.lastIndexOf(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(1)}));
+        assertTypeError(ArrayPrototype.lastIndexOf(context, JSNull.INSTANCE, numberArgs(1)));
         assertPendingException(context);
     }
 
     @Test
     public void testMap() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3));
 
         // Normal case: double each element
         JSFunction doubleFn = createTestFunction(args -> {
@@ -992,10 +896,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testPop() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3));
 
         // Normal case
         JSValue result = ArrayPrototype.pop(context, arr, JSValue.NO_ARGS);
@@ -1028,28 +929,25 @@ public class ArrayPrototypeTest extends BaseJavetTest {
     public void testPush() {
         // Normal case
         JSArray arr = new JSArray(context);
-        JSValue result = ArrayPrototype.push(context, arr, new JSValue[]{new JSNumber(1), new JSNumber(2)});
+        JSValue result = ArrayPrototype.push(context, arr, numberArgs(1, 2));
         assertNumberValue(result, 2);
         assertThat(arr.getLength()).isEqualTo(2);
         assertNumberValue(arr.get(0), 1.0);
         assertNumberValue(arr.get(1), 2.0);
 
         // Push more
-        result = ArrayPrototype.push(context, arr, new JSValue[]{new JSNumber(3)});
+        result = ArrayPrototype.push(context, arr, numberArgs(3));
         assertNumberValue(result, 3);
         assertThat(arr.getLength()).isEqualTo(3);
 
         // Edge case: push to null/undefined
-        assertTypeError(ArrayPrototype.push(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(1)}));
+        assertTypeError(ArrayPrototype.push(context, JSNull.INSTANCE, numberArgs(1)));
         assertPendingException(context);
     }
 
     @Test
     public void testReduce() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3));
 
         // Normal case: sum
         JSFunction sumFn = createTestFunction(args -> {
@@ -1075,8 +973,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertNumberValue(result, 42.0);
 
         // Edge case: single element without initial value
-        JSArray singleArr = new JSArray(context);
-        singleArr.push(new JSNumber(5));
+        JSArray singleArr = new JSArray(context, numberArgs(5));
         result = ArrayPrototype.reduce(context, singleArr, new JSValue[]{sumFn});
         assertNumberValue(result, 5.0);
 
@@ -1091,10 +988,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testReduceRight() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3));
 
         // Normal case: concatenate strings in reverse
         JSFunction concatFn = createTestFunction(args -> {
@@ -1103,10 +997,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
             return new JSString(acc + curr);
         });
 
-        JSArray strArr = new JSArray(context);
-        strArr.push(new JSString("a"));
-        strArr.push(new JSString("b"));
-        strArr.push(new JSString("c"));
+        JSArray strArr = new JSArray(context, new JSString("a"), new JSString("b"), new JSString("c"));
 
         JSValue result = ArrayPrototype.reduceRight(context, strArr, new JSValue[]{concatFn});
         assertStringValue(result, "cba");
@@ -1125,8 +1016,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "x");
 
         // Edge case: single element without initial value
-        JSArray singleArr = new JSArray(context);
-        singleArr.push(new JSString("z"));
+        JSArray singleArr = new JSArray(context, new JSString("z"));
         result = ArrayPrototype.reduceRight(context, singleArr, new JSValue[]{concatFn});
         assertStringValue(result, "z");
 
@@ -1141,11 +1031,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testReverse() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
-        arr.push(new JSNumber(4));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3, 4));
 
         // Normal case
         JSValue result = ArrayPrototype.reverse(context, arr, JSValue.NO_ARGS);
@@ -1162,8 +1048,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(result).isSameAs(emptyArr);
 
         // Edge case: single element
-        JSArray singleArr = new JSArray(context);
-        singleArr.push(new JSNumber(42));
+        JSArray singleArr = new JSArray(context, numberArgs(42));
         result = ArrayPrototype.reverse(context, singleArr, JSValue.NO_ARGS);
         assertThat(result).isSameAs(singleArr);
         assertNumberValue(singleArr.get(0), 42.0);
@@ -1175,10 +1060,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testShift() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3));
 
         // Normal case
         JSValue result = ArrayPrototype.shift(context, arr, JSValue.NO_ARGS);
@@ -1199,15 +1081,10 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testSlice() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(0));
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
-        arr.push(new JSNumber(4));
+        JSArray arr = new JSArray(context, numberArgs(0, 1, 2, 3, 4));
 
         // Normal case: slice(1, 4)
-        JSValue result = ArrayPrototype.slice(context, arr, new JSValue[]{new JSNumber(1), new JSNumber(4)});
+        JSValue result = ArrayPrototype.slice(context, arr, numberArgs(1, 4));
         JSArray sliced = result.asArray().orElseThrow();
         assertThat(sliced.getLength()).isEqualTo(3);
         assertNumberValue(sliced.get(0), 1.0);
@@ -1215,19 +1092,19 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertNumberValue(sliced.get(2), 3.0);
 
         // Slice from start
-        result = ArrayPrototype.slice(context, arr, new JSValue[]{new JSNumber(2)});
+        result = ArrayPrototype.slice(context, arr, numberArgs(2));
         sliced = result.asArray().orElseThrow();
         assertThat(sliced.getLength()).isEqualTo(3);
         assertNumberValue(sliced.get(0), 2.0);
 
         // Slice with negative indices
-        result = ArrayPrototype.slice(context, arr, new JSValue[]{new JSNumber(-2)});
+        result = ArrayPrototype.slice(context, arr, numberArgs(-2));
         sliced = result.asArray().orElseThrow();
         assertThat(sliced.getLength()).isEqualTo(2);
         assertNumberValue(sliced.get(0), 3.0);
 
         // Edge case: empty slice
-        result = ArrayPrototype.slice(context, arr, new JSValue[]{new JSNumber(2), new JSNumber(2)});
+        result = ArrayPrototype.slice(context, arr, numberArgs(2, 2));
         sliced = result.asArray().orElseThrow();
         assertThat(sliced.getLength()).isEqualTo(0);
 
@@ -1238,10 +1115,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testSome() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(3));
-        arr.push(new JSNumber(5));
+        JSArray arr = new JSArray(context, numberArgs(1, 3, 5));
 
         // Normal case: some odd
         JSFunction isOddFn = createTestFunction(args -> {
@@ -1253,10 +1127,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // None pass
-        JSArray arr2 = new JSArray(context);
-        arr2.push(new JSNumber(2));
-        arr2.push(new JSNumber(4));
-        arr2.push(new JSNumber(6));
+        JSArray arr2 = new JSArray(context, numberArgs(2, 4, 6));
 
         result = ArrayPrototype.some(context, arr2, new JSValue[]{isOddFn});
         assertThat(result).isEqualTo(JSBoolean.FALSE);
@@ -1277,12 +1148,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testSort() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(3));
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(4));
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(5));
+        JSArray arr = new JSArray(context, numberArgs(3, 1, 4, 1, 5));
 
         // Normal case: default sort (string comparison)
         JSValue result = ArrayPrototype.sort(context, arr, JSValue.NO_ARGS);
@@ -1295,10 +1161,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertNumberValue(arr.get(4), 5.0);
 
         // With compare function
-        JSArray arr2 = new JSArray(context);
-        arr2.push(new JSNumber(3));
-        arr2.push(new JSNumber(1));
-        arr2.push(new JSNumber(4));
+        JSArray arr2 = new JSArray(context, numberArgs(3, 1, 4));
 
         JSFunction descCompare = createTestFunction(args -> {
             double a = args[0].asNumber().map(JSNumber::value).orElseThrow();
@@ -1319,8 +1182,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(result).isSameAs(emptyArr);
 
         // Edge case: single element
-        JSArray singleArr = new JSArray(context);
-        singleArr.push(new JSNumber(42));
+        JSArray singleArr = new JSArray(context, numberArgs(42));
         result = ArrayPrototype.sort(context, singleArr, JSValue.NO_ARGS);
         assertThat(result).isSameAs(singleArr);
         assertNumberValue(singleArr.get(0), 42.0);
@@ -1336,16 +1198,10 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testSplice() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(0));
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
-        arr.push(new JSNumber(4));
+        JSArray arr = new JSArray(context, numberArgs(0, 1, 2, 3, 4));
 
         // Normal case: splice(2, 2, 10, 11)
-        JSValue result = ArrayPrototype.splice(context, arr,
-                new JSValue[]{new JSNumber(2), new JSNumber(2), new JSNumber(10), new JSNumber(11)});
+        JSValue result = ArrayPrototype.splice(context, arr, numberArgs(2, 2, 10, 11));
         JSArray deleted = result.asArray().orElseThrow();
         assertThat(deleted.getLength()).isEqualTo(2);
         assertNumberValue(deleted.get(0), 2.0);
@@ -1360,27 +1216,20 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertNumberValue(arr.get(4), 4.0);
 
         // Edge case: splice with no deletions
-        JSArray arr2 = new JSArray(context);
-        arr2.push(new JSNumber(1));
-        arr2.push(new JSNumber(2));
-        result = ArrayPrototype.splice(context, arr2,
-                new JSValue[]{new JSNumber(1), new JSNumber(0), new JSNumber(1.5)});
+        JSArray arr2 = new JSArray(context, numberArgs(1, 2));
+        result = ArrayPrototype.splice(context, arr2, numberArgs(1, 0, 1.5));
         deleted = result.asArray().orElseThrow();
         assertThat(deleted.getLength()).isEqualTo(0);
         assertThat(arr2.getLength()).isEqualTo(3);
 
         // Edge case: splice on null/undefined
-        assertTypeError(
-                ArrayPrototype.splice(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(0), new JSNumber(1)}));
+        assertTypeError(ArrayPrototype.splice(context, JSNull.INSTANCE, numberArgs(0, 1)));
         assertPendingException(context);
     }
 
     @Test
     public void testSymbolIterator() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3));
 
         context.transferPrototype(arr, JSArray.NAME);
 
@@ -1424,29 +1273,20 @@ public class ArrayPrototypeTest extends BaseJavetTest {
     @Test
     public void testToLocaleString() {
         // Normal case
-        JSArray arr = new JSArray(context);
-        arr.push(new JSString("a"));
-        arr.push(new JSString("b"));
-        arr.push(new JSString("c"));
+        JSArray arr = new JSArray(context, new JSString("a"), new JSString("b"), new JSString("c"));
 
         JSValue result = ArrayPrototype.toLocaleString(context, arr, JSValue.NO_ARGS);
         assertStringValue(result, "a,b,c");
 
         // With numbers
-        JSArray arr2 = new JSArray(context);
-        arr2.push(new JSNumber(1));
-        arr2.push(new JSNumber(2));
-        arr2.push(new JSNumber(3));
+        JSArray arr2 = new JSArray(context, numberArgs(1, 2, 3));
 
         result = ArrayPrototype.toLocaleString(context, arr2, JSValue.NO_ARGS);
         assertStringValue(result, "1,2,3");
 
         // With null and undefined
-        JSArray arr3 = new JSArray(context);
-        arr3.push(new JSString("a"));
-        arr3.push(JSNull.INSTANCE);
-        arr3.push(JSUndefined.INSTANCE);
-        arr3.push(new JSString("b"));
+        JSArray arr3 = new JSArray(context, new JSString("a"), JSNull.INSTANCE, JSUndefined.INSTANCE,
+                new JSString("b"));
 
         result = ArrayPrototype.toLocaleString(context, arr3, JSValue.NO_ARGS);
         assertStringValue(result, "a,,,b");
@@ -1463,10 +1303,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testToReversed() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3));
 
         // Normal case
         JSValue result = ArrayPrototype.toReversed(context, arr, JSValue.NO_ARGS);
@@ -1488,8 +1325,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(emptyReversed.getLength()).isEqualTo(0);
 
         // Edge case: single element
-        JSArray singleArr = new JSArray(context);
-        singleArr.push(new JSNumber(42));
+        JSArray singleArr = new JSArray(context, numberArgs(42));
         result = ArrayPrototype.toReversed(context, singleArr, JSValue.NO_ARGS);
         JSArray singleReversed = result.asArray().orElseThrow();
         assertThat(singleReversed.getLength()).isEqualTo(1);
@@ -1502,10 +1338,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testToSorted() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(3));
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
+        JSArray arr = new JSArray(context, numberArgs(3, 1, 2));
 
         // Normal case: default sort (string comparison)
         JSValue result = ArrayPrototype.toSorted(context, arr, JSValue.NO_ARGS);
@@ -1541,8 +1374,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(emptySorted.getLength()).isEqualTo(0);
 
         // Edge case: single element
-        JSArray singleArr = new JSArray(context);
-        singleArr.push(new JSNumber(42));
+        JSArray singleArr = new JSArray(context, numberArgs(42));
         result = ArrayPrototype.toSorted(context, singleArr, JSValue.NO_ARGS);
         JSArray singleSorted = result.asArray().orElseThrow();
         assertThat(singleSorted.getLength()).isEqualTo(1);
@@ -1556,14 +1388,10 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testToSpliced() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
-        arr.push(new JSNumber(4));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3, 4));
 
         // Normal case: remove 2 elements starting at index 1
-        JSValue result = ArrayPrototype.toSpliced(context, arr, new JSValue[]{new JSNumber(1), new JSNumber(2)});
+        JSValue result = ArrayPrototype.toSpliced(context, arr, numberArgs(1, 2));
         JSArray spliced = result.asArray().orElseThrow();
         assertThat(spliced.getLength()).isEqualTo(2);
         assertNumberValue(spliced.get(0), 1.0);
@@ -1577,8 +1405,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertNumberValue(arr.get(3), 4.0);
 
         // Insert elements
-        result = ArrayPrototype.toSpliced(context, arr,
-                new JSValue[]{new JSNumber(1), new JSNumber(0), new JSNumber(5), new JSNumber(6)});
+        result = ArrayPrototype.toSpliced(context, arr, numberArgs(1, 0, 5, 6));
         JSArray inserted = result.asArray().orElseThrow();
         assertThat(inserted.getLength()).isEqualTo(6);
         assertNumberValue(inserted.get(0), 1.0);
@@ -1589,8 +1416,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertNumberValue(inserted.get(5), 4.0);
 
         // Replace elements
-        result = ArrayPrototype.toSpliced(context, arr,
-                new JSValue[]{new JSNumber(1), new JSNumber(2), new JSNumber(7), new JSNumber(8)});
+        result = ArrayPrototype.toSpliced(context, arr, numberArgs(1, 2, 7, 8));
         JSArray replaced = result.asArray().orElseThrow();
         assertThat(replaced.getLength()).isEqualTo(4);
         assertNumberValue(replaced.get(0), 1.0);
@@ -1599,7 +1425,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertNumberValue(replaced.get(3), 4.0);
 
         // Negative start index
-        result = ArrayPrototype.toSpliced(context, arr, new JSValue[]{new JSNumber(-2), new JSNumber(1)});
+        result = ArrayPrototype.toSpliced(context, arr, numberArgs(-2, 1));
         JSArray negStart = result.asArray().orElseThrow();
         assertThat(negStart.getLength()).isEqualTo(3);
         assertNumberValue(negStart.get(0), 1.0);
@@ -1608,15 +1434,13 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
         // Edge case: empty array
         JSArray emptyArr = new JSArray(context);
-        result = ArrayPrototype.toSpliced(context, emptyArr,
-                new JSValue[]{new JSNumber(0), new JSNumber(0), new JSNumber(1)});
+        result = ArrayPrototype.toSpliced(context, emptyArr, numberArgs(0, 0, 1));
         JSArray emptySpliced = result.asArray().orElseThrow();
         assertThat(emptySpliced.getLength()).isEqualTo(1);
         assertNumberValue(emptySpliced.get(0), 1.0);
 
         // Edge case: toSpliced on null/undefined
-        assertTypeError(
-                ArrayPrototype.toSpliced(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(0), new JSNumber(1)}));
+        assertTypeError(ArrayPrototype.toSpliced(context, JSNull.INSTANCE, numberArgs(0, 1)));
         assertPendingException(context);
     }
 
@@ -1654,8 +1478,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "a,1,c");
 
         // An array with no join method — here one built without Array.prototype — is not joined
-        JSArray withoutPrototype = new JSArray(context);
-        withoutPrototype.push(new JSString("a"));
+        JSArray withoutPrototype = new JSArray(context, new JSString("a"));
         assertThat(ArrayPrototype.toString(context, withoutPrototype, JSValue.NO_ARGS).asString().map(JSString::value)
                 .orElseThrow()).isEqualTo("[object Array]");
 
@@ -1680,12 +1503,10 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testUnshift() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
+        JSArray arr = new JSArray(context, numberArgs(2, 3));
 
         // Normal case
-        JSValue result = ArrayPrototype.unshift(context, arr, new JSValue[]{new JSNumber(1)});
+        JSValue result = ArrayPrototype.unshift(context, arr, numberArgs(1));
         assertNumberValue(result, 3.0);
         assertThat(arr.getLength()).isEqualTo(3);
         assertNumberValue(arr.get(0), 1.0);
@@ -1693,30 +1514,27 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertNumberValue(arr.get(2), 3.0);
 
         // Unshift multiple
-        result = ArrayPrototype.unshift(context, arr, new JSValue[]{new JSNumber(-1), new JSNumber(0)});
+        result = ArrayPrototype.unshift(context, arr, numberArgs(-1, 0));
         assertNumberValue(result, 5.0);
         assertThat(arr.getLength()).isEqualTo(5);
 
         // Edge case: unshift to empty array
         JSArray emptyArr = new JSArray(context);
-        result = ArrayPrototype.unshift(context, emptyArr, new JSValue[]{new JSNumber(1)});
+        result = ArrayPrototype.unshift(context, emptyArr, numberArgs(1));
         assertNumberValue(result, 1.0);
         assertThat(emptyArr.getLength()).isEqualTo(1);
 
         // Edge case: unshift to null/undefined
-        assertTypeError(ArrayPrototype.unshift(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(1)}));
+        assertTypeError(ArrayPrototype.unshift(context, JSNull.INSTANCE, numberArgs(1)));
         assertPendingException(context);
     }
 
     @Test
     public void testWith() {
-        JSArray arr = new JSArray(context);
-        arr.push(new JSNumber(1));
-        arr.push(new JSNumber(2));
-        arr.push(new JSNumber(3));
+        JSArray arr = new JSArray(context, numberArgs(1, 2, 3));
 
         // Normal case: replace element at index 1
-        JSValue result = ArrayPrototype.with(context, arr, new JSValue[]{new JSNumber(1), new JSNumber(42)});
+        JSValue result = ArrayPrototype.with(context, arr, numberArgs(1, 42));
         JSArray withResult = result.asArray().orElseThrow();
         assertThat(withResult.getLength()).isEqualTo(3);
         assertNumberValue(withResult.get(0), 1.0);
@@ -1729,7 +1547,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertNumberValue(arr.get(2), 3.0);
 
         // Negative index
-        result = ArrayPrototype.with(context, arr, new JSValue[]{new JSNumber(-1), new JSNumber(99)});
+        result = ArrayPrototype.with(context, arr, numberArgs(-1, 99));
         JSArray negIndex = result.asArray().orElseThrow();
         assertThat(negIndex.getLength()).isEqualTo(3);
         assertNumberValue(negIndex.get(0), 1.0);
@@ -1737,7 +1555,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertNumberValue(negIndex.get(2), 99.0);
 
         // Edge case: index 0
-        result = ArrayPrototype.with(context, arr, new JSValue[]{new JSNumber(0), new JSNumber(100)});
+        result = ArrayPrototype.with(context, arr, numberArgs(0, 100));
         JSArray zeroIndex = result.asArray().orElseThrow();
         assertThat(zeroIndex.getLength()).isEqualTo(3);
         assertNumberValue(zeroIndex.get(0), 100.0);
@@ -1745,21 +1563,21 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertNumberValue(zeroIndex.get(2), 3.0);
 
         // Edge case: out of bounds positive index
-        JSValue outOfBoundsResult = ArrayPrototype.with(context, arr, new JSValue[]{new JSNumber(3), new JSNumber(1)});
+        JSValue outOfBoundsResult = ArrayPrototype.with(context, arr, numberArgs(3, 1));
         assertRangeError(outOfBoundsResult);
         assertPendingException(context);
 
         // Edge case: out of bounds negative index
-        outOfBoundsResult = ArrayPrototype.with(context, arr, new JSValue[]{new JSNumber(-4), new JSNumber(1)});
+        outOfBoundsResult = ArrayPrototype.with(context, arr, numberArgs(-4, 1));
         assertRangeError(outOfBoundsResult);
         assertPendingException(context);
 
         // Edge case: insufficient arguments
-        assertTypeError(ArrayPrototype.with(context, arr, new JSValue[]{new JSNumber(1)}));
+        assertTypeError(ArrayPrototype.with(context, arr, numberArgs(1)));
         assertPendingException(context);
 
         // Edge case: with on null/undefined
-        assertTypeError(ArrayPrototype.with(context, JSNull.INSTANCE, new JSValue[]{new JSNumber(0), new JSNumber(1)}));
+        assertTypeError(ArrayPrototype.with(context, JSNull.INSTANCE, numberArgs(0, 1)));
         assertPendingException(context);
     }
 }

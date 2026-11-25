@@ -100,7 +100,7 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertThat(set.size()).isEqualTo(1);
 
         // Normal case: add different value
-        result = SetPrototype.add(context, set, new JSValue[]{new JSNumber(42)});
+        result = SetPrototype.add(context, set, numberArgs(42));
         assertThat(result).isSameAs(set);
         assertThat(set.size()).isEqualTo(2);
         assertThat(set.setHas(new JSNumber(42))).isTrue();

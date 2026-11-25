@@ -120,4 +120,12 @@ public abstract class BaseTest {
         context.getRuntime().gc();
         context.close();
     }
+
+    protected static JSValue[] numberArgs(double... values) {
+        JSValue[] arguments = new JSValue[values.length];
+        for (int i = 0; i < values.length; i++) {
+            arguments[i] = new JSNumber(values[i]);
+        }
+        return arguments;
+    }
 }

@@ -53,6 +53,33 @@ final class ExpressionPrimaryParser {
         return new MemberExpression(object, property, computed, optional, partOfOptionalChain, location);
     }
 
+    private List<Expression> parseCallArguments() {
+        parserContext.advance();
+        List<Expression> args = new ArrayList<>();
+
+        if (!parserContext.match(TokenType.RPAREN)) {
+            do {
+                if (parserContext.match(TokenType.COMMA)) {
+                    parserContext.advance();
+                    if (parserContext.match(TokenType.RPAREN)) {
+                        break;
+                    }
+                }
+                if (parserContext.match(TokenType.ELLIPSIS)) {
+                    SourceLocation spreadLocation = parserContext.getLocation();
+                    parserContext.advance();
+                    Expression argument = expressions.parseAssignmentExpression();
+                    args.add(new SpreadElement(argument, spreadLocation));
+                } else {
+                    args.add(expressions.parseAssignmentExpression());
+                }
+            } while (parserContext.match(TokenType.COMMA));
+        }
+
+        parserContext.expect(TokenType.RPAREN);
+        return args;
+    }
+
     Expression parseCallExpression() {
         Expression expr = expressions.parseMemberExpression();
 
@@ -70,56 +97,14 @@ final class ExpressionPrimaryParser {
                     throw new JSSyntaxErrorException("Unexpected token '('");
                 }
                 SourceLocation location = parserContext.getLocation();
-                parserContext.advance();
-                List<Expression> args = new ArrayList<>();
-
-                if (!parserContext.match(TokenType.RPAREN)) {
-                    do {
-                        if (parserContext.match(TokenType.COMMA)) {
-                            parserContext.advance();
-                            if (parserContext.match(TokenType.RPAREN)) {
-                                break;
-                            }
-                        }
-                        if (parserContext.match(TokenType.ELLIPSIS)) {
-                            SourceLocation spreadLocation = parserContext.getLocation();
-                            parserContext.advance();
-                            Expression argument = expressions.parseAssignmentExpression();
-                            args.add(new SpreadElement(argument, spreadLocation));
-                        } else {
-                            args.add(expressions.parseAssignmentExpression());
-                        }
-                    } while (parserContext.match(TokenType.COMMA));
-                }
-
-                parserContext.expect(TokenType.RPAREN);
+                List<Expression> args = parseCallArguments();
                 expr = createCallExpression(expr, args, false, location);
             } else if (parserContext.match(TokenType.OPTIONAL_CHAINING)) {
                 SourceLocation location = parserContext.getLocation();
                 parserContext.advance();
                 if (parserContext.match(TokenType.LPAREN)) {
                     // Optional call: expr?.(args)
-                    parserContext.advance();
-                    List<Expression> args = new ArrayList<>();
-                    if (!parserContext.match(TokenType.RPAREN)) {
-                        do {
-                            if (parserContext.match(TokenType.COMMA)) {
-                                parserContext.advance();
-                                if (parserContext.match(TokenType.RPAREN)) {
-                                    break;
-                                }
-                            }
-                            if (parserContext.match(TokenType.ELLIPSIS)) {
-                                SourceLocation spreadLocation = parserContext.getLocation();
-                                parserContext.advance();
-                                Expression argument = expressions.parseAssignmentExpression();
-                                args.add(new SpreadElement(argument, spreadLocation));
-                            } else {
-                                args.add(expressions.parseAssignmentExpression());
-                            }
-                        } while (parserContext.match(TokenType.COMMA));
-                    }
-                    parserContext.expect(TokenType.RPAREN);
+                    List<Expression> args = parseCallArguments();
                     expr = createCallExpression(expr, args, true, location);
                 } else if (parserContext.match(TokenType.LBRACKET)) {
                     // Optional computed member: expr?.[prop]
@@ -219,30 +204,7 @@ final class ExpressionPrimaryParser {
                 throw new JSSyntaxErrorException("Invalid optional chain from new expression");
             }
 
-            List<Expression> args = new ArrayList<>();
-            if (parserContext.match(TokenType.LPAREN)) {
-                parserContext.advance();
-                if (!parserContext.match(TokenType.RPAREN)) {
-                    do {
-                        if (parserContext.match(TokenType.COMMA)) {
-                            parserContext.advance();
-                            if (parserContext.match(TokenType.RPAREN)) {
-                                break;
-                            }
-                        }
-                        if (parserContext.match(TokenType.ELLIPSIS)) {
-                            SourceLocation spreadLocation = parserContext.getLocation();
-                            parserContext.advance();
-                            Expression argument = expressions.parseAssignmentExpression();
-                            args.add(new SpreadElement(argument, spreadLocation));
-                        } else {
-                            args.add(expressions.parseAssignmentExpression());
-                        }
-                    } while (parserContext.match(TokenType.COMMA));
-                }
-                parserContext.expect(TokenType.RPAREN);
-            }
-
+            List<Expression> args = parserContext.match(TokenType.LPAREN) ? parseCallArguments() : new ArrayList<>();
             return new NewExpression(callee, args, location);
         }
 
@@ -342,53 +304,13 @@ final class ExpressionPrimaryParser {
                 expr = new TaggedTemplateExpression(expr, template, loc);
             } else if (parserContext.match(TokenType.LPAREN)) {
                 SourceLocation loc = parserContext.getLocation();
-                parserContext.advance();
-                List<Expression> args = new ArrayList<>();
-                if (!parserContext.match(TokenType.RPAREN)) {
-                    do {
-                        if (parserContext.match(TokenType.COMMA)) {
-                            parserContext.advance();
-                            if (parserContext.match(TokenType.RPAREN)) {
-                                break;
-                            }
-                        }
-                        if (parserContext.match(TokenType.ELLIPSIS)) {
-                            SourceLocation spreadLoc = parserContext.getLocation();
-                            parserContext.advance();
-                            Expression argument = expressions.parseAssignmentExpression();
-                            args.add(new SpreadElement(argument, spreadLoc));
-                        } else {
-                            args.add(expressions.parseAssignmentExpression());
-                        }
-                    } while (parserContext.match(TokenType.COMMA));
-                }
-                parserContext.expect(TokenType.RPAREN);
+                List<Expression> args = parseCallArguments();
                 expr = createCallExpression(expr, args, false, loc);
             } else if (parserContext.match(TokenType.OPTIONAL_CHAINING)) {
                 SourceLocation loc = parserContext.getLocation();
                 parserContext.advance();
                 if (parserContext.match(TokenType.LPAREN)) {
-                    parserContext.advance();
-                    List<Expression> args = new ArrayList<>();
-                    if (!parserContext.match(TokenType.RPAREN)) {
-                        do {
-                            if (parserContext.match(TokenType.COMMA)) {
-                                parserContext.advance();
-                                if (parserContext.match(TokenType.RPAREN)) {
-                                    break;
-                                }
-                            }
-                            if (parserContext.match(TokenType.ELLIPSIS)) {
-                                SourceLocation spreadLoc = parserContext.getLocation();
-                                parserContext.advance();
-                                Expression argument = expressions.parseAssignmentExpression();
-                                args.add(new SpreadElement(argument, spreadLoc));
-                            } else {
-                                args.add(expressions.parseAssignmentExpression());
-                            }
-                        } while (parserContext.match(TokenType.COMMA));
-                    }
-                    parserContext.expect(TokenType.RPAREN);
+                    List<Expression> args = parseCallArguments();
                     expr = createCallExpression(expr, args, true, loc);
                 } else if (parserContext.match(TokenType.LBRACKET)) {
                     parserContext.advance();
@@ -415,13 +337,13 @@ final class ExpressionPrimaryParser {
             }
         }
 
-        if (parserContext.isAssignmentOperator(parserContext.currentToken.type())) {
+        AssignmentOperator operator = ParserContext.assignmentOperator(parserContext.currentToken.type());
+        if (operator != null) {
             // Validate that expr is a valid assignment target
             if (!(expr instanceof Identifier) && !(expr instanceof MemberExpression)
                     && !(expr instanceof CallExpression)) {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
             }
-            TokenType op = parserContext.currentToken.type();
             SourceLocation loc = parserContext.getLocation();
             if (parserContext.strictMode && expr instanceof Identifier identifier) {
                 String identifierName = identifier.getName();
@@ -431,25 +353,6 @@ final class ExpressionPrimaryParser {
             }
             parserContext.advance();
             Expression right = expressions.parseAssignmentExpression();
-            AssignmentOperator operator = switch (op) {
-                case ASSIGN -> AssignmentOperator.ASSIGN;
-                case AND_ASSIGN -> AssignmentOperator.AND_ASSIGN;
-                case DIV_ASSIGN -> AssignmentOperator.DIV_ASSIGN;
-                case EXP_ASSIGN -> AssignmentOperator.EXP_ASSIGN;
-                case LOGICAL_AND_ASSIGN -> AssignmentOperator.LOGICAL_AND_ASSIGN;
-                case LOGICAL_OR_ASSIGN -> AssignmentOperator.LOGICAL_OR_ASSIGN;
-                case LSHIFT_ASSIGN -> AssignmentOperator.LSHIFT_ASSIGN;
-                case MINUS_ASSIGN -> AssignmentOperator.MINUS_ASSIGN;
-                case MOD_ASSIGN -> AssignmentOperator.MOD_ASSIGN;
-                case MUL_ASSIGN -> AssignmentOperator.MUL_ASSIGN;
-                case NULLISH_ASSIGN -> AssignmentOperator.NULLISH_ASSIGN;
-                case OR_ASSIGN -> AssignmentOperator.OR_ASSIGN;
-                case PLUS_ASSIGN -> AssignmentOperator.PLUS_ASSIGN;
-                case RSHIFT_ASSIGN -> AssignmentOperator.RSHIFT_ASSIGN;
-                case URSHIFT_ASSIGN -> AssignmentOperator.URSHIFT_ASSIGN;
-                case XOR_ASSIGN -> AssignmentOperator.XOR_ASSIGN;
-                default -> AssignmentOperator.ASSIGN;
-            };
             return new AssignmentExpression(expr, operator, right, loc);
         }
 
