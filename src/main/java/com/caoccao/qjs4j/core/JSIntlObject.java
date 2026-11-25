@@ -35,6 +35,9 @@ import java.util.stream.Collectors;
  */
 public final class JSIntlObject {
     private static final Set<String> AVAILABLE_LOCALE_LANGUAGES;
+    private static final String[] COMPACT_DISPLAY_VALUES = {"short", "long"};
+    private static final String[] CURRENCY_DISPLAY_VALUES = {"code", "symbol", "narrowSymbol", "name"};
+    private static final String[] CURRENCY_SIGN_VALUES = {"standard", "accounting"};
     private static final String[] FORMAT_STYLE_VALUES = {"short", "medium", "long", "full"};
     // ---- CLDR Language Alias Data ----
     // Maps: old language code → new language code
@@ -50,6 +53,8 @@ public final class JSIntlObject {
      */
     private static final Map<String, String> LIKELY_SUBTAGS = new HashMap<>();
     private static final BigInteger NANOS_PER_MILLISECOND = BigInteger.valueOf(1_000_000L);
+    private static final String[] NOTATION_VALUES = {"standard", "scientific", "engineering", "compact"};
+    private static final String[] NUMBER_STYLE_VALUES = {"decimal", "currency", "percent", "unit"};
     // ---- Region Alias Data ----
     // Maps: old region → {language/script → new region}
     // Default replacement is first, specific language/script replacements follow
@@ -57,12 +62,16 @@ public final class JSIntlObject {
     private static final Map<String, Map<String, String>> REGION_ALIASES_BY_LANG = new HashMap<>();
     // Script-based region resolution for SU/810
     private static final Map<String, String> REGION_BY_SCRIPT = new HashMap<>();
+    private static final String[] ROUNDING_MODE_VALUES = {"ceil", "floor", "expand", "trunc", "halfCeil", "halfFloor",
+            "halfExpand", "halfTrunc", "halfEven"};
+    private static final String[] ROUNDING_PRIORITY_VALUES = {"auto", "morePrecision", "lessPrecision"};
     private static final Set<String> SANCTIONED_SIMPLE_UNITS = Set.of("acre", "bit", "byte", "celsius", "centimeter",
             "day", "degree", "fahrenheit", "fluid-ounce", "foot", "gallon", "gigabit", "gigabyte", "gram", "hectare",
             "hour", "inch", "kilobit", "kilobyte", "kilogram", "kilometer", "liter", "megabit", "megabyte", "meter",
             "microsecond", "mile", "mile-scandinavian", "milliliter", "millimeter", "millisecond", "minute", "month",
             "nanosecond", "ounce", "percent", "petabyte", "pound", "second", "stone", "terabit", "terabyte", "week",
             "yard", "year");
+    private static final String[] SIGN_DISPLAY_VALUES = {"auto", "never", "always", "exceptZero", "negative"};
     // ---- Subdivision Aliases ----
     private static final Map<String, String> SUBDIVISION_ALIASES = new HashMap<>();
     /**
@@ -93,6 +102,7 @@ public final class JSIntlObject {
      * supplementary valid IANA timezone IDs that Java's ZoneId does not include.
      */
     private static volatile Map<String, String> TIMEZONE_LOOKUP_MAP;
+    private static final String[] TRAILING_ZERO_DISPLAY_VALUES = {"auto", "stripIfInteger"};
     // ---- Transform Extension tvalue Aliases ----
     private static final Map<String, Map<String, String>> TVALUE_ALIASES = new HashMap<>();
     // Unicode extension keys where "yes" → "true" (which means omit the value)
@@ -103,6 +113,7 @@ public final class JSIntlObject {
      * Pattern for Unicode Locale Identifier type: (3*8alphanum) *("-" (3*8alphanum))
      */
     private static final Pattern UNICODE_TYPE_PATTERN = Pattern.compile("^[a-zA-Z0-9]{3,8}(-[a-zA-Z0-9]{3,8})*$");
+    private static final String[] UNIT_DISPLAY_VALUES = {"short", "narrow", "long"};
     /**
      * Check if a collation value is valid/supported.
      */
@@ -2664,12 +2675,7 @@ public final class JSIntlObject {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            if (style == null) {
-                style = "decimal";
-            } else if (!"decimal".equals(style) && !"currency".equals(style) && !"percent".equals(style)
-                    && !"unit".equals(style)) {
-                return context.throwRangeError("Invalid option value: " + style);
-            }
+            style = normalizeOption(style, "decimal", NUMBER_STYLE_VALUES);
 
             String currency = getOptionString(context, optionsObject, "currency");
             if (context.hasPendingException()) {
@@ -2686,22 +2692,13 @@ public final class JSIntlObject {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            if (currencyDisplay == null) {
-                currencyDisplay = "symbol";
-            } else if (!"code".equals(currencyDisplay) && !"symbol".equals(currencyDisplay)
-                    && !"narrowSymbol".equals(currencyDisplay) && !"name".equals(currencyDisplay)) {
-                return context.throwRangeError("Invalid option value: " + currencyDisplay);
-            }
+            currencyDisplay = normalizeOption(currencyDisplay, "symbol", CURRENCY_DISPLAY_VALUES);
 
             String currencySign = getOptionString(context, optionsObject, "currencySign");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            if (currencySign == null) {
-                currencySign = "standard";
-            } else if (!"standard".equals(currencySign) && !"accounting".equals(currencySign)) {
-                return context.throwRangeError("Invalid option value: " + currencySign);
-            }
+            currencySign = normalizeOption(currencySign, "standard", CURRENCY_SIGN_VALUES);
 
             String unit = getOptionString(context, optionsObject, "unit");
             if (context.hasPendingException()) {
@@ -2712,11 +2709,7 @@ public final class JSIntlObject {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            if (unitDisplay == null) {
-                unitDisplay = "short";
-            } else if (!"short".equals(unitDisplay) && !"narrow".equals(unitDisplay) && !"long".equals(unitDisplay)) {
-                return context.throwRangeError("Invalid option value: " + unitDisplay);
-            }
+            unitDisplay = normalizeOption(unitDisplay, "short", UNIT_DISPLAY_VALUES);
 
             if ("currency".equals(style) && currency == null) {
                 return context.throwTypeError("Currency code is required with currency style");
@@ -2734,12 +2727,7 @@ public final class JSIntlObject {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            if (notation == null) {
-                notation = "standard";
-            } else if (!"standard".equals(notation) && !"scientific".equals(notation) && !"engineering".equals(notation)
-                    && !"compact".equals(notation)) {
-                return context.throwRangeError("Invalid option value: " + notation);
-            }
+            notation = normalizeOption(notation, "standard", NOTATION_VALUES);
 
             Integer minimumIntegerDigitsOption = getOptionIntegerOrUndefined(context, optionsObject,
                     "minimumIntegerDigits", 1, 21);
@@ -2786,45 +2774,25 @@ public final class JSIntlObject {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            if (roundingMode == null) {
-                roundingMode = "halfExpand";
-            } else if (!"ceil".equals(roundingMode) && !"floor".equals(roundingMode) && !"expand".equals(roundingMode)
-                    && !"trunc".equals(roundingMode) && !"halfCeil".equals(roundingMode)
-                    && !"halfFloor".equals(roundingMode) && !"halfExpand".equals(roundingMode)
-                    && !"halfTrunc".equals(roundingMode) && !"halfEven".equals(roundingMode)) {
-                return context.throwRangeError("Invalid option value: " + roundingMode);
-            }
+            roundingMode = normalizeOption(roundingMode, "halfExpand", ROUNDING_MODE_VALUES);
 
             String roundingPriority = getOptionString(context, optionsObject, "roundingPriority");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            if (roundingPriority == null) {
-                roundingPriority = "auto";
-            } else if (!"auto".equals(roundingPriority) && !"morePrecision".equals(roundingPriority)
-                    && !"lessPrecision".equals(roundingPriority)) {
-                return context.throwRangeError("Invalid option value: " + roundingPriority);
-            }
+            roundingPriority = normalizeOption(roundingPriority, "auto", ROUNDING_PRIORITY_VALUES);
 
             String trailingZeroDisplay = getOptionString(context, optionsObject, "trailingZeroDisplay");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            if (trailingZeroDisplay == null) {
-                trailingZeroDisplay = "auto";
-            } else if (!"auto".equals(trailingZeroDisplay) && !"stripIfInteger".equals(trailingZeroDisplay)) {
-                return context.throwRangeError("Invalid option value: " + trailingZeroDisplay);
-            }
+            trailingZeroDisplay = normalizeOption(trailingZeroDisplay, "auto", TRAILING_ZERO_DISPLAY_VALUES);
 
             String compactDisplay = getOptionString(context, optionsObject, "compactDisplay");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            if (compactDisplay == null) {
-                compactDisplay = "short";
-            } else if (!"short".equals(compactDisplay) && !"long".equals(compactDisplay)) {
-                return context.throwRangeError("Invalid option value: " + compactDisplay);
-            }
+            compactDisplay = normalizeOption(compactDisplay, "short", COMPACT_DISPLAY_VALUES);
 
             JSValue useGroupingValue = optionsObject.get(PropertyKey.fromString("useGrouping"));
             if (context.hasPendingException()) {
@@ -2839,12 +2807,7 @@ public final class JSIntlObject {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            if (signDisplay == null) {
-                signDisplay = "auto";
-            } else if (!"auto".equals(signDisplay) && !"never".equals(signDisplay) && !"always".equals(signDisplay)
-                    && !"exceptZero".equals(signDisplay) && !"negative".equals(signDisplay)) {
-                return context.throwRangeError("Invalid option value: " + signDisplay);
-            }
+            signDisplay = normalizeOption(signDisplay, "auto", SIGN_DISPLAY_VALUES);
 
             int currencyDigits = 2;
             if ("currency".equals(style) && currency != null) {
@@ -3001,7 +2964,7 @@ public final class JSIntlObject {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            notation = normalizeOption(notation, "standard", "standard", "compact", "scientific", "engineering");
+            notation = normalizeOption(notation, "standard", NOTATION_VALUES);
 
             Integer minimumIntegerDigitsOption = getOptionIntegerOrUndefined(context, optionsObject,
                     "minimumIntegerDigits", 1, 21);
@@ -3070,18 +3033,17 @@ public final class JSIntlObject {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            normalizeOption(roundingMode, "halfExpand", "ceil", "floor", "expand", "trunc", "halfCeil", "halfFloor",
-                    "halfExpand", "halfTrunc", "halfEven");
+            normalizeOption(roundingMode, "halfExpand", ROUNDING_MODE_VALUES);
             String roundingPriority = getOptionString(context, optionsObject, "roundingPriority");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            normalizeOption(roundingPriority, "auto", "auto", "morePrecision", "lessPrecision");
+            normalizeOption(roundingPriority, "auto", ROUNDING_PRIORITY_VALUES);
             String trailingZeroDisplay = getOptionString(context, optionsObject, "trailingZeroDisplay");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            normalizeOption(trailingZeroDisplay, "auto", "auto", "stripIfInteger");
+            normalizeOption(trailingZeroDisplay, "auto", TRAILING_ZERO_DISPLAY_VALUES);
 
             JSIntlPluralRules pluralRules = new JSIntlPluralRules(context, locale, type, notation, minimumIntegerDigits,
                     minimumFractionDigits, maximumFractionDigits, minimumSignificantDigits, maximumSignificantDigits);
@@ -3865,6 +3827,73 @@ public final class JSIntlObject {
             return "";
         }
         return numberFormat.format(numeric);
+    }
+
+    private static JSValue formatNumberRange(JSContext context, JSValue thisArg, JSValue[] args, boolean toParts) {
+        if (!(thisArg instanceof JSIntlNumberFormat numberFormat)) {
+            String method = toParts ? "formatRangeToParts" : "formatRange";
+            return context.throwTypeError("Intl.NumberFormat.prototype." + method + " called on incompatible receiver");
+        }
+        JSValue startValue = JSValue.argumentOrUndefined(args, 0);
+        JSValue endValue = JSValue.argumentOrUndefined(args, 1);
+        if (startValue instanceof JSUndefined || endValue instanceof JSUndefined) {
+            return context.throwTypeError("start and end must not be undefined");
+        }
+        if (isNaNRangeNumberValue(context, startValue) || isNaNRangeNumberValue(context, endValue)) {
+            return context.throwRangeError("start or end is NaN");
+        }
+        String startFormatted = formatIntlNumberValue(context, numberFormat, startValue);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        String endFormatted = formatIntlNumberValue(context, numberFormat, endValue);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (toParts) {
+            return numberRangeParts(context, numberFormat, startValue, endValue, startFormatted.equals(endFormatted));
+        }
+        if (startFormatted.equals(endFormatted)) {
+            return new JSString("~" + startFormatted);
+        }
+
+        String localeTag = numberFormat.getLocale().toLanguageTag();
+        String separator = localeTag.startsWith("pt") ? " - " : " \u2013 ";
+        if ("currency".equals(numberFormat.getStyle())) {
+            int startDigitStart = findFirstDigitIndex(startFormatted);
+            int startDigitEnd = findLastDigitIndex(startFormatted);
+            int endDigitStart = findFirstDigitIndex(endFormatted);
+            int endDigitEnd = findLastDigitIndex(endFormatted);
+            if (startDigitStart >= 0 && startDigitEnd >= startDigitStart && endDigitStart >= 0
+                    && endDigitEnd >= endDigitStart) {
+                String startPrefix = startFormatted.substring(0, startDigitStart);
+                String startCore = startFormatted.substring(startDigitStart, startDigitEnd + 1);
+                String startSuffix = startFormatted.substring(startDigitEnd + 1);
+                String endPrefix = endFormatted.substring(0, endDigitStart);
+                String endCore = endFormatted.substring(endDigitStart, endDigitEnd + 1);
+                String endSuffix = endFormatted.substring(endDigitEnd + 1);
+
+                if (!startSuffix.isEmpty() && startSuffix.equals(endSuffix)) {
+                    if (startCore.startsWith("+") && endCore.startsWith("+")) {
+                        endCore = endCore.substring(1);
+                    }
+                    return new JSString(startPrefix + startCore + separator + endCore + startSuffix);
+                }
+
+                if ("always".equals(numberFormat.getSignDisplay()) && !startPrefix.isEmpty()
+                        && startPrefix.equals(endPrefix) && startPrefix.startsWith("+")) {
+                    return new JSString(startPrefix + startCore + "\u2013" + endCore + startSuffix);
+                }
+            }
+        }
+
+        if ("currency".equals(numberFormat.getStyle())) {
+            return new JSString(startFormatted + separator + endFormatted);
+        }
+        if (localeTag.startsWith("pt")) {
+            return new JSString(startFormatted + " - " + endFormatted);
+        }
+        return new JSString(startFormatted + "\u2013" + endFormatted);
     }
 
     public static JSValue getCanonicalLocales(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -4838,116 +4867,11 @@ public final class JSIntlObject {
     }
 
     public static JSValue numberFormatFormatRange(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlNumberFormat numberFormat)) {
-            return context.throwTypeError("Intl.NumberFormat.prototype.formatRange called on incompatible receiver");
-        }
-        JSValue startValue = JSValue.argumentOrUndefined(args, 0);
-        JSValue endValue = JSValue.argumentOrUndefined(args, 1);
-        if (startValue instanceof JSUndefined || endValue instanceof JSUndefined) {
-            return context.throwTypeError("start and end must not be undefined");
-        }
-        if (isNaNRangeNumberValue(context, startValue) || isNaNRangeNumberValue(context, endValue)) {
-            return context.throwRangeError("start or end is NaN");
-        }
-        String startFormatted = formatIntlNumberValue(context, numberFormat, startValue);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        String endFormatted = formatIntlNumberValue(context, numberFormat, endValue);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (startFormatted.equals(endFormatted)) {
-            return new JSString("~" + startFormatted);
-        }
-
-        String localeTag = numberFormat.getLocale().toLanguageTag();
-        String separator = localeTag.startsWith("pt") ? " - " : " \u2013 ";
-        if ("currency".equals(numberFormat.getStyle())) {
-            int startDigitStart = findFirstDigitIndex(startFormatted);
-            int startDigitEnd = findLastDigitIndex(startFormatted);
-            int endDigitStart = findFirstDigitIndex(endFormatted);
-            int endDigitEnd = findLastDigitIndex(endFormatted);
-            if (startDigitStart >= 0 && startDigitEnd >= startDigitStart && endDigitStart >= 0
-                    && endDigitEnd >= endDigitStart) {
-                String startPrefix = startFormatted.substring(0, startDigitStart);
-                String startCore = startFormatted.substring(startDigitStart, startDigitEnd + 1);
-                String startSuffix = startFormatted.substring(startDigitEnd + 1);
-                String endPrefix = endFormatted.substring(0, endDigitStart);
-                String endCore = endFormatted.substring(endDigitStart, endDigitEnd + 1);
-                String endSuffix = endFormatted.substring(endDigitEnd + 1);
-
-                if (!startSuffix.isEmpty() && startSuffix.equals(endSuffix)) {
-                    if (startCore.startsWith("+") && endCore.startsWith("+")) {
-                        endCore = endCore.substring(1);
-                    }
-                    return new JSString(startPrefix + startCore + separator + endCore + startSuffix);
-                }
-
-                if ("always".equals(numberFormat.getSignDisplay()) && !startPrefix.isEmpty()
-                        && startPrefix.equals(endPrefix) && startPrefix.startsWith("+")) {
-                    return new JSString(startPrefix + startCore + "\u2013" + endCore + startSuffix);
-                }
-            }
-        }
-
-        if ("currency".equals(numberFormat.getStyle())) {
-            return new JSString(startFormatted + separator + endFormatted);
-        }
-        if (localeTag.startsWith("pt")) {
-            return new JSString(startFormatted + " - " + endFormatted);
-        }
-        return new JSString(startFormatted + "\u2013" + endFormatted);
+        return formatNumberRange(context, thisArg, args, false);
     }
 
     public static JSValue numberFormatFormatRangeToParts(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlNumberFormat numberFormat)) {
-            return context
-                    .throwTypeError("Intl.NumberFormat.prototype.formatRangeToParts called on incompatible receiver");
-        }
-        JSValue startValue = JSValue.argumentOrUndefined(args, 0);
-        JSValue endValue = JSValue.argumentOrUndefined(args, 1);
-        if (startValue instanceof JSUndefined || endValue instanceof JSUndefined) {
-            return context.throwTypeError("start and end must not be undefined");
-        }
-        if (isNaNRangeNumberValue(context, startValue) || isNaNRangeNumberValue(context, endValue)) {
-            return context.throwRangeError("start or end is NaN");
-        }
-
-        String startFormatted = formatIntlNumberValue(context, numberFormat, startValue);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        String endFormatted = formatIntlNumberValue(context, numberFormat, endValue);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue startPartsValue = numberFormatFormatToParts(context, numberFormat, new JSValue[]{startValue});
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue endPartsValue = numberFormatFormatToParts(context, numberFormat, new JSValue[]{endValue});
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(startPartsValue instanceof JSArray startParts) || !(endPartsValue instanceof JSArray endParts)) {
-            return context.throwTypeError("formatToParts did not return an array");
-        }
-
-        JSArray result = context.createJSArray();
-        if (startFormatted.equals(endFormatted)) {
-            result.push(createPartObject(context, "approximatelySign", "~", "shared"));
-            appendRangePartsWithSource(context, result, startParts, "shared");
-            return result;
-        }
-
-        appendRangePartsWithSource(context, result, startParts, "startRange");
-        String localeTag = numberFormat.getLocale().toLanguageTag();
-        String separator = localeTag.startsWith("pt") ? " - " : " \u2013 ";
-        result.push(createPartObject(context, "literal", separator, "shared"));
-        appendRangePartsWithSource(context, result, endParts, "endRange");
-        return result;
+        return formatNumberRange(context, thisArg, args, true);
     }
 
     public static JSValue numberFormatFormatToParts(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -5019,6 +4943,35 @@ public final class JSIntlObject {
         return resolvedOptions;
     }
 
+    private static JSValue numberRangeParts(JSContext context, JSIntlNumberFormat numberFormat, JSValue startValue,
+            JSValue endValue, boolean equalAfterFormatting) {
+        JSValue startPartsValue = numberFormatFormatToParts(context, numberFormat, new JSValue[]{startValue});
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        JSValue endPartsValue = numberFormatFormatToParts(context, numberFormat, new JSValue[]{endValue});
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!(startPartsValue instanceof JSArray startParts) || !(endPartsValue instanceof JSArray endParts)) {
+            return context.throwTypeError("formatToParts did not return an array");
+        }
+
+        JSArray result = context.createJSArray();
+        if (equalAfterFormatting) {
+            result.push(createPartObject(context, "approximatelySign", "~", "shared"));
+            appendRangePartsWithSource(context, result, startParts, "shared");
+            return result;
+        }
+
+        appendRangePartsWithSource(context, result, startParts, "startRange");
+        String localeTag = numberFormat.getLocale().toLanguageTag();
+        String separator = localeTag.startsWith("pt") ? " - " : " \u2013 ";
+        result.push(createPartObject(context, "literal", separator, "shared"));
+        appendRangePartsWithSource(context, result, endParts, "endRange");
+        return result;
+    }
+
     private static FormatStyle parseFormatStyle(String rawStyle) {
         if (rawStyle == null) {
             return null;
@@ -5049,6 +5002,8 @@ public final class JSIntlObject {
             throw new IllegalArgumentException("Invalid language tag: " + localeTag, e);
         }
     }
+
+    // ---- Locale option validation helpers ----
 
     /**
      * Parse Unicode extension keys and attributes from a BCP 47 locale tag. Attributes (3-8 alphanum subtags before any
@@ -5169,8 +5124,6 @@ public final class JSIntlObject {
                 "Invalid option value: " + JSTypeConversions.toString(context, useGroupingValue).value());
         return defaultValue;
     }
-
-    // ---- Locale option validation helpers ----
 
     public static JSValue pluralRulesResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlPluralRules pluralRules)) {
@@ -5368,6 +5321,8 @@ public final class JSIntlObject {
         return resolvedOptions;
     }
 
+    // ---- New Locale prototype methods ----
+
     /**
      * Remove likely subtags from a locale (CLDR "minimize"). Algorithm: maximize first, then try removing subtags.
      */
@@ -5454,8 +5409,6 @@ public final class JSIntlObject {
         }
         return defaultPrototype;
     }
-
-    // ---- New Locale prototype methods ----
 
     public static Locale resolveLocale(JSContext context, JSValue[] args, int index) {
         if (index >= args.length || args[index].isUndefined()) {

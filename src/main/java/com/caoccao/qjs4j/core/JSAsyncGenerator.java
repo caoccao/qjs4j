@@ -360,12 +360,7 @@ public final class JSAsyncGenerator extends JSObject {
                 return promise;
             }
             if (requestKind == AsyncGeneratorRequestKind.RETURN) {
-                JSPromise promise = context.createJSPromise();
-                JSObject result = context.createJSObject();
-                result.set(PropertyKey.VALUE, inputValue);
-                result.set(PropertyKey.DONE, JSBoolean.TRUE);
-                promise.fulfill(result);
-                return promise;
+                return JSAsyncIterator.createIteratorResultPromise(context, inputValue, true);
             }
             return yielder.yieldNext(inputValue);
         }, context);

@@ -23,9 +23,7 @@ import java.util.List;
 /**
  * Represents a function call expression.
  */
-public final class CallExpression extends Expression {
-    private final List<Expression> arguments;
-    private final Expression callee;
+public final class CallExpression extends InvocationExpression {
     private Boolean directEvalVarArgumentsInside;
     private final boolean optional;
     private final boolean optionalChainInside;
@@ -33,9 +31,7 @@ public final class CallExpression extends Expression {
 
     public CallExpression(Expression callee, List<Expression> arguments, boolean optional, boolean partOfOptionalChain,
             SourceLocation location) {
-        super(location);
-        this.callee = callee;
-        this.arguments = arguments;
+        super(callee, arguments, location);
         this.optional = optional;
         this.partOfOptionalChain = partOfOptionalChain;
         // See MemberExpression: cached so the parser's per-link question costs O(1).
@@ -48,26 +44,10 @@ public final class CallExpression extends Expression {
     }
 
     @Override
-    public boolean containsAwait() {
-        if (awaitInside == null) {
-            boolean hasAwait = callee != null && callee.containsAwait();
-            if (!hasAwait && arguments != null) {
-                for (Expression argument : arguments) {
-                    if (argument != null && argument.containsAwait()) {
-                        hasAwait = true;
-                        break;
-                    }
-                }
-            }
-            awaitInside = hasAwait;
-        }
-        return awaitInside;
-    }
-
-    @Override
     public boolean containsDirectEvalVarArguments() {
         if (directEvalVarArgumentsInside == null) {
-            directEvalVarArgumentsInside = callee instanceof Identifier calleeIdentifier
+            List<Expression> arguments = getArguments();
+            directEvalVarArgumentsInside = getCallee() instanceof Identifier calleeIdentifier
                     && JSKeyword.EVAL.equals(calleeIdentifier.getName()) && arguments != null && !arguments.isEmpty()
                     && arguments.get(0) instanceof Literal firstArgumentLiteral
                     && firstArgumentLiteral.getValue() instanceof String evalSourceString
@@ -79,31 +59,6 @@ public final class CallExpression extends Expression {
     @Override
     public boolean containsOptionalChain() {
         return optionalChainInside;
-    }
-
-    @Override
-    public boolean containsYield() {
-        if (yieldInside == null) {
-            boolean hasYield = callee != null && callee.containsYield();
-            if (!hasYield && arguments != null) {
-                for (Expression argument : arguments) {
-                    if (argument != null && argument.containsYield()) {
-                        hasYield = true;
-                        break;
-                    }
-                }
-            }
-            yieldInside = hasYield;
-        }
-        return yieldInside;
-    }
-
-    public List<Expression> getArguments() {
-        return arguments;
-    }
-
-    public Expression getCallee() {
-        return callee;
     }
 
     @Override

@@ -262,8 +262,7 @@ public final class TemporalPlainDateTimeConstructor {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            IsoDateTime localDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(zonedDateTime.getEpochNanoseconds(),
-                    zonedDateTime.getTimeZoneId());
+            IsoDateTime localDateTime = zonedDateTime.toLocalDateTime();
             return JSTemporalPlainDateTime.create(context, localDateTime, zonedDateTime.getCalendarId());
         }
         if (item instanceof JSObject itemObj) {

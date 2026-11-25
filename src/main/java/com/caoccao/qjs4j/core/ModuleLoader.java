@@ -392,52 +392,8 @@ final class ModuleLoader {
             moduleRecord.setDeferredPreload(true);
             dynamicImportModuleCache.put(moduleCacheKey, moduleRecord);
             try {
-                String importType = importAttributes != null ? importAttributes.get("type") : null;
-                // Handle type: 'text' import attribute
-                if ("text".equals(importType)) {
-                    // The payload is data, not source. Putting it through the module normaliser
-                    // meant a text file whose bytes happened to look like a declaration was
-                    // tokenised and compiled as JavaScript, so `export {}; this is arbitrary text`
-                    // was a SyntaxError instead of a string.
-                    String sourceCode = readModuleText(resolvedSpecifier);
-                    moduleRecord.setRawSource(sourceCode);
-                    context.importBindingInstaller().defineDynamicImportNamespaceValue(moduleRecord, "default",
-                            new JSString(sourceCode));
-                    moduleRecord.explicitExportNames().add("default");
-                    moduleRecord.exportOrigins().put("default", resolvedSpecifier);
-                    moduleRecord.namespace().finalizeNamespace();
-                    moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
-                    return moduleRecord.namespace();
-                }
-                // Handle type: 'bytes' import attribute
-                if ("bytes".equals(importType)) {
-                    byte[] fileBytes = readModuleBytes(resolvedSpecifier);
-                    moduleRecord.setRawSource("");
-                    JSArrayBuffer arrayBuffer = new JSArrayBuffer(context, fileBytes);
-                    context.transferPrototype(arrayBuffer, JSArrayBuffer.NAME);
-                    arrayBuffer.setImmutable(true);
-                    JSUint8Array uint8Array = context.createJSUint8Array(arrayBuffer, 0, fileBytes.length);
-                    context.importBindingInstaller().defineDynamicImportNamespaceValue(moduleRecord, "default",
-                            uint8Array);
-                    moduleRecord.explicitExportNames().add("default");
-                    moduleRecord.exportOrigins().put("default", resolvedSpecifier);
-                    moduleRecord.namespace().finalizeNamespace();
-                    moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
-                    return moduleRecord.namespace();
-                }
-                String sourceCode = readModuleText(resolvedSpecifier);
-                moduleRecord.setRawSource(transformer.normalizeModuleDeclarationLines(sourceCode));
-                if (resolvedSpecifier.endsWith(".json")) {
-                    if (!"json".equals(importType)) {
-                        throw new JSException(context.throwTypeError("Import attribute type must be 'json'"));
-                    }
-                    JSValue jsonDefaultValue = parseJsonModuleSource(sourceCode);
-                    context.importBindingInstaller().defineDynamicImportNamespaceValue(moduleRecord, "default",
-                            jsonDefaultValue);
-                    moduleRecord.explicitExportNames().add("default");
-                    moduleRecord.exportOrigins().put("default", resolvedSpecifier);
-                    moduleRecord.namespace().finalizeNamespace();
-                    moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
+                String sourceCode = loadModuleSource(moduleRecord, resolvedSpecifier, importAttributes);
+                if (sourceCode == null) {
                     return moduleRecord.namespace();
                 }
                 transformer.parseDynamicImportModuleSource(moduleRecord);
@@ -617,48 +573,8 @@ final class ModuleLoader {
         dynamicImportModuleCache.put(moduleCacheKey, moduleRecord);
 
         try {
-            String importType = importAttributes != null ? importAttributes.get("type") : null;
-            // Handle type: 'text' import attribute
-            if ("text".equals(importType)) {
-                // Data, not source — see the deferred path above.
-                String sourceCode = readModuleText(resolvedSpecifier);
-                moduleRecord.setRawSource(sourceCode);
-                context.importBindingInstaller().defineDynamicImportNamespaceValue(moduleRecord, "default",
-                        new JSString(sourceCode));
-                moduleRecord.explicitExportNames().add("default");
-                moduleRecord.exportOrigins().put("default", resolvedSpecifier);
-                moduleRecord.namespace().finalizeNamespace();
-                moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
-                return moduleRecord;
-            }
-            // Handle type: 'bytes' import attribute
-            if ("bytes".equals(importType)) {
-                byte[] fileBytes = readModuleBytes(resolvedSpecifier);
-                moduleRecord.setRawSource("");
-                JSArrayBuffer arrayBuffer = new JSArrayBuffer(context, fileBytes);
-                context.transferPrototype(arrayBuffer, JSArrayBuffer.NAME);
-                arrayBuffer.setImmutable(true);
-                JSUint8Array uint8Array = context.createJSUint8Array(arrayBuffer, 0, fileBytes.length);
-                context.importBindingInstaller().defineDynamicImportNamespaceValue(moduleRecord, "default", uint8Array);
-                moduleRecord.explicitExportNames().add("default");
-                moduleRecord.exportOrigins().put("default", resolvedSpecifier);
-                moduleRecord.namespace().finalizeNamespace();
-                moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
-                return moduleRecord;
-            }
-            String sourceCode = readModuleText(resolvedSpecifier);
-            moduleRecord.setRawSource(transformer.normalizeModuleDeclarationLines(sourceCode));
-            if (resolvedSpecifier.endsWith(".json")) {
-                if (!"json".equals(importType)) {
-                    throw new JSException(context.throwTypeError("Import attribute type must be 'json'"));
-                }
-                JSValue jsonDefaultValue = parseJsonModuleSource(sourceCode);
-                context.importBindingInstaller().defineDynamicImportNamespaceValue(moduleRecord, "default",
-                        jsonDefaultValue);
-                moduleRecord.explicitExportNames().add("default");
-                moduleRecord.exportOrigins().put("default", resolvedSpecifier);
-                moduleRecord.namespace().finalizeNamespace();
-                moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
+            String sourceCode = loadModuleSource(moduleRecord, resolvedSpecifier, importAttributes);
+            if (sourceCode == null) {
                 return moduleRecord;
             }
             // The dependency's own early errors, raised against the dependency's own text. Without
@@ -747,6 +663,44 @@ final class ModuleLoader {
             throw new JSException(
                     context.throwError(exception.getMessage() != null ? exception.getMessage() : "Module load error"));
         }
+    }
+
+    /** Load source text for the parser, or complete a data module and return null. */
+    private String loadModuleSource(JSDynamicImportModule moduleRecord, String resolvedSpecifier,
+            Map<String, String> importAttributes) throws IOException {
+        String type = importAttributes == null ? null : importAttributes.get("type");
+        JSValue defaultExport;
+        if ("bytes".equals(type)) {
+            byte[] bytes = readModuleBytes(resolvedSpecifier);
+            moduleRecord.setRawSource("");
+            JSArrayBuffer buffer = new JSArrayBuffer(context, bytes);
+            context.transferPrototype(buffer, JSArrayBuffer.NAME);
+            buffer.setImmutable(true);
+            defaultExport = context.createJSUint8Array(buffer, 0, bytes.length);
+        } else {
+            String source = readModuleText(resolvedSpecifier);
+            if ("text".equals(type)) {
+                // Text modules export the original content without parsing declaration-like text.
+                moduleRecord.setRawSource(source);
+                defaultExport = new JSString(source);
+            } else {
+                moduleRecord.setRawSource(transformer.normalizeModuleDeclarationLines(source));
+                if (!resolvedSpecifier.endsWith(".json")) {
+                    return source;
+                }
+                if (!"json".equals(type)) {
+                    throw new JSException(context.throwTypeError("Import attribute type must be 'json'"));
+                }
+                defaultExport = parseJsonModuleSource(source);
+            }
+        }
+
+        context.importBindingInstaller().defineDynamicImportNamespaceValue(moduleRecord, "default", defaultExport);
+        moduleRecord.explicitExportNames().add("default");
+        moduleRecord.exportOrigins().put("default", resolvedSpecifier);
+        moduleRecord.namespace().finalizeNamespace();
+        moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
+        return null;
     }
 
     /**

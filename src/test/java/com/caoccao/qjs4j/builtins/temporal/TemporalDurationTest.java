@@ -18,6 +18,8 @@ package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class TemporalDurationTest extends BaseJavetTest {
 
@@ -122,6 +124,12 @@ public class TemporalDurationTest extends BaseJavetTest {
         assertIntegerWithJavet("new Temporal.Duration(0, 0, 0, 0, 5).hours");
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"months", "weeks", "years"})
+    void testIntegerProperties(String property) {
+        assertIntegerWithJavet("new Temporal.Duration(1, 2, 3)." + property);
+    }
+
     @Test
     public void testMicroseconds() {
         assertIntegerWithJavet("new Temporal.Duration(0, 0, 0, 0, 0, 0, 0, 0, 9).microseconds");
@@ -135,11 +143,6 @@ public class TemporalDurationTest extends BaseJavetTest {
     @Test
     public void testMinutes() {
         assertIntegerWithJavet("new Temporal.Duration(0, 0, 0, 0, 0, 6).minutes");
-    }
-
-    @Test
-    public void testMonths() {
-        assertIntegerWithJavet("new Temporal.Duration(1, 2, 3).months");
     }
 
     @Test
@@ -224,17 +227,7 @@ public class TemporalDurationTest extends BaseJavetTest {
     }
 
     @Test
-    public void testWeeks() {
-        assertIntegerWithJavet("new Temporal.Duration(1, 2, 3).weeks");
-    }
-
-    @Test
     public void testWith() {
         assertStringWithJavet("new Temporal.Duration(1, 2, 3).with({years: 5}).toString()");
-    }
-
-    @Test
-    public void testYears() {
-        assertIntegerWithJavet("new Temporal.Duration(1, 2, 3).years");
     }
 }

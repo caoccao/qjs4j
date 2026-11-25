@@ -987,44 +987,14 @@ public final class RegExpCompiler {
             // * quantifier: SPLIT (skip or continue), SET_CHAR_POS?, atom, CHECK_ADVANCE?, GOTO back
             // Following QuickJS: if atom can match empty, insert SET_CHAR_POS before atom and
             // CHECK_ADVANCE after atom to prevent infinite loops on zero-width patterns.
-            int advCheckSize = addZeroAdvanceCheck ? 4 : 0; // SET_CHAR_POS(2) + CHECK_ADVANCE(2)
-            int loopStart = context.buffer.size();
-            context.buffer.appendU8(
-                    greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() : RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
-            context.buffer.appendU32(atomSize + 5 + advCheckSize); // Skip atom + GOTO + advance checks
-            if (addZeroAdvanceCheck) {
-                context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
-                context.buffer.appendU8(advReg);
-            }
-            context.buffer.append(atomCode);
-            if (addZeroAdvanceCheck) {
-                context.buffer.appendU8(RegExpOpcode.CHECK_ADVANCE.getCode());
-                context.buffer.appendU8(advReg);
-            }
-            context.buffer.appendU8(RegExpOpcode.GOTO.getCode());
-            int offset = loopStart - (context.buffer.size() + 4);
-            context.buffer.appendU32(offset);
+            emitUnboundedRepeat(context, atomCode, greedy, addZeroAdvanceCheck, advReg);
         } else if (min == 1 && max == Integer.MAX_VALUE) {
             // + quantifier: atom, then SPLIT back or continue
             // With advance check: atom, SET_CHAR_POS, SPLIT, SET_CHAR_POS, atom, CHECK_ADVANCE, GOTO SPLIT
             if (addZeroAdvanceCheck) {
                 // First iteration (no advance check needed)
                 context.buffer.append(atomCode);
-                // Loop iterations with advance check
-                int loopStart = context.buffer.size();
-                context.buffer.appendU8(
-                        greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() : RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
-                // Offset to skip: SET_CHAR_POS(2) + atom + CHECK_ADVANCE(2) + GOTO(5)
-                int skipSize = 2 + atomSize + 2 + 5;
-                context.buffer.appendU32(skipSize);
-                context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
-                context.buffer.appendU8(advReg);
-                context.buffer.append(atomCode);
-                context.buffer.appendU8(RegExpOpcode.CHECK_ADVANCE.getCode());
-                context.buffer.appendU8(advReg);
-                context.buffer.appendU8(RegExpOpcode.GOTO.getCode());
-                int gotoOffset = loopStart - (context.buffer.size() + 4);
-                context.buffer.appendU32(gotoOffset);
+                emitUnboundedRepeat(context, atomCode, greedy, true, advReg);
             } else {
                 context.buffer.append(atomCode);
                 int loopStart = context.buffer.size() - atomSize;
@@ -1051,23 +1021,7 @@ public final class RegExpCompiler {
             if (max != min) {
                 if (max == Integer.MAX_VALUE) {
                     // {n,} - unbounded: use loop with advance check if needed
-                    int advCheckSize = addZeroAdvanceCheck ? 4 : 0;
-                    int loopStart = context.buffer.size();
-                    context.buffer.appendU8(
-                            greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() : RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
-                    context.buffer.appendU32(atomSize + 5 + advCheckSize);
-                    if (addZeroAdvanceCheck) {
-                        context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
-                        context.buffer.appendU8(advReg);
-                    }
-                    context.buffer.append(atomCode);
-                    if (addZeroAdvanceCheck) {
-                        context.buffer.appendU8(RegExpOpcode.CHECK_ADVANCE.getCode());
-                        context.buffer.appendU8(advReg);
-                    }
-                    context.buffer.appendU8(RegExpOpcode.GOTO.getCode());
-                    int offset = loopStart - (context.buffer.size() + 4);
-                    context.buffer.appendU32(offset);
+                    emitUnboundedRepeat(context, atomCode, greedy, addZeroAdvanceCheck, advReg);
                 } else {
                     int remaining = max - min;
                     int register = allocateRegister(context);
@@ -1076,15 +1030,7 @@ public final class RegExpCompiler {
                     context.buffer.appendU8(
                             greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() : RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
                     context.buffer.appendU32(atomSize + 6 + (addZeroAdvanceCheck ? 4 : 0));
-                    if (addZeroAdvanceCheck) {
-                        context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
-                        context.buffer.appendU8(advReg);
-                    }
-                    context.buffer.append(atomCode);
-                    if (addZeroAdvanceCheck) {
-                        context.buffer.appendU8(RegExpOpcode.CHECK_ADVANCE.getCode());
-                        context.buffer.appendU8(advReg);
-                    }
+                    emitRepeatedAtom(context, atomCode, addZeroAdvanceCheck, advReg);
                     emitLoop(context, register, loopStart);
                 }
             }
@@ -2595,6 +2541,32 @@ public final class RegExpCompiler {
         }
     }
 
+    private static void emitRepeatedAtom(CompileContext context, byte[] atomCode, boolean addZeroAdvanceCheck,
+            int advReg) {
+        if (addZeroAdvanceCheck) {
+            context.buffer.appendU8(RegExpOpcode.SET_CHAR_POS.getCode());
+            context.buffer.appendU8(advReg);
+        }
+        context.buffer.append(atomCode);
+        if (addZeroAdvanceCheck) {
+            context.buffer.appendU8(RegExpOpcode.CHECK_ADVANCE.getCode());
+            context.buffer.appendU8(advReg);
+        }
+    }
+
+    private static void emitUnboundedRepeat(CompileContext context, byte[] atomCode, boolean greedy,
+            boolean addZeroAdvanceCheck, int advReg) {
+        int advCheckSize = addZeroAdvanceCheck ? 4 : 0; // SET_CHAR_POS(2) + CHECK_ADVANCE(2)
+        int loopStart = context.buffer.size();
+        context.buffer
+                .appendU8(greedy ? RegExpOpcode.SPLIT_NEXT_FIRST.getCode() : RegExpOpcode.SPLIT_GOTO_FIRST.getCode());
+        context.buffer.appendU32(atomCode.length + 5 + advCheckSize); // Skip atom + GOTO + advance checks
+        emitRepeatedAtom(context, atomCode, addZeroAdvanceCheck, advReg);
+        context.buffer.appendU8(RegExpOpcode.GOTO.getCode());
+        int offset = loopStart - (context.buffer.size() + 4);
+        context.buffer.appendU32(offset);
+    }
+
     private static int hexValue(int ch) {
         return ch >= 0 && ch < HEX_VALUES.length ? HEX_VALUES[ch] : -1;
     }
@@ -2719,7 +2691,6 @@ public final class RegExpCompiler {
 
     private record GroupNameParseResult(String name, int nextPos) {
     }
-
     private record InlineModifierGroupParseResult(int scopedFlags) {
     }
 
@@ -2735,6 +2706,7 @@ public final class RegExpCompiler {
             super(message, cause);
         }
     }
+
     private record UnicodeEscapeParseResult(int codePoint, int nextPos) {
     }
 }

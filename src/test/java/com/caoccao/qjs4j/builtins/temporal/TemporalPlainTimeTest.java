@@ -18,6 +18,8 @@ package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class TemporalPlainTimeTest extends BaseJavetTest {
 
@@ -34,11 +36,6 @@ public class TemporalPlainTimeTest extends BaseJavetTest {
     @Test
     public void testCompare() {
         assertIntegerWithJavet("Temporal.PlainTime.compare('12:30', '13:00')");
-    }
-
-    @Test
-    public void testConstructorBasic() {
-        assertStringWithJavet("new Temporal.PlainTime(12, 30, 45).toString()");
     }
 
     @Test
@@ -87,9 +84,10 @@ public class TemporalPlainTimeTest extends BaseJavetTest {
         assertStringWithJavet("Temporal.PlainTime.from({hour: 12, minute: 30}).toString()");
     }
 
-    @Test
-    public void testHour() {
-        assertIntegerWithJavet("new Temporal.PlainTime(12, 30, 45).hour");
+    @ParameterizedTest
+    @ValueSource(strings = {"hour", "minute", "second"})
+    void testIntegerProperties(String property) {
+        assertIntegerWithJavet("new Temporal.PlainTime(12, 30, 45)." + property);
     }
 
     @Test
@@ -100,11 +98,6 @@ public class TemporalPlainTimeTest extends BaseJavetTest {
     @Test
     public void testMillisecond() {
         assertIntegerWithJavet("new Temporal.PlainTime(12, 30, 45, 123).millisecond");
-    }
-
-    @Test
-    public void testMinute() {
-        assertIntegerWithJavet("new Temporal.PlainTime(12, 30, 45).minute");
     }
 
     @Test
@@ -123,13 +116,14 @@ public class TemporalPlainTimeTest extends BaseJavetTest {
     }
 
     @Test
-    public void testSecond() {
-        assertIntegerWithJavet("new Temporal.PlainTime(12, 30, 45).second");
-    }
-
-    @Test
     public void testSince() {
         assertStringWithJavet("new Temporal.PlainTime(15, 30).since('12:00').toString()");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"toString()", "toJSON()", "toString()"})
+    void testStringConversions(String operation) {
+        assertStringWithJavet("new Temporal.PlainTime(12, 30, 45)." + operation);
     }
 
     @Test
@@ -138,19 +132,9 @@ public class TemporalPlainTimeTest extends BaseJavetTest {
     }
 
     @Test
-    public void testToJSON() {
-        assertStringWithJavet("new Temporal.PlainTime(12, 30, 45).toJSON()");
-    }
-
-    @Test
     public void testToLocaleString() {
         assertBooleanWithJavet(
                 "(() => { const value = new Temporal.PlainTime(12, 30, 45); const locales = 'en-US'; const options = { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }; return value.toLocaleString(locales, options) === new Intl.DateTimeFormat(locales, options).format(value); })()");
-    }
-
-    @Test
-    public void testToString() {
-        assertStringWithJavet("new Temporal.PlainTime(12, 30, 45).toString()");
     }
 
     @Test

@@ -454,33 +454,7 @@ public final class StringPrototype {
      * String.prototype.endsWith(searchString[, endPosition]) ES2020 21.1.3.6
      */
     public static JSValue endsWith(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = toStringCheckObject(context, thisArg);
-        String s = str.value();
-
-        // A missing search string is undefined, which converts to "undefined"; it used to answer false.
-        if (args.length == 0) {
-            args = new JSValue[]{JSUndefined.INSTANCE};
-        }
-        int regexp = JSTypeChecking.isRegExp(context, args[0]);
-        if (regexp < 0) {
-            return JSUndefined.INSTANCE;
-        }
-        if (regexp > 0) {
-            return context.throwTypeError("regexp not supported");
-        }
-
-        String searchStr = JSTypeConversions.toString(context, args[0]).value();
-        long endPosition = args.length > 1 && !args[1].isUndefined()
-                ? (long) JSTypeConversions.toInteger(context, args[1])
-                : s.length();
-        endPosition = Math.max(0, Math.min(endPosition, s.length()));
-
-        int start = (int) (endPosition - searchStr.length());
-        if (start < 0) {
-            return JSBoolean.FALSE;
-        }
-
-        return JSBoolean.valueOf(s.substring(start, (int) endPosition).equals(searchStr));
+        return searchString(context, thisArg, args, SearchMode.SUFFIX);
     }
 
     /**
@@ -573,26 +547,7 @@ public final class StringPrototype {
      * String.prototype.includes(searchString[, position]) ES2020 21.1.3.7
      */
     public static JSValue includes(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = toStringCheckObject(context, thisArg);
-        String s = str.value();
-
-        // A missing search string is undefined, which converts to "undefined"; it used to answer false.
-        if (args.length == 0) {
-            args = new JSValue[]{JSUndefined.INSTANCE};
-        }
-        int regexp = JSTypeChecking.isRegExp(context, args[0]);
-        if (regexp < 0) {
-            return JSUndefined.INSTANCE;
-        }
-        if (regexp > 0) {
-            return context.throwTypeError("regexp not supported");
-        }
-
-        String searchStr = JSTypeConversions.toString(context, args[0]).value();
-        long position = args.length > 1 ? (long) JSTypeConversions.toInteger(context, args[1]) : 0;
-        position = Math.max(0, Math.min(position, s.length()));
-
-        return JSBoolean.valueOf(s.indexOf(searchStr, (int) position) >= 0);
+        return searchString(context, thisArg, args, SearchMode.INCLUDES);
     }
 
     /**
@@ -1325,6 +1280,29 @@ public final class StringPrototype {
         return context.throwTypeError("not a function");
     }
 
+    private static JSValue searchString(JSContext context, JSValue thisArg, JSValue[] args, SearchMode mode) {
+        String value = toStringCheckObject(context, thisArg).value();
+        JSValue needle = JSValue.argumentOrUndefined(args, 0);
+        int regexp = JSTypeChecking.isRegExp(context, needle);
+        if (regexp < 0) {
+            return JSUndefined.INSTANCE;
+        }
+        if (regexp > 0) {
+            return context.throwTypeError("regexp not supported");
+        }
+
+        String search = JSTypeConversions.toString(context, needle).value();
+        long position = args.length > 1 && !args[1].isUndefined()
+                ? (long) JSTypeConversions.toInteger(context, args[1])
+                : (mode == SearchMode.SUFFIX ? value.length() : 0);
+        int offset = (int) Math.max(0, Math.min(position, value.length()));
+        return JSBoolean.valueOf(switch (mode) {
+            case INCLUDES -> value.indexOf(search, offset) >= 0;
+            case PREFIX -> value.startsWith(search, offset);
+            case SUFFIX -> value.startsWith(search, offset - search.length());
+        });
+    }
+
     /**
      * String.prototype.slice(beginIndex[, endIndex]) ES2020 21.1.3.16
      */
@@ -1448,28 +1426,7 @@ public final class StringPrototype {
      * String.prototype.startsWith(searchString[, position]) ES2020 21.1.3.21
      */
     public static JSValue startsWith(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = toStringCheckObject(context, thisArg);
-        String s = str.value();
-
-        // A missing search string is undefined, which converts to "undefined"; it used to answer false.
-        if (args.length == 0) {
-            args = new JSValue[]{JSUndefined.INSTANCE};
-        }
-        int regexp = JSTypeChecking.isRegExp(context, args[0]);
-        if (regexp < 0) {
-            return JSUndefined.INSTANCE;
-        }
-        if (regexp > 0) {
-            return context.throwTypeError("regexp not supported");
-        }
-
-        String searchStr = JSTypeConversions.toString(context, args[0]).value();
-        long position = args.length > 1 && !args[1].isUndefined()
-                ? (long) JSTypeConversions.toInteger(context, args[1])
-                : 0;
-        position = Math.max(0, Math.min(position, s.length()));
-
-        return JSBoolean.valueOf(s.substring((int) position).startsWith(searchStr));
+        return searchString(context, thisArg, args, SearchMode.PREFIX);
     }
 
     /**
@@ -1781,5 +1738,9 @@ public final class StringPrototype {
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
         return thisArg.asStringWithDownCast().map(jsString -> (JSValue) jsString)
                 .orElseGet(() -> context.throwTypeError("String.prototype.valueOf requires that 'this' be a String"));
+    }
+
+    private enum SearchMode {
+        INCLUDES, PREFIX, SUFFIX
     }
 }

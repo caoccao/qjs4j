@@ -19,6 +19,11 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.Arguments;
+
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
@@ -68,6 +73,14 @@ public class DatePrototypeTest extends BaseJavetTest {
         // Should follow V8 format
         assertThat(str).matches(
                 "^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \\d{2} \\d{4} \\d{2}:\\d{2}:\\d{2} GMT[+-]\\d{4} \\([A-Z]{3,4}\\)$");
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("dateGetters")
+    void testDateGetter(String name, JSNativeCallback getter) {
+        // Midnight UTC, January 1, 2024.
+        assertIntegerWithJavet("new Date(1704067200000)." + name + "();");
+        assertPendingTypeError(context, getter.call(context, new JSString("not a date"), JSValue.NO_ARGS));
     }
 
     @Test
@@ -186,16 +199,6 @@ public class DatePrototypeTest extends BaseJavetTest {
     }
 
     @Test
-    public void testGetDate() {
-        // Test with 2024-01-01 00:00:00 UTC
-        assertIntegerWithJavet("new Date(1704067200000).getDate();");
-
-        // Edge case: called on non-Date
-        JSValue result = DatePrototype.getDate(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertPendingTypeError(context, result);
-    }
-
-    @Test
     public void testGetDay() {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(context, 1704067200000L);
@@ -208,16 +211,6 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-Date
         result = DatePrototype.getDay(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertPendingTypeError(context, result);
-    }
-
-    @Test
-    public void testGetFullYear() {
-        // Test with 2024-01-01 00:00:00 UTC
-        assertIntegerWithJavet("new Date(1704067200000).getFullYear();");
-
-        // Edge case: called on non-Date
-        JSValue result = DatePrototype.getFullYear(context, new JSString("not a date"), JSValue.NO_ARGS);
         assertPendingTypeError(context, result);
     }
 
@@ -238,92 +231,12 @@ public class DatePrototypeTest extends BaseJavetTest {
     }
 
     @Test
-    public void testGetMilliseconds() {
-        // Test with 2024-01-01 00:00:00 UTC
-        assertIntegerWithJavet("new Date(1704067200000).getMilliseconds();");
-
-        // Edge case: called on non-Date
-        JSValue result = DatePrototype.getMilliseconds(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertPendingTypeError(context, result);
-    }
-
-    @Test
-    public void testGetMinutes() {
-        // Test with 2024-01-01 00:00:00 UTC
-        assertIntegerWithJavet("new Date(1704067200000).getMinutes();");
-
-        // Edge case: called on non-Date
-        JSValue result = DatePrototype.getMinutes(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertPendingTypeError(context, result);
-    }
-
-    @Test
-    public void testGetMonth() {
-        // Test with 2024-01-01 00:00:00 UTC (January = month 0)
-        assertIntegerWithJavet("new Date(1704067200000).getMonth();");
-
-        // Edge case: called on non-Date
-        JSValue result = DatePrototype.getMonth(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertPendingTypeError(context, result);
-    }
-
-    @Test
-    public void testGetSeconds() {
-        // Test with 2024-01-01 00:00:00 UTC
-        assertIntegerWithJavet("new Date(1704067200000).getSeconds();");
-
-        // Edge case: called on non-Date
-        JSValue result = DatePrototype.getSeconds(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertPendingTypeError(context, result);
-    }
-
-    @Test
     public void testGetTime() {
         // Test with a known timestamp: 2024-01-01 00:00:00 UTC (1704067200000L)
         assertDoubleWithJavet("new Date(1704067200000).getTime();");
 
         // Edge case: called on non-Date
         JSValue result = DatePrototype.getTime(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertPendingTypeError(context, result);
-    }
-
-    @Test
-    public void testGetUTCDate() {
-        // Test with 2024-01-01 00:00:00 UTC
-        assertIntegerWithJavet("new Date(1704067200000).getUTCDate();");
-
-        // Edge case: called on non-Date
-        JSValue result = DatePrototype.getUTCDate(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertPendingTypeError(context, result);
-    }
-
-    @Test
-    public void testGetUTCFullYear() {
-        // Test with 2024-01-01 00:00:00 UTC
-        assertIntegerWithJavet("new Date(1704067200000).getUTCFullYear();");
-
-        // Edge case: called on non-Date
-        JSValue result = DatePrototype.getUTCFullYear(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertPendingTypeError(context, result);
-    }
-
-    @Test
-    public void testGetUTCHours() {
-        // Test with 2024-01-01 00:00:00 UTC
-        assertIntegerWithJavet("new Date(1704067200000).getUTCHours();");
-
-        // Edge case: called on non-Date
-        JSValue result = DatePrototype.getUTCHours(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertPendingTypeError(context, result);
-    }
-
-    @Test
-    public void testGetUTCMonth() {
-        // Test with 2024-01-01 00:00:00 UTC
-        assertIntegerWithJavet("new Date(1704067200000).getUTCMonth();");
-
-        // Edge case: called on non-Date
-        JSValue result = DatePrototype.getUTCMonth(context, new JSString("not a date"), JSValue.NO_ARGS);
         assertPendingTypeError(context, result);
     }
 
@@ -418,5 +331,18 @@ public class DatePrototypeTest extends BaseJavetTest {
         // Edge case: called on non-Date
         JSValue result = DatePrototype.valueOf(context, new JSString("not a date"), JSValue.NO_ARGS);
         assertPendingTypeError(context, result);
+    }
+
+    private static Stream<Arguments> dateGetters() {
+        return Stream.of(Arguments.of("getDate", (JSNativeCallback) DatePrototype::getDate),
+                Arguments.of("getFullYear", (JSNativeCallback) DatePrototype::getFullYear),
+                Arguments.of("getMilliseconds", (JSNativeCallback) DatePrototype::getMilliseconds),
+                Arguments.of("getMinutes", (JSNativeCallback) DatePrototype::getMinutes),
+                Arguments.of("getMonth", (JSNativeCallback) DatePrototype::getMonth),
+                Arguments.of("getSeconds", (JSNativeCallback) DatePrototype::getSeconds),
+                Arguments.of("getUTCDate", (JSNativeCallback) DatePrototype::getUTCDate),
+                Arguments.of("getUTCFullYear", (JSNativeCallback) DatePrototype::getUTCFullYear),
+                Arguments.of("getUTCHours", (JSNativeCallback) DatePrototype::getUTCHours),
+                Arguments.of("getUTCMonth", (JSNativeCallback) DatePrototype::getUTCMonth));
     }
 }

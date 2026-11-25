@@ -23,19 +23,20 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 public class RegExpEngineTest extends BaseJavetTest {
-    private boolean matches(String pattern, String flags, String input) {
+    private RegExpEngine compilePattern(String pattern, String flags) {
         RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        RegExpBytecode bytecode = compiler.compile(pattern, flags);
-        RegExpEngine engine = new RegExpEngine(bytecode);
+        return new RegExpEngine(compiler.compile(pattern, flags));
+    }
+
+    private boolean matches(String pattern, String flags, String input) {
+        RegExpEngine engine = compilePattern(pattern, flags);
         RegExpEngine.MatchResult result = engine.exec(input, 0);
         return result != null && result.matched();
     }
 
     @Test
     public void testCaseInsensitiveMatching() {
-        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        RegExpBytecode bytecode = compiler.compile("abc", "i");
-        RegExpEngine engine = new RegExpEngine(bytecode);
+        RegExpEngine engine = compilePattern("abc", "i");
         RegExpEngine.MatchResult result = engine.exec("ABC", 0);
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();
@@ -49,9 +50,7 @@ public class RegExpEngineTest extends BaseJavetTest {
 
     @Test
     public void testDotAllMode() {
-        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        RegExpBytecode bytecode = compiler.compile("a.b", "s");
-        RegExpEngine engine = new RegExpEngine(bytecode);
+        RegExpEngine engine = compilePattern("a.b", "s");
         RegExpEngine.MatchResult result = engine.exec("a\nb", 0);
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();
@@ -60,19 +59,15 @@ public class RegExpEngineTest extends BaseJavetTest {
 
     @Test
     public void testDotWithoutDotAll() {
-        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        RegExpBytecode bytecode = compiler.compile("a.b", "");
-        RegExpEngine engine = new RegExpEngine(bytecode);
+        RegExpEngine engine = compilePattern("a.b", "");
         RegExpEngine.MatchResult result = engine.exec("a\nb", 0);
         assertThat(result).isNull(); // Should not match because . doesn't match \n
     }
 
     @Test
     public void testEdgeCases() {
-        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
         // Empty pattern matches at every position
-        RegExpBytecode bytecode = compiler.compile("", "");
-        RegExpEngine engine = new RegExpEngine(bytecode);
+        RegExpEngine engine = compilePattern("", "");
         RegExpEngine.MatchResult result = engine.exec("", 0);
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();
@@ -87,16 +82,13 @@ public class RegExpEngineTest extends BaseJavetTest {
 
     @Test
     public void testEscapedCharacters() {
-        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        RegExpBytecode bytecode = compiler.compile("a\\nb", "");
-        RegExpEngine engine = new RegExpEngine(bytecode);
+        RegExpEngine engine = compilePattern("a\\nb", "");
         RegExpEngine.MatchResult result = engine.exec("a\nb", 0);
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();
         assertThat(result.getMatch()).isEqualTo("a\nb");
 
-        bytecode = compiler.compile("a\\tb", "");
-        engine = new RegExpEngine(bytecode);
+        engine = compilePattern("a\\tb", "");
         result = engine.exec("a\tb", 0);
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();
@@ -105,18 +97,14 @@ public class RegExpEngineTest extends BaseJavetTest {
 
     @Test
     public void testExecNoMatch() {
-        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        RegExpBytecode bytecode = compiler.compile("abc", "");
-        RegExpEngine engine = new RegExpEngine(bytecode);
+        RegExpEngine engine = compilePattern("abc", "");
         RegExpEngine.MatchResult result = engine.exec("defgh", 0);
         assertThat(result).isNull();
     }
 
     @Test
     public void testExecSimpleMatch() {
-        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        RegExpBytecode bytecode = compiler.compile("abc", "");
-        RegExpEngine engine = new RegExpEngine(bytecode);
+        RegExpEngine engine = compilePattern("abc", "");
         RegExpEngine.MatchResult result = engine.exec("xxabcxx", 0);
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();
@@ -127,9 +115,7 @@ public class RegExpEngineTest extends BaseJavetTest {
 
     @Test
     public void testExecWithGroups() {
-        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        RegExpBytecode bytecode = compiler.compile("a(bc)d", "");
-        RegExpEngine engine = new RegExpEngine(bytecode);
+        RegExpEngine engine = compilePattern("a(bc)d", "");
         RegExpEngine.MatchResult result = engine.exec("xabcd", 0);
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();
@@ -139,9 +125,7 @@ public class RegExpEngineTest extends BaseJavetTest {
 
     @Test
     public void testFlagsCombination() {
-        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        RegExpBytecode bytecode = compiler.compile("a.b", "is");
-        RegExpEngine engine = new RegExpEngine(bytecode);
+        RegExpEngine engine = compilePattern("a.b", "is");
         RegExpEngine.MatchResult result = engine.exec("A\nB", 0);
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();
@@ -150,9 +134,7 @@ public class RegExpEngineTest extends BaseJavetTest {
 
     @Test
     public void testLineAnchors() {
-        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        RegExpBytecode bytecode = compiler.compile("^abc", "");
-        RegExpEngine engine = new RegExpEngine(bytecode);
+        RegExpEngine engine = compilePattern("^abc", "");
         RegExpEngine.MatchResult result = engine.exec("abc", 0);
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();
@@ -160,8 +142,7 @@ public class RegExpEngineTest extends BaseJavetTest {
         result = engine.exec("xabc", 0);
         assertThat(result).isNull(); // Should not match at position 0
 
-        bytecode = compiler.compile("abc$", "");
-        engine = new RegExpEngine(bytecode);
+        engine = compilePattern("abc$", "");
         result = engine.exec("abc", 0);
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();
@@ -181,9 +162,7 @@ public class RegExpEngineTest extends BaseJavetTest {
 
     @Test
     public void testLookbehindAssertionsCaptures() {
-        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        RegExpBytecode bytecode = compiler.compile("(?<=(a))b", "");
-        RegExpEngine engine = new RegExpEngine(bytecode);
+        RegExpEngine engine = compilePattern("(?<=(a))b", "");
         RegExpEngine.MatchResult result = engine.exec("ab", 0);
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();
@@ -217,9 +196,7 @@ public class RegExpEngineTest extends BaseJavetTest {
 
     @Test
     public void testMultilineMode() {
-        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        RegExpBytecode bytecode = compiler.compile("^abc$", "m");
-        RegExpEngine engine = new RegExpEngine(bytecode);
+        RegExpEngine engine = compilePattern("^abc$", "m");
         RegExpEngine.MatchResult result = engine.exec("abc\ndef", 0);
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();
@@ -229,8 +206,7 @@ public class RegExpEngineTest extends BaseJavetTest {
         assertThat(result).isNull(); // Should not match "def" with "^abc$"
 
         // Test ^ matching at line start
-        bytecode = compiler.compile("^def", "m");
-        engine = new RegExpEngine(bytecode);
+        engine = compilePattern("^def", "m");
         result = engine.exec("abc\ndef", 4);
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();
@@ -239,9 +215,7 @@ public class RegExpEngineTest extends BaseJavetTest {
 
     @Test
     public void testMultipleCaptureGroups() {
-        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        RegExpBytecode bytecode = compiler.compile("(a)(b)(c)", "");
-        RegExpEngine engine = new RegExpEngine(bytecode);
+        RegExpEngine engine = compilePattern("(a)(b)(c)", "");
         RegExpEngine.MatchResult result = engine.exec("abc", 0);
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();
@@ -328,9 +302,7 @@ public class RegExpEngineTest extends BaseJavetTest {
 
     @Test
     public void testNestedCaptureGroups() {
-        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        RegExpBytecode bytecode = compiler.compile("((a)b)", "");
-        RegExpEngine engine = new RegExpEngine(bytecode);
+        RegExpEngine engine = compilePattern("((a)b)", "");
         RegExpEngine.MatchResult result = engine.exec("ab", 0);
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();
@@ -386,9 +358,7 @@ public class RegExpEngineTest extends BaseJavetTest {
 
     @Test
     public void testStartIndexInMiddle() {
-        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        RegExpBytecode bytecode = compiler.compile("abc", "");
-        RegExpEngine engine = new RegExpEngine(bytecode);
+        RegExpEngine engine = compilePattern("abc", "");
         RegExpEngine.MatchResult result = engine.exec("xxxabc", 3);
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();
@@ -399,9 +369,7 @@ public class RegExpEngineTest extends BaseJavetTest {
 
     @Test
     public void testUnicodeCharacters() {
-        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        RegExpBytecode bytecode = compiler.compile("😀🌟🚀", "");
-        RegExpEngine engine = new RegExpEngine(bytecode);
+        RegExpEngine engine = compilePattern("😀🌟🚀", "");
         RegExpEngine.MatchResult result = engine.exec("😀🌟🚀", 0);
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();

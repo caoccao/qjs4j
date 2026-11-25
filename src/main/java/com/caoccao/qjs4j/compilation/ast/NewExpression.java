@@ -21,55 +21,8 @@ import java.util.List;
 /**
  * Represents a new expression.
  */
-public final class NewExpression extends Expression {
-    private final List<Expression> arguments;
-    private final Expression callee;
-
+public final class NewExpression extends InvocationExpression {
     public NewExpression(Expression callee, List<Expression> arguments, SourceLocation location) {
-        super(location);
-        this.callee = callee;
-        this.arguments = arguments;
-    }
-
-    @Override
-    public boolean containsAwait() {
-        if (awaitInside == null) {
-            boolean hasAwait = callee != null && callee.containsAwait();
-            if (!hasAwait && arguments != null) {
-                for (Expression argument : arguments) {
-                    if (argument != null && argument.containsAwait()) {
-                        hasAwait = true;
-                        break;
-                    }
-                }
-            }
-            awaitInside = hasAwait;
-        }
-        return awaitInside;
-    }
-
-    @Override
-    public boolean containsYield() {
-        if (yieldInside == null) {
-            boolean hasYield = callee != null && callee.containsYield();
-            if (!hasYield && arguments != null) {
-                for (Expression argument : arguments) {
-                    if (argument != null && argument.containsYield()) {
-                        hasYield = true;
-                        break;
-                    }
-                }
-            }
-            yieldInside = hasYield;
-        }
-        return yieldInside;
-    }
-
-    public List<Expression> getArguments() {
-        return arguments;
-    }
-
-    public Expression getCallee() {
-        return callee;
+        super(callee, arguments, location);
     }
 }

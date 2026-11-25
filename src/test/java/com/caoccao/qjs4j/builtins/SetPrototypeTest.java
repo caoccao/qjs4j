@@ -36,14 +36,7 @@ public class SetPrototypeTest extends BaseJavetTest {
 
         // Before fix: returned 1 (only visited the original element)
         // After fix: returns 6 (visited original + 5 newly added elements)
-        assertIntegerWithJavet("""
-                var count = 0;
-                var s = new Set([1]);
-                s.forEach(function(v) {
-                  if(count < 5) s.add(count + 10);
-                  count++;
-                });
-                count""");
+        assertIntegerWithJavet(visitCount("[1]", "if(count < 5) s.add(count + 10);"));
 
         // The test expects 6 because:
         // 1. First iteration: visits 1, adds 10, count becomes 1
@@ -58,14 +51,7 @@ public class SetPrototypeTest extends BaseJavetTest {
     void demonstrateDuplicatesNotRevisited() {
         // Adding a duplicate element should not cause it to be visited again
         // Always add 1 (which is already in the set)
-        assertIntegerWithJavet("""
-                var count = 0;
-                var s = new Set([1, 2, 3]);
-                s.forEach(function(v) {
-                  s.add(1);
-                  count++;
-                });
-                count""");
+        assertIntegerWithJavet(visitCount("[1, 2, 3]", "s.add(1);"));
         // Result should be 3 (not more), showing duplicates don't add visits
     }
 
@@ -117,14 +103,7 @@ public class SetPrototypeTest extends BaseJavetTest {
     @Test
     void testAddDuringIteration() {
         // Add entries during iteration - they should be visited
-        assertIntegerWithJavet("""
-                var count = 0;
-                var s = new Set([1, 2, 3]);
-                s.forEach(function(v) {
-                  if(v === 2) s.add(4);
-                  count++;
-                });
-                count""");
+        assertIntegerWithJavet(visitCount("[1, 2, 3]", "if(v === 2) s.add(4);"));
     }
 
     @Test
@@ -348,43 +327,23 @@ public class SetPrototypeTest extends BaseJavetTest {
     @Test
     void testDeleteAndReAdd() {
         // Delete and re-add an entry
-        assertIntegerWithJavet("""
-                var count = 0;
-                var s = new Set([1, 2, 3]);
-                s.forEach(function(v) {
-                  if(v === 1) {
-                    s.delete(3);
-                    s.add(3);
-                  }
-                  count++;
-                });
-                count""");
+        assertIntegerWithJavet(visitCount("[1, 2, 3]", """
+                if(v === 1) {
+                  s.delete(3);
+                  s.add(3);
+                }"""));
     }
 
     @Test
     void testDeleteCurrentEntry() {
         // Delete the current entry during iteration
-        assertIntegerWithJavet("""
-                var count = 0;
-                var s = new Set([1, 2, 3]);
-                s.forEach(function(v) {
-                  s.delete(v);
-                  count++;
-                });
-                count""");
+        assertIntegerWithJavet(visitCount("[1, 2, 3]", "s.delete(v);"));
     }
 
     @Test
     void testDeleteDuringIteration() {
         // Delete an entry that hasn't been visited yet
-        assertIntegerWithJavet("""
-                var count = 0;
-                var s = new Set([1, 2, 3]);
-                s.forEach(function(v) {
-                  if(v === 2) s.delete(3);
-                  count++;
-                });
-                count""");
+        assertIntegerWithJavet(visitCount("[1, 2, 3]", "if(v === 2) s.delete(3);"));
     }
 
     @Test
@@ -438,43 +397,23 @@ public class SetPrototypeTest extends BaseJavetTest {
     @Test
     void testDeleteMultipleDuringIteration() {
         // Delete multiple entries during iteration
-        assertIntegerWithJavet("""
-                var count = 0;
-                var s = new Set([1, 2, 3, 4, 5]);
-                s.forEach(function(v) {
-                  if(v === 1) {
-                    s.delete(3);
-                    s.delete(4);
-                  }
-                  count++;
-                });
-                count""");
+        assertIntegerWithJavet(visitCount("[1, 2, 3, 4, 5]", """
+                if(v === 1) {
+                  s.delete(3);
+                  s.delete(4);
+                }"""));
     }
 
     @Test
     void testDeleteNonExistent() {
         // Delete non-existent value during iteration
-        assertIntegerWithJavet("""
-                var count = 0;
-                var s = new Set([1, 2]);
-                s.forEach(function(v) {
-                  s.delete(999);
-                  count++;
-                });
-                count""");
+        assertIntegerWithJavet(visitCount("[1, 2]", "s.delete(999);"));
     }
 
     @Test
     void testDeletePreviousEntry() {
         // Delete an entry that was already visited
-        assertIntegerWithJavet("""
-                var count = 0;
-                var s = new Set([1, 2, 3]);
-                s.forEach(function(v) {
-                  if(v === 3) s.delete(1);
-                  count++;
-                });
-                count""");
+        assertIntegerWithJavet(visitCount("[1, 2, 3]", "if(v === 3) s.delete(1);"));
     }
 
     @Test
@@ -496,27 +435,13 @@ public class SetPrototypeTest extends BaseJavetTest {
     @Test
     void testDeleteWithNullValue() {
         // Test with a set that has null as a value
-        assertIntegerWithJavet("""
-                var count = 0;
-                var s = new Set([null, 2, 3]);
-                s.forEach(function(v) {
-                  if(v === null) s.delete(2);
-                  count++;
-                });
-                count""");
+        assertIntegerWithJavet(visitCount("[null, 2, 3]", "if(v === null) s.delete(2);"));
     }
 
     @Test
     void testDeleteWithUndefinedValue() {
         // Test with a set that has undefined as a value
-        assertIntegerWithJavet("""
-                var count = 0;
-                var s = new Set([undefined, 2, 3]);
-                s.forEach(function(v) {
-                  if(v === undefined) s.delete(2);
-                  count++;
-                });
-                count""");
+        assertIntegerWithJavet(visitCount("[undefined, 2, 3]", "if(v === undefined) s.delete(2);"));
     }
 
     @Test
@@ -606,31 +531,18 @@ public class SetPrototypeTest extends BaseJavetTest {
     @Test
     void testForEachComplexDynamicGrowth() {
         // Complex test: each iteration adds multiple elements if under limit
-        assertIntegerWithJavet("""
-                var count = 0;
-                var s = new Set([0]);
-                s.forEach(function(v) {
-                  if(count < 3) {
-                    s.add(count * 10 + 1);
-                    s.add(count * 10 + 2);
-                  }
-                  count++;
-                });
-                count""");
+        assertIntegerWithJavet(visitCount("[0]", """
+                if(count < 3) {
+                  s.add(count * 10 + 1);
+                  s.add(count * 10 + 2);
+                }"""));
     }
 
     @Test
     void testForEachDuplicateAddDoesNotIncreaseVisits() {
         // Adding a duplicate should not cause additional visits
         // Always add 1 (duplicate)
-        assertIntegerWithJavet("""
-                var count = 0;
-                var s = new Set([1, 2]);
-                s.forEach(function(v) {
-                  s.add(1);
-                  count++;
-                });
-                count""");
+        assertIntegerWithJavet(visitCount("[1, 2]", "s.add(1);"));
     }
 
     @Test
@@ -1048,13 +960,7 @@ public class SetPrototypeTest extends BaseJavetTest {
     @Test
     void testNoDelete() {
         // Control test: no deletion
-        assertIntegerWithJavet("""
-                var count = 0;
-                var s = new Set([1, 2, 3]);
-                s.forEach(function(v) {
-                  count++;
-                });
-                count""");
+        assertIntegerWithJavet(visitCount("[1, 2, 3]", ""));
     }
 
     @Test
@@ -1261,5 +1167,16 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertIntegerWithJavet("var s = new Set(); s.add(0); s.add(1); s.size",
                 "var s = new Set(); s.add(-0); s.add(1); s.size");
         assertBooleanWithJavet("var s = new Set([0, 1]); s.has(1)", "var s = new Set([-0, 1]); s.has(1)");
+    }
+
+    private static String visitCount(String entries, String mutation) {
+        return """
+                var count = 0;
+                var s = new Set(%s);
+                s.forEach(function(v) {
+                  %s
+                  count++;
+                });
+                count""".formatted(entries, mutation);
     }
 }

@@ -621,8 +621,7 @@ public final class TemporalPlainYearMonthPrototype {
         boolean hasYear = year != null;
 
         TemporalCalendarId calendarId = plainYearMonth.getCalendarId();
-        boolean calendarSupportsEras = calendarId != TemporalCalendarId.ISO8601
-                && calendarId != TemporalCalendarId.CHINESE && calendarId != TemporalCalendarId.DANGI;
+        boolean calendarSupportsEras = calendarId.hasEra();
         boolean hasEra = false;
         boolean hasEraYear = false;
         String era = null;
@@ -750,8 +749,7 @@ public final class TemporalPlainYearMonthPrototype {
         if (hasEraYear) {
             mergedFieldsObject.set(eraYearKey, JSNumber.of(eraYear));
         }
-        JSObject normalizedOptionsObject = new JSObject(context);
-        normalizedOptionsObject.set(PropertyKey.fromString("overflow"), new JSString(overflow));
+        JSObject normalizedOptionsObject = TemporalUtils.overflowOptions(context, overflow);
         JSValue mergedYearMonthValue = TemporalPlainYearMonthConstructor.yearMonthFromFields(context,
                 mergedFieldsObject, normalizedOptionsObject);
         if (context.hasPendingException()) {

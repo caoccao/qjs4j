@@ -1159,12 +1159,15 @@ public final class VirtualMachine {
         return JSUndefined.INSTANCE;
     }
 
-    JSValue incrementValue(JSValue value, int delta) {
-        JSValue numeric = toNumericValue(value);
+    JSValue incrementNumericValue(JSValue numeric, int delta) {
         if (numeric instanceof JSBigInt bigInt) {
             return new JSBigInt(bigInt.value().add(delta >= 0 ? BIGINT_ONE : BIGINT_NEGATIVE_ONE));
         }
         return JSNumber.of(((JSNumber) numeric).value() + delta);
+    }
+
+    JSValue incrementValue(JSValue value, int delta) {
+        return incrementNumericValue(toNumericValue(value), delta);
     }
 
     void initializeConstantValueIfNeeded(JSValue constantValue) {
@@ -1997,5 +2000,4 @@ public final class VirtualMachine {
      */
     record TailCallRequest(JSBytecodeFunction function, JSValue receiver, JSValue[] args, int argCount) {
     }
-
 }

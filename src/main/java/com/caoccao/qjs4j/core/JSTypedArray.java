@@ -32,7 +32,7 @@ import java.util.function.LongFunction;
  */
 public sealed abstract class JSTypedArray extends JSObject
         permits JSUint8Array, JSUint8ClampedArray, JSUint16Array, JSUint32Array, JSInt8Array, JSInt16Array,
-        JSInt32Array, JSFloat16Array, JSFloat32Array, JSFloat64Array, JSBigInt64Array, JSBigUint64Array {
+        JSInt32Array, JSFloat16Array, JSFloat32Array, JSFloat64Array, JSBigIntTypedArray {
     private static final long CANONICAL_NUMERIC_INDEX_INVALID = -1;
     private static final long CANONICAL_NUMERIC_INDEX_NOT_CANONICAL = Long.MIN_VALUE;
     public static final String NAME = "TypedArray";

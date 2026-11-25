@@ -19,61 +19,24 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Represents a property in an object expression.
  */
-public final class ObjectExpressionProperty extends ASTNode {
-    private final boolean computed;
-    private final Expression key;
+public final class ObjectExpressionProperty extends ObjectProperty<Expression> {
     private final String kind;
     private final boolean method;
-    private final boolean shorthand;
-    private final Expression value;
 
     public ObjectExpressionProperty(Expression key, Expression value, String kind, boolean computed, boolean shorthand,
             boolean method) {
-        super(key != null ? key.getLocation() : (value != null ? value.getLocation() : new SourceLocation(0, 0, 0, 0)));
-        this.key = key;
-        this.value = value;
+        super(key, value, computed, shorthand);
         this.kind = kind;
-        this.computed = computed;
-        this.shorthand = shorthand;
         this.method = method;
-    }
-
-    @Override
-    public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = key != null && key.containsAwait();
-            if (!awaitInside && value != null && value.containsAwait()) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
-    }
-
-    @Override
-    public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = key != null && key.containsYield();
-            if (!yieldInside && value != null && value.containsYield()) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
-    }
-
-    public Expression getKey() {
-        return key;
     }
 
     public String getKind() {
         return kind;
     }
 
+    @Override
     public Expression getValue() {
-        return value;
-    }
-
-    public boolean isComputed() {
-        return computed;
+        return super.getValue();
     }
 
     public boolean isMethod() {
@@ -81,9 +44,10 @@ public final class ObjectExpressionProperty extends ASTNode {
     }
 
     public boolean isProtoDataProperty() {
-        if (computed || shorthand || method || !"init".equals(kind)) {
+        if (isComputed() || isShorthand() || method || !"init".equals(kind)) {
             return false;
         }
+        Expression key = getKey();
         if (key instanceof Identifier identifier) {
             return "__proto__".equals(identifier.getName());
         }
@@ -93,7 +57,4 @@ public final class ObjectExpressionProperty extends ASTNode {
         return false;
     }
 
-    public boolean isShorthand() {
-        return shorthand;
-    }
 }

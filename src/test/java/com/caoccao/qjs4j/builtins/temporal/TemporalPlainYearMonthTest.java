@@ -18,6 +18,8 @@ package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class TemporalPlainYearMonthTest extends BaseJavetTest {
 
@@ -34,11 +36,6 @@ public class TemporalPlainYearMonthTest extends BaseJavetTest {
     @Test
     public void testCompare() {
         assertIntegerWithJavet("Temporal.PlainYearMonth.compare('2024-03', '2024-04')");
-    }
-
-    @Test
-    public void testConstructorBasic() {
-        assertStringWithJavet("new Temporal.PlainYearMonth(2024, 3).toString()");
     }
 
     @Test
@@ -134,14 +131,15 @@ public class TemporalPlainYearMonthTest extends BaseJavetTest {
         assertStringWithJavet("new Temporal.PlainYearMonth(2024, 6).since('2024-01').toString()");
     }
 
-    @Test
-    public void testSubtract() {
-        assertStringWithJavet("new Temporal.PlainYearMonth(2024, 3).subtract({months: 1}).toString()");
+    @ParameterizedTest
+    @ValueSource(strings = {"toString()", "toJSON()", "toPlainDate({day: 15}).toString()", "toString()"})
+    void testStringConversions(String operation) {
+        assertStringWithJavet("new Temporal.PlainYearMonth(2024, 3)." + operation);
     }
 
     @Test
-    public void testToJSON() {
-        assertStringWithJavet("new Temporal.PlainYearMonth(2024, 3).toJSON()");
+    public void testSubtract() {
+        assertStringWithJavet("new Temporal.PlainYearMonth(2024, 3).subtract({months: 1}).toString()");
     }
 
     @Test
@@ -151,18 +149,8 @@ public class TemporalPlainYearMonthTest extends BaseJavetTest {
     }
 
     @Test
-    public void testToPlainDate() {
-        assertStringWithJavet("new Temporal.PlainYearMonth(2024, 3).toPlainDate({day: 15}).toString()");
-    }
-
-    @Test
     public void testToPlainDateNoDay() {
         assertErrorWithJavet("new Temporal.PlainYearMonth(2024, 3).toPlainDate()");
-    }
-
-    @Test
-    public void testToString() {
-        assertStringWithJavet("new Temporal.PlainYearMonth(2024, 3).toString()");
     }
 
     @Test

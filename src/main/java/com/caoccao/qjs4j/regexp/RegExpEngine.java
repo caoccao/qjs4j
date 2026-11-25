@@ -118,30 +118,16 @@ public final class RegExpEngine {
                 bytecode.isDotAll(), isUnicode, bytecode.registerCount(), backtrackLimit);
         executionContext.interruptProbe = interruptProbe;
 
-        // Try matching at each position
-        if (isUnicode) {
-            // In unicode mode, the engine works with code point indices internally.
-            // Convert startIndex from UTF-16 units to code point index.
-            int codePointStart = input.codePointCount(0, startIndex);
-            int codePointEnd = bytecode.isSticky() ? codePointStart + 1 : executionContext.inputLength + 1;
-            for (int pos = codePointStart; pos < codePointEnd; pos++) {
-                executionContext.pollInterrupt();
-                executionContext.reset(pos);
-                if (execute(executionContext)) {
-                    return executionContext.createResult(true);
-                }
-            }
-        } else {
-            int end = bytecode.isSticky() ? startIndex + 1 : input.length() + 1;
-            for (int pos = startIndex; pos < end; pos++) {
-                executionContext.pollInterrupt();
-                executionContext.reset(pos);
-                if (execute(executionContext)) {
-                    return executionContext.createResult(true);
-                }
+        // ExecutionContext indexes code points in Unicode mode and UTF-16 units otherwise.
+        int firstPosition = isUnicode ? input.codePointCount(0, startIndex) : startIndex;
+        int lastPosition = bytecode.isSticky() ? firstPosition : executionContext.inputLength;
+        for (int pos = firstPosition; pos <= lastPosition; pos++) {
+            executionContext.pollInterrupt();
+            executionContext.reset(pos);
+            if (execute(executionContext)) {
+                return executionContext.createResult(true);
             }
         }
-
         return null;
     }
 
@@ -154,418 +140,312 @@ public final class RegExpEngine {
         executionContext.resetBacktrack();
 
         while (true) {
-            if (pc >= bc.length) {
-                if (executionContext.hasBacktrack()) {
-                    pc = executionContext.popBacktrack();
-                    continue;
+            match : while (pc < bc.length) {
+                RegExpOpcode op = RegExpOpcode.fromCode(bc[pc] & 0xFF);
+
+                switch (op) {
+                    case CHAR -> {
+                        int ch = readU16(bc, pc + 1);
+                        if (!executionContext.matchChar(ch)) {
+                            break match;
+                        }
+                        pc += 3;
+                    }
+
+                    case CHAR_I -> {
+                        int ch = readU16(bc, pc + 1);
+                        if (!executionContext.matchCharIgnoreCase(ch)) {
+                            break match;
+                        }
+                        pc += 3;
+                    }
+
+                    case CHAR32 -> {
+                        int ch = readU32(bc, pc + 1);
+                        if (!executionContext.matchChar(ch)) {
+                            break match;
+                        }
+                        pc += 5;
+                    }
+
+                    case CHAR32_I -> {
+                        int ch = readU32(bc, pc + 1);
+                        if (!executionContext.matchCharIgnoreCase(ch)) {
+                            break match;
+                        }
+                        pc += 5;
+                    }
+
+                    case DOT -> {
+                        if (!executionContext.matchDot()) {
+                            break match;
+                        }
+                        pc += 1;
+                    }
+
+                    case ANY -> {
+                        if (!executionContext.matchAny()) {
+                            break match;
+                        }
+                        pc += 1;
+                    }
+
+                    case LINE_START, LINE_START_M -> {
+                        if (!executionContext.matchLineStart(op == RegExpOpcode.LINE_START_M)) {
+                            break match;
+                        }
+                        pc += 1;
+                    }
+
+                    case LINE_END, LINE_END_M -> {
+                        if (!executionContext.matchLineEnd(op == RegExpOpcode.LINE_END_M)) {
+                            break match;
+                        }
+                        pc += 1;
+                    }
+
+                    case MATCH -> {
+                        return true;
+                    }
+
+                    case LOOKAHEAD -> {
+                        int len = readU32(bc, pc + 1);
+                        byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
+                        ExecutionContext assertionContext = executeLookaheadAssertion(executionContext,
+                                assertionBytecode);
+                        if (assertionContext == null) {
+                            break match;
+                        }
+                        executionContext.copyCapturesFrom(assertionContext);
+                        pc += 5 + len;
+                    }
+
+                    case NEGATIVE_LOOKAHEAD -> {
+                        int len = readU32(bc, pc + 1);
+                        byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
+                        ExecutionContext assertionContext = executeLookaheadAssertion(executionContext,
+                                assertionBytecode);
+                        if (assertionContext != null) {
+                            break match;
+                        }
+                        pc += 5 + len;
+                    }
+
+                    case LOOKBEHIND -> {
+                        int len = readU32(bc, pc + 1);
+                        byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
+                        ExecutionContext assertionContext = executeLookbehindAssertion(executionContext,
+                                assertionBytecode);
+                        if (assertionContext == null) {
+                            break match;
+                        }
+                        executionContext.copyCapturesFrom(assertionContext);
+                        pc += 5 + len;
+                    }
+
+                    case NEGATIVE_LOOKBEHIND -> {
+                        int len = readU32(bc, pc + 1);
+                        byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
+                        ExecutionContext assertionContext = executeLookbehindAssertion(executionContext,
+                                assertionBytecode);
+                        if (assertionContext != null) {
+                            break match;
+                        }
+                        pc += 5 + len;
+                    }
+
+                    case LOOKAHEAD_MATCH, NEGATIVE_LOOKAHEAD_MATCH, LOOKBEHIND_MATCH, NEGATIVE_LOOKBEHIND_MATCH -> {
+                        return true;
+                    }
+
+                    case SAVE_START -> {
+                        int captureIndex = readU16(bc, pc + 1);
+                        executionContext.saveStart(captureIndex);
+                        pc += 3;
+                    }
+
+                    case SAVE_END -> {
+                        int captureIndex = readU16(bc, pc + 1);
+                        executionContext.saveEnd(captureIndex);
+                        pc += 3;
+                    }
+
+                    case RANGE -> {
+                        // 32-bit payload length: a class with more than 8,191 ranges overflows a
+                        // 16-bit one, and the matcher then resumes decoding inside the range data.
+                        int len = readU32(bc, pc + 1);
+                        if (!executionContext.matchRange(bc, pc + 5, len, false)) {
+                            break match;
+                        }
+                        pc += 5 + len;
+                    }
+
+                    case RANGE_I -> {
+                        // 32-bit payload length: a class with more than 8,191 ranges overflows a
+                        // 16-bit one, and the matcher then resumes decoding inside the range data.
+                        int len = readU32(bc, pc + 1);
+                        if (!executionContext.matchRange(bc, pc + 5, len, true)) {
+                            break match;
+                        }
+                        pc += 5 + len;
+                    }
+
+                    case SPACE -> {
+                        if (!executionContext.matchSpace()) {
+                            break match;
+                        }
+                        pc += 1;
+                    }
+
+                    case NOT_SPACE -> {
+                        if (!executionContext.matchNotSpace()) {
+                            break match;
+                        }
+                        pc += 1;
+                    }
+
+                    case NOT_RANGE -> {
+                        // 32-bit payload length: a class with more than 8,191 ranges overflows a
+                        // 16-bit one, and the matcher then resumes decoding inside the range data.
+                        int len = readU32(bc, pc + 1);
+                        if (!executionContext.matchNotRange(bc, pc + 5, len, false)) {
+                            break match;
+                        }
+                        pc += 5 + len;
+                    }
+
+                    case NOT_RANGE_I -> {
+                        // 32-bit payload length: a class with more than 8,191 ranges overflows a
+                        // 16-bit one, and the matcher then resumes decoding inside the range data.
+                        int len = readU32(bc, pc + 1);
+                        if (!executionContext.matchNotRange(bc, pc + 5, len, true)) {
+                            break match;
+                        }
+                        pc += 5 + len;
+                    }
+
+                    case BACK_REFERENCE -> {
+                        int groupNum = readU16(bc, pc + 1);
+                        if (!executionContext.matchBackReference(groupNum, false)) {
+                            break match;
+                        }
+                        pc += 3;
+                    }
+
+                    case BACK_REFERENCE_I -> {
+                        int groupNum = readU16(bc, pc + 1);
+                        if (!executionContext.matchBackReference(groupNum, true)) {
+                            break match;
+                        }
+                        pc += 3;
+                    }
+
+                    case BACKWARD_BACK_REFERENCE -> {
+                        int groupNum = readU16(bc, pc + 1);
+                        if (!executionContext.matchBackwardBackReference(groupNum, false)) {
+                            break match;
+                        }
+                        pc += 3;
+                    }
+
+                    case BACKWARD_BACK_REFERENCE_I -> {
+                        int groupNum = readU16(bc, pc + 1);
+                        if (!executionContext.matchBackwardBackReference(groupNum, true)) {
+                            break match;
+                        }
+                        pc += 3;
+                    }
+
+                    case GOTO -> {
+                        int offset = readU32(bc, pc + 1);
+                        pc += 5 + offset;
+                    }
+
+                    case WORD_BOUNDARY, WORD_BOUNDARY_I -> {
+                        if (!executionContext.matchWordBoundary(op == RegExpOpcode.WORD_BOUNDARY_I)) {
+                            break match;
+                        }
+                        pc += 1;
+                    }
+
+                    case NOT_WORD_BOUNDARY, NOT_WORD_BOUNDARY_I -> {
+                        if (!executionContext.matchNotWordBoundary(op == RegExpOpcode.NOT_WORD_BOUNDARY_I)) {
+                            break match;
+                        }
+                        pc += 1;
+                    }
+
+                    case SPLIT_GOTO_FIRST -> {
+                        int offset = readU32(bc, pc + 1);
+                        executionContext.pushBacktrack(pc + 5);
+                        pc = pc + 5 + offset;
+                    }
+
+                    case SPLIT_NEXT_FIRST -> {
+                        int offset = readU32(bc, pc + 1);
+                        executionContext.pushBacktrack(pc + 5 + offset);
+                        pc += 5;
+                    }
+
+                    case SET_I32 -> {
+                        int register = bc[pc + 1] & 0xFF;
+                        executionContext.stateDirty = true;
+                        executionContext.registers[register] = readU32(bc, pc + 2);
+                        pc += 6;
+                    }
+
+                    case LOOP -> {
+                        int register = bc[pc + 1] & 0xFF;
+                        executionContext.stateDirty = true;
+                        pc += --executionContext.registers[register] != 0 ? 6 + readU32(bc, pc + 2) : 6;
+                        executionContext.pollInterrupt();
+                    }
+
+                    case SET_CHAR_POS -> {
+                        int regIdx = bc[pc + 1] & 0xFF;
+                        if (regIdx < executionContext.registers.length) {
+                            executionContext.stateDirty = true;
+                            executionContext.registers[regIdx] = executionContext.pos;
+                        }
+                        pc += 2;
+                    }
+
+                    case CHECK_ADVANCE -> {
+                        int regIdx = bc[pc + 1] & 0xFF;
+                        if (regIdx < executionContext.registers.length
+                                && executionContext.registers[regIdx] == executionContext.pos) {
+                            break match;
+                        }
+                        pc += 2;
+                    }
+
+                    case PREV -> {
+                        if (!executionContext.movePrevious()) {
+                            break match;
+                        }
+                        pc += 1;
+                    }
+
+                    case SAVE_RESET -> {
+                        int startCapture = readU16(bc, pc + 1);
+                        int endCapture = readU16(bc, pc + 3);
+                        executionContext.stateDirty = true;
+                        for (int i = startCapture; i <= endCapture && i < executionContext.captureCount; i++) {
+                            executionContext.captureStarts[i] = -1;
+                            executionContext.captureEnds[i] = -1;
+                        }
+                        pc += 5;
+                    }
+
+                    default -> {
+                        break match;
+                    }
                 }
+            }
+            if (!executionContext.hasBacktrack()) {
                 return false;
             }
-
-            RegExpOpcode op = RegExpOpcode.fromCode(bc[pc] & 0xFF);
-
-            switch (op) {
-                case CHAR -> {
-                    int ch = readU16(bc, pc + 1);
-                    if (!executionContext.matchChar(ch)) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 3;
-                }
-
-                case CHAR_I -> {
-                    int ch = readU16(bc, pc + 1);
-                    if (!executionContext.matchCharIgnoreCase(ch)) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 3;
-                }
-
-                case CHAR32 -> {
-                    int ch = readU32(bc, pc + 1);
-                    if (!executionContext.matchChar(ch)) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 5;
-                }
-
-                case CHAR32_I -> {
-                    int ch = readU32(bc, pc + 1);
-                    if (!executionContext.matchCharIgnoreCase(ch)) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 5;
-                }
-
-                case DOT -> {
-                    if (!executionContext.matchDot()) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 1;
-                }
-
-                case ANY -> {
-                    if (!executionContext.matchAny()) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 1;
-                }
-
-                case LINE_START, LINE_START_M -> {
-                    if (!executionContext.matchLineStart(op == RegExpOpcode.LINE_START_M)) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 1;
-                }
-
-                case LINE_END, LINE_END_M -> {
-                    if (!executionContext.matchLineEnd(op == RegExpOpcode.LINE_END_M)) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 1;
-                }
-
-                case MATCH -> {
-                    return true;
-                }
-
-                case LOOKAHEAD -> {
-                    int len = readU32(bc, pc + 1);
-                    byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
-                    ExecutionContext assertionContext = executeLookaheadAssertion(executionContext, assertionBytecode);
-                    if (assertionContext == null) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    executionContext.copyCapturesFrom(assertionContext);
-                    pc += 5 + len;
-                }
-
-                case NEGATIVE_LOOKAHEAD -> {
-                    int len = readU32(bc, pc + 1);
-                    byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
-                    ExecutionContext assertionContext = executeLookaheadAssertion(executionContext, assertionBytecode);
-                    if (assertionContext != null) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 5 + len;
-                }
-
-                case LOOKBEHIND -> {
-                    int len = readU32(bc, pc + 1);
-                    byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
-                    ExecutionContext assertionContext = executeLookbehindAssertion(executionContext, assertionBytecode);
-                    if (assertionContext == null) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    executionContext.copyCapturesFrom(assertionContext);
-                    pc += 5 + len;
-                }
-
-                case NEGATIVE_LOOKBEHIND -> {
-                    int len = readU32(bc, pc + 1);
-                    byte[] assertionBytecode = createAssertionBytecode(bc, pc + 5, len);
-                    ExecutionContext assertionContext = executeLookbehindAssertion(executionContext, assertionBytecode);
-                    if (assertionContext != null) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 5 + len;
-                }
-
-                case LOOKAHEAD_MATCH, NEGATIVE_LOOKAHEAD_MATCH, LOOKBEHIND_MATCH, NEGATIVE_LOOKBEHIND_MATCH -> {
-                    return true;
-                }
-
-                case SAVE_START -> {
-                    int captureIndex = readU16(bc, pc + 1);
-                    executionContext.saveStart(captureIndex);
-                    pc += 3;
-                }
-
-                case SAVE_END -> {
-                    int captureIndex = readU16(bc, pc + 1);
-                    executionContext.saveEnd(captureIndex);
-                    pc += 3;
-                }
-
-                case RANGE -> {
-                    // 32-bit payload length: a class with more than 8,191 ranges overflows a
-                    // 16-bit one, and the matcher then resumes decoding inside the range data.
-                    int len = readU32(bc, pc + 1);
-                    if (!executionContext.matchRange(bc, pc + 5, len, false)) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 5 + len;
-                }
-
-                case RANGE_I -> {
-                    // 32-bit payload length: a class with more than 8,191 ranges overflows a
-                    // 16-bit one, and the matcher then resumes decoding inside the range data.
-                    int len = readU32(bc, pc + 1);
-                    if (!executionContext.matchRange(bc, pc + 5, len, true)) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 5 + len;
-                }
-
-                case SPACE -> {
-                    if (!executionContext.matchSpace()) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 1;
-                }
-
-                case NOT_SPACE -> {
-                    if (!executionContext.matchNotSpace()) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 1;
-                }
-
-                case NOT_RANGE -> {
-                    // 32-bit payload length: a class with more than 8,191 ranges overflows a
-                    // 16-bit one, and the matcher then resumes decoding inside the range data.
-                    int len = readU32(bc, pc + 1);
-                    if (!executionContext.matchNotRange(bc, pc + 5, len, false)) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 5 + len;
-                }
-
-                case NOT_RANGE_I -> {
-                    // 32-bit payload length: a class with more than 8,191 ranges overflows a
-                    // 16-bit one, and the matcher then resumes decoding inside the range data.
-                    int len = readU32(bc, pc + 1);
-                    if (!executionContext.matchNotRange(bc, pc + 5, len, true)) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 5 + len;
-                }
-
-                case BACK_REFERENCE -> {
-                    int groupNum = readU16(bc, pc + 1);
-                    if (!executionContext.matchBackReference(groupNum, false)) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 3;
-                }
-
-                case BACK_REFERENCE_I -> {
-                    int groupNum = readU16(bc, pc + 1);
-                    if (!executionContext.matchBackReference(groupNum, true)) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 3;
-                }
-
-                case BACKWARD_BACK_REFERENCE -> {
-                    int groupNum = readU16(bc, pc + 1);
-                    if (!executionContext.matchBackwardBackReference(groupNum, false)) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 3;
-                }
-
-                case BACKWARD_BACK_REFERENCE_I -> {
-                    int groupNum = readU16(bc, pc + 1);
-                    if (!executionContext.matchBackwardBackReference(groupNum, true)) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 3;
-                }
-
-                case GOTO -> {
-                    int offset = readU32(bc, pc + 1);
-                    pc += 5 + offset;
-                }
-
-                case WORD_BOUNDARY, WORD_BOUNDARY_I -> {
-                    if (!executionContext.matchWordBoundary(op == RegExpOpcode.WORD_BOUNDARY_I)) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 1;
-                }
-
-                case NOT_WORD_BOUNDARY, NOT_WORD_BOUNDARY_I -> {
-                    if (!executionContext.matchNotWordBoundary(op == RegExpOpcode.NOT_WORD_BOUNDARY_I)) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 1;
-                }
-
-                case SPLIT_GOTO_FIRST -> {
-                    int offset = readU32(bc, pc + 1);
-                    executionContext.pushBacktrack(pc + 5);
-                    pc = pc + 5 + offset;
-                }
-
-                case SPLIT_NEXT_FIRST -> {
-                    int offset = readU32(bc, pc + 1);
-                    executionContext.pushBacktrack(pc + 5 + offset);
-                    pc += 5;
-                }
-
-                case SET_I32 -> {
-                    int register = bc[pc + 1] & 0xFF;
-                    executionContext.stateDirty = true;
-                    executionContext.registers[register] = readU32(bc, pc + 2);
-                    pc += 6;
-                }
-
-                case LOOP -> {
-                    int register = bc[pc + 1] & 0xFF;
-                    executionContext.stateDirty = true;
-                    pc += --executionContext.registers[register] != 0 ? 6 + readU32(bc, pc + 2) : 6;
-                    executionContext.pollInterrupt();
-                }
-
-                case SET_CHAR_POS -> {
-                    int regIdx = bc[pc + 1] & 0xFF;
-                    if (regIdx < executionContext.registers.length) {
-                        executionContext.stateDirty = true;
-                        executionContext.registers[regIdx] = executionContext.pos;
-                    }
-                    pc += 2;
-                }
-
-                case CHECK_ADVANCE -> {
-                    int regIdx = bc[pc + 1] & 0xFF;
-                    if (regIdx < executionContext.registers.length
-                            && executionContext.registers[regIdx] == executionContext.pos) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 2;
-                }
-
-                case PREV -> {
-                    if (!executionContext.movePrevious()) {
-                        if (executionContext.hasBacktrack()) {
-                            pc = executionContext.popBacktrack();
-                            continue;
-                        }
-                        return false;
-                    }
-                    pc += 1;
-                }
-
-                case SAVE_RESET -> {
-                    int startCapture = readU16(bc, pc + 1);
-                    int endCapture = readU16(bc, pc + 3);
-                    executionContext.stateDirty = true;
-                    for (int i = startCapture; i <= endCapture && i < executionContext.captureCount; i++) {
-                        executionContext.captureStarts[i] = -1;
-                        executionContext.captureEnds[i] = -1;
-                    }
-                    pc += 5;
-                }
-
-                default -> {
-                    if (executionContext.hasBacktrack()) {
-                        pc = executionContext.popBacktrack();
-                        continue;
-                    }
-                    return false;
-                }
-            }
+            pc = executionContext.popBacktrack();
         }
     }
 

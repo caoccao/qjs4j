@@ -18,6 +18,8 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -196,29 +198,11 @@ public class JSONObjectTest extends BaseJavetTest {
                 obj.users[0].name""");
     }
 
-    @Test
-    public void testParseEmptyString() {
-        assertErrorWithJavet("JSON.parse('')");
-    }
-
-    @Test
-    public void testParseEscapedNewline() {
-        assertStringWithJavet("JSON.parse('\"hello\\\\nworld\"')");
-    }
-
-    @Test
-    public void testParseEscapedTab() {
-        assertStringWithJavet("JSON.parse('\"tab\\\\there\"')");
-    }
-
-    @Test
-    public void testParseInvalidJSON() {
-        assertErrorWithJavet("JSON.parse('{invalid}')");
-    }
-
-    @Test
-    public void testParseInvalidNumber() {
-        assertErrorWithJavet("JSON.parse('01')"); // Leading zeros not allowed
+    @ParameterizedTest
+    @ValueSource(strings = {"''", "'{invalid}'", "'01'", "", "'{\"a\":1,}'", "'[1,2,3'", "'{\"a\":1'",
+            "'\"unterminated'", "'{\"' + String.fromCharCode(1) + '\":1}'", "'\"' + String.fromCharCode(1) + '\"'"})
+    void testParseInvalidInputs(String arguments) {
+        assertErrorWithJavet("JSON.parse(" + arguments + ")");
     }
 
     @Test
@@ -229,11 +213,6 @@ public class JSONObjectTest extends BaseJavetTest {
     @Test
     public void testParseNestedObject() {
         assertStringWithJavet("JSON.parse('{\"user\":{\"name\":\"Alice\",\"age\":30}}').user.name");
-    }
-
-    @Test
-    public void testParseNoArguments() {
-        assertErrorWithJavet("JSON.parse()");
     }
 
     @Test
@@ -256,14 +235,10 @@ public class JSONObjectTest extends BaseJavetTest {
         assertStringWithJavet("JSON.parse('{\"name\":\"test\",\"value\":42}').name");
     }
 
-    @Test
-    public void testParseString() {
-        assertStringWithJavet("JSON.parse('\"hello\"')");
-    }
-
-    @Test
-    public void testParseTrailingComma() {
-        assertErrorWithJavet("JSON.parse('{\"a\":1,}')");
+    @ParameterizedTest
+    @ValueSource(strings = {"'\"hello\\\\nworld\"'", "'\"tab\\\\there\"'", "'\"hello\"'"})
+    void testParseStrings(String arguments) {
+        assertStringWithJavet("JSON.parse(" + arguments + ")");
     }
 
     @Test
@@ -277,31 +252,6 @@ public class JSONObjectTest extends BaseJavetTest {
                     return e instanceof SyntaxError;
                   }
                 })()""");
-    }
-
-    @Test
-    public void testParseUnterminatedArray() {
-        assertErrorWithJavet("JSON.parse('[1,2,3')");
-    }
-
-    @Test
-    public void testParseUnterminatedObject() {
-        assertErrorWithJavet("JSON.parse('{\"a\":1')");
-    }
-
-    @Test
-    public void testParseUnterminatedString() {
-        assertErrorWithJavet("JSON.parse('\"unterminated')");
-    }
-
-    @Test
-    public void testParseWithControlCharacterInPropertyName() {
-        assertErrorWithJavet("JSON.parse('{\"' + String.fromCharCode(1) + '\":1}')");
-    }
-
-    @Test
-    public void testParseWithControlCharacterInString() {
-        assertErrorWithJavet("JSON.parse('\"' + String.fromCharCode(1) + '\"')");
     }
 
     @Test
@@ -537,29 +487,15 @@ public class JSONObjectTest extends BaseJavetTest {
                 JSON.isRawJSON(raw) && !JSON.isRawJSON(1) && !JSON.isRawJSON({rawJSON: '1'})""");
     }
 
-    @Test
-    public void testRawJSONEmptyStringErrorMessage() {
-        assertErrorWithJavet("JSON.rawJSON('')");
-    }
-
-    @Test
-    public void testRawJSONInvalidOrMultipleValuesErrorMessage() {
-        assertErrorWithJavet("JSON.rawJSON('1 2')");
-    }
-
-    @Test
-    public void testRawJSONMissingArgumentErrorMessage() {
-        assertErrorWithJavet("JSON.rawJSON()");
+    @ParameterizedTest
+    @ValueSource(strings = {"''", "'1 2'", "", "' 1'"})
+    void testRawJSONInvalidInputs(String arguments) {
+        assertErrorWithJavet("JSON.rawJSON(" + arguments + ")");
     }
 
     @Test
     public void testRawJSONObjectAndArrayErrorMessage() {
         assertErrorWithJavet("JSON.rawJSON('{}')", "JSON.rawJSON('[]')");
-    }
-
-    @Test
-    public void testRawJSONWhitespaceErrorMessage() {
-        assertErrorWithJavet("JSON.rawJSON(' 1')");
     }
 
     @Test
@@ -649,39 +585,12 @@ public class JSONObjectTest extends BaseJavetTest {
                 parsed.b""");
     }
 
-    @Test
-    public void testStringifyArrayMixed() {
-        assertStringWithJavet("JSON.stringify([1, 'two', true, null])");
-    }
-
-    @Test
-    public void testStringifyArrayNested() {
-        assertStringWithJavet("JSON.stringify([[1, 2], [3, 4]])");
-    }
-
-    @Test
-    public void testStringifyArraySimple() {
-        assertStringWithJavet("JSON.stringify([1, 2, 3])");
-    }
-
-    @Test
-    public void testStringifyArrayWithMixedTypes() {
-        assertStringWithJavet("JSON.stringify([1, 'two', true, null, {a: 5}, [6, 7]])");
-    }
-
-    @Test
-    public void testStringifyArrayWithNumberSpace() {
-        assertStringWithJavet("JSON.stringify([1, 2, 3], null, 4)");
-    }
-
-    @Test
-    public void testStringifyArrayWithUndefined() {
-        assertStringWithJavet("JSON.stringify([1, undefined, 3])");
-    }
-
-    @Test
-    public void testStringifyBoolean() {
-        assertStringWithJavet("JSON.stringify(true)");
+    @ParameterizedTest
+    @ValueSource(strings = {"[1, 'two', true, null]", "[[1, 2], [3, 4]]", "[1, 2, 3]",
+            "[1, 'two', true, null, {a: 5}, [6, 7]]", "[1, undefined, 3]", "[]",
+            "[JSON.rawJSON('1'), JSON.rawJSON('2'), 3]"})
+    void testStringifyArrays(String arguments) {
+        assertStringWithJavet("JSON.stringify(" + arguments + ")");
     }
 
     @Test
@@ -741,16 +650,6 @@ public class JSONObjectTest extends BaseJavetTest {
     }
 
     @Test
-    public void testStringifyEmptyArray() {
-        assertStringWithJavet("JSON.stringify([])");
-    }
-
-    @Test
-    public void testStringifyEmptyObject() {
-        assertStringWithJavet("JSON.stringify({})");
-    }
-
-    @Test
     public void testStringifyEnumerableOwnStringKeysOnly() {
         assertStringWithJavet("""
                 var o = {a: 1};
@@ -772,11 +671,6 @@ public class JSONObjectTest extends BaseJavetTest {
     @Test
     public void testStringifyEscapeTab() {
         assertStringWithJavet("JSON.stringify('tab\\there')");
-    }
-
-    @Test
-    public void testStringifyFloatingPoint() {
-        assertStringWithJavet("JSON.stringify(0.1 + 0.2)");
     }
 
     @Test
@@ -1003,26 +897,6 @@ public class JSONObjectTest extends BaseJavetTest {
     }
 
     @Test
-    public void testStringifyGenericObjectSpaceIgnored() {
-        assertStringWithJavet("JSON.stringify({a: 1}, null, {toString: function() { return '  '; }})");
-    }
-
-    @Test
-    public void testStringifyInfinity() {
-        assertStringWithJavet("JSON.stringify(Infinity)");
-    }
-
-    @Test
-    public void testStringifyNaN() {
-        assertStringWithJavet("JSON.stringify(NaN)");
-    }
-
-    @Test
-    public void testStringifyNegativeInfinity() {
-        assertStringWithJavet("JSON.stringify(-Infinity)");
-    }
-
-    @Test
     public void testStringifyNestedStructure() {
         assertStringWithJavet("""
                 JSON.stringify({
@@ -1034,49 +908,34 @@ public class JSONObjectTest extends BaseJavetTest {
                 })""");
     }
 
-    @Test
-    public void testStringifyNull() {
-        assertStringWithJavet("JSON.stringify(null)");
+    @ParameterizedTest
+    @ValueSource(strings = {"{}", "{name: 'test', value: 42, active: true}", "{a: 1, b: 2}",
+            "{a: 1, b: function() {}, c: 2}", "{a: 1, b: undefined, c: 3}",
+            "[new Number(1.5), new String('x'), new Boolean(false)]"})
+    void testStringifyObjects(String arguments) {
+        assertStringWithJavet("JSON.stringify(" + arguments + ")");
     }
 
-    @Test
-    public void testStringifyNumber() {
-        assertStringWithJavet("JSON.stringify(42)");
+    @ParameterizedTest
+    @ValueSource(strings = {"true", "0.1 + 0.2", "Infinity", "NaN", "-Infinity", "null", "42", "1e10", "1e-10",
+            "'hello'"})
+    void testStringifyPrimitives(String arguments) {
+        assertStringWithJavet("JSON.stringify(" + arguments + ")");
     }
 
-    @Test
-    public void testStringifyObjectComplex() {
-        assertStringWithJavet("JSON.stringify({name: 'test', value: 42, active: true})");
+    @ParameterizedTest
+    @ValueSource(strings = {"{'1.5': 'x', '1': 'y'}, [1.5]", "{0: 'a', 1: 'b', 2: 'c'}, [0, 2]",
+            "{a: 1, b: 2}, [{toString: function() { return 'a'; }}, 'b']", "{a: 1, b: 2, c: 3, d: 4}, ['a', 'c']"})
+    void testStringifyReplacers(String arguments) {
+        assertStringWithJavet("JSON.stringify(" + arguments + ")");
     }
 
-    @Test
-    public void testStringifyObjectSimple() {
-        assertStringWithJavet("JSON.stringify({a: 1, b: 2})");
-    }
-
-    @Test
-    public void testStringifyObjectWithFunction() {
-        assertStringWithJavet("JSON.stringify({a: 1, b: function() {}, c: 2})");
-    }
-
-    @Test
-    public void testStringifyObjectWithUndefined() {
-        assertStringWithJavet("JSON.stringify({a: 1, b: undefined, c: 3})");
-    }
-
-    @Test
-    public void testStringifyScientificNotationLarge() {
-        assertStringWithJavet("JSON.stringify(1e10)");
-    }
-
-    @Test
-    public void testStringifyScientificNotationSmall() {
-        assertStringWithJavet("JSON.stringify(1e-10)");
-    }
-
-    @Test
-    public void testStringifyString() {
-        assertStringWithJavet("JSON.stringify('hello')");
+    @ParameterizedTest
+    @ValueSource(strings = {"[1, 2, 3], null, 4", "{a: 1}, null, {toString: function() { return '  '; }}",
+            "{a: 1, b: 2}, null, 2", "{a: 1}, null, 'abcdefghijklmnop'", "{a: 1}, null, new Number(2)",
+            "{a: 1, b: 2}, null, '  '", "{a: 1}, null, '\\t'"})
+    void testStringifySpacing(String arguments) {
+        assertStringWithJavet("JSON.stringify(" + arguments + ")");
     }
 
     @Test
@@ -1090,18 +949,8 @@ public class JSONObjectTest extends BaseJavetTest {
     }
 
     @Test
-    public void testStringifyWithNumberSpace() {
-        assertStringWithJavet("JSON.stringify({a: 1, b: 2}, null, 2)");
-    }
-
-    @Test
     public void testStringifyWithRawJSON() {
         assertStringWithJavet("JSON.stringify({a: JSON.rawJSON('1'), b: JSON.rawJSON('true')})");
-    }
-
-    @Test
-    public void testStringifyWithRawJSONInArray() {
-        assertStringWithJavet("JSON.stringify([JSON.rawJSON('1'), JSON.rawJSON('2'), 3])");
     }
 
     @Test
@@ -1199,11 +1048,6 @@ public class JSONObjectTest extends BaseJavetTest {
     }
 
     @Test
-    public void testStringifyWithReplacerArrayNonIntegerNumber() {
-        assertStringWithJavet("JSON.stringify({'1.5': 'x', '1': 'y'}, [1.5])");
-    }
-
-    @Test
     public void testStringifyWithReplacerArrayNumbers() {
         // Test that replacer array can contain numbers (for array indices)
         JSArray arr = new JSArray(context, new JSString("a"), new JSString("b"), new JSString("c"));
@@ -1222,21 +1066,6 @@ public class JSONObjectTest extends BaseJavetTest {
         assertThat(jsonStr).contains("\"0\":\"zero\"");
         assertThat(jsonStr).contains("\"2\":\"two\"");
         assertThat(jsonStr).doesNotContain("\"1\"");
-    }
-
-    @Test
-    public void testStringifyWithReplacerArrayNumbersWithJavet() {
-        assertStringWithJavet("JSON.stringify({0: 'a', 1: 'b', 2: 'c'}, [0, 2])");
-    }
-
-    @Test
-    public void testStringifyWithReplacerArraySkipsGenericObjects() {
-        assertStringWithJavet("JSON.stringify({a: 1, b: 2}, [{toString: function() { return 'a'; }}, 'b'])");
-    }
-
-    @Test
-    public void testStringifyWithReplacerArrayWithJavet() {
-        assertStringWithJavet("JSON.stringify({a: 1, b: 2, c: 3, d: 4}, ['a', 'c'])");
     }
 
     @Test
@@ -1295,26 +1124,6 @@ public class JSONObjectTest extends BaseJavetTest {
     }
 
     @Test
-    public void testStringifyWithSpaceLimitString() {
-        assertStringWithJavet("JSON.stringify({a: 1}, null, 'abcdefghijklmnop')");
-    }
-
-    @Test
-    public void testStringifyWithSpaceNumberObject() {
-        assertStringWithJavet("JSON.stringify({a: 1}, null, new Number(2))");
-    }
-
-    @Test
-    public void testStringifyWithStringSpace() {
-        assertStringWithJavet("JSON.stringify({a: 1, b: 2}, null, '  ')");
-    }
-
-    @Test
-    public void testStringifyWithTabSpace() {
-        assertStringWithJavet("JSON.stringify({a: 1}, null, '\\t')");
-    }
-
-    @Test
     public void testStringifyWithToJSON() {
         // Test toJSON method support
         JSObject obj = new JSObject(context);
@@ -1359,10 +1168,5 @@ public class JSONObjectTest extends BaseJavetTest {
                   }
                 };
                 JSON.stringify(obj)""");
-    }
-
-    @Test
-    public void testStringifyWithWrapperObjects() {
-        assertStringWithJavet("JSON.stringify([new Number(1.5), new String('x'), new Boolean(false)])");
     }
 }

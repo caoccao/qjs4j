@@ -380,6 +380,13 @@ public final class TemporalUtils {
         return secondDifference.add(BigInteger.valueOf(nanosecondDifference));
     }
 
+    /** An options bag whose overflow value has already been validated. */
+    public static JSObject overflowOptions(JSContext context, String overflow) {
+        JSObject options = new JSObject(context);
+        options.set(PropertyKey.fromString("overflow"), new JSString(overflow));
+        return options;
+    }
+
     public static int parseOffsetSecondsFromTimeZoneId(String timeZoneId) {
         String normalizedTimeZoneId = timeZoneId.replace('\u2212', '-');
         int sign = normalizedTimeZoneId.charAt(0) == '-' ? -1 : 1;

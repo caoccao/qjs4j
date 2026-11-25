@@ -569,14 +569,13 @@ public final class TemporalPlainDateTimePrototype {
 
         IsoTime originalTime = plainDateTime.getIsoDateTime().time();
         TemporalCalendarId calendarId = plainDateTime.getCalendarId();
-        boolean calendarSupportsEraFields = calendarId != TemporalCalendarId.ISO8601
-                && calendarId != TemporalCalendarId.CHINESE && calendarId != TemporalCalendarId.DANGI;
+        boolean calendarSupportsEraFields = calendarId.hasEra();
 
         Integer day = TemporalUtils.getOptionalIntegerField(context, fields, "day");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasDayField = day != null;
+
         if (day != null && day < 1) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
@@ -610,7 +609,7 @@ public final class TemporalPlainDateTimePrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasMonthField = month != null;
+
         if (month != null && month < 1) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
@@ -620,7 +619,6 @@ public final class TemporalPlainDateTimePrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasMonthCodeField = monthCode != null;
 
         Integer nanosecondField = TemporalUtils.getOptionalIntegerField(context, fields, "nanosecond");
         if (context.hasPendingException()) {
@@ -638,10 +636,7 @@ public final class TemporalPlainDateTimePrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasYearField = year != null;
 
-        boolean hasEraField = false;
-        boolean hasEraYearField = false;
         String era = null;
         Integer eraYear = null;
         if (calendarSupportsEraFields) {
@@ -649,20 +644,18 @@ public final class TemporalPlainDateTimePrototype {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            hasEraField = era != null;
 
             eraYear = TemporalUtils.getOptionalIntegerField(context, fields, "eraYear");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            hasEraYearField = eraYear != null;
+
         }
 
-        boolean hasDateField = hasDayField || hasMonthField || hasMonthCodeField || hasYearField || hasEraField
-                || hasEraYearField;
+        TemporalPartialDate dateFields = new TemporalPartialDate(day, month, monthCode, year, era, eraYear);
         boolean hasTimeField = hourField != null || minuteField != null || secondField != null
                 || millisecondField != null || microsecondField != null || nanosecondField != null;
-        if (!hasDateField && !hasTimeField) {
+        if (dateFields.isEmpty() && !hasTimeField) {
             context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
             return JSUndefined.INSTANCE;
         }
@@ -674,33 +667,13 @@ public final class TemporalPlainDateTimePrototype {
         }
 
         IsoDate resultDate = plainDateTime.getIsoDateTime().date();
-        if (hasDateField) {
-            JSObject dateFieldsObject = new JSObject(context);
-            if (hasDayField) {
-                dateFieldsObject.set(PropertyKey.fromString("day"), JSNumber.of(day));
+        if (!dateFields.isEmpty()) {
+            JSTemporalPlainDate plainDate = JSTemporalPlainDate.create(context, resultDate, calendarId);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
             }
-            if (hasMonthField) {
-                dateFieldsObject.set(PropertyKey.fromString("month"), JSNumber.of(month));
-            }
-            if (hasMonthCodeField) {
-                dateFieldsObject.set(PropertyKey.fromString("monthCode"), new JSString(monthCode));
-            }
-            if (hasYearField) {
-                dateFieldsObject.set(PropertyKey.fromString("year"), JSNumber.of(year));
-            }
-            if (hasEraField) {
-                dateFieldsObject.set(PropertyKey.fromString("era"), new JSString(era));
-            }
-            if (hasEraYearField) {
-                dateFieldsObject.set(PropertyKey.fromString("eraYear"), JSNumber.of(eraYear));
-            }
-            JSObject normalizedOptionsObject = new JSObject(context);
-            normalizedOptionsObject.set(PropertyKey.fromString("overflow"), new JSString(overflow));
-            JSValue mergedDateValue = TemporalPlainDatePrototype
-                    .with(context,
-                            JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(),
-                                    plainDateTime.getCalendarId()),
-                            new JSValue[]{dateFieldsObject, normalizedOptionsObject});
+            JSValue mergedDateValue = dateFields.merge(context, plainDate,
+                    TemporalUtils.overflowOptions(context, overflow));
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }

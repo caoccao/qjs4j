@@ -18,17 +18,14 @@ package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class TemporalPlainMonthDayTest extends BaseJavetTest {
 
     @Test
     public void testCalendarId() {
         assertStringWithJavet("new Temporal.PlainMonthDay(3, 15).calendarId");
-    }
-
-    @Test
-    public void testConstructorBasic() {
-        assertStringWithJavet("new Temporal.PlainMonthDay(3, 15).toString()");
     }
 
     @Test
@@ -112,9 +109,10 @@ public class TemporalPlainMonthDayTest extends BaseJavetTest {
         assertStringWithJavet("new Temporal.PlainMonthDay(3, 15).monthCode");
     }
 
-    @Test
-    public void testToJSON() {
-        assertStringWithJavet("new Temporal.PlainMonthDay(3, 15).toJSON()");
+    @ParameterizedTest
+    @ValueSource(strings = {"toString()", "toJSON()", "toPlainDate({year: 2024}).toString()", "toString()"})
+    void testStringConversions(String operation) {
+        assertStringWithJavet("new Temporal.PlainMonthDay(3, 15)." + operation);
     }
 
     @Test
@@ -124,18 +122,8 @@ public class TemporalPlainMonthDayTest extends BaseJavetTest {
     }
 
     @Test
-    public void testToPlainDate() {
-        assertStringWithJavet("new Temporal.PlainMonthDay(3, 15).toPlainDate({year: 2024}).toString()");
-    }
-
-    @Test
     public void testToPlainDateNoYear() {
         assertErrorWithJavet("new Temporal.PlainMonthDay(3, 15).toPlainDate()");
-    }
-
-    @Test
-    public void testToString() {
-        assertStringWithJavet("new Temporal.PlainMonthDay(3, 15).toString()");
     }
 
     @Test

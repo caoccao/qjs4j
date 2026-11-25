@@ -78,8 +78,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
         assertThat(awaitPromise(promise1)).isTrue();
 
         JSObject resultObj1 = (JSObject) promise1.getResult();
-        assertThat(resultObj1.get("value")).isEqualTo(new JSNumber(42));
-        assertThat(resultObj1.get("done")).isEqualTo(JSBoolean.FALSE);
+        assertIteratorResult(resultObj1, new JSNumber(42), false);
 
         // Get second value (should be done)
         JSValue result2 = AsyncGeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
@@ -87,8 +86,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
         assertThat(awaitPromise(promise2)).isTrue();
 
         JSObject resultObj2 = (JSObject) promise2.getResult();
-        assertThat(resultObj2.get("value")).isEqualTo(JSUndefined.INSTANCE);
-        assertThat(resultObj2.get("done")).isEqualTo(JSBoolean.TRUE);
+        assertIteratorResult(resultObj2, JSUndefined.INSTANCE, true);
     }
 
     @Test
@@ -104,10 +102,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
 
         // Check the result
         JSValue promiseResult = promise.getResult();
-        JSObject resultObj = promiseResult.asObject().orElseThrow();
-
-        assertThat(resultObj.get("value")).isEqualTo(new JSNumber(42));
-        assertThat(resultObj.get("done")).isEqualTo(JSBoolean.FALSE);
+        assertIteratorResult(promiseResult, new JSNumber(42), false);
     }
 
     @Test
@@ -149,10 +144,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
 
         // Check the result
         JSValue promiseResult = promise.getResult();
-        JSObject resultObj = promiseResult.asObject().orElseThrow();
-
-        assertThat(resultObj.get("value")).isEqualTo(new JSNumber(100));
-        assertThat(resultObj.get("done")).isEqualTo(JSBoolean.FALSE);
+        assertIteratorResult(promiseResult, new JSNumber(100), false);
     }
 
     @Test
@@ -170,10 +162,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
 
         // Check the result
         JSValue promiseResult = promise.getResult();
-        JSObject resultObj = promiseResult.asObject().orElseThrow();
-
-        assertThat(resultObj.get("value")).isEqualTo(returnValue);
-        assertThat(resultObj.get("done")).isEqualTo(JSBoolean.TRUE);
+        assertIteratorResult(promiseResult, returnValue, true);
     }
 
     @Test

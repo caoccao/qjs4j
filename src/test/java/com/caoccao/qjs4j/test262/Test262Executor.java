@@ -239,10 +239,7 @@ public class Test262Executor {
         if (test.hasFlag("async")) {
             return executeAsync(context, runtime, code, test);
         }
-        if (test.getVariant() == Test262TestCase.Variant.MODULE) {
-            return executeModule(context, runtime, code, test);
-        }
-        return executeScript(context, runtime, code, test);
+        return executeSync(context, runtime, code, test);
     }
 
     public TestResult execute(Test262TestCase test) {
@@ -407,36 +404,6 @@ public class Test262Executor {
         }
     }
 
-    private TestResult executeModule(JSContext context, JSRuntime runtime, String code, Test262TestCase test) {
-        try {
-            // Set execution deadline to prevent hangs
-            if (syncTimeoutMs > 0) {
-                context.getVirtualMachine().setExecutionDeadline(System.currentTimeMillis() + syncTimeoutMs);
-            }
-            context.eval(code, test.getPath().toString(), true);
-            synchronized (runtime) {
-                runtime.runJobs();
-            }
-
-            if (test.getNegative() != null) {
-                return TestResult.fail(test, "Expected error " + test.getNegative().getType() + " was not thrown");
-            }
-            return TestResult.pass(test);
-
-        } catch (JSException e) {
-            return handleException(e, test);
-        } catch (JSTerminationException e) {
-            // The runner is the host that set the deadline, so it is entitled to observe it. The
-            // engine no longer lets a script or any internal catch block intercept termination,
-            // which is why this needs its own clause: JSTerminationException is an Error.
-            return TestResult.timeout(test);
-        } catch (Exception e) {
-            return handleException(e, test);
-        } finally {
-            context.getVirtualMachine().setExecutionDeadline(0);
-        }
-    }
-
     /**
      * Compile the source and require that compilation is what fails.
      *
@@ -469,13 +436,13 @@ public class Test262Executor {
                 "Expected a parse-phase " + negative.getType() + " but the source compiled successfully");
     }
 
-    private TestResult executeScript(JSContext context, JSRuntime runtime, String code, Test262TestCase test) {
+    private TestResult executeSync(JSContext context, JSRuntime runtime, String code, Test262TestCase test) {
         try {
             // Set execution deadline for sync tests to prevent hangs
             if (syncTimeoutMs > 0) {
                 context.getVirtualMachine().setExecutionDeadline(System.currentTimeMillis() + syncTimeoutMs);
             }
-            context.eval(code, test.getPath().toString(), false);
+            context.eval(code, test.getPath().toString(), test.getVariant() == Test262TestCase.Variant.MODULE);
             synchronized (runtime) {
                 runtime.runJobs();
             }

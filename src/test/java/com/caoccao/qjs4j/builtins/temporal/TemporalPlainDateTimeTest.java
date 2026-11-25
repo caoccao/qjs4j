@@ -18,6 +18,8 @@ package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class TemporalPlainDateTimeTest extends BaseJavetTest {
 
@@ -34,11 +36,6 @@ public class TemporalPlainDateTimeTest extends BaseJavetTest {
     @Test
     public void testCompare() {
         assertIntegerWithJavet("Temporal.PlainDateTime.compare('2024-01-15T12:00', '2024-01-15T13:00')");
-    }
-
-    @Test
-    public void testConstructorBasic() {
-        assertStringWithJavet("new Temporal.PlainDateTime(2024, 1, 15, 12, 30, 45).toString()");
     }
 
     @Test
@@ -83,33 +80,8 @@ public class TemporalPlainDateTimeTest extends BaseJavetTest {
     }
 
     @Test
-    public void testDay() {
-        assertIntegerWithJavet("new Temporal.PlainDateTime(2024, 3, 15, 12, 30).day");
-    }
-
-    @Test
-    public void testDayOfWeek() {
-        assertIntegerWithJavet("new Temporal.PlainDateTime(2024, 3, 15, 12, 30).dayOfWeek");
-    }
-
-    @Test
-    public void testDayOfYear() {
-        assertIntegerWithJavet("new Temporal.PlainDateTime(2024, 3, 15, 12, 30).dayOfYear");
-    }
-
-    @Test
     public void testDaysInMonth() {
         assertIntegerWithJavet("new Temporal.PlainDateTime(2024, 2, 15, 12, 30).daysInMonth");
-    }
-
-    @Test
-    public void testDaysInWeek() {
-        assertIntegerWithJavet("new Temporal.PlainDateTime(2024, 3, 15, 12, 30).daysInWeek");
-    }
-
-    @Test
-    public void testDaysInYear() {
-        assertIntegerWithJavet("new Temporal.PlainDateTime(2024, 3, 15, 12, 30).daysInYear");
     }
 
     @Test
@@ -138,13 +110,15 @@ public class TemporalPlainDateTimeTest extends BaseJavetTest {
     }
 
     @Test
-    public void testHour() {
-        assertIntegerWithJavet("new Temporal.PlainDateTime(2024, 3, 15, 12, 30).hour");
-    }
-
-    @Test
     public void testInLeapYear() {
         assertBooleanWithJavet("new Temporal.PlainDateTime(2024, 3, 15, 12, 30).inLeapYear");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"day", "dayOfWeek", "dayOfYear", "daysInWeek", "daysInYear", "hour", "minute", "month",
+            "monthsInYear", "weekOfYear", "year", "yearOfWeek"})
+    void testIntegerProperties(String property) {
+        assertIntegerWithJavet("new Temporal.PlainDateTime(2024, 3, 15, 12, 30)." + property);
     }
 
     @Test
@@ -158,23 +132,8 @@ public class TemporalPlainDateTimeTest extends BaseJavetTest {
     }
 
     @Test
-    public void testMinute() {
-        assertIntegerWithJavet("new Temporal.PlainDateTime(2024, 3, 15, 12, 30).minute");
-    }
-
-    @Test
-    public void testMonth() {
-        assertIntegerWithJavet("new Temporal.PlainDateTime(2024, 3, 15, 12, 30).month");
-    }
-
-    @Test
     public void testMonthCode() {
         assertStringWithJavet("new Temporal.PlainDateTime(2024, 3, 15, 12, 30).monthCode");
-    }
-
-    @Test
-    public void testMonthsInYear() {
-        assertIntegerWithJavet("new Temporal.PlainDateTime(2024, 3, 15, 12, 30).monthsInYear");
     }
 
     @Test
@@ -202,14 +161,15 @@ public class TemporalPlainDateTimeTest extends BaseJavetTest {
         assertStringWithJavet("new Temporal.PlainDateTime(2024, 1, 2, 12, 0).since('2024-01-01').toString()");
     }
 
-    @Test
-    public void testSubtract() {
-        assertStringWithJavet("new Temporal.PlainDateTime(2024, 1, 15, 12, 30).subtract({days: 1}).toString()");
+    @ParameterizedTest
+    @ValueSource(strings = {"toString()", "toJSON()", "toString()"})
+    void testStringConversions(String operation) {
+        assertStringWithJavet("new Temporal.PlainDateTime(2024, 1, 15, 12, 30, 45)." + operation);
     }
 
     @Test
-    public void testToJSON() {
-        assertStringWithJavet("new Temporal.PlainDateTime(2024, 1, 15, 12, 30, 45).toJSON()");
+    public void testSubtract() {
+        assertStringWithJavet("new Temporal.PlainDateTime(2024, 1, 15, 12, 30).subtract({days: 1}).toString()");
     }
 
     @Test
@@ -229,11 +189,6 @@ public class TemporalPlainDateTimeTest extends BaseJavetTest {
     }
 
     @Test
-    public void testToString() {
-        assertStringWithJavet("new Temporal.PlainDateTime(2024, 1, 15, 12, 30, 45).toString()");
-    }
-
-    @Test
     public void testToStringFractionalDigits() {
         assertStringWithJavet(
                 "new Temporal.PlainDateTime(2024, 1, 15, 12, 30, 45, 123).toString({fractionalSecondDigits: 6})");
@@ -250,11 +205,6 @@ public class TemporalPlainDateTimeTest extends BaseJavetTest {
     }
 
     @Test
-    public void testWeekOfYear() {
-        assertIntegerWithJavet("new Temporal.PlainDateTime(2024, 3, 15, 12, 30).weekOfYear");
-    }
-
-    @Test
     public void testWith() {
         assertStringWithJavet("new Temporal.PlainDateTime(2024, 1, 15, 12, 30).with({hour: 15}).toString()");
     }
@@ -267,15 +217,5 @@ public class TemporalPlainDateTimeTest extends BaseJavetTest {
     @Test
     public void testWithPlainTime() {
         assertStringWithJavet("new Temporal.PlainDateTime(2024, 1, 15, 12, 30).withPlainTime('08:00').toString()");
-    }
-
-    @Test
-    public void testYear() {
-        assertIntegerWithJavet("new Temporal.PlainDateTime(2024, 3, 15, 12, 30).year");
-    }
-
-    @Test
-    public void testYearOfWeek() {
-        assertIntegerWithJavet("new Temporal.PlainDateTime(2024, 3, 15, 12, 30).yearOfWeek");
     }
 }

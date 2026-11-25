@@ -64,8 +64,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
 
         // End
         iteratorResult = iterator.next();
-        assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+        assertIteratorResult(iteratorResult, JSUndefined.INSTANCE, true);
 
         // Edge case: called on non-array
         result = IteratorPrototype.arrayEntries(context, JSNull.INSTANCE, JSValue.NO_ARGS);
@@ -103,16 +102,13 @@ public class IteratorPrototypeTest extends BaseJavetTest {
 
         // Test iteration
         JSObject iteratorResult = iterator.next();
-        assertNumberValue(iteratorResult.get("value"), 0.0);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
+        assertIteratorResult(iteratorResult, new JSNumber(0.0), false);
 
         iteratorResult = iterator.next();
-        assertNumberValue(iteratorResult.get("value"), 1.0);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
+        assertIteratorResult(iteratorResult, new JSNumber(1.0), false);
 
         iteratorResult = iterator.next();
-        assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+        assertIteratorResult(iteratorResult, JSUndefined.INSTANCE, true);
 
         // Edge case: called on plain object (generic, works via ToObject)
         result = IteratorPrototype.arrayKeys(context, new JSObject(context), JSValue.NO_ARGS);
@@ -147,20 +143,16 @@ public class IteratorPrototypeTest extends BaseJavetTest {
 
         // Test iteration
         JSObject iteratorResult = iterator.next();
-        assertNumberValue(iteratorResult.get("value"), 1.0);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
+        assertIteratorResult(iteratorResult, new JSNumber(1.0), false);
 
         iteratorResult = iterator.next();
-        assertStringValue(iteratorResult.get("value"), "hello");
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
+        assertIteratorResult(iteratorResult, new JSString("hello"), false);
 
         iteratorResult = iterator.next();
-        assertThat(iteratorResult.get("value")).isEqualTo(JSBoolean.TRUE);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
+        assertIteratorResult(iteratorResult, JSBoolean.TRUE, false);
 
         iteratorResult = iterator.next();
-        assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+        assertIteratorResult(iteratorResult, JSUndefined.INSTANCE, true);
 
         // Edge case: called on string (generic, works via ToObject on string primitive)
         result = IteratorPrototype.arrayValues(context, new JSString("hi"), JSValue.NO_ARGS);
@@ -261,8 +253,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
 
         // End of iteration
         JSObject iteratorResult = iterator.next();
-        assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+        assertIteratorResult(iteratorResult, JSUndefined.INSTANCE, true);
 
         // Edge case: called on non-map
         result = IteratorPrototype.mapEntriesIterator(context, new JSArray(context), JSValue.NO_ARGS);
@@ -340,21 +331,15 @@ public class IteratorPrototypeTest extends BaseJavetTest {
 
         // Normal case: next() on iterator
         JSValue result = IteratorPrototype.next(context, iterator, JSValue.NO_ARGS);
-        JSObject iteratorResult = result.asObject().orElseThrow();
-        assertNumberValue(iteratorResult.get("value"), 1.0);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
+        assertIteratorResult(result, new JSNumber(1.0), false);
 
         // Continue iteration
         result = IteratorPrototype.next(context, iterator, JSValue.NO_ARGS);
-        iteratorResult = result.asObject().orElseThrow();
-        assertNumberValue(iteratorResult.get("value"), 2.0);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
+        assertIteratorResult(result, new JSNumber(2.0), false);
 
         // End of iteration
         result = IteratorPrototype.next(context, iterator, JSValue.NO_ARGS);
-        iteratorResult = result.asObject().orElseThrow();
-        assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+        assertIteratorResult(result, JSUndefined.INSTANCE, true);
 
         // Edge case: called on non-iterator
         result = IteratorPrototype.next(context, new JSString("not an iterator"), JSValue.NO_ARGS);
@@ -451,8 +436,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
 
         // End of iteration
         JSObject iteratorResult = iterator.next();
-        assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+        assertIteratorResult(iteratorResult, JSUndefined.INSTANCE, true);
 
         // Edge case: called on non-set
         result = IteratorPrototype.setValuesIterator(context, new JSObject(context), JSValue.NO_ARGS);
@@ -469,28 +453,23 @@ public class IteratorPrototypeTest extends BaseJavetTest {
 
         // Test iteration
         JSObject iteratorResult = iterator.next();
-        assertStringValue(iteratorResult.get("value"), "a");
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
+        assertIteratorResult(iteratorResult, new JSString("a"), false);
 
         iteratorResult = iterator.next();
-        assertStringValue(iteratorResult.get("value"), "b");
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
+        assertIteratorResult(iteratorResult, new JSString("b"), false);
 
         iteratorResult = iterator.next();
-        assertStringValue(iteratorResult.get("value"), "c");
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
+        assertIteratorResult(iteratorResult, new JSString("c"), false);
 
         iteratorResult = iterator.next();
-        assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+        assertIteratorResult(iteratorResult, JSUndefined.INSTANCE, true);
 
         // Normal case: empty string
         JSString emptyStr = new JSString("");
         result = IteratorPrototype.stringIterator(context, emptyStr, JSValue.NO_ARGS);
         iterator = result.asIterator().orElseThrow();
         iteratorResult = iterator.next();
-        assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+        assertIteratorResult(iteratorResult, JSUndefined.INSTANCE, true);
 
         // Normal case: boxed string
         JSObject boxedString = new JSObject(context);

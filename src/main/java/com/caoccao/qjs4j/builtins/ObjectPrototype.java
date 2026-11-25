@@ -453,33 +453,7 @@ public final class ObjectPrototype {
      * Object.prototype.hasOwnProperty(prop)
      */
     public static JSValue hasOwnProperty(JSContext context, JSValue thisArg, JSValue[] args) {
-        // ES2024 20.1.3.2:
-        // Step 1: Let P be ? ToPropertyKey(V) - BEFORE ToObject
-        JSValue prop = JSValue.argumentOrUndefined(args, 0);
-        PropertyKey key = PropertyKey.fromValue(context, prop);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        // Step 2: Let O be ? ToObject(this value)
-        if (thisArg.isNullOrUndefined()) {
-            return context.throwTypeError("Cannot convert undefined or null to object");
-        }
-        JSObject obj;
-        if (thisArg instanceof JSObject jsObj) {
-            obj = jsObj;
-        } else {
-            obj = JSTypeConversions.toObject(context, thisArg);
-            if (obj == null || context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-
-        PropertyDescriptor descriptor = obj.getOwnPropertyDescriptor(key);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSBoolean.valueOf(descriptor != null);
+        return testOwnProperty(context, thisArg, args, false);
     }
 
     /**
@@ -574,8 +548,12 @@ public final class ObjectPrototype {
      * Object.prototype.propertyIsEnumerable(V)
      */
     public static JSValue propertyIsEnumerable(JSContext context, JSValue thisArg, JSValue[] args) {
-        // ES2024 20.1.3.4:
-        // Step 1: Let P be ? ToPropertyKey(V)
+        return testOwnProperty(context, thisArg, args, true);
+    }
+
+    private static JSValue testOwnProperty(JSContext context, JSValue thisArg, JSValue[] args, boolean enumerableOnly) {
+        // ES2024 20.1.3.2:
+        // Step 1: Let P be ? ToPropertyKey(V) - BEFORE ToObject
         JSValue prop = JSValue.argumentOrUndefined(args, 0);
         PropertyKey key = PropertyKey.fromValue(context, prop);
         if (context.hasPendingException()) {
@@ -596,13 +574,11 @@ public final class ObjectPrototype {
             }
         }
 
-        PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
-
-        if (desc == null) {
-            return JSBoolean.FALSE;
+        PropertyDescriptor descriptor = obj.getOwnPropertyDescriptor(key);
+        if (!enumerableOnly && context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
-
-        return JSBoolean.valueOf(desc.isEnumerable());
+        return JSBoolean.valueOf(descriptor != null && (!enumerableOnly || descriptor.isEnumerable()));
     }
 
     /**

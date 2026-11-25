@@ -48,19 +48,13 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
 
         // Test the custom generator
         JSValue result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
-        JSObject iteratorResult = result.asObject().orElseThrow();
-        assertStringValue(iteratorResult.get("value"), "first");
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
+        assertIteratorResult(result, new JSString("first"), false);
 
         result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
-        iteratorResult = result.asObject().orElseThrow();
-        assertStringValue(iteratorResult.get("value"), "second");
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
+        assertIteratorResult(result, new JSString("second"), false);
 
         result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
-        iteratorResult = result.asObject().orElseThrow();
-        assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+        assertIteratorResult(result, JSUndefined.INSTANCE, true);
     }
 
     @Test
@@ -76,16 +70,12 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
 
         // Normal case: next() on empty generator
         JSValue result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
-        JSObject iteratorResult = result.asObject().orElseThrow();
-        assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+        assertIteratorResult(result, JSUndefined.INSTANCE, true);
 
         // Normal case: return on empty generator
         JSGenerator generator2 = JSGenerator.fromArray(context, emptyArray);
         result = GeneratorPrototype.returnMethod(context, generator2, stringArgs("done"));
-        iteratorResult = result.asObject().orElseThrow();
-        assertStringValue(iteratorResult.get("value"), "done");
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+        assertIteratorResult(result, new JSString("done"), true);
     }
 
     @Test
@@ -134,39 +124,27 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
 
         // Normal case: first next() call
         JSValue result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
-        JSObject iteratorResult = result.asObject().orElseThrow();
-        assertNumberValue(iteratorResult.get("value"), 1.0);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
+        assertIteratorResult(result, new JSNumber(1.0), false);
 
         // Normal case: second next() call
         result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
-        iteratorResult = result.asObject().orElseThrow();
-        assertNumberValue(iteratorResult.get("value"), 2.0);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
+        assertIteratorResult(result, new JSNumber(2.0), false);
 
         // Normal case: third next() call
         result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
-        iteratorResult = result.asObject().orElseThrow();
-        assertNumberValue(iteratorResult.get("value"), 3.0);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.FALSE);
+        assertIteratorResult(result, new JSNumber(3.0), false);
 
         // Normal case: fourth next() call (done)
         result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
-        iteratorResult = result.asObject().orElseThrow();
-        assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+        assertIteratorResult(result, JSUndefined.INSTANCE, true);
 
         // Normal case: subsequent calls after done
         result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
-        iteratorResult = result.asObject().orElseThrow();
-        assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+        assertIteratorResult(result, JSUndefined.INSTANCE, true);
 
         // Normal case: next() with value argument (ignored in this simple implementation)
         result = GeneratorPrototype.next(context, generator, stringArgs("ignored"));
-        iteratorResult = result.asObject().orElseThrow();
-        assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+        assertIteratorResult(result, JSUndefined.INSTANCE, true);
 
         // Edge case: called on non-generator
         result = GeneratorPrototype.next(context, new JSString("not a generator"), JSValue.NO_ARGS);
@@ -198,23 +176,17 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
 
         // Normal case: return with value
         JSValue result = GeneratorPrototype.returnMethod(context, generator, stringArgs("returned"));
-        JSObject iteratorResult = result.asObject().orElseThrow();
-        assertStringValue(iteratorResult.get("value"), "returned");
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+        assertIteratorResult(result, new JSString("returned"), true);
 
         // Normal case: subsequent next() calls after return
         // QuickJS: completed generator's next() returns {value: undefined, done: true}
         result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
-        iteratorResult = result.asObject().orElseThrow();
-        assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+        assertIteratorResult(result, JSUndefined.INSTANCE, true);
 
         // Normal case: return without value (undefined)
         JSGenerator generator2 = JSGenerator.fromArray(context, array);
         result = GeneratorPrototype.returnMethod(context, generator2, JSValue.NO_ARGS);
-        iteratorResult = result.asObject().orElseThrow();
-        assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
-        assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
+        assertIteratorResult(result, JSUndefined.INSTANCE, true);
 
         // Edge case: called on non-generator
         result = GeneratorPrototype.returnMethod(context, new JSObject(context), numberArgs(42));

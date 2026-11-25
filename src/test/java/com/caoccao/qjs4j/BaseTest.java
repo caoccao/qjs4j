@@ -50,6 +50,12 @@ public abstract class BaseTest {
         });
     }
 
+    protected void assertIteratorResult(JSValue result, JSValue expectedValue, boolean done) {
+        JSObject entry = result.asObject().orElseThrow();
+        assertThat(entry.get("value")).isEqualTo(expectedValue);
+        assertThat(entry.get("done")).isEqualTo(JSBoolean.valueOf(done));
+    }
+
     protected void assertNumberValue(JSValue value, double expected) {
         assertThat(value).isInstanceOfSatisfying(JSNumber.class,
                 number -> assertThat(number.value()).isEqualTo(expected));

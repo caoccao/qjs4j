@@ -34,32 +34,13 @@ public final class AsyncGeneratorPrototype {
      * @return An async generator that yields values "asynchronously"
      */
     public static JSAsyncGenerator createDelayedGenerator(JSContext context, JSValue[] values) {
-        return new JSAsyncGenerator((inputValue, requestKind) -> {
+        return JSAsyncGenerator.create(inputValue -> {
             final int[] index = {0};
-
-            if (requestKind == JSAsyncGenerator.AsyncGeneratorRequestKind.THROW) {
-                JSPromise promise = context.createJSPromise();
-                promise.reject(inputValue);
-                return promise;
-            }
-            if (requestKind == JSAsyncGenerator.AsyncGeneratorRequestKind.RETURN) {
-                JSPromise promise = context.createJSPromise();
-                JSObject result = context.createJSObject();
-                result.set(PropertyKey.VALUE, inputValue);
-                result.set(PropertyKey.DONE, JSBoolean.TRUE);
-                promise.fulfill(result);
-                return promise;
-            }
 
             int currentIndex = index[0]++;
 
             if (currentIndex >= values.length) {
-                JSPromise promise = context.createJSPromise();
-                JSObject result = context.createJSObject();
-                result.set(PropertyKey.VALUE, JSUndefined.INSTANCE);
-                result.set(PropertyKey.DONE, JSBoolean.TRUE);
-                promise.fulfill(result);
-                return promise;
+                return JSAsyncIterator.createIteratorResultPromise(context, JSUndefined.INSTANCE, true);
             }
 
             // Create a promise that resolves with the value
@@ -89,34 +70,15 @@ public final class AsyncGeneratorPrototype {
      * @return An async generator
      */
     public static JSAsyncGenerator createFromPromises(JSContext context, JSPromise[] promises) {
-        return new JSAsyncGenerator((inputValue, requestKind) -> {
+        return JSAsyncGenerator.create(inputValue -> {
             // Use a holder to track the current index
             final int[] index = {0};
-
-            if (requestKind == JSAsyncGenerator.AsyncGeneratorRequestKind.THROW) {
-                JSPromise promise = context.createJSPromise();
-                promise.reject(inputValue);
-                return promise;
-            }
-            if (requestKind == JSAsyncGenerator.AsyncGeneratorRequestKind.RETURN) {
-                JSPromise promise = context.createJSPromise();
-                JSObject result = context.createJSObject();
-                result.set(PropertyKey.VALUE, inputValue);
-                result.set(PropertyKey.DONE, JSBoolean.TRUE);
-                promise.fulfill(result);
-                return promise;
-            }
 
             int currentIndex = index[0]++;
 
             if (currentIndex >= promises.length) {
                 // All promises processed
-                JSPromise promise = context.createJSPromise();
-                JSObject result = context.createJSObject();
-                result.set(PropertyKey.VALUE, JSUndefined.INSTANCE);
-                result.set(PropertyKey.DONE, JSBoolean.TRUE);
-                promise.fulfill(result);
-                return promise;
+                return JSAsyncIterator.createIteratorResultPromise(context, JSUndefined.INSTANCE, true);
             }
 
             // Wait for the current promise and yield its value
@@ -167,21 +129,11 @@ public final class AsyncGeneratorPrototype {
 
             if (currentIndex >= values.length) {
                 // All values yielded
-                JSPromise promise = context.createJSPromise();
-                JSObject result = context.createJSObject();
-                result.set(PropertyKey.VALUE, JSUndefined.INSTANCE);
-                result.set(PropertyKey.DONE, JSBoolean.TRUE);
-                promise.fulfill(result);
-                return promise;
+                return JSAsyncIterator.createIteratorResultPromise(context, JSUndefined.INSTANCE, true);
             }
 
             // Yield next value
-            JSPromise promise = context.createJSPromise();
-            JSObject result = context.createJSObject();
-            result.set(PropertyKey.VALUE, values[currentIndex]);
-            result.set(PropertyKey.DONE, JSBoolean.FALSE);
-            promise.fulfill(result);
-            return promise;
+            return JSAsyncIterator.createIteratorResultPromise(context, values[currentIndex], false);
         }, context);
     }
 

@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
+import com.caoccao.qjs4j.core.JSNativeCallback;
 import com.caoccao.qjs4j.core.JSNumber;
 import com.caoccao.qjs4j.core.JSUndefined;
 import com.caoccao.qjs4j.core.JSValue;
@@ -30,34 +31,42 @@ import static org.assertj.core.api.Assertions.offset;
  */
 public class MathObjectTest extends BaseJavetTest {
 
+    private void assertMath(JSNativeCallback operation, double expected, double... inputs) {
+        JSValue value = operation.call(context, JSUndefined.INSTANCE, numberArgs(inputs));
+        if (Double.isNaN(expected)) {
+            assertThat(value.asNumber().orElseThrow().value()).isNaN();
+        } else {
+            assertNumberValue(value, expected);
+        }
+    }
+
+    private void assertMathClose(JSNativeCallback operation, double expected, double... inputs) {
+        JSValue result = operation.call(context, JSUndefined.INSTANCE, numberArgs(inputs));
+        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(expected, offset(1e-10));
+    }
+
     @Test
     public void testAbs() {
         // Normal case: positive number
-        JSValue result = MathObject.abs(context, JSUndefined.INSTANCE, numberArgs(5.5));
-        assertNumberValue(result, 5.5);
+        assertMath(MathObject::abs, 5.5, 5.5);
 
         // Normal case: negative number
-        result = MathObject.abs(context, JSUndefined.INSTANCE, numberArgs(-3.7));
-        assertNumberValue(result, 3.7);
+        assertMath(MathObject::abs, 3.7, -3.7);
 
         // Normal case: zero
-        result = MathObject.abs(context, JSUndefined.INSTANCE, numberArgs(0));
-        assertNumberValue(result, 0.0);
+        assertMath(MathObject::abs, 0.0, 0);
 
         // Normal case: NaN
-        result = MathObject.abs(context, JSUndefined.INSTANCE, numberArgs(Double.NaN));
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::abs, Double.NaN, Double.NaN);
 
         // Normal case: Infinity
-        result = MathObject.abs(context, JSUndefined.INSTANCE, numberArgs(Double.NEGATIVE_INFINITY));
-        assertNumberValue(result, Double.POSITIVE_INFINITY);
+        assertMath(MathObject::abs, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
 
         // Edge case: no arguments
-        result = MathObject.abs(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::abs, Double.NaN);
 
         // Edge case: string coercion
-        result = MathObject.abs(context, JSUndefined.INSTANCE, stringArgs("-42"));
+        JSValue result = MathObject.abs(context, JSUndefined.INSTANCE, stringArgs("-42"));
         assertNumberValue(result, 42.0);
     }
 
@@ -70,43 +79,34 @@ public class MathObjectTest extends BaseJavetTest {
     @Test
     public void testCbrt() {
         // Normal case: perfect cube
-        JSValue result = MathObject.cbrt(context, JSUndefined.INSTANCE, numberArgs(8));
-        assertNumberValue(result, 2.0);
+        assertMath(MathObject::cbrt, 2.0, 8);
 
         // Normal case: negative perfect cube
-        result = MathObject.cbrt(context, JSUndefined.INSTANCE, numberArgs(-8));
-        assertNumberValue(result, -2.0);
+        assertMath(MathObject::cbrt, -2.0, -8);
 
         // Normal case: non-perfect cube
-        result = MathObject.cbrt(context, JSUndefined.INSTANCE, numberArgs(3));
-        assertNumberValue(result, Math.cbrt(3));
+        assertMath(MathObject::cbrt, Math.cbrt(3), 3);
 
         // Edge case: no arguments
-        result = MathObject.cbrt(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::cbrt, Double.NaN);
     }
 
     @Test
     public void testCeil() {
         // Normal case: positive number
-        JSValue result = MathObject.ceil(context, JSUndefined.INSTANCE, numberArgs(4.2));
-        assertNumberValue(result, 5.0);
+        assertMath(MathObject::ceil, 5.0, 4.2);
 
         // Normal case: negative number
-        result = MathObject.ceil(context, JSUndefined.INSTANCE, numberArgs(-4.2));
-        assertNumberValue(result, -4.0);
+        assertMath(MathObject::ceil, -4.0, -4.2);
 
         // Normal case: integer
-        result = MathObject.ceil(context, JSUndefined.INSTANCE, numberArgs(3.0));
-        assertNumberValue(result, 3.0);
+        assertMath(MathObject::ceil, 3.0, 3.0);
 
         // Normal case: NaN
-        result = MathObject.ceil(context, JSUndefined.INSTANCE, numberArgs(Double.NaN));
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::ceil, Double.NaN, Double.NaN);
 
         // Edge case: no arguments
-        result = MathObject.ceil(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::ceil, Double.NaN);
     }
 
     @Test
@@ -129,28 +129,21 @@ public class MathObjectTest extends BaseJavetTest {
     @Test
     public void testExponentialAndLogarithmicFunctions() {
         // Test exp, log, log10, log2
-        JSValue result = MathObject.exp(context, JSUndefined.INSTANCE, numberArgs(0));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(1.0, offset(1e-10));
+        assertMathClose(MathObject::exp, 1.0, 0);
 
-        result = MathObject.log(context, JSUndefined.INSTANCE, numberArgs(1));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(0.0, offset(1e-10));
+        assertMathClose(MathObject::log, 0.0, 1);
 
-        result = MathObject.log10(context, JSUndefined.INSTANCE, numberArgs(10));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(1.0, offset(1e-10));
+        assertMathClose(MathObject::log10, 1.0, 10);
 
-        result = MathObject.log2(context, JSUndefined.INSTANCE, numberArgs(2));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(1.0, offset(1e-10));
+        assertMathClose(MathObject::log2, 1.0, 2);
 
         // Test expm1, log1p
-        result = MathObject.expm1(context, JSUndefined.INSTANCE, numberArgs(0));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(0.0, offset(1e-10));
+        assertMathClose(MathObject::expm1, 0.0, 0);
 
-        result = MathObject.log1p(context, JSUndefined.INSTANCE, numberArgs(0));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(0.0, offset(1e-10));
+        assertMathClose(MathObject::log1p, 0.0, 0);
 
         // Edge case: no arguments
-        result = MathObject.exp(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::exp, Double.NaN);
     }
 
     @Test
@@ -165,79 +158,61 @@ public class MathObjectTest extends BaseJavetTest {
     @Test
     public void testFloor() {
         // Normal case: positive number
-        JSValue result = MathObject.floor(context, JSUndefined.INSTANCE, numberArgs(4.9));
-        assertNumberValue(result, 4.0);
+        assertMath(MathObject::floor, 4.0, 4.9);
 
         // Normal case: negative number
-        result = MathObject.floor(context, JSUndefined.INSTANCE, numberArgs(-4.1));
-        assertNumberValue(result, -5.0);
+        assertMath(MathObject::floor, -5.0, -4.1);
 
         // Normal case: integer
-        result = MathObject.floor(context, JSUndefined.INSTANCE, numberArgs(7.0));
-        assertNumberValue(result, 7.0);
+        assertMath(MathObject::floor, 7.0, 7.0);
 
         // Normal case: NaN
-        result = MathObject.floor(context, JSUndefined.INSTANCE, numberArgs(Double.NaN));
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::floor, Double.NaN, Double.NaN);
 
         // Edge case: no arguments
-        result = MathObject.floor(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::floor, Double.NaN);
     }
 
     @Test
     public void testHyperbolicFunctions() {
         // Test sinh, cosh, tanh
-        JSValue result = MathObject.sinh(context, JSUndefined.INSTANCE, numberArgs(0));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(0.0, offset(1e-10));
+        assertMathClose(MathObject::sinh, 0.0, 0);
 
-        result = MathObject.cosh(context, JSUndefined.INSTANCE, numberArgs(0));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(1.0, offset(1e-10));
+        assertMathClose(MathObject::cosh, 1.0, 0);
 
-        result = MathObject.tanh(context, JSUndefined.INSTANCE, numberArgs(0));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(0.0, offset(1e-10));
+        assertMathClose(MathObject::tanh, 0.0, 0);
 
         // Edge case: no arguments
-        result = MathObject.sinh(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::sinh, Double.NaN);
     }
 
     @Test
     public void testInverseHyperbolicFunctions() {
         // Test asinh, acosh, atanh
-        JSValue result = MathObject.asinh(context, JSUndefined.INSTANCE, numberArgs(0));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(0.0, offset(1e-10));
+        assertMathClose(MathObject::asinh, 0.0, 0);
 
-        result = MathObject.acosh(context, JSUndefined.INSTANCE, numberArgs(1));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(0.0, offset(1e-10));
+        assertMathClose(MathObject::acosh, 0.0, 1);
 
-        result = MathObject.atanh(context, JSUndefined.INSTANCE, numberArgs(0));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(0.0, offset(1e-10));
+        assertMathClose(MathObject::atanh, 0.0, 0);
 
         // Edge case: no arguments
-        result = MathObject.asinh(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::asinh, Double.NaN);
     }
 
     @Test
     public void testInverseTrigonometricFunctions() {
         // Test asin, acos, atan
-        JSValue result = MathObject.asin(context, JSUndefined.INSTANCE, numberArgs(0));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(0.0, offset(1e-10));
+        assertMathClose(MathObject::asin, 0.0, 0);
 
-        result = MathObject.acos(context, JSUndefined.INSTANCE, numberArgs(1));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(0.0, offset(1e-10));
+        assertMathClose(MathObject::acos, 0.0, 1);
 
-        result = MathObject.atan(context, JSUndefined.INSTANCE, numberArgs(0));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(0.0, offset(1e-10));
+        assertMathClose(MathObject::atan, 0.0, 0);
 
         // Test atan2
-        result = MathObject.atan2(context, JSUndefined.INSTANCE, numberArgs(0, 1));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(0.0, offset(1e-10));
+        assertMathClose(MathObject::atan2, 0.0, 0, 1);
 
         // Edge case: no arguments
-        result = MathObject.asin(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::asin, Double.NaN);
     }
 
     @Test
@@ -267,47 +242,37 @@ public class MathObjectTest extends BaseJavetTest {
     @Test
     public void testMax() {
         // Normal case: multiple numbers
-        JSValue result = MathObject.max(context, JSUndefined.INSTANCE, numberArgs(1, 5, 3));
-        assertNumberValue(result, 5.0);
+        assertMath(MathObject::max, 5.0, 1, 5, 3);
 
         // Normal case: single number
-        result = MathObject.max(context, JSUndefined.INSTANCE, numberArgs(42));
-        assertNumberValue(result, 42.0);
+        assertMath(MathObject::max, 42.0, 42);
 
         // Normal case: with NaN
-        result = MathObject.max(context, JSUndefined.INSTANCE, numberArgs(1, Double.NaN, 3));
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::max, Double.NaN, 1, Double.NaN, 3);
 
         // Normal case: negative numbers
-        result = MathObject.max(context, JSUndefined.INSTANCE, numberArgs(-5, -1, -10));
-        assertNumberValue(result, -1.0);
+        assertMath(MathObject::max, -1.0, -5, -1, -10);
 
         // Edge case: no arguments
-        result = MathObject.max(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertNumberValue(result, Double.NEGATIVE_INFINITY);
+        assertMath(MathObject::max, Double.NEGATIVE_INFINITY);
     }
 
     @Test
     public void testMin() {
         // Normal case: multiple numbers
-        JSValue result = MathObject.min(context, JSUndefined.INSTANCE, numberArgs(1, 5, 3));
-        assertNumberValue(result, 1.0);
+        assertMath(MathObject::min, 1.0, 1, 5, 3);
 
         // Normal case: single number
-        result = MathObject.min(context, JSUndefined.INSTANCE, numberArgs(42));
-        assertNumberValue(result, 42.0);
+        assertMath(MathObject::min, 42.0, 42);
 
         // Normal case: with NaN
-        result = MathObject.min(context, JSUndefined.INSTANCE, numberArgs(1, Double.NaN, 3));
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::min, Double.NaN, 1, Double.NaN, 3);
 
         // Normal case: negative numbers
-        result = MathObject.min(context, JSUndefined.INSTANCE, numberArgs(-5, -1, -10));
-        assertNumberValue(result, -10.0);
+        assertMath(MathObject::min, -10.0, -5, -1, -10);
 
         // Edge case: no arguments
-        result = MathObject.min(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertNumberValue(result, Double.POSITIVE_INFINITY);
+        assertMath(MathObject::min, Double.POSITIVE_INFINITY);
     }
 
     @Test
@@ -318,28 +283,22 @@ public class MathObjectTest extends BaseJavetTest {
     @Test
     public void testPow() {
         // Normal case: positive base, positive exponent
-        JSValue result = MathObject.pow(context, JSUndefined.INSTANCE, numberArgs(2, 3));
-        assertNumberValue(result, 8.0);
+        assertMath(MathObject::pow, 8.0, 2, 3);
 
         // Normal case: base 0, positive exponent
-        result = MathObject.pow(context, JSUndefined.INSTANCE, numberArgs(0, 5));
-        assertNumberValue(result, 0.0);
+        assertMath(MathObject::pow, 0.0, 0, 5);
 
         // Normal case: negative base, integer exponent
-        result = MathObject.pow(context, JSUndefined.INSTANCE, numberArgs(-2, 3));
-        assertNumberValue(result, -8.0);
+        assertMath(MathObject::pow, -8.0, -2, 3);
 
         // Normal case: fractional exponent
-        result = MathObject.pow(context, JSUndefined.INSTANCE, numberArgs(4, 0.5));
-        assertNumberValue(result, 2.0);
+        assertMath(MathObject::pow, 2.0, 4, 0.5);
 
         // Edge case: no base
-        result = MathObject.pow(context, JSUndefined.INSTANCE, numberArgs(2));
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::pow, Double.NaN, 2);
 
         // Edge case: no arguments
-        result = MathObject.pow(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::pow, Double.NaN);
     }
 
     @Test
@@ -358,24 +317,19 @@ public class MathObjectTest extends BaseJavetTest {
     @Test
     public void testRound() {
         // Normal case: round up
-        JSValue result = MathObject.round(context, JSUndefined.INSTANCE, numberArgs(4.5));
-        assertNumberValue(result, 5.0);
+        assertMath(MathObject::round, 5.0, 4.5);
 
         // Normal case: round down
-        result = MathObject.round(context, JSUndefined.INSTANCE, numberArgs(4.4));
-        assertNumberValue(result, 4.0);
+        assertMath(MathObject::round, 4.0, 4.4);
 
         // Normal case: negative number
-        result = MathObject.round(context, JSUndefined.INSTANCE, numberArgs(-4.5));
-        assertNumberValue(result, -4.0);
+        assertMath(MathObject::round, -4.0, -4.5);
 
         // Normal case: NaN
-        result = MathObject.round(context, JSUndefined.INSTANCE, numberArgs(Double.NaN));
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::round, Double.NaN, Double.NaN);
 
         // Edge case: no arguments
-        result = MathObject.round(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::round, Double.NaN);
     }
 
     @Test
@@ -388,74 +342,59 @@ public class MathObjectTest extends BaseJavetTest {
     @Test
     public void testSign() {
         // Normal case: positive number
-        JSValue result = MathObject.sign(context, JSUndefined.INSTANCE, numberArgs(5));
-        assertNumberValue(result, 1.0);
+        assertMath(MathObject::sign, 1.0, 5);
 
         // Normal case: negative number
-        result = MathObject.sign(context, JSUndefined.INSTANCE, numberArgs(-3));
-        assertNumberValue(result, -1.0);
+        assertMath(MathObject::sign, -1.0, -3);
 
         // Normal case: zero
-        result = MathObject.sign(context, JSUndefined.INSTANCE, numberArgs(0));
-        assertNumberValue(result, 0.0);
+        assertMath(MathObject::sign, 0.0, 0);
 
         // Normal case: negative zero
-        result = MathObject.sign(context, JSUndefined.INSTANCE, numberArgs(-0.0));
-        assertNumberValue(result, -0.0);
+        assertMath(MathObject::sign, -0.0, -0.0);
 
         // Normal case: NaN
-        result = MathObject.sign(context, JSUndefined.INSTANCE, numberArgs(Double.NaN));
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::sign, Double.NaN, Double.NaN);
 
         // Edge case: no arguments
-        result = MathObject.sign(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::sign, Double.NaN);
     }
 
     @Test
     public void testSpecializedFunctions() {
         // Test clz32
-        JSValue result = MathObject.clz32(context, JSUndefined.INSTANCE, numberArgs(1));
-        assertNumberValue(result, 31.0);
+        assertMath(MathObject::clz32, 31.0, 1);
 
         // Test fround
-        result = MathObject.fround(context, JSUndefined.INSTANCE, numberArgs(1.5));
+        JSValue result = MathObject.fround(context, JSUndefined.INSTANCE, numberArgs(1.5));
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(1.5, offset(1e-6));
 
         // Test hypot
-        result = MathObject.hypot(context, JSUndefined.INSTANCE, numberArgs(3, 4));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(5.0, offset(1e-10));
+        assertMathClose(MathObject::hypot, 5.0, 3, 4);
 
         // Test imul
-        result = MathObject.imul(context, JSUndefined.INSTANCE, numberArgs(2, 3));
-        assertNumberValue(result, 6.0);
+        assertMath(MathObject::imul, 6.0, 2, 3);
 
         // Edge case: no arguments
-        result = MathObject.clz32(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertNumberValue(result, 32.0);
+        assertMath(MathObject::clz32, 32.0);
     }
 
     @Test
     public void testSqrt() {
         // Normal case: perfect square
-        JSValue result = MathObject.sqrt(context, JSUndefined.INSTANCE, numberArgs(9));
-        assertNumberValue(result, 3.0);
+        assertMath(MathObject::sqrt, 3.0, 9);
 
         // Normal case: non-perfect square
-        result = MathObject.sqrt(context, JSUndefined.INSTANCE, numberArgs(2));
-        assertNumberValue(result, Math.sqrt(2));
+        assertMath(MathObject::sqrt, Math.sqrt(2), 2);
 
         // Normal case: zero
-        result = MathObject.sqrt(context, JSUndefined.INSTANCE, numberArgs(0));
-        assertNumberValue(result, 0.0);
+        assertMath(MathObject::sqrt, 0.0, 0);
 
         // Normal case: negative number
-        result = MathObject.sqrt(context, JSUndefined.INSTANCE, numberArgs(-1));
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::sqrt, Double.NaN, -1);
 
         // Edge case: no arguments
-        result = MathObject.sqrt(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::sqrt, Double.NaN);
     }
 
     @Test
@@ -516,48 +455,38 @@ public class MathObjectTest extends BaseJavetTest {
     @Test
     public void testTrigonometricFunctions() {
         // Test sin, cos, tan with common values
-        JSValue result = MathObject.sin(context, JSUndefined.INSTANCE, numberArgs(0));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(0.0, offset(1e-10));
+        assertMathClose(MathObject::sin, 0.0, 0);
 
-        result = MathObject.cos(context, JSUndefined.INSTANCE, numberArgs(0));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(1.0, offset(1e-10));
+        assertMathClose(MathObject::cos, 1.0, 0);
 
-        result = MathObject.tan(context, JSUndefined.INSTANCE, numberArgs(0));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(0.0, offset(1e-10));
+        assertMathClose(MathObject::tan, 0.0, 0);
 
         // Test with PI/2
-        result = MathObject.sin(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(Math.PI / 2)});
+        JSValue result = MathObject.sin(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(Math.PI / 2)});
         assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(1.0, offset(1e-10));
 
         // Edge case: no arguments
-        result = MathObject.sin(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::sin, Double.NaN);
     }
 
     @Test
     public void testTrunc() {
         // Normal case: positive number
-        JSValue result = MathObject.trunc(context, JSUndefined.INSTANCE, numberArgs(4.9));
-        assertNumberValue(result, 4.0);
+        assertMath(MathObject::trunc, 4.0, 4.9);
 
         // Normal case: negative number
-        result = MathObject.trunc(context, JSUndefined.INSTANCE, numberArgs(-4.9));
-        assertNumberValue(result, -4.0);
+        assertMath(MathObject::trunc, -4.0, -4.9);
 
         // Normal case: integer
-        result = MathObject.trunc(context, JSUndefined.INSTANCE, numberArgs(7.0));
-        assertNumberValue(result, 7.0);
+        assertMath(MathObject::trunc, 7.0, 7.0);
 
         // Normal case: NaN
-        result = MathObject.trunc(context, JSUndefined.INSTANCE, numberArgs(Double.NaN));
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::trunc, Double.NaN, Double.NaN);
 
         // Normal case: Infinity
-        result = MathObject.trunc(context, JSUndefined.INSTANCE, numberArgs(Double.POSITIVE_INFINITY));
-        assertNumberValue(result, Double.POSITIVE_INFINITY);
+        assertMath(MathObject::trunc, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY);
 
         // Edge case: no arguments
-        result = MathObject.trunc(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
+        assertMath(MathObject::trunc, Double.NaN);
     }
 }

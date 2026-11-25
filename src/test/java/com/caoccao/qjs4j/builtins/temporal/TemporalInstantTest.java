@@ -18,6 +18,8 @@ package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class TemporalInstantTest extends BaseJavetTest {
 
@@ -29,11 +31,6 @@ public class TemporalInstantTest extends BaseJavetTest {
     @Test
     public void testCompare() {
         assertIntegerWithJavet("Temporal.Instant.compare('1970-01-01T00:00:00Z', '1970-01-01T00:00:01Z')");
-    }
-
-    @Test
-    public void testConstructorBasic() {
-        assertStringWithJavet("new Temporal.Instant(0n).toString()");
     }
 
     @Test
@@ -107,35 +104,22 @@ public class TemporalInstantTest extends BaseJavetTest {
         assertStringWithJavet("new Temporal.Instant(3600000000000n).since('1970-01-01T00:00:00Z').toString()");
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"toString()", "toJSON()", "toString()", "toString({timeZone: 'UTC'})",
+            "toZonedDateTimeISO('UTC').toString()"})
+    void testStringConversions(String operation) {
+        assertStringWithJavet("new Temporal.Instant(0n)." + operation);
+    }
+
     @Test
     public void testSubtract() {
         assertStringWithJavet("new Temporal.Instant(3600000000000n).subtract({hours: 1}).toString()");
     }
 
     @Test
-    public void testToJSON() {
-        assertStringWithJavet("new Temporal.Instant(0n).toJSON()");
-    }
-
-    @Test
     public void testToLocaleString() {
         assertBooleanWithJavet(
                 "(() => { const value = new Temporal.Instant(0n); const locales = 'en-US'; const options = { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }; return value.toLocaleString(locales, options) === new Intl.DateTimeFormat(locales, options).format(value); })()");
-    }
-
-    @Test
-    public void testToString() {
-        assertStringWithJavet("new Temporal.Instant(0n).toString()");
-    }
-
-    @Test
-    public void testToStringWithTimeZone() {
-        assertStringWithJavet("new Temporal.Instant(0n).toString({timeZone: 'UTC'})");
-    }
-
-    @Test
-    public void testToZonedDateTimeISO() {
-        assertStringWithJavet("new Temporal.Instant(0n).toZonedDateTimeISO('UTC').toString()");
     }
 
     @Test
