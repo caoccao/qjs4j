@@ -44,31 +44,6 @@ public record TemporalRoundSettings(TemporalUnit smallestUnit, long roundingIncr
         return optionText.value();
     }
 
-    private static long getRoundingIncrementOption(JSContext context, JSObject optionsObject) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString("roundingIncrement"));
-        if (context.hasPendingException()) {
-            return Long.MIN_VALUE;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            return 1L;
-        }
-        JSNumber numericValue = JSTypeConversions.toNumber(context, optionValue);
-        if (context.hasPendingException() || numericValue == null) {
-            return Long.MIN_VALUE;
-        }
-        double numericRoundingIncrement = numericValue.value();
-        if (!Double.isFinite(numericRoundingIncrement) || Double.isNaN(numericRoundingIncrement)) {
-            context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
-            return Long.MIN_VALUE;
-        }
-        long integerIncrement = (long) numericRoundingIncrement;
-        if (integerIncrement < 1L || integerIncrement > TemporalConstants.MAX_ROUNDING_INCREMENT) {
-            context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
-            return Long.MIN_VALUE;
-        }
-        return integerIncrement;
-    }
-
     /**
      * Parses round options from a JS value (either a unit string or an options object).
      *
@@ -91,7 +66,8 @@ public record TemporalRoundSettings(TemporalUnit smallestUnit, long roundingIncr
         if (roundTo instanceof JSString unitString) {
             smallestUnitText = unitString.value();
         } else if (roundTo instanceof JSObject optionsObject) {
-            roundingIncrement = getRoundingIncrementOption(context, optionsObject);
+            roundingIncrement = TemporalUtils.getRoundingIncrementOption(context, optionsObject,
+                    "Temporal error: Invalid roundingIncrement option.");
             if (context.hasPendingException()) {
                 return null;
             }

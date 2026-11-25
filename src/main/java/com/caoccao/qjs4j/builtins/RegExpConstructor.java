@@ -102,7 +102,7 @@ public final class RegExpConstructor {
         // ES2024 22.2.3.1 step 3: If new.target is undefined (called as function)
         // Check if patternIsRegExp and flags is undefined
         if (flagsArg instanceof JSUndefined) {
-            boolean patternIsRegExp = isRegExp(context, patternArg);
+            boolean patternIsRegExp = JSTypeChecking.isRegExp(context, patternArg) == 1;
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -199,23 +199,4 @@ public final class RegExpConstructor {
         return value >= 0x2000 && value <= 0x200A;
     }
 
-    /**
-     * Check if a value is regexp-like per ES2024 IsRegExp. Checks Symbol.match first, then falls back to instanceof
-     * JSRegExp.
-     */
-    private static boolean isRegExp(JSContext context, JSValue value) {
-        if (!(value instanceof JSObject obj)) {
-            return false;
-        }
-        // Check Symbol.match property
-        JSValue matchProp = obj.get(PropertyKey.SYMBOL_MATCH);
-        if (context.hasPendingException()) {
-            return false;
-        }
-        if (!(matchProp instanceof JSUndefined)) {
-            return JSTypeConversions.toBoolean(matchProp).value();
-        }
-        // Fall back to instanceof check
-        return value instanceof JSRegExp;
-    }
 }

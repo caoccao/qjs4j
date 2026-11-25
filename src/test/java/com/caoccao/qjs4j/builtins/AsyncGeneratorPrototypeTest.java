@@ -142,7 +142,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
         JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(context, values);
 
         // Test next() with a value parameter
-        JSValue result = AsyncGeneratorPrototype.next(context, generator, new JSValue[]{new JSString("ignored")});
+        JSValue result = AsyncGeneratorPrototype.next(context, generator, stringArgs("ignored"));
 
         JSPromise promise = result.asPromise().orElseThrow();
         assertThat(awaitPromise(promise)).isTrue();
@@ -179,8 +179,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testReturnOnNonAsyncGenerator() {
         // Test return() called on non-async generator
-        JSValue result = AsyncGeneratorPrototype.return_(context, new JSNumber(123),
-                new JSValue[]{new JSString("value")});
+        JSValue result = AsyncGeneratorPrototype.return_(context, new JSNumber(123), stringArgs("value"));
         JSPromise promise = result.asPromise().orElseThrow();
         assertThat(awaitPromise(promise)).isTrue();
         assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
@@ -223,8 +222,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testThrowOnNonAsyncGenerator() {
         // Test throw() called on non-async generator
-        JSValue result = AsyncGeneratorPrototype.throw_(context, new JSObject(context),
-                new JSValue[]{new JSString("error")});
+        JSValue result = AsyncGeneratorPrototype.throw_(context, new JSObject(context), stringArgs("error"));
         JSPromise promise = result.asPromise().orElseThrow();
         assertThat(awaitPromise(promise)).isTrue();
         assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);

@@ -30,7 +30,7 @@ public class SymbolConstructorTest extends BaseJavetTest {
     @Test
     public void testCall() {
         // Normal case: with description
-        JSValue result = SymbolConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("test")});
+        JSValue result = SymbolConstructor.call(context, JSUndefined.INSTANCE, stringArgs("test"));
         JSSymbol symbol = result.asSymbol().orElseThrow();
         assertThat(symbol.getDescription()).isEqualTo("test");
 
@@ -50,10 +50,10 @@ public class SymbolConstructorTest extends BaseJavetTest {
         assertThat(symbol.getDescription()).isNull();
 
         // Normal case: symbols are unique
-        JSSymbol symbol1 = SymbolConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("same")})
-                .asSymbol().orElseThrow();
-        JSSymbol symbol2 = SymbolConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("same")})
-                .asSymbol().orElseThrow();
+        JSSymbol symbol1 = SymbolConstructor.call(context, JSUndefined.INSTANCE, stringArgs("same")).asSymbol()
+                .orElseThrow();
+        JSSymbol symbol2 = SymbolConstructor.call(context, JSUndefined.INSTANCE, stringArgs("same")).asSymbol()
+                .orElseThrow();
         assertThat(symbol1).isNotEqualTo(symbol2);
         assertThat(symbol1.getDescription()).isEqualTo("same");
         assertThat(symbol2.getDescription()).isEqualTo("same");
@@ -111,55 +111,48 @@ public class SymbolConstructorTest extends BaseJavetTest {
     @Test
     public void testKeyFor() {
         // Normal case: symbol from registry
-        JSSymbol symbol = SymbolConstructor
-                .symbolFor(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("registryKey")}).asSymbol()
-                .orElseThrow();
+        JSSymbol symbol = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, stringArgs("registryKey"))
+                .asSymbol().orElseThrow();
         JSValue result = SymbolConstructor.keyFor(context, JSUndefined.INSTANCE, new JSValue[]{symbol});
         assertStringValue(result, "registryKey");
 
         // Normal case: symbol not in registry
-        JSSymbol unregisteredSymbol = SymbolConstructor
-                .call(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("unregistered")}).asSymbol()
-                .orElseThrow();
+        JSSymbol unregisteredSymbol = SymbolConstructor.call(context, JSUndefined.INSTANCE, stringArgs("unregistered"))
+                .asSymbol().orElseThrow();
         result = SymbolConstructor.keyFor(context, JSUndefined.INSTANCE, new JSValue[]{unregisteredSymbol});
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
         // Edge case: no arguments
         result = SymbolConstructor.keyFor(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: non-symbol argument
-        result = SymbolConstructor.keyFor(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("not a symbol")});
-        assertTypeError(result);
-        assertPendingException(context);
+        result = SymbolConstructor.keyFor(context, JSUndefined.INSTANCE, stringArgs("not a symbol"));
+        assertPendingTypeError(context, result);
 
         // Edge case: null
         result = SymbolConstructor.keyFor(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE});
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: undefined
         result = SymbolConstructor.keyFor(context, JSUndefined.INSTANCE, new JSValue[]{JSUndefined.INSTANCE});
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
     public void testSymbolFor() {
         // Normal case: create new symbol in registry
-        JSValue result = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSString("test")});
+        JSValue result = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, stringArgs("test"));
         JSSymbol symbol1 = result.asSymbol().orElseThrow();
         assertThat(symbol1.getDescription()).isEqualTo("test");
 
         // Normal case: get existing symbol from registry
-        result = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("test")});
+        result = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, stringArgs("test"));
         JSSymbol symbol2 = result.asSymbol().orElseThrow();
         assertThat(symbol2).isEqualTo(symbol1); // Same symbol instance
 
         // Normal case: different keys create different symbols
-        result = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("other")});
+        result = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, stringArgs("other"));
         JSSymbol symbol3 = result.asSymbol().orElseThrow();
         assertThat(symbol3).isNotEqualTo(symbol1);
         assertThat(symbol3.getDescription()).isEqualTo("other");
@@ -223,12 +216,10 @@ public class SymbolConstructorTest extends BaseJavetTest {
                 JSContext context1 = runtime1.createContext();
                 JSRuntime runtime2 = new JSRuntime();
                 JSContext context2 = runtime2.createContext()) {
-            JSSymbol symbol1 = SymbolConstructor
-                    .symbolFor(context1, JSUndefined.INSTANCE, new JSValue[]{new JSString("sameKey")}).asSymbol()
-                    .orElseThrow();
-            JSSymbol symbol2 = SymbolConstructor
-                    .symbolFor(context2, JSUndefined.INSTANCE, new JSValue[]{new JSString("sameKey")}).asSymbol()
-                    .orElseThrow();
+            JSSymbol symbol1 = SymbolConstructor.symbolFor(context1, JSUndefined.INSTANCE, stringArgs("sameKey"))
+                    .asSymbol().orElseThrow();
+            JSSymbol symbol2 = SymbolConstructor.symbolFor(context2, JSUndefined.INSTANCE, stringArgs("sameKey"))
+                    .asSymbol().orElseThrow();
 
             assertThat(symbol1).isNotEqualTo(symbol2);
 

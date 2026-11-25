@@ -44,8 +44,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
     @Test
     public void testDateConstructorYearNormalizationWithJavet() {
-        assertIntegerWithJavet("new Date(99, 0, 1).getFullYear();");
-        assertIntegerWithJavet("new Date(Date.UTC(99, 0, 1)).getUTCFullYear();");
+        assertIntegerWithJavet("new Date(99, 0, 1).getFullYear();", "new Date(Date.UTC(99, 0, 1)).getUTCFullYear();");
     }
 
     @Test
@@ -193,8 +192,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-Date
         JSValue result = DatePrototype.getDate(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -210,8 +208,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-Date
         result = DatePrototype.getDay(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -221,8 +218,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-Date
         JSValue result = DatePrototype.getFullYear(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -238,8 +234,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-Date
         result = DatePrototype.getHours(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -249,8 +244,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-Date
         JSValue result = DatePrototype.getMilliseconds(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -260,8 +254,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-Date
         JSValue result = DatePrototype.getMinutes(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -271,8 +264,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-Date
         JSValue result = DatePrototype.getMonth(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -282,8 +274,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-Date
         JSValue result = DatePrototype.getSeconds(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -293,8 +284,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-Date
         JSValue result = DatePrototype.getTime(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -304,8 +294,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-Date
         JSValue result = DatePrototype.getUTCDate(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -315,8 +304,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-Date
         JSValue result = DatePrototype.getUTCFullYear(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -326,8 +314,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-Date
         JSValue result = DatePrototype.getUTCHours(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -337,22 +324,19 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-Date
         JSValue result = DatePrototype.getUTCMonth(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
     public void testGetYearWithJavet() {
         assertIntegerWithJavet("new Date(946684800000).getYear();");
-        assertTypeError(DatePrototype.getYear(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, DatePrototype.getYear(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
     }
 
     @Test
     public void testSetYearWithJavet() {
         assertIntegerWithJavet("var d = new Date(0); d.setYear(5); d.getFullYear();");
-        assertDoubleWithJavet("var d = new Date(0); d.setYear(NaN);");
-        assertDoubleWithJavet("var d = new Date(NaN); d.setYear(2020);");
+        assertDoubleWithJavet("var d = new Date(0); d.setYear(NaN);", "var d = new Date(NaN); d.setYear(2020);");
     }
 
     @Test
@@ -368,8 +352,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-Date
         result = DatePrototype.toISOString(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -385,8 +368,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-Date
         result = DatePrototype.toJSON(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -397,8 +379,7 @@ public class DatePrototypeTest extends BaseJavetTest {
     @Test
     public void testToPrimitiveAndAliasWithJavet() {
         assertBooleanWithJavet("Date.prototype.toGMTString === Date.prototype.toUTCString;");
-        assertStringWithJavet("typeof Date.prototype[Symbol.toPrimitive];");
-        assertStringWithJavet("new Date(0) + '';");
+        assertStringWithJavet("typeof Date.prototype[Symbol.toPrimitive];", "new Date(0) + '';");
         assertIntegerWithJavet("+new Date(0);");
     }
 
@@ -413,8 +394,8 @@ public class DatePrototypeTest extends BaseJavetTest {
         });
 
         // Edge case: called on non-Date
-        assertTypeError(DatePrototype.toStringMethod(context, new JSString("not date"), JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context,
+                DatePrototype.toStringMethod(context, new JSString("not date"), JSValue.NO_ARGS));
 
         // Skip Javet comparison on Windows due to timezone format differences
         assumeFalse(isWindows(), "Skipping on Windows - timezone format differences with V8");
@@ -424,10 +405,8 @@ public class DatePrototypeTest extends BaseJavetTest {
 
     @Test
     public void testUTCGettersSettersWithJavet() {
-        assertIntegerWithJavet("new Date(1704067200123).getUTCMinutes();");
-        assertIntegerWithJavet("new Date(1704067200123).getUTCSeconds();");
-        assertIntegerWithJavet("new Date(1704067200123).getUTCMilliseconds();");
-        assertIntegerWithJavet("var d = new Date(0); d.setUTCSeconds(61, 250);");
+        assertIntegerWithJavet("new Date(1704067200123).getUTCMinutes();", "new Date(1704067200123).getUTCSeconds();",
+                "new Date(1704067200123).getUTCMilliseconds();", "var d = new Date(0); d.setUTCSeconds(61, 250);");
         assertDoubleWithJavet("var d = new Date(NaN); d.setUTCFullYear(2000);");
     }
 
@@ -438,7 +417,6 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-Date
         JSValue result = DatePrototype.valueOf(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 }

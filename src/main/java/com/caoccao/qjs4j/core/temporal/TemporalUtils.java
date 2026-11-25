@@ -192,6 +192,35 @@ public final class TemporalUtils {
         return overflow;
     }
 
+    public static long getRoundingIncrementOption(JSContext context, JSObject optionsObject,
+            String invalidOptionMessage) {
+        JSValue optionValue = optionsObject.get(PropertyKey.fromString("roundingIncrement"));
+        if (context.hasPendingException()) {
+            return Long.MIN_VALUE;
+        }
+        if (optionValue instanceof JSUndefined || optionValue == null) {
+            return 1L;
+        }
+
+        JSNumber optionNumber = JSTypeConversions.toNumber(context, optionValue);
+        if (context.hasPendingException() || optionNumber == null) {
+            return Long.MIN_VALUE;
+        }
+
+        double numericOptionValue = optionNumber.value();
+        if (!Double.isFinite(numericOptionValue)) {
+            context.throwRangeError(invalidOptionMessage);
+            return Long.MIN_VALUE;
+        }
+
+        long integerOptionValue = (long) numericOptionValue;
+        if (integerOptionValue < 1L || integerOptionValue > TemporalConstants.MAX_ROUNDING_INCREMENT) {
+            context.throwRangeError(invalidOptionMessage);
+            return Long.MIN_VALUE;
+        }
+        return integerOptionValue;
+    }
+
     /**
      * Gets a string option from an options object.
      */

@@ -391,6 +391,14 @@ public final class RegExpPrototype {
         return JSNull.INSTANCE;
     }
 
+    private static JSValue getBooleanFlag(JSContext context, JSValue receiver,
+            java.util.function.Predicate<JSRegExp> getter) {
+        if (isRegExpPrototypeObject(context, receiver) || !(receiver instanceof JSRegExp regexp)) {
+            return JSUndefined.INSTANCE;
+        }
+        return JSBoolean.valueOf(getter.test(regexp));
+    }
+
     private static JSValue getBooleanFlagAccessorValue(JSContext context, JSValue thisArg, String errorName,
             java.util.function.Function<JSRegExp, Boolean> getter) {
         if (isRegExpPrototypeObject(context, thisArg)) {
@@ -473,14 +481,7 @@ public final class RegExpPrototype {
      * get RegExp.prototype.global ES2020 21.2.5.4
      */
     public static JSValue getGlobal(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (isRegExpPrototypeObject(context, thisArg)) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(thisArg instanceof JSRegExp regexp)) {
-            return JSUndefined.INSTANCE;
-        }
-
-        return JSBoolean.valueOf(regexp.isGlobal());
+        return getBooleanFlag(context, thisArg, JSRegExp::isGlobal);
     }
 
     public static JSValue getGlobalAccessor(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -491,14 +492,7 @@ public final class RegExpPrototype {
      * get RegExp.prototype.hasIndices ES2022
      */
     public static JSValue getHasIndices(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (isRegExpPrototypeObject(context, thisArg)) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(thisArg instanceof JSRegExp regexp)) {
-            return JSUndefined.INSTANCE;
-        }
-
-        return JSBoolean.valueOf(regexp.hasIndices());
+        return getBooleanFlag(context, thisArg, JSRegExp::hasIndices);
     }
 
     public static JSValue getHasIndicesAccessor(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -509,14 +503,7 @@ public final class RegExpPrototype {
      * get RegExp.prototype.ignoreCase ES2020 21.2.5.5
      */
     public static JSValue getIgnoreCase(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (isRegExpPrototypeObject(context, thisArg)) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(thisArg instanceof JSRegExp regexp)) {
-            return JSUndefined.INSTANCE;
-        }
-
-        return JSBoolean.valueOf(regexp.isIgnoreCase());
+        return getBooleanFlag(context, thisArg, JSRegExp::isIgnoreCase);
     }
 
     public static JSValue getIgnoreCaseAccessor(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -527,14 +514,7 @@ public final class RegExpPrototype {
      * get RegExp.prototype.multiline ES2020 21.2.5.7
      */
     public static JSValue getMultiline(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (isRegExpPrototypeObject(context, thisArg)) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(thisArg instanceof JSRegExp regexp)) {
-            return JSUndefined.INSTANCE;
-        }
-
-        return JSBoolean.valueOf(regexp.isMultiline());
+        return getBooleanFlag(context, thisArg, JSRegExp::isMultiline);
     }
 
     public static JSValue getMultilineAccessor(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -597,14 +577,7 @@ public final class RegExpPrototype {
      * get RegExp.prototype.sticky ES2020 21.2.5.12
      */
     public static JSValue getSticky(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (isRegExpPrototypeObject(context, thisArg)) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(thisArg instanceof JSRegExp regexp)) {
-            return JSUndefined.INSTANCE;
-        }
-
-        return JSBoolean.valueOf(regexp.isSticky());
+        return getBooleanFlag(context, thisArg, JSRegExp::isSticky);
     }
 
     public static JSValue getStickyAccessor(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -615,14 +588,7 @@ public final class RegExpPrototype {
      * get RegExp.prototype.unicode ES2020 21.2.5.15
      */
     public static JSValue getUnicode(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (isRegExpPrototypeObject(context, thisArg)) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(thisArg instanceof JSRegExp regexp)) {
-            return JSUndefined.INSTANCE;
-        }
-
-        return JSBoolean.valueOf(regexp.isUnicode());
+        return getBooleanFlag(context, thisArg, JSRegExp::isUnicode);
     }
 
     public static JSValue getUnicodeAccessor(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -633,14 +599,7 @@ public final class RegExpPrototype {
      * get RegExp.prototype.unicodeSets ES2024
      */
     public static JSValue getUnicodeSets(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (isRegExpPrototypeObject(context, thisArg)) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(thisArg instanceof JSRegExp regexp)) {
-            return JSUndefined.INSTANCE;
-        }
-
-        return JSBoolean.valueOf(regexp.isUnicodeSets());
+        return getBooleanFlag(context, thisArg, JSRegExp::isUnicodeSets);
     }
 
     public static JSValue getUnicodeSetsAccessor(JSContext context, JSValue thisArg, JSValue[] args) {

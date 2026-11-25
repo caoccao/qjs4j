@@ -164,27 +164,22 @@ public class JSResourceLimitTest extends BaseJavetTest {
 
     @Test
     public void testOrdinaryRegularExpressionsAreUnaffected() {
-        assertStringWithJavet("/(\\w+)\\s(\\w+)/.exec('John Smith')[2]");
-        assertStringWithJavet("'2026-08-25'.replace(/(\\d+)-(\\d+)-(\\d+)/, '$3/$2/$1')");
-        assertStringWithJavet("String('aaa'.repeat(2000).match(/a+/)[0].length)");
-        assertStringWithJavet("String('x'.repeat(100000).split(/(?=x)/).length)");
+        assertStringWithJavet("/(\\w+)\\s(\\w+)/.exec('John Smith')[2]",
+                "'2026-08-25'.replace(/(\\d+)-(\\d+)-(\\d+)/, '$3/$2/$1')",
+                "String('aaa'.repeat(2000).match(/a+/)[0].length)", "String('x'.repeat(100000).split(/(?=x)/).length)");
     }
 
     @Test
     public void testOrdinaryStringOperationsAreUnaffected() {
-        assertStringWithJavet("'abc'.repeat(3)");
-        assertStringWithJavet("'x'.padStart(5, '-')");
-        assertStringWithJavet("'x'.padEnd(5, '-')");
-        assertStringWithJavet("'a'.concat('b', 'c')");
-        assertStringWithJavet("[1, 2, 3].join('-')");
-        assertStringWithJavet("'a' + 'b' + 1");
+        assertStringWithJavet("'abc'.repeat(3)", "'x'.padStart(5, '-')", "'x'.padEnd(5, '-')", "'a'.concat('b', 'c')",
+                "[1, 2, 3].join('-')", "'a' + 'b' + 1");
     }
 
     @Test
     @Timeout(60)
     public void testPadBeyondMaximumLengthRaisesRangeError() {
-        assertStringWithJavet("try { 'a'.padStart(1e9); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
-        assertStringWithJavet("try { 'a'.padEnd(1e9); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
+        assertStringWithJavet("try { 'a'.padStart(1e9); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }",
+                "try { 'a'.padEnd(1e9); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
     }
 
     @Test
@@ -217,8 +212,8 @@ public class JSResourceLimitTest extends BaseJavetTest {
     @Test
     @Timeout(60)
     public void testRepeatBeyondMaximumLengthRaisesRangeError() {
-        assertStringWithJavet("try { 'a'.repeat(1e9); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
-        assertStringWithJavet("try { 'ab'.repeat(2147483647); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
+        assertStringWithJavet("try { 'a'.repeat(1e9); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }",
+                "try { 'ab'.repeat(2147483647); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
     }
 
     @Test
@@ -228,10 +223,10 @@ public class JSResourceLimitTest extends BaseJavetTest {
         // 2 * that wrapped to -2, the guard passed, and `new StringBuilder(-2)` threw
         // NegativeArraySizeException — a Java failure that escaped the script's own catch. The
         // multiplication is now a division, so nothing overflows before the check.
-        assertStringWithJavet("try { 'xx'.repeat(1e20); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
-        assertStringWithJavet("try { 'xx'.repeat(9223372036854775807); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
-        assertStringWithJavet("try { 'abc'.repeat(1e30); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
-        assertStringWithJavet("try { 'x'.repeat(Number.MAX_VALUE); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
+        assertStringWithJavet("try { 'xx'.repeat(1e20); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }",
+                "try { 'xx'.repeat(9223372036854775807); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }",
+                "try { 'abc'.repeat(1e30); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }",
+                "try { 'x'.repeat(Number.MAX_VALUE); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
     }
 
     @Test
@@ -239,14 +234,12 @@ public class JSResourceLimitTest extends BaseJavetTest {
     public void testRepeatEdgeCountsAreUnaffectedByTheOverflowGuard() {
         // The guard divides by s.length(), so the empty-string and zero-count shortcuts have to
         // come first — dividing by zero would turn a legal call into an engine failure.
-        assertStringWithJavet("JSON.stringify(''.repeat(1e20))");
-        assertStringWithJavet("JSON.stringify(''.repeat(0))");
-        assertStringWithJavet("JSON.stringify('abc'.repeat(0))");
-        assertStringWithJavet("try { 'x'.repeat(-1); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
-        assertStringWithJavet("try { 'x'.repeat(Infinity); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
-        assertStringWithJavet("JSON.stringify('x'.repeat(NaN))");
-        assertStringWithJavet("JSON.stringify('x'.repeat())");
-        assertStringWithJavet("try { 'x'.repeat(-Infinity); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
+        assertStringWithJavet("JSON.stringify(''.repeat(1e20))", "JSON.stringify(''.repeat(0))",
+                "JSON.stringify('abc'.repeat(0))",
+                "try { 'x'.repeat(-1); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }",
+                "try { 'x'.repeat(Infinity); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }",
+                "JSON.stringify('x'.repeat(NaN))", "JSON.stringify('x'.repeat())",
+                "try { 'x'.repeat(-Infinity); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
     }
 
     @Test

@@ -68,18 +68,15 @@ public class MapConstructorTest extends BaseJavetTest {
         assertThat(map.size()).isEqualTo(0);
 
         // Edge case: insufficient arguments
-        assertTypeError(MapConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{items}));
-        assertPendingException(context);
+        assertPendingTypeError(context, MapConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{items}));
 
         // Edge case: non-iterable items
-        assertTypeError(
+        assertPendingTypeError(context,
                 MapConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(1), callback}));
-        assertPendingException(context);
 
         // Edge case: non-function callback
-        assertTypeError(MapConstructor.groupBy(context, JSUndefined.INSTANCE,
+        assertPendingTypeError(context, MapConstructor.groupBy(context, JSUndefined.INSTANCE,
                 new JSValue[]{items, new JSString("not function")}));
-        assertPendingException(context);
     }
 
     @Test

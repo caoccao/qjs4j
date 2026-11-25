@@ -60,20 +60,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         if (operator != AssignmentOperator.ASSIGN) {
             if (left instanceof MemberExpression memberExpr) {
                 if (memberExpr.getObject().isSuperIdentifier()) {
-                    compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
-                    if (memberExpr.isComputed()) {
-                        // Per ES spec: computed key evaluated before GetSuperBase()
-                        compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
-                        compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-                        compilerContext.emitter.emitU8(4);
-                        compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
-                        compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                    } else {
-                        compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-                        compilerContext.emitter.emitU8(4);
-                        compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
-                        compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
-                    }
+                    compilerContext.emitHelpers.emitSuperPropertyReference(memberExpr);
                     compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                     compilerContext.emitter.emitOpcode(Opcode.DUP3);
                     compilerContext.emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
@@ -106,20 +93,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         } else {
             if (left instanceof MemberExpression memberExpr) {
                 if (memberExpr.getObject().isSuperIdentifier()) {
-                    compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
-                    if (memberExpr.isComputed()) {
-                        // Per ES spec: computed key evaluated before GetSuperBase()
-                        compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
-                        compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-                        compilerContext.emitter.emitU8(4);
-                        compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
-                        compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                    } else {
-                        compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-                        compilerContext.emitter.emitU8(4);
-                        compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
-                        compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
-                    }
+                    compilerContext.emitHelpers.emitSuperPropertyReference(memberExpr);
                     compilerContext.expressionCompiler.compile(assignExpr.getRight());
                     compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
                     return;
@@ -359,20 +333,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
             }
         } else if (left instanceof MemberExpression memberExpr) {
             if (memberExpr.getObject().isSuperIdentifier()) {
-                compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
-                if (memberExpr.isComputed()) {
-                    // Per ES spec: computed key evaluated before GetSuperBase()
-                    compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
-                    compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-                    compilerContext.emitter.emitU8(4);
-                    compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
-                    compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                } else {
-                    compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-                    compilerContext.emitter.emitU8(4);
-                    compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
-                    compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
-                }
+                compilerContext.emitHelpers.emitSuperPropertyReference(memberExpr);
                 compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                 compilerContext.emitter.emitOpcode(Opcode.DUP3);
                 compilerContext.emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
@@ -586,7 +547,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         compilerContext.emitter.emitOpcode(Opcode.DUP);
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSSymbol.UNSCOPABLES);
         compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-        int[] jumpToResolveWithoutUnscopables = emitWithUnscopablesSkipJumps();
+        int[] jumpToResolveWithoutUnscopables = compilerContext.emitHelpers.emitWithUnscopablesSkipJumps();
 
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
         compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
@@ -609,24 +570,4 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         compilerContext.emitter.emitOpcode(Opcode.DROP);
     }
 
-    private int[] emitWithUnscopablesSkipJumps() {
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
-        int jumpToResolveWithoutUnscopablesOnNullish = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
-
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcode(Opcode.TYPEOF);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("object"));
-        compilerContext.emitter.emitOpcode(Opcode.STRICT_EQ);
-        int jumpToCheckBlockedWhenObject = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
-
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcode(Opcode.TYPEOF);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("function"));
-        compilerContext.emitter.emitOpcode(Opcode.STRICT_EQ);
-        int jumpToResolveWithoutUnscopablesOnPrimitive = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
-
-        compilerContext.emitter.patchJump(jumpToCheckBlockedWhenObject, compilerContext.emitter.currentOffset());
-        return new int[]{jumpToResolveWithoutUnscopablesOnNullish, jumpToResolveWithoutUnscopablesOnPrimitive};
-    }
 }

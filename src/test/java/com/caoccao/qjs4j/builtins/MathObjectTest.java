@@ -18,7 +18,6 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.JSNumber;
-import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.core.JSUndefined;
 import com.caoccao.qjs4j.core.JSValue;
 import org.junit.jupiter.api.Test;
@@ -58,7 +57,7 @@ public class MathObjectTest extends BaseJavetTest {
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Edge case: string coercion
-        result = MathObject.abs(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("-42")});
+        result = MathObject.abs(context, JSUndefined.INSTANCE, stringArgs("-42"));
         assertNumberValue(result, 42.0);
     }
 
@@ -381,13 +380,9 @@ public class MathObjectTest extends BaseJavetTest {
 
     @Test
     public void testRoundAndFroundEdgeCases() {
-        assertBooleanWithJavet("Object.is(Math.round(-0.5), -0)");
-        assertBooleanWithJavet("Object.is(Math.round(-0.1), -0)");
-        assertBooleanWithJavet("Math.round(-1.5) === -1");
-        assertBooleanWithJavet("Math.round(0.5) === 1");
-        assertBooleanWithJavet("Object.is(Math.fround(-0), -0)");
-        assertBooleanWithJavet("Math.fround(1.337) === 1.3370000123977661");
-        assertBooleanWithJavet("Math.hypot(NaN, Infinity) === Infinity");
+        assertBooleanWithJavet("Object.is(Math.round(-0.5), -0)", "Object.is(Math.round(-0.1), -0)",
+                "Math.round(-1.5) === -1", "Math.round(0.5) === 1", "Object.is(Math.fround(-0), -0)",
+                "Math.fround(1.337) === 1.3370000123977661", "Math.hypot(NaN, Infinity) === Infinity");
     }
 
     @Test

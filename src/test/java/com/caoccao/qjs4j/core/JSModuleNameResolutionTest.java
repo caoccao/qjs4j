@@ -16,13 +16,9 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.BaseTest;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -41,33 +37,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  * the expected values here were taken from Node 24.16.0 running the same files, and are noted per case where they are
  * not simply "it works".
  */
-public class JSModuleNameResolutionTest extends BaseTest {
-    @TempDir
-    Path moduleDirectory;
-
-    /**
-     * Evaluate an entry module and return what it left in {@code globalThis.result}.
-     *
-     * @param entryName
-     *            the entry module's file name
-     * @param entrySource
-     *            the entry module's source
-     * @return the string form of the result
-     */
-    private String evaluateEntry(String entryName, String entrySource) throws IOException {
-        Path entry = writeModule(entryName, entrySource);
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            context.eval(entrySource, entry.toString(), true);
-            return context.eval("String(globalThis.result)", "probe.js", false).toString();
-        }
-    }
+public class JSModuleNameResolutionTest extends ModuleFileTest {
 
     @Test
     public void testAHexEscapeInASpecifier() throws IOException {
         // Node: 5.
         writeModule("dep2.mjs", "export const z = 5;\n");
         writeStandardDependency();
-        assertThat(evaluateEntry("main-hex.mjs", "import { z } from \"./de\\x702.mjs\";\nglobalThis.result = z;\n"))
+        assertThat(
+                evaluateModuleResult("main-hex.mjs", "import { z } from \"./de\\x702.mjs\";\nglobalThis.result = z;\n"))
                 .isEqualTo("5");
     }
 
@@ -76,7 +54,7 @@ public class JSModuleNameResolutionTest extends BaseTest {
         // A LineContinuation contributes nothing to the StringValue, so this names ./dep.mjs.
         // Node: 42.
         writeStandardDependency();
-        assertThat(evaluateEntry("main-continuation.mjs",
+        assertThat(evaluateModuleResult("main-continuation.mjs",
                 "import { x } from \"./de\\\np.mjs\";\nglobalThis.result = x;\n")).isEqualTo("42");
     }
 
@@ -85,9 +63,8 @@ public class JSModuleNameResolutionTest extends BaseTest {
         // The closing quote is the third one, not the second: an escape-blind scan for the next
         // quote character truncates the specifier. Node: 9.
         writeModule("a'b.mjs", "export const q = 9;\n");
-        assertThat(
-                evaluateEntry("main-escaped-quote.mjs", "import { q } from './a\\'b.mjs';\nglobalThis.result = q;\n"))
-                .isEqualTo("9");
+        assertThat(evaluateModuleResult("main-escaped-quote.mjs",
+                "import { q } from './a\\'b.mjs';\nglobalThis.result = q;\n")).isEqualTo("9");
     }
 
     @Test
@@ -95,7 +72,7 @@ public class JSModuleNameResolutionTest extends BaseTest {
         // The review's third reproduction, which used to fail only after the dependency had run.
         // Node: 1.
         writeStandardDependency();
-        assertThat(evaluateEntry("main-escaped-import.mjs",
+        assertThat(evaluateModuleResult("main-escaped-import.mjs",
                 "import { \"a\\u002db\" as v } from './dep.mjs';\nglobalThis.result = v;\n")).isEqualTo("1");
     }
 
@@ -103,14 +80,14 @@ public class JSModuleNameResolutionTest extends BaseTest {
     public void testAnEscapedLocalImportName() throws IOException {
         // The local binding is `y`, so `y` is the name the module body can use. Node: 42.
         writeStandardDependency();
-        assertThat(evaluateEntry("main-escaped-local.mjs",
+        assertThat(evaluateModuleResult("main-escaped-local.mjs",
                 "import { x as \\u0079 } from './dep.mjs';\nglobalThis.result = y;\n")).isEqualTo("42");
     }
 
     @Test
     public void testAnEscapedNamespaceAlias() throws IOException {
         writeStandardDependency();
-        assertThat(evaluateEntry("main-escaped-namespace.mjs",
+        assertThat(evaluateModuleResult("main-escaped-namespace.mjs",
                 "import * as m\\u00f3dulo from './dep.mjs';\nglobalThis.result = módulo.x;\n")).isEqualTo("42");
     }
 
@@ -118,7 +95,7 @@ public class JSModuleNameResolutionTest extends BaseTest {
     public void testAnEscapedSpecifier() throws IOException {
         // The review's first reproduction. Node: 42.
         writeStandardDependency();
-        assertThat(evaluateEntry("main-escaped-specifier.mjs",
+        assertThat(evaluateModuleResult("main-escaped-specifier.mjs",
                 "import { x } from \"./d\\u0065p.mjs\";\nglobalThis.result = x;\n")).isEqualTo("42");
     }
 
@@ -126,7 +103,7 @@ public class JSModuleNameResolutionTest extends BaseTest {
     public void testAPlainImportedNameAgainstAnEscapedExportName() throws IOException {
         // The review's second reproduction, the other way round. Node: 2.
         writeModule("dep-escaped-export.mjs", "const y = 2;\nexport { y as \"a\\u002db\" };\n");
-        assertThat(evaluateEntry("main-plain-import.mjs",
+        assertThat(evaluateModuleResult("main-plain-import.mjs",
                 "import { \"a-b\" as v } from './dep-escaped-export.mjs';\nglobalThis.result = v;\n")).isEqualTo("2");
     }
 
@@ -134,7 +111,7 @@ public class JSModuleNameResolutionTest extends BaseTest {
     public void testAUnicodeFunctionAndClassImportedAcrossModules() throws IOException {
         // The review's Unicode reproductions. Node: 7:function.
         writeStandardDependency();
-        assertThat(evaluateEntry("main-unicode-import.mjs",
+        assertThat(evaluateModuleResult("main-unicode-import.mjs",
                 "import { café, Café } from './dep.mjs';\n" + "globalThis.result = café() + ':' + typeof Café;\n"))
                 .isEqualTo("7:function");
     }
@@ -144,7 +121,7 @@ public class JSModuleNameResolutionTest extends BaseTest {
         // Node: 7.
         writeStandardDependency();
         writeModule("reexport.mjs", "export { café as coffee } from './dep.mjs';\n");
-        assertThat(evaluateEntry("main-reexport.mjs",
+        assertThat(evaluateModuleResult("main-reexport.mjs",
                 "import { coffee } from './reexport.mjs';\nglobalThis.result = coffee();\n")).isEqualTo("7");
     }
 
@@ -153,14 +130,8 @@ public class JSModuleNameResolutionTest extends BaseTest {
         // The review's reproduction: this used to run the dependency and then fail with
         // "módulo is not defined". Node: 42.
         writeStandardDependency();
-        assertThat(evaluateEntry("main-unicode-namespace.mjs",
+        assertThat(evaluateModuleResult("main-unicode-namespace.mjs",
                 "import * as módulo from './dep.mjs';\nglobalThis.result = módulo.x;\n")).isEqualTo("42");
-    }
-
-    private Path writeModule(String name, String source) throws IOException {
-        Path path = moduleDirectory.resolve(name);
-        Files.writeString(path, source);
-        return path;
     }
 
     private void writeStandardDependency() throws IOException {

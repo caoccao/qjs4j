@@ -56,46 +56,11 @@ public final class TemporalPlainTimeConstructor {
             context.throwTypeError("Method invoked on an object that is not Temporal.PlainTime.");
             return JSUndefined.INSTANCE;
         }
-        int hour = 0, minute = 0, second = 0, millisecond = 0, microsecond = 0, nanosecond = 0;
-
-        if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
-            hour = TemporalUtils.toIntegerThrowOnInfinity(context, args[0]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-            minute = TemporalUtils.toIntegerThrowOnInfinity(context, args[1]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
-            second = TemporalUtils.toIntegerThrowOnInfinity(context, args[2]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        if (args.length > 3 && !(args[3] instanceof JSUndefined)) {
-            millisecond = TemporalUtils.toIntegerThrowOnInfinity(context, args[3]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        if (args.length > 4 && !(args[4] instanceof JSUndefined)) {
-            microsecond = TemporalUtils.toIntegerThrowOnInfinity(context, args[4]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        if (args.length > 5 && !(args[5] instanceof JSUndefined)) {
-            nanosecond = TemporalUtils.toIntegerThrowOnInfinity(context, args[5]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+        IsoTime isoTime = readTimeArguments(context, args, 0);
+        if (isoTime == null) {
+            return JSUndefined.INSTANCE;
         }
 
-        IsoTime isoTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
         if (!isoTime.isValid()) {
             context.throwRangeError("Temporal error: Invalid time");
             return JSUndefined.INSTANCE;
@@ -117,70 +82,71 @@ public final class TemporalPlainTimeConstructor {
         return toTemporalTime(context, item, options);
     }
 
+    static IsoTime readTimeArguments(JSContext context, JSValue[] args, int start) {
+        if (args.length <= start) {
+            return IsoTime.MIDNIGHT;
+        }
+        int[] fields = new int[6];
+        int count = Math.min(fields.length, args.length - start);
+        for (int i = 0; i < count; i++) {
+            JSValue argument = args[start + i];
+            if (!(argument instanceof JSUndefined)) {
+                fields[i] = TemporalUtils.toIntegerThrowOnInfinity(context, argument);
+                if (context.hasPendingException()) {
+                    return null;
+                }
+            }
+        }
+        return new IsoTime(fields[0], fields[1], fields[2], fields[3], fields[4], fields[5]);
+    }
+
     static JSValue timeFromFields(JSContext context, JSObject fields, JSValue options) {
-        boolean hasTimeField = false;
+        return timeFromFields(context, fields, options, IsoTime.MIDNIGHT,
+                "Temporal error: Time-like argument must be object or string");
+    }
 
-        JSValue hourValue = fields.get(PropertyKey.fromString("hour"));
+    static JSValue timeFromFields(JSContext context, JSObject fields, JSValue options, IsoTime original,
+            String missingFieldsError) {
+        Integer hourField = TemporalUtils.getOptionalIntegerField(context, fields, "hour");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        hasTimeField |= !(hourValue instanceof JSUndefined) && hourValue != null;
-        int hour = toIntegerFieldOrDefault(context, hourValue, 0);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
+        int hour = hourField != null ? hourField : original.hour();
 
-        JSValue microsecondValue = fields.get(PropertyKey.fromString("microsecond"));
+        Integer microsecondField = TemporalUtils.getOptionalIntegerField(context, fields, "microsecond");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        hasTimeField |= !(microsecondValue instanceof JSUndefined) && microsecondValue != null;
-        int microsecond = toIntegerFieldOrDefault(context, microsecondValue, 0);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
+        int microsecond = microsecondField != null ? microsecondField : original.microsecond();
 
-        JSValue millisecondValue = fields.get(PropertyKey.fromString("millisecond"));
+        Integer millisecondField = TemporalUtils.getOptionalIntegerField(context, fields, "millisecond");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        hasTimeField |= !(millisecondValue instanceof JSUndefined) && millisecondValue != null;
-        int millisecond = toIntegerFieldOrDefault(context, millisecondValue, 0);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
+        int millisecond = millisecondField != null ? millisecondField : original.millisecond();
 
-        JSValue minuteValue = fields.get(PropertyKey.fromString("minute"));
+        Integer minuteField = TemporalUtils.getOptionalIntegerField(context, fields, "minute");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        hasTimeField |= !(minuteValue instanceof JSUndefined) && minuteValue != null;
-        int minute = toIntegerFieldOrDefault(context, minuteValue, 0);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
+        int minute = minuteField != null ? minuteField : original.minute();
 
-        JSValue nanosecondValue = fields.get(PropertyKey.fromString("nanosecond"));
+        Integer nanosecondField = TemporalUtils.getOptionalIntegerField(context, fields, "nanosecond");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        hasTimeField |= !(nanosecondValue instanceof JSUndefined) && nanosecondValue != null;
-        int nanosecond = toIntegerFieldOrDefault(context, nanosecondValue, 0);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
+        int nanosecond = nanosecondField != null ? nanosecondField : original.nanosecond();
 
-        JSValue secondValue = fields.get(PropertyKey.fromString("second"));
+        Integer secondField = TemporalUtils.getOptionalIntegerField(context, fields, "second");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        hasTimeField |= !(secondValue instanceof JSUndefined) && secondValue != null;
-        int second = toIntegerFieldOrDefault(context, secondValue, 0);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!hasTimeField) {
-            context.throwTypeError("Temporal error: Time-like argument must be object or string");
+        int second = secondField != null ? secondField : original.second();
+
+        boolean hasAnyField = hourField != null || microsecondField != null || millisecondField != null
+                || minuteField != null || nanosecondField != null || secondField != null;
+        if (!hasAnyField) {
+            context.throwTypeError(missingFieldsError);
             return JSUndefined.INSTANCE;
         }
 
@@ -208,13 +174,6 @@ public final class TemporalPlainTimeConstructor {
             return JSUndefined.INSTANCE;
         }
         return JSTemporalPlainTime.create(context, time);
-    }
-
-    private static int toIntegerFieldOrDefault(JSContext context, JSValue value, int defaultValue) {
-        if (value instanceof JSUndefined || value == null) {
-            return defaultValue;
-        }
-        return TemporalUtils.toIntegerThrowOnInfinity(context, value);
     }
 
     /**

@@ -82,7 +82,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
 
         // Normal case: return on empty generator
         JSGenerator generator2 = JSGenerator.fromArray(context, emptyArray);
-        result = GeneratorPrototype.returnMethod(context, generator2, new JSValue[]{new JSString("done")});
+        result = GeneratorPrototype.returnMethod(context, generator2, stringArgs("done"));
         iteratorResult = result.asObject().orElseThrow();
         assertStringValue(iteratorResult.get("value"), "done");
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
@@ -163,7 +163,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: next() with value argument (ignored in this simple implementation)
-        result = GeneratorPrototype.next(context, generator, new JSValue[]{new JSString("ignored")});
+        result = GeneratorPrototype.next(context, generator, stringArgs("ignored"));
         iteratorResult = result.asObject().orElseThrow();
         assertThat(iteratorResult.get("value")).isEqualTo(JSUndefined.INSTANCE);
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
@@ -197,7 +197,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         JSGenerator generator = JSGenerator.fromArray(context, array);
 
         // Normal case: return with value
-        JSValue result = GeneratorPrototype.returnMethod(context, generator, new JSValue[]{new JSString("returned")});
+        JSValue result = GeneratorPrototype.returnMethod(context, generator, stringArgs("returned"));
         JSObject iteratorResult = result.asObject().orElseThrow();
         assertStringValue(iteratorResult.get("value"), "returned");
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
@@ -261,8 +261,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         JSGenerator generator = JSGenerator.fromArray(context, array);
 
         // Normal case: throw with exception
-        JSValue result = GeneratorPrototype.throwMethod(context, generator,
-                new JSValue[]{new JSString("test exception")});
+        JSValue result = GeneratorPrototype.throwMethod(context, generator, stringArgs("test exception"));
         // In this simplified implementation, throw completes the generator and returns an error
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
             assertThat(error.get("name")).isNotNull();
@@ -280,12 +279,12 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         assertThat(context.getPendingException()).isNotNull();
 
         // Edge case: called on non-generator
-        result = GeneratorPrototype.throwMethod(context, new JSNumber(123), new JSValue[]{new JSString("error")});
+        result = GeneratorPrototype.throwMethod(context, new JSNumber(123), stringArgs("error"));
         assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
 
         // Edge case: called on null
-        result = GeneratorPrototype.throwMethod(context, JSNull.INSTANCE, new JSValue[]{new JSString("error")});
+        result = GeneratorPrototype.throwMethod(context, JSNull.INSTANCE, stringArgs("error"));
         assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
     }

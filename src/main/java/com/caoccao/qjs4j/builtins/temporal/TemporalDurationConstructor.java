@@ -23,7 +23,6 @@ import java.math.BigInteger;
 import java.time.*;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Implementation of Temporal.Duration constructor and static methods.
@@ -156,74 +155,16 @@ public final class TemporalDurationConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        long years = 0, months = 0, weeks = 0, days = 0;
-        long hours = 0, minutes = 0, seconds = 0;
-        long milliseconds = 0, microseconds = 0, nanoseconds = 0;
-
-        if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
-            years = parseDurationConstructorArgument(context, args[0]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
+        long[] components = new long[TemporalUnit.DURATION_PROPERTY_ORDER.size()];
+        for (int i = 0; i < Math.min(args.length, components.length); i++) {
+            if (!(args[i] instanceof JSUndefined)) {
+                components[i] = parseDurationConstructorArgument(context, args[i]);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
             }
         }
-        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-            months = parseDurationConstructorArgument(context, args[1]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
-            weeks = parseDurationConstructorArgument(context, args[2]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        if (args.length > 3 && !(args[3] instanceof JSUndefined)) {
-            days = parseDurationConstructorArgument(context, args[3]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        if (args.length > 4 && !(args[4] instanceof JSUndefined)) {
-            hours = parseDurationConstructorArgument(context, args[4]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        if (args.length > 5 && !(args[5] instanceof JSUndefined)) {
-            minutes = parseDurationConstructorArgument(context, args[5]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        if (args.length > 6 && !(args[6] instanceof JSUndefined)) {
-            seconds = parseDurationConstructorArgument(context, args[6]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        if (args.length > 7 && !(args[7] instanceof JSUndefined)) {
-            milliseconds = parseDurationConstructorArgument(context, args[7]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        if (args.length > 8 && !(args[8] instanceof JSUndefined)) {
-            microseconds = parseDurationConstructorArgument(context, args[8]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        if (args.length > 9 && !(args[9] instanceof JSUndefined)) {
-            nanoseconds = parseDurationConstructorArgument(context, args[9]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-
-        TemporalDuration record = new TemporalDuration(years, months, weeks, days, hours, minutes, seconds,
-                milliseconds, microseconds, nanoseconds);
-
+        TemporalDuration record = TemporalDuration.fromComponents(components);
         if (!record.isValid()) {
             context.throwRangeError("Temporal error: Duration was not valid.");
             return JSUndefined.INSTANCE;
@@ -240,136 +181,29 @@ public final class TemporalDurationConstructor {
     }
 
     static JSValue durationFromFields(JSContext context, JSObject fields) {
-        Optional<BigInteger> daysFieldValue = getDurationLikeField(context, fields, "days");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
+        BigInteger[] values = new BigInteger[TemporalUnit.DURATION_PROPERTY_ORDER.size()];
+        boolean any = false;
+        for (TemporalUnit unit : TemporalUnit.DURATION_PROPERTY_ORDER) {
+            BigInteger value = getDurationLikeField(context, fields, unit.durationProperty());
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            any |= value != null;
+            values[unit.rank()] = value == null ? BigInteger.ZERO : value;
         }
-        Optional<BigInteger> hoursFieldValue = getDurationLikeField(context, fields, "hours");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        Optional<BigInteger> microsecondsFieldValue = getDurationLikeField(context, fields, "microseconds");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        Optional<BigInteger> millisecondsFieldValue = getDurationLikeField(context, fields, "milliseconds");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        Optional<BigInteger> minutesFieldValue = getDurationLikeField(context, fields, "minutes");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        Optional<BigInteger> monthsFieldValue = getDurationLikeField(context, fields, "months");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        Optional<BigInteger> nanosecondsFieldValue = getDurationLikeField(context, fields, "nanoseconds");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        Optional<BigInteger> secondsFieldValue = getDurationLikeField(context, fields, "seconds");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        Optional<BigInteger> weeksFieldValue = getDurationLikeField(context, fields, "weeks");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        Optional<BigInteger> yearsFieldValue = getDurationLikeField(context, fields, "years");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        boolean hasRecognizedField = daysFieldValue.isPresent() || hoursFieldValue.isPresent()
-                || microsecondsFieldValue.isPresent() || millisecondsFieldValue.isPresent()
-                || minutesFieldValue.isPresent() || monthsFieldValue.isPresent() || nanosecondsFieldValue.isPresent()
-                || secondsFieldValue.isPresent() || weeksFieldValue.isPresent() || yearsFieldValue.isPresent();
-        if (!hasRecognizedField) {
+        if (!any) {
             context.throwTypeError("Temporal error: Must provide a duration.");
             return JSUndefined.INSTANCE;
         }
-
-        BigInteger yearsBigInteger = yearsFieldValue.orElse(BigInteger.ZERO);
-        BigInteger monthsBigInteger = monthsFieldValue.orElse(BigInteger.ZERO);
-        BigInteger weeksBigInteger = weeksFieldValue.orElse(BigInteger.ZERO);
-        BigInteger daysBigInteger = daysFieldValue.orElse(BigInteger.ZERO);
-        BigInteger hoursBigInteger = hoursFieldValue.orElse(BigInteger.ZERO);
-        BigInteger minutesBigInteger = minutesFieldValue.orElse(BigInteger.ZERO);
-        BigInteger secondsBigInteger = secondsFieldValue.orElse(BigInteger.ZERO);
-        BigInteger millisecondsBigInteger = millisecondsFieldValue.orElse(BigInteger.ZERO);
-        BigInteger microsecondsBigInteger = microsecondsFieldValue.orElse(BigInteger.ZERO);
-        BigInteger nanosecondsBigInteger = nanosecondsFieldValue.orElse(BigInteger.ZERO);
-
-        BigInteger normalizedMillisecondsBigInteger = millisecondsBigInteger;
-        BigInteger normalizedMicrosecondsBigInteger = microsecondsBigInteger;
-        BigInteger normalizedNanosecondsBigInteger = nanosecondsBigInteger;
-        boolean needsSubsecondNormalization = millisecondsBigInteger.abs().bitLength() > 63
-                || microsecondsBigInteger.abs().bitLength() > 63 || nanosecondsBigInteger.abs().bitLength() > 63;
-        if (needsSubsecondNormalization) {
-            BigInteger thousand = BigInteger.valueOf(1_000L);
-
-            BigInteger nanosecondCarryToMicroseconds = normalizedNanosecondsBigInteger.divide(thousand);
-            normalizedNanosecondsBigInteger = normalizedNanosecondsBigInteger.remainder(thousand);
-            normalizedMicrosecondsBigInteger = normalizedMicrosecondsBigInteger.add(nanosecondCarryToMicroseconds);
-
-            if (normalizedMicrosecondsBigInteger.abs().bitLength() > 63) {
-                BigInteger microsecondCarryToMilliseconds = normalizedMicrosecondsBigInteger.divide(thousand);
-                normalizedMicrosecondsBigInteger = normalizedMicrosecondsBigInteger.remainder(thousand);
-                normalizedMillisecondsBigInteger = normalizedMillisecondsBigInteger.add(microsecondCarryToMilliseconds);
-            }
-
-            if (normalizedMillisecondsBigInteger.abs().bitLength() > 63) {
-                BigInteger millisecondCarryToSeconds = normalizedMillisecondsBigInteger.divide(thousand);
-                normalizedMillisecondsBigInteger = normalizedMillisecondsBigInteger.remainder(thousand);
-                secondsBigInteger = secondsBigInteger.add(millisecondCarryToSeconds);
+        normalizeSubseconds(values);
+        long[] components = new long[values.length];
+        for (int i = 0; i < values.length; i++) {
+            components[i] = toLongDurationField(context, values[i]);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
             }
         }
-
-        long years = toLongDurationField(context, yearsBigInteger);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        long months = toLongDurationField(context, monthsBigInteger);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        long weeks = toLongDurationField(context, weeksBigInteger);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        long days = toLongDurationField(context, daysBigInteger);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        long hours = toLongDurationField(context, hoursBigInteger);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        long minutes = toLongDurationField(context, minutesBigInteger);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        long seconds = toLongDurationField(context, secondsBigInteger);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        long milliseconds = toLongDurationField(context, normalizedMillisecondsBigInteger);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        long microseconds = toLongDurationField(context, normalizedMicrosecondsBigInteger);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        long nanoseconds = toLongDurationField(context, normalizedNanosecondsBigInteger);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        TemporalDuration record = new TemporalDuration(years, months, weeks, days, hours, minutes, seconds,
-                milliseconds, microseconds, nanoseconds);
-
+        TemporalDuration record = TemporalDuration.fromComponents(components);
         if (!record.isValid()) {
             context.throwRangeError("Temporal error: Duration was not valid.");
             return JSUndefined.INSTANCE;
@@ -406,26 +240,26 @@ public final class TemporalDurationConstructor {
         return toTemporalDuration(context, item);
     }
 
-    private static Optional<BigInteger> getDurationLikeField(JSContext context, JSObject durationLikeObject,
-            String fieldKey) {
-        JSValue value = durationLikeObject.get(PropertyKey.fromString(fieldKey));
+    private static BigInteger getDurationLikeField(JSContext context, JSObject durationLikeObject,
+            PropertyKey fieldKey) {
+        JSValue value = durationLikeObject.get(fieldKey);
         if (value instanceof JSUndefined || value == null) {
-            return Optional.empty();
+            return null;
         }
         double numericValueAsDouble = JSTypeConversions.toNumber(context, value).value();
         if (context.hasPendingException()) {
-            return Optional.of(BigInteger.ZERO);
+            return null;
         }
         if (!Double.isFinite(numericValueAsDouble)) {
             context.throwRangeError("Temporal error: Expected finite integer.");
-            return Optional.of(BigInteger.ZERO);
+            return null;
         }
         if (numericValueAsDouble != Math.floor(numericValueAsDouble)) {
             context.throwRangeError("Temporal error: Expected finite integer.");
-            return Optional.of(BigInteger.ZERO);
+            return null;
         }
         BigInteger numericValue = TemporalUtils.toBigIntegerFromIntegralDouble(numericValueAsDouble);
-        return Optional.of(numericValue);
+        return numericValue;
     }
 
     private static boolean hasZuluDesignator(String text) {
@@ -458,6 +292,24 @@ public final class TemporalDurationConstructor {
             return false;
         }
         return true;
+    }
+
+    private static void normalizeSubseconds(BigInteger[] values) {
+        int nanos = TemporalUnit.NANOSECOND.rank();
+        int micros = TemporalUnit.MICROSECOND.rank();
+        int millis = TemporalUnit.MILLISECOND.rank();
+        if (values[nanos].abs().bitLength() <= 63 && values[micros].abs().bitLength() <= 63
+                && values[millis].abs().bitLength() <= 63) {
+            return;
+        }
+        BigInteger thousand = BigInteger.valueOf(1_000);
+        for (int i = nanos; i >= millis; i--) {
+            if (i == nanos || values[i].abs().bitLength() > 63) {
+                BigInteger[] parts = values[i].divideAndRemainder(thousand);
+                values[i] = parts[1];
+                values[i - 1] = values[i - 1].add(parts[0]);
+            }
+        }
     }
 
     private static boolean offsetMatchesTimeZoneOffsetForString(String offsetText, int parsedOffsetSeconds,

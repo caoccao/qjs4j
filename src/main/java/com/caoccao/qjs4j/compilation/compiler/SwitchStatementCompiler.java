@@ -20,9 +20,7 @@ import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.vm.Opcode;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 final class SwitchStatementCompiler extends AstNodeCompiler<SwitchStatement> {
     SwitchStatementCompiler(CompilerContext compilerContext) {
@@ -46,48 +44,7 @@ final class SwitchStatementCompiler extends AstNodeCompiler<SwitchStatement> {
 
         // Switch creates a lexical environment before evaluating case selectors.
         for (SwitchStatement.SwitchCase switchCase : switchStmt.getCases()) {
-            for (Statement statement : switchCase.getConsequent()) {
-                if (statement instanceof VariableDeclaration variableDeclaration
-                        && variableDeclaration.getKind() != VariableKind.VAR) {
-                    for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                        Set<String> declarationNames = new HashSet<>();
-                        compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(),
-                                declarationNames);
-                        for (String declarationName : declarationNames) {
-                            Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(declarationName);
-                            if (localIndex == null) {
-                                localIndex = compilerContext.scopeManager.currentScope().declareLocal(declarationName);
-                            }
-                            if (variableDeclaration.getKind() == VariableKind.CONST
-                                    || variableDeclaration.getKind() == VariableKind.USING
-                                    || variableDeclaration.getKind() == VariableKind.AWAIT_USING) {
-                                compilerContext.scopeManager.currentScope().markConstLocal(declarationName);
-                            }
-                            compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
-                            compilerContext.tdzLocals.add(declarationName);
-                        }
-                    }
-                } else if (statement instanceof ClassDeclaration classDeclaration && classDeclaration.getId() != null) {
-                    String className = classDeclaration.getId().getName();
-                    Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(className);
-                    if (localIndex == null) {
-                        localIndex = compilerContext.scopeManager.currentScope().declareLocal(className);
-                    }
-                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
-                    compilerContext.tdzLocals.add(className);
-                } else {
-                    FunctionDeclaration functionDeclaration = statement.unwrapLabeledFunctionDeclaration();
-                    if (functionDeclaration != null && functionDeclaration.getId() != null) {
-                        String functionName = functionDeclaration.getId().getName();
-                        Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(functionName);
-                        if (localIndex == null) {
-                            localIndex = compilerContext.scopeManager.currentScope().declareLocal(functionName);
-                        }
-                        compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
-                        compilerContext.tdzLocals.add(functionName);
-                    }
-                }
-            }
+            compilerContext.statementCompiler.predeclareLexicalBindings(switchCase.getConsequent(), true);
         }
 
         // BlockDeclarationInstantiation for switch case block: initialize function declarations.

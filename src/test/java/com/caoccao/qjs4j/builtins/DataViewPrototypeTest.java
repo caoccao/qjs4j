@@ -38,8 +38,7 @@ public class DataViewPrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-DataView
         result = DataViewPrototype.getBuffer(context, new JSString("not a dataview"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -57,8 +56,7 @@ public class DataViewPrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-DataView
         result = DataViewPrototype.getByteLength(context, new JSNumber(123), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -76,8 +74,7 @@ public class DataViewPrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-DataView
         result = DataViewPrototype.getByteOffset(context, new JSObject(context), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -101,13 +98,11 @@ public class DataViewPrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-DataView
         result = DataViewPrototype.getFloat32(context, new JSString("not a dataview"), numberArgs(0));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: out of bounds
         result = DataViewPrototype.getFloat32(context, dataView, numberArgs(20));
-        assertRangeError(result);
-        assertPendingException(context);
+        assertPendingRangeError(context, result);
     }
 
     @Test
@@ -131,8 +126,7 @@ public class DataViewPrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-DataView
         result = DataViewPrototype.getFloat64(context, new JSNumber(123), numberArgs(0));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -154,8 +148,7 @@ public class DataViewPrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-DataView
         result = DataViewPrototype.getInt16(context, new JSObject(context), numberArgs(0));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -177,8 +170,7 @@ public class DataViewPrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-DataView
         result = DataViewPrototype.getInt32(context, new JSString("not a dataview"), numberArgs(0));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -194,8 +186,7 @@ public class DataViewPrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-DataView
         result = DataViewPrototype.getInt8(context, new JSNumber(456), numberArgs(0));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -211,8 +202,7 @@ public class DataViewPrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-DataView
         result = DataViewPrototype.getUint8(context, new JSObject(context), numberArgs(0));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -238,13 +228,11 @@ public class DataViewPrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-DataView
         result = DataViewPrototype.setFloat32(context, new JSString("not a dataview"), numberArgs(0, 1.0f));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: out of bounds
         result = DataViewPrototype.setFloat32(context, dataView, numberArgs(20, 1.0f));
-        assertRangeError(result);
-        assertPendingException(context);
+        assertPendingRangeError(context, result);
     }
 
     @Test
@@ -270,8 +258,7 @@ public class DataViewPrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-DataView
         result = DataViewPrototype.setFloat64(context, new JSNumber(123), numberArgs(0, 1.0));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -296,12 +283,10 @@ public class DataViewPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(new JSBigInt("18446744073709551615"));
 
         result = DataViewPrototype.setBigInt64(context, dataView, numberArgs(0, 1));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         result = DataViewPrototype.setBigInt64(context, dataView, new JSValue[]{new JSNumber(0), JSUndefined.INSTANCE});
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -350,8 +335,7 @@ public class DataViewPrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-DataView
         result = DataViewPrototype.setInt16(context, new JSObject(context), numberArgs(0, 123));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -375,8 +359,7 @@ public class DataViewPrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-DataView
         result = DataViewPrototype.setInt32(context, new JSString("not a dataview"), numberArgs(0, 123));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -393,8 +376,7 @@ public class DataViewPrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-DataView
         result = DataViewPrototype.setInt8(context, new JSNumber(456), numberArgs(0, 123));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -411,8 +393,7 @@ public class DataViewPrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-DataView
         result = DataViewPrototype.setUint8(context, new JSObject(context), numberArgs(0, 123));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -426,12 +407,10 @@ public class DataViewPrototypeTest extends BaseJavetTest {
         assertNumberValue(result, 7.0);
 
         result = DataViewPrototype.getInt8(context, dataView, numberArgs(-1));
-        assertRangeError(result);
-        assertPendingException(context);
+        assertPendingRangeError(context, result);
 
         result = DataViewPrototype.getInt8(context, dataView, new JSValue[]{new JSSymbol("offset")});
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -444,12 +423,10 @@ public class DataViewPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(detachedBuffer);
 
         result = DataViewPrototype.getByteLength(context, detachedView, JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         result = DataViewPrototype.getByteOffset(context, detachedView, JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         JSArrayBuffer resizableBuffer = new JSArrayBuffer(context, 16, 16);
         JSDataView outOfBoundsView = new JSDataView(context, resizableBuffer, 8, 8);
@@ -459,11 +436,9 @@ public class DataViewPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(resizableBuffer);
 
         result = DataViewPrototype.getByteLength(context, outOfBoundsView, JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         result = DataViewPrototype.getByteOffset(context, outOfBoundsView, JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 }

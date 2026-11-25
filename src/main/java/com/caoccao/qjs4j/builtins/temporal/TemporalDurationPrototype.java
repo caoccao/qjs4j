@@ -384,35 +384,6 @@ public final class TemporalDurationPrototype {
         return quotient.doubleValue();
     }
 
-    private static long getRoundingIncrementOption(JSContext context, JSObject optionsObject, String optionName,
-            long defaultValue, long minimumValue, long maximumValue, String invalidOptionMessage) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString(optionName));
-        if (context.hasPendingException()) {
-            return Long.MIN_VALUE;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            return defaultValue;
-        }
-
-        JSNumber optionNumber = JSTypeConversions.toNumber(context, optionValue);
-        if (context.hasPendingException() || optionNumber == null) {
-            return Long.MIN_VALUE;
-        }
-
-        double numericOptionValue = optionNumber.value();
-        if (!Double.isFinite(numericOptionValue) || Double.isNaN(numericOptionValue)) {
-            context.throwRangeError(invalidOptionMessage);
-            return Long.MIN_VALUE;
-        }
-
-        long integerOptionValue = (long) numericOptionValue;
-        if (integerOptionValue < minimumValue || integerOptionValue > maximumValue) {
-            context.throwRangeError(invalidOptionMessage);
-            return Long.MIN_VALUE;
-        }
-        return integerOptionValue;
-    }
-
     public static JSValue hours(JSContext context, JSValue thisArg, JSValue[] args) {
         return RECEIVER.read(context, thisArg, "hours", duration -> JSNumber.of(duration.getDuration().hours()));
     }
@@ -492,16 +463,11 @@ public final class TemporalDurationPrototype {
             return TemporalDurationToStringOptions.DEFAULT;
         }
 
-        JSValue fractionalSecondDigitsValue = optionsObject.get(PropertyKey.fromString("fractionalSecondDigits"));
-        if (context.hasPendingException()) {
-            return null;
-        }
         TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption = TemporalFractionalSecondDigitsOption
-                .parse(context, fractionalSecondDigitsValue, "Temporal error: Invalid fractionalSecondDigits.");
-        if (context.hasPendingException() || fractionalSecondDigitsOption == null) {
+                .read(context, optionsObject);
+        if (fractionalSecondDigitsOption == null) {
             return null;
         }
-
         String roundingModeText = TemporalUtils.getStringOption(context, optionsObject, "roundingMode", "trunc");
         if (context.hasPendingException() || roundingModeText == null) {
             return null;
@@ -580,8 +546,8 @@ public final class TemporalDurationPrototype {
                 return null;
             }
 
-            roundingIncrement = getRoundingIncrementOption(context, optionsObject, "roundingIncrement", 1L, 1L,
-                    1_000_000_000L, "Temporal error: Invalid rounding increment.");
+            roundingIncrement = TemporalUtils.getRoundingIncrementOption(context, optionsObject,
+                    "Temporal error: Invalid rounding increment.");
             if (context.hasPendingException()) {
                 return null;
             }
@@ -691,8 +657,8 @@ public final class TemporalDurationPrototype {
     }
 
     private static TemporalPartialDurationFieldValue readPartialDurationField(JSContext context, JSObject fields,
-            String fieldKey) {
-        JSValue value = fields.get(PropertyKey.fromString(fieldKey));
+            PropertyKey fieldKey) {
+        JSValue value = fields.get(fieldKey);
         if (context.hasPendingException()) {
             return null;
         }
@@ -1547,79 +1513,24 @@ public final class TemporalDurationPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalPartialDurationFieldValue daysFieldValue = readPartialDurationField(context, fields, "days");
-        if (context.hasPendingException() || daysFieldValue == null) {
-            return JSUndefined.INSTANCE;
+        long[] components = duration.getDuration().toComponents();
+        boolean any = false;
+        for (TemporalUnit unit : TemporalUnit.DURATION_PROPERTY_ORDER) {
+            TemporalPartialDurationFieldValue field = readPartialDurationField(context, fields,
+                    unit.durationProperty());
+            if (field == null) {
+                return JSUndefined.INSTANCE;
+            }
+            if (field.present()) {
+                any = true;
+                components[unit.rank()] = field.value();
+            }
         }
-        TemporalPartialDurationFieldValue hoursFieldValue = readPartialDurationField(context, fields, "hours");
-        if (context.hasPendingException() || hoursFieldValue == null) {
-            return JSUndefined.INSTANCE;
-        }
-        TemporalPartialDurationFieldValue microsecondsFieldValue = readPartialDurationField(context, fields,
-                "microseconds");
-        if (context.hasPendingException() || microsecondsFieldValue == null) {
-            return JSUndefined.INSTANCE;
-        }
-        TemporalPartialDurationFieldValue millisecondsFieldValue = readPartialDurationField(context, fields,
-                "milliseconds");
-        if (context.hasPendingException() || millisecondsFieldValue == null) {
-            return JSUndefined.INSTANCE;
-        }
-        TemporalPartialDurationFieldValue minutesFieldValue = readPartialDurationField(context, fields, "minutes");
-        if (context.hasPendingException() || minutesFieldValue == null) {
-            return JSUndefined.INSTANCE;
-        }
-        TemporalPartialDurationFieldValue monthsFieldValue = readPartialDurationField(context, fields, "months");
-        if (context.hasPendingException() || monthsFieldValue == null) {
-            return JSUndefined.INSTANCE;
-        }
-        TemporalPartialDurationFieldValue nanosecondsFieldValue = readPartialDurationField(context, fields,
-                "nanoseconds");
-        if (context.hasPendingException() || nanosecondsFieldValue == null) {
-            return JSUndefined.INSTANCE;
-        }
-        TemporalPartialDurationFieldValue secondsFieldValue = readPartialDurationField(context, fields, "seconds");
-        if (context.hasPendingException() || secondsFieldValue == null) {
-            return JSUndefined.INSTANCE;
-        }
-        TemporalPartialDurationFieldValue weeksFieldValue = readPartialDurationField(context, fields, "weeks");
-        if (context.hasPendingException() || weeksFieldValue == null) {
-            return JSUndefined.INSTANCE;
-        }
-        TemporalPartialDurationFieldValue yearsFieldValue = readPartialDurationField(context, fields, "years");
-        if (context.hasPendingException() || yearsFieldValue == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        boolean hasAnyDefinedFields = daysFieldValue.present() || hoursFieldValue.present()
-                || microsecondsFieldValue.present() || millisecondsFieldValue.present() || minutesFieldValue.present()
-                || monthsFieldValue.present() || nanosecondsFieldValue.present() || secondsFieldValue.present()
-                || weeksFieldValue.present() || yearsFieldValue.present();
-        if (!hasAnyDefinedFields) {
+        if (!any) {
             context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
             return JSUndefined.INSTANCE;
         }
-
-        TemporalDuration durationRecord = duration.getDuration();
-        long years = yearsFieldValue.present() ? yearsFieldValue.value() : durationRecord.years();
-        long months = monthsFieldValue.present() ? monthsFieldValue.value() : durationRecord.months();
-        long weeks = weeksFieldValue.present() ? weeksFieldValue.value() : durationRecord.weeks();
-        long days = daysFieldValue.present() ? daysFieldValue.value() : durationRecord.days();
-        long hours = hoursFieldValue.present() ? hoursFieldValue.value() : durationRecord.hours();
-        long minutes = minutesFieldValue.present() ? minutesFieldValue.value() : durationRecord.minutes();
-        long seconds = secondsFieldValue.present() ? secondsFieldValue.value() : durationRecord.seconds();
-        long milliseconds = millisecondsFieldValue.present()
-                ? millisecondsFieldValue.value()
-                : durationRecord.milliseconds();
-        long microseconds = microsecondsFieldValue.present()
-                ? microsecondsFieldValue.value()
-                : durationRecord.microseconds();
-        long nanoseconds = nanosecondsFieldValue.present()
-                ? nanosecondsFieldValue.value()
-                : durationRecord.nanoseconds();
-        TemporalDuration newRecord = new TemporalDuration(years, months, weeks, days, hours, minutes, seconds,
-                milliseconds, microseconds, nanoseconds);
-
+        TemporalDuration newRecord = TemporalDuration.fromComponents(components);
         if (!newRecord.isValid()) {
             context.throwRangeError("Temporal error: Duration was not valid.");
             return JSUndefined.INSTANCE;

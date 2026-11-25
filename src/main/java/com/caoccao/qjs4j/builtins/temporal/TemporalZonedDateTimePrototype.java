@@ -561,31 +561,17 @@ public final class TemporalZonedDateTimePrototype {
             return TemporalZonedDateTimeToStringSettings.DEFAULT;
         }
 
-        String calendarNameOption = "auto";
-        TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption = TemporalFractionalSecondDigitsOption
-                .autoOption();
-        String offsetOption = "auto";
-        TemporalRoundingMode roundingMode = TemporalRoundingMode.TRUNC;
-        String smallestUnitText = null;
-        String timeZoneNameOption = "auto";
-
-        calendarNameOption = getToStringCalendarNameOption(context, optionsObject);
+        String calendarNameOption = getToStringCalendarNameOption(context, optionsObject);
         if (context.hasPendingException() || calendarNameOption == null) {
             return null;
         }
 
-        JSValue fractionalSecondDigitsValue = optionsObject.get(PropertyKey.fromString("fractionalSecondDigits"));
-        if (context.hasPendingException()) {
+        TemporalFractionalSecondDigitsOption digits = TemporalFractionalSecondDigitsOption.read(context, optionsObject);
+        if (digits == null) {
             return null;
         }
-        TemporalFractionalSecondDigitsOption resolvedFractionalSecondDigitsOption = TemporalFractionalSecondDigitsOption
-                .parse(context, fractionalSecondDigitsValue, "Temporal error: Invalid fractionalSecondDigits.");
-        if (context.hasPendingException() || resolvedFractionalSecondDigitsOption == null) {
-            return null;
-        }
-        fractionalSecondDigitsOption = resolvedFractionalSecondDigitsOption;
 
-        offsetOption = getToStringOffsetOption(context, optionsObject);
+        String offsetOption = getToStringOffsetOption(context, optionsObject);
         if (context.hasPendingException() || offsetOption == null) {
             return null;
         }
@@ -595,52 +581,24 @@ public final class TemporalZonedDateTimePrototype {
             return null;
         }
 
-        smallestUnitText = TemporalUtils.getStringOption(context, optionsObject, "smallestUnit", null);
+        String smallestUnitText = TemporalUtils.getStringOption(context, optionsObject, "smallestUnit", null);
         if (context.hasPendingException()) {
             return null;
         }
 
-        timeZoneNameOption = getToStringTimeZoneNameOption(context, optionsObject);
+        String timeZoneNameOption = getToStringTimeZoneNameOption(context, optionsObject);
         if (context.hasPendingException() || timeZoneNameOption == null) {
             return null;
         }
 
-        roundingMode = TemporalRoundingMode.fromString(roundingModeText);
-        if (roundingMode == null) {
-            context.throwRangeError("Temporal error: Invalid rounding mode.");
+        TemporalPlainTimeToStringSettings time = TemporalPlainTimeToStringSettings.resolve(context, roundingModeText,
+                smallestUnitText, digits);
+        if (time == null) {
             return null;
         }
-
-        TemporalUnit smallestUnit = null;
-        if (smallestUnitText != null) {
-            smallestUnit = TemporalUnit.fromString(smallestUnitText)
-                    .filter(unit -> unit == TemporalUnit.MINUTE || unit == TemporalUnit.SECOND
-                            || unit == TemporalUnit.MILLISECOND || unit == TemporalUnit.MICROSECOND
-                            || unit == TemporalUnit.NANOSECOND)
-                    .orElse(null);
-            if (smallestUnit == null) {
-                context.throwRangeError("Temporal error: Invalid smallestUnit option.");
-                return null;
-            }
-        }
-
-        boolean autoFractionalSecondDigits = smallestUnit == null && fractionalSecondDigitsOption.auto();
-        int fractionalSecondDigits;
-        long roundingIncrementNanoseconds;
-        if (smallestUnit != null) {
-            fractionalSecondDigits = smallestUnit.getStringFractionalSecondDigits();
-            roundingIncrementNanoseconds = smallestUnit.getStringRoundingIncrementNanoseconds();
-        } else if (autoFractionalSecondDigits) {
-            fractionalSecondDigits = -1;
-            roundingIncrementNanoseconds = 1L;
-        } else {
-            fractionalSecondDigits = fractionalSecondDigitsOption.digits();
-            roundingIncrementNanoseconds = fractionalSecondDigitsOption.roundingIncrementNanoseconds();
-        }
-
         return new TemporalZonedDateTimeToStringSettings(calendarNameOption, offsetOption, timeZoneNameOption,
-                smallestUnit, roundingMode, autoFractionalSecondDigits, fractionalSecondDigits,
-                roundingIncrementNanoseconds);
+                time.smallestUnit(), time.roundingMode(), time.autoFractionalSecondDigits(),
+                time.fractionalSecondDigits(), time.roundingIncrementNanoseconds());
     }
 
     private static String getToStringTimeZoneNameOption(JSContext context, JSObject optionsObject) {

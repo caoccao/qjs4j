@@ -187,8 +187,7 @@ public class TemplateLiteralEnhancementTest extends BaseJavetTest {
 
     @Test
     public void testTaggedTemplateUndefinedCookedSegmentForInvalidEscape() {
-        assertStringWithJavet("((parts) => typeof parts[0])`\\u{110000}`");
-        assertStringWithJavet("((parts) => parts.raw[0])`\\u{110000}`");
+        assertStringWithJavet("((parts) => typeof parts[0])`\\u{110000}`", "((parts) => parts.raw[0])`\\u{110000}`");
     }
 
     @Test

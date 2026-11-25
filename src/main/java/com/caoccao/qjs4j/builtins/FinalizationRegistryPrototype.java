@@ -30,13 +30,7 @@ public final class FinalizationRegistryPrototype {
      * weakly. Registered symbols (Symbol.for()) cannot.
      */
     static boolean canBeHeldWeakly(JSValue value) {
-        if (value instanceof JSObject) {
-            return true;
-        }
-        if (value instanceof JSSymbol symbol) {
-            return !symbol.isRegistered();
-        }
-        return false;
+        return JSTypeChecking.canBeHeldWeakly(value);
     }
 
     /**

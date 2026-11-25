@@ -17,6 +17,8 @@
 package com.caoccao.qjs4j.core.temporal;
 
 import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.PropertyKey;
+import java.util.List;
 
 import java.math.BigInteger;
 import java.time.LocalDateTime;
@@ -29,12 +31,17 @@ public enum TemporalUnit {
     DAY("day", 3), HOUR("hour", 4), MICROSECOND("microsecond", 8), MILLISECOND("millisecond", 7), MINUTE("minute",
             5), MONTH("month", 1), NANOSECOND("nanosecond", 9), SECOND("second", 6), WEEK("week", 2), YEAR("year", 0);
 
+    /** Property access order for a Temporal duration-like object. */
+    public static final List<TemporalUnit> DURATION_PROPERTY_ORDER = List.of(DAY, HOUR, MICROSECOND, MILLISECOND,
+            MINUTE, MONTH, NANOSECOND, SECOND, WEEK, YEAR);
     private static final int UNKNOWN_RANK = 10;
+    private final PropertyKey durationProperty;
     private final String jsName;
     private final int rank;
 
     TemporalUnit(String jsName, int rank) {
         this.jsName = jsName;
+        this.durationProperty = PropertyKey.fromString(jsName + "s");
         this.rank = rank;
     }
 
@@ -67,6 +74,10 @@ public enum TemporalUnit {
         } else {
             return otherUnit;
         }
+    }
+
+    public PropertyKey durationProperty() {
+        return durationProperty;
     }
 
     public long estimateCalendarUnitCount(LocalDateTime startDateTime, LocalDateTime endDateTime) {

@@ -16,7 +16,6 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.BaseTest;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -40,9 +39,7 @@ import static org.assertj.core.api.Assumptions.assumeThat;
  * contents, {@code 'bytes'} returned its raw bytes — and an embedder had no hook to intercept, confine or refuse it.
  * These cases are embedder-API tests: V8 has no file system of its own to compare against, which is the point.
  */
-public class JSModuleLoaderHookTest extends BaseTest {
-    @TempDir
-    Path moduleDirectory;
+public class JSModuleLoaderHookTest extends ModuleFileTest {
     @TempDir
     Path outsideDirectory;
 

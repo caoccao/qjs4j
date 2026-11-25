@@ -16,11 +16,9 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.BaseTest;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -49,27 +47,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * environments remove them, which is why this suite asserts what the author's own bindings do rather than that the
  * generated ones are absent.
  */
-public class JSModuleGeneratedBindingTest extends BaseTest {
-    @TempDir
-    Path moduleDirectory;
-
-    /**
-     * Evaluate a module from a file and read back what it left on the global.
-     *
-     * @param name
-     *            the module's file name
-     * @param source
-     *            the module's source
-     * @return the string value of {@code globalThis.result}
-     */
-    private String evaluateModuleResult(String name, String source) throws IOException {
-        Path path = moduleDirectory.resolve(name);
-        Files.writeString(path, source);
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            context.eval(source, path.toString(), true);
-            return context.eval("String(globalThis.result)", "probe.js", false).toString();
-        }
-    }
+public class JSModuleGeneratedBindingTest extends ModuleFileTest {
 
     @Test
     public void testADefaultExportEndedByAutomaticSemicolonInsertionEvaluates() throws IOException {

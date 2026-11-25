@@ -81,4 +81,11 @@ public record TemporalFractionalSecondDigitsOption(boolean auto, int digits) {
         }
         return DIGIT_ROUNDING_INCREMENT_NANOSECONDS[digits];
     }
+
+    public static TemporalFractionalSecondDigitsOption read(JSContext context, JSObject options) {
+        JSValue value = options.get(PropertyKey.fromString("fractionalSecondDigits"));
+        return context.hasPendingException()
+                ? null
+                : parse(context, value, "Temporal error: Invalid fractionalSecondDigits.");
+    }
 }

@@ -71,33 +71,9 @@ public final class PromiseConstructor {
 
     static JSValue callCallable(JSContext context, JSValue callable, JSValue thisArg, JSValue[] args) {
         try {
-            if (callable instanceof JSProxy proxy) {
-                return proxy.apply(context, thisArg, args);
-            }
-            if (callable instanceof JSFunction function) {
-                return function.call(context, thisArg, args);
-            }
-            return context.throwTypeError("Value is not callable");
-        } catch (JSException e) {
-            if (!context.hasPendingException()) {
-                context.setPendingException(e.getErrorValue());
-            }
-            return JSUndefined.INSTANCE;
-        } catch (JSVirtualMachineException e) {
-            if (!context.hasPendingException()) {
-                if (e.getJsValue() != null) {
-                    context.setPendingException(e.getJsValue());
-                } else if (e.getJsError() != null) {
-                    context.setPendingException(e.getJsError());
-                } else {
-                    context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
-                }
-            }
-            return JSUndefined.INSTANCE;
+            return JSCall.call(context, callable, thisArg, args);
         } catch (Exception e) {
-            if (!context.hasPendingException()) {
-                context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
-            }
+            captureException(context, e);
             return JSUndefined.INSTANCE;
         }
     }
@@ -112,27 +88,24 @@ public final class PromiseConstructor {
                 return JSUndefined.INSTANCE;
             }
             return boxedTarget.get(propertyKey);
-        } catch (JSException e) {
-            if (!context.hasPendingException()) {
-                context.setPendingException(e.getErrorValue());
-            }
-            return JSUndefined.INSTANCE;
-        } catch (JSVirtualMachineException e) {
-            if (!context.hasPendingException()) {
-                if (e.getJsValue() != null) {
-                    context.setPendingException(e.getJsValue());
-                } else if (e.getJsError() != null) {
-                    context.setPendingException(e.getJsError());
-                } else {
-                    context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
-                }
-            }
-            return JSUndefined.INSTANCE;
         } catch (Exception e) {
-            if (!context.hasPendingException()) {
-                context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
-            }
+            captureException(context, e);
             return JSUndefined.INSTANCE;
+        }
+    }
+
+    private static void captureException(JSContext context, Exception exception) {
+        if (context.hasPendingException()) {
+            return;
+        }
+        if (exception instanceof JSException jsException) {
+            context.setPendingException(jsException.getErrorValue());
+        } else if (exception instanceof JSVirtualMachineException vmException && vmException.getJsValue() != null) {
+            context.setPendingException(vmException.getJsValue());
+        } else if (exception instanceof JSVirtualMachineException vmException && vmException.getJsError() != null) {
+            context.setPendingException(vmException.getJsError());
+        } else {
+            context.throwError(exception.getMessage() != null ? exception.getMessage() : "Unhandled exception");
         }
     }
 
@@ -182,6 +155,19 @@ public final class PromiseConstructor {
         return promiseCapability.promise();
     }
 
+    private static JSValue getCallableProperty(JSContext context, JSValue object, PropertyKey key, String methodName,
+            String error) {
+        JSValue value = callGet(context, object, key);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (!JSTypeChecking.isCallable(value)) {
+            context.throwTypeError(methodName + error);
+            return null;
+        }
+        return value;
+    }
+
     private static String getPromiseCombinatorName(PromiseCombinatorMode mode) {
         return switch (mode) {
             case ALL -> "Promise.all";
@@ -227,6 +213,26 @@ public final class PromiseConstructor {
         return promiseCapability;
     }
 
+    /** A null result signals exhaustion or an exception while advancing the iterator. */
+    private static JSObject nextPromiseIteratorResult(JSContext context, JSObject iterator) {
+        JSObject result;
+        try {
+            result = JSIteratorHelper.iteratorNext(iterator, context);
+        } catch (Exception exception) {
+            captureException(context, exception);
+            return null;
+        }
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (result == null) {
+            context.throwTypeError("iterator result is not an object");
+            return null;
+        }
+        JSValue done = callGet(context, result, PropertyKey.DONE);
+        return context.hasPendingException() || JSTypeConversions.toBoolean(done).isBooleanTrue() ? null : result;
+    }
+
     private static JSValue performPromiseCombinator(JSContext context, JSValue thisArg, JSValue[] args,
             PromiseCombinatorMode mode) {
         String methodName = getPromiseCombinatorName(mode);
@@ -239,12 +245,9 @@ public final class PromiseConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue promiseResolve = callGet(context, thisArg, PropertyKey.RESOLVE);
-        if (context.hasPendingException()) {
-            return rejectAbruptPromise(context, promiseCapability);
-        }
-        if (!JSTypeChecking.isCallable(promiseResolve)) {
-            context.throwTypeError(methodName + " resolve is not callable");
+        JSValue promiseResolve = getCallableProperty(context, thisArg, PropertyKey.RESOLVE, methodName,
+                " resolve is not callable");
+        if (promiseResolve == null) {
             return rejectAbruptPromise(context, promiseCapability);
         }
 
@@ -260,57 +263,15 @@ public final class PromiseConstructor {
 
         JSArray values = context.createJSArray();
         int[] remainingElementsCount = new int[]{1};
-        boolean[] iteratorDone = new boolean[]{false};
         boolean[] combinatorSettled = new boolean[]{false};
         int index = 0;
 
         while (true) {
-            JSObject nextResult;
-            try {
-                nextResult = JSIteratorHelper.iteratorNext(iteratorObject, context);
-            } catch (JSException e) {
-                if (!context.hasPendingException()) {
-                    context.setPendingException(e.getErrorValue());
-                }
-                iteratorDone[0] = true;
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone[0]);
-            } catch (JSVirtualMachineException e) {
-                if (!context.hasPendingException()) {
-                    if (e.getJsValue() != null) {
-                        context.setPendingException(e.getJsValue());
-                    } else if (e.getJsError() != null) {
-                        context.setPendingException(e.getJsError());
-                    } else {
-                        context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
-                    }
-                }
-                iteratorDone[0] = true;
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone[0]);
-            } catch (Exception e) {
-                if (!context.hasPendingException()) {
-                    context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
-                }
-                iteratorDone[0] = true;
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone[0]);
-            }
+            JSObject nextResult = nextPromiseIteratorResult(context, iteratorObject);
             if (context.hasPendingException()) {
-                iteratorDone[0] = true;
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone[0]);
+                return rejectAbruptPromise(context, promiseCapability);
             }
             if (nextResult == null) {
-                context.throwTypeError("iterator result is not an object");
-                iteratorDone[0] = true;
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone[0]);
-            }
-
-            JSValue doneValue = callGet(context, nextResult, PropertyKey.DONE);
-            if (context.hasPendingException()) {
-                iteratorDone[0] = true;
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone[0]);
-            }
-            boolean done = JSTypeConversions.toBoolean(doneValue).isBooleanTrue();
-            if (done) {
-                iteratorDone[0] = true;
                 remainingElementsCount[0]--;
                 if (remainingElementsCount[0] == 0) {
                     return finalizePromiseCombinator(context, promiseCapability, mode, values, combinatorSettled);
@@ -320,27 +281,23 @@ public final class PromiseConstructor {
 
             JSValue nextValue = callGet(context, nextResult, PropertyKey.VALUE);
             if (context.hasPendingException()) {
-                iteratorDone[0] = true;
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone[0]);
+                return rejectAbruptPromise(context, promiseCapability);
             }
 
             values.set(index, JSUndefined.INSTANCE);
             if (context.hasPendingException()) {
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, false);
+                return closeIteratorAndRejectAbruptPromise(context, iteratorObject, promiseCapability);
             }
 
             JSValue nextPromise = callCallable(context, promiseResolve, thisArg, new JSValue[]{nextValue});
             if (context.hasPendingException()) {
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, false);
+                return closeIteratorAndRejectAbruptPromise(context, iteratorObject, promiseCapability);
             }
 
-            JSValue thenMethod = callGet(context, nextPromise, PropertyKey.THEN);
-            if (context.hasPendingException()) {
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, false);
-            }
-            if (!JSTypeChecking.isCallable(thenMethod)) {
-                context.throwTypeError(methodName + " resolve result then is not callable");
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, false);
+            JSValue thenMethod = getCallableProperty(context, nextPromise, PropertyKey.THEN, methodName,
+                    " resolve result then is not callable");
+            if (thenMethod == null) {
+                return closeIteratorAndRejectAbruptPromise(context, iteratorObject, promiseCapability);
             }
 
             int currentIndex = index;
@@ -441,7 +398,7 @@ public final class PromiseConstructor {
             JSValue rejectHandler = mode == PromiseCombinatorMode.ALL ? promiseCapability.reject() : rejectElement;
             callCallable(context, thenMethod, nextPromise, new JSValue[]{resolveHandler, rejectHandler});
             if (context.hasPendingException()) {
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, false);
+                return closeIteratorAndRejectAbruptPromise(context, iteratorObject, promiseCapability);
             }
             index++;
         }
@@ -459,12 +416,9 @@ public final class PromiseConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue promiseResolve = callGet(context, thisArg, PropertyKey.RESOLVE);
-        if (context.hasPendingException()) {
-            return rejectAbruptPromise(context, promiseCapability);
-        }
-        if (!JSTypeChecking.isCallable(promiseResolve)) {
-            context.throwTypeError(methodName + " resolve is not callable");
+        JSValue promiseResolve = getCallableProperty(context, thisArg, PropertyKey.RESOLVE, methodName,
+                " resolve is not callable");
+        if (promiseResolve == null) {
             return rejectAbruptPromise(context, promiseCapability);
         }
 
@@ -573,6 +527,7 @@ public final class PromiseConstructor {
      * Promise.race(iterable)
      */
     public static JSValue race(JSContext context, JSValue thisArg, JSValue[] args) {
+        String methodName = "Promise.race";
         if (!JSTypeChecking.isConstructor(thisArg)) {
             return context.throwTypeError("Promise.race called on non-constructor");
         }
@@ -582,12 +537,9 @@ public final class PromiseConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue promiseResolve = callGet(context, thisArg, PropertyKey.RESOLVE);
-        if (context.hasPendingException()) {
-            return rejectAbruptPromise(context, promiseCapability);
-        }
-        if (!JSTypeChecking.isCallable(promiseResolve)) {
-            context.throwTypeError("Promise.race resolve is not callable");
+        JSValue promiseResolve = getCallableProperty(context, thisArg, PropertyKey.RESOLVE, methodName,
+                " resolve is not callable");
+        if (promiseResolve == null) {
             return rejectAbruptPromise(context, promiseCapability);
         }
 
@@ -601,80 +553,35 @@ public final class PromiseConstructor {
             return rejectAbruptPromise(context, promiseCapability);
         }
 
-        boolean iteratorDone = false;
         while (true) {
-            JSObject nextResult;
-            try {
-                nextResult = JSIteratorHelper.iteratorNext(iteratorObject, context);
-            } catch (JSException e) {
-                if (!context.hasPendingException()) {
-                    context.setPendingException(e.getErrorValue());
-                }
-                iteratorDone = true;
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone);
-            } catch (JSVirtualMachineException e) {
-                if (!context.hasPendingException()) {
-                    if (e.getJsValue() != null) {
-                        context.setPendingException(e.getJsValue());
-                    } else if (e.getJsError() != null) {
-                        context.setPendingException(e.getJsError());
-                    } else {
-                        context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
-                    }
-                }
-                iteratorDone = true;
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone);
-            } catch (Exception e) {
-                if (!context.hasPendingException()) {
-                    context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
-                }
-                iteratorDone = true;
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone);
-            }
+            JSObject nextResult = nextPromiseIteratorResult(context, iteratorObject);
             if (context.hasPendingException()) {
-                iteratorDone = true;
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone);
+                return rejectAbruptPromise(context, promiseCapability);
             }
             if (nextResult == null) {
-                context.throwTypeError("iterator result is not an object");
-                iteratorDone = true;
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone);
-            }
-
-            JSValue doneValue = callGet(context, nextResult, PropertyKey.DONE);
-            if (context.hasPendingException()) {
-                iteratorDone = true;
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone);
-            }
-            boolean done = JSTypeConversions.toBoolean(doneValue).isBooleanTrue();
-            if (done) {
                 return promiseCapability.promise();
             }
 
             JSValue nextValue = callGet(context, nextResult, PropertyKey.VALUE);
             if (context.hasPendingException()) {
-                iteratorDone = true;
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone);
+                return rejectAbruptPromise(context, promiseCapability);
             }
 
             JSValue nextPromise = callCallable(context, promiseResolve, thisArg, new JSValue[]{nextValue});
             if (context.hasPendingException()) {
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, false);
+                return closeIteratorAndRejectAbruptPromise(context, iteratorObject, promiseCapability);
             }
 
-            JSValue thenMethod = callGet(context, nextPromise, PropertyKey.THEN);
-            if (context.hasPendingException()) {
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, false);
-            }
-            if (!JSTypeChecking.isCallable(thenMethod)) {
-                context.throwTypeError("Promise.race resolve result then is not callable");
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, false);
+            JSValue thenMethod = getCallableProperty(context, nextPromise, PropertyKey.THEN, methodName,
+                    " resolve result then is not callable");
+            if (thenMethod == null) {
+                return closeIteratorAndRejectAbruptPromise(context, iteratorObject, promiseCapability);
             }
 
             callCallable(context, thenMethod, nextPromise,
                     new JSValue[]{promiseCapability.resolve(), promiseCapability.reject()});
             if (context.hasPendingException()) {
-                return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, false);
+                return closeIteratorAndRejectAbruptPromise(context, iteratorObject, promiseCapability);
             }
         }
     }
@@ -709,14 +616,6 @@ public final class PromiseConstructor {
             return JSUndefined.INSTANCE;
         }
         return promiseCapability.promise();
-    }
-
-    private static JSValue rejectAbruptPromiseMaybeClose(JSContext context, JSObject iteratorObject,
-            PromiseCapability promiseCapability, boolean iteratorDone) {
-        if (iteratorDone) {
-            return rejectAbruptPromise(context, promiseCapability);
-        }
-        return closeIteratorAndRejectAbruptPromise(context, iteratorObject, promiseCapability);
     }
 
     /**
@@ -823,7 +722,6 @@ public final class PromiseConstructor {
         result.set(PropertyKey.REJECT, promiseCapability.reject());
         return result;
     }
-
     static final class PromiseCapability {
         private JSValue promise;
         private JSValue reject;
@@ -859,7 +757,6 @@ public final class PromiseConstructor {
             this.resolve = resolve;
         }
     }
-
     private enum PromiseCombinatorMode {
         ALL, ALL_SETTLED, ANY
     }

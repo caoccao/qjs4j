@@ -20,9 +20,6 @@ import com.caoccao.qjs4j.compilation.ast.BreakStatement;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 
-import java.util.Iterator;
-import java.util.List;
-
 final class BreakStatementCompiler extends AstNodeCompiler<BreakStatement> {
     BreakStatementCompiler(CompilerContext compilerContext) {
         super(compilerContext);
@@ -48,7 +45,7 @@ final class BreakStatementCompiler extends AstNodeCompiler<BreakStatement> {
             }
             compilerContext.emitHelpers.emitIteratorCloseForLoopsUntil(target);
             compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(target.breakTargetScopeDepth);
-            emitActiveFinallyGosubs();
+            compilerContext.emitHelpers.emitActiveFinallyGosubs();
             int jumpPos = compilerContext.emitter.emitJump(Opcode.GOTO);
             target.breakPositions.add(jumpPos);
         } else {
@@ -66,25 +63,10 @@ final class BreakStatementCompiler extends AstNodeCompiler<BreakStatement> {
                 throw new JSCompilerException("Illegal break statement", breakStmt);
             }
             compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(loopContext.breakTargetScopeDepth);
-            emitActiveFinallyGosubs();
+            compilerContext.emitHelpers.emitActiveFinallyGosubs();
             int jumpPos = compilerContext.emitter.emitJump(Opcode.GOTO);
             loopContext.breakPositions.add(jumpPos);
         }
     }
 
-    private void emitActiveFinallyGosubs() {
-        Iterator<List<Integer>> gosubPatchIterator = compilerContext.activeFinallyGosubPatches.iterator();
-        Iterator<Integer> nipCatchCountIterator = compilerContext.activeFinallyNipCatchCounts.iterator();
-        while (gosubPatchIterator.hasNext() && nipCatchCountIterator.hasNext()) {
-            List<Integer> gosubPatches = gosubPatchIterator.next();
-            int nipCatchCount = nipCatchCountIterator.next();
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            for (int i = 0; i < nipCatchCount; i++) {
-                compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
-            }
-            int gosubPosition = compilerContext.emitter.emitJump(Opcode.GOSUB);
-            gosubPatches.add(gosubPosition);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-        }
-    }
 }

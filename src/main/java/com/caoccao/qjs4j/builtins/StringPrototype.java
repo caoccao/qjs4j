@@ -461,7 +461,7 @@ public final class StringPrototype {
         if (args.length == 0) {
             args = new JSValue[]{JSUndefined.INSTANCE};
         }
-        int regexp = isRegExp(context, args[0]);
+        int regexp = JSTypeChecking.isRegExp(context, args[0]);
         if (regexp < 0) {
             return JSUndefined.INSTANCE;
         }
@@ -580,7 +580,7 @@ public final class StringPrototype {
         if (args.length == 0) {
             args = new JSValue[]{JSUndefined.INSTANCE};
         }
-        int regexp = isRegExp(context, args[0]);
+        int regexp = JSTypeChecking.isRegExp(context, args[0]);
         if (regexp < 0) {
             return JSUndefined.INSTANCE;
         }
@@ -709,20 +709,6 @@ public final class StringPrototype {
             }
         }
         return false;
-    }
-
-    private static int isRegExp(JSContext context, JSValue value) {
-        if (!(value instanceof JSObject obj)) {
-            return 0;
-        }
-        JSValue matcher = obj.get(PropertyKey.SYMBOL_MATCH);
-        if (context.hasPendingException()) {
-            return -1;
-        }
-        if (!(matcher instanceof JSUndefined)) {
-            return JSTypeConversions.toBoolean(matcher).value() ? 1 : 0;
-        }
-        return value instanceof JSRegExp ? 1 : 0;
     }
 
     /**
@@ -868,7 +854,7 @@ public final class StringPrototype {
         // Step 2: If regexp is neither undefined nor null
         if (!(regexpArg instanceof JSUndefined) && !(regexpArg instanceof JSNull)) {
             // Step 2a: isRegExp check
-            if (isRegExp(context, regexpArg) == 1) {
+            if (JSTypeChecking.isRegExp(context, regexpArg) == 1) {
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -1198,7 +1184,7 @@ public final class StringPrototype {
         // Step 2: If searchValue is neither undefined nor null
         if (!(searchValue instanceof JSUndefined) && !(searchValue instanceof JSNull)) {
             // Step 2a: isRegExp check
-            if (isRegExp(context, searchValue) == 1) {
+            if (JSTypeChecking.isRegExp(context, searchValue) == 1) {
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -1469,7 +1455,7 @@ public final class StringPrototype {
         if (args.length == 0) {
             args = new JSValue[]{JSUndefined.INSTANCE};
         }
-        int regexp = isRegExp(context, args[0]);
+        int regexp = JSTypeChecking.isRegExp(context, args[0]);
         if (regexp < 0) {
             return JSUndefined.INSTANCE;
         }

@@ -16,14 +16,12 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.BaseTest;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -47,9 +45,7 @@ import static org.assertj.core.api.Assertions.fail;
  * JavaScript counterpart, so they cannot be made against V8. The messages themselves are compared with V8 in
  * {@link JSModuleAutomaticSemicolonInsertionTest} and the other Javet suites.
  */
-public class JSModuleSourceLocationTest extends BaseTest {
-    @TempDir
-    Path moduleDirectory;
+public class JSModuleSourceLocationTest extends ModuleFileTest {
 
     /**
      * Assert that a module's compile error is reported where the caller can find it.

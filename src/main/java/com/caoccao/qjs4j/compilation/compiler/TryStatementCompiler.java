@@ -20,7 +20,6 @@ import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.vm.Opcode;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -139,36 +138,7 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
         List<Statement> body = block.getBody();
 
         // Phase 1: pre-declare lexical bindings for TDZ.
-        for (Statement statement : body) {
-            if (statement instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.getKind() != VariableKind.VAR) {
-                for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                    Set<String> declarationNames = new HashSet<>();
-                    compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(), declarationNames);
-                    for (String declarationName : declarationNames) {
-                        Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(declarationName);
-                        if (localIndex == null) {
-                            localIndex = compilerContext.scopeManager.currentScope().declareLocal(declarationName);
-                        }
-                        if (variableDeclaration.getKind() == VariableKind.CONST
-                                || variableDeclaration.getKind() == VariableKind.USING
-                                || variableDeclaration.getKind() == VariableKind.AWAIT_USING) {
-                            compilerContext.scopeManager.currentScope().markConstLocal(declarationName);
-                        }
-                        compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
-                        compilerContext.tdzLocals.add(declarationName);
-                    }
-                }
-            } else if (statement instanceof ClassDeclaration classDeclaration && classDeclaration.getId() != null) {
-                String className = classDeclaration.getId().getName();
-                Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(className);
-                if (localIndex == null) {
-                    localIndex = compilerContext.scopeManager.currentScope().declareLocal(className);
-                }
-                compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
-                compilerContext.tdzLocals.add(className);
-            }
-        }
+        compilerContext.statementCompiler.predeclareLexicalBindings(body, false);
 
         // Phase 2: hoist function declarations.
         for (Statement statement : body) {

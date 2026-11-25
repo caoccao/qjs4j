@@ -287,40 +287,4 @@ public final class JSImportNamespaceObject extends JSObject {
         return true;
     }
 
-    private static boolean sameValue(JSValue leftValue, JSValue rightValue) {
-        if (leftValue == rightValue) {
-            return true;
-        }
-        if (leftValue == null || rightValue == null) {
-            return false;
-        }
-
-        JSValueType leftType = leftValue.type();
-        JSValueType rightType = rightValue.type();
-        if (leftType != rightType) {
-            return false;
-        }
-
-        return switch (leftType) {
-            case UNDEFINED, NULL -> true;
-            case NUMBER -> {
-                if (!(leftValue instanceof JSNumber leftNumber) || !(rightValue instanceof JSNumber rightNumber)) {
-                    yield false;
-                }
-                double left = leftNumber.value();
-                double right = rightNumber.value();
-                if (Double.isNaN(left) && Double.isNaN(right)) {
-                    yield true;
-                }
-                yield Double.doubleToRawLongBits(left) == Double.doubleToRawLongBits(right);
-            }
-            case STRING -> (leftValue instanceof JSString leftString && rightValue instanceof JSString rightString)
-                    && leftString.value().equals(rightString.value());
-            case BOOLEAN -> (leftValue instanceof JSBoolean leftBoolean && rightValue instanceof JSBoolean rightBoolean)
-                    && leftBoolean.value() == rightBoolean.value();
-            case BIGINT -> (leftValue instanceof JSBigInt leftBigInt && rightValue instanceof JSBigInt rightBigInt)
-                    && leftBigInt.value().equals(rightBigInt.value());
-            case SYMBOL, OBJECT, FUNCTION -> false;
-        };
-    }
 }

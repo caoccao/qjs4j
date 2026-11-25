@@ -18,7 +18,6 @@ package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
-import com.caoccao.qjs4j.vm.Opcode;
 
 /**
  * Compiles expression AST nodes into bytecode. Dispatches to specialized expression compilers.
@@ -103,20 +102,7 @@ final class ExpressionCompiler extends AstNodeCompiler<Expression> {
         if (target instanceof MemberExpression memberExpr && !memberExpr.isOptional()) {
             if (memberExpr.getObject().isSuperIdentifier()) {
                 // Pre-evaluate super reference: this, superObj, key
-                compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
-                if (memberExpr.isComputed()) {
-                    // Per ES spec: computed key evaluated before GetSuperBase()
-                    compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
-                    compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-                    compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
-                    compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
-                    compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                } else {
-                    compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-                    compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
-                    compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
-                    compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
-                }
+                compilerContext.emitHelpers.emitSuperPropertyReference(memberExpr);
                 return 3; // this, superObj, key on stack
             }
             // Pre-evaluate the object

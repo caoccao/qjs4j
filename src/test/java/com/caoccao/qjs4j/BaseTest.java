@@ -60,6 +60,26 @@ public abstract class BaseTest {
         context.clearPendingException();
     }
 
+    protected void assertPendingRangeError(JSContext context, JSValue value) {
+        assertRangeError(value);
+        assertPendingException(context);
+    }
+
+    protected void assertPendingSyntaxError(JSContext context, JSValue value) {
+        assertSyntaxError(value);
+        assertPendingException(context);
+    }
+
+    protected void assertPendingTypeError(JSContext context, JSValue value) {
+        assertTypeError(value);
+        assertPendingException(context);
+    }
+
+    protected void assertPendingTypeError(JSContext context, JSValue value, String expectedMessage) {
+        assertTypeError(value, expectedMessage);
+        assertPendingException(context);
+    }
+
     protected void assertRangeError(JSValue value) {
         assertError(value, "RangeError", null);
     }
@@ -125,6 +145,14 @@ public abstract class BaseTest {
         JSValue[] arguments = new JSValue[values.length];
         for (int i = 0; i < values.length; i++) {
             arguments[i] = new JSNumber(values[i]);
+        }
+        return arguments;
+    }
+
+    protected static JSValue[] stringArgs(String... strings) {
+        JSValue[] arguments = new JSValue[strings.length];
+        for (int i = 0; i < strings.length; i++) {
+            arguments[i] = new JSString(strings[i]);
         }
         return arguments;
     }

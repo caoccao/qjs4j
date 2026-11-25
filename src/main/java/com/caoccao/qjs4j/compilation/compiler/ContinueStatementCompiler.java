@@ -20,9 +20,6 @@ import com.caoccao.qjs4j.compilation.ast.ContinueStatement;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 
-import java.util.Iterator;
-import java.util.List;
-
 final class ContinueStatementCompiler extends AstNodeCompiler<ContinueStatement> {
     ContinueStatementCompiler(CompilerContext compilerContext) {
         super(compilerContext);
@@ -57,7 +54,7 @@ final class ContinueStatementCompiler extends AstNodeCompiler<ContinueStatement>
             }
             compilerContext.emitHelpers.emitIteratorCloseForLoopsUntil(target);
             compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(target.continueTargetScopeDepth);
-            emitActiveFinallyGosubs();
+            compilerContext.emitHelpers.emitActiveFinallyGosubs();
             int jumpPos = compilerContext.emitter.emitJump(Opcode.GOTO);
             target.continuePositions.add(jumpPos);
         } else {
@@ -74,25 +71,10 @@ final class ContinueStatementCompiler extends AstNodeCompiler<ContinueStatement>
             }
             compilerContext.emitHelpers
                     .emitUsingDisposalsForScopeDepthGreaterThan(loopContext.continueTargetScopeDepth);
-            emitActiveFinallyGosubs();
+            compilerContext.emitHelpers.emitActiveFinallyGosubs();
             int jumpPos = compilerContext.emitter.emitJump(Opcode.GOTO);
             loopContext.continuePositions.add(jumpPos);
         }
     }
 
-    private void emitActiveFinallyGosubs() {
-        Iterator<List<Integer>> gosubPatchIterator = compilerContext.activeFinallyGosubPatches.iterator();
-        Iterator<Integer> nipCatchCountIterator = compilerContext.activeFinallyNipCatchCounts.iterator();
-        while (gosubPatchIterator.hasNext() && nipCatchCountIterator.hasNext()) {
-            List<Integer> gosubPatches = gosubPatchIterator.next();
-            int nipCatchCount = nipCatchCountIterator.next();
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            for (int i = 0; i < nipCatchCount; i++) {
-                compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
-            }
-            int gosubPosition = compilerContext.emitter.emitJump(Opcode.GOSUB);
-            gosubPatches.add(gosubPosition);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-        }
-    }
 }

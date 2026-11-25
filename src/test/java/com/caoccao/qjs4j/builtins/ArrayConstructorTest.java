@@ -41,7 +41,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertNumberValue(arr.get(2), 3.0);
 
         // Normal case: from string
-        result = ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("abc")});
+        result = ArrayConstructor.from(context, JSUndefined.INSTANCE, stringArgs("abc"));
         arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(3);
         assertStringValue(arr.get(0), "a");
@@ -85,13 +85,12 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertThat(arr.getLength()).isEqualTo(0);
 
         // Edge case: empty string
-        result = ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("")});
+        result = ArrayConstructor.from(context, JSUndefined.INSTANCE, stringArgs(""));
         arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(0);
 
         // Edge case: no arguments
-        assertTypeError(ArrayConstructor.from(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, ArrayConstructor.from(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
 
         // Edge case: non-iterable number → empty array (per spec, ToObject(123) has no length)
         result = ArrayConstructor.from(context, JSUndefined.INSTANCE, numberArgs(123));
@@ -99,9 +98,8 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertThat(arr.getLength()).isEqualTo(0);
 
         // Edge case: invalid mapFn
-        assertTypeError(ArrayConstructor.from(context, JSUndefined.INSTANCE,
+        assertPendingTypeError(context, ArrayConstructor.from(context, JSUndefined.INSTANCE,
                 new JSValue[]{sourceArr, new JSString("not a function")}));
-        assertPendingException(context);
     }
 
     @Test
@@ -155,7 +153,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertNumberValue(arr.get(1), 4.0);
 
         // Normal case: from string
-        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("abc")});
+        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, stringArgs("abc"));
         promise = result.asPromise().orElseThrow();
         awaitPromise(promise);
 
@@ -229,8 +227,8 @@ public class ArrayConstructorTest extends BaseJavetTest {
 
     @Test
     public void testFromWithNativeIterables() {
-        assertStringWithJavet("JSON.stringify(Array.from(new Set([1, 2, 2, 3])))");
-        assertStringWithJavet("JSON.stringify(Array.from(new Map([['a', 1], ['b', 2]])))");
+        assertStringWithJavet("JSON.stringify(Array.from(new Set([1, 2, 2, 3])))",
+                "JSON.stringify(Array.from(new Map([['a', 1], ['b', 2]])))");
     }
 
     @Test
@@ -275,7 +273,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertThat(result.isBooleanTrue()).isTrue();
 
         // Normal case: not array
-        result = ArrayConstructor.isArray(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("not array")});
+        result = ArrayConstructor.isArray(context, JSUndefined.INSTANCE, stringArgs("not array"));
         assertThat(result.isBooleanFalse()).isTrue();
 
         result = ArrayConstructor.isArray(context, JSUndefined.INSTANCE, new JSValue[]{new JSObject(context)});
@@ -305,7 +303,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertThat(arr.getLength()).isEqualTo(0);
 
         // Edge case: single element
-        result = ArrayConstructor.of(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("hello")});
+        result = ArrayConstructor.of(context, JSUndefined.INSTANCE, stringArgs("hello"));
         arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(1);
         assertStringValue(arr.get(0), "hello");

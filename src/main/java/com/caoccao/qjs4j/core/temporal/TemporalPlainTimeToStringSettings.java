@@ -16,8 +16,30 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
+import com.caoccao.qjs4j.core.JSContext;
+
 public record TemporalPlainTimeToStringSettings(TemporalUnit smallestUnit, TemporalRoundingMode roundingMode,
         boolean autoFractionalSecondDigits, int fractionalSecondDigits, long roundingIncrementNanoseconds) {
     public static final TemporalPlainTimeToStringSettings DEFAULT = new TemporalPlainTimeToStringSettings(null,
             TemporalRoundingMode.TRUNC, true, -1, 1L);
+
+    public static TemporalPlainTimeToStringSettings resolve(JSContext context, String roundingModeText,
+            String smallestUnitText, TemporalFractionalSecondDigitsOption digits) {
+        TemporalRoundingMode roundingMode = TemporalRoundingMode.fromString(roundingModeText);
+        if (roundingMode == null) {
+            context.throwRangeError("Temporal error: Invalid rounding mode.");
+            return null;
+        }
+        TemporalUnit unit = TemporalUnit.fromString(smallestUnitText).orElse(null);
+        if (smallestUnitText != null && (unit == null || !unit.isSmallerOrEqual(TemporalUnit.MINUTE))) {
+            context.throwRangeError("Temporal error: Invalid smallestUnit option.");
+            return null;
+        }
+        if (unit != null) {
+            return new TemporalPlainTimeToStringSettings(unit, roundingMode, false,
+                    unit.getStringFractionalSecondDigits(), unit.getStringRoundingIncrementNanoseconds());
+        }
+        return new TemporalPlainTimeToStringSettings(null, roundingMode, digits.auto(),
+                digits.auto() ? -1 : digits.digits(), digits.roundingIncrementNanoseconds());
+    }
 }

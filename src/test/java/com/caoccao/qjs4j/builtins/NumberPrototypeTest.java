@@ -75,7 +75,7 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: non-number value
-        result = NumberPrototype.isFinite(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("42")});
+        result = NumberPrototype.isFinite(context, JSUndefined.INSTANCE, stringArgs("42"));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: no arguments
@@ -110,7 +110,7 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: non-number value
-        result = NumberPrototype.isInteger(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("42")});
+        result = NumberPrototype.isInteger(context, JSUndefined.INSTANCE, stringArgs("42"));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: no arguments
@@ -133,7 +133,7 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: non-number value
-        result = NumberPrototype.isNaN(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("not a number")});
+        result = NumberPrototype.isNaN(context, JSUndefined.INSTANCE, stringArgs("not a number"));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: no arguments
@@ -175,7 +175,7 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: non-number value
-        result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("42")});
+        result = NumberPrototype.isSafeInteger(context, JSUndefined.INSTANCE, stringArgs("42"));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: no arguments
@@ -241,43 +241,43 @@ public class NumberPrototypeTest extends BaseJavetTest {
     @Test
     public void testParseFloat() {
         // Normal case: valid float string
-        JSValue result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("42.5")});
+        JSValue result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, stringArgs("42.5"));
         assertNumberValue(result, 42.5);
 
         // Normal case: integer string
-        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("42")});
+        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, stringArgs("42"));
         assertNumberValue(result, 42.0);
 
         // Normal case: negative number
-        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("-123.45")});
+        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, stringArgs("-123.45"));
         assertNumberValue(result, -123.45);
 
         // Normal case: scientific notation
-        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("1.23e4")});
+        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, stringArgs("1.23e4"));
         assertNumberValue(result, 12300.0);
 
         // Normal case: leading/trailing whitespace
-        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("  42.5  ")});
+        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, stringArgs("  42.5  "));
         assertNumberValue(result, 42.5);
 
         // Normal case: string starting with number
-        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("42abc")});
+        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, stringArgs("42abc"));
         assertNumberValue(result, 42.0);
 
         // Special case: Infinity
-        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("Infinity")});
+        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, stringArgs("Infinity"));
         assertNumberValue(result, Double.POSITIVE_INFINITY);
 
         // Special case: NaN string
-        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("NaN")});
+        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, stringArgs("NaN"));
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Edge case: invalid string
-        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("abc")});
+        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, stringArgs("abc"));
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Edge case: empty string
-        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("")});
+        result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, stringArgs(""));
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Edge case: no arguments
@@ -292,15 +292,15 @@ public class NumberPrototypeTest extends BaseJavetTest {
     @Test
     public void testParseInt() {
         // Normal case: valid integer string
-        JSValue result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("42")});
+        JSValue result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, stringArgs("42"));
         assertNumberValue(result, 42.0);
 
         // Normal case: float string (truncates)
-        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("42.9")});
+        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, stringArgs("42.9"));
         assertNumberValue(result, 42.0);
 
         // Normal case: negative number
-        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("-123")});
+        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, stringArgs("-123"));
         assertNumberValue(result, -123.0);
 
         // Normal case: hexadecimal
@@ -309,7 +309,7 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertNumberValue(result, 255.0);
 
         // Normal case: auto-detect hex
-        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("0xFF")});
+        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, stringArgs("0xFF"));
         assertNumberValue(result, 255.0);
 
         // Normal case: binary
@@ -318,19 +318,19 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertNumberValue(result, 10.0);
 
         // Normal case: leading/trailing whitespace
-        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("  42  ")});
+        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, stringArgs("  42  "));
         assertNumberValue(result, 42.0);
 
         // Normal case: string starting with number
-        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("42abc")});
+        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, stringArgs("42abc"));
         assertNumberValue(result, 42.0);
 
         // Edge case: invalid string
-        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("abc")});
+        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, stringArgs("abc"));
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Edge case: empty string
-        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("")});
+        result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, stringArgs(""));
         assertThat(Double.isNaN(result.asNumber().map(JSNumber::value).orElseThrow())).isTrue();
 
         // Edge case: no arguments
@@ -396,12 +396,10 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "-Infinity");
 
         // Edge case: precision too low - skip error check due to JSObject implementation
-        assertRangeError(NumberPrototype.toExponential(context, num, numberArgs(-1)));
-        assertPendingException(context);
+        assertPendingRangeError(context, NumberPrototype.toExponential(context, num, numberArgs(-1)));
 
         // Edge case: precision too high - skip error check due to JSObject implementation
-        assertRangeError(NumberPrototype.toExponential(context, num, numberArgs(101)));
-        assertPendingException(context);
+        assertPendingRangeError(context, NumberPrototype.toExponential(context, num, numberArgs(101)));
     }
 
     @Test
@@ -474,12 +472,10 @@ public class NumberPrototypeTest extends BaseJavetTest {
                 .satisfies(s -> assertThat(s.contains("e")).isTrue());
 
         // Edge case: precision too low - skip error check due to JSObject implementation
-        assertRangeError(NumberPrototype.toFixed(context, num, numberArgs(-1)));
-        assertPendingException(context);
+        assertPendingRangeError(context, NumberPrototype.toFixed(context, num, numberArgs(-1)));
 
         // Edge case: precision too high - skip error check due to JSObject implementation
-        assertRangeError(NumberPrototype.toFixed(context, num, numberArgs(101)));
-        assertPendingException(context);
+        assertPendingRangeError(context, NumberPrototype.toFixed(context, num, numberArgs(101)));
     }
 
     @Test
@@ -558,12 +554,10 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "Infinity");
 
         // Edge case: precision too low - skip error check due to JSObject implementation
-        assertRangeError(NumberPrototype.toPrecision(context, num, numberArgs(0)));
-        assertPendingException(context);
+        assertPendingRangeError(context, NumberPrototype.toPrecision(context, num, numberArgs(0)));
 
         // Edge case: precision too high - skip error check due to JSObject implementation
-        assertRangeError(NumberPrototype.toPrecision(context, num, numberArgs(101)));
-        assertPendingException(context);
+        assertPendingRangeError(context, NumberPrototype.toPrecision(context, num, numberArgs(101)));
     }
 
     @Test
@@ -620,12 +614,10 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "0");
 
         // Edge case: radix too low - skip error check due to JSObject implementation
-        assertRangeError(NumberPrototype.toString(context, num, numberArgs(1)));
-        assertPendingException(context);
+        assertPendingRangeError(context, NumberPrototype.toString(context, num, numberArgs(1)));
 
         // Edge case: radix too high - skip error check due to JSObject implementation
-        assertRangeError(NumberPrototype.toString(context, num, numberArgs(37)));
-        assertPendingException(context);
+        assertPendingRangeError(context, NumberPrototype.toString(context, num, numberArgs(37)));
 
         // Edge case: non-integer with non-10 radix (now supported for floating-point conversion)
         result = NumberPrototype.toString(context, new JSNumber(42.5), numberArgs(16));
@@ -690,7 +682,6 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertNumberValue(result, 42.5);
 
         // Edge case: called on non-number
-        assertTypeError(NumberPrototype.valueOf(context, new JSString("42"), JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, NumberPrototype.valueOf(context, new JSString("42"), JSValue.NO_ARGS));
     }
 }

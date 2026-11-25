@@ -57,8 +57,7 @@ public class BigIntConstructorTest extends BaseJavetTest {
 
         // Edge case: insufficient arguments
         result = BigIntConstructor.asIntN(context, JSUndefined.INSTANCE, numberArgs(8));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: first argument is coerced via ToIndex
         result = BigIntConstructor.asIntN(context, JSUndefined.INSTANCE,
@@ -68,14 +67,12 @@ public class BigIntConstructorTest extends BaseJavetTest {
 
         // Edge case: second argument not a BigInt
         result = BigIntConstructor.asIntN(context, JSUndefined.INSTANCE, numberArgs(8, 123));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: negative bits
         result = BigIntConstructor.asIntN(context, JSUndefined.INSTANCE,
                 new JSValue[]{new JSNumber(-1), new JSBigInt(BigInteger.ONE)});
-        assertRangeError(result);
-        assertPendingException(context);
+        assertPendingRangeError(context, result);
 
         // Edge case: bits larger than Integer.MAX_VALUE are still valid (ToIndex)
         result = BigIntConstructor.asIntN(context, JSUndefined.INSTANCE,
@@ -106,8 +103,7 @@ public class BigIntConstructorTest extends BaseJavetTest {
 
         // Edge case: insufficient arguments
         result = BigIntConstructor.asUintN(context, JSUndefined.INSTANCE, numberArgs(8));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: first argument is coerced via ToIndex
         result = BigIntConstructor.asUintN(context, JSUndefined.INSTANCE,
@@ -117,20 +113,17 @@ public class BigIntConstructorTest extends BaseJavetTest {
 
         // Edge case: second argument not a BigInt
         result = BigIntConstructor.asUintN(context, JSUndefined.INSTANCE, numberArgs(8, 123));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: negative bits
         result = BigIntConstructor.asUintN(context, JSUndefined.INSTANCE,
                 new JSValue[]{new JSNumber(-1), new JSBigInt(BigInteger.ONE)});
-        assertRangeError(result);
-        assertPendingException(context);
+        assertPendingRangeError(context, result);
 
         // Edge case: bits too large
         result = BigIntConstructor.asUintN(context, JSUndefined.INSTANCE,
                 new JSValue[]{new JSNumber(NumberPrototype.MAX_SAFE_INTEGER + 1), new JSBigInt(BigInteger.ONE)});
-        assertRangeError(result);
-        assertPendingException(context);
+        assertPendingRangeError(context, result);
     }
 
     @Test
@@ -205,22 +198,22 @@ public class BigIntConstructorTest extends BaseJavetTest {
         assertThat(result).isEqualTo(bigInt);
 
         // Normal case: from string (decimal)
-        result = BigIntConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("789")});
+        result = BigIntConstructor.call(context, JSUndefined.INSTANCE, stringArgs("789"));
         bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.valueOf(789));
 
         // Normal case: from string (hex)
-        result = BigIntConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("0xFF")});
+        result = BigIntConstructor.call(context, JSUndefined.INSTANCE, stringArgs("0xFF"));
         bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.valueOf(255));
 
         // Normal case: from string (octal)
-        result = BigIntConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("0o77")});
+        result = BigIntConstructor.call(context, JSUndefined.INSTANCE, stringArgs("0o77"));
         bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.valueOf(63));
 
         // Normal case: from string (binary)
-        result = BigIntConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("0b101")});
+        result = BigIntConstructor.call(context, JSUndefined.INSTANCE, stringArgs("0b101"));
         bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.valueOf(5));
 
@@ -236,33 +229,27 @@ public class BigIntConstructorTest extends BaseJavetTest {
 
         // Edge case: no arguments
         result = BigIntConstructor.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: non-integer number
         result = BigIntConstructor.call(context, JSUndefined.INSTANCE, numberArgs(1.5));
-        assertRangeError(result);
-        assertPendingException(context);
+        assertPendingRangeError(context, result);
 
         // Edge case: Infinity
         result = BigIntConstructor.call(context, JSUndefined.INSTANCE, numberArgs(Double.POSITIVE_INFINITY));
-        assertRangeError(result);
-        assertPendingException(context);
+        assertPendingRangeError(context, result);
 
         // Edge case: NaN
         result = BigIntConstructor.call(context, JSUndefined.INSTANCE, numberArgs(Double.NaN));
-        assertRangeError(result);
-        assertPendingException(context);
+        assertPendingRangeError(context, result);
 
         // Edge case: invalid string
-        result = BigIntConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("not a number")});
-        assertSyntaxError(result);
-        assertPendingException(context);
+        result = BigIntConstructor.call(context, JSUndefined.INSTANCE, stringArgs("not a number"));
+        assertPendingSyntaxError(context, result);
 
         // Edge case: unsupported type
         result = BigIntConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSObject(context)});
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test

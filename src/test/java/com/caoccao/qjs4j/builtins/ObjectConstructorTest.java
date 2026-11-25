@@ -55,12 +55,11 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(target2.get("x").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
 
         // Edge case: no arguments
-        assertTypeError(ObjectConstructor.assign(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, ObjectConstructor.assign(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
 
         // Edge case: non-object target
-        assertTypeError(ObjectConstructor.assign(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE}));
-        assertPendingException(context);
+        assertPendingTypeError(context,
+                ObjectConstructor.assign(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE}));
 
         assertStringWithJavet("var target = {a: 1}; Object.assign(target, {b: 2}, {c: 3}); JSON.stringify(target)");
     }
@@ -98,13 +97,11 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result).isInstanceOfSatisfying(JSObject.class, obj -> assertThat(obj.getPrototype()).isNull());
 
         // Edge case: no arguments
-        assertTypeError(ObjectConstructor.create(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, ObjectConstructor.create(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
 
         // Edge case: invalid prototype
-        assertTypeError(
-                ObjectConstructor.create(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("not valid")}));
-        assertPendingException(context);
+        assertPendingTypeError(context,
+                ObjectConstructor.create(context, JSUndefined.INSTANCE, stringArgs("not valid")));
 
         context.eval("var proto = {x: 10}");
         result = context.eval("var newObj = Object.create(proto); newObj.x");
@@ -161,8 +158,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
                 entries -> assertThat(entries.getLength()).isEqualTo(0));
 
         // Edge case: no arguments
-        assertTypeError(ObjectConstructor.entries(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, ObjectConstructor.entries(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
 
         assertStringWithJavet("""
                 var obj = {a: 1, b: 2, c: 3};
@@ -180,11 +176,10 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(obj.isFrozen()).isTrue();
 
         // Edge case: no arguments
-        assertTypeError(ObjectConstructor.freeze(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, ObjectConstructor.freeze(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
 
         // Normal case: freeze primitive (returns primitive)
-        result = ObjectPrototype.freeze(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("string")});
+        result = ObjectPrototype.freeze(context, JSUndefined.INSTANCE, stringArgs("string"));
         assertStringValue(result, "string");
 
         // Edge case: freeze number primitive
@@ -362,12 +357,10 @@ public class ObjectConstructorTest extends BaseJavetTest {
                 obj -> assertThat(obj.getOwnPropertyKeys().size()).isEqualTo(0));
 
         // Edge case: no arguments
-        assertTypeError(ObjectConstructor.fromEntries(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, ObjectConstructor.fromEntries(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
 
         // Edge case: non-iterable argument
-        assertTypeError(ObjectConstructor.fromEntries(context, JSUndefined.INSTANCE, numberArgs(42)));
-        assertPendingException(context);
+        assertPendingTypeError(context, ObjectConstructor.fromEntries(context, JSUndefined.INSTANCE, numberArgs(42)));
 
         // Test with string keys and various value types - use manual creation
         JSArray mixedEntries = new JSArray(context);
@@ -421,7 +414,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
         // Edge case: primitive (ToObject wraps it, then property lookup returns undefined)
         result = ObjectConstructor.getOwnPropertyDescriptor(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSString("not object"), new JSString("prop")});
+                stringArgs("not object", "prop"));
         assertThat(result.isUndefined()).isTrue();
     }
 
@@ -456,12 +449,11 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result).isInstanceOfSatisfying(JSArray.class, names -> assertThat(names.getLength()).isEqualTo(0));
 
         // Edge case: no arguments
-        assertTypeError(ObjectConstructor.getOwnPropertyNames(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context,
+                ObjectConstructor.getOwnPropertyNames(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
 
         // Edge case: non-object primitive (should ToObject - strings have own properties)
-        result = ObjectConstructor.getOwnPropertyNames(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSString("ab")});
+        result = ObjectConstructor.getOwnPropertyNames(context, JSUndefined.INSTANCE, stringArgs("ab"));
         assertThat(result).isInstanceOf(JSArray.class);
 
         assertObjectWithJavet("var obj = {first: 'John', last: 'Doe'}; Object.getOwnPropertyNames(obj)",
@@ -495,12 +487,11 @@ public class ObjectConstructorTest extends BaseJavetTest {
                 symbols -> assertThat(symbols.getLength()).isEqualTo(0));
 
         // Edge case: no arguments (should throw TypeError per spec)
-        assertTypeError(ObjectConstructor.getOwnPropertySymbols(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context,
+                ObjectConstructor.getOwnPropertySymbols(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
 
         // Edge case: non-object primitive (should ToObject, then return empty symbol array)
-        result = ObjectConstructor.getOwnPropertySymbols(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSString("not object")});
+        result = ObjectConstructor.getOwnPropertySymbols(context, JSUndefined.INSTANCE, stringArgs("not object"));
         assertThat(result).isInstanceOfSatisfying(JSArray.class,
                 symbols -> assertThat(symbols.getLength()).isEqualTo(0));
     }
@@ -522,11 +513,11 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result.isNull()).isTrue();
 
         // Edge case: no arguments
-        assertTypeError(ObjectConstructor.getPrototypeOf(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context,
+                ObjectConstructor.getPrototypeOf(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
 
         // Edge case: non-object primitive (should ToObject per spec)
-        result = ObjectConstructor.getPrototypeOf(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("test")});
+        result = ObjectConstructor.getPrototypeOf(context, JSUndefined.INSTANCE, stringArgs("test"));
         assertThat(result).isInstanceOf(JSObject.class);
 
         assertBooleanWithJavet("""
@@ -584,18 +575,15 @@ public class ObjectConstructorTest extends BaseJavetTest {
         });
 
         // Edge case: insufficient arguments
-        assertTypeError(ObjectConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{items}));
-        assertPendingException(context);
+        assertPendingTypeError(context, ObjectConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{items}));
 
         // Edge case: null items
-        assertTypeError(
+        assertPendingTypeError(context,
                 ObjectConstructor.groupBy(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE, callback}));
-        assertPendingException(context);
 
         // Edge case: non-function callback
-        assertTypeError(ObjectConstructor.groupBy(context, JSUndefined.INSTANCE,
+        assertPendingTypeError(context, ObjectConstructor.groupBy(context, JSUndefined.INSTANCE,
                 new JSValue[]{items, new JSString("not function")}));
-        assertPendingException(context);
     }
 
     @Test
@@ -618,12 +606,10 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Edge case: no arguments
-        assertTypeError(ObjectConstructor.hasOwn(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, ObjectConstructor.hasOwn(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
 
         // Edge case: non-object primitive (should ToObject per spec)
-        result = ObjectConstructor.hasOwn(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSString("test"), new JSString("length")});
+        result = ObjectConstructor.hasOwn(context, JSUndefined.INSTANCE, stringArgs("test", "length"));
         assertThat(result.isBooleanTrue()).isTrue();
     }
 
@@ -634,11 +620,11 @@ public class ObjectConstructorTest extends BaseJavetTest {
         obj.set("b", new JSNumber(2));
 
         // Normal case: property exists
-        JSValue result = ObjectConstructor.hasOwnProperty(context, obj, new JSValue[]{new JSString("a")});
+        JSValue result = ObjectConstructor.hasOwnProperty(context, obj, stringArgs("a"));
         assertThat(result.isBooleanTrue()).isTrue();
 
         // Property doesn't exist
-        result = ObjectConstructor.hasOwnProperty(context, obj, new JSValue[]{new JSString("z")});
+        result = ObjectConstructor.hasOwnProperty(context, obj, stringArgs("z"));
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Edge case: no arguments
@@ -646,9 +632,8 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Edge case: called on non-object
-        assertTypeError(ObjectConstructor.hasOwnProperty(context, new JSString("not object"),
-                new JSValue[]{new JSString("a")}));
-        assertPendingException(context);
+        assertPendingTypeError(context,
+                ObjectConstructor.hasOwnProperty(context, new JSString("not object"), stringArgs("a")));
     }
 
     @Test
@@ -682,8 +667,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result.isBooleanTrue()).isTrue();
 
         // Edge case: no arguments
-        assertTypeError(ObjectConstructor.isFrozen(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, ObjectConstructor.isFrozen(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
     }
 
     @Test
@@ -701,8 +685,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result.isBooleanTrue()).isTrue();
 
         // Edge case: no arguments
-        assertTypeError(ObjectConstructor.isSealed(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, ObjectConstructor.isSealed(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
     }
 
     @Test
@@ -722,12 +705,11 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result).isInstanceOfSatisfying(JSArray.class, keys -> assertThat(keys.getLength()).isEqualTo(0));
 
         // Edge case: no arguments
-        assertTypeError(ObjectConstructor.keys(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, ObjectConstructor.keys(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
 
         // Edge case: non-object
-        assertTypeError(ObjectConstructor.keys(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE}));
-        assertPendingException(context);
+        assertPendingTypeError(context,
+                ObjectConstructor.keys(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE}));
 
         JSObject negativeKey = context.createJSObject();
         negativeKey.set(PropertyKey.fromIndex(-1), JSBoolean.TRUE);
@@ -746,8 +728,8 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result).isSameAs(obj);
 
         // Edge case: no arguments
-        assertTypeError(ObjectConstructor.preventExtensions(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context,
+                ObjectConstructor.preventExtensions(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
 
         // Edge case: non-object (should return as-is)
         JSValue primitive = new JSString("string");
@@ -766,8 +748,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(obj.isSealed()).isTrue();
 
         // Edge case: no arguments
-        assertTypeError(ObjectConstructor.seal(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, ObjectConstructor.seal(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
 
         // Test seal behavior with Javet comparison
         assertBooleanWithJavet(
@@ -827,8 +808,8 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(obj.getPrototype()).isNull();
 
         // Edge case: missing arguments
-        assertTypeError(ObjectConstructor.setPrototypeOf(context, JSUndefined.INSTANCE, new JSValue[]{obj}));
-        assertPendingException(context);
+        assertPendingTypeError(context,
+                ObjectConstructor.setPrototypeOf(context, JSUndefined.INSTANCE, new JSValue[]{obj}));
 
         // Edge case: non-object primitive target (should return as-is per spec)
         JSValue primitiveTarget = new JSString("not object");
@@ -837,9 +818,8 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result).isSameAs(primitiveTarget);
 
         // Edge case: invalid prototype
-        assertTypeError(ObjectConstructor.setPrototypeOf(context, JSUndefined.INSTANCE,
+        assertPendingTypeError(context, ObjectConstructor.setPrototypeOf(context, JSUndefined.INSTANCE,
                 new JSValue[]{obj, new JSString("invalid")}));
-        assertPendingException(context);
     }
 
     @Test
@@ -859,8 +839,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result).isInstanceOfSatisfying(JSArray.class, values -> assertThat(values.getLength()).isEqualTo(0));
 
         // Edge case: no arguments
-        assertTypeError(ObjectConstructor.values(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, ObjectConstructor.values(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
 
         assertStringWithJavet("var obj = {a: 1, b: 2, c: 3}; JSON.stringify(Object.values(obj))");
     }

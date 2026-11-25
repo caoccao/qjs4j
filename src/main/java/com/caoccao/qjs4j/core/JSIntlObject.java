@@ -1343,6 +1343,34 @@ public final class JSIntlObject {
         return result.toString();
     }
 
+    private static JSValue changeLikelySubtags(JSContext context, JSValue thisArg, boolean maximize) {
+        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
+            return context.throwTypeError(maximize
+                    ? "Intl.Locale.prototype.maximize called on incompatible receiver"
+                    : "Intl.Locale.prototype.minimize called on incompatible receiver");
+        }
+        try {
+            String tag = intlLocale.getTag();
+            String baseTag = stripExtensions(tag);
+            Locale baseLocale = Locale.forLanguageTag(baseTag);
+            Locale updated = maximize ? addLikelySubtags(baseLocale) : removeLikelySubtags(baseLocale);
+            String updatedTag = canonicalizeLocaleTag(updated.toLanguageTag());
+            // Append extensions from the original tag
+            String extensionSuffix = getExtensionSuffix(tag);
+            if (!extensionSuffix.isEmpty()) {
+                updatedTag = updatedTag + extensionSuffix;
+            }
+            JSIntlLocale result = new JSIntlLocale(context, updated, updatedTag, intlLocale.getCalendar(),
+                    intlLocale.getCaseFirst(), intlLocale.getCollation(), intlLocale.getFirstDayOfWeek(),
+                    intlLocale.getHourCycle(), intlLocale.getNumberingSystem(), intlLocale.getNumeric(),
+                    intlLocale.isNumericSet());
+            result.setPrototype(intlLocale.getPrototype());
+            return result;
+        } catch (IllegalArgumentException e) {
+            return context.throwRangeError(e.getMessage());
+        }
+    }
+
     private static JSValue coerceOptionsObject(JSContext context, JSValue options) {
         if (options instanceof JSUndefined) {
             JSObject empty = context.createJSObject();
@@ -1434,14 +1462,14 @@ public final class JSIntlObject {
             // Read options in ECMA-402 spec order
 
             // 1. usage
-            String usage = getOptionStringChecked(context, optionsValue, "usage");
+            String usage = getOptionString(context, optionsValue, "usage");
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
             usage = normalizeOption(usage, "sort", "sort", "search");
 
             // 2. localeMatcher
-            String localeMatcher = getOptionStringChecked(context, optionsValue, "localeMatcher");
+            String localeMatcher = getOptionString(context, optionsValue, "localeMatcher");
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1450,7 +1478,7 @@ public final class JSIntlObject {
             }
 
             // 3. collation: resolve from option and/or extension per ECMA-402
-            String optionCollation = getOptionStringChecked(context, optionsValue, "collation");
+            String optionCollation = getOptionString(context, optionsValue, "collation");
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1491,7 +1519,7 @@ public final class JSIntlObject {
             }
 
             // 5. caseFirst: option overrides extension key "kf"
-            String caseFirst = getOptionStringChecked(context, optionsValue, "caseFirst");
+            String caseFirst = getOptionString(context, optionsValue, "caseFirst");
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1511,7 +1539,7 @@ public final class JSIntlObject {
             }
 
             // 6. sensitivity - default depends on usage per ECMA-402 Table 4
-            String sensitivity = getOptionStringChecked(context, optionsValue, "sensitivity");
+            String sensitivity = getOptionString(context, optionsValue, "sensitivity");
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1919,7 +1947,7 @@ public final class JSIntlObject {
         }
 
         // localeMatcher
-        String localeMatcher = getOptionStringChecked(context, options, "localeMatcher");
+        String localeMatcher = getOptionString(context, options, "localeMatcher");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1930,7 +1958,7 @@ public final class JSIntlObject {
         }
 
         // style (default: "long")
-        String style = getOptionStringChecked(context, options, "style");
+        String style = getOptionString(context, options, "style");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1941,7 +1969,7 @@ public final class JSIntlObject {
         }
 
         // type (required — TypeError if undefined)
-        String type = getOptionStringChecked(context, options, "type");
+        String type = getOptionString(context, options, "type");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1955,7 +1983,7 @@ public final class JSIntlObject {
         }
 
         // fallback (default: "code")
-        String fallback = getOptionStringChecked(context, options, "fallback");
+        String fallback = getOptionString(context, options, "fallback");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1966,7 +1994,7 @@ public final class JSIntlObject {
         }
 
         // languageDisplay (default: "dialect")
-        String languageDisplay = getOptionStringChecked(context, options, "languageDisplay");
+        String languageDisplay = getOptionString(context, options, "languageDisplay");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -2011,7 +2039,7 @@ public final class JSIntlObject {
 
         // Read localeMatcher (not in resolvedOptions, but read from options)
         if (options != null) {
-            String localeMatcher = getOptionStringChecked(context, options, "localeMatcher");
+            String localeMatcher = getOptionString(context, options, "localeMatcher");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -2023,9 +2051,7 @@ public final class JSIntlObject {
         }
 
         // Read numberingSystem from options
-        String numberingSystemOption = options != null
-                ? getOptionStringChecked(context, options, "numberingSystem")
-                : null;
+        String numberingSystemOption = options != null ? getOptionString(context, options, "numberingSystem") : null;
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -2063,7 +2089,7 @@ public final class JSIntlObject {
         }
 
         // Read style (default "short")
-        String style = options != null ? getOptionStringChecked(context, options, "style") : null;
+        String style = options != null ? getOptionString(context, options, "style") : null;
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -2084,7 +2110,7 @@ public final class JSIntlObject {
             String unitName = JSIntlDurationFormat.UNIT_NAMES[i];
 
             // Read unit style from options
-            String unitStyle = options != null ? getOptionStringChecked(context, options, unitName) : null;
+            String unitStyle = options != null ? getOptionString(context, options, unitName) : null;
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -2119,7 +2145,7 @@ public final class JSIntlObject {
             if (fractional) {
                 displayDefault = "auto";
             }
-            String display = options != null ? getOptionStringChecked(context, options, unitName + "Display") : null;
+            String display = options != null ? getOptionString(context, options, unitName + "Display") : null;
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -2614,7 +2640,7 @@ public final class JSIntlObject {
             }
 
             // Option read order must match ECMA-402.
-            String localeMatcher = getOptionStringChecked(context, optionsObject, "localeMatcher");
+            String localeMatcher = getOptionString(context, optionsObject, "localeMatcher");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -2623,7 +2649,7 @@ public final class JSIntlObject {
                         + " out of range for Intl.NumberFormat options property localeMatcher");
             }
 
-            String numberingSystemOption = getOptionStringChecked(context, optionsObject, "numberingSystem");
+            String numberingSystemOption = getOptionString(context, optionsObject, "numberingSystem");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -2634,7 +2660,7 @@ public final class JSIntlObject {
                 numberingSystemOption = numberingSystemOption.toLowerCase(Locale.ROOT);
             }
 
-            String style = getOptionStringChecked(context, optionsObject, "style");
+            String style = getOptionString(context, optionsObject, "style");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -2645,7 +2671,7 @@ public final class JSIntlObject {
                 return context.throwRangeError("Invalid option value: " + style);
             }
 
-            String currency = getOptionStringChecked(context, optionsObject, "currency");
+            String currency = getOptionString(context, optionsObject, "currency");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -2656,7 +2682,7 @@ public final class JSIntlObject {
                 currency = currency.toUpperCase(Locale.ROOT);
             }
 
-            String currencyDisplay = getOptionStringChecked(context, optionsObject, "currencyDisplay");
+            String currencyDisplay = getOptionString(context, optionsObject, "currencyDisplay");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -2667,7 +2693,7 @@ public final class JSIntlObject {
                 return context.throwRangeError("Invalid option value: " + currencyDisplay);
             }
 
-            String currencySign = getOptionStringChecked(context, optionsObject, "currencySign");
+            String currencySign = getOptionString(context, optionsObject, "currencySign");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -2677,12 +2703,12 @@ public final class JSIntlObject {
                 return context.throwRangeError("Invalid option value: " + currencySign);
             }
 
-            String unit = getOptionStringChecked(context, optionsObject, "unit");
+            String unit = getOptionString(context, optionsObject, "unit");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
 
-            String unitDisplay = getOptionStringChecked(context, optionsObject, "unitDisplay");
+            String unitDisplay = getOptionString(context, optionsObject, "unitDisplay");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -2704,7 +2730,7 @@ public final class JSIntlObject {
                 }
             }
 
-            String notation = getOptionStringChecked(context, optionsObject, "notation");
+            String notation = getOptionString(context, optionsObject, "notation");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -2756,7 +2782,7 @@ public final class JSIntlObject {
                 return context.throwRangeError("Invalid roundingIncrement value: " + roundingIncrement);
             }
 
-            String roundingMode = getOptionStringChecked(context, optionsObject, "roundingMode");
+            String roundingMode = getOptionString(context, optionsObject, "roundingMode");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -2769,7 +2795,7 @@ public final class JSIntlObject {
                 return context.throwRangeError("Invalid option value: " + roundingMode);
             }
 
-            String roundingPriority = getOptionStringChecked(context, optionsObject, "roundingPriority");
+            String roundingPriority = getOptionString(context, optionsObject, "roundingPriority");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -2780,7 +2806,7 @@ public final class JSIntlObject {
                 return context.throwRangeError("Invalid option value: " + roundingPriority);
             }
 
-            String trailingZeroDisplay = getOptionStringChecked(context, optionsObject, "trailingZeroDisplay");
+            String trailingZeroDisplay = getOptionString(context, optionsObject, "trailingZeroDisplay");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -2790,7 +2816,7 @@ public final class JSIntlObject {
                 return context.throwRangeError("Invalid option value: " + trailingZeroDisplay);
             }
 
-            String compactDisplay = getOptionStringChecked(context, optionsObject, "compactDisplay");
+            String compactDisplay = getOptionString(context, optionsObject, "compactDisplay");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -2809,7 +2835,7 @@ public final class JSIntlObject {
                 return JSUndefined.INSTANCE;
             }
 
-            String signDisplay = getOptionStringChecked(context, optionsObject, "signDisplay");
+            String signDisplay = getOptionString(context, optionsObject, "signDisplay");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -2959,19 +2985,19 @@ public final class JSIntlObject {
                 return options;
             }
 
-            String localeMatcher = getOptionStringChecked(context, optionsObject, "localeMatcher");
+            String localeMatcher = getOptionString(context, optionsObject, "localeMatcher");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
             localeMatcher = normalizeOption(localeMatcher, "best fit", "lookup", "best fit");
 
-            String type = getOptionStringChecked(context, optionsObject, "type");
+            String type = getOptionString(context, optionsObject, "type");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
             type = normalizeOption(type, "cardinal", "cardinal", "ordinal");
 
-            String notation = getOptionStringChecked(context, optionsObject, "notation");
+            String notation = getOptionString(context, optionsObject, "notation");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -3040,18 +3066,18 @@ public final class JSIntlObject {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            String roundingMode = getOptionStringChecked(context, optionsObject, "roundingMode");
+            String roundingMode = getOptionString(context, optionsObject, "roundingMode");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
             normalizeOption(roundingMode, "halfExpand", "ceil", "floor", "expand", "trunc", "halfCeil", "halfFloor",
                     "halfExpand", "halfTrunc", "halfEven");
-            String roundingPriority = getOptionStringChecked(context, optionsObject, "roundingPriority");
+            String roundingPriority = getOptionString(context, optionsObject, "roundingPriority");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
             normalizeOption(roundingPriority, "auto", "auto", "morePrecision", "lessPrecision");
-            String trailingZeroDisplay = getOptionStringChecked(context, optionsObject, "trailingZeroDisplay");
+            String trailingZeroDisplay = getOptionString(context, optionsObject, "trailingZeroDisplay");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -3083,13 +3109,13 @@ public final class JSIntlObject {
                 return options;
             }
 
-            String localeMatcher = getOptionStringChecked(context, optionsObject, "localeMatcher");
+            String localeMatcher = getOptionString(context, optionsObject, "localeMatcher");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
             localeMatcher = normalizeOption(localeMatcher, "best fit", "lookup", "best fit");
 
-            String numberingSystemOption = getOptionStringChecked(context, optionsObject, "numberingSystem");
+            String numberingSystemOption = getOptionString(context, optionsObject, "numberingSystem");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -3100,13 +3126,13 @@ public final class JSIntlObject {
                 }
             }
 
-            String style = getOptionStringChecked(context, optionsObject, "style");
+            String style = getOptionString(context, optionsObject, "style");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
             style = normalizeOption(style, "long", "long", "short", "narrow");
 
-            String numeric = getOptionStringChecked(context, optionsObject, "numeric");
+            String numeric = getOptionString(context, optionsObject, "numeric");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -3191,13 +3217,13 @@ public final class JSIntlObject {
                 return options;
             }
 
-            String localeMatcher = getOptionStringChecked(context, optionsObject, "localeMatcher");
+            String localeMatcher = getOptionString(context, optionsObject, "localeMatcher");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
             localeMatcher = normalizeOption(localeMatcher, "best fit", "lookup", "best fit");
 
-            String granularity = getOptionStringChecked(context, optionsObject, "granularity");
+            String granularity = getOptionString(context, optionsObject, "granularity");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -3431,25 +3457,7 @@ public final class JSIntlObject {
     }
 
     public static JSValue dateTimeFormatFormat(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlDateTimeFormat dateTimeFormat)) {
-            return context.throwTypeError("Intl.DateTimeFormat.prototype.format called on incompatible receiver");
-        }
-        DateTimeFormattable formattable = toDateTimeFormattable(context, JSValue.argumentOrUndefined(args, 0), true);
-        if (formattable == null || context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        JSIntlDateTimeFormat effectiveDateTimeFormat = getEffectiveDateTimeFormat(context, dateTimeFormat,
-                formattable.kind());
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!isTemporalCalendarCompatibleWithDateTimeFormat(context, formattable, effectiveDateTimeFormat)) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!isFormattableEpochMillisValid(context, formattable)) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(effectiveDateTimeFormat.format(formattable.epochMillis()));
+        return formatDateTime(context, thisArg, args, false);
     }
 
     /**
@@ -3488,28 +3496,7 @@ public final class JSIntlObject {
      * Intl.DateTimeFormat.prototype.formatToParts(date)
      */
     public static JSValue dateTimeFormatFormatToParts(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlDateTimeFormat dateTimeFormat)) {
-            return context
-                    .throwTypeError("Intl.DateTimeFormat.prototype.formatToParts called on incompatible receiver");
-        }
-        DateTimeFormattable formattable = toDateTimeFormattable(context, JSValue.argumentOrUndefined(args, 0), true);
-        if (formattable == null || context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        JSIntlDateTimeFormat effectiveDateTimeFormat = getEffectiveDateTimeFormat(context, dateTimeFormat,
-                formattable.kind());
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!isTemporalCalendarCompatibleWithDateTimeFormat(context, formattable, effectiveDateTimeFormat)) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!isFormattableEpochMillisValid(context, formattable)) {
-            return JSUndefined.INSTANCE;
-        }
-        List<JSIntlDateTimeFormat.DatePart> partsList = effectiveDateTimeFormat
-                .formatToPartsList(formattable.epochMillis());
-        return datePartsToJSArray(context, partsList);
+        return formatDateTime(context, thisArg, args, true);
     }
 
     public static JSValue dateTimeFormatResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -3839,6 +3826,33 @@ public final class JSIntlObject {
         return new JSString(text.toString());
     }
 
+    private static JSValue formatDateTime(JSContext context, JSValue thisArg, JSValue[] args, boolean toParts) {
+        if (!(thisArg instanceof JSIntlDateTimeFormat dateTimeFormat)) {
+            return context.throwTypeError(toParts
+                    ? "Intl.DateTimeFormat.prototype.formatToParts called on incompatible receiver"
+                    : "Intl.DateTimeFormat.prototype.format called on incompatible receiver");
+        }
+        DateTimeFormattable formattable = toDateTimeFormattable(context, JSValue.argumentOrUndefined(args, 0), true);
+        if (formattable == null || context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        JSIntlDateTimeFormat effectiveDateTimeFormat = getEffectiveDateTimeFormat(context, dateTimeFormat,
+                formattable.kind());
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!isTemporalCalendarCompatibleWithDateTimeFormat(context, formattable, effectiveDateTimeFormat)) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!isFormattableEpochMillisValid(context, formattable)) {
+            return JSUndefined.INSTANCE;
+        }
+        if (toParts) {
+            return datePartsToJSArray(context, effectiveDateTimeFormat.formatToPartsList(formattable.epochMillis()));
+        }
+        return new JSString(effectiveDateTimeFormat.format(formattable.epochMillis()));
+    }
+
     private static String formatIntlNumberValue(JSContext context, JSIntlNumberFormat numberFormat, JSValue value) {
         if (value instanceof JSBigInt bigInt) {
             return numberFormat.format(bigInt.value());
@@ -4000,34 +4014,13 @@ public final class JSIntlObject {
         if (!(optionsValue instanceof JSObject optionsObject)) {
             return null;
         }
-        JSValue rawValue = optionsObject.get(PropertyKey.fromString(key));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (rawValue == null || rawValue instanceof JSUndefined) {
-            return null;
-        }
-        return JSTypeConversions.toString(context, rawValue).value();
+        return readStringOption(context, optionsObject, key);
     }
 
     /**
      * Like getOptionString but checks for pending exceptions after property access. Returns null if an exception
      * occurred (caller must check context.hasPendingException()).
      */
-    private static String getOptionStringChecked(JSContext context, JSValue optionsValue, String key) {
-        if (!(optionsValue instanceof JSObject optionsObject)) {
-            return null;
-        }
-        JSValue rawValue = optionsObject.get(PropertyKey.fromString(key));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (rawValue == null || rawValue instanceof JSUndefined) {
-            return null;
-        }
-        return JSTypeConversions.toString(context, rawValue).value();
-    }
-
     private static String getPolishOtherUnit(String style, String unit) {
         if ("long".equals(style)) {
             return switch (unit) {
@@ -4501,18 +4494,11 @@ public final class JSIntlObject {
     }
 
     public static JSValue localeGetBaseName(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
-            return context.throwTypeError("Intl.Locale.prototype.baseName called on incompatible receiver");
-        }
-        return new JSString(intlLocale.getBaseName());
+        return localeString(context, thisArg, "baseName", JSIntlLocale::getBaseName);
     }
 
     public static JSValue localeGetCalendar(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
-            return context.throwTypeError("Intl.Locale.prototype.calendar called on incompatible receiver");
-        }
-        String calendar = intlLocale.getCalendar();
-        return calendar != null ? new JSString(calendar) : JSUndefined.INSTANCE;
+        return localeString(context, thisArg, "calendar", JSIntlLocale::getCalendar);
     }
 
     public static JSValue localeGetCalendars(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -4531,19 +4517,11 @@ public final class JSIntlObject {
     }
 
     public static JSValue localeGetCaseFirst(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
-            return context.throwTypeError("Intl.Locale.prototype.caseFirst called on incompatible receiver");
-        }
-        String caseFirst = intlLocale.getCaseFirst();
-        return caseFirst != null ? new JSString(caseFirst) : JSUndefined.INSTANCE;
+        return localeString(context, thisArg, "caseFirst", JSIntlLocale::getCaseFirst);
     }
 
     public static JSValue localeGetCollation(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
-            return context.throwTypeError("Intl.Locale.prototype.collation called on incompatible receiver");
-        }
-        String collation = intlLocale.getCollation();
-        return collation != null ? new JSString(collation) : JSUndefined.INSTANCE;
+        return localeString(context, thisArg, "collation", JSIntlLocale::getCollation);
     }
 
     public static JSValue localeGetCollations(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -4563,22 +4541,11 @@ public final class JSIntlObject {
     }
 
     public static JSValue localeGetFirstDayOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
-            return context.throwTypeError("Intl.Locale.prototype.firstDayOfWeek called on incompatible receiver");
-        }
-        String firstDayOfWeek = intlLocale.getFirstDayOfWeek();
-        if (firstDayOfWeek == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(firstDayOfWeek);
+        return localeString(context, thisArg, "firstDayOfWeek", JSIntlLocale::getFirstDayOfWeek);
     }
 
     public static JSValue localeGetHourCycle(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
-            return context.throwTypeError("Intl.Locale.prototype.hourCycle called on incompatible receiver");
-        }
-        String hourCycle = intlLocale.getHourCycle();
-        return hourCycle != null ? new JSString(hourCycle) : JSUndefined.INSTANCE;
+        return localeString(context, thisArg, "hourCycle", JSIntlLocale::getHourCycle);
     }
 
     public static JSValue localeGetHourCycles(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -4597,18 +4564,11 @@ public final class JSIntlObject {
     }
 
     public static JSValue localeGetLanguage(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
-            return context.throwTypeError("Intl.Locale.prototype.language called on incompatible receiver");
-        }
-        return new JSString(intlLocale.getLanguage());
+        return localeString(context, thisArg, "language", JSIntlLocale::getLanguage);
     }
 
     public static JSValue localeGetNumberingSystem(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
-            return context.throwTypeError("Intl.Locale.prototype.numberingSystem called on incompatible receiver");
-        }
-        String numberingSystem = intlLocale.getNumberingSystem();
-        return numberingSystem != null ? new JSString(numberingSystem) : JSUndefined.INSTANCE;
+        return localeString(context, thisArg, "numberingSystem", JSIntlLocale::getNumberingSystem);
     }
 
     public static JSValue localeGetNumberingSystems(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -4723,63 +4683,24 @@ public final class JSIntlObject {
     }
 
     public static JSValue localeMaximize(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
-            return context.throwTypeError("Intl.Locale.prototype.maximize called on incompatible receiver");
-        }
-        try {
-            String tag = intlLocale.getTag();
-            // Strip extensions from tag to get the base locale for maximization
-            String baseTag = stripExtensions(tag);
-            Locale baseLocale = Locale.forLanguageTag(baseTag);
-            Locale maximized = addLikelySubtags(baseLocale);
-            String maximizedTag = canonicalizeLocaleTag(maximized.toLanguageTag());
-            // Append extensions from the original tag
-            String extensionSuffix = getExtensionSuffix(tag);
-            if (!extensionSuffix.isEmpty()) {
-                maximizedTag = maximizedTag + extensionSuffix;
-            }
-            JSIntlLocale result = new JSIntlLocale(context, maximized, maximizedTag, intlLocale.getCalendar(),
-                    intlLocale.getCaseFirst(), intlLocale.getCollation(), intlLocale.getFirstDayOfWeek(),
-                    intlLocale.getHourCycle(), intlLocale.getNumberingSystem(), intlLocale.getNumeric(),
-                    intlLocale.isNumericSet());
-            result.setPrototype(intlLocale.getPrototype());
-            return result;
-        } catch (IllegalArgumentException e) {
-            return context.throwRangeError(e.getMessage());
-        }
+        return changeLikelySubtags(context, thisArg, true);
     }
 
     public static JSValue localeMinimize(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
-            return context.throwTypeError("Intl.Locale.prototype.minimize called on incompatible receiver");
+        return changeLikelySubtags(context, thisArg, false);
+    }
+
+    private static JSValue localeString(JSContext context, JSValue receiver, String name,
+            java.util.function.Function<JSIntlLocale, String> getter) {
+        if (!(receiver instanceof JSIntlLocale locale)) {
+            return context.throwTypeError("Intl.Locale.prototype." + name + " called on incompatible receiver");
         }
-        try {
-            String tag = intlLocale.getTag();
-            String baseTag = stripExtensions(tag);
-            Locale baseLocale = Locale.forLanguageTag(baseTag);
-            Locale minimized = removeLikelySubtags(baseLocale);
-            String minimizedTag = canonicalizeLocaleTag(minimized.toLanguageTag());
-            // Append extensions from the original tag
-            String extensionSuffix = getExtensionSuffix(tag);
-            if (!extensionSuffix.isEmpty()) {
-                minimizedTag = minimizedTag + extensionSuffix;
-            }
-            JSIntlLocale result = new JSIntlLocale(context, minimized, minimizedTag, intlLocale.getCalendar(),
-                    intlLocale.getCaseFirst(), intlLocale.getCollation(), intlLocale.getFirstDayOfWeek(),
-                    intlLocale.getHourCycle(), intlLocale.getNumberingSystem(), intlLocale.getNumeric(),
-                    intlLocale.isNumericSet());
-            result.setPrototype(intlLocale.getPrototype());
-            return result;
-        } catch (IllegalArgumentException e) {
-            return context.throwRangeError(e.getMessage());
-        }
+        String value = getter.apply(locale);
+        return value == null ? JSUndefined.INSTANCE : new JSString(value);
     }
 
     public static JSValue localeToString(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlLocale intlLocale)) {
-            return context.throwTypeError("Intl.Locale.prototype.toString called on incompatible receiver");
-        }
-        return new JSString(intlLocale.getTag());
+        return localeString(context, thisArg, "toString", JSIntlLocale::getTag);
     }
 
     /**
@@ -5249,6 +5170,8 @@ public final class JSIntlObject {
         return defaultValue;
     }
 
+    // ---- Locale option validation helpers ----
+
     public static JSValue pluralRulesResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlPluralRules pluralRules)) {
             return context.throwTypeError("Intl.PluralRules.prototype.resolvedOptions called on incompatible receiver");
@@ -5311,8 +5234,6 @@ public final class JSIntlObject {
             return context.throwRangeError(e.getMessage());
         }
     }
-
-    // ---- Locale option validation helpers ----
 
     /**
      * Read a string option from options object. Returns null if option is undefined.
@@ -5534,6 +5455,8 @@ public final class JSIntlObject {
         return defaultPrototype;
     }
 
+    // ---- New Locale prototype methods ----
+
     public static Locale resolveLocale(JSContext context, JSValue[] args, int index) {
         if (index >= args.length || args[index].isUndefined()) {
             return Locale.getDefault();
@@ -5574,8 +5497,6 @@ public final class JSIntlObject {
         }
         return segmenter.createSegments(text.value());
     }
-
-    // ---- New Locale prototype methods ----
 
     public static JSValue segmentsContaining(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlSegments segments)) {

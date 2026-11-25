@@ -24,6 +24,7 @@ import com.caoccao.qjs4j.vm.Opcode;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -109,6 +110,22 @@ final class EmitHelpers {
             if (loopContext.hasIterator) {
                 emitLoopIteratorClose(loopContext);
             }
+        }
+    }
+
+    void emitActiveFinallyGosubs() {
+        Iterator<List<Integer>> gosubPatchIterator = compilerContext.activeFinallyGosubPatches.iterator();
+        Iterator<Integer> nipCatchCountIterator = compilerContext.activeFinallyNipCatchCounts.iterator();
+        while (gosubPatchIterator.hasNext() && nipCatchCountIterator.hasNext()) {
+            List<Integer> gosubPatches = gosubPatchIterator.next();
+            int nipCatchCount = nipCatchCountIterator.next();
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            for (int i = 0; i < nipCatchCount; i++) {
+                compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+            }
+            int gosubPosition = compilerContext.emitter.emitJump(Opcode.GOSUB);
+            gosubPatches.add(gosubPosition);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
     }
 
@@ -620,6 +637,22 @@ final class EmitHelpers {
         }
     }
 
+    /** Stack: ... -> ... this superBase propertyKey. Computed keys are evaluated before GetSuperBase. */
+    void emitSuperPropertyReference(MemberExpression member) {
+        compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
+        if (member.isComputed()) {
+            emitSuperPropertyKey(member);
+        }
+        compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+        compilerContext.emitter.emitU8(4);
+        compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
+        if (member.isComputed()) {
+            compilerContext.emitter.emitOpcode(Opcode.SWAP);
+        } else {
+            emitSuperPropertyKey(member);
+        }
+    }
+
     void emitUsingDisposalsForScopeDepthGreaterThan(int targetScopeDepth) {
         for (CompilerScope scope : compilerContext.scopeManager) {
             if (scope.getScopeDepth() > targetScopeDepth) {
@@ -633,6 +666,27 @@ final class EmitHelpers {
                 emitScopeUsingDisposal(scope);
             }
         }
+    }
+
+    int[] emitWithUnscopablesSkipJumps() {
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
+        int jumpToResolveWithoutUnscopablesOnNullish = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcode(Opcode.TYPEOF);
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("object"));
+        compilerContext.emitter.emitOpcode(Opcode.STRICT_EQ);
+        int jumpToCheckBlockedWhenObject = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcode(Opcode.TYPEOF);
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("function"));
+        compilerContext.emitter.emitOpcode(Opcode.STRICT_EQ);
+        int jumpToResolveWithoutUnscopablesOnPrimitive = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
+
+        compilerContext.emitter.patchJump(jumpToCheckBlockedWhenObject, compilerContext.emitter.currentOffset());
+        return new int[]{jumpToResolveWithoutUnscopablesOnNullish, jumpToResolveWithoutUnscopablesOnPrimitive};
     }
 
     int ensureUsingStackLocal(boolean asyncUsingDeclaration, ASTNode ast) {

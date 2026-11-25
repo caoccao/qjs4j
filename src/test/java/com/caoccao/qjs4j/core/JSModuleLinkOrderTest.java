@@ -16,11 +16,9 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.BaseTest;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -43,9 +41,7 @@ import static org.assertj.core.api.Assertions.*;
  * plainest one. So are the two the pass used to decline outright: a name two {@code export *} routes provide with
  * different bindings, and a name that does not resolve across a cycle.
  */
-public class JSModuleLinkOrderTest extends BaseTest {
-    @TempDir
-    Path moduleDirectory;
+public class JSModuleLinkOrderTest extends ModuleFileTest {
 
     /**
      * Evaluate an entry module that imports a name {@code ./dep.mjs} does not export, and assert that nothing ran.
@@ -427,9 +423,4 @@ public class JSModuleLinkOrderTest extends BaseTest {
         }
     }
 
-    private Path writeModule(String name, String source) throws IOException {
-        Path path = moduleDirectory.resolve(name);
-        Files.writeString(path, source);
-        return path;
-    }
 }

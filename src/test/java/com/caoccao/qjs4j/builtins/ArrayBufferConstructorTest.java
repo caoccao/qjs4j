@@ -77,7 +77,7 @@ public class ArrayBufferConstructorTest extends BaseJavetTest {
         result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{new JSObject(context)});
         assertThat(result.isBooleanFalse()).isTrue();
 
-        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("test")});
+        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, stringArgs("test"));
         assertThat(result.isBooleanFalse()).isTrue();
 
         result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, numberArgs(123));

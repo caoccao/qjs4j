@@ -264,75 +264,32 @@ public final class TemporalPlainDateTimePrototype {
             return TemporalPlainDateTimeToStringSettings.DEFAULT;
         }
 
-        String calendarNameOption = "auto";
-        TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption = TemporalFractionalSecondDigitsOption
-                .autoOption();
-        TemporalRoundingMode roundingMode = TemporalRoundingMode.TRUNC;
-        String smallestUnitText = null;
-        calendarNameOption = getToStringCalendarNameOption(context, optionsObject);
+        String calendarNameOption = getToStringCalendarNameOption(context, optionsObject);
         if (context.hasPendingException() || calendarNameOption == null) {
             return null;
         }
 
-        JSValue fractionalSecondDigitsValue = optionsObject.get(PropertyKey.fromString("fractionalSecondDigits"));
-        if (context.hasPendingException()) {
+        TemporalFractionalSecondDigitsOption digits = TemporalFractionalSecondDigitsOption.read(context, optionsObject);
+        if (digits == null) {
             return null;
         }
-        TemporalFractionalSecondDigitsOption resolvedFractionalSecondDigitsOption = TemporalFractionalSecondDigitsOption
-                .parse(context, fractionalSecondDigitsValue, "Temporal error: Invalid fractionalSecondDigits.");
-        if (context.hasPendingException() || resolvedFractionalSecondDigitsOption == null) {
-            return null;
-        }
-        fractionalSecondDigitsOption = resolvedFractionalSecondDigitsOption;
 
         String roundingModeText = TemporalUtils.getStringOption(context, optionsObject, "roundingMode", "trunc");
         if (context.hasPendingException() || roundingModeText == null) {
             return null;
         }
 
-        JSValue smallestUnitValue = optionsObject.get(PropertyKey.fromString("smallestUnit"));
+        String smallestUnitText = TemporalUtils.getStringOption(context, optionsObject, "smallestUnit", null);
         if (context.hasPendingException()) {
             return null;
         }
-        if (!(smallestUnitValue instanceof JSUndefined) && smallestUnitValue != null) {
-            smallestUnitText = JSTypeConversions.toString(context, smallestUnitValue).value();
-            if (context.hasPendingException()) {
-                return null;
-            }
-        }
-
-        roundingMode = TemporalRoundingMode.fromString(roundingModeText);
-        if (roundingMode == null) {
-            context.throwRangeError("Temporal error: Invalid rounding mode.");
+        TemporalPlainTimeToStringSettings time = TemporalPlainTimeToStringSettings.resolve(context, roundingModeText,
+                smallestUnitText, digits);
+        if (time == null) {
             return null;
         }
-
-        TemporalUnit smallestUnit = null;
-        if (smallestUnitText != null) {
-            smallestUnit = TemporalUnit.fromString(smallestUnitText)
-                    .filter(u -> u.isSmallerOrEqual(TemporalUnit.MINUTE)).orElse(null);
-            if (smallestUnit == null) {
-                context.throwRangeError("Temporal error: Invalid smallestUnit option.");
-                return null;
-            }
-        }
-
-        boolean autoFractionalSecondDigits = smallestUnit == null && fractionalSecondDigitsOption.auto();
-        int fractionalSecondDigits;
-        long roundingIncrementNanoseconds;
-        if (smallestUnit != null) {
-            fractionalSecondDigits = smallestUnit.getStringFractionalSecondDigits();
-            roundingIncrementNanoseconds = smallestUnit.getStringRoundingIncrementNanoseconds();
-        } else if (autoFractionalSecondDigits) {
-            fractionalSecondDigits = -1;
-            roundingIncrementNanoseconds = 1L;
-        } else {
-            fractionalSecondDigits = fractionalSecondDigitsOption.digits();
-            roundingIncrementNanoseconds = fractionalSecondDigitsOption.roundingIncrementNanoseconds();
-        }
-
-        return new TemporalPlainDateTimeToStringSettings(calendarNameOption, smallestUnit, roundingMode,
-                autoFractionalSecondDigits, fractionalSecondDigits, roundingIncrementNanoseconds);
+        return new TemporalPlainDateTimeToStringSettings(calendarNameOption, time.smallestUnit(), time.roundingMode(),
+                time.autoFractionalSecondDigits(), time.fractionalSecondDigits(), time.roundingIncrementNanoseconds());
     }
 
     public static JSValue hour(JSContext context, JSValue thisArg, JSValue[] args) {

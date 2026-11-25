@@ -40,21 +40,19 @@ public class StrictModeDeleteOperandTest extends BaseJavetTest {
 
     @Test
     void testDeleteNewTargetIsAllowed() {
-        assertBooleanWithJavet("(function () { return delete (new.target); })();");
-        assertBooleanWithJavet("(function () { return delete void typeof +-~!(new.target); })();");
+        assertBooleanWithJavet("(function () { return delete (new.target); })();",
+                "(function () { return delete void typeof +-~!(new.target); })();");
     }
 
     @Test
     void testDeleteThisIsAllowed() {
-        assertBooleanWithJavet("(function () { return delete this; })();");
-        assertBooleanWithJavet("delete this;");
+        assertBooleanWithJavet("(function () { return delete this; })();", "delete this;");
     }
 
     @Test
     void testForOfTargetStillRejectsThisAndNewTarget() {
         // The same predicate now classifies the for-in/of assignment target, so `this` must still
         // be rejected — with V8's wording, which the message did not use before.
-        assertErrorWithJavet("for (this of []) ;");
-        assertErrorWithJavet("for (new.target in {}) ;");
+        assertErrorWithJavet("for (this of []) ;", "for (new.target in {}) ;");
     }
 }

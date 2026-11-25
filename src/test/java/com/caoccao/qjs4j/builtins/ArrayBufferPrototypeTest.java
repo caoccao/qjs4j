@@ -45,8 +45,7 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
         result = ArrayBufferPrototype.getByteLength(context, nonBuffer, JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -64,8 +63,7 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
         result = ArrayBufferPrototype.getDetached(context, nonBuffer, JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -83,8 +81,7 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
         result = ArrayBufferPrototype.getMaxByteLength(context, nonBuffer, JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -102,8 +99,7 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
         result = ArrayBufferPrototype.getResizable(context, nonBuffer, JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -134,26 +130,22 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         // Edge case: resize non-resizable buffer (TypeError per ES2024 spec)
         JSArrayBuffer fixedBuffer = new JSArrayBuffer(context, 16);
         result = ArrayBufferPrototype.resize(context, fixedBuffer, numberArgs(32));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: resize detached buffer (TypeError per ES2024 spec)
         buffer.detach();
         result = ArrayBufferPrototype.resize(context, buffer, numberArgs(16));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: resize beyond maxByteLength
         JSArrayBuffer buffer2 = new JSArrayBuffer(context, 16, 64);
         result = ArrayBufferPrototype.resize(context, buffer2, numberArgs(128));
-        assertRangeError(result);
-        assertPendingException(context);
+        assertPendingRangeError(context, result);
 
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
         result = ArrayBufferPrototype.resize(context, nonBuffer, numberArgs(16));
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: no arguments (ToIndex(undefined) = 0, resizes to 0 per ES2024 spec)
         JSArrayBuffer buffer3 = new JSArrayBuffer(context, 16, 64);
@@ -209,14 +201,12 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
         result = ArrayBufferPrototype.slice(context, nonBuffer, JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: slice on detached buffer
         buffer.detach();
         result = ArrayBufferPrototype.slice(context, buffer, JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -255,14 +245,12 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         JSArrayBuffer detachedBuffer = new JSArrayBuffer(context, 16);
         detachedBuffer.detach();
         result = ArrayBufferPrototype.transfer(context, detachedBuffer, JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
         result = ArrayBufferPrototype.transfer(context, nonBuffer, JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -303,13 +291,11 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         JSArrayBuffer detachedBuffer = new JSArrayBuffer(context, 16);
         detachedBuffer.detach();
         result = ArrayBufferPrototype.transferToFixedLength(context, detachedBuffer, JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
         result = ArrayBufferPrototype.transferToFixedLength(context, nonBuffer, JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 }

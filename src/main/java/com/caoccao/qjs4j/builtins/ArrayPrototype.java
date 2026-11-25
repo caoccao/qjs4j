@@ -67,16 +67,6 @@ public final class ArrayPrototype {
         return obj.get(PropertyKey.fromIndexString(index));
     }
 
-    private static JSValue callCallableForSort(JSContext context, JSValue callable, JSValue thisArg, JSValue[] args) {
-        if (callable instanceof JSProxy proxy) {
-            return proxy.apply(context, thisArg, args);
-        }
-        if (callable instanceof JSFunction function) {
-            return function.call(context, thisArg, args);
-        }
-        return context.throwTypeError("Value is not callable");
-    }
-
     /**
      * Array.prototype.concat(...items) Merges arrays and/or values.
      */
@@ -425,10 +415,7 @@ public final class ArrayPrototype {
      * Array.prototype.flat([depth]) Creates a new array with all sub-array elements concatenated.
      */
     public static JSValue flat(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.flat called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        JSObject obj = requireArrayLike(context, thisArg, "flat");
         if (obj == null) {
             return context.getPendingException();
         }
@@ -456,8 +443,7 @@ public final class ArrayPrototype {
         }
 
         // Step 5: Perform ? FlattenIntoArray(A, O, sourceLen, 0, depthNum).
-        long[] targetIndex = {0};
-        internalFlattenIntoObject(context, obj, length, depth, resultObj, targetIndex);
+        internalFlattenIntoObject(context, obj, length, depth, resultObj, 0, null, JSUndefined.INSTANCE);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -470,10 +456,7 @@ public final class ArrayPrototype {
      * result by one level.
      */
     public static JSValue flatMap(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.flatMap called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        JSObject obj = requireArrayLike(context, thisArg, "flatMap");
         if (obj == null) {
             return context.getPendingException();
         }
@@ -497,79 +480,15 @@ public final class ArrayPrototype {
         }
 
         // Step 6: Perform ? FlattenIntoArray(A, O, sourceLen, 0, 1, mapperFunction, thisArg).
-        long resultIndex = 0;
-        for (long i = 0; i < length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromIndexString(i);
-            if (!obj.has(key)) {
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                continue;
-            }
-            JSValue element = obj.get(key);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-
-            // Call the callback with (element, index, array)
-            JSValue[] callbackArgs = new JSValue[]{element, JSNumber.of(i), obj};
-            JSValue mapped = JSCall.call(context, callback, callbackThisArg, callbackArgs);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-
-            // Flatten one level
-            if (mapped instanceof JSObject mappedObj) {
-                int isArr = JSTypeChecking.isArray(context, mappedObj);
-                if (isArr < 0) {
-                    return context.getPendingException();
-                }
-                if (isArr > 0) {
-                    long mappedLen = lengthOfArrayLike(context, mappedObj);
-                    if (context.hasPendingException()) {
-                        return context.getPendingException();
-                    }
-                    for (long j = 0; j < mappedLen; j++) {
-                        context.getVirtualMachine().checkExecutionInterruptForNative();
-                        PropertyKey jKey = PropertyKey.fromIndexString(j);
-                        boolean jPresent = mappedObj.has(jKey);
-                        if (context.hasPendingException()) {
-                            return context.getPendingException();
-                        }
-                        if (jPresent) {
-                            JSValue val = mappedObj.get(jKey);
-                            if (context.hasPendingException()) {
-                                return context.getPendingException();
-                            }
-                            if (!resultObj.defineProperty(PropertyKey.fromIndexString(resultIndex), val,
-                                    PropertyDescriptor.DataState.All)) {
-                                return context.throwTypeError("Cannot define property " + resultIndex);
-                            }
-                            resultIndex++;
-                        }
-                    }
-                    continue;
-                }
-            }
-            if (!resultObj.defineProperty(PropertyKey.fromIndexString(resultIndex), mapped,
-                    PropertyDescriptor.DataState.All)) {
-                return context.throwTypeError("Cannot define property " + resultIndex);
-            }
-            resultIndex++;
-        }
-
-        return resultObj;
+        internalFlattenIntoObject(context, obj, length, 1, resultObj, 0, callback, callbackThisArg);
+        return context.hasPendingException() ? context.getPendingException() : resultObj;
     }
 
     /**
      * Array.prototype.forEach(callbackFn[, thisArg]) Executes a function for each array element.
      */
     public static JSValue forEach(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.forEach called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        JSObject obj = requireArrayLike(context, thisArg, "forEach");
         if (obj == null) {
             return context.getPendingException();
         }
@@ -635,10 +554,7 @@ public final class ArrayPrototype {
      * Array.prototype.includes(searchElement[, fromIndex]) Determines whether an array includes a certain element.
      */
     public static JSValue includes(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.includes called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        JSObject obj = requireArrayLike(context, thisArg, "includes");
         if (obj == null) {
             return context.getPendingException();
         }
@@ -718,100 +634,56 @@ public final class ArrayPrototype {
      * found.
      */
     public static JSValue indexOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.indexOf called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        if (length == 0) {
-            return JSNumber.of(-1);
-        }
-
-        JSValue searchElement = JSValue.argumentOrUndefined(args, 0);
-        double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        if (fromIndexD >= length) {
-            return JSNumber.of(-1);
-        }
-        long fromIndex;
-        if (fromIndexD < 0) {
-            fromIndex = Math.max(0, length + (long) fromIndexD);
-        } else {
-            fromIndex = (long) fromIndexD;
-        }
-
-        for (long i = fromIndex; i < length; i++) {
-
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromIndexString(i);
-            if (!obj.has(key)) {
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                continue;
-            }
-            JSValue element = obj.get(key);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (JSTypeConversions.strictEquals(element, searchElement)) {
-                return JSNumber.of(i);
-            }
-        }
-
-        return JSNumber.of(-1);
+        return searchIndex(context, thisArg, args, false);
     }
 
-    private static void internalFlattenIntoObject(JSContext context, JSObject source, long sourceLen, int depth,
-            JSObject target, long[] targetIndex) {
+    private static long internalFlattenIntoObject(JSContext context, JSObject source, long sourceLen, int depth,
+            JSObject target, long targetIndex, JSValue mapper, JSValue mapperThis) {
         for (long i = 0; i < sourceLen; i++) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
             PropertyKey key = PropertyKey.fromIndexString(i);
             if (!source.has(key)) {
                 if (context.hasPendingException()) {
-                    return;
+                    return targetIndex;
                 }
                 continue;
             }
             JSValue element = source.get(key);
             if (context.hasPendingException()) {
-                return;
+                return targetIndex;
+            }
+            if (mapper != null) {
+                element = JSCall.call(context, mapper, mapperThis, new JSValue[]{element, JSNumber.of(i), source});
+                if (context.hasPendingException()) {
+                    return targetIndex;
+                }
             }
             if (depth > 0 && element instanceof JSObject elementObj) {
                 int isArr = JSTypeChecking.isArray(context, elementObj);
                 if (isArr < 0) {
-                    return;
+                    return targetIndex;
                 }
                 if (isArr > 0) {
                     long elementLen = lengthOfArrayLike(context, elementObj);
                     if (context.hasPendingException()) {
-                        return;
+                        return targetIndex;
                     }
-                    internalFlattenIntoObject(context, elementObj, elementLen, depth - 1, target, targetIndex);
+                    targetIndex = internalFlattenIntoObject(context, elementObj, elementLen, depth - 1, target,
+                            targetIndex, null, JSUndefined.INSTANCE);
                     if (context.hasPendingException()) {
-                        return;
+                        return targetIndex;
                     }
                     continue;
                 }
             }
-            if (!target.defineProperty(PropertyKey.fromIndexString(targetIndex[0]), element,
+            if (!target.defineProperty(PropertyKey.fromIndexString(targetIndex), element,
                     PropertyDescriptor.DataState.All)) {
-                context.throwTypeError("Cannot define property " + targetIndex[0]);
-                return;
+                context.throwTypeError("Cannot define property " + targetIndex);
+                return targetIndex;
             }
-            targetIndex[0]++;
+            targetIndex++;
         }
+        return targetIndex;
     }
 
     /**
@@ -898,56 +770,7 @@ public final class ArrayPrototype {
      * found.
      */
     public static JSValue lastIndexOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.lastIndexOf called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        if (length == 0) {
-            return JSNumber.of(-1);
-        }
-
-        JSValue searchElement = JSValue.argumentOrUndefined(args, 0);
-        double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : length - 1;
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        long fromIndex;
-        if (fromIndexD < 0) {
-            fromIndex = length + (long) fromIndexD;
-        } else {
-            fromIndex = Math.min((long) fromIndexD, length - 1);
-        }
-
-        for (long i = fromIndex; i >= 0; i--) {
-
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromIndexString(i);
-            if (!obj.has(key)) {
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                continue;
-            }
-            JSValue element = obj.get(key);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (JSTypeConversions.strictEquals(element, searchElement)) {
-                return JSNumber.of(i);
-            }
-        }
-
-        return JSNumber.of(-1);
+        return searchIndex(context, thisArg, args, true);
     }
 
     /**
@@ -1054,10 +877,7 @@ public final class ArrayPrototype {
      * Array.prototype.pop() Removes and returns the last element of an array.
      */
     public static JSValue pop(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.pop called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        JSObject obj = requireArrayLike(context, thisArg, "pop");
         if (obj == null) {
             return context.getPendingException();
         }
@@ -1094,10 +914,7 @@ public final class ArrayPrototype {
      * @see <a href="https://tc39.es/ecma262/#sec-array.prototype.push">ECMAScript Array.prototype.push</a>
      */
     public static JSValue push(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.push called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        JSObject obj = requireArrayLike(context, thisArg, "push");
         if (obj == null) {
             return context.getPendingException();
         }
@@ -1205,14 +1022,19 @@ public final class ArrayPrototype {
         return value < 0 ? Math.max(length + value, 0) : Math.min(value, length);
     }
 
+    private static JSObject requireArrayLike(JSContext context, JSValue receiver, String method) {
+        if (receiver instanceof JSNull || receiver instanceof JSUndefined) {
+            context.throwTypeError("Array.prototype." + method + " called on null or undefined");
+            return null;
+        }
+        return JSTypeConversions.toObject(context, receiver);
+    }
+
     /**
      * Array.prototype.reverse() Reverses the elements of an array in place.
      */
     public static JSValue reverse(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.reverse called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        JSObject obj = requireArrayLike(context, thisArg, "reverse");
         if (obj == null) {
             return context.getPendingException();
         }
@@ -1280,6 +1102,59 @@ public final class ArrayPrototype {
         return obj;
     }
 
+    private static JSValue searchIndex(JSContext context, JSValue thisArg, JSValue[] args, boolean fromEnd) {
+        JSObject obj = requireArrayLike(context, thisArg, fromEnd ? "lastIndexOf" : "indexOf");
+        if (obj == null) {
+            return context.getPendingException();
+        }
+
+        long length = lengthOfArrayLike(context, obj);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+
+        if (length == 0) {
+            return JSNumber.of(-1);
+        }
+
+        JSValue searchElement = JSValue.argumentOrUndefined(args, 0);
+        double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : fromEnd ? length - 1 : 0;
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+
+        long start = searchStart(fromIndexD, length, fromEnd);
+        long end = fromEnd ? -1 : length;
+        int step = fromEnd ? -1 : 1;
+        for (long i = start; i != end; i += step) {
+            context.getVirtualMachine().checkExecutionInterruptForNative();
+            PropertyKey key = PropertyKey.fromIndexString(i);
+            if (!obj.has(key)) {
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                continue;
+            }
+            JSValue element = obj.get(key);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (JSTypeConversions.strictEquals(element, searchElement)) {
+                return JSNumber.of(i);
+            }
+        }
+
+        return JSNumber.of(-1);
+    }
+
+    static long searchStart(double fromIndex, long length, boolean fromEnd) {
+        long index = (long) fromIndex;
+        if (index < 0) {
+            index += length;
+        }
+        return fromEnd ? Math.max(-1L, Math.min(index, length - 1)) : Math.max(0L, Math.min(index, length));
+    }
+
     /**
      * ES2024 Set(O, P, V, true) — always throws TypeError on failure regardless of strict mode. Generates V8-matching
      * error messages based on the failure reason.
@@ -1307,10 +1182,7 @@ public final class ArrayPrototype {
      * Array.prototype.shift() Removes and returns the first element of an array.
      */
     public static JSValue shift(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.shift called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        JSObject obj = requireArrayLike(context, thisArg, "shift");
         if (obj == null) {
             return context.getPendingException();
         }
@@ -1354,10 +1226,7 @@ public final class ArrayPrototype {
      * Array.prototype.slice([begin[, end]]) Returns a shallow copy of a portion of an array.
      */
     public static JSValue slice(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.slice called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        JSObject obj = requireArrayLike(context, thisArg, "slice");
         if (obj == null) {
             return context.getPendingException();
         }
@@ -1432,10 +1301,7 @@ public final class ArrayPrototype {
                     + (compareFunction instanceof JSObject ? "#<Object>" : compareFunction.toString()));
         }
 
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.sort called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        JSObject obj = requireArrayLike(context, thisArg, "sort");
         if (obj == null) {
             return context.getPendingException();
         }
@@ -1518,10 +1384,7 @@ public final class ArrayPrototype {
      * replacing elements.
      */
     public static JSValue splice(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.splice called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        JSObject obj = requireArrayLike(context, thisArg, "splice");
         if (obj == null) {
             return context.getPendingException();
         }
@@ -1681,10 +1544,7 @@ public final class ArrayPrototype {
      * its elements.
      */
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.toLocaleString called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        JSObject obj = requireArrayLike(context, thisArg, "toLocaleString");
         if (obj == null) {
             return context.getPendingException();
         }
@@ -1766,10 +1626,7 @@ public final class ArrayPrototype {
      * version of reverse).
      */
     public static JSValue toReversed(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.toReversed called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        JSObject obj = requireArrayLike(context, thisArg, "toReversed");
         if (obj == null) {
             return context.getPendingException();
         }
@@ -1812,10 +1669,7 @@ public final class ArrayPrototype {
                     + (compareFunction instanceof JSObject ? "#<Object>" : compareFunction.toString()));
         }
 
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.toSorted called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        JSObject obj = requireArrayLike(context, thisArg, "toSorted");
         if (obj == null) {
             return context.getPendingException();
         }
@@ -1864,10 +1718,7 @@ public final class ArrayPrototype {
      * removed and/or added (immutable version of splice).
      */
     public static JSValue toSpliced(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.toSpliced called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        JSObject obj = requireArrayLike(context, thisArg, "toSpliced");
         if (obj == null) {
             return context.getPendingException();
         }
@@ -1984,10 +1835,7 @@ public final class ArrayPrototype {
      * Array.prototype.unshift(...items) Adds elements to the beginning of an array.
      */
     public static JSValue unshift(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.unshift called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        JSObject obj = requireArrayLike(context, thisArg, "unshift");
         if (obj == null) {
             return context.getPendingException();
         }
@@ -2035,10 +1883,7 @@ public final class ArrayPrototype {
      * replaced (immutable version of arr[index] = value).
      */
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.with called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
+        JSObject obj = requireArrayLike(context, thisArg, "with");
         if (obj == null) {
             return context.getPendingException();
         }

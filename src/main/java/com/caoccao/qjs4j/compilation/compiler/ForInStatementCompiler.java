@@ -104,7 +104,8 @@ final class ForInStatementCompiler extends AstNodeCompiler<ForInStatement> {
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 
         if (isExpressionBased) {
-            compileForInExpressionTargetAssignment((Expression) forInStmt.getLeft());
+            compilerContext.expressionDestructuringAssignmentCompiler
+                    .compileIterationTarget((Expression) forInStmt.getLeft());
         } else if (declarationPattern != null) {
             compilerContext.patternCompiler.compileForOfValueAssignment(declarationPattern, isVar);
         }
@@ -137,18 +138,6 @@ final class ForInStatementCompiler extends AstNodeCompiler<ForInStatement> {
         compilerContext.loopManager.popLoop();
         compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.scopeManager.exitScope();
-    }
-
-    private void compileForInExpressionTargetAssignment(Expression leftExpression) {
-        if (leftExpression instanceof CallExpression) {
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.expressionCompiler.compile(leftExpression);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
-            compilerContext.emitter.emitU8(5);
-            return;
-        }
-        compilerContext.expressionDestructuringAssignmentCompiler.compile(leftExpression);
     }
 
 }

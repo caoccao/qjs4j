@@ -16,10 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.BaseTest;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -46,9 +44,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * The cases below drive the loader through its own package-private surface and read the answers off module records, so
  * a failure names the transition rather than the module that tripped over it.
  */
-public class ModuleLoaderTest extends BaseTest {
-    @TempDir
-    Path moduleDirectory;
+public class ModuleLoaderTest extends ModuleFileTest {
 
     private ModuleLoader loader() {
         return context.moduleLoader();

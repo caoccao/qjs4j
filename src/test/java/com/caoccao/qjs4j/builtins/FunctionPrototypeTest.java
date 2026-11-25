@@ -206,15 +206,14 @@ public class FunctionPrototypeTest extends BaseJavetTest {
     @Test
     public void testFunctionConstructor() {
         // Normal case: function with parameters and body
-        JSValue result = FunctionConstructor.call(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSString("a"), new JSString("b"), new JSString("return a + b;")});
+        JSValue result = FunctionConstructor.call(context, JSUndefined.INSTANCE, stringArgs("a", "b", "return a + b;"));
         assertThat(result).isInstanceOfSatisfying(JSFunction.class, func -> {
             JSValue callResult = func.call(context, JSUndefined.INSTANCE, numberArgs(2, 3));
             assertNumberValue(callResult, 5.0);
         });
 
         // Normal case: function with only body (no parameters)
-        result = FunctionConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("return 42;")});
+        result = FunctionConstructor.call(context, JSUndefined.INSTANCE, stringArgs("return 42;"));
         assertThat(result).isInstanceOfSatisfying(JSFunction.class, func -> {
             JSValue callResult = func.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
             assertNumberValue(callResult, 42.0);
@@ -228,8 +227,8 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         });
 
         // Normal case: function with multiple parameters
-        result = FunctionConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("x"),
-                new JSString("y"), new JSString("z"), new JSString("return x * y + z;")});
+        result = FunctionConstructor.call(context, JSUndefined.INSTANCE,
+                stringArgs("x", "y", "z", "return x * y + z;"));
         assertThat(result).isInstanceOfSatisfying(JSFunction.class, func -> {
             JSValue callResult = func.call(context, JSUndefined.INSTANCE, numberArgs(3, 4, 5));
             assertNumberValue(callResult, 17.0);
@@ -239,8 +238,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         result = FunctionConstructor.call(context, JSUndefined.INSTANCE,
                 new JSValue[]{new JSString("a"), new JSString("return a +") // Incomplete expression
                 });
-        assertSyntaxError(result);
-        assertPendingException(context);
+        assertPendingSyntaxError(context, result);
     }
 
     @Test

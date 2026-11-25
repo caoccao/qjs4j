@@ -56,13 +56,11 @@ public class ObjectPrototypeTest extends BaseJavetTest {
 
         // Edge case: no arguments
         result = ObjectPrototype.assign(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: null target
         result = ObjectPrototype.assign(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE});
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -87,14 +85,12 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         });
 
         // Edge case: invalid prototype
-        result = ObjectPrototype.create(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("not object")});
-        assertTypeError(result);
-        assertPendingException(context);
+        result = ObjectPrototype.create(context, JSUndefined.INSTANCE, stringArgs("not object"));
+        assertPendingTypeError(context, result);
 
         // Edge case: no arguments
         result = ObjectPrototype.create(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -113,21 +109,17 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         assertThat(desc.getGetter()).isEqualTo(getter);
 
         // Edge case: non-function getter
-        result = ObjectPrototype.__defineGetter__(context, obj,
-                new JSValue[]{new JSString("badProp"), new JSString("not a function")});
-        assertTypeError(result);
-        assertPendingException(context);
+        result = ObjectPrototype.__defineGetter__(context, obj, stringArgs("badProp", "not a function"));
+        assertPendingTypeError(context, result);
 
         // Edge case: null thisArg
         result = ObjectPrototype.__defineGetter__(context, JSNull.INSTANCE,
                 new JSValue[]{new JSString("prop"), getter});
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: insufficient arguments
-        result = ObjectPrototype.__defineGetter__(context, obj, new JSValue[]{new JSString("prop")});
-        assertTypeError(result);
-        assertPendingException(context);
+        result = ObjectPrototype.__defineGetter__(context, obj, stringArgs("prop"));
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -149,14 +141,12 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         // Edge case: not enough arguments
         result = ObjectPrototype.defineProperty(context, JSUndefined.INSTANCE,
                 new JSValue[]{obj, new JSString("prop")});
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: first argument not object
         result = ObjectPrototype.defineProperty(context, JSUndefined.INSTANCE,
                 new JSValue[]{new JSString("not object"), new JSString("prop"), descriptor});
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -177,19 +167,16 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         // Edge case: non-function setter
         result = ObjectPrototype.__defineSetter__(context, obj,
                 new JSValue[]{new JSString("badProp"), new JSNumber(42)});
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: null thisArg
         result = ObjectPrototype.__defineSetter__(context, JSNull.INSTANCE,
                 new JSValue[]{new JSString("prop"), setter});
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: insufficient arguments
-        result = ObjectPrototype.__defineSetter__(context, obj, new JSValue[]{new JSString("prop")});
-        assertTypeError(result);
-        assertPendingException(context);
+        result = ObjectPrototype.__defineSetter__(context, obj, stringArgs("prop"));
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -211,8 +198,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
 
         // Edge case: null
         result = ObjectPrototype.entries(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE});
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: primitive
         result = ObjectPrototype.entries(context, JSUndefined.INSTANCE, new JSValue[]{JSBoolean.FALSE});
@@ -227,11 +213,11 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         obj.set("b", new JSNumber(2));
 
         // Normal case: has property
-        JSValue result = ObjectPrototype.hasOwnProperty(context, obj, new JSValue[]{new JSString("a")});
+        JSValue result = ObjectPrototype.hasOwnProperty(context, obj, stringArgs("a"));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: doesn't have property
-        result = ObjectPrototype.hasOwnProperty(context, obj, new JSValue[]{new JSString("c")});
+        result = ObjectPrototype.hasOwnProperty(context, obj, stringArgs("c"));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: numeric property
@@ -243,7 +229,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: called on non-object primitive (should ToObject per spec)
-        result = ObjectPrototype.hasOwnProperty(context, new JSString("string"), new JSValue[]{new JSString("length")});
+        result = ObjectPrototype.hasOwnProperty(context, new JSString("string"), stringArgs("length"));
         assertThat(result).isEqualTo(JSBoolean.TRUE); // String wrapper has "length" own property
 
         assertBooleanWithJavet("var obj = {foo: 'bar'}; obj.hasOwnProperty('foo')",
@@ -294,13 +280,12 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: primitive argument
-        result = ObjectPrototype.isPrototypeOf(context, proto, new JSValue[]{new JSString("test")});
+        result = ObjectPrototype.isPrototypeOf(context, proto, stringArgs("test"));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: null thisArg
         result = ObjectPrototype.isPrototypeOf(context, JSNull.INSTANCE, new JSValue[]{obj});
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -323,16 +308,14 @@ public class ObjectPrototypeTest extends BaseJavetTest {
 
         // Edge case: null
         result = ObjectPrototype.keys(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE});
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: undefined
         result = ObjectPrototype.keys(context, JSUndefined.INSTANCE, new JSValue[]{JSUndefined.INSTANCE});
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: primitive
-        result = ObjectPrototype.keys(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("string")});
+        result = ObjectPrototype.keys(context, JSUndefined.INSTANCE, stringArgs("string"));
         assertThat(result).isInstanceOfSatisfying(JSArray.class,
                 primitiveKeys -> assertThat(primitiveKeys.getLength()).isEqualTo(0));
     }
@@ -350,20 +333,20 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         ObjectPrototype.__defineGetter__(context, obj, new JSValue[]{new JSString("objProp"), objGetter});
 
         // Normal case: lookup own getter
-        JSValue result = ObjectPrototype.__lookupGetter__(context, obj, new JSValue[]{new JSString("objProp")});
+        JSValue result = ObjectPrototype.__lookupGetter__(context, obj, stringArgs("objProp"));
         assertThat(result).isEqualTo(objGetter);
 
         // Normal case: lookup getter from prototype
-        result = ObjectPrototype.__lookupGetter__(context, obj, new JSValue[]{new JSString("protoProp")});
+        result = ObjectPrototype.__lookupGetter__(context, obj, stringArgs("protoProp"));
         assertThat(result).isEqualTo(protoGetter);
 
         // Normal case: property without getter
         obj.set("dataProp", new JSString("data"));
-        result = ObjectPrototype.__lookupGetter__(context, obj, new JSValue[]{new JSString("dataProp")});
+        result = ObjectPrototype.__lookupGetter__(context, obj, stringArgs("dataProp"));
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
         // Normal case: non-existent property
-        result = ObjectPrototype.__lookupGetter__(context, obj, new JSValue[]{new JSString("nonExistent")});
+        result = ObjectPrototype.__lookupGetter__(context, obj, stringArgs("nonExistent"));
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
         // Edge case: no arguments
@@ -371,9 +354,8 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
         // Edge case: null thisArg
-        result = ObjectPrototype.__lookupGetter__(context, JSNull.INSTANCE, new JSValue[]{new JSString("prop")});
-        assertTypeError(result);
-        assertPendingException(context);
+        result = ObjectPrototype.__lookupGetter__(context, JSNull.INSTANCE, stringArgs("prop"));
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -389,20 +371,20 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         ObjectPrototype.__defineSetter__(context, obj, new JSValue[]{new JSString("objProp"), objSetter});
 
         // Normal case: lookup own setter
-        JSValue result = ObjectPrototype.__lookupSetter__(context, obj, new JSValue[]{new JSString("objProp")});
+        JSValue result = ObjectPrototype.__lookupSetter__(context, obj, stringArgs("objProp"));
         assertThat(result).isEqualTo(objSetter);
 
         // Normal case: lookup setter from prototype
-        result = ObjectPrototype.__lookupSetter__(context, obj, new JSValue[]{new JSString("protoProp")});
+        result = ObjectPrototype.__lookupSetter__(context, obj, stringArgs("protoProp"));
         assertThat(result).isEqualTo(protoSetter);
 
         // Normal case: property without setter
         obj.set("dataProp", new JSString("data"));
-        result = ObjectPrototype.__lookupSetter__(context, obj, new JSValue[]{new JSString("dataProp")});
+        result = ObjectPrototype.__lookupSetter__(context, obj, stringArgs("dataProp"));
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
         // Normal case: non-existent property
-        result = ObjectPrototype.__lookupSetter__(context, obj, new JSValue[]{new JSString("nonExistent")});
+        result = ObjectPrototype.__lookupSetter__(context, obj, stringArgs("nonExistent"));
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
         // Edge case: no arguments
@@ -410,9 +392,8 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
         // Edge case: null thisArg
-        result = ObjectPrototype.__lookupSetter__(context, JSNull.INSTANCE, new JSValue[]{new JSString("prop")});
-        assertTypeError(result);
-        assertPendingException(context);
+        result = ObjectPrototype.__lookupSetter__(context, JSNull.INSTANCE, stringArgs("prop"));
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -421,17 +402,16 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         obj.set("enumProp", new JSString("value"));
 
         // Normal case: enumerable property
-        JSValue result = ObjectPrototype.propertyIsEnumerable(context, obj, new JSValue[]{new JSString("enumProp")});
+        JSValue result = ObjectPrototype.propertyIsEnumerable(context, obj, stringArgs("enumProp"));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: non-existent property
-        result = ObjectPrototype.propertyIsEnumerable(context, obj, new JSValue[]{new JSString("nonExistent")});
+        result = ObjectPrototype.propertyIsEnumerable(context, obj, stringArgs("nonExistent"));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: null thisArg
-        result = ObjectPrototype.propertyIsEnumerable(context, JSNull.INSTANCE, new JSValue[]{new JSString("test")});
-        assertTypeError(result);
-        assertPendingException(context);
+        result = ObjectPrototype.propertyIsEnumerable(context, JSNull.INSTANCE, stringArgs("test"));
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -466,7 +446,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
 
         // Edge case: set __proto__ to primitive (should be ignored)
         JSObject testObj = new JSObject(context, proto);
-        result = ObjectPrototype.__proto__Setter(context, testObj, new JSValue[]{new JSString("not an object")});
+        result = ObjectPrototype.__proto__Setter(context, testObj, stringArgs("not an object"));
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
         assertThat(testObj.getPrototype()).isEqualTo(proto); // Should remain unchanged
     }
@@ -504,8 +484,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
 
         // Edge case: null thisArg
         result = ObjectPrototype.toLocaleString(context, JSNull.INSTANCE, JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -562,8 +541,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         assertThat(result).isInstanceOf(JSObject.class);
 
         // Normal case: null (should throw TypeError per spec)
-        assertTypeError(ObjectPrototype.valueOf(context, JSNull.INSTANCE, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, ObjectPrototype.valueOf(context, JSNull.INSTANCE, JSValue.NO_ARGS));
     }
 
     @Test
@@ -586,8 +564,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
 
         // Edge case: null
         result = ObjectPrototype.values(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE});
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         // Edge case: primitive
         result = ObjectPrototype.values(context, JSUndefined.INSTANCE, numberArgs(42));

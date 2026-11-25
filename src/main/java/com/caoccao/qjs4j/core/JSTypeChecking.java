@@ -26,40 +26,18 @@ import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
  */
 public final class JSTypeChecking {
 
+    public static boolean canBeHeldWeakly(JSValue value) {
+        return value instanceof JSObject || (value instanceof JSSymbol symbol && !symbol.isRegistered());
+    }
+
     /**
      * Get the JavaScript type name of a value. Matches the behavior of JavaScript's typeof operator.
      */
     public static String getTypeName(JSValue value) {
-        if (value instanceof JSUndefined) {
-            return "undefined";
-        }
-        if (value instanceof JSNull) {
-            // Note: typeof null === "object" in JavaScript (historical bug)
-            return "object";
-        }
-        if (value instanceof JSBoolean) {
-            return "boolean";
-        }
-        if (value instanceof JSNumber) {
-            return "number";
-        }
-        if (value instanceof JSString) {
-            return "string";
-        }
-        if (value instanceof JSSymbol) {
-            return "symbol";
-        }
-        if (value instanceof JSBigInt) {
-            return "bigint";
-        }
-        if (isFunction(value)) {
-            return "function";
-        }
-        if (value instanceof JSObject) {
-            return "object";
-        }
-        return "unknown";
+        return typeName(value, false);
     }
+
+    // Primitive type checks
 
     /**
      * ES2024 7.2.2 IsArray(argument). Unwraps Proxy chains to check the target, following QuickJS JS_IsArray. Throws
@@ -90,8 +68,6 @@ public final class JSTypeChecking {
         }
         return (hare instanceof JSObject obj && obj.isArrayObject()) ? 1 : 0;
     }
-
-    // Primitive type checks
 
     /**
      * Check if value is an array. Simple version without context that cannot throw on revoked proxies.
@@ -193,14 +169,14 @@ public final class JSTypeChecking {
         return value instanceof JSNull;
     }
 
+    // Composite checks
+
     /**
      * Check if value is null or undefined (nullish).
      */
     public static boolean isNullish(JSValue value) {
         return value instanceof JSNull || value instanceof JSUndefined;
     }
-
-    // Composite checks
 
     /**
      * Check if value is a number.
@@ -216,6 +192,8 @@ public final class JSTypeChecking {
         return value instanceof JSObject;
     }
 
+    // Number-specific checks
+
     /**
      * Check if value is a primitive (not an object).
      */
@@ -225,7 +203,22 @@ public final class JSTypeChecking {
                 || value instanceof JSBigInt;
     }
 
-    // Number-specific checks
+    /** ECMAScript IsRegExp, returning -1 if reading Symbol.match throws. */
+    public static int isRegExp(JSContext context, JSValue value) {
+        if (!(value instanceof JSObject obj)) {
+            return 0;
+        }
+        JSValue matcher = obj.get(PropertyKey.SYMBOL_MATCH);
+        if (context.hasPendingException()) {
+            return -1;
+        }
+        if (!(matcher instanceof JSUndefined)) {
+            return JSTypeConversions.toBoolean(matcher).value() ? 1 : 0;
+        }
+        return value instanceof JSRegExp ? 1 : 0;
+    }
+
+    // Boolean value checks
 
     /**
      * Check if value is a safe integer (-(2^53 - 1) to 2^53 - 1).
@@ -248,7 +241,7 @@ public final class JSTypeChecking {
         return a.type() == b.type();
     }
 
-    // Boolean value checks
+    // Type equality checks
 
     /**
      * Check if value is a string.
@@ -264,7 +257,7 @@ public final class JSTypeChecking {
         return value instanceof JSSymbol;
     }
 
-    // Type equality checks
+    // Validation helpers
 
     /**
      * Check if value is truthy (converts to true in boolean context).
@@ -279,8 +272,6 @@ public final class JSTypeChecking {
     public static boolean isUndefined(JSValue value) {
         return value instanceof JSUndefined;
     }
-
-    // Validation helpers
 
     /**
      * One step of {@link #unwrapTargets(JSValue, boolean)}.
@@ -352,10 +343,7 @@ public final class JSTypeChecking {
         return expectedType.cast(value);
     }
 
-    /**
-     * Get the typeof string for a value. ES2020 13.5.3
-     */
-    public static String typeof(JSValue value) {
+    private static String typeName(JSValue value, boolean typeofOperator) {
         if (value instanceof JSUndefined) {
             return "undefined";
         }
@@ -378,7 +366,7 @@ public final class JSTypeChecking {
             return "bigint";
         }
         if (value instanceof JSObject obj) {
-            if (obj.isHTMLDDA()) {
+            if (typeofOperator && obj.isHTMLDDA()) {
                 return "undefined";
             }
             if (isFunction(value)) {
@@ -386,7 +374,14 @@ public final class JSTypeChecking {
             }
             return "object";
         }
-        return "undefined";
+        return typeofOperator ? "undefined" : "unknown";
+    }
+
+    /**
+     * Get the typeof string for a value. ES2020 13.5.3
+     */
+    public static String typeof(JSValue value) {
+        return typeName(value, true);
     }
 
     /**

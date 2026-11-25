@@ -16,10 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.BaseTest;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -44,12 +42,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * list and the one the README points at. Nothing here is a known limitation; every assertion in this class is the
  * specified behaviour.
  */
-public class JSModuleSourceTransformTest extends BaseTest {
-    @TempDir
-    Path moduleDirectory;
+public class JSModuleSourceTransformTest extends ModuleFileTest {
 
     private JSValue evalModule(String dependencySource, String mainSource) throws IOException {
-        Files.writeString(moduleDirectory.resolve("dep.mjs"), dependencySource);
+        writeModule("dep.mjs", dependencySource);
         Path mainPath = moduleDirectory.resolve("main.mjs");
         Files.writeString(mainPath, mainSource);
         JSValue result = context.eval(mainSource, mainPath.toString(), true);
@@ -205,7 +201,7 @@ public class JSModuleSourceTransformTest extends BaseTest {
         // The declaration-splitting pass runs on every module the loader reads, not only on the one
         // handed to eval, so a dependency that depends on a semicolon it does not have has to be
         // rejected there too — and as an ordinary SyntaxError, not a raw Java exception.
-        Files.writeString(moduleDirectory.resolve("dep.mjs"), "export {} let x = 1;\n");
+        writeModule("dep.mjs", "export {} let x = 1;\n");
         Path mainPath = moduleDirectory.resolve("main.mjs");
         String mainSource = """
                 import { v } from './dep.mjs';

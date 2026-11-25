@@ -249,7 +249,7 @@ public final class JSRegExp extends JSObject {
         JSValue flagsArg = JSValue.argumentOrUndefined(args, 1);
 
         // ES2024 22.2.3.1 step 1: Always call IsRegExp first (may access @@match).
-        boolean patternIsRegExp = isRegExpLike(context, patternArg);
+        boolean patternIsRegExp = JSTypeChecking.isRegExp(context, patternArg) == 1;
         if (context.hasPendingException()) {
             return null;
         }
@@ -292,17 +292,4 @@ public final class JSRegExp extends JSObject {
         return new JSValue[]{patternValue, flagsValue};
     }
 
-    private static boolean isRegExpLike(JSContext context, JSValue value) {
-        if (!(value instanceof JSObject objectValue)) {
-            return false;
-        }
-        JSValue matchValue = objectValue.get(PropertyKey.SYMBOL_MATCH);
-        if (context.hasPendingException()) {
-            return false;
-        }
-        if (!(matchValue instanceof JSUndefined)) {
-            return JSTypeConversions.toBoolean(matchValue).value();
-        }
-        return value instanceof JSRegExp;
-    }
 }

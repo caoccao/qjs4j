@@ -290,7 +290,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         compilerContext.emitter.emitOpcode(Opcode.DUP);
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSSymbol.UNSCOPABLES);
         compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-        int[] jumpToDeleteWithoutUnscopables = emitWithUnscopablesSkipJumps();
+        int[] jumpToDeleteWithoutUnscopables = compilerContext.emitHelpers.emitWithUnscopablesSkipJumps();
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
         compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
         int jumpToFallbackWhenBlocked = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
@@ -327,7 +327,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         compilerContext.emitter.emitOpcode(Opcode.DUP);
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSSymbol.UNSCOPABLES);
         compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-        int[] jumpToResolveWithoutUnscopables = emitWithUnscopablesSkipJumps();
+        int[] jumpToResolveWithoutUnscopables = compilerContext.emitHelpers.emitWithUnscopablesSkipJumps();
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
         compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
         int jumpToFallbackWhenBlocked = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
@@ -377,24 +377,4 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         }
     }
 
-    private int[] emitWithUnscopablesSkipJumps() {
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
-        int jumpToResolveWithoutUnscopablesOnNullish = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
-
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcode(Opcode.TYPEOF);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("object"));
-        compilerContext.emitter.emitOpcode(Opcode.STRICT_EQ);
-        int jumpToCheckBlockedWhenObject = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
-
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcode(Opcode.TYPEOF);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("function"));
-        compilerContext.emitter.emitOpcode(Opcode.STRICT_EQ);
-        int jumpToResolveWithoutUnscopablesOnPrimitive = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
-
-        compilerContext.emitter.patchJump(jumpToCheckBlockedWhenObject, compilerContext.emitter.currentOffset());
-        return new int[]{jumpToResolveWithoutUnscopablesOnNullish, jumpToResolveWithoutUnscopablesOnPrimitive};
-    }
 }

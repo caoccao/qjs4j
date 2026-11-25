@@ -29,31 +29,6 @@ import java.util.Optional;
 public record TemporalDifferenceSettings(TemporalUnit largestUnit, TemporalUnit smallestUnit, long roundingIncrement,
         TemporalRoundingMode roundingMode) {
 
-    private static long getRoundingIncrementOption(JSContext context, JSObject optionsObject) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString("roundingIncrement"));
-        if (context.hasPendingException()) {
-            return Long.MIN_VALUE;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            return 1L;
-        }
-        JSNumber numericValue = JSTypeConversions.toNumber(context, optionValue);
-        if (context.hasPendingException() || numericValue == null) {
-            return Long.MIN_VALUE;
-        }
-        double roundingIncrement = numericValue.value();
-        if (!Double.isFinite(roundingIncrement) || Double.isNaN(roundingIncrement)) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return Long.MIN_VALUE;
-        }
-        long integerIncrement = (long) roundingIncrement;
-        if (integerIncrement < 1L || integerIncrement > TemporalConstants.MAX_ROUNDING_INCREMENT) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return Long.MIN_VALUE;
-        }
-        return integerIncrement;
-    }
-
     /**
      * Parses and validates difference options from a JS options argument. This replaces the per-prototype
      * getDifferenceSettings / parseDifferenceOptions methods.
@@ -104,7 +79,8 @@ public record TemporalDifferenceSettings(TemporalUnit largestUnit, TemporalUnit 
                 return null;
             }
 
-            roundingIncrement = getRoundingIncrementOption(context, optionsObject);
+            roundingIncrement = TemporalUtils.getRoundingIncrementOption(context, optionsObject,
+                    "Temporal error: Invalid rounding increment.");
             if (context.hasPendingException()) {
                 return null;
             }

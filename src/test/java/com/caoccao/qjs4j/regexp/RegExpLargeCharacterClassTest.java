@@ -79,14 +79,9 @@ public class RegExpLargeCharacterClassTest extends BaseJavetTest {
 
     @Test
     public void testOrdinaryClassesAndShorthandsAreUnaffected() {
-        assertStringWithJavet("/[a-c]+/.exec('xxabcyy')[0];");
-        assertStringWithJavet("/[^a-c]+/.exec('abxyzc')[0];");
-        assertStringWithJavet("/\\w+/.exec('ab_9!')[0];");
-        assertStringWithJavet("/\\W+/.exec('ab_9!!')[0];");
-        assertStringWithJavet("/\\d+/.exec('a123b')[0];");
-        assertStringWithJavet("/\\D+/.exec('12ab34')[0];");
-        assertStringWithJavet("/\\w+/iu.exec('ab_9!')[0];");
-        assertStringWithJavet("/\\W+/iu.exec('ab_9!!')[0];");
+        assertStringWithJavet("/[a-c]+/.exec('xxabcyy')[0];", "/[^a-c]+/.exec('abxyzc')[0];",
+                "/\\w+/.exec('ab_9!')[0];", "/\\W+/.exec('ab_9!!')[0];", "/\\d+/.exec('a123b')[0];",
+                "/\\D+/.exec('12ab34')[0];", "/\\w+/iu.exec('ab_9!')[0];", "/\\W+/iu.exec('ab_9!!')[0];");
     }
 
     @Test

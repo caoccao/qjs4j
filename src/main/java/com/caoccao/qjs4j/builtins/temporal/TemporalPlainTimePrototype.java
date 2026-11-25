@@ -66,10 +66,6 @@ public final class TemporalPlainTimePrototype {
         return JSTemporalPlainTime.create(context, IsoTime.createFromNanoseconds(resultNanoseconds.longValue()));
     }
 
-    private static TemporalUnit canonicalizeToStringSmallestUnit(String unitText) {
-        return TemporalUnit.fromString(unitText).filter(u -> u.isSmallerOrEqual(TemporalUnit.MINUTE)).orElse(null);
-    }
-
     private static JSValue difference(JSContext context, JSValue thisArg, JSValue[] args, boolean since) {
         JSTemporalPlainTime plainTime = RECEIVER.require(context, thisArg, since ? "since" : "until");
         if (plainTime == null) {
@@ -146,62 +142,22 @@ public final class TemporalPlainTimePrototype {
             return TemporalPlainTimeToStringSettings.DEFAULT;
         }
 
-        TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption = TemporalFractionalSecondDigitsOption
-                .autoOption();
-        TemporalRoundingMode roundingMode = TemporalRoundingMode.TRUNC;
-        String smallestUnitText = null;
-        JSValue fractionalSecondDigitsValue = optionsObject.get(PropertyKey.fromString("fractionalSecondDigits"));
-        if (context.hasPendingException()) {
+        TemporalFractionalSecondDigitsOption digits = TemporalFractionalSecondDigitsOption.read(context, optionsObject);
+        if (digits == null) {
             return null;
         }
-        TemporalFractionalSecondDigitsOption resolvedFractionalSecondDigitsOption = TemporalFractionalSecondDigitsOption
-                .parse(context, fractionalSecondDigitsValue, "Temporal error: Invalid fractionalSecondDigits.");
-        if (context.hasPendingException() || resolvedFractionalSecondDigitsOption == null) {
-            return null;
-        }
-        fractionalSecondDigitsOption = resolvedFractionalSecondDigitsOption;
 
         String roundingModeText = TemporalUtils.getStringOption(context, optionsObject, "roundingMode", "trunc");
         if (context.hasPendingException() || roundingModeText == null) {
             return null;
         }
 
-        smallestUnitText = TemporalUtils.getStringOption(context, optionsObject, "smallestUnit", null);
+        String smallestUnitText = TemporalUtils.getStringOption(context, optionsObject, "smallestUnit", null);
         if (context.hasPendingException()) {
             return null;
         }
 
-        roundingMode = TemporalRoundingMode.fromString(roundingModeText);
-        if (roundingMode == null) {
-            context.throwRangeError("Temporal error: Invalid rounding mode.");
-            return null;
-        }
-
-        TemporalUnit smallestUnit = null;
-        if (smallestUnitText != null) {
-            smallestUnit = canonicalizeToStringSmallestUnit(smallestUnitText);
-            if (smallestUnit == null) {
-                context.throwRangeError("Temporal error: Invalid smallestUnit option.");
-                return null;
-            }
-        }
-
-        boolean autoFractionalSecondDigits = smallestUnit == null && fractionalSecondDigitsOption.auto();
-        int fractionalSecondDigits;
-        long roundingIncrementNanoseconds;
-        if (smallestUnit != null) {
-            fractionalSecondDigits = smallestUnit.getStringFractionalSecondDigits();
-            roundingIncrementNanoseconds = smallestUnit.getStringRoundingIncrementNanoseconds();
-        } else if (autoFractionalSecondDigits) {
-            fractionalSecondDigits = -1;
-            roundingIncrementNanoseconds = 1L;
-        } else {
-            fractionalSecondDigits = fractionalSecondDigitsOption.digits();
-            roundingIncrementNanoseconds = fractionalSecondDigitsOption.roundingIncrementNanoseconds();
-        }
-
-        return new TemporalPlainTimeToStringSettings(smallestUnit, roundingMode, autoFractionalSecondDigits,
-                fractionalSecondDigits, roundingIncrementNanoseconds);
+        return TemporalPlainTimeToStringSettings.resolve(context, roundingModeText, smallestUnitText, digits);
     }
 
     public static JSValue hour(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -346,66 +302,7 @@ public final class TemporalPlainTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        IsoTime original = plainTime.getIsoTime();
-
-        Integer hourField = TemporalUtils.getOptionalIntegerField(context, fields, "hour");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int hour = hourField != null ? hourField : original.hour();
-
-        Integer microsecondField = TemporalUtils.getOptionalIntegerField(context, fields, "microsecond");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int microsecond = microsecondField != null ? microsecondField : original.microsecond();
-
-        Integer millisecondField = TemporalUtils.getOptionalIntegerField(context, fields, "millisecond");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int millisecond = millisecondField != null ? millisecondField : original.millisecond();
-
-        Integer minuteField = TemporalUtils.getOptionalIntegerField(context, fields, "minute");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int minute = minuteField != null ? minuteField : original.minute();
-
-        Integer nanosecondField = TemporalUtils.getOptionalIntegerField(context, fields, "nanosecond");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int nanosecond = nanosecondField != null ? nanosecondField : original.nanosecond();
-
-        Integer secondField = TemporalUtils.getOptionalIntegerField(context, fields, "second");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int second = secondField != null ? secondField : original.second();
-
-        boolean hasAnyField = hourField != null || microsecondField != null || millisecondField != null
-                || minuteField != null || nanosecondField != null || secondField != null;
-        if (!hasAnyField) {
-            context.throwTypeError("Temporal error: Must specify at least one time field.");
-            return JSUndefined.INSTANCE;
-        }
-
-        String overflow = TemporalUtils.getOverflowOption(context, JSValue.argumentOrUndefined(args, 1));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        if ("reject".equals(overflow)) {
-            IsoTime isoTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
-            if (!isoTime.isValid()) {
-                context.throwRangeError("Temporal error: Invalid time");
-                return JSUndefined.INSTANCE;
-            }
-            return JSTemporalPlainTime.create(context, isoTime);
-        } else {
-            IsoTime constrained = IsoTime.createNormalized(hour, minute, second, millisecond, microsecond, nanosecond);
-            return JSTemporalPlainTime.create(context, constrained);
-        }
+        return TemporalPlainTimeConstructor.timeFromFields(context, fields, JSValue.argumentOrUndefined(args, 1),
+                plainTime.getIsoTime(), "Temporal error: Must specify at least one time field.");
     }
 }

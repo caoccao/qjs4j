@@ -2032,7 +2032,7 @@ public non-sealed class JSObject implements JSValue {
         return weakEntryTable;
     }
 
-    private static boolean sameValue(JSValue x, JSValue y) {
+    static boolean sameValue(JSValue x, JSValue y) {
         if (x == y) {
             return true;
         }

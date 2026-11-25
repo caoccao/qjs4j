@@ -178,7 +178,8 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
         }
 
         if (isExpressionBased) {
-            compileForOfExpressionTargetAssignment((Expression) forOfStmt.getLeft());
+            compilerContext.expressionDestructuringAssignmentCompiler
+                    .compileIterationTarget((Expression) forOfStmt.getLeft());
         } else {
             compilerContext.patternCompiler.compileForOfValueAssignment(pattern, isVar);
         }
@@ -232,18 +233,6 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
             compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
         }
         compilerContext.scopeManager.exitScope();
-    }
-
-    private void compileForOfExpressionTargetAssignment(Expression leftExpression) {
-        if (leftExpression instanceof CallExpression) {
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.expressionCompiler.compile(leftExpression);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
-            compilerContext.emitter.emitU8(5);
-            return;
-        }
-        compilerContext.expressionDestructuringAssignmentCompiler.compile(leftExpression);
     }
 
     private void compileForOfWithCallExpressionTarget(ForOfStatement forOfStmt, CallExpression callExpr) {

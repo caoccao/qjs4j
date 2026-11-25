@@ -331,16 +331,6 @@ public final class JSPromise extends JSObject {
         });
     }
 
-    private static JSValue callCallable(JSContext context, JSValue callable, JSValue thisArg, JSValue[] args) {
-        if (callable instanceof JSProxy proxy) {
-            return proxy.apply(context, thisArg, args);
-        }
-        if (callable instanceof JSFunction function) {
-            return function.call(context, thisArg, args);
-        }
-        return context.throwTypeError("Value is not callable");
-    }
-
     public static JSObject create(JSContext context, JSValue... args) {
         // Promise requires an executor function
         if (args.length == 0 || !JSTypeChecking.isCallable(args[0])) {
@@ -427,7 +417,7 @@ public final class JSPromise extends JSObject {
             return;
         }
         if (reaction.capabilityReject != null) {
-            callCallable(reaction.context, reaction.capabilityReject, JSUndefined.INSTANCE, new JSValue[]{reason});
+            JSCall.call(reaction.context, reaction.capabilityReject, JSUndefined.INSTANCE, new JSValue[]{reason});
         }
     }
 
@@ -437,7 +427,7 @@ public final class JSPromise extends JSObject {
             return;
         }
         if (reaction.capabilityResolve != null) {
-            callCallable(reaction.context, reaction.capabilityResolve, JSUndefined.INSTANCE, new JSValue[]{value});
+            JSCall.call(reaction.context, reaction.capabilityResolve, JSUndefined.INSTANCE, new JSValue[]{value});
         }
     }
 

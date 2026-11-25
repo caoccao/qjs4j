@@ -16,10 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.BaseTest;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -37,9 +35,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * object's own {@code [[Delete]]}, which refuses export properties — so these cases also pin that the internal delete
  * stays non-virtual.
  */
-public class JSModuleAmbiguousExportTest extends BaseTest {
-    @TempDir
-    Path moduleDirectory;
+public class JSModuleAmbiguousExportTest extends ModuleFileTest {
 
     private String evalMain(Path mainPath, String source) throws IOException {
         Files.writeString(mainPath, source);
@@ -84,13 +80,13 @@ public class JSModuleAmbiguousExportTest extends BaseTest {
     }
 
     private Path writeAmbiguousStarModule() throws IOException {
-        Files.writeString(moduleDirectory.resolve("first.mjs"), """
+        writeModule("first.mjs", """
                 export var first = 'a';
                 export var both = 'from-first';""");
-        Files.writeString(moduleDirectory.resolve("second.mjs"), """
+        writeModule("second.mjs", """
                 export var second = 'b';
                 export var both = 'from-second';""");
-        Files.writeString(moduleDirectory.resolve("star.mjs"), """
+        writeModule("star.mjs", """
                 export * from './first.mjs';
                 export * from './second.mjs';""");
         return moduleDirectory.resolve("main.mjs");

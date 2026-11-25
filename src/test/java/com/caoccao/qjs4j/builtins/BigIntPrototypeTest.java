@@ -65,20 +65,19 @@ public class BigIntPrototypeTest extends BaseJavetTest {
     public void testToLocaleString() {
         JSBigInt bigInt = new JSBigInt(BigInteger.valueOf(12345));
         // Normal case: with locale — grouping is enabled by default per Intl.NumberFormat spec
-        JSValue result = BigIntPrototype.toLocaleString(context, bigInt, new JSValue[]{new JSString("en-US")});
+        JSValue result = BigIntPrototype.toLocaleString(context, bigInt, stringArgs("en-US"));
         JSString str = result.asString().orElseThrow();
         assertThat(str.value()).isEqualTo("12,345");
 
         // Normal case: small number (no grouping needed)
         JSBigInt smallBigInt = new JSBigInt(BigInteger.valueOf(123));
-        result = BigIntPrototype.toLocaleString(context, smallBigInt, new JSValue[]{new JSString("en-US")});
+        result = BigIntPrototype.toLocaleString(context, smallBigInt, stringArgs("en-US"));
         str = result.asString().orElseThrow();
         assertThat(str.value()).isEqualTo("123");
 
         // Edge case: called on non-BigInt
         result = BigIntPrototype.toLocaleString(context, new JSString("not a bigint"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
     }
 
     @Test
@@ -122,18 +121,15 @@ public class BigIntPrototypeTest extends BaseJavetTest {
 
         // Edge case: radix too small
         result = BigIntPrototype.toString(context, bigInt, numberArgs(1));
-        assertRangeError(result);
-        assertPendingException(context);
+        assertPendingRangeError(context, result);
 
         // Edge case: radix too large
         result = BigIntPrototype.toString(context, bigInt, numberArgs(37));
-        assertRangeError(result);
-        assertPendingException(context);
+        assertPendingRangeError(context, result);
 
         // Edge case: called on non-BigInt
         result = BigIntPrototype.toString(context, new JSString("not a bigint"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         assertStringWithJavet("Object(BigInt(123n)).toString()");
     }
@@ -147,8 +143,7 @@ public class BigIntPrototypeTest extends BaseJavetTest {
 
         // Edge case: called on non-BigInt
         result = BigIntPrototype.valueOf(context, new JSString("not a bigint"), JSValue.NO_ARGS);
-        assertTypeError(result);
-        assertPendingException(context);
+        assertPendingTypeError(context, result);
 
         assertLongWithJavet("Object(BigInt(123n)).valueOf()");
     }

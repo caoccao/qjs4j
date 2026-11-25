@@ -19,6 +19,10 @@ package com.caoccao.qjs4j.compilation.compiler;
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.vm.Opcode;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 /**
  * Compiles statement AST nodes into bytecode. Extracted from BytecodeCompiler to separate statement compilation
  * concerns.
@@ -95,4 +99,43 @@ final class StatementCompiler extends AstNodeCompiler<Statement> {
         }
     }
 
+    private void initializeLexicalBinding(String name, boolean immutable) {
+        var scope = compilerContext.scopeManager.currentScope();
+        Integer index = scope.getLocal(name);
+        if (index == null) {
+            index = scope.declareLocal(name);
+        }
+        if (immutable) {
+            scope.markConstLocal(name);
+        }
+        compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, index);
+        compilerContext.tdzLocals.add(name);
+    }
+    void predeclareLexicalBindings(List<Statement> statements, boolean includeFunctions) {
+        for (Statement statement : statements) {
+            if (statement instanceof VariableDeclaration declaration && declaration.getKind() != VariableKind.VAR) {
+                boolean immutable = declaration.getKind() == VariableKind.CONST
+                        || declaration.getKind() == VariableKind.USING
+                        || declaration.getKind() == VariableKind.AWAIT_USING;
+                for (VariableDeclarator declarator : declaration.getDeclarations()) {
+                    if (declarator.getId() instanceof Identifier identifier) {
+                        initializeLexicalBinding(identifier.getName(), immutable);
+                        continue;
+                    }
+                    Set<String> names = new HashSet<>();
+                    compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(), names);
+                    for (String name : names) {
+                        initializeLexicalBinding(name, immutable);
+                    }
+                }
+            } else if (statement instanceof ClassDeclaration declaration && declaration.getId() != null) {
+                initializeLexicalBinding(declaration.getId().getName(), false);
+            } else if (includeFunctions) {
+                FunctionDeclaration function = statement.unwrapLabeledFunctionDeclaration();
+                if (function != null && function.getId() != null) {
+                    initializeLexicalBinding(function.getId().getName(), false);
+                }
+            }
+        }
+    }
 }

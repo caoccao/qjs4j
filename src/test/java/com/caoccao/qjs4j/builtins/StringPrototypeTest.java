@@ -41,8 +41,7 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "'text'.anchor('')");
 
         // Test quote escaping
-        JSValue result = StringPrototype.anchor(context, new JSString("test"),
-                new JSValue[]{new JSString("my\"anchor")});
+        JSValue result = StringPrototype.anchor(context, new JSString("test"), stringArgs("my\"anchor"));
         assertThat(result).isInstanceOfSatisfying(JSString.class,
                 jsStr -> assertThat(jsStr.value()).isEqualTo("<a name=\"my&quot;anchor\">test</a>"));
     }
@@ -83,7 +82,7 @@ public class StringPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "");
 
         // Non-integer index
-        result = StringPrototype.charAt(context, str, new JSValue[]{new JSString("1")});
+        result = StringPrototype.charAt(context, str, stringArgs("1"));
         assertStringValue(result, "e");
 
         // Empty string
@@ -144,11 +143,11 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testConcat() {
         // Normal case
-        JSValue result = StringPrototype.concat(context, str, new JSValue[]{new JSString(" test")});
+        JSValue result = StringPrototype.concat(context, str, stringArgs(" test"));
         assertStringValue(result, "hello world test");
 
         // Multiple args
-        result = StringPrototype.concat(context, str, new JSValue[]{new JSString(" "), new JSString("test")});
+        result = StringPrototype.concat(context, str, stringArgs(" ", "test"));
         assertStringValue(result, "hello world test");
 
         // No args
@@ -174,10 +173,10 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testEndsWith() {
         // Normal case
-        JSValue result = StringPrototype.endsWith(context, str, new JSValue[]{new JSString("world")});
+        JSValue result = StringPrototype.endsWith(context, str, stringArgs("world"));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
-        result = StringPrototype.endsWith(context, str, new JSValue[]{new JSString("hello")});
+        result = StringPrototype.endsWith(context, str, stringArgs("hello"));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // With position
@@ -193,12 +192,12 @@ public class StringPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Empty search string
-        result = StringPrototype.endsWith(context, str, new JSValue[]{new JSString("")});
+        result = StringPrototype.endsWith(context, str, stringArgs(""));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.endsWith(context, empty, new JSValue[]{new JSString("")});
+        result = StringPrototype.endsWith(context, empty, stringArgs(""));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
     }
 
@@ -235,8 +234,7 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "'text'.fontcolor('')");
 
         // Test quote escaping
-        JSValue result = StringPrototype.fontcolor(context, new JSString("test"),
-                new JSValue[]{new JSString("\"red\"")});
+        JSValue result = StringPrototype.fontcolor(context, new JSString("test"), stringArgs("\"red\""));
         assertThat(result).isInstanceOfSatisfying(JSString.class,
                 jsStr -> assertThat(jsStr.value()).isEqualTo("<font color=\"&quot;red&quot;\">test</font>"));
     }
@@ -302,10 +300,10 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testIncludes() {
         // Normal case
-        JSValue result = StringPrototype.includes(context, str, new JSValue[]{new JSString("world")});
+        JSValue result = StringPrototype.includes(context, str, stringArgs("world"));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
-        result = StringPrototype.includes(context, str, new JSValue[]{new JSString("test")});
+        result = StringPrototype.includes(context, str, stringArgs("test"));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // With position
@@ -316,22 +314,22 @@ public class StringPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Empty search string
-        result = StringPrototype.includes(context, str, new JSValue[]{new JSString("")});
+        result = StringPrototype.includes(context, str, stringArgs(""));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.includes(context, empty, new JSValue[]{new JSString("test")});
+        result = StringPrototype.includes(context, empty, stringArgs("test"));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
     }
 
     @Test
     public void testIndexOf() {
         // Normal case
-        JSValue result = StringPrototype.indexOf(context, str, new JSValue[]{new JSString("world")});
+        JSValue result = StringPrototype.indexOf(context, str, stringArgs("world"));
         assertNumberValue(result, 6.0);
 
-        result = StringPrototype.indexOf(context, str, new JSValue[]{new JSString("test")});
+        result = StringPrototype.indexOf(context, str, stringArgs("test"));
         assertNumberValue(result, -1.0);
 
         // With position
@@ -343,12 +341,12 @@ public class StringPrototypeTest extends BaseJavetTest {
         assertNumberValue(result, -1.0);
 
         // Empty search string
-        result = StringPrototype.indexOf(context, str, new JSValue[]{new JSString("")});
+        result = StringPrototype.indexOf(context, str, stringArgs(""));
         assertNumberValue(result, 0.0);
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.indexOf(context, empty, new JSValue[]{new JSString("test")});
+        result = StringPrototype.indexOf(context, empty, stringArgs("test"));
         assertNumberValue(result, -1.0);
     }
 
@@ -376,10 +374,10 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testLastIndexOf() {
         // Normal case
-        JSValue result = StringPrototype.lastIndexOf(context, str, new JSValue[]{new JSString("o")});
+        JSValue result = StringPrototype.lastIndexOf(context, str, stringArgs("o"));
         assertNumberValue(result, 7.0);
 
-        result = StringPrototype.lastIndexOf(context, str, new JSValue[]{new JSString("test")});
+        result = StringPrototype.lastIndexOf(context, str, stringArgs("test"));
         assertNumberValue(result, -1.0);
 
         // With position
@@ -391,12 +389,12 @@ public class StringPrototypeTest extends BaseJavetTest {
         assertNumberValue(result, 0.0);
 
         // Empty search string
-        result = StringPrototype.lastIndexOf(context, str, new JSValue[]{new JSString("")});
+        result = StringPrototype.lastIndexOf(context, str, stringArgs(""));
         assertNumberValue(result, 11.0);
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.lastIndexOf(context, empty, new JSValue[]{new JSString("test")});
+        result = StringPrototype.lastIndexOf(context, empty, stringArgs("test"));
         assertNumberValue(result, -1.0);
     }
 
@@ -407,7 +405,7 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Test quote escaping
         JSValue result = StringPrototype.link(context, new JSString("test"),
-                new JSValue[]{new JSString("http://example.com?q=\"hello\"")});
+                stringArgs("http://example.com?q=\"hello\""));
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value())
                 .isEqualTo("<a href=\"http://example.com?q=&quot;hello&quot;\">test</a>"));
     }
@@ -491,14 +489,14 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "'abc'.normalize('NFKD')");
 
         // Test that Angstrom sign normalizes correctly
-        JSValue result = StringPrototype.normalize(context, new JSString("\u212B"), new JSValue[]{new JSString("NFC")});
+        JSValue result = StringPrototype.normalize(context, new JSString("\u212B"), stringArgs("NFC"));
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> {
             // Both \u212B (Angstrom) and \u00C5 (A with ring) normalize to \u00C5 in NFC
             assertThat(jsStr.value()).isEqualTo("\u00C5");
         });
 
         // Test NFD produces decomposed form
-        result = StringPrototype.normalize(context, new JSString("\u00C5"), new JSValue[]{new JSString("NFD")});
+        result = StringPrototype.normalize(context, new JSString("\u00C5"), stringArgs("NFD"));
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> {
             // \u00C5 decomposes to A (\u0041) + combining ring above (\u030A)
             assertThat(jsStr.value()).isEqualTo("\u0041\u030A");
@@ -507,8 +505,7 @@ public class StringPrototypeTest extends BaseJavetTest {
         // Test undefined form defaults to NFC
         JSValue result1 = StringPrototype.normalize(context, new JSString("\u212B"),
                 new JSValue[]{JSUndefined.INSTANCE});
-        JSValue result2 = StringPrototype.normalize(context, new JSString("\u212B"),
-                new JSValue[]{new JSString("NFC")});
+        JSValue result2 = StringPrototype.normalize(context, new JSString("\u212B"), stringArgs("NFC"));
         assertThat(result1).isInstanceOfSatisfying(JSString.class,
                 jsStr1 -> assertThat(result2).isInstanceOfSatisfying(JSString.class,
                         jsStr2 -> assertThat(jsStr1.value()).isEqualTo(jsStr2.value())));
@@ -616,38 +613,36 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testReplace() {
         // Normal case
-        JSValue result = StringPrototype.replace(context, str,
-                new JSValue[]{new JSString("world"), new JSString("universe")});
+        JSValue result = StringPrototype.replace(context, str, stringArgs("world", "universe"));
         assertStringValue(result, "hello universe");
 
         // No match
-        result = StringPrototype.replace(context, str, new JSValue[]{new JSString("test"), new JSString("universe")});
+        result = StringPrototype.replace(context, str, stringArgs("test", "universe"));
         assertStringValue(result, "hello world");
 
         // Replace with function (simplified, assuming string replacement)
-        result = StringPrototype.replace(context, str, new JSValue[]{new JSString("o"), new JSString("x")});
+        result = StringPrototype.replace(context, str, stringArgs("o", "x"));
         assertStringValue(result, "hellx world");
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.replace(context, empty, new JSValue[]{new JSString(""), new JSString("test")});
+        result = StringPrototype.replace(context, empty, stringArgs("", "test"));
         assertStringValue(result, "test");
     }
 
     @Test
     public void testReplaceAll() {
         // Normal case
-        JSValue result = StringPrototype.replaceAll(context, str, new JSValue[]{new JSString("o"), new JSString("x")});
+        JSValue result = StringPrototype.replaceAll(context, str, stringArgs("o", "x"));
         assertStringValue(result, "hellx wxrld");
 
         // No match
-        result = StringPrototype.replaceAll(context, str,
-                new JSValue[]{new JSString("test"), new JSString("universe")});
+        result = StringPrototype.replaceAll(context, str, stringArgs("test", "universe"));
         assertStringValue(result, "hello world");
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.replaceAll(context, empty, new JSValue[]{new JSString(""), new JSString("test")});
+        result = StringPrototype.replaceAll(context, empty, stringArgs("", "test"));
         assertStringValue(result, "test");
     }
 
@@ -799,7 +794,7 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testSplit() {
         // Normal case
-        JSValue result = StringPrototype.split(context, str, new JSValue[]{new JSString(" ")});
+        JSValue result = StringPrototype.split(context, str, stringArgs(" "));
         JSArray arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(2);
         assertStringValue(arr.get(0), "hello");
@@ -812,7 +807,7 @@ public class StringPrototypeTest extends BaseJavetTest {
         assertStringValue(arr.get(0), "hello world");
 
         // Empty separator
-        result = StringPrototype.split(context, str, new JSValue[]{new JSString("")});
+        result = StringPrototype.split(context, str, stringArgs(""));
         arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(11); // "h","e","l","l","o"," ","w","o","r","l","d"
 
@@ -824,7 +819,7 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.split(context, empty, new JSValue[]{new JSString(" ")});
+        result = StringPrototype.split(context, empty, stringArgs(" "));
         arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(1);
         assertStringValue(arr.get(0), "");
@@ -864,10 +859,10 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testStartsWith() {
         // Normal case
-        JSValue result = StringPrototype.startsWith(context, str, new JSValue[]{new JSString("hello")});
+        JSValue result = StringPrototype.startsWith(context, str, stringArgs("hello"));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
-        result = StringPrototype.startsWith(context, str, new JSValue[]{new JSString("world")});
+        result = StringPrototype.startsWith(context, str, stringArgs("world"));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // With position
@@ -879,12 +874,12 @@ public class StringPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Empty search string
-        result = StringPrototype.startsWith(context, str, new JSValue[]{new JSString("")});
+        result = StringPrototype.startsWith(context, str, stringArgs(""));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.startsWith(context, empty, new JSValue[]{new JSString("")});
+        result = StringPrototype.startsWith(context, empty, stringArgs(""));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
     }
 
@@ -1034,8 +1029,7 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "'ABC123'.toLocaleLowerCase()");
 
         // Test with locale parameter (currently ignored, but should work)
-        JSValue result = StringPrototype.toLocaleLowerCase(context, new JSString("HELLO"),
-                new JSValue[]{new JSString("en-US")});
+        JSValue result = StringPrototype.toLocaleLowerCase(context, new JSString("HELLO"), stringArgs("en-US"));
         assertStringValue(result, "hello");
     }
 
@@ -1046,8 +1040,7 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "'abc123'.toLocaleUpperCase()");
 
         // Test with locale parameter (currently ignored, but should work)
-        JSValue result = StringPrototype.toLocaleUpperCase(context, new JSString("hello"),
-                new JSValue[]{new JSString("en-US")});
+        JSValue result = StringPrototype.toLocaleUpperCase(context, new JSString("hello"), stringArgs("en-US"));
         assertStringValue(result, "HELLO");
     }
 

@@ -89,13 +89,13 @@ public class SetPrototypeTest extends BaseJavetTest {
         JSSet set = new JSSet(context);
 
         // Normal case: add new value
-        JSValue result = SetPrototype.add(context, set, new JSValue[]{new JSString("value1")});
+        JSValue result = SetPrototype.add(context, set, stringArgs("value1"));
         assertThat(result).isSameAs(set);
         assertThat(set.size()).isEqualTo(1);
         assertThat(set.setHas(new JSString("value1"))).isTrue();
 
         // Normal case: add duplicate value (should not increase size)
-        result = SetPrototype.add(context, set, new JSValue[]{new JSString("value1")});
+        result = SetPrototype.add(context, set, stringArgs("value1"));
         assertThat(result).isSameAs(set);
         assertThat(set.size()).isEqualTo(1);
 
@@ -111,8 +111,7 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertThat(set.size()).isEqualTo(3); // Should add undefined, increasing size
 
         // Edge case: called on non-Set
-        assertTypeError(SetPrototype.add(context, new JSString("not set"), new JSValue[]{new JSString("value")}));
-        assertPendingException(context);
+        assertPendingTypeError(context, SetPrototype.add(context, new JSString("not set"), stringArgs("value")));
     }
 
     @Test
@@ -131,25 +130,21 @@ public class SetPrototypeTest extends BaseJavetTest {
     @Test
     void testAddEdgeCases() {
         // Add primitive values
-        assertIntegerWithJavet("var s = new Set(); s.add(1); s.size");
-        assertIntegerWithJavet("var s = new Set(); s.add('str'); s.size");
-        assertIntegerWithJavet("var s = new Set(); s.add(true); s.size");
-        assertIntegerWithJavet("var s = new Set(); s.add(false); s.size");
-        assertIntegerWithJavet("var s = new Set(); s.add(null); s.size");
-        assertIntegerWithJavet("var s = new Set(); s.add(undefined); s.size");
+        assertIntegerWithJavet("var s = new Set(); s.add(1); s.size", "var s = new Set(); s.add('str'); s.size",
+                "var s = new Set(); s.add(true); s.size", "var s = new Set(); s.add(false); s.size",
+                "var s = new Set(); s.add(null); s.size", "var s = new Set(); s.add(undefined); s.size");
 
         // Add returns the Set itself (for chaining)
         assertBooleanWithJavet("var s = new Set(); s.add(1) === s");
         assertIntegerWithJavet("var s = new Set(); s.add(1).add(2).add(3).size");
 
         // Adding duplicate values
-        assertIntegerWithJavet("var s = new Set(); s.add(1); s.add(1); s.size");
-        assertIntegerWithJavet("var s = new Set(); s.add('a'); s.add('a'); s.add('a'); s.size");
+        assertIntegerWithJavet("var s = new Set(); s.add(1); s.add(1); s.size",
+                "var s = new Set(); s.add('a'); s.add('a'); s.add('a'); s.size");
 
         // Zero values: +0 and -0 are treated as the same
         assertIntegerWithJavet("var s = new Set(); s.add(0); s.add(-0); s.size");
-        assertBooleanWithJavet("var s = new Set(); s.add(0); s.has(-0)");
-        assertBooleanWithJavet("var s = new Set(); s.add(-0); s.has(0)");
+        assertBooleanWithJavet("var s = new Set(); s.add(0); s.has(-0)", "var s = new Set(); s.add(-0); s.has(0)");
 
         // NaN handling: all NaN values are treated as the same
         assertIntegerWithJavet("var s = new Set(); s.add(NaN); s.add(NaN); s.size");
@@ -157,17 +152,17 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertIntegerWithJavet("var s = new Set(); s.add(0/0); s.add(NaN); s.size");
 
         // Add objects (objects are compared by reference)
-        assertIntegerWithJavet("var s = new Set(); s.add({}); s.add({}); s.size");
-        assertIntegerWithJavet("var s = new Set(); var obj = {}; s.add(obj); s.add(obj); s.size");
+        assertIntegerWithJavet("var s = new Set(); s.add({}); s.add({}); s.size",
+                "var s = new Set(); var obj = {}; s.add(obj); s.add(obj); s.size");
         assertBooleanWithJavet("var s = new Set(); var obj = {}; s.add(obj); s.has(obj)");
 
         // Add arrays
-        assertIntegerWithJavet("var s = new Set(); s.add([1,2]); s.add([1,2]); s.size");
-        assertIntegerWithJavet("var s = new Set(); var arr = [1,2]; s.add(arr); s.add(arr); s.size");
+        assertIntegerWithJavet("var s = new Set(); s.add([1,2]); s.add([1,2]); s.size",
+                "var s = new Set(); var arr = [1,2]; s.add(arr); s.add(arr); s.size");
 
         // Add symbols
-        assertIntegerWithJavet("var s = new Set(); var sym = Symbol('test'); s.add(sym); s.add(sym); s.size");
-        assertIntegerWithJavet("var s = new Set(); s.add(Symbol('a')); s.add(Symbol('a')); s.size");
+        assertIntegerWithJavet("var s = new Set(); var sym = Symbol('test'); s.add(sym); s.add(sym); s.size",
+                "var s = new Set(); s.add(Symbol('a')); s.add(Symbol('a')); s.size");
     }
 
     @Test
@@ -249,8 +244,7 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertThat(set.size()).isEqualTo(0);
 
         // Edge case: called on non-Set
-        assertTypeError(SetPrototype.clear(context, new JSString("not set"), JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, SetPrototype.clear(context, new JSString("not set"), JSValue.NO_ARGS));
     }
 
     @Test
@@ -269,8 +263,8 @@ public class SetPrototypeTest extends BaseJavetTest {
 
         // Add after clear
         assertIntegerWithJavet("var s = new Set([1,2,3]); s.clear(); s.add(4); s.size");
-        assertBooleanWithJavet("var s = new Set([1,2,3]); s.clear(); s.add(4); s.has(4)");
-        assertBooleanWithJavet("var s = new Set([1,2,3]); s.clear(); s.add(4); s.has(1)");
+        assertBooleanWithJavet("var s = new Set([1,2,3]); s.clear(); s.add(4); s.has(4)",
+                "var s = new Set([1,2,3]); s.clear(); s.add(4); s.has(1)");
     }
 
     @Test
@@ -305,13 +299,13 @@ public class SetPrototypeTest extends BaseJavetTest {
         set.setAdd(new JSString("value2"));
 
         // Normal case: delete existing value
-        JSValue result = SetPrototype.delete(context, set, new JSValue[]{new JSString("value1")});
+        JSValue result = SetPrototype.delete(context, set, stringArgs("value1"));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
         assertThat(set.size()).isEqualTo(1);
         assertThat(set.setHas(new JSString("value1"))).isFalse();
 
         // Normal case: delete non-existing value
-        result = SetPrototype.delete(context, set, new JSValue[]{new JSString("nonexistent")});
+        result = SetPrototype.delete(context, set, stringArgs("nonexistent"));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
         assertThat(set.size()).isEqualTo(1);
 
@@ -320,8 +314,7 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: called on non-Set
-        assertTypeError(SetPrototype.delete(context, new JSString("not set"), new JSValue[]{new JSString("value")}));
-        assertPendingException(context);
+        assertPendingTypeError(context, SetPrototype.delete(context, new JSString("not set"), stringArgs("value")));
     }
 
     @Test
@@ -410,25 +403,23 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertBooleanWithJavet("var s = new Set([1,2,3]); s.delete(2); s.delete(2)");
 
         // Delete with different types
-        assertBooleanWithJavet("var s = new Set([1,'1',true]); s.delete(1)");
-        assertBooleanWithJavet("var s = new Set([1,'1',true]); s.delete('1')");
-        assertBooleanWithJavet("var s = new Set([1,'1',true]); s.delete(true)");
+        assertBooleanWithJavet("var s = new Set([1,'1',true]); s.delete(1)",
+                "var s = new Set([1,'1',true]); s.delete('1')", "var s = new Set([1,'1',true]); s.delete(true)");
 
         // Delete NaN
         assertBooleanWithJavet("var s = new Set(); s.add(NaN); s.delete(NaN)");
         assertIntegerWithJavet("var s = new Set(); s.add(NaN); s.delete(NaN); s.size");
 
         // Delete undefined and null
-        assertBooleanWithJavet("var s = new Set(); s.add(undefined); s.delete(undefined)");
-        assertBooleanWithJavet("var s = new Set(); s.add(null); s.delete(null)");
+        assertBooleanWithJavet("var s = new Set(); s.add(undefined); s.delete(undefined)",
+                "var s = new Set(); s.add(null); s.delete(null)");
 
         // Delete object by reference
-        assertBooleanWithJavet("var s = new Set(); var obj = {}; s.add(obj); s.delete(obj)");
-        assertBooleanWithJavet("var s = new Set(); s.add({}); s.delete({})");
+        assertBooleanWithJavet("var s = new Set(); var obj = {}; s.add(obj); s.delete(obj)",
+                "var s = new Set(); s.add({}); s.delete({})");
 
         // Zero values
-        assertBooleanWithJavet("var s = new Set(); s.add(0); s.has(-0)");
-        assertBooleanWithJavet("var s = new Set(); s.add(-0); s.has(0)");
+        assertBooleanWithJavet("var s = new Set(); s.add(0); s.has(-0)", "var s = new Set(); s.add(-0); s.has(0)");
     }
 
     @Test
@@ -531,8 +522,8 @@ public class SetPrototypeTest extends BaseJavetTest {
     @Test
     void testEntriesIsDifferent() {
         // entries() should be a DIFFERENT function from keys/values
-        assertBooleanWithJavet("Set.prototype.entries !== Set.prototype.values");
-        assertBooleanWithJavet("Set.prototype.entries !== Set.prototype.keys");
+        assertBooleanWithJavet("Set.prototype.entries !== Set.prototype.values",
+                "Set.prototype.entries !== Set.prototype.keys");
     }
 
     @Test
@@ -557,16 +548,14 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertThat(resultStr).contains("value2");
 
         // Edge case: no callback function
-        assertTypeError(SetPrototype.forEach(context, set, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, SetPrototype.forEach(context, set, JSValue.NO_ARGS));
 
         // Edge case: non-function callback
-        assertTypeError(SetPrototype.forEach(context, set, new JSValue[]{new JSString("not function")}));
-        assertPendingException(context);
+        assertPendingTypeError(context, SetPrototype.forEach(context, set, stringArgs("not function")));
 
         // Edge case: called on non-Set
-        assertTypeError(SetPrototype.forEach(context, new JSString("not set"), new JSValue[]{callback}));
-        assertPendingException(context);
+        assertPendingTypeError(context,
+                SetPrototype.forEach(context, new JSString("not set"), new JSValue[]{callback}));
     }
 
     @Test
@@ -829,8 +818,7 @@ public class SetPrototypeTest extends BaseJavetTest {
     @Test
     void testFunctionLength() {
         // Both should have length 0
-        assertIntegerWithJavet("Set.prototype.values.length");
-        assertIntegerWithJavet("Set.prototype.keys.length");
+        assertIntegerWithJavet("Set.prototype.values.length", "Set.prototype.keys.length");
     }
 
     @Test
@@ -845,8 +833,7 @@ public class SetPrototypeTest extends BaseJavetTest {
     @Test
     void testFunctionNameIsValues() {
         // Even though the property is called "keys", the function name is "values"
-        assertStringWithJavet("Set.prototype.keys.name");
-        assertStringWithJavet("Set.prototype.values.name");
+        assertStringWithJavet("Set.prototype.keys.name", "Set.prototype.values.name");
     }
 
     @Test
@@ -864,8 +851,7 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertNumberValue(result, 2.0);
 
         // Edge case: called on non-Set
-        assertTypeError(SetPrototype.getSize(context, new JSString("not set"), JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, SetPrototype.getSize(context, new JSString("not set"), JSValue.NO_ARGS));
 
         assertIntegerWithJavet("new Set().size", "var a = new Set(); a.add('a'); a.size");
     }
@@ -876,11 +862,11 @@ public class SetPrototypeTest extends BaseJavetTest {
         set.setAdd(new JSString("value1"));
 
         // Normal case: existing value
-        JSValue result = SetPrototype.has(context, set, new JSValue[]{new JSString("value1")});
+        JSValue result = SetPrototype.has(context, set, stringArgs("value1"));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: non-existing value
-        result = SetPrototype.has(context, set, new JSValue[]{new JSString("value2")});
+        result = SetPrototype.has(context, set, stringArgs("value2"));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: no arguments
@@ -888,8 +874,7 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: called on non-Set
-        assertTypeError(SetPrototype.has(context, new JSString("not set"), new JSValue[]{new JSString("value")}));
-        assertPendingException(context);
+        assertPendingTypeError(context, SetPrototype.has(context, new JSString("not set"), stringArgs("value")));
     }
 
     @Test
@@ -898,31 +883,26 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertBooleanWithJavet("var s = new Set(); s.has(1)");
 
         // Has with various types
-        assertBooleanWithJavet("var s = new Set([1,2,3]); s.has(2)");
-        assertBooleanWithJavet("var s = new Set([1,2,3]); s.has(5)");
-        assertBooleanWithJavet("var s = new Set(['a','b']); s.has('a')");
-        assertBooleanWithJavet("var s = new Set(['a','b']); s.has('c')");
+        assertBooleanWithJavet("var s = new Set([1,2,3]); s.has(2)", "var s = new Set([1,2,3]); s.has(5)",
+                "var s = new Set(['a','b']); s.has('a')", "var s = new Set(['a','b']); s.has('c')");
 
         // Type matters
-        assertBooleanWithJavet("var s = new Set([1]); s.has('1')");
-        assertBooleanWithJavet("var s = new Set(['1']); s.has(1)");
+        assertBooleanWithJavet("var s = new Set([1]); s.has('1')", "var s = new Set(['1']); s.has(1)");
 
         // NaN
-        assertBooleanWithJavet("var s = new Set(); s.add(NaN); s.has(NaN)");
-        assertBooleanWithJavet("var s = new Set(); s.add(0/0); s.has(NaN)");
+        assertBooleanWithJavet("var s = new Set(); s.add(NaN); s.has(NaN)",
+                "var s = new Set(); s.add(0/0); s.has(NaN)");
 
         // Undefined and null
-        assertBooleanWithJavet("var s = new Set(); s.add(undefined); s.has(undefined)");
-        assertBooleanWithJavet("var s = new Set(); s.add(null); s.has(null)");
-        assertBooleanWithJavet("var s = new Set(); s.add(null); s.has(undefined)");
+        assertBooleanWithJavet("var s = new Set(); s.add(undefined); s.has(undefined)",
+                "var s = new Set(); s.add(null); s.has(null)", "var s = new Set(); s.add(null); s.has(undefined)");
 
         // Objects by reference
-        assertBooleanWithJavet("var s = new Set(); var obj = {}; s.add(obj); s.has(obj)");
-        assertBooleanWithJavet("var s = new Set(); s.add({}); s.has({})");
+        assertBooleanWithJavet("var s = new Set(); var obj = {}; s.add(obj); s.has(obj)",
+                "var s = new Set(); s.add({}); s.has({})");
 
         // Zero values
-        assertBooleanWithJavet("var s = new Set(); s.add(0); s.has(-0)");
-        assertBooleanWithJavet("var s = new Set(); s.add(-0); s.has(0)");
+        assertBooleanWithJavet("var s = new Set(); s.add(0); s.has(-0)", "var s = new Set(); s.add(-0); s.has(0)");
     }
 
     @Test
@@ -947,15 +927,15 @@ public class SetPrototypeTest extends BaseJavetTest {
     @Test
     void testIteratorMethods() {
         // values()
-        assertBooleanWithJavet("typeof new Set().values() === 'object'");
-        assertBooleanWithJavet("typeof new Set([1,2,3]).values().next === 'function'");
+        assertBooleanWithJavet("typeof new Set().values() === 'object'",
+                "typeof new Set([1,2,3]).values().next === 'function'");
 
         // keys() is same as values() for Set
         assertBooleanWithJavet("Set.prototype.keys === Set.prototype.values");
 
         // entries()
-        assertBooleanWithJavet("typeof new Set().entries() === 'object'");
-        assertBooleanWithJavet("typeof new Set([1,2,3]).entries().next === 'function'");
+        assertBooleanWithJavet("typeof new Set().entries() === 'object'",
+                "typeof new Set([1,2,3]).entries().next === 'function'");
 
         // @@iterator is same as values
         assertBooleanWithJavet("Set.prototype[Symbol.iterator] === Set.prototype.values");
@@ -964,8 +944,8 @@ public class SetPrototypeTest extends BaseJavetTest {
     @Test
     void testKeysBehavesLikeValues() {
         // Even though they're the same object, verify they work correctly
-        assertBooleanWithJavet("typeof new Set().keys() === 'object'");
-        assertBooleanWithJavet("typeof new Set([1,2,3]).keys().next === 'function'");
+        assertBooleanWithJavet("typeof new Set().keys() === 'object'",
+                "typeof new Set([1,2,3]).keys().next === 'function'");
 
         // Calling keys() should produce an iterator
         assertBooleanWithJavet("var it = new Set([1,2,3]).keys(); it.next().value === 1");
@@ -981,8 +961,8 @@ public class SetPrototypeTest extends BaseJavetTest {
     void testLargeSet() {
         // Add many values
         assertIntegerWithJavet("var s = new Set(); for(var i = 0; i < 1000; i++) s.add(i); s.size");
-        assertBooleanWithJavet("var s = new Set(); for(var i = 0; i < 1000; i++) s.add(i); s.has(500)");
-        assertBooleanWithJavet("var s = new Set(); for(var i = 0; i < 1000; i++) s.add(i); s.has(1000)");
+        assertBooleanWithJavet("var s = new Set(); for(var i = 0; i < 1000; i++) s.add(i); s.has(500)",
+                "var s = new Set(); for(var i = 0; i < 1000; i++) s.add(i); s.has(1000)");
 
         // Delete from large set
         assertIntegerWithJavet("var s = new Set(); for(var i = 0; i < 1000; i++) s.add(i); s.delete(500); s.size");
@@ -1026,19 +1006,19 @@ public class SetPrototypeTest extends BaseJavetTest {
     void testMapSetZeroKeys() {
         // Map should treat +0 and -0 as the same key
         assertIntegerWithJavet("var m = new Map(); m.set(0, 'a'); m.set(-0, 'b'); m.size");
-        assertStringWithJavet("var m = new Map(); m.set(0, 'a'); m.set(-0, 'b'); m.get(0)");
-        assertStringWithJavet("var m = new Map(); m.set(0, 'a'); m.set(-0, 'b'); m.get(-0)");
+        assertStringWithJavet("var m = new Map(); m.set(0, 'a'); m.set(-0, 'b'); m.get(0)",
+                "var m = new Map(); m.set(0, 'a'); m.set(-0, 'b'); m.get(-0)");
     }
 
     @Test
     void testMixedTypes() {
         // Set can contain mixed types
         assertIntegerWithJavet("new Set([1, 'str', true, null, undefined, {}]).size");
-        assertBooleanWithJavet("var s = new Set([1, 'str', true, null, undefined]); s.has(1)");
-        assertBooleanWithJavet("var s = new Set([1, 'str', true, null, undefined]); s.has('str')");
-        assertBooleanWithJavet("var s = new Set([1, 'str', true, null, undefined]); s.has(true)");
-        assertBooleanWithJavet("var s = new Set([1, 'str', true, null, undefined]); s.has(null)");
-        assertBooleanWithJavet("var s = new Set([1, 'str', true, null, undefined]); s.has(undefined)");
+        assertBooleanWithJavet("var s = new Set([1, 'str', true, null, undefined]); s.has(1)",
+                "var s = new Set([1, 'str', true, null, undefined]); s.has('str')",
+                "var s = new Set([1, 'str', true, null, undefined]); s.has(true)",
+                "var s = new Set([1, 'str', true, null, undefined]); s.has(null)",
+                "var s = new Set([1, 'str', true, null, undefined]); s.has(undefined)");
     }
 
     @Test
@@ -1108,8 +1088,7 @@ public class SetPrototypeTest extends BaseJavetTest {
     @Test
     void testSetConstructorWithIterable() {
         // Construct from array
-        assertIntegerWithJavet("new Set([1,2,3]).size");
-        assertIntegerWithJavet("new Set([1,2,2,3,3,3]).size");
+        assertIntegerWithJavet("new Set([1,2,3]).size", "new Set([1,2,2,3,3,3]).size");
         assertBooleanWithJavet("new Set([1,2,3]).has(2)");
 
         // Empty iterable
@@ -1211,9 +1190,8 @@ public class SetPrototypeTest extends BaseJavetTest {
     @Test
     void testSetToString() {
         // toString returns [object Set]
-        assertStringWithJavet("new Set().toString()");
-        assertStringWithJavet("new Set([1,2,3]).toString()");
-        assertStringWithJavet("Object.prototype.toString.call(new Set())");
+        assertStringWithJavet("new Set().toString()", "new Set([1,2,3]).toString()",
+                "Object.prototype.toString.call(new Set())");
     }
 
     @Test
@@ -1240,9 +1218,8 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertIntegerWithJavet("new Set([1,2,3,2,1]).size"); // duplicates
 
         // Size after operations
-        assertIntegerWithJavet("var s = new Set(); s.add(1); s.add(2); s.size");
-        assertIntegerWithJavet("var s = new Set([1,2,3]); s.delete(2); s.size");
-        assertIntegerWithJavet("var s = new Set([1,2,3]); s.clear(); s.size");
+        assertIntegerWithJavet("var s = new Set(); s.add(1); s.add(2); s.size",
+                "var s = new Set([1,2,3]); s.delete(2); s.size", "var s = new Set([1,2,3]); s.clear(); s.size");
 
         // Size is a getter, not a method
         assertBooleanWithJavet("typeof Object.getOwnPropertyDescriptor(Set.prototype, 'size').get === 'function'");
@@ -1258,8 +1235,8 @@ public class SetPrototypeTest extends BaseJavetTest {
     @Test
     void testValuesWorks() {
         // Verify values() still works correctly
-        assertBooleanWithJavet("typeof new Set().values() === 'object'");
-        assertBooleanWithJavet("typeof new Set([1,2,3]).values().next === 'function'");
+        assertBooleanWithJavet("typeof new Set().values() === 'object'",
+                "typeof new Set([1,2,3]).values().next === 'function'");
 
         // Calling values() should produce an iterator
         assertBooleanWithJavet("var it = new Set([1,2,3]).values(); it.next().value === 1");
@@ -1281,9 +1258,8 @@ public class SetPrototypeTest extends BaseJavetTest {
     @Test
     void testZeroVsNonZero() {
         // +0 and -0 should not equal other numbers
-        assertIntegerWithJavet("var s = new Set(); s.add(0); s.add(1); s.size");
-        assertIntegerWithJavet("var s = new Set(); s.add(-0); s.add(1); s.size");
-        assertBooleanWithJavet("var s = new Set([0, 1]); s.has(1)");
-        assertBooleanWithJavet("var s = new Set([-0, 1]); s.has(1)");
+        assertIntegerWithJavet("var s = new Set(); s.add(0); s.add(1); s.size",
+                "var s = new Set(); s.add(-0); s.add(1); s.size");
+        assertBooleanWithJavet("var s = new Set([0, 1]); s.has(1)", "var s = new Set([-0, 1]); s.has(1)");
     }
 }

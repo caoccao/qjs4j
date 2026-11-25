@@ -16,9 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.BaseTest;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -35,9 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * resemble an ECMAScript declaration: {@code export \{\}; this is arbitrary text} was a {@code SyntaxError} instead of
  * a string, and an innocuous edit to a data file could change whether the file loaded at all.
  */
-public class JSTextModuleImportTest extends BaseTest {
-    @TempDir
-    Path moduleDirectory;
+public class JSTextModuleImportTest extends ModuleFileTest {
 
     /**
      * Import a payload as text and return what the default export was.
@@ -49,15 +45,10 @@ public class JSTextModuleImportTest extends BaseTest {
      * @return the imported string
      */
     private String importAsText(String payloadName, String payload) throws IOException {
-        Files.writeString(moduleDirectory.resolve(payloadName), payload);
-        Path entry = moduleDirectory.resolve(payloadName + ".importer.mjs");
+        writeModule(payloadName, payload);
         String entrySource = "import value from './" + payloadName + "' with { type: 'text' };\n"
                 + "globalThis.result = value;\n";
-        Files.writeString(entry, entrySource);
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            context.eval(entrySource, entry.toString(), true);
-            return context.eval("globalThis.result", "probe.js", false).toString();
-        }
+        return evaluateModuleResult(payloadName + ".importer.mjs", entrySource, "globalThis.result");
     }
 
     @Test
@@ -68,7 +59,7 @@ public class JSTextModuleImportTest extends BaseTest {
     @Test
     public void testAPayloadImportedThroughADeferredImportIsStillText() throws IOException {
         String payload = "export {}; this is arbitrary text\n";
-        Files.writeString(moduleDirectory.resolve("deferred.txt"), payload);
+        writeModule("deferred.txt", payload);
         Path entry = moduleDirectory.resolve("deferred-importer.mjs");
         String entrySource = "import defer * as ns from './deferred.txt' with { type: 'text' };\n"
                 + "globalThis.result = ns.default;\n";
@@ -83,7 +74,7 @@ public class JSTextModuleImportTest extends BaseTest {
     @Test
     public void testAPayloadImportedThroughADynamicImportIsStillText() throws IOException {
         String payload = "export {}; this is arbitrary text\n";
-        Files.writeString(moduleDirectory.resolve("dynamic.txt"), payload);
+        writeModule("dynamic.txt", payload);
         Path entry = moduleDirectory.resolve("dynamic-importer.mjs");
         String entrySource = "const m = await import('./dynamic.txt', "
                 + "{ with: { type: 'text' } });\nglobalThis.result = m.default;\n";

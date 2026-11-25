@@ -16,11 +16,9 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.BaseTest;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -47,9 +45,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * Node 24.16.0 is the reference for the timing: for each of these entry modules it reports the same failure with
  * {@code globalThis.ran} still empty.
  */
-public class JSModuleGraphLoadOrderTest extends BaseTest {
-    @TempDir
-    Path moduleDirectory;
+public class JSModuleGraphLoadOrderTest extends ModuleFileTest {
 
     /**
      * Evaluate an entry module whose graph cannot be loaded, and assert that nothing ran.
@@ -229,9 +225,4 @@ public class JSModuleGraphLoadOrderTest extends BaseTest {
         }
     }
 
-    private Path writeModule(String name, String source) throws IOException {
-        Path path = moduleDirectory.resolve(name);
-        Files.writeString(path, source);
-        return path;
-    }
 }

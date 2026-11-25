@@ -129,8 +129,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertThat(map.size()).isEqualTo(0);
 
         // Edge case: called on non-Map
-        assertTypeError(MapPrototype.clear(context, new JSString("not map"), JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, MapPrototype.clear(context, new JSString("not map"), JSValue.NO_ARGS));
     }
 
     @Test
@@ -179,13 +178,13 @@ public class MapPrototypeTest extends BaseJavetTest {
         map.mapSet(new JSString("key2"), new JSString("value2"));
 
         // Normal case: delete existing key
-        JSValue result = MapPrototype.delete(context, map, new JSValue[]{new JSString("key1")});
+        JSValue result = MapPrototype.delete(context, map, stringArgs("key1"));
         assertThat(result.isBooleanTrue()).isTrue();
         assertThat(map.size()).isEqualTo(1);
         assertThat(map.mapGet(new JSString("key1")).isUndefined()).isTrue();
 
         // Normal case: delete non-existing key
-        result = MapPrototype.delete(context, map, new JSValue[]{new JSString("key3")});
+        result = MapPrototype.delete(context, map, stringArgs("key3"));
         assertThat(result.isBooleanFalse()).isTrue();
         assertThat(map.size()).isEqualTo(1);
 
@@ -194,8 +193,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Edge case: called on non-Map
-        assertTypeError(MapPrototype.delete(context, new JSString("not map"), new JSValue[]{new JSString("key")}));
-        assertPendingException(context);
+        assertPendingTypeError(context, MapPrototype.delete(context, new JSString("not map"), stringArgs("key")));
     }
 
     @Test
@@ -271,8 +269,7 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testDeleteEmpty() {
         // delete from empty map returns false
-        assertBooleanWithJavet("new Map().delete('key')");
-        assertBooleanWithJavet("new Map().delete(1)");
+        assertBooleanWithJavet("new Map().delete('key')", "new Map().delete(1)");
     }
 
     @Test
@@ -343,8 +340,8 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testDeleteObject() {
         // delete with object key (by reference)
-        assertBooleanWithJavet("var m = new Map(); m.set({}, 'val'); m.delete({})");
-        assertBooleanWithJavet("var m = new Map(); var obj = {}; m.set(obj, 'val'); m.delete(obj)");
+        assertBooleanWithJavet("var m = new Map(); m.set({}, 'val'); m.delete({})",
+                "var m = new Map(); var obj = {}; m.set(obj, 'val'); m.delete(obj)");
     }
 
     @Test
@@ -465,8 +462,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertThat((Boolean) emptyResult.get("done").toJavaObject()).isTrue();
 
         // Edge case: called on non-Map
-        assertTypeError(MapPrototype.entries(context, new JSString("not map"), JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, MapPrototype.entries(context, new JSString("not map"), JSValue.NO_ARGS));
     }
 
     @Test
@@ -485,8 +481,8 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testEntriesIterator() {
         // entries() returns iterator
-        assertBooleanWithJavet("typeof new Map().entries() === 'object'");
-        assertBooleanWithJavet("typeof new Map([[1, 'a']]).entries().next === 'function'");
+        assertBooleanWithJavet("typeof new Map().entries() === 'object'",
+                "typeof new Map([[1, 'a']]).entries().next === 'function'");
     }
 
     @Test
@@ -523,8 +519,8 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testEntriesReturnsIterator() {
         // entries() should return an iterator
-        assertBooleanWithJavet("typeof new Map([[1, 'a']]).entries() === 'object'");
-        assertBooleanWithJavet("typeof new Map([[1, 'a']]).entries().next === 'function'");
+        assertBooleanWithJavet("typeof new Map([[1, 'a']]).entries() === 'object'",
+                "typeof new Map([[1, 'a']]).entries().next === 'function'");
     }
 
     @Test
@@ -576,16 +572,14 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertThat(resultStr.contains("key2:value2")).isTrue();
 
         // Edge case: no callback function
-        assertTypeError(MapPrototype.forEach(context, map, JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, MapPrototype.forEach(context, map, JSValue.NO_ARGS));
 
         // Edge case: non-function callback
-        assertTypeError(MapPrototype.forEach(context, map, new JSValue[]{new JSString("not function")}));
-        assertPendingException(context);
+        assertPendingTypeError(context, MapPrototype.forEach(context, map, stringArgs("not function")));
 
         // Edge case: called on non-Map
-        assertTypeError(MapPrototype.forEach(context, new JSString("not map"), new JSValue[]{callback}));
-        assertPendingException(context);
+        assertPendingTypeError(context,
+                MapPrototype.forEach(context, new JSString("not map"), new JSValue[]{callback}));
     }
 
     @Test
@@ -802,16 +796,14 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testFunctionLength() {
         // Both should have the same length (0 parameters)
-        assertIntegerWithJavet("Map.prototype[Symbol.iterator].length");
-        assertIntegerWithJavet("Map.prototype.entries.length");
+        assertIntegerWithJavet("Map.prototype[Symbol.iterator].length", "Map.prototype.entries.length");
         assertBooleanWithJavet("Map.prototype[Symbol.iterator].length === Map.prototype.entries.length");
     }
 
     @Test
     void testFunctionName() {
         // The function name should be "entries" (not "[Symbol.iterator]")
-        assertStringWithJavet("Map.prototype[Symbol.iterator].name");
-        assertStringWithJavet("Map.prototype.entries.name");
+        assertStringWithJavet("Map.prototype[Symbol.iterator].name", "Map.prototype.entries.name");
         // Since they're the same function, names should match
         assertBooleanWithJavet("Map.prototype[Symbol.iterator].name === Map.prototype.entries.name");
     }
@@ -822,11 +814,11 @@ public class MapPrototypeTest extends BaseJavetTest {
         map.mapSet(new JSString("key1"), new JSString("value1"));
 
         // Normal case: existing key
-        JSValue result = MapPrototype.get(context, map, new JSValue[]{new JSString("key1")});
+        JSValue result = MapPrototype.get(context, map, stringArgs("key1"));
         assertStringValue(result, "value1");
 
         // Normal case: non-existing key
-        result = MapPrototype.get(context, map, new JSValue[]{new JSString("key2")});
+        result = MapPrototype.get(context, map, stringArgs("key2"));
         assertThat(result.isUndefined()).isTrue();
 
         // Normal case: no arguments
@@ -834,23 +826,21 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertThat(result.isUndefined()).isTrue();
 
         // Edge case: called on non-Map
-        assertTypeError(MapPrototype.get(context, new JSString("not map"), new JSValue[]{new JSString("key")}));
-        assertPendingException(context);
+        assertPendingTypeError(context, MapPrototype.get(context, new JSString("not map"), stringArgs("key")));
     }
 
     @Test
     void testGetNaN() {
         // Getting with NaN key
-        assertStringWithJavet("var m = new Map(); m.set(NaN, 'value'); m.get(NaN)");
-        assertStringWithJavet("var m = new Map(); m.set(0/0, 'value'); m.get(NaN)");
+        assertStringWithJavet("var m = new Map(); m.set(NaN, 'value'); m.get(NaN)",
+                "var m = new Map(); m.set(0/0, 'value'); m.get(NaN)");
     }
 
     @Test
     void testGetNonExistent() {
         // Non-existent keys return undefined
-        assertUndefinedWithJavet("new Map().get('missing')");
-        assertUndefinedWithJavet("new Map([[1, 'a']]).get(2)");
-        assertUndefinedWithJavet("new Map([[1, 'a']]).get('1')");
+        assertUndefinedWithJavet("new Map().get('missing')", "new Map([[1, 'a']]).get(2)",
+                "new Map([[1, 'a']]).get('1')");
     }
 
     @Test
@@ -897,8 +887,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertNumberValue(result, 2.0);
 
         // Edge case: called on non-Map
-        assertTypeError(MapPrototype.getSize(context, new JSString("not map"), JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, MapPrototype.getSize(context, new JSString("not map"), JSValue.NO_ARGS));
 
         assertIntegerWithJavet("new Map().size", "var a = new Map(); a.set('a', 1); a.size");
     }
@@ -906,18 +895,18 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testGetVariousTypes() {
         // Get with various key types
-        assertStringWithJavet("var m = new Map(); m.set(1, 'num'); m.get(1)");
-        assertStringWithJavet("var m = new Map(); m.set('str', 'string'); m.get('str')");
-        assertStringWithJavet("var m = new Map(); m.set(true, 'bool'); m.get(true)");
-        assertStringWithJavet("var m = new Map(); m.set(null, 'null'); m.get(null)");
-        assertStringWithJavet("var m = new Map(); m.set(undefined, 'undef'); m.get(undefined)");
+        assertStringWithJavet("var m = new Map(); m.set(1, 'num'); m.get(1)",
+                "var m = new Map(); m.set('str', 'string'); m.get('str')",
+                "var m = new Map(); m.set(true, 'bool'); m.get(true)",
+                "var m = new Map(); m.set(null, 'null'); m.get(null)",
+                "var m = new Map(); m.set(undefined, 'undef'); m.get(undefined)");
     }
 
     @Test
     void testGetZero() {
         // Getting with +0/-0 keys
-        assertStringWithJavet("var m = new Map(); m.set(0, 'zero'); m.get(-0)");
-        assertStringWithJavet("var m = new Map(); m.set(-0, 'zero'); m.get(0)");
+        assertStringWithJavet("var m = new Map(); m.set(0, 'zero'); m.get(-0)",
+                "var m = new Map(); m.set(-0, 'zero'); m.get(0)");
     }
 
     @Test
@@ -926,11 +915,11 @@ public class MapPrototypeTest extends BaseJavetTest {
         map.mapSet(new JSString("key1"), new JSString("value1"));
 
         // Normal case: existing key
-        JSValue result = MapPrototype.has(context, map, new JSValue[]{new JSString("key1")});
+        JSValue result = MapPrototype.has(context, map, stringArgs("key1"));
         assertThat(result.isBooleanTrue()).isTrue();
 
         // Normal case: non-existing key
-        result = MapPrototype.has(context, map, new JSValue[]{new JSString("key2")});
+        result = MapPrototype.has(context, map, stringArgs("key2"));
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Normal case: no arguments
@@ -938,16 +927,13 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Edge case: called on non-Map
-        assertTypeError(MapPrototype.has(context, new JSString("not map"), new JSValue[]{new JSString("key")}));
-        assertPendingException(context);
+        assertPendingTypeError(context, MapPrototype.has(context, new JSString("not map"), stringArgs("key")));
     }
 
     @Test
     void testHasEmpty() {
         // has on empty map
-        assertBooleanWithJavet("new Map().has(1)");
-        assertBooleanWithJavet("new Map().has('key')");
-        assertBooleanWithJavet("new Map().has(undefined)");
+        assertBooleanWithJavet("new Map().has(1)", "new Map().has('key')", "new Map().has(undefined)");
     }
 
     @Test
@@ -965,35 +951,31 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testHasNaN() {
         // has with NaN
-        assertBooleanWithJavet("var m = new Map(); m.set(NaN, 'val'); m.has(NaN)");
-        assertBooleanWithJavet("var m = new Map(); m.set(0/0, 'val'); m.has(NaN)");
-        assertBooleanWithJavet("new Map().has(NaN)");
+        assertBooleanWithJavet("var m = new Map(); m.set(NaN, 'val'); m.has(NaN)",
+                "var m = new Map(); m.set(0/0, 'val'); m.has(NaN)", "new Map().has(NaN)");
     }
 
     @Test
     void testHasTypeMismatch() {
         // Type must match exactly
-        assertBooleanWithJavet("var m = new Map(); m.set(1, 'val'); m.has('1')");
-        assertBooleanWithJavet("var m = new Map(); m.set('1', 'val'); m.has(1)");
-        assertBooleanWithJavet("var m = new Map(); m.set(true, 'val'); m.has(1)");
+        assertBooleanWithJavet("var m = new Map(); m.set(1, 'val'); m.has('1')",
+                "var m = new Map(); m.set('1', 'val'); m.has(1)", "var m = new Map(); m.set(true, 'val'); m.has(1)");
     }
 
     @Test
     void testHasVariousTypes() {
         // has with various types
-        assertBooleanWithJavet("var m = new Map([[1, 'a'], [2, 'b']]); m.has(1)");
-        assertBooleanWithJavet("var m = new Map([[1, 'a'], [2, 'b']]); m.has(3)");
-        assertBooleanWithJavet("var m = new Map([['key', 'val']]); m.has('key')");
-        assertBooleanWithJavet("var m = new Map([[true, 'val']]); m.has(true)");
-        assertBooleanWithJavet("var m = new Map([[null, 'val']]); m.has(null)");
-        assertBooleanWithJavet("var m = new Map([[undefined, 'val']]); m.has(undefined)");
+        assertBooleanWithJavet("var m = new Map([[1, 'a'], [2, 'b']]); m.has(1)",
+                "var m = new Map([[1, 'a'], [2, 'b']]); m.has(3)", "var m = new Map([['key', 'val']]); m.has('key')",
+                "var m = new Map([[true, 'val']]); m.has(true)", "var m = new Map([[null, 'val']]); m.has(null)",
+                "var m = new Map([[undefined, 'val']]); m.has(undefined)");
     }
 
     @Test
     void testHasZero() {
         // has with +0/-0
-        assertBooleanWithJavet("var m = new Map(); m.set(0, 'val'); m.has(-0)");
-        assertBooleanWithJavet("var m = new Map(); m.set(-0, 'val'); m.has(0)");
+        assertBooleanWithJavet("var m = new Map(); m.set(0, 'val'); m.has(-0)",
+                "var m = new Map(); m.set(-0, 'val'); m.has(0)");
     }
 
     @Test
@@ -1087,8 +1069,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertThat(jsArray.getLength()).isEqualTo(0);
 
         // Edge case: called on non-Map
-        assertTypeError(MapPrototype.keys(context, new JSString("not map"), JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, MapPrototype.keys(context, new JSString("not map"), JSValue.NO_ARGS));
     }
 
     @Test
@@ -1109,8 +1090,8 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testKeysIterator() {
         // keys() returns iterator
-        assertBooleanWithJavet("typeof new Map().keys() === 'object'");
-        assertBooleanWithJavet("typeof new Map([[1, 'a']]).keys().next === 'function'");
+        assertBooleanWithJavet("typeof new Map().keys() === 'object'",
+                "typeof new Map([[1, 'a']]).keys().next === 'function'");
         assertIntegerWithJavet("var it = new Map([[1, 'a']]).keys(); it.next().value");
         assertBooleanWithJavet("var it = new Map([[1, 'a']]).keys(); it.next().done");
     }
@@ -1120,8 +1101,8 @@ public class MapPrototypeTest extends BaseJavetTest {
         // Add many entries
         assertIntegerWithJavet("var m = new Map(); for(var i = 0; i < 1000; i++) m.set(i, 'val' + i); m.size");
         assertStringWithJavet("var m = new Map(); for(var i = 0; i < 1000; i++) m.set(i, 'val' + i); m.get(500)");
-        assertBooleanWithJavet("var m = new Map(); for(var i = 0; i < 1000; i++) m.set(i, 'val' + i); m.has(999)");
-        assertBooleanWithJavet("var m = new Map(); for(var i = 0; i < 1000; i++) m.set(i, 'val' + i); m.has(1000)");
+        assertBooleanWithJavet("var m = new Map(); for(var i = 0; i < 1000; i++) m.set(i, 'val' + i); m.has(999)",
+                "var m = new Map(); for(var i = 0; i < 1000; i++) m.set(i, 'val' + i); m.has(1000)");
     }
 
     @Test
@@ -1191,8 +1172,7 @@ public class MapPrototypeTest extends BaseJavetTest {
     void testMapConstructorWithArray() {
         // Construct from array of entries
         assertIntegerWithJavet("new Map([[1, 'a'], [2, 'b'], [3, 'c']]).size");
-        assertStringWithJavet("new Map([[1, 'a'], [2, 'b']]).get(1)");
-        assertStringWithJavet("new Map([['key', 'value']]).get('key')");
+        assertStringWithJavet("new Map([[1, 'a'], [2, 'b']]).get(1)", "new Map([['key', 'value']]).get('key')");
     }
 
     @Test
@@ -1311,8 +1291,7 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testMapToString() {
         // Map toString
-        assertStringWithJavet("new Map().toString()");
-        assertStringWithJavet("Object.prototype.toString.call(new Map())");
+        assertStringWithJavet("new Map().toString()", "Object.prototype.toString.call(new Map())");
     }
 
     @Test
@@ -1327,28 +1306,22 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testMethodLengths() {
         // Method lengths (number of parameters)
-        assertIntegerWithJavet("Map.prototype.set.length");
-        assertIntegerWithJavet("Map.prototype.get.length");
-        assertIntegerWithJavet("Map.prototype.has.length");
-        assertIntegerWithJavet("Map.prototype.delete.length");
-        assertIntegerWithJavet("Map.prototype.clear.length");
-        assertIntegerWithJavet("Map.prototype.forEach.length");
+        assertIntegerWithJavet("Map.prototype.set.length", "Map.prototype.get.length", "Map.prototype.has.length",
+                "Map.prototype.delete.length", "Map.prototype.clear.length", "Map.prototype.forEach.length");
     }
 
     @Test
     void testMethodNames() {
         // Method names
-        assertStringWithJavet("Map.prototype.keys.name");
-        assertStringWithJavet("Map.prototype.values.name");
-        assertStringWithJavet("Map.prototype.entries.name");
+        assertStringWithJavet("Map.prototype.keys.name", "Map.prototype.values.name", "Map.prototype.entries.name");
     }
 
     @Test
     void testMixedTypeKeys() {
         // Map can have keys of different types
         assertIntegerWithJavet("new Map([[1, 'a'], ['str', 'b'], [true, 'c'], [null, 'd'], [undefined, 'e']]).size");
-        assertStringWithJavet("var m = new Map([[1, 'a'], ['str', 'b']]); m.get(1)");
-        assertStringWithJavet("var m = new Map([[1, 'a'], ['str', 'b']]); m.get('str')");
+        assertStringWithJavet("var m = new Map([[1, 'a'], ['str', 'b']]); m.get(1)",
+                "var m = new Map([[1, 'a'], ['str', 'b']]); m.get('str')");
     }
 
     @Test
@@ -1454,34 +1427,32 @@ public class MapPrototypeTest extends BaseJavetTest {
         JSMap map = new JSMap(context);
 
         // Normal case: set key-value pair
-        JSValue result = MapPrototype.set(context, map, new JSValue[]{new JSString("key"), new JSString("value")});
+        JSValue result = MapPrototype.set(context, map, stringArgs("key", "value"));
         assertThat(result).isEqualTo(map); // Should return the map
         assertThat(map.size()).isEqualTo(1);
         assertThat(map.mapGet(new JSString("key")).asString().map(JSString::value).orElseThrow()).isEqualTo("value");
 
         // Normal case: update existing key
-        result = MapPrototype.set(context, map, new JSValue[]{new JSString("key"), new JSString("newValue")});
+        result = MapPrototype.set(context, map, stringArgs("key", "newValue"));
         assertThat(result).isEqualTo(map);
         assertThat(map.size()).isEqualTo(1);
         assertThat(map.mapGet(new JSString("key")).asString().map(JSString::value).orElseThrow()).isEqualTo("newValue");
 
         // Normal case: set with undefined value
-        result = MapPrototype.set(context, map, new JSValue[]{new JSString("key2")});
+        result = MapPrototype.set(context, map, stringArgs("key2"));
         assertThat(result).isEqualTo(map);
         assertThat(map.size()).isEqualTo(2);
         assertThat(map.mapGet(new JSString("key2")).isUndefined()).isTrue();
 
         // Edge case: called on non-Map
-        assertTypeError(MapPrototype.set(context, new JSString("not map"),
-                new JSValue[]{new JSString("key"), new JSString("value")}));
-        assertPendingException(context);
+        assertPendingTypeError(context, MapPrototype.set(context, new JSString("not map"), stringArgs("key", "value")));
     }
 
     @Test
     void testSetArrayKeys() {
         // Arrays are compared by reference
-        assertIntegerWithJavet("var m = new Map(); m.set([1,2], 'a'); m.set([1,2], 'b'); m.size");
-        assertIntegerWithJavet("var m = new Map(); var arr = [1,2]; m.set(arr, 'a'); m.set(arr, 'b'); m.size");
+        assertIntegerWithJavet("var m = new Map(); m.set([1,2], 'a'); m.set([1,2], 'b'); m.size",
+                "var m = new Map(); var arr = [1,2]; m.set(arr, 'a'); m.set(arr, 'b'); m.size");
         assertStringWithJavet("var m = new Map(); var arr = [1,2]; m.set(arr, 'value'); m.get(arr)");
     }
 
@@ -1505,8 +1476,8 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testSetObjectKeys() {
         // Objects are compared by reference
-        assertIntegerWithJavet("var m = new Map(); m.set({}, 'a'); m.set({}, 'b'); m.size");
-        assertIntegerWithJavet("var m = new Map(); var obj = {}; m.set(obj, 'a'); m.set(obj, 'b'); m.size");
+        assertIntegerWithJavet("var m = new Map(); m.set({}, 'a'); m.set({}, 'b'); m.size",
+                "var m = new Map(); var obj = {}; m.set(obj, 'a'); m.set(obj, 'b'); m.size");
         assertStringWithJavet("var m = new Map(); var obj = {}; m.set(obj, 'a'); m.set(obj, 'b'); m.get(obj)");
         assertBooleanWithJavet("var m = new Map(); var obj = {}; m.set(obj, 'val'); m.has(obj)");
     }
@@ -1514,19 +1485,17 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testSetPrimitiveKeys() {
         // Test setting various primitive types as keys
-        assertIntegerWithJavet("var m = new Map(); m.set(1, 'num'); m.size");
-        assertIntegerWithJavet("var m = new Map(); m.set('str', 'string'); m.size");
-        assertIntegerWithJavet("var m = new Map(); m.set(true, 'bool'); m.size");
-        assertIntegerWithJavet("var m = new Map(); m.set(false, 'bool'); m.size");
-        assertIntegerWithJavet("var m = new Map(); m.set(null, 'null'); m.size");
-        assertIntegerWithJavet("var m = new Map(); m.set(undefined, 'undef'); m.size");
+        assertIntegerWithJavet("var m = new Map(); m.set(1, 'num'); m.size",
+                "var m = new Map(); m.set('str', 'string'); m.size", "var m = new Map(); m.set(true, 'bool'); m.size",
+                "var m = new Map(); m.set(false, 'bool'); m.size", "var m = new Map(); m.set(null, 'null'); m.size",
+                "var m = new Map(); m.set(undefined, 'undef'); m.size");
     }
 
     @Test
     void testSetSymbolKeys() {
         // Symbols are unique
-        assertIntegerWithJavet("var m = new Map(); var s = Symbol('test'); m.set(s, 'a'); m.set(s, 'b'); m.size");
-        assertIntegerWithJavet("var m = new Map(); m.set(Symbol('a'), 1); m.set(Symbol('a'), 2); m.size");
+        assertIntegerWithJavet("var m = new Map(); var s = Symbol('test'); m.set(s, 'a'); m.set(s, 'b'); m.size",
+                "var m = new Map(); m.set(Symbol('a'), 1); m.set(Symbol('a'), 2); m.size");
         assertStringWithJavet("var m = new Map(); var s = Symbol('test'); m.set(s, 'value'); m.get(s)");
     }
 
@@ -1549,10 +1518,10 @@ public class MapPrototypeTest extends BaseJavetTest {
     void testSetZeroKeys() {
         // +0 and -0 are treated as the same key
         assertIntegerWithJavet("var m = new Map(); m.set(0, 'a'); m.set(-0, 'b'); m.size");
-        assertStringWithJavet("var m = new Map(); m.set(0, 'a'); m.set(-0, 'b'); m.get(0)");
-        assertStringWithJavet("var m = new Map(); m.set(0, 'a'); m.set(-0, 'b'); m.get(-0)");
-        assertBooleanWithJavet("var m = new Map(); m.set(0, 'val'); m.has(-0)");
-        assertBooleanWithJavet("var m = new Map(); m.set(-0, 'val'); m.has(0)");
+        assertStringWithJavet("var m = new Map(); m.set(0, 'a'); m.set(-0, 'b'); m.get(0)",
+                "var m = new Map(); m.set(0, 'a'); m.set(-0, 'b'); m.get(-0)");
+        assertBooleanWithJavet("var m = new Map(); m.set(0, 'val'); m.has(-0)",
+                "var m = new Map(); m.set(-0, 'val'); m.has(0)");
     }
 
     @Test
@@ -1567,10 +1536,10 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testSizeAfterOperations() {
         // Size after various operations
-        assertIntegerWithJavet("var m = new Map(); m.set(1, 'a'); m.size");
-        assertIntegerWithJavet("var m = new Map(); m.set(1, 'a').set(2, 'b'); m.size");
-        assertIntegerWithJavet("var m = new Map([[1, 'a'], [2, 'b']]); m.delete(1); m.size");
-        assertIntegerWithJavet("var m = new Map([[1, 'a'], [2, 'b']]); m.clear(); m.size");
+        assertIntegerWithJavet("var m = new Map(); m.set(1, 'a'); m.size",
+                "var m = new Map(); m.set(1, 'a').set(2, 'b'); m.size",
+                "var m = new Map([[1, 'a'], [2, 'b']]); m.delete(1); m.size",
+                "var m = new Map([[1, 'a'], [2, 'b']]); m.clear(); m.size");
     }
 
     @Test
@@ -1652,8 +1621,8 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testSymbolIteratorReturnsIterator() {
         // Symbol.iterator should return an iterator (because it's the same as entries)
-        assertBooleanWithJavet("typeof new Map([[1, 'a']])[Symbol.iterator]() === 'object'");
-        assertBooleanWithJavet("typeof new Map([[1, 'a']])[Symbol.iterator]().next === 'function'");
+        assertBooleanWithJavet("typeof new Map([[1, 'a']])[Symbol.iterator]() === 'object'",
+                "typeof new Map([[1, 'a']])[Symbol.iterator]().next === 'function'");
     }
 
     @Test
@@ -1686,10 +1655,10 @@ public class MapPrototypeTest extends BaseJavetTest {
     void testUndefinedVsNull() {
         // undefined and null are different keys
         assertIntegerWithJavet("var m = new Map(); m.set(null, 'a'); m.set(undefined, 'b'); m.size");
-        assertStringWithJavet("var m = new Map(); m.set(null, 'a'); m.set(undefined, 'b'); m.get(null)");
-        assertStringWithJavet("var m = new Map(); m.set(null, 'a'); m.set(undefined, 'b'); m.get(undefined)");
-        assertBooleanWithJavet("var m = new Map(); m.set(null, 'a'); m.has(undefined)");
-        assertBooleanWithJavet("var m = new Map(); m.set(undefined, 'a'); m.has(null)");
+        assertStringWithJavet("var m = new Map(); m.set(null, 'a'); m.set(undefined, 'b'); m.get(null)",
+                "var m = new Map(); m.set(null, 'a'); m.set(undefined, 'b'); m.get(undefined)");
+        assertBooleanWithJavet("var m = new Map(); m.set(null, 'a'); m.has(undefined)",
+                "var m = new Map(); m.set(undefined, 'a'); m.has(null)");
     }
 
     @Test
@@ -1714,8 +1683,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertThat(jsArray.getLength()).isEqualTo(0);
 
         // Edge case: called on non-Map
-        assertTypeError(MapPrototype.values(context, new JSString("not map"), JSValue.NO_ARGS));
-        assertPendingException(context);
+        assertPendingTypeError(context, MapPrototype.values(context, new JSString("not map"), JSValue.NO_ARGS));
     }
 
     @Test
@@ -1730,8 +1698,8 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testValuesIterator() {
         // values() returns iterator
-        assertBooleanWithJavet("typeof new Map().values() === 'object'");
-        assertBooleanWithJavet("typeof new Map([[1, 'a']]).values().next === 'function'");
+        assertBooleanWithJavet("typeof new Map().values() === 'object'",
+                "typeof new Map([[1, 'a']]).values().next === 'function'");
         assertStringWithJavet("var it = new Map([[1, 'a']]).values(); it.next().value");
     }
 

@@ -68,42 +68,9 @@ public final class TemporalPlainDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        int hour = 0, minute = 0, second = 0, millisecond = 0, microsecond = 0, nanosecond = 0;
-        if (args.length > 3 && !(args[3] instanceof JSUndefined)) {
-            hour = TemporalUtils.toIntegerThrowOnInfinity(context, args[3]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        if (args.length > 4 && !(args[4] instanceof JSUndefined)) {
-            minute = TemporalUtils.toIntegerThrowOnInfinity(context, args[4]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        if (args.length > 5 && !(args[5] instanceof JSUndefined)) {
-            second = TemporalUtils.toIntegerThrowOnInfinity(context, args[5]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        if (args.length > 6 && !(args[6] instanceof JSUndefined)) {
-            millisecond = TemporalUtils.toIntegerThrowOnInfinity(context, args[6]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        if (args.length > 7 && !(args[7] instanceof JSUndefined)) {
-            microsecond = TemporalUtils.toIntegerThrowOnInfinity(context, args[7]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        if (args.length > 8 && !(args[8] instanceof JSUndefined)) {
-            nanosecond = TemporalUtils.toIntegerThrowOnInfinity(context, args[8]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+        IsoTime isoTime = TemporalPlainTimeConstructor.readTimeArguments(context, args, 3);
+        if (isoTime == null) {
+            return JSUndefined.INSTANCE;
         }
 
         TemporalCalendarId calendarId = TemporalCalendarId.ISO8601;
@@ -120,7 +87,6 @@ public final class TemporalPlainDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        IsoTime isoTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
         if (!isoTime.isValid()) {
             context.throwRangeError("Temporal error: Invalid time");
             return JSUndefined.INSTANCE;
