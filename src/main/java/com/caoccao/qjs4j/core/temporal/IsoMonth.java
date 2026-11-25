@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
-import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.*;
 
 import java.util.Locale;
 
@@ -52,6 +52,35 @@ public record IsoMonth(int month, boolean leapMonth) {
     }
 
     public static String toMonthCode(int month) {
+        if (month >= 1 && month <= MONTH_CODES.length) {
+            return MONTH_CODES[month - 1];
+        }
         return String.format(Locale.ROOT, "M%02d", month);
     }
+
+    /** Coerce a Temporal monthCode field, requiring its primitive value to be a string. */
+    public static IsoMonth fromField(JSContext context, JSValue value) {
+        if (value == null || value instanceof JSUndefined) {
+            return null;
+        }
+        if (value instanceof JSObject) {
+            value = JSTypeConversions.toPrimitive(context, value, JSTypeConversions.PreferredType.STRING);
+            if (context.hasPendingException()) {
+                return null;
+            }
+        }
+        if (value instanceof JSString text) {
+            return parseByMonthCode(context, text.value(), "Temporal error: Month code out of range.");
+        }
+        context.throwTypeError("Temporal error: Month code must be string.");
+        return null;
+    }
+
+    public String monthCode() {
+        String code = toMonthCode(month);
+        return leapMonth ? code + "L" : code;
+    }
+
+    private static final String[] MONTH_CODES = {"M01", "M02", "M03", "M04", "M05", "M06", "M07", "M08", "M09", "M10",
+            "M11", "M12", "M13"};
 }

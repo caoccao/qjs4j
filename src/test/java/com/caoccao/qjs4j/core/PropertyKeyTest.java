@@ -94,6 +94,21 @@ public class PropertyKeyTest {
     }
 
     @Test
+    public void testNumericStringKeysRetainStringRepresentationAtCacheBoundaries() {
+        long[] indices = {-1, 0, 1, 1023, 1024, Integer.MAX_VALUE, 0xFFFF_FFFEL, 0xFFFF_FFFFL, Long.MAX_VALUE};
+        for (long index : indices) {
+            String text = Long.toString(index);
+            PropertyKey key = PropertyKey.fromIndexString(index);
+            PropertyKey expected = PropertyKey.fromString(text);
+            assertThat(key.isString()).isTrue();
+            assertThat(key.asString()).isEqualTo(text);
+            assertThat(key.toArrayIndex()).isEqualTo(expected.toArrayIndex());
+            assertThat(key.toIndex()).isEqualTo(expected.toIndex());
+            assertThat(key).isEqualTo(expected);
+        }
+    }
+
+    @Test
     public void testStringKeysStayDistinct() {
         assertThat(PropertyKey.fromString("length")).isEqualTo(PropertyKey.fromString("length"));
         assertThat(PropertyKey.fromString("length")).isNotEqualTo(PropertyKey.fromString("name"));

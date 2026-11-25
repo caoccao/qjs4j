@@ -88,7 +88,7 @@ public final class JSBooleanObject extends JSObject {
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
         JSBoolean boolValue = JSTypeConversions.toBoolean(value);
         JSObject jsObject = new JSBooleanObject(context, boolValue);
         context.transferPrototype(jsObject, NAME);

@@ -43,30 +43,15 @@ public final class JSInt32Array extends JSTypedArray {
     }
 
     @Override
+    TypedArrayKind elementKind() {
+        return TypedArrayKind.INT32;
+    }
+
+    @Override
     public double getElement(long index) {
         checkIndex(index);
         JSByteBuffer buf = getByteBuffer();
         return buf.getInt(index * BYTES_PER_ELEMENT);
-    }
-
-    @Override
-    public String getObjectTag() {
-        return "[object " + NAME + "]";
-    }
-
-    @Override
-    public String getTypedArrayName() {
-        return NAME;
-    }
-
-    @Override
-    public boolean isAtomicsReadableAndWriteable() {
-        return true;
-    }
-
-    @Override
-    public boolean isAtomicsWriteable() {
-        return true;
     }
 
     @Override

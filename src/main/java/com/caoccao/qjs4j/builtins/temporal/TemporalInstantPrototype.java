@@ -80,13 +80,13 @@ public final class TemporalInstantPrototype {
         if (instant == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
         JSTemporalInstant other = TemporalInstantConstructor.toTemporalInstantObject(context, otherArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
         return since
                 ? instantDifference(context, instant, other, optionsArg)
                 : instantDifference(context, other, instant, optionsArg);
@@ -111,7 +111,7 @@ public final class TemporalInstantPrototype {
         if (instant == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
         JSTemporalInstant other = TemporalInstantConstructor.toTemporalInstantObject(context, otherArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -528,8 +528,8 @@ public final class TemporalInstantPrototype {
         if (instant == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue locales = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue locales = JSValue.argumentOrUndefined(args, 0);
+        JSValue options = JSValue.argumentOrUndefined(args, 1);
         JSValue dateTimeFormat = JSIntlObject.createDateTimeFormat(context, null, new JSValue[]{locales, options});
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -542,7 +542,7 @@ public final class TemporalInstantPrototype {
         if (instant == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue optionsArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue optionsArg = JSValue.argumentOrUndefined(args, 0);
         JSString formatted = formatInstantWithOptions(context, instant, optionsArg);
         if (context.hasPendingException() || formatted == null) {
             return JSUndefined.INSTANCE;
@@ -555,7 +555,7 @@ public final class TemporalInstantPrototype {
         if (instant == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue tzArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue tzArg = JSValue.argumentOrUndefined(args, 0);
         if (!(tzArg instanceof JSString tzStr)) {
             context.throwTypeError("Temporal error: Time zone must be string");
             return JSUndefined.INSTANCE;

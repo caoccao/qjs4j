@@ -258,7 +258,7 @@ public final class TypedArrayPrototype {
             return context.throwTypeError(
                     "Cannot perform TypedArray.prototype.fill on a typed array backed by a detached or out-of-bounds buffer");
         }
-        JSValue rawValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue rawValue = JSValue.argumentOrUndefined(args, 0);
 
         // Step 3: Capture length BEFORE value conversion (per spec order)
         long length = typedArray.getLength();
@@ -340,7 +340,7 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         JSValue callbackFn = args[0];
-        JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue callbackThisArg = JSValue.argumentOrUndefined(args, 1);
         long length = typedArray.getLength();
 
         // Collect kept elements
@@ -397,7 +397,7 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         JSValue callbackFn = args[0];
-        JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue callbackThisArg = JSValue.argumentOrUndefined(args, 1);
         long length = typedArray.getLength();
         long step = reverse ? -1 : 1;
         long end = reverse ? -1 : length;
@@ -422,7 +422,7 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         JSValue callbackFn = args[0];
-        JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue callbackThisArg = JSValue.argumentOrUndefined(args, 1);
         long length = typedArray.getLength();
         for (long k = 0; k < length; k++) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
@@ -500,7 +500,7 @@ public final class TypedArrayPrototype {
         if (length == 0) {
             return JSBoolean.FALSE;
         }
-        JSValue searchElement = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue searchElement = JSValue.argumentOrUndefined(args, 0);
         double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
         if (context.hasPendingException()) {
             return context.getPendingException();
@@ -538,7 +538,7 @@ public final class TypedArrayPrototype {
         if (length == 0) {
             return JSNumber.of(-1);
         }
-        JSValue searchElement = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue searchElement = JSValue.argumentOrUndefined(args, 0);
         double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
         if (context.hasPendingException()) {
             return context.getPendingException();
@@ -646,7 +646,7 @@ public final class TypedArrayPrototype {
         if (length == 0) {
             return JSNumber.of(-1);
         }
-        JSValue searchElement = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue searchElement = JSValue.argumentOrUndefined(args, 0);
         double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : length - 1;
         if (context.hasPendingException()) {
             return context.getPendingException();
@@ -678,7 +678,7 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         JSValue callbackFn = args[0];
-        JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue callbackThisArg = JSValue.argumentOrUndefined(args, 1);
         long length = typedArray.getLength();
 
         // TypedArraySpeciesCreate with same length
@@ -806,7 +806,7 @@ public final class TypedArrayPrototype {
         if (target == null) {
             return context.getPendingException();
         }
-        JSValue source = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue source = JSValue.argumentOrUndefined(args, 0);
 
         if (source instanceof JSTypedArray srcTypedArray) {
             return setFromTypedArray(context, target, srcTypedArray, args);
@@ -860,7 +860,7 @@ public final class TypedArrayPrototype {
         // Step 11: Loop - convert values and write
         for (long k = 0; k < srcLength; k++) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey pk = PropertyKey.fromString(Long.toString(k));
+            PropertyKey pk = PropertyKey.fromIndexString(k);
             JSValue value = src.get(pk);
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -1057,7 +1057,7 @@ public final class TypedArrayPrototype {
             return context.throwTypeError(
                     "Cannot perform TypedArray.prototype.sort on a typed array backed by a detached or out-of-bounds buffer");
         }
-        JSValue compareArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue compareArg = JSValue.argumentOrUndefined(args, 0);
         if (!(compareArg instanceof JSUndefined)) {
             if (!JSTypeChecking.isCallable(compareArg)) {
                 return context.throwTypeError("compareFn is not a function");
@@ -1218,7 +1218,7 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
         JSValue callbackFn = args[0];
-        JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue callbackThisArg = JSValue.argumentOrUndefined(args, 1);
         long length = typedArray.getLength();
         for (long k = 0; k < length; k++) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
@@ -1317,7 +1317,7 @@ public final class TypedArrayPrototype {
 
     public static JSValue toSorted(JSContext context, JSValue thisArg, JSValue[] args) {
         // Step 1: Validate compareFn first (before this-value validation per spec)
-        JSValue compareArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue compareArg = JSValue.argumentOrUndefined(args, 0);
         if (!(compareArg instanceof JSUndefined)) {
             if (!JSTypeChecking.isCallable(compareArg)) {
                 return context.throwTypeError("compareFn is not a function");
@@ -1530,7 +1530,7 @@ public final class TypedArrayPrototype {
         }
 
         // Steps 7-8: Convert value (may resize/detach buffer)
-        JSValue value = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 1);
         JSValue convertedValue;
         if (isBigIntTypedArray(typedArray)) {
             convertedValue = JSTypeConversions.toBigInt(context, value);

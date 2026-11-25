@@ -77,9 +77,8 @@ public final class JSIntlSegments extends JSObject {
         JSObject result = context.createJSObject();
         result.defineProperty(PropertyKey.fromString("segment"),
                 new JSString(text.substring(range.start(), range.end())), PropertyDescriptor.DataState.All);
-        result.defineProperty(PropertyKey.fromString("index"), JSNumber.of(range.start()),
-                PropertyDescriptor.DataState.All);
-        result.defineProperty(PropertyKey.fromString("input"), new JSString(text), PropertyDescriptor.DataState.All);
+        result.defineProperty(PropertyKey.INDEX, JSNumber.of(range.start()), PropertyDescriptor.DataState.All);
+        result.defineProperty(PropertyKey.INPUT, new JSString(text), PropertyDescriptor.DataState.All);
         if (segmenter.isWordGranularity()) {
             result.defineProperty(PropertyKey.fromString("isWordLike"), JSBoolean.valueOf(range.wordLike()),
                     PropertyDescriptor.DataState.All);

@@ -35,7 +35,7 @@ public final class GeneratorPrototype {
         if (!(thisArg instanceof JSGenerator generator)) {
             return context.throwTypeError("not a generator");
         }
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
         return generator.next(value);
     }
 
@@ -46,7 +46,7 @@ public final class GeneratorPrototype {
         if (!(thisArg instanceof JSGenerator generator)) {
             return context.throwTypeError("not a generator");
         }
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
         return generator.returnMethod(value);
     }
 
@@ -57,7 +57,7 @@ public final class GeneratorPrototype {
         if (!(thisArg instanceof JSGenerator generator)) {
             return context.throwTypeError("not a generator");
         }
-        JSValue exception = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue exception = JSValue.argumentOrUndefined(args, 0);
         return generator.throwMethod(exception);
     }
 }

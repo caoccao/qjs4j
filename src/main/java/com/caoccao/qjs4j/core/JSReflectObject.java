@@ -34,8 +34,8 @@ public final class JSReflectObject {
             return context.throwTypeError("Reflect.apply called on non-function");
         }
 
-        JSValue funcThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        JSValue arrayArg = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
+        JSValue funcThisArg = JSValue.argumentOrUndefined(args, 1);
+        JSValue arrayArg = JSValue.argumentOrUndefined(args, 2);
         JSValue[] funcArgs = buildArgumentList(context, arrayArg);
         if (funcArgs == null) {
             return context.getPendingException();
@@ -87,7 +87,7 @@ public final class JSReflectObject {
             return context.throwTypeError("Reflect.construct called on non-constructor");
         }
 
-        JSValue arrayArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue arrayArg = JSValue.argumentOrUndefined(args, 1);
         JSValue[] constructorArgs = buildArgumentList(context, arrayArg);
         if (constructorArgs == null) {
             return context.getPendingException();
@@ -471,7 +471,7 @@ public final class JSReflectObject {
             return context.throwTypeError("Reflect.get called on non-object");
         }
 
-        JSValue keyArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue keyArg = JSValue.argumentOrUndefined(args, 1);
         PropertyKey key = PropertyKey.fromValue(context, keyArg);
         if (context.hasPendingException()) {
             return context.getPendingException();
@@ -497,7 +497,7 @@ public final class JSReflectObject {
             return context.throwTypeError("Reflect.getOwnPropertyDescriptor called on non-object");
         }
 
-        JSValue keyValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue keyValue = JSValue.argumentOrUndefined(args, 1);
         PropertyKey key = PropertyKey.fromValue(context, keyValue);
         PropertyDescriptor descriptor = target.getOwnPropertyDescriptor(key);
         if (descriptor == null) {
@@ -526,7 +526,7 @@ public final class JSReflectObject {
             return context.throwTypeError("Reflect.has called on non-object");
         }
 
-        JSValue keyArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue keyArg = JSValue.argumentOrUndefined(args, 1);
         PropertyKey key = PropertyKey.fromValue(context, keyArg);
         if (context.hasPendingException()) {
             return context.getPendingException();
@@ -588,12 +588,12 @@ public final class JSReflectObject {
             return context.throwTypeError("Reflect.set called on non-object");
         }
 
-        JSValue keyArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue keyArg = JSValue.argumentOrUndefined(args, 1);
         PropertyKey key = PropertyKey.fromValue(context, keyArg);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        JSValue value = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 2);
         JSValue receiver = args.length > 3 ? args[3] : target;
 
         boolean success = target instanceof JSProxy proxy
@@ -613,7 +613,7 @@ public final class JSReflectObject {
             return context.throwTypeError("Reflect.setPrototypeOf called on non-object");
         }
 
-        JSValue prototypeArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue prototypeArg = JSValue.argumentOrUndefined(args, 1);
         JSObject proto;
         if (prototypeArg instanceof JSNull) {
             proto = null;

@@ -429,6 +429,17 @@ public class JSGlobalObjectTest extends BaseJavetTest {
     }
 
     @Test
+    public void testTypedArrayConstructorInstallationOrder() {
+        JSValue names = context.eval("""
+                Object.getOwnPropertyNames(globalThis)
+                    .filter(name => /^(?:Int|Uint|Float|BigInt|BigUint)[0-9]+(?:Clamped)?Array$/.test(name))
+                    .join(',')
+                """);
+        assertThat(names.toString()).isEqualTo("Int8Array,Uint8Array,Uint8ClampedArray,Int16Array,Uint16Array,"
+                + "Int32Array,Uint32Array,Float16Array,Float32Array,Float64Array,BigInt64Array,BigUint64Array");
+    }
+
+    @Test
     public void testUnescape() {
         assertStringWithJavet(
                 // Test basic %XX sequences

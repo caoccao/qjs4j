@@ -73,7 +73,7 @@ public final class JSAggregateError extends JSError {
         }
 
         // Step 5: Let errorsList be ? IterableToList(errors).
-        JSValue errorsArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue errorsArg = JSValue.argumentOrUndefined(args, 0);
         JSArray errorsList = JSIteratorHelper.iterableToList(context, errorsArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -89,8 +89,8 @@ public final class JSAggregateError extends JSError {
         // Create AggregateError.prototype (not an error instance per spec)
         JSObject errorPrototype = new JSObject(context);
         context.transferPrototype(errorPrototype, JSError.NAME);
-        errorPrototype.defineProperty(PropertyKey.fromString("name"), PropertyDescriptor
-                .dataDescriptor(new JSString(NAME), PropertyDescriptor.DataState.ConfigurableWritable));
+        errorPrototype.defineProperty(PropertyKey.NAME, PropertyDescriptor.dataDescriptor(new JSString(NAME),
+                PropertyDescriptor.DataState.ConfigurableWritable));
         errorPrototype.defineProperty(PropertyKey.MESSAGE,
                 PropertyDescriptor.dataDescriptor(new JSString(""), PropertyDescriptor.DataState.ConfigurableWritable));
 
@@ -99,8 +99,7 @@ public final class JSAggregateError extends JSError {
 
         JSNativeFunction errorConstructor = new JSNativeFunction(context, NAME, length,
                 (childContext, thisObj, childArgs) -> create(childContext, childArgs), true);
-        errorConstructor.defineProperty(PropertyKey.fromString("prototype"), errorPrototype,
-                PropertyDescriptor.DataState.None);
+        errorConstructor.defineProperty(PropertyKey.PROTOTYPE, errorPrototype, PropertyDescriptor.DataState.None);
 
         // AggregateError.[[Prototype]] = Error (the constructor inherits from Error)
         JSValue errorCtor = context.getGlobalObject().get(JSError.NAME);

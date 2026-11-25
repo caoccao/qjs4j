@@ -246,8 +246,7 @@ public final class ShadowRealmPrototype {
         if (!(thisArg instanceof JSShadowRealm shadowRealm)) {
             return callerContext.throwTypeError("ShadowRealm.prototype.importValue requires a ShadowRealm receiver");
         }
-        JSString specifierString = JSTypeConversions.toString(callerContext,
-                args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        JSString specifierString = JSTypeConversions.toString(callerContext, JSValue.argumentOrUndefined(args, 0));
         if (callerContext.hasPendingException()) {
             return callerContext.getPendingException();
         }

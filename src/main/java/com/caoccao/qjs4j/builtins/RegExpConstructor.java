@@ -96,8 +96,8 @@ public final class RegExpConstructor {
      * delegate to the constructor path.
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue patternArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue flagsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue patternArg = JSValue.argumentOrUndefined(args, 0);
+        JSValue flagsArg = JSValue.argumentOrUndefined(args, 1);
 
         // ES2024 22.2.3.1 step 3: If new.target is undefined (called as function)
         // Check if patternIsRegExp and flags is undefined
@@ -130,7 +130,7 @@ public final class RegExpConstructor {
      * RegExp.escape(string) ES2024 22.2.5 RegExp.escape
      */
     public static JSValue escape(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue stringValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue stringValue = JSValue.argumentOrUndefined(args, 0);
         if (!(stringValue instanceof JSString jsString)) {
             return context.throwTypeError("input argument must be a string");
         }

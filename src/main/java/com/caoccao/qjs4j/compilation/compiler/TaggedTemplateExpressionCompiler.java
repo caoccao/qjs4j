@@ -100,10 +100,8 @@ final class TaggedTemplateExpressionCompiler extends AstNodeCompiler<TaggedTempl
         }
 
         // QuickJS/spec attributes for template objects.
-        rawArray.defineProperty(PropertyKey.fromString("length"), JSNumber.of(segmentCount),
-                PropertyDescriptor.DataState.None);
-        templateObject.defineProperty(PropertyKey.fromString("length"), JSNumber.of(segmentCount),
-                PropertyDescriptor.DataState.None);
+        rawArray.defineProperty(PropertyKey.LENGTH, JSNumber.of(segmentCount), PropertyDescriptor.DataState.None);
+        templateObject.defineProperty(PropertyKey.LENGTH, JSNumber.of(segmentCount), PropertyDescriptor.DataState.None);
         templateObject.defineProperty(PropertyKey.fromString("raw"), rawArray, PropertyDescriptor.DataState.None);
 
         rawArray.freeze();

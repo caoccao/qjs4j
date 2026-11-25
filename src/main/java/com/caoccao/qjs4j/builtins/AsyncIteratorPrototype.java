@@ -113,7 +113,7 @@ public final class AsyncIteratorPrototype {
                     return JSUndefined.INSTANCE;
                 }), null, context), new JSPromise.ReactionRecord(
                         new JSNativeFunction(context, "", 1, (childContext, callbackThisArg, callbackArgs) -> {
-                            JSValue error = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                            JSValue error = JSValue.argumentOrUndefined(callbackArgs, 0);
                             resultPromise.reject(error);
                             return JSUndefined.INSTANCE;
                         }), null, context));

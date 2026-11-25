@@ -359,6 +359,14 @@ public final class PropertyKey {
         return index >= 0 && index <= Integer.MAX_VALUE ? fromIndex((int) index) : fromString(Long.toString(index));
     }
 
+    /** Decimal property name for algorithms that use ToString(index), including indices beyond uint32. */
+    public static PropertyKey fromIndexString(long index) {
+        if (index >= 0 && index < INDEX_CACHE_SIZE) {
+            return IndexStrings.KEYS[(int) index];
+        }
+        return fromString(Long.toString(index));
+    }
+
     /**
      * Create a property key from a string.
      */
@@ -407,5 +415,20 @@ public final class PropertyKey {
         // Convert to string for other types
         JSString str = JSTypeConversions.toString(context, value);
         return fromString(str.value());
+    }
+
+    private static final class IndexStrings {
+        private static final PropertyKey[] KEYS = createKeys();
+
+        private static PropertyKey[] createKeys() {
+            PropertyKey[] keys = new PropertyKey[INDEX_CACHE_SIZE];
+            for (int i = 0; i < keys.length; i++) {
+                PropertyKey key = fromString(Integer.toString(i));
+                key.cachedIndex = i;
+                key.cachedArrayIndex = i;
+                keys[i] = key;
+            }
+            return keys;
+        }
     }
 }

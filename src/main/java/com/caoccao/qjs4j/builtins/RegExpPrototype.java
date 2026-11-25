@@ -305,7 +305,7 @@ public final class RegExpPrototype {
             return context.throwTypeError("RegExp.prototype.exec called on non-RegExp");
         }
 
-        JSString inputString = JSTypeConversions.toString(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        JSString inputString = JSTypeConversions.toString(context, JSValue.argumentOrUndefined(args, 0));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -748,7 +748,7 @@ public final class RegExpPrototype {
             return context.throwTypeError("RegExp.prototype[@@match] called on non-object");
         }
 
-        JSString str = JSTypeConversions.toString(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        JSString str = JSTypeConversions.toString(context, JSValue.argumentOrUndefined(args, 0));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -825,7 +825,7 @@ public final class RegExpPrototype {
             return context.throwTypeError("RegExp.prototype[Symbol.matchAll] called on non-object");
         }
 
-        JSString inputString = JSTypeConversions.toString(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        JSString inputString = JSTypeConversions.toString(context, JSValue.argumentOrUndefined(args, 0));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -878,13 +878,12 @@ public final class RegExpPrototype {
             return context.throwTypeError("RegExp.prototype[Symbol.replace] called on non-object");
         }
 
-        JSString inputStringValue = JSTypeConversions.toString(context,
-                args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        JSString inputStringValue = JSTypeConversions.toString(context, JSValue.argumentOrUndefined(args, 0));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
         String inputString = inputStringValue.value();
-        JSValue replaceValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue replaceValue = JSValue.argumentOrUndefined(args, 1);
 
         boolean functionalReplace = JSTypeChecking.isCallable(replaceValue);
         if (!functionalReplace) {
@@ -1058,7 +1057,7 @@ public final class RegExpPrototype {
             return context.throwTypeError("RegExp.prototype[Symbol.search] called on non-object");
         }
 
-        JSString inputString = JSTypeConversions.toString(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        JSString inputString = JSTypeConversions.toString(context, JSValue.argumentOrUndefined(args, 0));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1258,7 +1257,7 @@ public final class RegExpPrototype {
         if (!(thisArg instanceof JSObject regexpObject)) {
             return context.throwTypeError("RegExp.prototype.test called on non-object");
         }
-        JSString inputString = JSTypeConversions.toString(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        JSString inputString = JSTypeConversions.toString(context, JSValue.argumentOrUndefined(args, 0));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1344,7 +1343,7 @@ public final class RegExpPrototype {
                 return createIteratorResultObject(context, matchObject, false);
             }
 
-            JSValue matchStringValue = matchObject.get(PropertyKey.fromString("0"));
+            JSValue matchStringValue = matchObject.get(PropertyKey.ZERO);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }

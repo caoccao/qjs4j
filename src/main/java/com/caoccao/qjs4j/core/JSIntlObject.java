@@ -649,7 +649,7 @@ public final class JSIntlObject {
                 continue;
             }
             JSValue typeValue = partObject.get(PropertyKey.fromString("type"));
-            JSValue valueValue = partObject.get(PropertyKey.fromString("value"));
+            JSValue valueValue = partObject.get(PropertyKey.VALUE);
             if (!(typeValue instanceof JSString typeString) || !(valueValue instanceof JSString valueString)) {
                 continue;
             }
@@ -1031,7 +1031,7 @@ public final class JSIntlObject {
                 }
             }
             // Step 5: Let len be ToLength(Get(O, "length"))
-            JSValue lengthValue = localeObject.get(PropertyKey.fromString("length"));
+            JSValue lengthValue = localeObject.get(PropertyKey.LENGTH);
             if (context.hasPendingException()) {
                 return localeTags;
             }
@@ -1343,6 +1343,19 @@ public final class JSIntlObject {
         return result.toString();
     }
 
+    private static JSValue coerceOptionsObject(JSContext context, JSValue options) {
+        if (options instanceof JSUndefined) {
+            JSObject empty = context.createJSObject();
+            empty.setPrototype(null);
+            return empty;
+        }
+        if (options instanceof JSNull) {
+            return context.throwTypeError("Cannot convert null to object");
+        }
+        JSObject object = JSTypeConversions.toObject(context, options);
+        return object == null || context.hasPendingException() ? JSUndefined.INSTANCE : object;
+    }
+
     public static JSValue collatorCompare(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlCollator collator)) {
             return context.throwTypeError("Intl.Collator.prototype.compare called on incompatible receiver");
@@ -1413,7 +1426,7 @@ public final class JSIntlObject {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            JSValue optionsValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+            JSValue optionsValue = JSValue.argumentOrUndefined(args, 1);
 
             // Parse unicode extension keys from locale tag (e.g. en-u-kn-true-co-phonebk)
             Map<String, String> unicodeExtensions = parseUnicodeExtensions(locale.toLanguageTag());
@@ -1565,7 +1578,7 @@ public final class JSIntlObject {
                 return JSUndefined.INSTANCE;
             }
 
-            JSValue rawOptions = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+            JSValue rawOptions = JSValue.argumentOrUndefined(args, 1);
             boolean optionsIsUndefined = rawOptions instanceof JSUndefined;
 
             // Convert options to Object per spec: undefined → null-prototype object, null → TypeError
@@ -1896,7 +1909,7 @@ public final class JSIntlObject {
         }
 
         // Step 4: Get options object (required, must be an object per GetOptionsObject)
-        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
         if (optionsArg instanceof JSUndefined) {
             return context.throwTypeError("options must be an object");
         }
@@ -1988,7 +2001,7 @@ public final class JSIntlObject {
         }
 
         // Get options object (optional, defaults to undefined)
-        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
         JSObject options = null;
         if (optionsArg instanceof JSObject opt) {
             options = opt;
@@ -2235,7 +2248,7 @@ public final class JSIntlObject {
             }
 
             // GetOptionsObject: validate options argument
-            JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+            JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
             JSValue optionsObj = getOptionsObject(context, optionsArg);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -2302,7 +2315,7 @@ public final class JSIntlObject {
             }
 
             // Step 2: Options validation — null → TypeError, non-object → TypeError
-            JSValue optionsValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+            JSValue optionsValue = JSValue.argumentOrUndefined(args, 1);
             if (!(optionsValue instanceof JSUndefined)) {
                 if (optionsValue instanceof JSNull) {
                     return context.throwTypeError("Cannot convert null to object");
@@ -2587,7 +2600,7 @@ public final class JSIntlObject {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            JSValue optionsArgument = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+            JSValue optionsArgument = JSValue.argumentOrUndefined(args, 1);
             JSObject optionsObject;
             if (optionsArgument instanceof JSUndefined || optionsArgument == null) {
                 optionsObject = context.createJSObject();
@@ -2941,19 +2954,9 @@ public final class JSIntlObject {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            JSValue optionsValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-            JSObject optionsObject;
-            if (optionsValue instanceof JSUndefined) {
-                optionsObject = context.createJSObject();
-                optionsObject.setPrototype(null);
-            } else if (optionsValue instanceof JSNull) {
-                return context.throwTypeError("Cannot convert null to object");
-            } else {
-                JSValue optionsObjectValue = JSTypeConversions.toObject(context, optionsValue);
-                if (context.hasPendingException() || !(optionsObjectValue instanceof JSObject jsObject)) {
-                    return JSUndefined.INSTANCE;
-                }
-                optionsObject = jsObject;
+            JSValue options = coerceOptionsObject(context, JSValue.argumentOrUndefined(args, 1));
+            if (context.hasPendingException() || !(options instanceof JSObject optionsObject)) {
+                return options;
             }
 
             String localeMatcher = getOptionStringChecked(context, optionsObject, "localeMatcher");
@@ -3075,19 +3078,9 @@ public final class JSIntlObject {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            JSValue optionsValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-            JSObject optionsObject;
-            if (optionsValue instanceof JSUndefined) {
-                optionsObject = context.createJSObject();
-                optionsObject.setPrototype(null);
-            } else if (optionsValue instanceof JSNull) {
-                return context.throwTypeError("Cannot convert null to object");
-            } else {
-                JSValue optionsObjectValue = JSTypeConversions.toObject(context, optionsValue);
-                if (context.hasPendingException() || !(optionsObjectValue instanceof JSObject jsObject)) {
-                    return JSUndefined.INSTANCE;
-                }
-                optionsObject = jsObject;
+            JSValue options = coerceOptionsObject(context, JSValue.argumentOrUndefined(args, 1));
+            if (context.hasPendingException() || !(options instanceof JSObject optionsObject)) {
+                return options;
             }
 
             String localeMatcher = getOptionStringChecked(context, optionsObject, "localeMatcher");
@@ -3193,19 +3186,9 @@ public final class JSIntlObject {
                 }
             }
 
-            JSValue optionsValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-            JSObject optionsObject;
-            if (optionsValue instanceof JSUndefined) {
-                optionsObject = context.createJSObject();
-                optionsObject.setPrototype(null);
-            } else if (optionsValue instanceof JSNull) {
-                return context.throwTypeError("Cannot convert null to object");
-            } else {
-                JSValue optionsObjectValue = JSTypeConversions.toObject(context, optionsValue);
-                if (context.hasPendingException() || !(optionsObjectValue instanceof JSObject jsObject)) {
-                    return JSUndefined.INSTANCE;
-                }
-                optionsObject = jsObject;
+            JSValue options = coerceOptionsObject(context, JSValue.argumentOrUndefined(args, 1));
+            if (context.hasPendingException() || !(options instanceof JSObject optionsObject)) {
+                return options;
             }
 
             String localeMatcher = getOptionStringChecked(context, optionsObject, "localeMatcher");
@@ -3451,8 +3434,7 @@ public final class JSIntlObject {
         if (!(thisArg instanceof JSIntlDateTimeFormat dateTimeFormat)) {
             return context.throwTypeError("Intl.DateTimeFormat.prototype.format called on incompatible receiver");
         }
-        DateTimeFormattable formattable = toDateTimeFormattable(context,
-                args.length > 0 ? args[0] : JSUndefined.INSTANCE, true);
+        DateTimeFormattable formattable = toDateTimeFormattable(context, JSValue.argumentOrUndefined(args, 0), true);
         if (formattable == null || context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -3492,229 +3474,14 @@ public final class JSIntlObject {
      * Intl.DateTimeFormat.prototype.formatRange(startDate, endDate)
      */
     public static JSValue dateTimeFormatFormatRange(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlDateTimeFormat dateTimeFormat)) {
-            return context.throwTypeError("Intl.DateTimeFormat.prototype.formatRange called on incompatible receiver");
-        }
-        JSValue startArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue endArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        if (startArg instanceof JSUndefined || endArg instanceof JSUndefined) {
-            return context.throwTypeError("start date or end date is undefined");
-        }
-        DateTimeFormattable startFormattable = toDateTimeFormattable(context, startArg, false);
-        if (startFormattable == null || context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        DateTimeFormattable endFormattable = toDateTimeFormattable(context, endArg, false);
-        if (endFormattable == null || context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (startFormattable.kind() != endFormattable.kind()) {
-            return context.throwTypeError("Invalid range");
-        }
-        if (startFormattable.calendarId() != null && endFormattable.calendarId() != null
-                && !startFormattable.calendarId().equals(endFormattable.calendarId())) {
-            return context.throwRangeError("Invalid date/time value");
-        }
-        JSIntlDateTimeFormat effectiveDateTimeFormat = getEffectiveDateTimeFormat(context, dateTimeFormat,
-                startFormattable.kind());
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!isTemporalCalendarCompatibleWithDateTimeFormat(context, startFormattable, effectiveDateTimeFormat)
-                || !isTemporalCalendarCompatibleWithDateTimeFormat(context, endFormattable, effectiveDateTimeFormat)) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!isFormattableEpochMillisValid(context, startFormattable)
-                || !isFormattableEpochMillisValid(context, endFormattable)) {
-            return JSUndefined.INSTANCE;
-        }
-        double startDate = startFormattable.epochMillis();
-        double endDate = endFormattable.epochMillis();
-
-        if (Double.compare(startDate, endDate) == 0) {
-            return new JSString(effectiveDateTimeFormat.format(startDate));
-        }
-
-        List<JSIntlDateTimeFormat.DatePart> startParts = effectiveDateTimeFormat.formatToPartsList(startDate);
-        List<JSIntlDateTimeFormat.DatePart> endParts = effectiveDateTimeFormat.formatToPartsList(endDate);
-
-        StringBuilder resultBuilder = new StringBuilder();
-        if (startParts.equals(endParts)) {
-            for (JSIntlDateTimeFormat.DatePart startPart : startParts) {
-                resultBuilder.append(startPart.value());
-            }
-            return new JSString(resultBuilder.toString());
-        }
-
-        boolean isYearSame = true;
-        int comparablePartCount = Math.min(startParts.size(), endParts.size());
-        for (int index = 0; index < comparablePartCount; index++) {
-            JSIntlDateTimeFormat.DatePart startPart = startParts.get(index);
-            JSIntlDateTimeFormat.DatePart endPart = endParts.get(index);
-            if ("year".equals(startPart.type()) && !startPart.equals(endPart)) {
-                isYearSame = false;
-                break;
-            }
-        }
-        boolean canCollapse = startParts.size() == endParts.size()
-                && ((effectiveDateTimeFormat.hasTextMonth() && isYearSame)
-                        || differsOnlyInTimeParts(startParts, endParts));
-        if (canCollapse) {
-            int firstDifferenceIndex = -1;
-            int lastDifferenceIndex = -1;
-            for (int index = 0; index < startParts.size(); index++) {
-                if (!startParts.get(index).equals(endParts.get(index))) {
-                    if (firstDifferenceIndex < 0) {
-                        firstDifferenceIndex = index;
-                    }
-                    lastDifferenceIndex = index;
-                }
-            }
-            if (firstDifferenceIndex >= 0) {
-                for (int index = 0; index < firstDifferenceIndex; index++) {
-                    resultBuilder.append(startParts.get(index).value());
-                }
-                for (int index = firstDifferenceIndex; index <= lastDifferenceIndex; index++) {
-                    resultBuilder.append(startParts.get(index).value());
-                }
-                resultBuilder.append(" \u2013 ");
-                for (int index = firstDifferenceIndex; index <= lastDifferenceIndex; index++) {
-                    resultBuilder.append(endParts.get(index).value());
-                }
-                for (int index = lastDifferenceIndex + 1; index < startParts.size(); index++) {
-                    resultBuilder.append(startParts.get(index).value());
-                }
-                return new JSString(resultBuilder.toString());
-            }
-        }
-
-        for (JSIntlDateTimeFormat.DatePart startPart : startParts) {
-            resultBuilder.append(startPart.value());
-        }
-        resultBuilder.append(" \u2013 ");
-        for (JSIntlDateTimeFormat.DatePart endPart : endParts) {
-            resultBuilder.append(endPart.value());
-        }
-        return new JSString(resultBuilder.toString());
+        return formatDateRange(context, thisArg, args, false);
     }
 
     /**
      * Intl.DateTimeFormat.prototype.formatRangeToParts(startDate, endDate)
      */
     public static JSValue dateTimeFormatFormatRangeToParts(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlDateTimeFormat dateTimeFormat)) {
-            return context
-                    .throwTypeError("Intl.DateTimeFormat.prototype.formatRangeToParts called on incompatible receiver");
-        }
-
-        // Per ECMA-402: If startDate is undefined or endDate is undefined, throw TypeError
-        JSValue startArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue endArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        if (startArg instanceof JSUndefined || endArg instanceof JSUndefined) {
-            return context.throwTypeError("start date or end date is undefined");
-        }
-
-        DateTimeFormattable startFormattable = toDateTimeFormattable(context, startArg, false);
-        if (startFormattable == null || context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        DateTimeFormattable endFormattable = toDateTimeFormattable(context, endArg, false);
-        if (endFormattable == null || context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (startFormattable.kind() != endFormattable.kind()) {
-            return context.throwTypeError("Invalid range");
-        }
-        if (startFormattable.calendarId() != null && endFormattable.calendarId() != null
-                && !startFormattable.calendarId().equals(endFormattable.calendarId())) {
-            return context.throwRangeError("Invalid date/time value");
-        }
-        JSIntlDateTimeFormat effectiveDateTimeFormat = getEffectiveDateTimeFormat(context, dateTimeFormat,
-                startFormattable.kind());
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!isTemporalCalendarCompatibleWithDateTimeFormat(context, startFormattable, effectiveDateTimeFormat)
-                || !isTemporalCalendarCompatibleWithDateTimeFormat(context, endFormattable, effectiveDateTimeFormat)) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!isFormattableEpochMillisValid(context, startFormattable)
-                || !isFormattableEpochMillisValid(context, endFormattable)) {
-            return JSUndefined.INSTANCE;
-        }
-        double startDate = startFormattable.epochMillis();
-        double endDate = endFormattable.epochMillis();
-
-        List<JSIntlDateTimeFormat.DatePart> startParts = effectiveDateTimeFormat.formatToPartsList(startDate);
-        List<JSIntlDateTimeFormat.DatePart> endParts = effectiveDateTimeFormat.formatToPartsList(endDate);
-
-        JSArray result = context.createJSArray();
-        // Check if dates are practically equal (all parts identical)
-        if (startParts.equals(endParts)) {
-            for (JSIntlDateTimeFormat.DatePart part : startParts) {
-                result.push(createPartObject(context, part.type(), part.value(), "shared"));
-            }
-            return result;
-        }
-
-        // Determine the range of differing parts for collapsed formatting.
-        // For text-based formats (short/long month), collapse shared parts
-        // but only when the year values are the same (per CLDR range patterns).
-        boolean yearSame = true;
-        for (int i = 0; i < startParts.size(); i++) {
-            if ("year".equals(startParts.get(i).type()) && !startParts.get(i).equals(endParts.get(i))) {
-                yearSame = false;
-                break;
-            }
-        }
-        boolean canCollapse = (effectiveDateTimeFormat.hasTextMonth() && yearSame)
-                || differsOnlyInTimeParts(startParts, endParts);
-        if (canCollapse && startParts.size() == endParts.size()) {
-            int firstDiff = -1;
-            int lastDiff = -1;
-            for (int i = 0; i < startParts.size(); i++) {
-                if (!startParts.get(i).equals(endParts.get(i))) {
-                    if (firstDiff < 0) {
-                        firstDiff = i;
-                    }
-                    lastDiff = i;
-                }
-            }
-            if (firstDiff >= 0) {
-                // Shared prefix
-                for (int i = 0; i < firstDiff; i++) {
-                    result.push(
-                            createPartObject(context, startParts.get(i).type(), startParts.get(i).value(), "shared"));
-                }
-                // Start range parts
-                for (int i = firstDiff; i <= lastDiff; i++) {
-                    result.push(createPartObject(context, startParts.get(i).type(), startParts.get(i).value(),
-                            "startRange"));
-                }
-                // Range separator
-                result.push(createPartObject(context, "literal", " \u2013 ", "shared"));
-                // End range parts
-                for (int i = firstDiff; i <= lastDiff; i++) {
-                    result.push(createPartObject(context, endParts.get(i).type(), endParts.get(i).value(), "endRange"));
-                }
-                // Shared suffix
-                for (int i = lastDiff + 1; i < startParts.size(); i++) {
-                    result.push(
-                            createPartObject(context, startParts.get(i).type(), startParts.get(i).value(), "shared"));
-                }
-                return result;
-            }
-        }
-
-        // Full range: all start parts as startRange, separator, all end parts as endRange
-        for (JSIntlDateTimeFormat.DatePart part : startParts) {
-            result.push(createPartObject(context, part.type(), part.value(), "startRange"));
-        }
-        result.push(createPartObject(context, "literal", " \u2013 ", "shared"));
-        for (JSIntlDateTimeFormat.DatePart part : endParts) {
-            result.push(createPartObject(context, part.type(), part.value(), "endRange"));
-        }
-        return result;
+        return formatDateRange(context, thisArg, args, true);
     }
 
     /**
@@ -3725,8 +3492,7 @@ public final class JSIntlObject {
             return context
                     .throwTypeError("Intl.DateTimeFormat.prototype.formatToParts called on incompatible receiver");
         }
-        DateTimeFormattable formattable = toDateTimeFormattable(context,
-                args.length > 0 ? args[0] : JSUndefined.INSTANCE, true);
+        DateTimeFormattable formattable = toDateTimeFormattable(context, JSValue.argumentOrUndefined(args, 0), true);
         if (formattable == null || context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -4013,6 +3779,66 @@ public final class JSIntlObject {
         };
     }
 
+    private static JSValue formatDateRange(JSContext context, JSValue thisArg, JSValue[] args, boolean toParts) {
+        if (!(thisArg instanceof JSIntlDateTimeFormat dateTimeFormat)) {
+            String method = toParts ? "formatRangeToParts" : "formatRange";
+            return context
+                    .throwTypeError("Intl.DateTimeFormat.prototype." + method + " called on incompatible receiver");
+        }
+        JSValue startArg = JSValue.argumentOrUndefined(args, 0);
+        JSValue endArg = JSValue.argumentOrUndefined(args, 1);
+        if (startArg instanceof JSUndefined || endArg instanceof JSUndefined) {
+            return context.throwTypeError("start date or end date is undefined");
+        }
+        DateTimeFormattable startFormattable = toDateTimeFormattable(context, startArg, false);
+        if (startFormattable == null || context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        DateTimeFormattable endFormattable = toDateTimeFormattable(context, endArg, false);
+        if (endFormattable == null || context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (startFormattable.kind() != endFormattable.kind()) {
+            return context.throwTypeError("Invalid range");
+        }
+        if (startFormattable.calendarId() != null && endFormattable.calendarId() != null
+                && !startFormattable.calendarId().equals(endFormattable.calendarId())) {
+            return context.throwRangeError("Invalid date/time value");
+        }
+        JSIntlDateTimeFormat effectiveDateTimeFormat = getEffectiveDateTimeFormat(context, dateTimeFormat,
+                startFormattable.kind());
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!isTemporalCalendarCompatibleWithDateTimeFormat(context, startFormattable, effectiveDateTimeFormat)
+                || !isTemporalCalendarCompatibleWithDateTimeFormat(context, endFormattable, effectiveDateTimeFormat)) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!isFormattableEpochMillisValid(context, startFormattable)
+                || !isFormattableEpochMillisValid(context, endFormattable)) {
+            return JSUndefined.INSTANCE;
+        }
+        double startDate = startFormattable.epochMillis();
+        double endDate = endFormattable.epochMillis();
+
+        if (!toParts && Double.compare(startDate, endDate) == 0) {
+            return new JSString(effectiveDateTimeFormat.format(startDate));
+        }
+
+        List<JSIntlDateTimeFormat.DatePart> startParts = effectiveDateTimeFormat.formatToPartsList(startDate);
+        List<JSIntlDateTimeFormat.DatePart> endParts = effectiveDateTimeFormat.formatToPartsList(endDate);
+
+        if (toParts) {
+            JSArray result = context.createJSArray();
+            writeDateRange(effectiveDateTimeFormat, startParts, endParts,
+                    (type, value, source) -> result.push(createPartObject(context, type, value, source)));
+            return result;
+        }
+        StringBuilder text = new StringBuilder();
+        writeDateRange(effectiveDateTimeFormat, startParts, endParts, (type, value, source) -> text.append(value));
+        return new JSString(text.toString());
+    }
+
     private static String formatIntlNumberValue(JSContext context, JSIntlNumberFormat numberFormat, JSValue value) {
         if (value instanceof JSBigInt bigInt) {
             return numberFormat.format(bigInt.value());
@@ -4029,7 +3855,7 @@ public final class JSIntlObject {
 
     public static JSValue getCanonicalLocales(JSContext context, JSValue thisArg, JSValue[] args) {
         try {
-            List<String> localeList = canonicalizeLocaleList(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+            List<String> localeList = canonicalizeLocaleList(context, JSValue.argumentOrUndefined(args, 0));
             JSArray localesArray = context.createJSArray();
             for (String localeTag : localeList) {
                 localesArray.push(new JSString(localeTag));
@@ -4632,7 +4458,7 @@ public final class JSIntlObject {
         if (!(thisArg instanceof JSIntlListFormat listFormat)) {
             return context.throwTypeError("Intl.ListFormat.prototype.format called on incompatible receiver");
         }
-        JSValue listArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue listArg = JSValue.argumentOrUndefined(args, 0);
         List<String> values = stringListFromIterable(context, listArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -4644,7 +4470,7 @@ public final class JSIntlObject {
         if (!(thisArg instanceof JSIntlListFormat listFormat)) {
             return context.throwTypeError("Intl.ListFormat.prototype.formatToParts called on incompatible receiver");
         }
-        JSValue listArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue listArg = JSValue.argumentOrUndefined(args, 0);
         List<String> values = stringListFromIterable(context, listArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -5061,7 +4887,7 @@ public final class JSIntlObject {
         if (!(thisArg instanceof JSIntlNumberFormat numberFormat)) {
             return context.throwTypeError("Intl.NumberFormat.prototype.format called on incompatible receiver");
         }
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
         if (value instanceof JSBigInt bigInt) {
             return new JSString(numberFormat.format(bigInt.value()));
         }
@@ -5094,8 +4920,8 @@ public final class JSIntlObject {
         if (!(thisArg instanceof JSIntlNumberFormat numberFormat)) {
             return context.throwTypeError("Intl.NumberFormat.prototype.formatRange called on incompatible receiver");
         }
-        JSValue startValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue endValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue startValue = JSValue.argumentOrUndefined(args, 0);
+        JSValue endValue = JSValue.argumentOrUndefined(args, 1);
         if (startValue instanceof JSUndefined || endValue instanceof JSUndefined) {
             return context.throwTypeError("start and end must not be undefined");
         }
@@ -5158,8 +4984,8 @@ public final class JSIntlObject {
             return context
                     .throwTypeError("Intl.NumberFormat.prototype.formatRangeToParts called on incompatible receiver");
         }
-        JSValue startValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue endValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue startValue = JSValue.argumentOrUndefined(args, 0);
+        JSValue endValue = JSValue.argumentOrUndefined(args, 1);
         if (startValue instanceof JSUndefined || endValue instanceof JSUndefined) {
             return context.throwTypeError("start and end must not be undefined");
         }
@@ -5463,8 +5289,8 @@ public final class JSIntlObject {
         if (!(thisArg instanceof JSIntlPluralRules pluralRules)) {
             return context.throwTypeError("Intl.PluralRules.prototype.selectRange called on incompatible receiver");
         }
-        JSValue startValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue endValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue startValue = JSValue.argumentOrUndefined(args, 0);
+        JSValue endValue = JSValue.argumentOrUndefined(args, 1);
         if (startValue instanceof JSUndefined || endValue instanceof JSUndefined) {
             return context.throwTypeError("Intl.PluralRules.prototype.selectRange requires start and end");
         }
@@ -5485,6 +5311,8 @@ public final class JSIntlObject {
             return context.throwRangeError(e.getMessage());
         }
     }
+
+    // ---- Locale option validation helpers ----
 
     /**
      * Read a string option from options object. Returns null if option is undefined.
@@ -5522,8 +5350,6 @@ public final class JSIntlObject {
         context.throwRangeError("Value " + stringValue + " out of range for property " + key);
         return null;
     }
-
-    // ---- Locale option validation helpers ----
 
     public static JSValue relativeTimeFormatFormat(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlRelativeTimeFormat relativeTimeFormat)) {
@@ -5741,7 +5567,7 @@ public final class JSIntlObject {
         if (!(thisArg instanceof JSIntlSegmenter segmenter)) {
             return context.throwTypeError("Intl.Segmenter.prototype.segment called on incompatible receiver");
         }
-        JSValue stringValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue stringValue = JSValue.argumentOrUndefined(args, 0);
         JSString text = JSTypeConversions.toString(context, stringValue);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -5749,11 +5575,13 @@ public final class JSIntlObject {
         return segmenter.createSegments(text.value());
     }
 
+    // ---- New Locale prototype methods ----
+
     public static JSValue segmentsContaining(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlSegments segments)) {
             return context.throwTypeError("%Segments.prototype%.containing called on incompatible receiver");
         }
-        JSValue indexValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue indexValue = JSValue.argumentOrUndefined(args, 0);
         return segments.containing(context, indexValue);
     }
 
@@ -5763,8 +5591,6 @@ public final class JSIntlObject {
         }
         return segments.createIterator(context);
     }
-
-    // ---- New Locale prototype methods ----
 
     /**
      * StringListFromIterable (ECMA-402 §13.5.1). Converts an iterable to a list of strings, throwing TypeError for
@@ -6650,6 +6476,53 @@ public final class JSIntlObject {
             case "6" -> "sat";
             default -> value;
         };
+    }
+
+    private static void writeDateRange(JSIntlDateTimeFormat format, List<JSIntlDateTimeFormat.DatePart> start,
+            List<JSIntlDateTimeFormat.DatePart> end, DateRangeOutput output) {
+        int first = 0;
+        int startLimit = start.size();
+        int endLimit = end.size();
+        if (startLimit == endLimit) {
+            while (first < startLimit && start.get(first).equals(end.get(first))) {
+                first++;
+            }
+            if (first == startLimit) {
+                output.append(start, 0, first, "shared");
+                return;
+            }
+            boolean sameYear = true;
+            for (int i = first; i < startLimit; i++) {
+                if ("year".equals(start.get(i).type()) && !start.get(i).equals(end.get(i))) {
+                    sameYear = false;
+                    break;
+                }
+            }
+            if ((format.hasTextMonth() && sameYear) || differsOnlyInTimeParts(start, end)) {
+                while (startLimit > first && start.get(startLimit - 1).equals(end.get(endLimit - 1))) {
+                    startLimit--;
+                    endLimit--;
+                }
+            } else {
+                first = 0;
+            }
+        }
+        output.append(start, 0, first, "shared");
+        output.append(start, first, startLimit, "startRange");
+        output.append("literal", " \u2013 ", "shared");
+        output.append(end, first, endLimit, "endRange");
+        output.append(start, startLimit, start.size(), "shared");
+    }
+
+    private interface DateRangeOutput {
+        default void append(List<JSIntlDateTimeFormat.DatePart> parts, int start, int end, String source) {
+            for (int i = start; i < end; i++) {
+                JSIntlDateTimeFormat.DatePart part = parts.get(i);
+                append(part.type(), part.value(), source);
+            }
+        }
+
+        void append(String type, String value, String source);
     }
 
     private record DateStyleOptionFields(String weekdayOption, String yearOption, String monthOption,

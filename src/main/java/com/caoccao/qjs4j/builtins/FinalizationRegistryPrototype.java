@@ -46,9 +46,9 @@ public final class FinalizationRegistryPrototype {
         if (!(thisArg instanceof JSFinalizationRegistry registry)) {
             return context.throwTypeError("FinalizationRegistry value expected");
         }
-        JSValue target = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue heldValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        JSValue token = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
+        JSValue target = JSValue.argumentOrUndefined(args, 0);
+        JSValue heldValue = JSValue.argumentOrUndefined(args, 1);
+        JSValue token = JSValue.argumentOrUndefined(args, 2);
 
         if (!canBeHeldWeakly(target)) {
             return context.throwTypeError("invalid target");
@@ -72,7 +72,7 @@ public final class FinalizationRegistryPrototype {
         if (!(thisArg instanceof JSFinalizationRegistry registry)) {
             return context.throwTypeError("FinalizationRegistry value expected");
         }
-        JSValue token = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue token = JSValue.argumentOrUndefined(args, 0);
         if (!canBeHeldWeakly(token)) {
             return context.throwTypeError("invalid unregister token");
         }

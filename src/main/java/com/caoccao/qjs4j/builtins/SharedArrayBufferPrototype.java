@@ -75,7 +75,7 @@ public final class SharedArrayBufferPrototype {
 
         long newByteLength;
         try {
-            JSValue lengthArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            JSValue lengthArg = JSValue.argumentOrUndefined(args, 0);
             long length = JSTypeConversions.toIndex(context, lengthArg);
             if (length > NumberPrototype.MAX_SAFE_INTEGER) {
                 return context.throwRangeError("Invalid array buffer length");

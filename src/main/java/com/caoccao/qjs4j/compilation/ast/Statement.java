@@ -23,10 +23,10 @@ import java.util.List;
 /**
  * Base sealed class for all statement nodes.
  */
-public abstract sealed class Statement extends ASTNode permits ExpressionStatement, BlockStatement, IfStatement,
-        WhileStatement, DoWhileStatement, ForStatement, ForOfStatement, ForInStatement, ReturnStatement, BreakStatement,
-        ContinueStatement, ThrowStatement, TryStatement, SwitchStatement, WithStatement, DebuggerStatement,
-        VariableDeclaration, LabeledStatement, Declaration {
+public abstract sealed class Statement extends ASTNode
+        permits ExpressionStatement, BlockStatement, IfStatement, WhileStatement, DoWhileStatement, ForStatement,
+        ForEachStatement, ReturnStatement, BreakStatement, ContinueStatement, ThrowStatement, TryStatement,
+        SwitchStatement, WithStatement, DebuggerStatement, VariableDeclaration, LabeledStatement, Declaration {
 
     protected List<VariableDeclarator> varDeclarators;
 

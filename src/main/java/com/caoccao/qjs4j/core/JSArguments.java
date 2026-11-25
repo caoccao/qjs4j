@@ -90,7 +90,7 @@ public final class JSArguments extends JSObject {
         this.parameterVarRefs = mappedVarRefs;
 
         // Set length property (writable, non-enumerable, configurable per ES spec)
-        defineProperty(PropertyKey.fromString("length"), JSNumber.of(argumentValues.length),
+        defineProperty(PropertyKey.LENGTH, JSNumber.of(argumentValues.length),
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Set indexed properties for each argument
@@ -131,8 +131,7 @@ public final class JSArguments extends JSObject {
         } else {
             // In non-strict mode, callee is a data property referencing the function
             if (callee != null) {
-                defineProperty(PropertyKey.fromString("callee"), callee,
-                        PropertyDescriptor.DataState.ConfigurableWritable);
+                defineProperty(PropertyKey.CALLEE, callee, PropertyDescriptor.DataState.ConfigurableWritable);
             }
 
             // Note: arguments.caller is NOT defined (returns undefined when accessed)

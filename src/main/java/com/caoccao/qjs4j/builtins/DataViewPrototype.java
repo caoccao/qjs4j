@@ -155,7 +155,7 @@ public final class DataViewPrototype {
         if (dataView == null) {
             return context.getPendingException();
         }
-        Long byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        Long byteOffset = toDataViewIndex(context, JSValue.argumentOrUndefined(args, 0));
         if (byteOffset == null) {
             return context.getPendingException();
         }
@@ -263,11 +263,11 @@ public final class DataViewPrototype {
         if (dataView.isImmutable()) {
             return context.throwTypeError("cannot write to an immutable ArrayBuffer");
         }
-        Long byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        Long byteOffset = toDataViewIndex(context, JSValue.argumentOrUndefined(args, 0));
         if (byteOffset == null) {
             return context.getPendingException();
         }
-        T value = converter.apply(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
+        T value = converter.apply(context, JSValue.argumentOrUndefined(args, 1));
         if (value == null || context.hasPendingException()) {
             return context.getPendingException();
         }

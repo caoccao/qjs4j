@@ -100,7 +100,7 @@ final class ModuleLoader {
             JSNativeFunction onReject = new JSNativeFunction(context, "", 1, (ctx, thisArg, args) -> {
                 if (!resolveState.alreadyResolved) {
                     resolveState.alreadyResolved = true;
-                    JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                    JSValue reason = JSValue.argumentOrUndefined(args, 0);
                     importPromise.reject(reason);
                 }
                 return JSUndefined.INSTANCE;
@@ -125,7 +125,7 @@ final class ModuleLoader {
         JSNativeFunction onReject = new JSNativeFunction(context, "", 1, (ctx, thisArg, args) -> {
             if (!resolveState.alreadyResolved) {
                 resolveState.alreadyResolved = true;
-                JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                JSValue reason = JSValue.argumentOrUndefined(args, 0);
                 importPromise.reject(reason);
             }
             return JSUndefined.INSTANCE;
@@ -525,7 +525,7 @@ final class ModuleLoader {
                 JSNativeFunction onReject = new JSNativeFunction(context, "", 1, (ctx, thisArg, args) -> {
                     if (!resolveState.alreadyResolved) {
                         resolveState.alreadyResolved = true;
-                        JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                        JSValue reason = JSValue.argumentOrUndefined(args, 0);
                         importPromise.reject(reason);
                     }
                     return JSUndefined.INSTANCE;
@@ -951,7 +951,7 @@ final class ModuleLoader {
         });
         onFulfill.initializePrototypeChain(context);
         JSNativeFunction onReject = new JSNativeFunction(context, "onReject", 1, (ctx, thisArg, args) -> {
-            JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            JSValue error = JSValue.argumentOrUndefined(args, 0);
             // A top-level-await body that finished and then rejected still failed while
             // the graph was being evaluated. Counting it is what lets a host tell that
             // apart from a graph that never got past linking — see

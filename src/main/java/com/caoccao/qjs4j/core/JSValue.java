@@ -965,4 +965,9 @@ public sealed interface JSValue extends JSStackValue
      * Get the type of this value.
      */
     JSValueType type();
+
+    /** Read a native function argument, treating an omitted argument as JavaScript undefined. */
+    static JSValue argumentOrUndefined(JSValue[] arguments, int index) {
+        return index >= 0 && index < arguments.length ? arguments[index] : JSUndefined.INSTANCE;
+    }
 }

@@ -62,7 +62,7 @@ public final class MapConstructor {
         }
         JSValue callback = args[1];
 
-        JSValue items = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue items = JSValue.argumentOrUndefined(args, 0);
         JSValue iterator = JSIteratorHelper.getIterator(context, items);
         if (!(iterator instanceof JSObject)) {
             return context.throwTypeError("Object is not iterable");

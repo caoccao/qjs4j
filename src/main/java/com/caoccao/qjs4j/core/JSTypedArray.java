@@ -211,13 +211,15 @@ public sealed abstract class JSTypedArray extends JSObject
         return true;
     }
 
+    abstract TypedArrayKind elementKind();
+
     @Override
     public PropertyKey[] enumerableKeys() {
         List<PropertyKey> result = new ArrayList<>();
         if (!buffer.isDetached() && !isOutOfBounds()) {
             long len = getLength();
             for (long i = 0; i < len; i++) {
-                result.add(PropertyKey.fromString(Long.toString(i)));
+                result.add(PropertyKey.fromIndexString(i));
             }
         }
         Collections.addAll(result, super.enumerableKeys());
@@ -340,7 +342,9 @@ public sealed abstract class JSTypedArray extends JSObject
         return length;
     }
 
-    public abstract String getObjectTag();
+    public final String getObjectTag() {
+        return elementKind().objectTag;
+    }
 
     /**
      * Integer-Indexed exotic object [[GetOwnProperty]]. Following QuickJS JS_GetOwnPropertyInternal for fast arrays
@@ -375,7 +379,7 @@ public sealed abstract class JSTypedArray extends JSObject
         if (!buffer.isDetached() && !isOutOfBounds()) {
             long len = getLength();
             for (long i = 0; i < len; i++) {
-                result.add(PropertyKey.fromString(Long.toString(i)));
+                result.add(PropertyKey.fromIndexString(i));
             }
         }
         // Add non-index own properties from the shape (string keys, then symbols)
@@ -387,8 +391,8 @@ public sealed abstract class JSTypedArray extends JSObject
      * Get the TypedArrayName (e.g., "Int8Array", "Float64Array"). Per ES spec, this is returned by the @@toStringTag
      * getter.
      */
-    public String getTypedArrayName() {
-        return NAME;
+    public final String getTypedArrayName() {
+        return elementKind().name;
     }
 
     /**
@@ -453,14 +457,18 @@ public sealed abstract class JSTypedArray extends JSObject
         return resolveCanonicalNumericIndex(key) != CANONICAL_NUMERIC_INDEX_NOT_CANONICAL;
     }
 
-    public abstract boolean isAtomicsReadableAndWriteable();
+    public final boolean isAtomicsReadableAndWriteable() {
+        return elementKind().atomic;
+    }
 
     /**
      * Whether {@code Atomics} may write to this element type.
      *
      * @return true when this typed array is a valid Atomics write target
      */
-    public abstract boolean isAtomicsWriteable();
+    public final boolean isAtomicsWriteable() {
+        return elementKind().waitable;
+    }
 
     /**
      * Returns true if this TypedArray is length-tracking (auto-length) on a resizable ArrayBuffer.
@@ -761,10 +769,6 @@ public sealed abstract class JSTypedArray extends JSObject
         return lengthFactory.apply(length);
     }
 
-    private static boolean isAsciiDigit(char c) {
-        return c >= '0' && c <= '9';
-    }
-
     private static boolean isValidDoubleString(String str) {
         if ("NaN".equals(str) || "Infinity".equals(str) || "-Infinity".equals(str)) {
             return true;
@@ -779,40 +783,7 @@ public sealed abstract class JSTypedArray extends JSObject
             }
         }
 
-        boolean hasIntegerDigits = false;
-        while (index < length && isAsciiDigit(str.charAt(index))) {
-            hasIntegerDigits = true;
-            index++;
-        }
-
-        boolean hasFractionDigits = false;
-        if (index < length && str.charAt(index) == '.') {
-            index++;
-            while (index < length && isAsciiDigit(str.charAt(index))) {
-                hasFractionDigits = true;
-                index++;
-            }
-        }
-
-        if (!hasIntegerDigits && !hasFractionDigits) {
-            return false;
-        }
-
-        if (index < length && (str.charAt(index) == 'e' || str.charAt(index) == 'E')) {
-            index++;
-            if (index < length && (str.charAt(index) == '+' || str.charAt(index) == '-')) {
-                index++;
-            }
-            int exponentStart = index;
-            while (index < length && isAsciiDigit(str.charAt(index))) {
-                index++;
-            }
-            if (exponentStart == index) {
-                return false;
-            }
-        }
-
-        return index == length;
+        return JSTypeConversions.hasDecimalDigits(str, index);
     }
 
     /**

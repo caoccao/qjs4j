@@ -23,7 +23,7 @@ import java.util.Set;
 /**
  * Represents an arrow function expression.
  */
-public final class ArrowFunctionExpression extends Expression {
+public final class ArrowFunctionExpression extends Expression implements FunctionNode {
     private final ASTNode body;
     private final FunctionParams functionParams;
     private final boolean isAsync;
@@ -52,28 +52,9 @@ public final class ArrowFunctionExpression extends Expression {
         return body;
     }
 
-    public List<Expression> getDefaults() {
-        return functionParams.defaults();
-    }
-
+    @Override
     public FunctionParams getFunctionParams() {
         return functionParams;
-    }
-
-    public Set<String> getParameterNames() {
-        Set<String> paramNames = new HashSet<>();
-        for (Pattern param : functionParams.params()) {
-            paramNames.addAll(param.getBoundNames());
-        }
-        return paramNames;
-    }
-
-    public List<Pattern> getParams() {
-        return functionParams.params();
-    }
-
-    public RestParameter getRestParameter() {
-        return functionParams.restParameter();
     }
 
     @Override

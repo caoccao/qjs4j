@@ -133,7 +133,7 @@ public final class JSFinalizationRegistry extends JSObject {
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        JSValue cbArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue cbArg = JSValue.argumentOrUndefined(args, 0);
         if (!(cbArg instanceof JSFunction callback)) {
             return context.throwTypeError("argument must be a function");
         }

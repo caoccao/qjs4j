@@ -112,7 +112,7 @@ public final class ArrayBufferPrototype {
         // Step 4: Let newByteLength be ? ToIndex(newLength) - may trigger valueOf which could detach
         long newByteLength;
         try {
-            newByteLength = JSTypeConversions.toIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+            newByteLength = JSTypeConversions.toIndex(context, JSValue.argumentOrUndefined(args, 0));
         } catch (JSRangeErrorException e) {
             return context.throwRangeError(e.getMessage());
         }

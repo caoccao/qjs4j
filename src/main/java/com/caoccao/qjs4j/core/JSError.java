@@ -223,15 +223,14 @@ public sealed class JSError extends JSObject permits JSAggregateError, JSRangeEr
         JSObject errorPrototype = new JSObject(context);
         context.transferPrototype(errorPrototype, JSError.NAME);
 
-        errorPrototype.defineProperty(PropertyKey.fromString("name"), new JSString(name),
+        errorPrototype.defineProperty(PropertyKey.NAME, new JSString(name),
                 PropertyDescriptor.DataState.ConfigurableWritable);
-        errorPrototype.defineProperty(PropertyKey.fromString("message"), new JSString(""),
+        errorPrototype.defineProperty(PropertyKey.MESSAGE, new JSString(""),
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSNativeFunction errorConstructor = new JSNativeFunction(context, name, 1, constructor, true);
-        errorConstructor.defineProperty(PropertyKey.fromString("prototype"), errorPrototype,
-                PropertyDescriptor.DataState.None);
-        errorPrototype.defineProperty(PropertyKey.fromString("constructor"), errorConstructor,
+        errorConstructor.defineProperty(PropertyKey.PROTOTYPE, errorPrototype, PropertyDescriptor.DataState.None);
+        errorPrototype.defineProperty(PropertyKey.CONSTRUCTOR, errorConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         return errorConstructor;
@@ -244,19 +243,18 @@ public sealed class JSError extends JSObject permits JSAggregateError, JSRangeEr
         context.transferPrototype(errorPrototype, JSObject.NAME);
 
         // All prototype properties: writable, non-enumerable, configurable
-        errorPrototype.defineProperty(PropertyKey.fromString("name"), new JSString(NAME),
+        errorPrototype.defineProperty(PropertyKey.NAME, new JSString(NAME),
                 PropertyDescriptor.DataState.ConfigurableWritable);
-        errorPrototype.defineProperty(PropertyKey.fromString("message"), new JSString(""),
+        errorPrototype.defineProperty(PropertyKey.MESSAGE, new JSString(""),
                 PropertyDescriptor.DataState.ConfigurableWritable);
-        errorPrototype.defineProperty(PropertyKey.fromString("toString"),
+        errorPrototype.defineProperty(PropertyKey.TO_STRING,
                 new JSNativeFunction(context, "toString", 0, JSError::errorToString),
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Standard Error(message, options) — length = 1
         JSNativeFunction errorConstructor = new JSNativeFunction(context, NAME, 1,
                 (childContext, thisObj, childArgs) -> create(childContext, childArgs), true);
-        errorConstructor.defineProperty(PropertyKey.fromString("prototype"), errorPrototype,
-                PropertyDescriptor.DataState.None);
+        errorConstructor.defineProperty(PropertyKey.PROTOTYPE, errorPrototype, PropertyDescriptor.DataState.None);
 
         // Error.isError static method (ES2024)
         errorConstructor.defineProperty(PropertyKey.fromString("isError"),
@@ -271,7 +269,7 @@ public sealed class JSError extends JSObject permits JSAggregateError, JSRangeEr
                 JSNumber.of(JSErrorReporter.DEFAULT_STACK_TRACE_LIMIT), PropertyDescriptor.DataState.All);
 
         // Constructor property on prototype (writable, non-enumerable, configurable)
-        errorPrototype.defineProperty(PropertyKey.fromString("constructor"), errorConstructor,
+        errorPrototype.defineProperty(PropertyKey.CONSTRUCTOR, errorConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         return errorConstructor;
@@ -363,7 +361,7 @@ public sealed class JSError extends JSObject permits JSAggregateError, JSRangeEr
      * QuickJS js_error_isError which checks class_id == JS_CLASS_ERROR.
      */
     public static JSValue isError(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue arg = JSValue.argumentOrUndefined(args, 0);
         return JSBoolean.valueOf(arg instanceof JSError);
     }
 }

@@ -48,7 +48,7 @@ public final class ArrayPrototype {
         }
 
         // Step 3: Let relativeIndex be ? ToIntegerOrInfinity(index).
-        long index = (long) JSTypeConversions.toInteger(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        long index = (long) JSTypeConversions.toInteger(context, JSValue.argumentOrUndefined(args, 0));
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -64,7 +64,7 @@ public final class ArrayPrototype {
         }
 
         // Step 7: Return ? Get(O, ! ToString(k)).
-        return obj.get(PropertyKey.fromString(Long.toString(index)));
+        return obj.get(PropertyKey.fromIndexString(index));
     }
 
     private static JSValue callCallableForSort(JSContext context, JSValue callable, JSValue thisArg, JSValue[] args) {
@@ -96,12 +96,9 @@ public final class ArrayPrototype {
         }
 
         // Step 2: Let A be ? ArraySpeciesCreate(O, 0)
-        JSValue resultVal = context.createJSArraySpecies(obj, 0);
-        if (resultVal == null || context.hasPendingException()) {
+        JSObject resultObj = createSpeciesObject(context, obj, 0);
+        if (resultObj == null) {
             return context.hasPendingException() ? context.getPendingException() : JSUndefined.INSTANCE;
-        }
-        if (!(resultVal instanceof JSObject resultObj)) {
-            return context.throwTypeError("ArraySpeciesCreate did not return an object");
         }
         // Fast path flag: if result is a plain JSArray, use internal array ops
         JSArray resultArr = resultObj instanceof JSArray arr ? arr : null;
@@ -133,7 +130,7 @@ public final class ArrayPrototype {
                 for (long k = 0; k < elementLength; k++, resultIndex++) {
 
                     context.getVirtualMachine().checkExecutionInterruptForNative();
-                    PropertyKey indexKey = PropertyKey.fromString(Long.toString(k));
+                    PropertyKey indexKey = PropertyKey.fromIndexString(k);
                     // JS_TryGetPropertyInt64: only define property if it exists (preserve holes)
                     boolean present = elementObj.has(indexKey);
                     if (context.hasPendingException()) {
@@ -146,7 +143,7 @@ public final class ArrayPrototype {
                         }
                         if (resultArr != null) {
                             resultArr.set(resultIndex, val);
-                        } else if (!resultObj.defineProperty(PropertyKey.fromString(Long.toString(resultIndex)), val,
+                        } else if (!resultObj.defineProperty(PropertyKey.fromIndexString(resultIndex), val,
                                 PropertyDescriptor.DataState.All)) {
                             return context.throwTypeError("Cannot define property " + resultIndex);
                         }
@@ -159,7 +156,7 @@ public final class ArrayPrototype {
                 }
                 if (resultArr != null) {
                     resultArr.set(resultIndex, element);
-                } else if (!resultObj.defineProperty(PropertyKey.fromString(Long.toString(resultIndex)), element,
+                } else if (!resultObj.defineProperty(PropertyKey.fromIndexString(resultIndex), element,
                         PropertyDescriptor.DataState.All)) {
                     return context.throwTypeError("Cannot define property " + resultIndex);
                 }
@@ -233,8 +230,8 @@ public final class ArrayPrototype {
             context.getVirtualMachine().checkExecutionInterruptForNative();
             final long from = dir < 0 ? (start + count - i - 1) : (start + i);
             final long to = dir < 0 ? (target + count - i - 1) : (target + i);
-            final PropertyKey fromKey = PropertyKey.fromString(Long.toString(from));
-            final PropertyKey toKey = PropertyKey.fromString(Long.toString(to));
+            final PropertyKey fromKey = PropertyKey.fromIndexString(from);
+            final PropertyKey toKey = PropertyKey.fromIndexString(to);
 
             if (!copyOrDeleteElement(context, obj, fromKey, toKey)) {
                 return context.getPendingException();
@@ -242,6 +239,18 @@ public final class ArrayPrototype {
         }
 
         return obj;
+    }
+
+    private static JSObject createSpeciesObject(JSContext context, JSObject source, long length) {
+        JSValue result = context.createJSArraySpecies(source, length);
+        if (result == null || context.hasPendingException()) {
+            return null;
+        }
+        if (result instanceof JSObject object) {
+            return object;
+        }
+        context.throwTypeError("ArraySpeciesCreate did not return an object");
+        return null;
     }
 
     /**
@@ -313,7 +322,7 @@ public final class ArrayPrototype {
             return context.getPendingException();
         }
 
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
 
         long start = relativeIndex(context, args, 1, length, 0);
         if (context.hasPendingException()) {
@@ -327,7 +336,7 @@ public final class ArrayPrototype {
         // Step 8: Repeat, while k < final
         for (long i = start; i < end; i++) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            PropertyKey key = PropertyKey.fromIndexString(i);
             if (!setOrThrow(context, obj, key, value)) {
                 return context.getPendingException();
             }
@@ -341,73 +350,7 @@ public final class ArrayPrototype {
      * Array.prototype.filter(callbackFn[, thisArg]) Creates a new array with elements that pass the test.
      */
     public static JSValue filter(JSContext context, JSValue thisArg, JSValue[] args) {
-        // Step 1: Let O be ? ToObject(this value).
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.filter called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        // Step 2: Let len be ? LengthOfArrayLike(O).
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        // Step 3: If IsCallable(callbackfn) is false, throw a TypeError exception.
-        if (args.length == 0 || !JSTypeChecking.isCallable(args[0])) {
-            return context.throwTypeError("Callback must be a function");
-        }
-        JSValue callback = args[0];
-
-        JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        // Step 5: Let A be ? ArraySpeciesCreate(O, 0).
-        JSValue resultVal = context.createJSArraySpecies(obj, 0);
-        if (resultVal == null || context.hasPendingException()) {
-            return context.hasPendingException() ? context.getPendingException() : JSUndefined.INSTANCE;
-        }
-        if (!(resultVal instanceof JSObject resultObj)) {
-            return context.throwTypeError("ArraySpeciesCreate did not return an object");
-        }
-
-        // Step 7: Repeat, while k < len
-        long resultIndex = 0;
-        for (long i = 0; i < length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            // Step 7.a: Let kPresent be ? HasProperty(O, Pk).
-            if (!obj.has(key)) {
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                continue;
-            }
-            // Step 7.c.i: Let kValue be ? Get(O, Pk).
-            JSValue element = obj.get(key);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            // Step 7.c.ii: Let selected be ! ToBoolean(? Call(callbackfn, thisArg, ...)).
-            JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
-            JSValue keep = JSCall.call(context, callback, callbackThis, callbackArgs);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-
-            if (JSTypeConversions.toBoolean(keep) == JSBoolean.TRUE) {
-                // Step 7.c.iii.1: Perform ? CreateDataPropertyOrThrow(A, ! ToString(to), kValue).
-                if (!resultObj.defineProperty(PropertyKey.fromString(Long.toString(resultIndex)), element,
-                        PropertyDescriptor.DataState.All)) {
-                    return context.throwTypeError("Cannot define property " + resultIndex);
-                }
-                resultIndex++;
-            }
-        }
-
-        // Step 8: Return A.
-        return resultObj;
+        return mapOrFilter(context, thisArg, args, true);
     }
 
     /**
@@ -457,13 +400,13 @@ public final class ArrayPrototype {
             return context.throwTypeError("Callback must be a function");
         }
         JSValue callback = args[0];
-        JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue callbackThis = JSValue.argumentOrUndefined(args, 1);
         long end = fromEnd ? -1 : length;
         long step = fromEnd ? -1 : 1;
         for (long i = fromEnd ? length - 1 : 0; i != end; i += step) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
             // Find visits holes with Get, without the HasProperty used by every/some/reduce.
-            JSValue element = obj.get(PropertyKey.fromString(Long.toString(i)));
+            JSValue element = obj.get(PropertyKey.fromIndexString(i));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -507,12 +450,9 @@ public final class ArrayPrototype {
         }
 
         // Step 4: Let A be ? ArraySpeciesCreate(O, 0).
-        JSValue resultVal = context.createJSArraySpecies(obj, 0);
-        if (resultVal == null || context.hasPendingException()) {
+        JSObject resultObj = createSpeciesObject(context, obj, 0);
+        if (resultObj == null) {
             return context.hasPendingException() ? context.getPendingException() : JSUndefined.INSTANCE;
-        }
-        if (!(resultVal instanceof JSObject resultObj)) {
-            return context.throwTypeError("ArraySpeciesCreate did not return an object");
         }
 
         // Step 5: Perform ? FlattenIntoArray(A, O, sourceLen, 0, depthNum).
@@ -548,22 +488,19 @@ public final class ArrayPrototype {
         }
         JSValue callback = args[0];
 
-        JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue callbackThisArg = JSValue.argumentOrUndefined(args, 1);
 
         // Step 5: Let A be ? ArraySpeciesCreate(O, 0).
-        JSValue resultVal = context.createJSArraySpecies(obj, 0);
-        if (resultVal == null || context.hasPendingException()) {
+        JSObject resultObj = createSpeciesObject(context, obj, 0);
+        if (resultObj == null) {
             return context.hasPendingException() ? context.getPendingException() : JSUndefined.INSTANCE;
-        }
-        if (!(resultVal instanceof JSObject resultObj)) {
-            return context.throwTypeError("ArraySpeciesCreate did not return an object");
         }
 
         // Step 6: Perform ? FlattenIntoArray(A, O, sourceLen, 0, 1, mapperFunction, thisArg).
         long resultIndex = 0;
         for (long i = 0; i < length; i++) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            PropertyKey key = PropertyKey.fromIndexString(i);
             if (!obj.has(key)) {
                 if (context.hasPendingException()) {
                     return context.getPendingException();
@@ -595,7 +532,7 @@ public final class ArrayPrototype {
                     }
                     for (long j = 0; j < mappedLen; j++) {
                         context.getVirtualMachine().checkExecutionInterruptForNative();
-                        PropertyKey jKey = PropertyKey.fromString(Long.toString(j));
+                        PropertyKey jKey = PropertyKey.fromIndexString(j);
                         boolean jPresent = mappedObj.has(jKey);
                         if (context.hasPendingException()) {
                             return context.getPendingException();
@@ -605,7 +542,7 @@ public final class ArrayPrototype {
                             if (context.hasPendingException()) {
                                 return context.getPendingException();
                             }
-                            if (!resultObj.defineProperty(PropertyKey.fromString(Long.toString(resultIndex)), val,
+                            if (!resultObj.defineProperty(PropertyKey.fromIndexString(resultIndex), val,
                                     PropertyDescriptor.DataState.All)) {
                                 return context.throwTypeError("Cannot define property " + resultIndex);
                             }
@@ -615,7 +552,7 @@ public final class ArrayPrototype {
                     continue;
                 }
             }
-            if (!resultObj.defineProperty(PropertyKey.fromString(Long.toString(resultIndex)), mapped,
+            if (!resultObj.defineProperty(PropertyKey.fromIndexString(resultIndex), mapped,
                     PropertyDescriptor.DataState.All)) {
                 return context.throwTypeError("Cannot define property " + resultIndex);
             }
@@ -647,12 +584,12 @@ public final class ArrayPrototype {
         }
         JSValue callback = args[0];
 
-        JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue callbackThis = JSValue.argumentOrUndefined(args, 1);
 
         for (long i = 0; i < length; i++) {
 
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            PropertyKey key = PropertyKey.fromIndexString(i);
             if (!obj.has(key)) {
                 if (context.hasPendingException()) {
                     return context.getPendingException();
@@ -680,7 +617,7 @@ public final class ArrayPrototype {
         if (obj instanceof JSArray arr && index <= Integer.MAX_VALUE) {
             return arr.get((int) index);
         }
-        return obj.get(PropertyKey.fromString(Long.toString(index)));
+        return obj.get(PropertyKey.fromIndexString(index));
     }
 
     /**
@@ -716,7 +653,7 @@ public final class ArrayPrototype {
             return JSBoolean.FALSE;
         }
 
-        JSValue searchElement = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue searchElement = JSValue.argumentOrUndefined(args, 0);
         double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
         if (context.hasPendingException()) {
             return context.getPendingException();
@@ -756,7 +693,7 @@ public final class ArrayPrototype {
         for (long i = fromIndex; i < length; i++) {
 
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            PropertyKey key = PropertyKey.fromIndexString(i);
             JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -798,7 +735,7 @@ public final class ArrayPrototype {
             return JSNumber.of(-1);
         }
 
-        JSValue searchElement = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue searchElement = JSValue.argumentOrUndefined(args, 0);
         double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
         if (context.hasPendingException()) {
             return context.getPendingException();
@@ -817,7 +754,7 @@ public final class ArrayPrototype {
         for (long i = fromIndex; i < length; i++) {
 
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            PropertyKey key = PropertyKey.fromIndexString(i);
             if (!obj.has(key)) {
                 if (context.hasPendingException()) {
                     return context.getPendingException();
@@ -840,7 +777,7 @@ public final class ArrayPrototype {
             JSObject target, long[] targetIndex) {
         for (long i = 0; i < sourceLen; i++) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            PropertyKey key = PropertyKey.fromIndexString(i);
             if (!source.has(key)) {
                 if (context.hasPendingException()) {
                     return;
@@ -868,7 +805,7 @@ public final class ArrayPrototype {
                     continue;
                 }
             }
-            if (!target.defineProperty(PropertyKey.fromString(Long.toString(targetIndex[0])), element,
+            if (!target.defineProperty(PropertyKey.fromIndexString(targetIndex[0]), element,
                     PropertyDescriptor.DataState.All)) {
                 context.throwTypeError("Cannot define property " + targetIndex[0]);
                 return;
@@ -935,7 +872,7 @@ public final class ArrayPrototype {
                 }
                 JSValue element = jsObject instanceof JSArray jsArray
                         ? jsArray.get(i)
-                        : jsObject.get(PropertyKey.fromString(Long.toString(i)));
+                        : jsObject.get(PropertyKey.fromIndexString(i));
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -978,7 +915,7 @@ public final class ArrayPrototype {
             return JSNumber.of(-1);
         }
 
-        JSValue searchElement = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue searchElement = JSValue.argumentOrUndefined(args, 0);
         double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : length - 1;
         if (context.hasPendingException()) {
             return context.getPendingException();
@@ -994,7 +931,7 @@ public final class ArrayPrototype {
         for (long i = fromIndex; i >= 0; i--) {
 
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            PropertyKey key = PropertyKey.fromIndexString(i);
             if (!obj.has(key)) {
                 if (context.hasPendingException()) {
                     return context.getPendingException();
@@ -1037,8 +974,14 @@ public final class ArrayPrototype {
      * element.
      */
     public static JSValue map(JSContext context, JSValue thisArg, JSValue[] args) {
+        return mapOrFilter(context, thisArg, args, false);
+    }
+
+    private static JSValue mapOrFilter(JSContext context, JSValue thisArg, JSValue[] args, boolean filter) {
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.map called on null or undefined");
+            return context.throwTypeError(filter
+                    ? "Array.prototype.filter called on null or undefined"
+                    : "Array.prototype.map called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);
         if (obj == null) {
@@ -1055,21 +998,19 @@ public final class ArrayPrototype {
         }
         JSValue callback = args[0];
 
-        JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue callbackThis = JSValue.argumentOrUndefined(args, 1);
 
         // Step 5: Let A be ? ArraySpeciesCreate(O, len).
-        JSValue resultVal = context.createJSArraySpecies(obj, length);
-        if (resultVal == null || context.hasPendingException()) {
+        JSObject resultObj = createSpeciesObject(context, obj, filter ? 0 : length);
+        if (resultObj == null) {
             return context.hasPendingException() ? context.getPendingException() : JSUndefined.INSTANCE;
         }
-        if (!(resultVal instanceof JSObject resultObj)) {
-            return context.throwTypeError("ArraySpeciesCreate did not return an object");
-        }
 
+        long resultIndex = 0;
         for (long i = 0; i < length; i++) {
 
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            PropertyKey key = PropertyKey.fromIndexString(i);
             if (!obj.has(key)) {
                 if (context.hasPendingException()) {
                     return context.getPendingException();
@@ -1085,12 +1026,17 @@ public final class ArrayPrototype {
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
-            // Step 7.c.iii.1: Perform ? CreateDataPropertyOrThrow(A, ! ToString(k), mappedValue).
+            if (filter) {
+                if (JSTypeConversions.toBoolean(mapped) != JSBoolean.TRUE) {
+                    continue;
+                }
+                key = PropertyKey.fromIndexString(resultIndex++);
+                mapped = element;
+            }
             if (!resultObj.defineProperty(key, mapped, PropertyDescriptor.DataState.All)) {
-                return context.throwTypeError("Cannot define property " + i);
+                return context.throwTypeError("Cannot define property " + key.toPropertyString());
             }
         }
-
         return resultObj;
     }
 
@@ -1128,7 +1074,7 @@ public final class ArrayPrototype {
             return JSUndefined.INSTANCE;
         }
         long newLen = length - 1;
-        PropertyKey key = PropertyKey.fromString(Long.toString(newLen));
+        PropertyKey key = PropertyKey.fromIndexString(newLen);
         JSValue element = obj.get(key);
         if (context.hasPendingException()) {
             return context.getPendingException();
@@ -1170,7 +1116,7 @@ public final class ArrayPrototype {
         for (int i = 0; i < args.length; i++) {
 
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(length));
+            PropertyKey key = PropertyKey.fromIndexString(length);
             if (!setOrThrow(context, obj, key, args[i])) {
                 return context.getPendingException();
             }
@@ -1215,7 +1161,7 @@ public final class ArrayPrototype {
         long step = fromEnd ? -1 : 1;
         for (long i = fromEnd ? length - 1 : 0; i != end; i += step) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            PropertyKey key = PropertyKey.fromIndexString(i);
             boolean present = obj.has(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -1279,8 +1225,8 @@ public final class ArrayPrototype {
         for (long lower = 0, upper = length - 1; lower < upper; lower++, upper--) {
 
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey lowerKey = PropertyKey.fromString(Long.toString(lower));
-            PropertyKey upperKey = PropertyKey.fromString(Long.toString(upper));
+            PropertyKey lowerKey = PropertyKey.fromIndexString(lower);
+            PropertyKey upperKey = PropertyKey.fromIndexString(upper);
 
             // Per ES2024: HasProperty then Get for lower, then HasProperty then Get for upper
             boolean lowerExists = obj.has(lowerKey);
@@ -1380,7 +1326,7 @@ public final class ArrayPrototype {
             }
             return JSUndefined.INSTANCE;
         }
-        PropertyKey firstKey = PropertyKey.fromString("0");
+        PropertyKey firstKey = PropertyKey.ZERO;
         JSValue first = obj.get(firstKey);
         if (context.hasPendingException()) {
             return context.getPendingException();
@@ -1389,13 +1335,13 @@ public final class ArrayPrototype {
         for (long k = 1; k < length; k++) {
 
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey from = PropertyKey.fromString(Long.toString(k));
-            PropertyKey to = PropertyKey.fromString(Long.toString(k - 1));
+            PropertyKey from = PropertyKey.fromIndexString(k);
+            PropertyKey to = PropertyKey.fromIndexString(k - 1);
             if (!copyOrDeleteElement(context, obj, from, to)) {
                 return context.getPendingException();
             }
         }
-        if (!deleteOrThrow(context, obj, PropertyKey.fromString(Long.toString(length - 1)))) {
+        if (!deleteOrThrow(context, obj, PropertyKey.fromIndexString(length - 1))) {
             return context.getPendingException();
         }
         if (!setOrThrow(context, obj, PropertyKey.LENGTH, JSNumber.of(length - 1))) {
@@ -1433,18 +1379,15 @@ public final class ArrayPrototype {
         long count = Math.max(end - begin, 0);
 
         // Step 7: Let A be ? ArraySpeciesCreate(O, count).
-        JSValue resultVal = context.createJSArraySpecies(obj, count);
-        if (resultVal == null || context.hasPendingException()) {
+        JSObject resultObj = createSpeciesObject(context, obj, count);
+        if (resultObj == null) {
             return context.hasPendingException() ? context.getPendingException() : JSUndefined.INSTANCE;
-        }
-        if (!(resultVal instanceof JSObject resultObj)) {
-            return context.throwTypeError("ArraySpeciesCreate did not return an object");
         }
 
         long resultIndex = 0;
         for (long i = begin; i < end; i++, resultIndex++) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            PropertyKey key = PropertyKey.fromIndexString(i);
             boolean kPresent = obj.has(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -1455,7 +1398,7 @@ public final class ArrayPrototype {
                     return context.getPendingException();
                 }
                 // Step 8.b.iii: Perform ? CreateDataPropertyOrThrow(A, ! ToString(resultIndex), kValue).
-                if (!resultObj.defineProperty(PropertyKey.fromString(Long.toString(resultIndex)), element,
+                if (!resultObj.defineProperty(PropertyKey.fromIndexString(resultIndex), element,
                         PropertyDescriptor.DataState.All)) {
                     return context.throwTypeError("Cannot define property " + resultIndex);
                 }
@@ -1483,7 +1426,7 @@ public final class ArrayPrototype {
      */
     public static JSValue sort(JSContext context, JSValue thisArg, JSValue[] args) {
         // ES2024 23.1.3.30 step 1: validate comparefn before anything else
-        JSValue compareFunction = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue compareFunction = JSValue.argumentOrUndefined(args, 0);
         if (!(compareFunction instanceof JSUndefined) && !JSTypeChecking.isCallable(compareFunction)) {
             return context.throwTypeError("The comparison function must be either a function or undefined: "
                     + (compareFunction instanceof JSObject ? "#<Object>" : compareFunction.toString()));
@@ -1508,7 +1451,7 @@ public final class ArrayPrototype {
         int undefinedCount = 0;
         for (long i = 0; i < length; i++) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            PropertyKey key = PropertyKey.fromIndexString(i);
             boolean present = obj.has(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -1541,7 +1484,7 @@ public final class ArrayPrototype {
         // Write sorted elements
         for (int i = 0; i < sortableElements.size(); i++) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(writeIndex));
+            PropertyKey key = PropertyKey.fromIndexString(writeIndex);
             if (!setOrThrow(context, obj, key, sortableElements.get(i))) {
                 return context.getPendingException();
             }
@@ -1551,7 +1494,7 @@ public final class ArrayPrototype {
         // Write undefined values after sorted elements
         for (int i = 0; i < undefinedCount; i++) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(writeIndex));
+            PropertyKey key = PropertyKey.fromIndexString(writeIndex);
             if (!setOrThrow(context, obj, key, JSUndefined.INSTANCE)) {
                 return context.getPendingException();
             }
@@ -1561,7 +1504,7 @@ public final class ArrayPrototype {
         // Delete remaining holes
         for (long i = writeIndex; i < length; i++) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            PropertyKey key = PropertyKey.fromIndexString(i);
             if (!deleteOrThrow(context, obj, key)) {
                 return context.getPendingException();
             }
@@ -1598,18 +1541,15 @@ public final class ArrayPrototype {
         }
 
         // Step 12: Let A be ? ArraySpeciesCreate(O, actualDeleteCount).
-        JSValue deletedVal = context.createJSArraySpecies(obj, deleteCount);
-        if (deletedVal == null || context.hasPendingException()) {
+        JSObject deletedObj = createSpeciesObject(context, obj, deleteCount);
+        if (deletedObj == null) {
             return context.hasPendingException() ? context.getPendingException() : JSUndefined.INSTANCE;
-        }
-        if (!(deletedVal instanceof JSObject deletedObj)) {
-            return context.throwTypeError("ArraySpeciesCreate did not return an object");
         }
 
         // Step 10: Collect deleted elements
         for (long i = 0; i < deleteCount; i++) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(start + i));
+            PropertyKey key = PropertyKey.fromIndexString(start + i);
             boolean kPresent = obj.has(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -1620,8 +1560,7 @@ public final class ArrayPrototype {
                     return context.getPendingException();
                 }
                 // Step 10.c.ii: Perform ? CreateDataPropertyOrThrow(A, ! ToString(k), fromValue).
-                if (!deletedObj.defineProperty(PropertyKey.fromString(Long.toString(i)), val,
-                        PropertyDescriptor.DataState.All)) {
+                if (!deletedObj.defineProperty(PropertyKey.fromIndexString(i), val, PropertyDescriptor.DataState.All)) {
                     return context.throwTypeError("Cannot define property " + i);
                 }
             }
@@ -1644,8 +1583,8 @@ public final class ArrayPrototype {
             // Shift elements left
             for (long k = start; k < length - deleteCount; k++) {
                 context.getVirtualMachine().checkExecutionInterruptForNative();
-                PropertyKey from = PropertyKey.fromString(Long.toString(k + deleteCount));
-                PropertyKey to = PropertyKey.fromString(Long.toString(k + insertCount));
+                PropertyKey from = PropertyKey.fromIndexString(k + deleteCount);
+                PropertyKey to = PropertyKey.fromIndexString(k + insertCount);
                 if (!copyOrDeleteElement(context, obj, from, to)) {
                     return context.getPendingException();
                 }
@@ -1653,7 +1592,7 @@ public final class ArrayPrototype {
             // Delete trailing elements
             for (long k = newLen; k < length; k++) {
                 context.getVirtualMachine().checkExecutionInterruptForNative();
-                if (!deleteOrThrow(context, obj, PropertyKey.fromString(Long.toString(k)))) {
+                if (!deleteOrThrow(context, obj, PropertyKey.fromIndexString(k))) {
                     return context.getPendingException();
                 }
             }
@@ -1661,8 +1600,8 @@ public final class ArrayPrototype {
             // Shift elements right
             for (long k = length - deleteCount - 1; k >= start; k--) {
                 context.getVirtualMachine().checkExecutionInterruptForNative();
-                PropertyKey from = PropertyKey.fromString(Long.toString(k + deleteCount));
-                PropertyKey to = PropertyKey.fromString(Long.toString(k + insertCount));
+                PropertyKey from = PropertyKey.fromIndexString(k + deleteCount);
+                PropertyKey to = PropertyKey.fromIndexString(k + insertCount);
                 if (!copyOrDeleteElement(context, obj, from, to)) {
                     return context.getPendingException();
                 }
@@ -1672,7 +1611,7 @@ public final class ArrayPrototype {
         // Insert new elements
         for (int i = 0; i < insertCount; i++) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(start + i));
+            PropertyKey key = PropertyKey.fromIndexString(start + i);
             if (!setOrThrow(context, obj, key, args[i + 2])) {
                 return context.getPendingException();
             }
@@ -1710,11 +1649,11 @@ public final class ArrayPrototype {
             return context.throwTypeError("Callback must be a function");
         }
         JSValue callback = args[0];
-        JSValue callbackThis = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue callbackThis = JSValue.argumentOrUndefined(args, 1);
         JSBoolean stopResult = every ? JSBoolean.FALSE : JSBoolean.TRUE;
         for (long i = 0; i < length; i++) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            PropertyKey key = PropertyKey.fromIndexString(i);
             boolean present = obj.has(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -1775,7 +1714,7 @@ public final class ArrayPrototype {
             if (i > 0) {
                 sb.append(",");
             }
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            PropertyKey key = PropertyKey.fromIndexString(i);
             JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -1793,8 +1732,8 @@ public final class ArrayPrototype {
                     return context.throwTypeError("toLocaleString is not a function");
                 }
                 // Per ECMA-402, invoke toLocaleString with exactly 2 args: locales and options
-                JSValue localesArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+                JSValue localesArg = JSValue.argumentOrUndefined(args, 0);
+                JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
                 JSValue localeStringValue = PromiseConstructor.callCallable(context, toLocaleStringValue, element,
                         new JSValue[]{localesArg, optionsArg});
                 if (context.hasPendingException()) {
@@ -1850,7 +1789,7 @@ public final class ArrayPrototype {
         // Copy elements in reverse order
         for (long i = length - 1; i >= 0; i--) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            PropertyKey key = PropertyKey.fromIndexString(i);
             JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -1867,7 +1806,7 @@ public final class ArrayPrototype {
     public static JSValue toSorted(JSContext context, JSValue thisArg, JSValue[] args) {
         // Step 1: If comparefn is not undefined and IsCallable(comparefn) is false, throw a TypeError.
         // This must happen before ToObject and LengthOfArrayLike per spec.
-        JSValue compareFunction = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue compareFunction = JSValue.argumentOrUndefined(args, 0);
         if (!(compareFunction instanceof JSUndefined) && !JSTypeChecking.isCallable(compareFunction)) {
             return context.throwTypeError("The comparison function must be either a function or undefined: "
                     + (compareFunction instanceof JSObject ? "#<Object>" : compareFunction.toString()));
@@ -1895,7 +1834,7 @@ public final class ArrayPrototype {
         List<JSValue> elements = new ArrayList<>();
         for (long i = 0; i < length; i++) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
+            PropertyKey key = PropertyKey.fromIndexString(i);
             elements.add(obj.get(key));
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -2069,8 +2008,8 @@ public final class ArrayPrototype {
             // Shift existing elements right
             for (long k = length - 1; k >= 0; k--) {
                 context.getVirtualMachine().checkExecutionInterruptForNative();
-                PropertyKey from = PropertyKey.fromString(Long.toString(k));
-                PropertyKey to = PropertyKey.fromString(Long.toString(k + argCount));
+                PropertyKey from = PropertyKey.fromIndexString(k);
+                PropertyKey to = PropertyKey.fromIndexString(k + argCount);
                 if (!copyOrDeleteElement(context, obj, from, to)) {
                     return context.getPendingException();
                 }
@@ -2079,7 +2018,7 @@ public final class ArrayPrototype {
         // Insert new elements at the beginning
         for (int j = 0; j < argCount; j++) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            if (!setOrThrow(context, obj, PropertyKey.fromString(Long.toString(j)), args[j])) {
+            if (!setOrThrow(context, obj, PropertyKey.fromIndexString(j), args[j])) {
                 return context.getPendingException();
             }
         }
@@ -2143,7 +2082,7 @@ public final class ArrayPrototype {
             if (i == index) {
                 result.push(newValue);
             } else {
-                PropertyKey key = PropertyKey.fromString(Long.toString(i));
+                PropertyKey key = PropertyKey.fromIndexString(i);
                 result.push(obj.get(key));
                 if (context.hasPendingException()) {
                     return context.getPendingException();

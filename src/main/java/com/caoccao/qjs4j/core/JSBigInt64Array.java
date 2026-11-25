@@ -48,6 +48,11 @@ public final class JSBigInt64Array extends JSTypedArray {
     }
 
     @Override
+    TypedArrayKind elementKind() {
+        return TypedArrayKind.BIGINT64;
+    }
+
+    @Override
     public double getElement(long index) {
         checkIndex(index);
         JSByteBuffer buf = getByteBuffer();
@@ -59,16 +64,6 @@ public final class JSBigInt64Array extends JSTypedArray {
         checkIndex(index);
         JSByteBuffer buf = getByteBuffer();
         return new JSBigInt(BigInteger.valueOf(buf.getLong(index * BYTES_PER_ELEMENT)));
-    }
-
-    @Override
-    public String getObjectTag() {
-        return "[object " + NAME + "]";
-    }
-
-    @Override
-    public String getTypedArrayName() {
-        return NAME;
     }
 
     @Override
@@ -87,16 +82,6 @@ public final class JSBigInt64Array extends JSTypedArray {
             JSByteBuffer buf = getByteBuffer();
             buf.putLong(index * BYTES_PER_ELEMENT, longVal);
         }
-    }
-
-    @Override
-    public boolean isAtomicsReadableAndWriteable() {
-        return true;
-    }
-
-    @Override
-    public boolean isAtomicsWriteable() {
-        return true;
     }
 
     @Override

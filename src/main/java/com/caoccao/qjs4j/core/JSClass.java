@@ -70,7 +70,7 @@ public final class JSClass extends JSFunction {
         this.prototype.defineProperty(PropertyKey.CONSTRUCTOR, this, DataState.ConfigurableWritable);
 
         // Set prototype property on class
-        this.defineProperty(PropertyKey.fromString("prototype"), prototype, DataState.None);
+        this.defineProperty(PropertyKey.PROTOTYPE, prototype, DataState.None);
     }
 
     public JSClass(String name, JSFunction constructor, JSClass superClass) {

@@ -547,6 +547,11 @@ public enum TemporalCalendarId {
         return null;
     }
 
+    public static TemporalCalendarId fromDateAnnotation(JSContext context, String input) {
+        String annotation = TemporalUtils.firstCalendarAnnotation(input);
+        return annotation == null ? ISO8601 : createFromCalendarString(context, new JSString(annotation));
+    }
+
     public static TemporalCalendarId fromIdentifier(String calendarIdentifier) {
         if (calendarIdentifier == null) {
             return null;

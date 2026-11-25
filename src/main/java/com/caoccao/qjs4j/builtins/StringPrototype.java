@@ -220,7 +220,7 @@ public final class StringPrototype {
         String s = str.value();
 
         // A missing index is undefined, which ToIntegerOrInfinity makes 0: "abc".at() is "a". It used to be undefined.
-        long index = (long) JSTypeConversions.toInteger(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        long index = (long) JSTypeConversions.toInteger(context, JSValue.argumentOrUndefined(args, 0));
         int length = s.length();
 
         // Handle negative indices
@@ -424,7 +424,7 @@ public final class StringPrototype {
 
         if (attr != null) {
             // Attribute requires a value from args[0]
-            JSValue attrValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            JSValue attrValue = JSValue.argumentOrUndefined(args, 0);
             JSString attrStr = toStringCheckObject(context, attrValue);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -603,8 +603,7 @@ public final class StringPrototype {
         String s = str.value();
 
         // A missing search string is undefined, which converts to "undefined"; it used to answer -1.
-        String searchStr = JSTypeConversions.toString(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE)
-                .value();
+        String searchStr = JSTypeConversions.toString(context, JSValue.argumentOrUndefined(args, 0)).value();
         long position = args.length > 1 ? (long) JSTypeConversions.toInteger(context, args[1]) : 0;
         position = Math.max(0, Math.min(position, s.length()));
 
@@ -761,8 +760,7 @@ public final class StringPrototype {
         String s = str.value();
 
         // A missing search string is undefined, which converts to "undefined"; it used to answer -1.
-        String searchStr = JSTypeConversions.toString(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE)
-                .value();
+        String searchStr = JSTypeConversions.toString(context, JSValue.argumentOrUndefined(args, 0)).value();
         // ES2024 22.1.3.9: If numPos is NaN, let pos be +∞; otherwise let pos be ToIntegerOrInfinity(numPos)
         long position;
         if (args.length > 1 && !args[1].isUndefined()) {
@@ -796,11 +794,11 @@ public final class StringPrototype {
         JSString str = toStringCheckObject(context, thisArg);
         String thisStr = str.value();
 
-        JSString thatStr = JSTypeConversions.toString(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        JSString thatStr = JSTypeConversions.toString(context, JSValue.argumentOrUndefined(args, 0));
         String that = thatStr.value();
 
-        JSValue localeValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        JSValue optionsValue = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
+        JSValue localeValue = JSValue.argumentOrUndefined(args, 1);
+        JSValue optionsValue = JSValue.argumentOrUndefined(args, 2);
         JSValue collatorValue = JSIntlObject.createCollator(context, context.createJSObject(),
                 new JSValue[]{localeValue, optionsValue});
         if (context.hasPendingException()) {
@@ -822,7 +820,7 @@ public final class StringPrototype {
             return context.throwTypeError("cannot convert to object");
         }
 
-        JSValue regexpArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue regexpArg = JSValue.argumentOrUndefined(args, 0);
         if (regexpArg instanceof JSObject regexpObj) {
             JSValue matcher = regexpObj.get(PropertyKey.SYMBOL_MATCH);
             if (context.hasPendingException()) {
@@ -866,7 +864,7 @@ public final class StringPrototype {
             return context.throwTypeError("cannot convert to object");
         }
 
-        JSValue regexpArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue regexpArg = JSValue.argumentOrUndefined(args, 0);
         // Step 2: If regexp is neither undefined nor null
         if (!(regexpArg instanceof JSUndefined) && !(regexpArg instanceof JSNull)) {
             // Step 2a: isRegExp check
@@ -1141,8 +1139,8 @@ public final class StringPrototype {
             return context.throwTypeError("cannot convert to object");
         }
 
-        JSValue searchValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue replaceValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue searchValue = JSValue.argumentOrUndefined(args, 0);
+        JSValue replaceValue = JSValue.argumentOrUndefined(args, 1);
         if (searchValue instanceof JSObject searchValueObject) {
             JSValue replacer = searchValueObject.get(PropertyKey.SYMBOL_REPLACE);
             if (context.hasPendingException()) {
@@ -1195,8 +1193,8 @@ public final class StringPrototype {
             return context.throwTypeError("cannot convert to object");
         }
 
-        JSValue searchValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue replaceValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue searchValue = JSValue.argumentOrUndefined(args, 0);
+        JSValue replaceValue = JSValue.argumentOrUndefined(args, 1);
         // Step 2: If searchValue is neither undefined nor null
         if (!(searchValue instanceof JSUndefined) && !(searchValue instanceof JSNull)) {
             // Step 2a: isRegExp check
@@ -1306,7 +1304,7 @@ public final class StringPrototype {
             return context.throwTypeError("cannot convert to object");
         }
 
-        JSValue regexpArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue regexpArg = JSValue.argumentOrUndefined(args, 0);
         if (regexpArg instanceof JSObject regexpObj) {
             JSValue searcher = regexpObj.get(PropertyKey.SYMBOL_SEARCH);
             if (context.hasPendingException()) {
@@ -1389,8 +1387,8 @@ public final class StringPrototype {
             return context.throwTypeError("cannot convert to object");
         }
 
-        JSValue separatorArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue limitArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue separatorArg = JSValue.argumentOrUndefined(args, 0);
+        JSValue limitArg = JSValue.argumentOrUndefined(args, 1);
         if (separatorArg instanceof JSObject separatorObject) {
             JSValue splitter = separatorObject.get(PropertyKey.SYMBOL_SPLIT);
             if (context.hasPendingException()) {

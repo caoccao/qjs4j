@@ -350,7 +350,7 @@ public final class JSArray extends JSObject {
         }
 
         if (sealed || frozen) {
-            PropertyKey stringKey = key.isString() ? key : PropertyKey.fromString(Long.toString(index));
+            PropertyKey stringKey = key.isString() ? key : PropertyKey.fromIndexString(index);
             return super.delete(stringKey, throwOnFailure);
         }
 
@@ -465,7 +465,7 @@ public final class JSArray extends JSObject {
             }
         }
 
-        JSValue value = super.get(PropertyKey.fromString(Long.toString(index)));
+        JSValue value = super.get(PropertyKey.fromIndexString(index));
         if (!(value instanceof JSUndefined)) {
             return value;
         }
@@ -542,7 +542,7 @@ public final class JSArray extends JSObject {
         } else {
             // getOwnPropertyDescriptorRaw, not getOwnPropertyDescriptor: the public method
             // dispatches back to this override, so `super.` on it recurses forever.
-            return super.getOwnPropertyDescriptorRaw(PropertyKey.fromString(Long.toString(index)));
+            return super.getOwnPropertyDescriptorRaw(PropertyKey.fromIndexString(index));
         }
 
         return null;
@@ -616,7 +616,7 @@ public final class JSArray extends JSObject {
                             if (index <= Integer.MAX_VALUE) {
                                 numericKeys.add(Map.entry(index, PropertyKey.fromIndex((int) index)));
                             } else {
-                                numericKeys.add(Map.entry(index, PropertyKey.fromString(Long.toString(index))));
+                                numericKeys.add(Map.entry(index, PropertyKey.fromIndexString(index)));
                             }
                         }
                     }
@@ -681,7 +681,7 @@ public final class JSArray extends JSObject {
             }
             return sparseProperties != null && sparseProperties.containsKey(intIndex);
         }
-        return super.hasOwnProperty(PropertyKey.fromString(Long.toString(index)));
+        return super.hasOwnProperty(PropertyKey.fromIndexString(index));
     }
 
     @Override
@@ -698,7 +698,7 @@ public final class JSArray extends JSObject {
         if (index <= Integer.MAX_VALUE) {
             return hasDenseValue((int) index);
         }
-        return super.hasOwnProperty(PropertyKey.fromString(Long.toString(index)));
+        return super.hasOwnProperty(PropertyKey.fromIndexString(index));
     }
 
     private boolean hasPrototypeSetInterference(PropertyKey key) {
@@ -838,7 +838,7 @@ public final class JSArray extends JSObject {
         } else {
             // Two-argument form so the call stays non-virtual: the one-argument delete now
             // routes back through the overridable [[Delete]], which would re-enter this class.
-            super.delete(PropertyKey.fromString(Long.toString(lastIndex)), context.isStrictMode());
+            super.delete(PropertyKey.fromIndexString(lastIndex), context.isStrictMode());
         }
 
         setLength(lastIndex);
@@ -892,7 +892,7 @@ public final class JSArray extends JSObject {
     public void set(long index, JSValue value) {
         if (index < 0 || index > MAX_ARRAY_INDEX) {
             // Negative indices are treated as string properties
-            super.set(PropertyKey.fromString(Long.toString(index)), value);
+            super.set(PropertyKey.fromIndexString(index), value);
             return;
         }
 
@@ -930,7 +930,7 @@ public final class JSArray extends JSObject {
         // delegate to JSObject.set which handles descriptor constraints (writable, accessor, etc.).
         // Following QuickJS which checks find_own_property before using the fast array path.
         if (!isAddingNewElement && index <= Integer.MAX_VALUE) {
-            PropertyKey key = PropertyKey.fromString(Long.toString(index));
+            PropertyKey key = PropertyKey.fromIndexString(index);
             if (super.hasOwnShapeProperty(key)) {
                 super.set(key, value);
                 return;
@@ -954,7 +954,7 @@ public final class JSArray extends JSObject {
             putElement((int) index, value);
         } else {
             // Preserve semantics for very large array indices without integer overflow.
-            super.set(PropertyKey.fromString(Long.toString(index)), value);
+            super.set(PropertyKey.fromIndexString(index), value);
         }
     }
 

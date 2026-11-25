@@ -33,8 +33,8 @@ public final class TemporalPlainTimeConstructor {
      * Temporal.PlainTime.compare(one, two)
      */
     public static JSValue compare(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue oneArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue twoArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue oneArg = JSValue.argumentOrUndefined(args, 0);
+        JSValue twoArg = JSValue.argumentOrUndefined(args, 1);
 
         JSTemporalPlainTime firstTime = toTemporalTimeObject(context, oneArg);
         if (context.hasPendingException()) {
@@ -112,8 +112,8 @@ public final class TemporalPlainTimeConstructor {
      * Temporal.PlainTime.from(item, options?)
      */
     public static JSValue from(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue item = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue item = JSValue.argumentOrUndefined(args, 0);
+        JSValue options = JSValue.argumentOrUndefined(args, 1);
         return toTemporalTime(context, item, options);
     }
 

@@ -1255,8 +1255,7 @@ public final class OpcodeHandler {
             }
         }
 
-        constructorFunction.defineProperty(PropertyKey.fromString("prototype"), prototypeObject,
-                PropertyDescriptor.DataState.None);
+        constructorFunction.defineProperty(PropertyKey.PROTOTYPE, prototypeObject, PropertyDescriptor.DataState.None);
         prototypeObject.defineProperty(PropertyKey.CONSTRUCTOR, constructorValue,
                 PropertyDescriptor.DataState.ConfigurableWritable);
         JSString constructorName = computed
@@ -1787,87 +1786,11 @@ public final class OpcodeHandler {
     }
 
     static void handleFclosure(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
-        int sp = executionContext.sp;
-        int functionIndex = executionContext.bytecode.readU32(pc + 1);
-        JSValue functionValue = executionContext.bytecode.getConstants()[functionIndex];
-        if (functionValue instanceof JSBytecodeFunction templateFunction) {
-            IdentityHashMap<JSSymbol, JSSymbol> symbolRemap = internalResolvePrivateSymbolRemap(executionContext,
-                    templateFunction, pc, op, sp);
-            JSBytecodeFunction closureTemplate = templateFunction;
-            if (symbolRemap != null && !symbolRemap.isEmpty()) {
-                closureTemplate = templateFunction.copyTemplateWithRemappedPrivateSymbols(symbolRemap);
-            }
-            int[] captureInfos = closureTemplate.getCaptureSourceInfos();
-            JSBytecodeFunction closureFunction;
-            if (captureInfos != null) {
-                VarRef[] capturedVarRefs = internalCreateVarRefsFromCaptures(captureInfos, executionContext.frame);
-                closureFunction = closureTemplate.copyWithVarRefs(capturedVarRefs);
-                int selfIndex = closureTemplate.getSelfCaptureIndex();
-                if (selfIndex >= 0 && selfIndex < capturedVarRefs.length) {
-                    capturedVarRefs[selfIndex].set(closureFunction);
-                }
-            } else {
-                int closureCount = closureTemplate.getClosureVars().length;
-                JSValue[] capturedClosureVars = new JSValue[closureCount];
-                for (int i = closureCount - 1; i >= 0; i--) {
-                    capturedClosureVars[i] = (JSValue) stack[--sp];
-                }
-                closureFunction = closureTemplate.copyWithClosureVars(capturedClosureVars);
-                int selfIndex = closureTemplate.getSelfCaptureIndex();
-                if (selfIndex >= 0 && selfIndex < capturedClosureVars.length) {
-                    capturedClosureVars[selfIndex] = closureFunction;
-                }
-            }
-            internalInitializeClosure(executionContext, closureTemplate, closureFunction, symbolRemap);
-            stack[sp++] = closureFunction;
-        } else {
-            if (functionValue instanceof JSFunction function) {
-                function.initializePrototypeChain(executionContext.virtualMachine.context);
-            }
-            stack[sp++] = functionValue;
-        }
-        executionContext.sp = sp;
-        executionContext.pc = pc + op.getSize();
+        pushClosure(op, executionContext, executionContext.bytecode.readU32(executionContext.pc + 1), true);
     }
 
     static void handleFclosure8(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
-        int sp = executionContext.sp;
-        int functionIndex = executionContext.bytecode.readU8(pc + 1);
-        JSValue functionValue = executionContext.bytecode.getConstants()[functionIndex];
-        if (functionValue instanceof JSBytecodeFunction templateFunction) {
-            IdentityHashMap<JSSymbol, JSSymbol> symbolRemap = internalResolvePrivateSymbolRemap(executionContext,
-                    templateFunction, pc, op, sp);
-            JSBytecodeFunction closureTemplate = templateFunction;
-            if (symbolRemap != null && !symbolRemap.isEmpty()) {
-                closureTemplate = templateFunction.copyTemplateWithRemappedPrivateSymbols(symbolRemap);
-            }
-            int[] captureInfos = closureTemplate.getCaptureSourceInfos();
-            JSBytecodeFunction closureFunction;
-            if (captureInfos != null) {
-                VarRef[] capturedVarRefs = internalCreateVarRefsFromCaptures(captureInfos, executionContext.frame);
-                closureFunction = closureTemplate.copyWithVarRefs(capturedVarRefs);
-            } else {
-                int closureCount = closureTemplate.getClosureVars().length;
-                JSValue[] capturedClosureVars = new JSValue[closureCount];
-                for (int i = closureCount - 1; i >= 0; i--) {
-                    capturedClosureVars[i] = (JSValue) stack[--sp];
-                }
-                closureFunction = closureTemplate.copyWithClosureVars(capturedClosureVars);
-            }
-            internalInitializeClosure(executionContext, closureTemplate, closureFunction, symbolRemap);
-            stack[sp++] = closureFunction;
-        } else {
-            if (functionValue instanceof JSFunction function) {
-                function.initializePrototypeChain(executionContext.virtualMachine.context);
-            }
-            stack[sp++] = functionValue;
-        }
-        executionContext.sp = sp;
-        executionContext.pc = pc + op.getSize();
+        pushClosure(op, executionContext, executionContext.bytecode.readU8(executionContext.pc + 1), false);
     }
 
     static void handleForAwaitOfNext(Opcode op, ExecutionContext executionContext) {
@@ -6276,6 +6199,51 @@ public final class OpcodeHandler {
         }
         Opcode nextOpcode = executionContext.decodedOpcodes[nextPc];
         return nextOpcode == Opcode.DEFINE_CLASS || nextOpcode == Opcode.DEFINE_CLASS_COMPUTED;
+    }
+
+    private static void pushClosure(Opcode op, ExecutionContext executionContext, int functionIndex, boolean bindSelf) {
+        int pc = executionContext.pc;
+        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        int sp = executionContext.sp;
+        JSValue functionValue = executionContext.bytecode.getConstants()[functionIndex];
+        if (functionValue instanceof JSBytecodeFunction templateFunction) {
+            IdentityHashMap<JSSymbol, JSSymbol> symbolRemap = internalResolvePrivateSymbolRemap(executionContext,
+                    templateFunction, pc, op, sp);
+            JSBytecodeFunction closureTemplate = templateFunction;
+            if (symbolRemap != null && !symbolRemap.isEmpty()) {
+                closureTemplate = templateFunction.copyTemplateWithRemappedPrivateSymbols(symbolRemap);
+            }
+            int[] captureInfos = closureTemplate.getCaptureSourceInfos();
+            JSBytecodeFunction closureFunction;
+            if (captureInfos != null) {
+                VarRef[] capturedVarRefs = internalCreateVarRefsFromCaptures(captureInfos, executionContext.frame);
+                closureFunction = closureTemplate.copyWithVarRefs(capturedVarRefs);
+                int selfIndex = bindSelf ? closureTemplate.getSelfCaptureIndex() : -1;
+                if (selfIndex >= 0 && selfIndex < capturedVarRefs.length) {
+                    capturedVarRefs[selfIndex].set(closureFunction);
+                }
+            } else {
+                int closureCount = closureTemplate.getClosureVars().length;
+                JSValue[] capturedClosureVars = new JSValue[closureCount];
+                for (int i = closureCount - 1; i >= 0; i--) {
+                    capturedClosureVars[i] = (JSValue) stack[--sp];
+                }
+                closureFunction = closureTemplate.copyWithClosureVars(capturedClosureVars);
+                int selfIndex = bindSelf ? closureTemplate.getSelfCaptureIndex() : -1;
+                if (selfIndex >= 0 && selfIndex < capturedClosureVars.length) {
+                    capturedClosureVars[selfIndex] = closureFunction;
+                }
+            }
+            internalInitializeClosure(executionContext, closureTemplate, closureFunction, symbolRemap);
+            stack[sp++] = closureFunction;
+        } else {
+            if (functionValue instanceof JSFunction function) {
+                function.initializePrototypeChain(executionContext.virtualMachine.context);
+            }
+            stack[sp++] = functionValue;
+        }
+        executionContext.sp = sp;
+        executionContext.pc = pc + op.getSize();
     }
 
     private static JSValue readNamedBindingValue(ExecutionContext executionContext, String variableName,

@@ -245,8 +245,8 @@ public final class JSRegExp extends JSObject {
      * ToString'd).
      */
     public static JSValue[] extractRawArgs(JSContext context, JSValue[] args) {
-        JSValue patternArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue flagsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue patternArg = JSValue.argumentOrUndefined(args, 0);
+        JSValue flagsArg = JSValue.argumentOrUndefined(args, 1);
 
         // ES2024 22.2.3.1 step 1: Always call IsRegExp first (may access @@match).
         boolean patternIsRegExp = isRegExpLike(context, patternArg);

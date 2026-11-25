@@ -153,7 +153,7 @@ public final class JSONObject {
             if (index >= 0 && index <= Integer.MAX_VALUE) {
                 return obj.get(PropertyKey.fromIndex((int) index));
             }
-            return obj.get(PropertyKey.fromString(Long.toString(index)));
+            return obj.get(PropertyKey.fromIndexString(index));
         } catch (JSVirtualMachineException e) {
             convertVMException(e);
             return null;
@@ -248,10 +248,10 @@ public final class JSONObject {
                             // [[Delete]], not the delete operator: InternalizeJSONProperty ignores
                             // a false result, and must not throw because the calling script
                             // happens to be strict.
-                            obj.delete(PropertyKey.fromString(Long.toString(i)), false);
+                            obj.delete(PropertyKey.fromIndexString(i), false);
                         } else {
                             // Use CreateDataProperty (defineProperty), not [[Set]]
-                            obj.defineProperty(PropertyKey.fromString(Long.toString(i)), newElement,
+                            obj.defineProperty(PropertyKey.fromIndexString(i), newElement,
                                     PropertyDescriptor.DataState.All);
                         }
                     } catch (JSVirtualMachineException e) {
@@ -1089,7 +1089,7 @@ public final class JSONObject {
                         context.getVirtualMachine().checkExecutionInterruptForNative();
                         JSValue item;
                         try {
-                            item = ((JSObject) replacer).get(PropertyKey.fromString(Long.toString(i)));
+                            item = ((JSObject) replacer).get(PropertyKey.fromIndexString(i));
                         } catch (JSVirtualMachineException e) {
                             convertVMException(e);
                             return JSUndefined.INSTANCE;

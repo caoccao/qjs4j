@@ -43,8 +43,8 @@ public final class FunctionPrototype {
         }
 
         // First argument is the 'this' value for the called function
-        JSValue applyThisArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue arrayArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue applyThisArg = JSValue.argumentOrUndefined(args, 0);
+        JSValue arrayArg = JSValue.argumentOrUndefined(args, 1);
         JSValue[] callArgs = buildArgumentList(context, arrayArg);
         if (callArgs == null) {
             return context.getPendingException();
@@ -85,7 +85,7 @@ public final class FunctionPrototype {
         }
 
         // First argument is the 'this' value to bind
-        JSValue boundThis = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue boundThis = JSValue.argumentOrUndefined(args, 0);
 
         // Remaining arguments are pre-bound arguments
         int argCount = Math.max(0, args.length - 1);
@@ -195,7 +195,7 @@ public final class FunctionPrototype {
                 return context.throwTypeError("Function.prototype.call called on non-function");
             }
             // Use the proxy's apply mechanism
-            JSValue callThisArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            JSValue callThisArg = JSValue.argumentOrUndefined(args, 0);
             JSValue[] callArgs = new JSValue[Math.max(0, args.length - 1)];
             if (args.length > 1) {
                 System.arraycopy(args, 1, callArgs, 0, args.length - 1);
@@ -203,7 +203,7 @@ public final class FunctionPrototype {
             return proxy.apply(context, callThisArg, callArgs);
         } else if (thisArg instanceof JSFunction func) {
             // First argument is the 'this' value for the called function
-            JSValue callThisArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            JSValue callThisArg = JSValue.argumentOrUndefined(args, 0);
 
             // Remaining arguments are passed to the function
             JSValue[] callArgs = new JSValue[Math.max(0, args.length - 1)];
@@ -307,7 +307,7 @@ public final class FunctionPrototype {
             }
             // Handle proxy getPrototypeOf trap
             if (currentPrototype instanceof JSProxy proxy) {
-                JSValue proxyProto = proxy.get(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG));
+                JSValue proxyProto = proxy.get(PropertyKey.SYMBOL_TO_STRING_TAG);
                 // Actually, we need to call [[GetPrototypeOf]] on the proxy
                 // For now, get the prototype from the proxy itself
             }
@@ -320,7 +320,7 @@ public final class FunctionPrototype {
      * Function.prototype[Symbol.hasInstance](V) ES2024 20.2.3.6 - OrdinaryHasInstance
      */
     public static JSValue symbolHasInstance(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
         return ordinaryHasInstance(context, thisArg, value);
     }
 

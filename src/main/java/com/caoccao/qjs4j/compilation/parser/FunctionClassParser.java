@@ -86,39 +86,19 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
      *            The function name (or null for anonymous)
      */
     private void checkStrictModeParameters(FunctionParams funcParams, Identifier funcName) {
-        // Check function name
         if (funcName != null) {
-            String name = funcName.getName();
-            if (JSKeyword.EVAL.equals(name) || JSKeyword.ARGUMENTS.equals(name)) {
-                throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
-            } else if (parserContext.isStrictReservedIdentifier(name)) {
-                throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
-            }
+            checkStrictBindingName(funcName.getName());
         }
-
-        // Check parameter names for reserved names
         for (Pattern param : funcParams.params()) {
-            List<String> boundNames = param.getBoundNames();
-            for (String paramName : boundNames) {
-                if (JSKeyword.EVAL.equals(paramName) || JSKeyword.ARGUMENTS.equals(paramName)) {
-                    throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
-                } else if (parserContext.isStrictReservedIdentifier(paramName)) {
-                    throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
-                }
+            for (String name : param.getBoundNames()) {
+                checkStrictBindingName(name);
             }
         }
         if (funcParams.restParameter() != null) {
-            List<String> restBoundNames = funcParams.restParameter().getArgument().getBoundNames();
-            for (String restName : restBoundNames) {
-                if (JSKeyword.EVAL.equals(restName) || JSKeyword.ARGUMENTS.equals(restName)) {
-                    throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
-                } else if (parserContext.isStrictReservedIdentifier(restName)) {
-                    throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
-                }
+            for (String name : funcParams.restParameter().getArgument().getBoundNames()) {
+                checkStrictBindingName(name);
             }
         }
-
-        // Check for duplicates (strict mode always rejects duplicates)
         checkDuplicateParameters(funcParams);
     }
 
@@ -174,68 +154,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
      * Parse a class declaration or expression. Syntax: class Name extends Super { body }
      */
     ClassDeclaration parseClassDeclaration() {
-        SourceLocation startLocation = parserContext.getLocation();
-        int startOffset = parserContext.currentToken.offset();
-        parserContext.expect(TokenType.CLASS);
-
-        boolean savedStrictMode = parserContext.strictMode;
-        parserContext.strictMode = true;
-        parserContext.lexer.setStrictMode(true);
-        try {
-            // Parse optional class name
-            // Per ES spec 14.6: class definitions (including heritage and body) are strict mode code.
-            Identifier id = null;
-            if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
-                    || parserContext.match(TokenType.YIELD) || parserContext.match(TokenType.LET)) {
-                id = parserContext.parseIdentifier();
-                validateClassBindingName(id);
-            }
-
-            // Parse optional extends clause
-            // ES2024 ClassHeritage: extends LeftHandSideExpression[?Yield, ?Await]
-            Expression superClass = null;
-            if (parserContext.match(TokenType.EXTENDS)) {
-                parserContext.advance();
-                superClass = delegates.expressions.parseCallExpression();
-            }
-
-            // Parse class body
-            parserContext.expect(TokenType.LBRACE);
-            List<ClassElement> body = new ArrayList<>();
-            boolean savedParsingClassWithSuper = parserContext.parsingClassWithSuper;
-            parserContext.parsingClassWithSuper = superClass != null;
-            parserContext.classBodyNesting++;
-            try {
-                while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
-                    // Skip empty semicolons
-                    if (parserContext.match(TokenType.SEMICOLON)) {
-                        parserContext.advance();
-                        continue;
-                    }
-
-                    ClassElement element = parseClassElement();
-                    if (element != null) {
-                        body.add(element);
-                    }
-                }
-                validateClassElements(body);
-            } finally {
-                parserContext.classBodyNesting--;
-                parserContext.parsingClassWithSuper = savedParsingClassWithSuper;
-            }
-
-            // Capture the end position before advancing past the closing brace
-            int endOffset = parserContext.currentToken.offset() + parserContext.currentToken.value().length();
-            parserContext.expect(TokenType.RBRACE);
-
-            SourceLocation location = new SourceLocation(startLocation.line(), startLocation.column(), startOffset,
-                    endOffset);
-
-            return new ClassDeclaration(id, superClass, body, location);
-        } finally {
-            parserContext.strictMode = savedStrictMode;
-            parserContext.lexer.setStrictMode(savedStrictMode);
-        }
+        return parseClass(ClassDeclaration::new);
     }
 
     /**
@@ -458,68 +377,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
      * Parse a class expression (class used as an expression). Syntax: class [Name] [extends Super] { body }
      */
     ClassExpression parseClassExpression() {
-        SourceLocation startLocation = parserContext.getLocation();
-        int startOffset = parserContext.currentToken.offset();
-        parserContext.expect(TokenType.CLASS);
-
-        boolean savedStrictMode = parserContext.strictMode;
-        parserContext.strictMode = true;
-        parserContext.lexer.setStrictMode(true);
-        try {
-            // Parse optional class name (class expressions can be anonymous)
-            // Per ES spec 14.6: class definitions (including heritage and body) are strict mode code.
-            Identifier id = null;
-            if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
-                    || parserContext.match(TokenType.YIELD) || parserContext.match(TokenType.LET)) {
-                id = parserContext.parseIdentifier();
-                validateClassBindingName(id);
-            }
-
-            // Parse optional extends clause
-            // ES2024 ClassHeritage: extends LeftHandSideExpression[?Yield, ?Await]
-            Expression superClass = null;
-            if (parserContext.match(TokenType.EXTENDS)) {
-                parserContext.advance();
-                superClass = delegates.expressions.parseCallExpression();
-            }
-
-            // Parse class body
-            parserContext.expect(TokenType.LBRACE);
-            List<ClassElement> body = new ArrayList<>();
-            boolean savedParsingClassWithSuper2 = parserContext.parsingClassWithSuper;
-            parserContext.parsingClassWithSuper = superClass != null;
-            parserContext.classBodyNesting++;
-            try {
-                while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
-                    // Skip empty semicolons
-                    if (parserContext.match(TokenType.SEMICOLON)) {
-                        parserContext.advance();
-                        continue;
-                    }
-
-                    ClassElement element = parseClassElement();
-                    if (element != null) {
-                        body.add(element);
-                    }
-                }
-                validateClassElements(body);
-            } finally {
-                parserContext.classBodyNesting--;
-                parserContext.parsingClassWithSuper = savedParsingClassWithSuper2;
-            }
-
-            // Capture the end position before advancing past the closing brace
-            int endOffset = parserContext.currentToken.offset() + parserContext.currentToken.value().length();
-            parserContext.expect(TokenType.RBRACE);
-
-            SourceLocation location = new SourceLocation(startLocation.line(), startLocation.column(), startOffset,
-                    endOffset);
-
-            return new ClassExpression(id, superClass, body, location);
-        } finally {
-            parserContext.strictMode = savedStrictMode;
-            parserContext.lexer.setStrictMode(savedStrictMode);
-        }
+        return parseClass(ClassExpression::new);
     }
 
     private Expression parseClassFieldInitializer() {
@@ -1132,5 +990,84 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
     private void validateFormalsBodyDuplicate(FunctionParams funcParams, List<Statement> body) {
         ExpressionAssignmentParser.validateFormalsBodyDuplicate(funcParams.params(), funcParams.restParameter(), body);
+    }
+
+    private <T extends ASTNode> T parseClass(ClassFactory<T> factory) {
+        SourceLocation startLocation = parserContext.getLocation();
+        int startOffset = parserContext.currentToken.offset();
+        parserContext.expect(TokenType.CLASS);
+
+        boolean savedStrictMode = parserContext.strictMode;
+        parserContext.strictMode = true;
+        parserContext.lexer.setStrictMode(true);
+        try {
+            // Parse optional class name
+            // Per ES spec 14.6: class definitions (including heritage and body) are strict mode code.
+            Identifier id = null;
+            if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
+                    || parserContext.match(TokenType.YIELD) || parserContext.match(TokenType.LET)) {
+                id = parserContext.parseIdentifier();
+                validateClassBindingName(id);
+            }
+
+            // Parse optional extends clause
+            // ES2024 ClassHeritage: extends LeftHandSideExpression[?Yield, ?Await]
+            Expression superClass = null;
+            if (parserContext.match(TokenType.EXTENDS)) {
+                parserContext.advance();
+                superClass = delegates.expressions.parseCallExpression();
+            }
+
+            // Parse class body
+            parserContext.expect(TokenType.LBRACE);
+            List<ClassElement> body = new ArrayList<>();
+            boolean savedParsingClassWithSuper = parserContext.parsingClassWithSuper;
+            parserContext.parsingClassWithSuper = superClass != null;
+            parserContext.classBodyNesting++;
+            try {
+                while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+                    // Skip empty semicolons
+                    if (parserContext.match(TokenType.SEMICOLON)) {
+                        parserContext.advance();
+                        continue;
+                    }
+
+                    ClassElement element = parseClassElement();
+                    if (element != null) {
+                        body.add(element);
+                    }
+                }
+                validateClassElements(body);
+            } finally {
+                parserContext.classBodyNesting--;
+                parserContext.parsingClassWithSuper = savedParsingClassWithSuper;
+            }
+
+            // Capture the end position before advancing past the closing brace
+            int endOffset = parserContext.currentToken.offset() + parserContext.currentToken.value().length();
+            parserContext.expect(TokenType.RBRACE);
+
+            SourceLocation location = new SourceLocation(startLocation.line(), startLocation.column(), startOffset,
+                    endOffset);
+
+            return factory.create(id, superClass, body, location);
+        } finally {
+            parserContext.strictMode = savedStrictMode;
+            parserContext.lexer.setStrictMode(savedStrictMode);
+        }
+    }
+
+    @FunctionalInterface
+    private interface ClassFactory<T extends ASTNode> {
+        T create(Identifier id, Expression superClass, List<ClassElement> body, SourceLocation location);
+    }
+
+    private void checkStrictBindingName(String name) {
+        if (JSKeyword.EVAL.equals(name) || JSKeyword.ARGUMENTS.equals(name)) {
+            throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
+        }
+        if (parserContext.isStrictReservedIdentifier(name)) {
+            throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
+        }
     }
 }

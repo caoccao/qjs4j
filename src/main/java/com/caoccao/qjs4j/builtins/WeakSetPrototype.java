@@ -31,7 +31,7 @@ public final class WeakSetPrototype {
         if (!(thisArg instanceof JSWeakSet jsWeakSet)) {
             return context.throwTypeError("Method WeakSet.prototype.add called on incompatible receiver not weakset");
         }
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
         if (!JSWeakSet.isWeakSetValue(value)) {
             return context.throwTypeError("Invalid value used in weak set");
         }
@@ -48,7 +48,7 @@ public final class WeakSetPrototype {
             return context
                     .throwTypeError("Method WeakSet.prototype.delete called on incompatible receiver not weakset");
         }
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
         if (!JSWeakSet.isWeakSetValue(value)) {
             return JSBoolean.FALSE;
         }
@@ -62,7 +62,7 @@ public final class WeakSetPrototype {
         if (!(thisArg instanceof JSWeakSet jsWeakSet)) {
             return context.throwTypeError("Method WeakSet.prototype.has called on incompatible receiver not weakset");
         }
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
         if (!JSWeakSet.isWeakSetValue(value)) {
             return JSBoolean.FALSE;
         }

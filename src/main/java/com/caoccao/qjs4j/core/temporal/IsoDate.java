@@ -303,45 +303,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             return null;
         }
 
-        boolean hasTimePart = false;
-        if (parsingState.position() < parsingState.inputLength()
-                && (parsingState.current() == 'T' || parsingState.current() == 't' || parsingState.current() == ' ')) {
-            hasTimePart = true;
-            parsingState.advanceOne();
-            IsoTime parsedTime = parsingState.parseInstantTime(context);
-            if (parsedTime == null || context.hasPendingException()) {
-                return null;
-            }
-        }
-
-        if (parsingState.position() < parsingState.inputLength()) {
-            char marker = parsingState.current();
-            if (marker == 'Z' || marker == 'z') {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
-            }
-            if (marker == '+' || marker == '-') {
-                if (!hasTimePart) {
-                    context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return null;
-                }
-                IsoOffset parsedOffset = parsingState.parseInstantOffsetNanoseconds(context);
-                if (parsedOffset == null || context.hasPendingException()) {
-                    return null;
-                }
-            }
-        }
-
-        parsingState.parseInstantAnnotations(context);
-        if (context.hasPendingException()) {
-            return null;
-        }
-
-        if (parsingState.position() != parsingState.inputLength()) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-        return date;
+        return parseDateSuffix(context, parsingState) ? date : null;
     }
 
     public static IsoDate parseMonthDayString(JSContext context, String input) {
@@ -472,44 +434,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             return null;
         }
 
-        boolean hasTimePart = false;
-        if (parsingState.position() < parsingState.inputLength()
-                && (parsingState.current() == 'T' || parsingState.current() == 't' || parsingState.current() == ' ')) {
-            hasTimePart = true;
-            parsingState.advanceOne();
-            IsoTime parsedTime = parsingState.parseInstantTime(context);
-            if (parsedTime == null || context.hasPendingException()) {
-                return null;
-            }
-        }
-
-        if (parsingState.position() < parsingState.inputLength()) {
-            char marker = parsingState.current();
-            if (marker == 'Z' || marker == 'z') {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
-            }
-            if (marker == '+' || marker == '-') {
-                if (!hasTimePart) {
-                    context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return null;
-                }
-                IsoOffset parsedOffset = parsingState.parseInstantOffsetNanoseconds(context);
-                if (parsedOffset == null || context.hasPendingException()) {
-                    return null;
-                }
-            }
-        }
-
-        parsingState.parseInstantAnnotations(context);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (parsingState.position() != parsingState.inputLength()) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-        return new IsoDate(year, month, dayOfMonth);
+        return parseDateSuffix(context, parsingState) ? new IsoDate(year, month, dayOfMonth) : null;
     }
 
     private static IsoCalendarDate persianCalendarDateFromDayOfYear(int persianYear, long dayOfYear) {
@@ -1392,5 +1317,127 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             return year + 1;
         }
         return year;
+    }
+
+    public TemporalEraYear toTemporalEraYear(TemporalCalendarId calendarId) {
+        if (calendarId == TemporalCalendarId.ISO8601 || calendarId == TemporalCalendarId.CHINESE
+                || calendarId == TemporalCalendarId.DANGI) {
+            return null;
+        }
+
+        IsoCalendarDate calendarDateFields = toIsoCalendarDate(calendarId);
+        int calendarYear = calendarDateFields.year();
+
+        if (calendarId == TemporalCalendarId.GREGORY) {
+            if (calendarYear <= 0) {
+                return new TemporalEraYear(TemporalEra.BCE, 1 - calendarYear);
+            } else {
+                return new TemporalEraYear(TemporalEra.CE, calendarYear);
+            }
+        }
+
+        if (calendarId == TemporalCalendarId.JAPANESE) {
+            LocalDate date = LocalDate.of(year, month, day);
+            LocalDate reiwaStart = LocalDate.of(2019, 5, 1);
+            LocalDate heiseiStart = LocalDate.of(1989, 1, 8);
+            LocalDate showaStart = LocalDate.of(1926, 12, 25);
+            LocalDate taishoStart = LocalDate.of(1912, 7, 30);
+            LocalDate meijiStart = LocalDate.of(1873, 1, 1);
+
+            if (!date.isBefore(reiwaStart)) {
+                return new TemporalEraYear(TemporalEra.REIWA, year - 2018);
+            } else if (!date.isBefore(heiseiStart)) {
+                return new TemporalEraYear(TemporalEra.HEISEI, year - 1988);
+            } else if (!date.isBefore(showaStart)) {
+                return new TemporalEraYear(TemporalEra.SHOWA, year - 1925);
+            } else if (!date.isBefore(taishoStart)) {
+                return new TemporalEraYear(TemporalEra.TAISHO, year - 1911);
+            } else if (!date.isBefore(meijiStart)) {
+                return new TemporalEraYear(TemporalEra.MEIJI, year - 1867);
+            } else if (year <= 0) {
+                return new TemporalEraYear(TemporalEra.BCE, 1 - year);
+            } else {
+                return new TemporalEraYear(TemporalEra.CE, year);
+            }
+        }
+
+        if (calendarId == TemporalCalendarId.ROC) {
+            if (calendarYear >= 1) {
+                return new TemporalEraYear(TemporalEra.ROC, calendarYear);
+            } else {
+                return new TemporalEraYear(TemporalEra.BROC, 1 - calendarYear);
+            }
+        }
+
+        if (calendarId == TemporalCalendarId.BUDDHIST) {
+            return new TemporalEraYear(TemporalEra.BE, calendarYear);
+        } else if (calendarId == TemporalCalendarId.COPTIC) {
+            return new TemporalEraYear(TemporalEra.AM, calendarYear);
+        } else if (calendarId == TemporalCalendarId.ETHIOPIC) {
+            if (calendarYear <= 0) {
+                return new TemporalEraYear(TemporalEra.AA, 5500 + calendarYear);
+            } else {
+                return new TemporalEraYear(TemporalEra.AM, calendarYear);
+            }
+        } else if (calendarId == TemporalCalendarId.ETHIOAA) {
+            return new TemporalEraYear(TemporalEra.AA, calendarYear);
+        } else if (calendarId == TemporalCalendarId.HEBREW) {
+            return new TemporalEraYear(TemporalEra.AM, calendarYear);
+        } else if (calendarId == TemporalCalendarId.INDIAN) {
+            return new TemporalEraYear(TemporalEra.SHAKA, calendarYear);
+        } else if (calendarId == TemporalCalendarId.PERSIAN) {
+            return new TemporalEraYear(TemporalEra.AP, calendarYear);
+        } else if (calendarId == TemporalCalendarId.ISLAMIC_CIVIL || calendarId == TemporalCalendarId.ISLAMIC_TBLA
+                || calendarId == TemporalCalendarId.ISLAMIC_UMALQURA) {
+            if (calendarYear > 0) {
+                return new TemporalEraYear(TemporalEra.AH, calendarYear);
+            } else {
+                return new TemporalEraYear(TemporalEra.BH, 1 - calendarYear);
+            }
+        }
+
+        return null;
+    }
+
+    private static boolean parseDateSuffix(JSContext context, IsoParsingState parsingState) {
+        boolean hasTimePart = false;
+        if (parsingState.position() < parsingState.inputLength()
+                && (parsingState.current() == 'T' || parsingState.current() == 't' || parsingState.current() == ' ')) {
+            hasTimePart = true;
+            parsingState.advanceOne();
+            IsoTime parsedTime = parsingState.parseInstantTime(context);
+            if (parsedTime == null || context.hasPendingException()) {
+                return false;
+            }
+        }
+
+        if (parsingState.position() < parsingState.inputLength()) {
+            char marker = parsingState.current();
+            if (marker == 'Z' || marker == 'z') {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return false;
+            }
+            if (marker == '+' || marker == '-') {
+                if (!hasTimePart) {
+                    context.throwRangeError("Temporal error: Invalid ISO date.");
+                    return false;
+                }
+                IsoOffset parsedOffset = parsingState.parseInstantOffsetNanoseconds(context);
+                if (parsedOffset == null || context.hasPendingException()) {
+                    return false;
+                }
+            }
+        }
+
+        parsingState.parseInstantAnnotations(context);
+        if (context.hasPendingException()) {
+            return false;
+        }
+
+        if (parsingState.position() != parsingState.inputLength()) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return false;
+        }
+        return true;
     }
 }

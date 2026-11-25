@@ -29,7 +29,7 @@ public final class BooleanConstructor {
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         // Get the value to convert to boolean
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
 
         // Convert to boolean using ToBoolean
         JSBoolean boolValue = JSTypeConversions.toBoolean(value);

@@ -471,43 +471,12 @@ final class ExpressionPrimaryParser {
                     }
                 }
                 parserContext.advance();
-                String normalizedValue = value.replace("_", "");
-                Object numValue;
-                if (normalizedValue.startsWith("0x") || normalizedValue.startsWith("0X")) {
-                    long longVal = Long.parseLong(normalizedValue.substring(2), 16);
-                    numValue = (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
-                            ? (int) longVal
-                            : (double) longVal;
-                } else if (normalizedValue.startsWith("0b") || normalizedValue.startsWith("0B")) {
-                    long longVal = Long.parseLong(normalizedValue.substring(2), 2);
-                    numValue = (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
-                            ? (int) longVal
-                            : (double) longVal;
-                } else if (normalizedValue.startsWith("0o") || normalizedValue.startsWith("0O")) {
-                    long longVal = Long.parseLong(normalizedValue.substring(2), 8);
-                    numValue = (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
-                            ? (int) longVal
-                            : (double) longVal;
-                } else {
-                    numValue = parseDecimalOrLegacyOctal(normalizedValue);
-                }
-                yield new Literal(numValue, location);
+                yield parseNumericLiteral(value, location, false);
             }
             case BIGINT -> {
                 String value = parserContext.currentToken.value();
                 parserContext.advance();
-                String normalizedValue = value.replace("_", "");
-                BigInteger bigIntValue;
-                if (normalizedValue.startsWith("0x") || normalizedValue.startsWith("0X")) {
-                    bigIntValue = new BigInteger(normalizedValue.substring(2), 16);
-                } else if (normalizedValue.startsWith("0b") || normalizedValue.startsWith("0B")) {
-                    bigIntValue = new BigInteger(normalizedValue.substring(2), 2);
-                } else if (normalizedValue.startsWith("0o") || normalizedValue.startsWith("0O")) {
-                    bigIntValue = new BigInteger(normalizedValue.substring(2), 8);
-                } else {
-                    bigIntValue = new BigInteger(normalizedValue);
-                }
-                yield new Literal(bigIntValue, location);
+                yield parseNumericLiteral(value, location, true);
             }
             case STRING -> {
                 String value = parserContext.currentToken.value();
@@ -824,44 +793,12 @@ final class ExpressionPrimaryParser {
             case NUMBER -> {
                 String value = parserContext.currentToken.value();
                 parserContext.advance();
-                // Parse numeric property names to canonical form (e.g., 0b10 -> 2)
-                String normalizedValue = value.replace("_", "");
-                Object numValue;
-                if (normalizedValue.startsWith("0x") || normalizedValue.startsWith("0X")) {
-                    long longVal = Long.parseLong(normalizedValue.substring(2), 16);
-                    numValue = (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
-                            ? (int) longVal
-                            : (double) longVal;
-                } else if (normalizedValue.startsWith("0b") || normalizedValue.startsWith("0B")) {
-                    long longVal = Long.parseLong(normalizedValue.substring(2), 2);
-                    numValue = (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
-                            ? (int) longVal
-                            : (double) longVal;
-                } else if (normalizedValue.startsWith("0o") || normalizedValue.startsWith("0O")) {
-                    long longVal = Long.parseLong(normalizedValue.substring(2), 8);
-                    numValue = (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
-                            ? (int) longVal
-                            : (double) longVal;
-                } else {
-                    numValue = parseDecimalOrLegacyOctal(normalizedValue);
-                }
-                yield new Literal(numValue, location);
+                yield parseNumericLiteral(value, location, false);
             }
             case BIGINT -> {
                 String value = parserContext.currentToken.value();
                 parserContext.advance();
-                String normalizedValue = value.replace("_", "");
-                BigInteger bigIntValue;
-                if (normalizedValue.startsWith("0x") || normalizedValue.startsWith("0X")) {
-                    bigIntValue = new BigInteger(normalizedValue.substring(2), 16);
-                } else if (normalizedValue.startsWith("0b") || normalizedValue.startsWith("0B")) {
-                    bigIntValue = new BigInteger(normalizedValue.substring(2), 2);
-                } else if (normalizedValue.startsWith("0o") || normalizedValue.startsWith("0O")) {
-                    bigIntValue = new BigInteger(normalizedValue.substring(2), 8);
-                } else {
-                    bigIntValue = new BigInteger(normalizedValue);
-                }
-                yield new Literal(bigIntValue, location);
+                yield parseNumericLiteral(value, location, true);
             }
             case LBRACKET -> {
                 parserContext.advance();
@@ -1042,6 +979,29 @@ final class ExpressionPrimaryParser {
             return (int) doubleVal;
         }
         return doubleVal;
+    }
+
+    private static Literal parseNumericLiteral(String token, SourceLocation location, boolean bigInt) {
+        String digits = token.replace("_", "");
+        int radix = 10;
+        if (digits.length() > 1 && digits.charAt(0) == '0') {
+            radix = switch (digits.charAt(1)) {
+                case 'x', 'X' -> 16;
+                case 'o', 'O' -> 8;
+                case 'b', 'B' -> 2;
+                default -> 10;
+            };
+        }
+        if (radix != 10) {
+            digits = digits.substring(2);
+        }
+        if (bigInt) {
+            return new Literal(new BigInteger(digits, radix), location);
+        }
+        if (radix == 10) {
+            return new Literal(parseDecimalOrLegacyOctal(digits), location);
+        }
+        return new Literal((double) Long.parseLong(digits, radix), location);
     }
 
     /**

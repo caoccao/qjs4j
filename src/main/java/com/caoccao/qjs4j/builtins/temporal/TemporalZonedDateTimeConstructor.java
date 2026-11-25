@@ -36,8 +36,8 @@ public final class TemporalZonedDateTimeConstructor {
      * Temporal.ZonedDateTime.compare(one, two)
      */
     public static JSValue compare(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue oneArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue twoArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue oneArg = JSValue.argumentOrUndefined(args, 0);
+        JSValue twoArg = JSValue.argumentOrUndefined(args, 1);
 
         JSTemporalZonedDateTime firstZonedDateTime = toTemporalZonedDateTimeObject(context, oneArg);
         if (context.hasPendingException()) {
@@ -75,7 +75,7 @@ public final class TemporalZonedDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue epochNsArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue epochNsArg = JSValue.argumentOrUndefined(args, 0);
         JSBigInt epochNanosecondsBigInt;
         try {
             epochNanosecondsBigInt = JSTypeConversions.toBigInt(context, epochNsArg);
@@ -131,27 +131,6 @@ public final class TemporalZonedDateTimeConstructor {
         return JSTemporalZonedDateTime.create(context, epochNs, timeZoneId, calendarId, resolvedPrototype);
     }
 
-    private static String convertMonthCodeToString(JSContext context, JSValue monthCodeValue) {
-        if (monthCodeValue instanceof JSString monthCodeString) {
-            return monthCodeString.value();
-        }
-        if (monthCodeValue instanceof JSObject) {
-            JSValue primitiveMonthCode = JSTypeConversions.toPrimitive(context, monthCodeValue,
-                    JSTypeConversions.PreferredType.STRING);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            if (!(primitiveMonthCode instanceof JSString primitiveMonthCodeString)) {
-                context.throwTypeError("Temporal error: Month code must be string.");
-                return null;
-            }
-            return primitiveMonthCodeString.value();
-        }
-
-        context.throwTypeError("Temporal error: Month code must be string.");
-        return null;
-    }
-
     private static JSValue createZonedDateTimeFromPropertyBag(JSContext context,
             TemporalZonedDateTimePropertyBagData propertyBagData, TemporalZonedDateTimeOptions options) {
         Integer monthFromProperty = propertyBagData.month();
@@ -161,13 +140,7 @@ public final class TemporalZonedDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        String monthCodeFromProperty = null;
-        if (parsedMonthCode != null) {
-            monthCodeFromProperty = IsoMonth.toMonthCode(parsedMonthCode.month());
-            if (parsedMonthCode.leapMonth()) {
-                monthCodeFromProperty += "L";
-            }
-        }
+        String monthCodeFromProperty = parsedMonthCode == null ? null : parsedMonthCode.monthCode();
 
         int calendarYear = propertyBagData.year();
         int dayOfMonth = propertyBagData.day();
@@ -325,8 +298,8 @@ public final class TemporalZonedDateTimeConstructor {
      * Temporal.ZonedDateTime.from(item, options?)
      */
     public static JSValue from(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue item = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue item = JSValue.argumentOrUndefined(args, 0);
+        JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
 
         if (item instanceof JSTemporalZonedDateTime zonedDateTime) {
             TemporalZonedDateTimeOptions options = TemporalZonedDateTimeOptions.parse(context, optionsArg, "reject");
@@ -636,17 +609,9 @@ public final class TemporalZonedDateTimeConstructor {
         if (context.hasPendingException()) {
             return null;
         }
-        IsoMonth parsedMonthCode = null;
-        if (!(monthCodeValue instanceof JSUndefined) && monthCodeValue != null) {
-            String monthCodeText = convertMonthCodeToString(context, monthCodeValue);
-            if (context.hasPendingException() || monthCodeText == null) {
-                return null;
-            }
-            parsedMonthCode = IsoMonth.parseByMonthCode(context, monthCodeText,
-                    "Temporal error: Month code out of range.");
-            if (context.hasPendingException() || parsedMonthCode == null) {
-                return null;
-            }
+        IsoMonth parsedMonthCode = IsoMonth.fromField(context, monthCodeValue);
+        if (context.hasPendingException()) {
+            return null;
         }
 
         int nanosecond = toOptionalIntegralInt(context, itemObject, "nanosecond", 0);

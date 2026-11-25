@@ -555,7 +555,7 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      */
     private static long[] validateArgs(JSContext context, JSValue[] args) {
         // Get byteLength using ToIndex (preserves large values, throws RangeError for negative)
-        JSValue byteLengthArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue byteLengthArg = JSValue.argumentOrUndefined(args, 0);
         long byteLengthLong = JSTypeConversions.toIndex(context, byteLengthArg);
 
         // Check for options (maxByteLength for resizable buffers)

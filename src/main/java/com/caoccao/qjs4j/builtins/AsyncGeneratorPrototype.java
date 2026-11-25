@@ -125,7 +125,7 @@ public final class AsyncGeneratorPrototype {
 
             currentPromise.addReactions(new JSPromise.ReactionRecord(
                     new JSNativeFunction(context, "onFulfilled", 1, (childContext, thisArg, args) -> {
-                        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                        JSValue value = JSValue.argumentOrUndefined(args, 0);
                         JSObject result = context.createJSObject();
                         result.set(PropertyKey.VALUE, value);
                         result.set(PropertyKey.DONE, JSBoolean.FALSE);
@@ -133,7 +133,7 @@ public final class AsyncGeneratorPrototype {
                         return JSUndefined.INSTANCE;
                     }), resultPromise, context), new JSPromise.ReactionRecord(
                             new JSNativeFunction(context, "onRejected", 1, (childContext, thisArg, args) -> {
-                                JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                JSValue error = JSValue.argumentOrUndefined(args, 0);
                                 resultPromise.reject(error);
                                 return JSUndefined.INSTANCE;
                             }), resultPromise, context));
@@ -219,7 +219,7 @@ public final class AsyncGeneratorPrototype {
             return rejectIncompatibleReceiver(context, "next", thisArg);
         }
 
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
         return generator.next(value);
     }
 
@@ -243,7 +243,7 @@ public final class AsyncGeneratorPrototype {
             return rejectIncompatibleReceiver(context, "return", thisArg);
         }
 
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
         return generator.return_(value);
     }
 
@@ -258,7 +258,7 @@ public final class AsyncGeneratorPrototype {
             return rejectIncompatibleReceiver(context, "throw", thisArg);
         }
 
-        JSValue exception = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue exception = JSValue.argumentOrUndefined(args, 0);
         return generator.throw_(exception);
     }
 }

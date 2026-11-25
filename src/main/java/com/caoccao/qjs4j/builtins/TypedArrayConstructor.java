@@ -32,9 +32,9 @@ public final class TypedArrayConstructor {
             return context.throwTypeError("TypedArray.from called on non-TypedArray constructor");
         }
 
-        JSValue items = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue mapFnValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        JSValue thisArgValue = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
+        JSValue items = JSValue.argumentOrUndefined(args, 0);
+        JSValue mapFnValue = JSValue.argumentOrUndefined(args, 1);
+        JSValue thisArgValue = JSValue.argumentOrUndefined(args, 2);
 
         // Validate mapfn
         JSFunction mapFn = null;
@@ -106,7 +106,7 @@ public final class TypedArrayConstructor {
         }
 
         for (long k = 0; k < itemsLength; k++) {
-            PropertyKey key = PropertyKey.fromString(Long.toString(k));
+            PropertyKey key = PropertyKey.fromIndexString(k);
             JSValue kValue = iterableValues != null ? iterableValues.get(key) : arrayLike.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();

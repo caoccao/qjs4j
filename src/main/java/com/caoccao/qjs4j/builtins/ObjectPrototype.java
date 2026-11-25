@@ -328,7 +328,7 @@ public final class ObjectPrototype {
      */
     public static JSValue create(JSContext context, JSValue thisArg, JSValue[] args) {
         // Get the prototype argument
-        JSValue protoArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue protoArg = JSValue.argumentOrUndefined(args, 0);
 
         // Prototype must be null or an object
         JSObject proto = null;
@@ -504,7 +504,7 @@ public final class ObjectPrototype {
      * Object.entries(obj)
      */
     public static JSValue entries(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue arg = JSValue.argumentOrUndefined(args, 0);
 
         if (arg instanceof JSNull || arg instanceof JSUndefined) {
             return context.throwTypeError("Cannot convert undefined or null to object");
@@ -532,7 +532,7 @@ public final class ObjectPrototype {
      * non-configurable.
      */
     public static JSValue freeze(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue arg = JSValue.argumentOrUndefined(args, 0);
 
         if (!(arg instanceof JSObject obj)) {
             return arg;
@@ -568,7 +568,7 @@ public final class ObjectPrototype {
     public static JSValue hasOwnProperty(JSContext context, JSValue thisArg, JSValue[] args) {
         // ES2024 20.1.3.2:
         // Step 1: Let P be ? ToPropertyKey(V) - BEFORE ToObject
-        JSValue prop = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue prop = JSValue.argumentOrUndefined(args, 0);
         PropertyKey key = PropertyKey.fromValue(context, prop);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -599,7 +599,7 @@ public final class ObjectPrototype {
      * Object.prototype.isPrototypeOf(V)
      */
     public static JSValue isPrototypeOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue v = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue v = JSValue.argumentOrUndefined(args, 0);
 
         if (!(v instanceof JSObject obj)) {
             return JSBoolean.FALSE;
@@ -625,7 +625,7 @@ public final class ObjectPrototype {
      * Object.keys(obj)
      */
     public static JSValue keys(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue arg = JSValue.argumentOrUndefined(args, 0);
 
         if (arg instanceof JSNull || arg instanceof JSUndefined) {
             return context.throwTypeError("Cannot convert undefined or null to object");
@@ -651,7 +651,7 @@ public final class ObjectPrototype {
     public static JSValue propertyIsEnumerable(JSContext context, JSValue thisArg, JSValue[] args) {
         // ES2024 20.1.3.4:
         // Step 1: Let P be ? ToPropertyKey(V)
-        JSValue prop = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue prop = JSValue.argumentOrUndefined(args, 0);
         PropertyKey key = PropertyKey.fromValue(context, prop);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -811,7 +811,7 @@ public final class ObjectPrototype {
      * Object.values(obj)
      */
     public static JSValue values(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue arg = JSValue.argumentOrUndefined(args, 0);
 
         if (arg instanceof JSNull || arg instanceof JSUndefined) {
             return context.throwTypeError("Cannot convert undefined or null to object");

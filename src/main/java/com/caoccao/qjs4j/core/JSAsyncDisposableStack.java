@@ -188,7 +188,7 @@ public final class JSAsyncDisposableStack extends JSObject {
             return JSUndefined.INSTANCE;
         });
         JSNativeFunction onRejected = new JSNativeFunction(context, "", 1, (childContext, thisArg, args) -> {
-            JSValue rejectionValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            JSValue rejectionValue = JSValue.argumentOrUndefined(args, 0);
             JSValue mergedError = mergeDisposalError(childContext, rejectionValue, nextAccumulatedError);
             disposeNextRecord(childContext, index - 1, mergedError, true, completionPromise);
             return JSUndefined.INSTANCE;

@@ -38,8 +38,8 @@ public final class TemporalInstantConstructor {
      * Temporal.Instant.compare(one, two)
      */
     public static JSValue compare(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue oneArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue twoArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue oneArg = JSValue.argumentOrUndefined(args, 0);
+        JSValue twoArg = JSValue.argumentOrUndefined(args, 1);
 
         JSTemporalInstant firstInstant = toTemporalInstantObject(context, oneArg);
         if (context.hasPendingException()) {
@@ -61,7 +61,7 @@ public final class TemporalInstantConstructor {
             context.throwTypeError("Method invoked on an object that is not Temporal.Instant.");
             return JSUndefined.INSTANCE;
         }
-        JSValue epochNanosecondsArgument = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue epochNanosecondsArgument = JSValue.argumentOrUndefined(args, 0);
         final JSBigInt bigInt;
         try {
             bigInt = JSTypeConversions.toBigInt(context, epochNanosecondsArgument);
@@ -87,7 +87,7 @@ public final class TemporalInstantConstructor {
      * Temporal.Instant.from(item)
      */
     public static JSValue from(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue item = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue item = JSValue.argumentOrUndefined(args, 0);
         return toTemporalInstant(context, item);
     }
 
@@ -95,7 +95,7 @@ public final class TemporalInstantConstructor {
      * Temporal.Instant.fromEpochMilliseconds(epochMilliseconds)
      */
     public static JSValue fromEpochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue epochMillisecondsArgument = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue epochMillisecondsArgument = JSValue.argumentOrUndefined(args, 0);
         double epochMilliseconds = JSTypeConversions.toNumber(context, epochMillisecondsArgument).value();
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -116,7 +116,7 @@ public final class TemporalInstantConstructor {
      * Temporal.Instant.fromEpochNanoseconds(epochNanoseconds)
      */
     public static JSValue fromEpochNanoseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue epochNanosecondsArgument = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue epochNanosecondsArgument = JSValue.argumentOrUndefined(args, 0);
         final JSBigInt bigInt;
         try {
             bigInt = JSTypeConversions.toBigInt(context, epochNanosecondsArgument);

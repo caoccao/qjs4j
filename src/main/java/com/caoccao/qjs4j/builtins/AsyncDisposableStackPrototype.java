@@ -29,8 +29,8 @@ public final class AsyncDisposableStackPrototype {
         if (!(thisArg instanceof JSAsyncDisposableStack stack)) {
             return context.throwTypeError("AsyncDisposableStack.prototype.adopt called on non-AsyncDisposableStack");
         }
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue onDispose = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
+        JSValue onDispose = JSValue.argumentOrUndefined(args, 1);
         return stack.adopt(context, value, onDispose);
     }
 
@@ -38,7 +38,7 @@ public final class AsyncDisposableStackPrototype {
         if (!(thisArg instanceof JSAsyncDisposableStack stack)) {
             return context.throwTypeError("AsyncDisposableStack.prototype.defer called on non-AsyncDisposableStack");
         }
-        JSValue onDispose = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue onDispose = JSValue.argumentOrUndefined(args, 0);
         return stack.defer(context, onDispose);
     }
 
@@ -76,7 +76,7 @@ public final class AsyncDisposableStackPrototype {
         if (!(thisArg instanceof JSAsyncDisposableStack stack)) {
             return context.throwTypeError("AsyncDisposableStack.prototype.use called on non-AsyncDisposableStack");
         }
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
         return stack.use(context, value);
     }
 }

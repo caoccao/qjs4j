@@ -416,7 +416,7 @@ public final class MathObject {
      * Math.sumPrecise(iterable) QuickJS extension.
      */
     public static JSValue sumPrecise(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue iterable = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue iterable = JSValue.argumentOrUndefined(args, 0);
         JSValue iteratorValue = JSIteratorHelper.getIterator(context, iterable);
         if (!(iteratorValue instanceof JSObject iterator)) {
             return context.throwTypeError("value is not iterable");

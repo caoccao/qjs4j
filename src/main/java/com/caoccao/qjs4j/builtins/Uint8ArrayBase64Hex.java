@@ -66,7 +66,7 @@ public final class Uint8ArrayBase64Hex {
             return context.throwTypeError("input argument must be a string");
         }
 
-        JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue options = JSValue.argumentOrUndefined(args, 1);
 
         String alphabet = getAlphabetOption(context, options);
         if (alphabet == null) {
@@ -425,7 +425,7 @@ public final class Uint8ArrayBase64Hex {
             return context.throwTypeError("expected first argument to be a string");
         }
 
-        JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue options = JSValue.argumentOrUndefined(args, 1);
 
         String alphabet = getAlphabetOption(context, options);
         if (alphabet == null) {
@@ -520,7 +520,7 @@ public final class Uint8ArrayBase64Hex {
             return context.throwTypeError("toBase64 called on non-Uint8Array");
         }
 
-        JSValue options = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue options = JSValue.argumentOrUndefined(args, 0);
 
         String alphabet = getAlphabetOption(context, options);
         if (alphabet == null) {

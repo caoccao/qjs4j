@@ -30,8 +30,8 @@ public final class BigIntConstructor {
      * BigInt.asIntN(bits, bigint) ES2020 20.2.2.1 Wraps a BigInt value to a signed integer of the given bit width.
      */
     public static JSValue asIntN(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue bitsArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue bigIntArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue bitsArg = JSValue.argumentOrUndefined(args, 0);
+        JSValue bigIntArg = JSValue.argumentOrUndefined(args, 1);
         try {
             long bits = JSTypeConversions.toIndex(context, bitsArg);
             JSBigInt bigInt = JSTypeConversions.toBigInt(context, bigIntArg);
@@ -48,8 +48,8 @@ public final class BigIntConstructor {
      * BigInt.asUintN(bits, bigint) ES2020 20.2.2.2 Wraps a BigInt value to an unsigned integer of the given bit width.
      */
     public static JSValue asUintN(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue bitsArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue bigIntArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue bitsArg = JSValue.argumentOrUndefined(args, 0);
+        JSValue bigIntArg = JSValue.argumentOrUndefined(args, 1);
         try {
             long bits = JSTypeConversions.toIndex(context, bitsArg);
             JSBigInt bigInt = JSTypeConversions.toBigInt(context, bigIntArg);

@@ -31,7 +31,7 @@ public final class SetPrototype {
             return context.throwTypeError("Set.prototype.add called on non-Set");
         }
 
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
         set.setAdd(value);
         return set; // Return the Set object for chaining
     }
@@ -90,7 +90,7 @@ public final class SetPrototype {
             return context.throwTypeError("Set.prototype.delete called on non-Set");
         }
 
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
         return JSBoolean.valueOf(set.setDelete(value));
     }
 
@@ -101,7 +101,7 @@ public final class SetPrototype {
         if (!(thisArg instanceof JSSet set)) {
             return context.throwTypeError("Set.prototype.difference called on non-Set");
         }
-        SetRecord record = getSetRecord(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        SetRecord record = getSetRecord(context, JSValue.argumentOrUndefined(args, 0));
         if (record == null) {
             return JSUndefined.INSTANCE;
         }
@@ -169,7 +169,7 @@ public final class SetPrototype {
         }
         JSValue callback = args[0];
 
-        JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue callbackThisArg = JSValue.argumentOrUndefined(args, 1);
 
         JSSet.IterationCursor cursor = set.createIterationCursor();
         while (true) {
@@ -290,7 +290,7 @@ public final class SetPrototype {
             return context.throwTypeError("Set.prototype.has called on non-Set");
         }
 
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
         return JSBoolean.valueOf(set.setHas(value));
     }
 
@@ -301,7 +301,7 @@ public final class SetPrototype {
         if (!(thisArg instanceof JSSet set)) {
             return context.throwTypeError("Set.prototype.intersection called on non-Set");
         }
-        SetRecord record = getSetRecord(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        SetRecord record = getSetRecord(context, JSValue.argumentOrUndefined(args, 0));
         if (record == null) {
             return JSUndefined.INSTANCE;
         }
@@ -352,7 +352,7 @@ public final class SetPrototype {
         if (!(thisArg instanceof JSSet set)) {
             return context.throwTypeError("Set.prototype.isDisjointFrom called on non-Set");
         }
-        SetRecord record = getSetRecord(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        SetRecord record = getSetRecord(context, JSValue.argumentOrUndefined(args, 0));
         if (record == null) {
             return JSUndefined.INSTANCE;
         }
@@ -403,7 +403,7 @@ public final class SetPrototype {
         if (!(thisArg instanceof JSSet set)) {
             return context.throwTypeError("Set.prototype.isSubsetOf called on non-Set");
         }
-        SetRecord record = getSetRecord(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        SetRecord record = getSetRecord(context, JSValue.argumentOrUndefined(args, 0));
         if (record == null) {
             return JSUndefined.INSTANCE;
         }
@@ -436,7 +436,7 @@ public final class SetPrototype {
         if (!(thisArg instanceof JSSet set)) {
             return context.throwTypeError("Set.prototype.isSupersetOf called on non-Set");
         }
-        SetRecord record = getSetRecord(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        SetRecord record = getSetRecord(context, JSValue.argumentOrUndefined(args, 0));
         if (record == null) {
             return JSUndefined.INSTANCE;
         }
@@ -506,7 +506,7 @@ public final class SetPrototype {
         if (!(thisArg instanceof JSSet set)) {
             return context.throwTypeError("Set.prototype.symmetricDifference called on non-Set");
         }
-        SetRecord record = getSetRecord(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        SetRecord record = getSetRecord(context, JSValue.argumentOrUndefined(args, 0));
         if (record == null) {
             return JSUndefined.INSTANCE;
         }
@@ -545,7 +545,7 @@ public final class SetPrototype {
         if (!(thisArg instanceof JSSet set)) {
             return context.throwTypeError("Set.prototype.union called on non-Set");
         }
-        SetRecord record = getSetRecord(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        SetRecord record = getSetRecord(context, JSValue.argumentOrUndefined(args, 0));
         if (record == null) {
             return JSUndefined.INSTANCE;
         }

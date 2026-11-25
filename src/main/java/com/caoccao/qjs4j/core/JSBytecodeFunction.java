@@ -137,7 +137,7 @@ public final class JSBytecodeFunction extends JSFunction {
         // Every function (except arrow functions) has a prototype property
         if (prototype != null) {
             // Class constructor: prototype is {writable: false, enumerable: false, configurable: false}
-            this.defineProperty(PropertyKey.fromString("prototype"), prototype, PropertyDescriptor.DataState.None);
+            this.defineProperty(PropertyKey.PROTOTYPE, prototype, PropertyDescriptor.DataState.None);
         } else if (isConstructor) {
             // User-defined function constructor: prototype is {writable: true, enumerable: false, configurable: false}
             JSObject funcPrototype = new JSObject(context);
@@ -322,90 +322,13 @@ public final class JSBytecodeFunction extends JSFunction {
                             promise.reject(new JSString("Async generator await suspension promise is missing"));
                             return promise;
                         }
-                        awaitedPromise.addReactions(new JSPromise.ReactionRecord(new JSNativeFunction(executionContext,
-                                "onAsyncGenAwaitResolve", 1, (childContext, callbackThisArg, callbackArgs) -> {
-                                    JSValue resolvedValue = callbackArgs.length > 0
-                                            ? callbackArgs[0]
-                                            : JSUndefined.INSTANCE;
-                                    generatorState.setPendingResumeRecord(JSGeneratorState.ResumeKind.NEXT,
-                                            resolvedValue);
-                                    JSPromise resumedPromise = asyncGeneratorRequestExecutorHolder[0]
-                                            .executeNext(JSUndefined.INSTANCE, requestKind);
-                                    // Per QuickJS: resolve the request synchronously when the
-                                    // resumed execution completes, avoiding extra microtask ticks.
-                                    // The request is settled from this internal promise directly, which handles it.
-                                    resumedPromise.markHandled();
-                                    if (resumedPromise.getState() == JSPromise.PromiseState.FULFILLED) {
-                                        asyncGeneratorHolder[0].completeCurrentRequest(resumedPromise.getResult());
-                                    } else if (resumedPromise.getState() == JSPromise.PromiseState.REJECTED) {
-                                        promise.reject(resumedPromise.getResult());
-                                    } else {
-                                        // Still pending (nested await or complex case) — use reaction chain
-                                        resumedPromise.addReactions(new JSPromise.ReactionRecord(
-                                                new JSNativeFunction(executionContext, "onResumeResolve", 1,
-                                                        (resumeContext, resumeThisArg, resumeArgs) -> {
-                                                            JSValue resumedResult = resumeArgs.length > 0
-                                                                    ? resumeArgs[0]
-                                                                    : JSUndefined.INSTANCE;
-                                                            asyncGeneratorHolder[0]
-                                                                    .completeCurrentRequest(resumedResult);
-                                                            return JSUndefined.INSTANCE;
-                                                        }),
-                                                null, executionContext),
-                                                new JSPromise.ReactionRecord(
-                                                        new JSNativeFunction(executionContext, "onResumeReject", 1,
-                                                                (resumeContext, resumeThisArg, resumeArgs) -> {
-                                                                    JSValue resumedError = resumeArgs.length > 0
-                                                                            ? resumeArgs[0]
-                                                                            : JSUndefined.INSTANCE;
-                                                                    promise.reject(resumedError);
-                                                                    return JSUndefined.INSTANCE;
-                                                                }),
-                                                        null, executionContext));
-                                    }
-                                    return JSUndefined.INSTANCE;
-                                }), null, executionContext),
-                                new JSPromise.ReactionRecord(new JSNativeFunction(executionContext,
-                                        "onAsyncGenAwaitReject", 1, (childContext, callbackThisArg, callbackArgs) -> {
-                                            JSValue rejectionValue = callbackArgs.length > 0
-                                                    ? callbackArgs[0]
-                                                    : JSUndefined.INSTANCE;
-                                            generatorState.setPendingResumeRecord(JSGeneratorState.ResumeKind.THROW,
-                                                    rejectionValue);
-                                            JSPromise resumedPromise = asyncGeneratorRequestExecutorHolder[0]
-                                                    .executeNext(JSUndefined.INSTANCE, requestKind);
-                                            // The request is settled from this internal promise directly, which handles
-                                            // it.
-                                            resumedPromise.markHandled();
-                                            if (resumedPromise.getState() == JSPromise.PromiseState.FULFILLED) {
-                                                asyncGeneratorHolder[0]
-                                                        .completeCurrentRequest(resumedPromise.getResult());
-                                            } else if (resumedPromise.getState() == JSPromise.PromiseState.REJECTED) {
-                                                promise.reject(resumedPromise.getResult());
-                                            } else {
-                                                resumedPromise.addReactions(new JSPromise.ReactionRecord(
-                                                        new JSNativeFunction(executionContext, "onResumeResolve", 1,
-                                                                (resumeContext, resumeThisArg, resumeArgs) -> {
-                                                                    JSValue resumedResult = resumeArgs.length > 0
-                                                                            ? resumeArgs[0]
-                                                                            : JSUndefined.INSTANCE;
-                                                                    asyncGeneratorHolder[0]
-                                                                            .completeCurrentRequest(resumedResult);
-                                                                    return JSUndefined.INSTANCE;
-                                                                }),
-                                                        null, executionContext),
-                                                        new JSPromise.ReactionRecord(new JSNativeFunction(
-                                                                executionContext, "onResumeReject", 1,
-                                                                (resumeContext, resumeThisArg, resumeArgs) -> {
-                                                                    JSValue resumedError = resumeArgs.length > 0
-                                                                            ? resumeArgs[0]
-                                                                            : JSUndefined.INSTANCE;
-                                                                    promise.reject(resumedError);
-                                                                    return JSUndefined.INSTANCE;
-                                                                }), null, executionContext));
-                                            }
-                                            return JSUndefined.INSTANCE;
-                                        }), null, executionContext));
+                        awaitedPromise.addReactions(awaitReaction(executionContext, "onAsyncGenAwaitResolve",
+                                JSGeneratorState.ResumeKind.NEXT, generatorState,
+                                asyncGeneratorRequestExecutorHolder[0], requestKind, asyncGeneratorHolder[0], promise),
+                                awaitReaction(executionContext, "onAsyncGenAwaitReject",
+                                        JSGeneratorState.ResumeKind.THROW, generatorState,
+                                        asyncGeneratorRequestExecutorHolder[0], requestKind, asyncGeneratorHolder[0],
+                                        promise));
                         return promise;
                     }
                     if (executionContext.hasPendingException()) {
@@ -580,6 +503,26 @@ public final class JSBytecodeFunction extends JSFunction {
         return executionContext.getVirtualMachine().execute(this, thisArg, args, argCount, JSUndefined.INSTANCE);
     }
 
+    private void copyClosureStateTo(JSBytecodeFunction target) {
+        target.hasParameterExpressions = hasParameterExpressions;
+        target.hasArgumentsParameterBinding = hasArgumentsParameterBinding;
+        target.selfLocalIndex = selfLocalIndex;
+        target.parameterScopeFunctionName = parameterScopeFunctionName;
+        target.bodyScopeEnteredLocalIndex = bodyScopeEnteredLocalIndex;
+        target.inheritedParameterScopeFunctionNames = inheritedParameterScopeFunctionNames;
+        target.capturedActiveFunction = capturedActiveFunction;
+        target.capturedDerivedThisRef = capturedDerivedThisRef;
+        target.capturedThisArg = capturedThisArg;
+        target.capturedArguments = capturedArguments;
+        target.capturedNewTarget = capturedNewTarget;
+        target.capturedVarNames = capturedVarNames;
+        target.classPrivateSymbols = classPrivateSymbols;
+        target.classPrivateSymbolRemap = classPrivateSymbolRemap;
+        target.displaysAsArgumentsObjectInToString = displaysAsArgumentsObjectInToString;
+        target.evalDynamicScopeFrame = evalDynamicScopeFrame;
+        target.evalDynamicScopeLookupEnabled = evalDynamicScopeLookupEnabled;
+    }
+
     public JSBytecodeFunction copyTemplateWithRemappedPrivateSymbols(IdentityHashMap<JSSymbol, JSSymbol> symbolRemap) {
         if (symbolRemap == null || symbolRemap.isEmpty()) {
             return this;
@@ -590,23 +533,7 @@ public final class JSBytecodeFunction extends JSFunction {
     public JSBytecodeFunction copyWithClosureVars(JSValue[] capturedClosureVars) {
         JSBytecodeFunction copiedFunction = new JSBytecodeFunction(context, bytecode, name, length, capturedClosureVars,
                 prototype, isConstructor, isAsync, isGenerator, isArrow, strict, sourceCode, selfCaptureIndex);
-        copiedFunction.hasParameterExpressions = this.hasParameterExpressions;
-        copiedFunction.hasArgumentsParameterBinding = this.hasArgumentsParameterBinding;
-        copiedFunction.selfLocalIndex = selfLocalIndex;
-        copiedFunction.parameterScopeFunctionName = parameterScopeFunctionName;
-        copiedFunction.bodyScopeEnteredLocalIndex = bodyScopeEnteredLocalIndex;
-        copiedFunction.inheritedParameterScopeFunctionNames = inheritedParameterScopeFunctionNames;
-        copiedFunction.capturedActiveFunction = this.capturedActiveFunction;
-        copiedFunction.capturedDerivedThisRef = this.capturedDerivedThisRef;
-        copiedFunction.capturedThisArg = this.capturedThisArg;
-        copiedFunction.capturedArguments = this.capturedArguments;
-        copiedFunction.capturedNewTarget = this.capturedNewTarget;
-        copiedFunction.capturedVarNames = this.capturedVarNames;
-        copiedFunction.classPrivateSymbols = this.classPrivateSymbols;
-        copiedFunction.classPrivateSymbolRemap = this.classPrivateSymbolRemap;
-        copiedFunction.displaysAsArgumentsObjectInToString = this.displaysAsArgumentsObjectInToString;
-        copiedFunction.evalDynamicScopeFrame = this.evalDynamicScopeFrame;
-        copiedFunction.evalDynamicScopeLookupEnabled = this.evalDynamicScopeLookupEnabled;
+        copyClosureStateTo(copiedFunction);
         return copiedFunction;
     }
 
@@ -618,23 +545,7 @@ public final class JSBytecodeFunction extends JSFunction {
         JSBytecodeFunction copiedFunction = new JSBytecodeFunction(context, bytecode, name, length, JSValue.NO_ARGS,
                 prototype, isConstructor, isAsync, isGenerator, isArrow, strict, sourceCode, selfCaptureIndex);
         copiedFunction.varRefs = capturedVarRefs;
-        copiedFunction.hasParameterExpressions = this.hasParameterExpressions;
-        copiedFunction.hasArgumentsParameterBinding = this.hasArgumentsParameterBinding;
-        copiedFunction.selfLocalIndex = selfLocalIndex;
-        copiedFunction.parameterScopeFunctionName = parameterScopeFunctionName;
-        copiedFunction.bodyScopeEnteredLocalIndex = bodyScopeEnteredLocalIndex;
-        copiedFunction.inheritedParameterScopeFunctionNames = inheritedParameterScopeFunctionNames;
-        copiedFunction.capturedActiveFunction = this.capturedActiveFunction;
-        copiedFunction.capturedDerivedThisRef = this.capturedDerivedThisRef;
-        copiedFunction.capturedThisArg = this.capturedThisArg;
-        copiedFunction.capturedArguments = this.capturedArguments;
-        copiedFunction.capturedNewTarget = this.capturedNewTarget;
-        copiedFunction.capturedVarNames = this.capturedVarNames;
-        copiedFunction.classPrivateSymbols = this.classPrivateSymbols;
-        copiedFunction.classPrivateSymbolRemap = this.classPrivateSymbolRemap;
-        copiedFunction.displaysAsArgumentsObjectInToString = this.displaysAsArgumentsObjectInToString;
-        copiedFunction.evalDynamicScopeFrame = this.evalDynamicScopeFrame;
-        copiedFunction.evalDynamicScopeLookupEnabled = this.evalDynamicScopeLookupEnabled;
+        copyClosureStateTo(copiedFunction);
         return copiedFunction;
     }
 
@@ -893,26 +804,10 @@ public final class JSBytecodeFunction extends JSFunction {
                 prototype, isConstructor, isAsync, isGenerator, isArrow, strict, sourceCode, selfCaptureIndex);
         functionMemo.put(this, copiedFunction);
         copiedFunction.captureSourceInfos = captureSourceInfos;
-        copiedFunction.classPrivateSymbolRemap = classPrivateSymbolRemap;
-        copiedFunction.classPrivateSymbols = classPrivateSymbols;
+        copyClosureStateTo(copiedFunction);
         copiedFunction.classConstructor = classConstructor;
         copiedFunction.derivedConstructor = derivedConstructor;
-        copiedFunction.displaysAsArgumentsObjectInToString = displaysAsArgumentsObjectInToString;
-        copiedFunction.hasArgumentsParameterBinding = hasArgumentsParameterBinding;
-        copiedFunction.hasParameterExpressions = hasParameterExpressions;
-        copiedFunction.selfLocalIndex = selfLocalIndex;
-        copiedFunction.parameterScopeFunctionName = parameterScopeFunctionName;
-        copiedFunction.bodyScopeEnteredLocalIndex = bodyScopeEnteredLocalIndex;
-        copiedFunction.inheritedParameterScopeFunctionNames = inheritedParameterScopeFunctionNames;
         copiedFunction.varRefs = varRefs;
-        copiedFunction.capturedActiveFunction = capturedActiveFunction;
-        copiedFunction.capturedArguments = capturedArguments;
-        copiedFunction.capturedDerivedThisRef = capturedDerivedThisRef;
-        copiedFunction.capturedNewTarget = capturedNewTarget;
-        copiedFunction.capturedThisArg = capturedThisArg;
-        copiedFunction.capturedVarNames = capturedVarNames;
-        copiedFunction.evalDynamicScopeFrame = evalDynamicScopeFrame;
-        copiedFunction.evalDynamicScopeLookupEnabled = evalDynamicScopeLookupEnabled;
         return copiedFunction;
     }
 
@@ -1187,7 +1082,7 @@ public final class JSBytecodeFunction extends JSFunction {
             JSPromise resultPromise = context.createJSPromise();
             promiseResult.addReactions(new JSPromise.ReactionRecord(
                     new JSNativeFunction(context, "onAwaitResult", 1, (childCtx, thisArg, args) -> {
-                        JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                        JSValue resolved = JSValue.argumentOrUndefined(args, 0);
                         if (!(resolved instanceof JSObject resolvedObj)) {
                             JSValue typeError = childCtx.throwTypeError("Iterator result is not an object");
                             childCtx.clearPendingException();
@@ -1207,7 +1102,7 @@ public final class JSBytecodeFunction extends JSFunction {
                         return JSUndefined.INSTANCE;
                     }), null, context), new JSPromise.ReactionRecord(
                             new JSNativeFunction(context, "onAwaitReject", 1, (childCtx, thisArg, args) -> {
-                                resultPromise.reject(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                                resultPromise.reject(JSValue.argumentOrUndefined(args, 0));
                                 return JSUndefined.INSTANCE;
                             }), null, context));
             return resultPromise;
@@ -1225,7 +1120,7 @@ public final class JSBytecodeFunction extends JSFunction {
             try {
                 thenFunc.call(context, rawResult,
                         new JSValue[]{new JSNativeFunction(context, "", 1, (childCtx, thisArg, args) -> {
-                            JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            JSValue resolved = JSValue.argumentOrUndefined(args, 0);
                             if (!(resolved instanceof JSObject resolvedObj)) {
                                 JSValue typeError = childCtx.throwTypeError("Iterator result is not an object");
                                 childCtx.clearPendingException();
@@ -1245,7 +1140,7 @@ public final class JSBytecodeFunction extends JSFunction {
                                             }), null, childCtx));
                             return JSUndefined.INSTANCE;
                         }), new JSNativeFunction(context, "", 1, (childCtx, thisArg, args) -> {
-                            resultPromise.reject(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                            resultPromise.reject(JSValue.argumentOrUndefined(args, 0));
                             return JSUndefined.INSTANCE;
                         })});
             } catch (Exception e) {
@@ -1262,6 +1157,35 @@ public final class JSBytecodeFunction extends JSFunction {
 
         // Non-thenable, non-promise: read done/value directly
         return readDoneValueAndCreatePromise(context, rawResult, delegateIterator);
+    }
+
+    private static JSPromise.ReactionRecord awaitReaction(JSContext context, String name,
+            JSGeneratorState.ResumeKind resumeKind, JSGeneratorState state,
+            JSAsyncGenerator.AsyncGeneratorFunction executor, JSAsyncGenerator.AsyncGeneratorRequestKind requestKind,
+            JSAsyncGenerator generator, JSPromise requestPromise) {
+        JSNativeFunction callback = new JSNativeFunction(context, name, 1, (childContext, thisArg, args) -> {
+            state.setPendingResumeRecord(resumeKind, JSValue.argumentOrUndefined(args, 0));
+            JSPromise resumed = executor.executeNext(JSUndefined.INSTANCE, requestKind);
+            // Settle synchronously when possible to preserve the async generator's microtask order.
+            resumed.markHandled();
+            if (resumed.getState() == JSPromise.PromiseState.FULFILLED) {
+                generator.completeCurrentRequest(resumed.getResult());
+            } else if (resumed.getState() == JSPromise.PromiseState.REJECTED) {
+                requestPromise.reject(resumed.getResult());
+            } else {
+                resumed.addReactions(new JSPromise.ReactionRecord(
+                        new JSNativeFunction(context, "onResumeResolve", 1, (c, receiver, values) -> {
+                            generator.completeCurrentRequest(JSValue.argumentOrUndefined(values, 0));
+                            return JSUndefined.INSTANCE;
+                        }), null, context), new JSPromise.ReactionRecord(
+                                new JSNativeFunction(context, "onResumeReject", 1, (c, receiver, values) -> {
+                                    requestPromise.reject(JSValue.argumentOrUndefined(values, 0));
+                                    return JSUndefined.INSTANCE;
+                                }), null, context));
+            }
+            return JSUndefined.INSTANCE;
+        });
+        return new JSPromise.ReactionRecord(callback, null, context);
     }
 
     private static JSPromise createAsyncDelegatedNextPromise(JSContext context, JSObject delegateIterator,
@@ -1328,7 +1252,7 @@ public final class JSBytecodeFunction extends JSFunction {
                 JSPromise returnResultPromise = context.createJSPromise();
                 returnAwaitPromise.addReactions(new JSPromise.ReactionRecord(
                         new JSNativeFunction(context, "onReturnUndefinedAwaitResolve", 1, (childCtx, thisArg, args) -> {
-                            JSValue awaitedValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            JSValue awaitedValue = JSValue.argumentOrUndefined(args, 0);
                             JSObject result = context.createJSObject();
                             result.set(PropertyKey.VALUE, awaitedValue);
                             result.set(PropertyKey.DONE, JSBoolean.TRUE);
@@ -1336,7 +1260,7 @@ public final class JSBytecodeFunction extends JSFunction {
                             return JSUndefined.INSTANCE;
                         }), null, context), new JSPromise.ReactionRecord(new JSNativeFunction(context,
                                 "onReturnUndefinedAwaitReject", 1, (childCtx, thisArg, args) -> {
-                                    JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                    JSValue error = JSValue.argumentOrUndefined(args, 0);
                                     returnResultPromise.reject(error);
                                     return JSUndefined.INSTANCE;
                                 }), null, context));
@@ -1464,7 +1388,7 @@ public final class JSBytecodeFunction extends JSFunction {
             // Pending promise: add reaction to fulfill when resolved (1 tick)
             promiseValue.addReactions(new JSPromise.ReactionRecord(
                     new JSNativeFunction(context, "onResolve", 1, (childContext, thisArg, args) -> {
-                        JSValue resolvedValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                        JSValue resolvedValue = JSValue.argumentOrUndefined(args, 0);
                         JSObject result = context.createJSObject();
                         result.set(PropertyKey.VALUE, resolvedValue);
                         result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
@@ -1472,7 +1396,7 @@ public final class JSBytecodeFunction extends JSFunction {
                         return JSUndefined.INSTANCE;
                     }), null, context), new JSPromise.ReactionRecord(
                             new JSNativeFunction(context, "onReject", 1, (childContext, thisArg, args) -> {
-                                JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                JSValue error = JSValue.argumentOrUndefined(args, 0);
                                 promise.reject(error);
                                 return JSUndefined.INSTANCE;
                             }), null, context));
@@ -1493,12 +1417,12 @@ public final class JSBytecodeFunction extends JSFunction {
                         done);
                 resolvedResultPromise.addReactions(new JSPromise.ReactionRecord(
                         new JSNativeFunction(context, "onResolve", 1, (childContext, thisArg, args) -> {
-                            JSValue resolvedResult = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            JSValue resolvedResult = JSValue.argumentOrUndefined(args, 0);
                             promise.fulfill(resolvedResult);
                             return JSUndefined.INSTANCE;
                         }), null, context), new JSPromise.ReactionRecord(
                                 new JSNativeFunction(context, "onReject", 1, (childContext, thisArg, args) -> {
-                                    JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                    JSValue error = JSValue.argumentOrUndefined(args, 0);
                                     promise.reject(error);
                                     return JSUndefined.INSTANCE;
                                 }), null, context));
@@ -1519,7 +1443,7 @@ public final class JSBytecodeFunction extends JSFunction {
         if (iteratorResultObject instanceof JSPromise promiseResult) {
             promiseResult.addReactions(new JSPromise.ReactionRecord(
                     new JSNativeFunction(context, "onAwaitInnerResult", 1, (childContext, thisArg, args) -> {
-                        JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                        JSValue resolved = JSValue.argumentOrUndefined(args, 0);
                         if (!(resolved instanceof JSObject resolvedObj)) {
                             JSError typeError = context.throwTypeError("Iterator result is not an object");
                             context.clearPendingException();
@@ -1531,7 +1455,7 @@ public final class JSBytecodeFunction extends JSFunction {
                         return JSUndefined.INSTANCE;
                     }), null, context), new JSPromise.ReactionRecord(
                             new JSNativeFunction(context, "onAwaitInnerReject", 1, (childContext, thisArg, args) -> {
-                                JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                JSValue error = JSValue.argumentOrUndefined(args, 0);
                                 promise.reject(error);
                                 return JSUndefined.INSTANCE;
                             }), null, context));
@@ -1552,11 +1476,11 @@ public final class JSBytecodeFunction extends JSFunction {
             try {
                 thenFunc.call(context, iteratorResultObject,
                         new JSValue[]{new JSNativeFunction(context, "", 1, (childContext, thisArg, args) -> {
-                            JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            JSValue resolved = JSValue.argumentOrUndefined(args, 0);
                             thenablePromise.fulfill(resolved);
                             return JSUndefined.INSTANCE;
                         }), new JSNativeFunction(context, "", 1, (childContext, thisArg, args) -> {
-                            JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            JSValue error = JSValue.argumentOrUndefined(args, 0);
                             thenablePromise.reject(error);
                             return JSUndefined.INSTANCE;
                         })});
@@ -1573,7 +1497,7 @@ public final class JSBytecodeFunction extends JSFunction {
             }
             thenablePromise.addReactions(new JSPromise.ReactionRecord(
                     new JSNativeFunction(context, "onThenableResolve", 1, (childContext, thisArg, args) -> {
-                        JSValue resolved = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                        JSValue resolved = JSValue.argumentOrUndefined(args, 0);
                         if (!(resolved instanceof JSObject resolvedObj)) {
                             JSError typeError = context.throwTypeError("Iterator result is not an object");
                             context.clearPendingException();
@@ -1585,7 +1509,7 @@ public final class JSBytecodeFunction extends JSFunction {
                         return JSUndefined.INSTANCE;
                     }), null, context), new JSPromise.ReactionRecord(
                             new JSNativeFunction(context, "onThenableReject", 1, (childContext, thisArg, args) -> {
-                                JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                JSValue error = JSValue.argumentOrUndefined(args, 0);
                                 promise.reject(error);
                                 return JSUndefined.INSTANCE;
                             }), null, context));
@@ -1631,12 +1555,12 @@ public final class JSBytecodeFunction extends JSFunction {
                 JSPromise closeOnRejectionPromise = context.createJSPromise();
                 asyncFromSyncResultPromise.addReactions(new JSPromise.ReactionRecord(
                         new JSNativeFunction(context, "onResolve", 1, (childContext, thisArg, args) -> {
-                            JSValue resolvedResult = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                            JSValue resolvedResult = JSValue.argumentOrUndefined(args, 0);
                             closeOnRejectionPromise.fulfill(resolvedResult);
                             return JSUndefined.INSTANCE;
                         }), null, context), new JSPromise.ReactionRecord(
                                 new JSNativeFunction(context, "onReject", 1, (childContext, thisArg, args) -> {
-                                    JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                    JSValue error = JSValue.argumentOrUndefined(args, 0);
                                     JSValue returnMethodValue = delegateIterator.get(PropertyKey.RETURN);
                                     if (context.hasPendingException()) {
                                         context.clearAllPendingExceptions();
@@ -1654,12 +1578,12 @@ public final class JSBytecodeFunction extends JSFunction {
             }
             resultPromise.addReactions(new JSPromise.ReactionRecord(
                     new JSNativeFunction(context, "onResolve", 1, (childContext, thisArg, args) -> {
-                        JSValue resolvedResult = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                        JSValue resolvedResult = JSValue.argumentOrUndefined(args, 0);
                         promise.fulfill(resolvedResult);
                         return JSUndefined.INSTANCE;
                     }), null, context), new JSPromise.ReactionRecord(
                             new JSNativeFunction(context, "onReject", 1, (childContext, thisArg, args) -> {
-                                JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                JSValue error = JSValue.argumentOrUndefined(args, 0);
                                 promise.reject(error);
                                 return JSUndefined.INSTANCE;
                             }), null, context));
@@ -1677,7 +1601,7 @@ public final class JSBytecodeFunction extends JSFunction {
         JSPromise outerPromise = context.createJSPromise();
         delegatedPromise.addReactions(new JSPromise.ReactionRecord(new JSNativeFunction(context, "onDelegatedResolve",
                 1, (childContext, callbackThisArg, callbackArgs) -> {
-                    JSValue resultValue = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                    JSValue resultValue = JSValue.argumentOrUndefined(callbackArgs, 0);
                     if (!(resultValue instanceof JSObject resultObject)) {
                         delegatedYieldStarIteratorHolder[0] = null;
                         generatorState.setCompleted(true);
@@ -1739,7 +1663,7 @@ public final class JSBytecodeFunction extends JSFunction {
                 }), null, context), new JSPromise.ReactionRecord(new JSNativeFunction(context, "onDelegatedReject", 1,
                         (childContext, callbackThisArg, callbackArgs) -> {
                             delegatedYieldStarIteratorHolder[0] = null;
-                            JSValue error = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                            JSValue error = JSValue.argumentOrUndefined(callbackArgs, 0);
                             // Per ES2024: errors from Await(innerResult) and IteratorValue
                             // should propagate inside the generator (? notation in spec).
                             // Route the error back through the generator via THROW resume
@@ -1792,11 +1716,11 @@ public final class JSBytecodeFunction extends JSFunction {
         JSPromise closeOnRejectionPromise = context.createJSPromise();
         asyncFromSyncResultPromise.addReactions(new JSPromise.ReactionRecord(
                 new JSNativeFunction(context, "onResolve", 1, (childCtx, thisArg, args) -> {
-                    closeOnRejectionPromise.fulfill(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                    closeOnRejectionPromise.fulfill(JSValue.argumentOrUndefined(args, 0));
                     return JSUndefined.INSTANCE;
                 }), null, context),
                 new JSPromise.ReactionRecord(new JSNativeFunction(context, "onReject", 1, (childCtx, thisArg, args) -> {
-                    JSValue originalError = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                    JSValue originalError = JSValue.argumentOrUndefined(args, 0);
                     JSValue returnMethodValue = delegateIterator.get(PropertyKey.RETURN);
                     if (childCtx.hasPendingException()) {
                         childCtx.clearAllPendingExceptions();
@@ -1820,15 +1744,13 @@ public final class JSBytecodeFunction extends JSFunction {
             if (awaitedPromise != null) {
                 awaitedPromise.addReactions(new JSPromise.ReactionRecord(new JSNativeFunction(context, "onAwaitResolve",
                         1, (childContext, callbackThisArg, callbackArgs) -> {
-                            JSValue resolvedValue = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                            JSValue resolvedValue = JSValue.argumentOrUndefined(callbackArgs, 0);
                             asyncFunctionState.setPendingResumeRecord(JSGeneratorState.ResumeKind.NEXT, resolvedValue);
                             resumeAsyncFunctionExecution(context, asyncFunctionState, outerPromise);
                             return JSUndefined.INSTANCE;
                         }), null, context), new JSPromise.ReactionRecord(new JSNativeFunction(context, "onAwaitReject",
                                 1, (childContext, callbackThisArg, callbackArgs) -> {
-                                    JSValue rejectionValue = callbackArgs.length > 0
-                                            ? callbackArgs[0]
-                                            : JSUndefined.INSTANCE;
+                                    JSValue rejectionValue = JSValue.argumentOrUndefined(callbackArgs, 0);
                                     asyncFunctionState.setPendingResumeRecord(JSGeneratorState.ResumeKind.THROW,
                                             rejectionValue);
                                     resumeAsyncFunctionExecution(context, asyncFunctionState, outerPromise);

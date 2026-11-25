@@ -62,7 +62,7 @@ public final class TemporalPlainMonthDayPrototype {
         if (plainMonthDay == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
         JSTemporalPlainMonthDay other = TemporalPlainMonthDayConstructor.toTemporalMonthDayObject(context, otherArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -84,31 +84,6 @@ public final class TemporalPlainMonthDayPrototype {
         return new JSString(calendarDateFields.monthCode());
     }
 
-    private static IsoMonth parseMonthCodeSyntaxForWith(JSContext context, String monthCode) {
-        if (monthCode == null || monthCode.length() < 3 || monthCode.length() > 4) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-        if (monthCode.charAt(0) != 'M') {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-        if (!Character.isDigit(monthCode.charAt(1)) || !Character.isDigit(monthCode.charAt(2))) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-        boolean leapMonth = false;
-        if (monthCode.length() == 4) {
-            if (monthCode.charAt(3) != 'L') {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
-            }
-            leapMonth = true;
-        }
-        int month = Integer.parseInt(monthCode.substring(1, 3));
-        return new IsoMonth(month, leapMonth);
-    }
-
     public static JSValue referenceISOYear(JSContext context, JSValue thisArg, JSValue[] args) {
         return RECEIVER.read(context, thisArg, "referenceISOYear",
                 plainMonthDay -> JSNumber.of(plainMonthDay.getIsoDate().year()));
@@ -127,8 +102,8 @@ public final class TemporalPlainMonthDayPrototype {
         if (plainMonthDay == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue locales = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue locales = JSValue.argumentOrUndefined(args, 0);
+        JSValue options = JSValue.argumentOrUndefined(args, 1);
         if (options instanceof JSObject optionsObject) {
             JSValue timeStyleValue = optionsObject.get(PropertyKey.fromString("timeStyle"));
             if (context.hasPendingException()) {
@@ -205,8 +180,7 @@ public final class TemporalPlainMonthDayPrototype {
         if (plainMonthDay == null) {
             return JSUndefined.INSTANCE;
         }
-        String calendarNameOption = TemporalUtils.getCalendarNameOption(context,
-                args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        String calendarNameOption = TemporalUtils.getCalendarNameOption(context, JSValue.argumentOrUndefined(args, 0));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -246,7 +220,7 @@ public final class TemporalPlainMonthDayPrototype {
         }
 
         if (plainMonthDay.getCalendarId() != TemporalCalendarId.ISO8601) {
-            return withNonIsoCalendar(context, plainMonthDay, fields, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
+            return withNonIsoCalendar(context, plainMonthDay, fields, JSValue.argumentOrUndefined(args, 1));
         }
 
         IsoDate originalDate = plainMonthDay.getIsoDate();
@@ -308,13 +282,13 @@ public final class TemporalPlainMonthDayPrototype {
 
         IsoMonth parsedMonthCode = null;
         if (hasMonthCode) {
-            parsedMonthCode = parseMonthCodeSyntaxForWith(context, monthCode);
+            parsedMonthCode = IsoMonth.parseByMonthCode(context, monthCode, "Temporal error: Invalid ISO date.");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
         }
 
-        String overflow = TemporalUtils.getOverflowOption(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
+        String overflow = TemporalUtils.getOverflowOption(context, JSValue.argumentOrUndefined(args, 1));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

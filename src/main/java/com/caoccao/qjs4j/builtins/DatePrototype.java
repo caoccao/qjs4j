@@ -66,8 +66,8 @@ public final class DatePrototype {
         if (Double.isNaN(timeValue)) {
             return new JSString("Invalid Date");
         }
-        JSValue locales = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue locales = JSValue.argumentOrUndefined(args, 0);
+        JSValue options = JSValue.argumentOrUndefined(args, 1);
         JSValue[] dtfArgs = {locales, options};
         JSValue dtf = JSIntlObject.createDateTimeFormat(context, null, dtfArgs, required, defaults);
         if (context.hasPendingException()) {
@@ -381,7 +381,7 @@ public final class DatePrototype {
         if (date == null) {
             return context.getPendingException();
         }
-        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue arg = JSValue.argumentOrUndefined(args, 0);
         if (arg instanceof JSNumber numberArgument) {
             double numericValue = numberArgument.value();
             double clippedValue = JSDate.timeClip(numericValue);
@@ -435,7 +435,7 @@ public final class DatePrototype {
         if (date == null) {
             return context.getPendingException();
         }
-        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue arg = JSValue.argumentOrUndefined(args, 0);
         JSNumber number = toNumberOrThrow(context, arg);
         if (number == null) {
             return context.getPendingException();
@@ -457,7 +457,7 @@ public final class DatePrototype {
 
         // Per ES2024 20.4.4.45 and QuickJS: hint must be a string primitive.
         // If hint is not a string (undefined, null, object, etc.), throw TypeError.
-        JSValue hintArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue hintArg = JSValue.argumentOrUndefined(args, 0);
         if (!(hintArg instanceof JSString hintString)) {
             return context.throwTypeError("invalid hint");
         }

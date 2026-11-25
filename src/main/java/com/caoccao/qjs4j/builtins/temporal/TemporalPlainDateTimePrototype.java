@@ -63,7 +63,7 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        String overflow = TemporalUtils.getOverflowOption(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
+        String overflow = TemporalUtils.getOverflowOption(context, JSValue.argumentOrUndefined(args, 1));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -143,7 +143,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
         JSTemporalPlainDateTime other = TemporalPlainDateTimeConstructor.toTemporalDateTimeObject(context, otherArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -153,7 +153,7 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
         TemporalDifferenceSettings settings = TemporalDifferenceSettings.parse(context, since, optionsArg,
                 TemporalUnit.YEAR, TemporalUnit.NANOSECOND, TemporalUnit.NANOSECOND, TemporalUnit.DAY, true, true);
         if (context.hasPendingException() || settings == null) {
@@ -196,7 +196,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
         JSTemporalPlainDateTime other = TemporalPlainDateTimeConstructor.toTemporalDateTimeObject(context, otherArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -464,8 +464,8 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue locales = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue locales = JSValue.argumentOrUndefined(args, 0);
+        JSValue options = JSValue.argumentOrUndefined(args, 1);
         JSValue dateTimeFormat = JSIntlObject.createDateTimeFormat(context, null, new JSValue[]{locales, options},
                 "any", "all");
         if (context.hasPendingException()) {
@@ -496,7 +496,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue optionsValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue optionsValue = JSValue.argumentOrUndefined(args, 0);
         TemporalPlainDateTimeToStringSettings toStringSettings = getToStringSettings(context, optionsValue);
         if (context.hasPendingException() || toStringSettings == null) {
             return JSUndefined.INSTANCE;
@@ -558,13 +558,13 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue temporalTimeZoneLike = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue temporalTimeZoneLike = JSValue.argumentOrUndefined(args, 0);
         String timeZoneId = toTemporalTimeZoneIdentifier(context, temporalTimeZoneLike);
         if (context.hasPendingException() || timeZoneId == null) {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
         String disambiguation = getTemporalDisambiguation(context, optionsArg);
         if (context.hasPendingException() || disambiguation == null) {
             return JSUndefined.INSTANCE;
@@ -710,7 +710,7 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue optionsValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue optionsValue = JSValue.argumentOrUndefined(args, 1);
         String overflow = TemporalUtils.getOverflowOption(context, optionsValue);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;

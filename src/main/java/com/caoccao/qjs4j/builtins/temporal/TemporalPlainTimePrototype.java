@@ -75,12 +75,12 @@ public final class TemporalPlainTimePrototype {
         if (plainTime == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
         JSTemporalPlainTime other = TemporalPlainTimeConstructor.toTemporalTimeObject(context, otherArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
         return differencePlainTime(context, plainTime, other, optionsArg, since);
     }
 
@@ -122,7 +122,7 @@ public final class TemporalPlainTimePrototype {
         if (plainTime == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
         JSTemporalPlainTime other = TemporalPlainTimeConstructor.toTemporalTimeObject(context, otherArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -282,8 +282,8 @@ public final class TemporalPlainTimePrototype {
         if (plainTime == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue locales = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue locales = JSValue.argumentOrUndefined(args, 0);
+        JSValue options = JSValue.argumentOrUndefined(args, 1);
         if (options instanceof JSObject optionsObject) {
             JSValue dateStyleValue = optionsObject.get(PropertyKey.fromString("dateStyle"));
             if (context.hasPendingException()) {
@@ -306,7 +306,7 @@ public final class TemporalPlainTimePrototype {
         if (plainTime == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue optionsValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue optionsValue = JSValue.argumentOrUndefined(args, 0);
         TemporalPlainTimeToStringSettings toStringSettings = getToStringSettings(context, optionsValue);
         if (context.hasPendingException() || toStringSettings == null) {
             return JSUndefined.INSTANCE;
@@ -391,7 +391,7 @@ public final class TemporalPlainTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        String overflow = TemporalUtils.getOverflowOption(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
+        String overflow = TemporalUtils.getOverflowOption(context, JSValue.argumentOrUndefined(args, 1));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

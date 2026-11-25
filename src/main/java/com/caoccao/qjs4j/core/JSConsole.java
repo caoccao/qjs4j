@@ -828,15 +828,15 @@ public final class JSConsole {
      * {@code toString}, because the {@code toString} it would get is a built-in one.
      */
     private static boolean hasBuiltInToString(JSObject object) {
-        JSValue toString = object.get(PropertyKey.fromString("toString"));
+        JSValue toString = object.get(PropertyKey.TO_STRING);
         if (!(toString instanceof JSFunction)) {
             return true;
         }
-        if (object.hasOwnProperty(PropertyKey.fromString("toString"))) {
+        if (object.hasOwnProperty(PropertyKey.TO_STRING)) {
             return false;
         }
         JSObject pointer = object.getPrototype();
-        while (pointer != null && !pointer.hasOwnProperty(PropertyKey.fromString("toString"))) {
+        while (pointer != null && !pointer.hasOwnProperty(PropertyKey.TO_STRING)) {
             pointer = pointer.getPrototype();
         }
         if (pointer == null) {

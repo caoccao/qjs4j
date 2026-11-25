@@ -62,7 +62,7 @@ public final class TemporalZonedDateTimePrototype {
             durationRecord = durationRecord.negated();
         }
 
-        String overflow = TemporalUtils.getOverflowOption(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
+        String overflow = TemporalUtils.getOverflowOption(context, JSValue.argumentOrUndefined(args, 1));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -211,7 +211,7 @@ public final class TemporalZonedDateTimePrototype {
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
         JSTemporalZonedDateTime other = TemporalZonedDateTimeConstructor.toTemporalZonedDateTimeObject(context,
                 otherArg);
         if (context.hasPendingException()) {
@@ -222,7 +222,7 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
         TemporalDifferenceSettings settings = getDifferenceSettings(context, since, optionsArg);
         if (context.hasPendingException() || settings == null) {
             return JSUndefined.INSTANCE;
@@ -329,7 +329,7 @@ public final class TemporalZonedDateTimePrototype {
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
         JSTemporalZonedDateTime other;
         if (otherArg instanceof JSTemporalZonedDateTime otherZdt) {
             other = otherZdt;
@@ -490,7 +490,7 @@ public final class TemporalZonedDateTimePrototype {
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue directionArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue directionArg = JSValue.argumentOrUndefined(args, 0);
         String direction = getDirectionOption(context, directionArg);
         if (context.hasPendingException() || direction == null) {
             return JSUndefined.INSTANCE;
@@ -1025,8 +1025,8 @@ public final class TemporalZonedDateTimePrototype {
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue locales = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue locales = JSValue.argumentOrUndefined(args, 0);
+        JSValue options = JSValue.argumentOrUndefined(args, 1);
         JSObject dateTimeFormatOptions = createDateTimeFormatOptionsForZonedDateTime(context, options,
                 zonedDateTime.getTimeZoneId());
         if (context.hasPendingException() || dateTimeFormatOptions == null) {
@@ -1112,7 +1112,7 @@ public final class TemporalZonedDateTimePrototype {
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue optionsValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue optionsValue = JSValue.argumentOrUndefined(args, 0);
         TemporalZonedDateTimeToStringSettings toStringSettings = getToStringSettings(context, optionsValue);
         if (context.hasPendingException() || toStringSettings == null) {
             return JSUndefined.INSTANCE;
@@ -1285,7 +1285,7 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue optionsValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue optionsValue = JSValue.argumentOrUndefined(args, 1);
         TemporalZonedDateTimeOptions withOptions = TemporalZonedDateTimeOptions.parse(context, optionsValue, "prefer");
         if (context.hasPendingException() || withOptions == null) {
             return JSUndefined.INSTANCE;
@@ -1438,7 +1438,7 @@ public final class TemporalZonedDateTimePrototype {
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue tzArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue tzArg = JSValue.argumentOrUndefined(args, 0);
         if (!(tzArg instanceof JSString timeZoneString)) {
             context.throwTypeError("Temporal error: Time zone must be string");
             return JSUndefined.INSTANCE;

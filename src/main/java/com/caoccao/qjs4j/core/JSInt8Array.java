@@ -43,30 +43,15 @@ public final class JSInt8Array extends JSTypedArray {
     }
 
     @Override
+    TypedArrayKind elementKind() {
+        return TypedArrayKind.INT8;
+    }
+
+    @Override
     public double getElement(long index) {
         checkIndex(index);
         JSByteBuffer buf = getByteBuffer();
         return buf.get(index);
-    }
-
-    @Override
-    public String getObjectTag() {
-        return "[object " + NAME + "]";
-    }
-
-    @Override
-    public String getTypedArrayName() {
-        return NAME;
-    }
-
-    @Override
-    public boolean isAtomicsReadableAndWriteable() {
-        return true;
-    }
-
-    @Override
-    public boolean isAtomicsWriteable() {
-        return false;
     }
 
     @Override

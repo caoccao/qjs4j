@@ -82,7 +82,7 @@ public final class TemporalPlainDatePrototype {
             durationRecord = durationRecord.negated();
         }
 
-        String overflow = TemporalUtils.getOverflowOption(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
+        String overflow = TemporalUtils.getOverflowOption(context, JSValue.argumentOrUndefined(args, 1));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -173,7 +173,7 @@ public final class TemporalPlainDatePrototype {
 
     private static JSValue differenceTemporalPlainDate(JSContext context, JSTemporalPlainDate plainDate, JSValue[] args,
             boolean sinceOperation) {
-        JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
         JSTemporalPlainDate other = TemporalPlainDateConstructor.toTemporalDateObject(context, otherArg);
         if (context.hasPendingException() || other == null) {
             return JSUndefined.INSTANCE;
@@ -183,7 +183,7 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
         TemporalDifferenceSettings settings = TemporalDifferenceSettings.parse(context, sinceOperation, optionsArg,
                 TemporalUnit.YEAR, TemporalUnit.DAY, TemporalUnit.DAY, TemporalUnit.DAY, true, false);
         if (context.hasPendingException() || settings == null) {
@@ -220,7 +220,7 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
         JSTemporalPlainDate other = TemporalPlainDateConstructor.toTemporalDateObject(context, otherArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -435,8 +435,8 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue locales = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue locales = JSValue.argumentOrUndefined(args, 0);
+        JSValue options = JSValue.argumentOrUndefined(args, 1);
         if (options instanceof JSObject optionsObject) {
             JSValue timeStyleValue = optionsObject.get(PropertyKey.fromString("timeStyle"));
             if (context.hasPendingException()) {
@@ -512,8 +512,7 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        String calendarNameOption = TemporalUtils.getCalendarNameOption(context,
-                args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        String calendarNameOption = TemporalUtils.getCalendarNameOption(context, JSValue.argumentOrUndefined(args, 0));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -536,7 +535,7 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue item = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue item = JSValue.argumentOrUndefined(args, 0);
         JSValue timeZoneLike = item;
         JSValue plainTimeLike = JSUndefined.INSTANCE;
         if (item instanceof JSObject itemObject) {
@@ -745,7 +744,7 @@ public final class TemporalPlainDatePrototype {
             mergedFieldsObject.set(PropertyKey.fromString("eraYear"), JSNumber.of(eraYear));
         }
 
-        JSValue optionsValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue optionsValue = JSValue.argumentOrUndefined(args, 1);
         String overflow = TemporalUtils.getOverflowOption(context, optionsValue);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;

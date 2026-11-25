@@ -87,7 +87,7 @@ public final class SymbolConstructor {
      * Symbol.keyFor(sym) ES2020 19.4.2.6 Returns the key for a Symbol from the global symbol registry.
      */
     public static JSValue keyFor(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue arg = JSValue.argumentOrUndefined(args, 0);
         if (!(arg instanceof JSSymbol symbol)) {
             return context.throwTypeError("Symbol.keyFor requires a Symbol");
         }
@@ -104,7 +104,7 @@ public final class SymbolConstructor {
      * Symbol.for(key) ES2020 19.4.2.1 Returns a Symbol from the global symbol registry.
      */
     public static JSValue symbolFor(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue keyValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue keyValue = JSValue.argumentOrUndefined(args, 0);
         String key = JSTypeConversions.toString(context, keyValue).value();
         return context.getRuntime().getOrCreateGlobalSymbol(key);
     }

@@ -129,6 +129,44 @@ public final class JSTypeConversions {
         return new BigDecimal(bigInt).compareTo(new BigDecimal(number));
     }
 
+    static boolean hasDecimalDigits(String str, int index) {
+        int length = str.length();
+        boolean hasIntegerDigits = false;
+        while (index < length && isAsciiDigit(str.charAt(index))) {
+            hasIntegerDigits = true;
+            index++;
+        }
+
+        boolean hasFractionDigits = false;
+        if (index < length && str.charAt(index) == '.') {
+            index++;
+            while (index < length && isAsciiDigit(str.charAt(index))) {
+                hasFractionDigits = true;
+                index++;
+            }
+        }
+
+        if (!hasIntegerDigits && !hasFractionDigits) {
+            return false;
+        }
+
+        if (index < length && (str.charAt(index) == 'e' || str.charAt(index) == 'E')) {
+            index++;
+            if (index < length && (str.charAt(index) == '+' || str.charAt(index) == '-')) {
+                index++;
+            }
+            int exponentStart = index;
+            while (index < length && isAsciiDigit(str.charAt(index))) {
+                index++;
+            }
+            if (exponentStart == index) {
+                return false;
+            }
+        }
+
+        return index == length;
+    }
+
     private static boolean isAsciiDigit(char c) {
         return c >= '0' && c <= '9';
     }
@@ -182,40 +220,7 @@ public final class JSTypeConversions {
             return false;
         }
 
-        boolean hasIntegerDigits = false;
-        while (index < length && isAsciiDigit(str.charAt(index))) {
-            hasIntegerDigits = true;
-            index++;
-        }
-
-        boolean hasFractionDigits = false;
-        if (index < length && str.charAt(index) == '.') {
-            index++;
-            while (index < length && isAsciiDigit(str.charAt(index))) {
-                hasFractionDigits = true;
-                index++;
-            }
-        }
-
-        if (!hasIntegerDigits && !hasFractionDigits) {
-            return false;
-        }
-
-        if (index < length && (str.charAt(index) == 'e' || str.charAt(index) == 'E')) {
-            index++;
-            if (index < length && (str.charAt(index) == '+' || str.charAt(index) == '-')) {
-                index++;
-            }
-            int exponentStart = index;
-            while (index < length && isAsciiDigit(str.charAt(index))) {
-                index++;
-            }
-            if (exponentStart == index) {
-                return false;
-            }
-        }
-
-        return index == length;
+        return hasDecimalDigits(str, index);
     }
 
     /**

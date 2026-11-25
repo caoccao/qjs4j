@@ -204,8 +204,8 @@ public final class PromiseConstructor {
             if (!promiseCapability.resolve().isUndefined() || !promiseCapability.reject().isUndefined()) {
                 return childContext.throwTypeError("Promise capability executor called multiple times");
             }
-            JSValue resolveFunction = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-            JSValue rejectFunction = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+            JSValue resolveFunction = JSValue.argumentOrUndefined(args, 0);
+            JSValue rejectFunction = JSValue.argumentOrUndefined(args, 1);
             promiseCapability.setResolve(resolveFunction);
             promiseCapability.setReject(rejectFunction);
             return JSUndefined.INSTANCE;
@@ -249,7 +249,7 @@ public final class PromiseConstructor {
             return rejectAbruptPromise(context, promiseCapability);
         }
 
-        JSValue iterable = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue iterable = JSValue.argumentOrUndefined(args, 0);
         JSValue iterator = JSIteratorHelper.getIterator(context, iterable);
         if (context.hasPendingException()) {
             return rejectAbruptPromise(context, promiseCapability);
@@ -469,7 +469,7 @@ public final class PromiseConstructor {
             return rejectAbruptPromise(context, promiseCapability);
         }
 
-        JSValue dictionary = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue dictionary = JSValue.argumentOrUndefined(args, 0);
         if (dictionary.isNullOrUndefined()) {
             context.throwTypeError("Cannot convert undefined or null to object");
             return rejectAbruptPromise(context, promiseCapability);
@@ -520,8 +520,8 @@ public final class PromiseConstructor {
                 onFulfilled = new JSNativeFunction(context, "", 1, (ctx, ta, a) -> {
                     JSValue resolvedValue = a.length > 0 ? a[0] : JSUndefined.INSTANCE;
                     JSObject settledResult = ctx.createJSObject();
-                    settledResult.set(PropertyKey.fromString("status"), new JSString("fulfilled"));
-                    settledResult.set(PropertyKey.fromString("value"), resolvedValue);
+                    settledResult.set(PropertyKey.STATUS, new JSString("fulfilled"));
+                    settledResult.set(PropertyKey.VALUE, resolvedValue);
                     resultObject.set(PropertyKey.fromString(capturedKey), settledResult);
                     remainingCount[0]--;
                     if (remainingCount[0] == 0) {
@@ -543,8 +543,8 @@ public final class PromiseConstructor {
                 onRejected = new JSNativeFunction(context, "", 1, (ctx, ta, a) -> {
                     JSValue reason = a.length > 0 ? a[0] : JSUndefined.INSTANCE;
                     JSObject settledResult = ctx.createJSObject();
-                    settledResult.set(PropertyKey.fromString("status"), new JSString("rejected"));
-                    settledResult.set(PropertyKey.fromString("reason"), reason);
+                    settledResult.set(PropertyKey.STATUS, new JSString("rejected"));
+                    settledResult.set(PropertyKey.REASON, reason);
                     resultObject.set(PropertyKey.fromString(capturedKey), settledResult);
                     remainingCount[0]--;
                     if (remainingCount[0] == 0) {
@@ -557,7 +557,7 @@ public final class PromiseConstructor {
 
             context.transferPrototype(onFulfilled, JSFunction.NAME);
             context.transferPrototype(onRejected, JSFunction.NAME);
-            JSValue thenFn = callGet(context, nextPromise, PropertyKey.fromString("then"));
+            JSValue thenFn = callGet(context, nextPromise, PropertyKey.THEN);
             if (context.hasPendingException()) {
                 return rejectAbruptPromise(context, promiseCapability);
             }
@@ -592,7 +592,7 @@ public final class PromiseConstructor {
             return rejectAbruptPromise(context, promiseCapability);
         }
 
-        JSValue iterable = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue iterable = JSValue.argumentOrUndefined(args, 0);
         JSValue iterator = JSIteratorHelper.getIterator(context, iterable);
         if (context.hasPendingException()) {
             return rejectAbruptPromise(context, promiseCapability);
@@ -687,7 +687,7 @@ public final class PromiseConstructor {
         if (!JSTypeChecking.isConstructor(thisArg)) {
             return context.throwTypeError("Promise.reject called on non-constructor");
         }
-        JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue reason = JSValue.argumentOrUndefined(args, 0);
         PromiseCapability promiseCapability = newPromiseCapability(context, thisArg);
         if (promiseCapability == null) {
             return JSUndefined.INSTANCE;
@@ -727,7 +727,7 @@ public final class PromiseConstructor {
         if (!JSTypeChecking.isConstructor(thisArg)) {
             return context.throwTypeError("Promise.resolve called on non-constructor");
         }
-        JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
 
         if (value instanceof JSPromise jsPromise) {
             JSValue constructor = jsPromise.get(PropertyKey.CONSTRUCTOR);

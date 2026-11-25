@@ -16,83 +16,8 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
-import java.util.ArrayList;
-import java.util.List;
-
-/**
- * Represents a for-of statement: for (variable of iterable) { ... } * or async for-of: for await (variable of iterable)
- * { ... } *
- * <p>
- * * Based on ES2015 for-of loops and ES2018 async iteration. * left can be a VariableDeclaration (e.g., let x) or a
- * Pattern/Expression (e.g., x, obj.prop).
- */
-public final class ForOfStatement extends Statement {
-    private final Statement body;
-    private final boolean isAsync;
-    private final ASTNode left;
-    private final Expression right;
-
+public final class ForOfStatement extends ForEachStatement {
     public ForOfStatement(ASTNode left, Expression right, Statement body, boolean isAsync, SourceLocation location) {
-        super(location);
-        this.left = left;
-        this.right = right;
-        this.body = body;
-        this.isAsync = isAsync;
+        super(left, right, body, isAsync, location);
     }
-
-    @Override
-    public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = isAsync;
-            if (!awaitInside && ((left != null && left.containsAwait()) || (right != null && right.containsAwait())
-                    || (body != null && body.containsAwait()))) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
-    }
-
-    @Override
-    public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = left != null && left.containsYield();
-            if (!yieldInside && ((right != null && right.containsYield()) || (body != null && body.containsYield()))) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
-    }
-
-    public Statement getBody() {
-        return body;
-    }
-
-    public ASTNode getLeft() {
-        return left;
-    }
-
-    public Expression getRight() {
-        return right;
-    }
-
-    @Override
-    public List<VariableDeclarator> getVarDeclarators() {
-        if (varDeclarators == null) {
-            List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
-            if (left instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.getKind() == VariableKind.VAR) {
-                collectedVarDeclarators.addAll(variableDeclaration.getDeclarations());
-            }
-            if (body != null) {
-                collectedVarDeclarators.addAll(body.getVarDeclarators());
-            }
-            varDeclarators = collectedVarDeclarators;
-        }
-        return varDeclarators;
-    }
-
-    public boolean isAsync() {
-        return isAsync;
-    }
-
 }

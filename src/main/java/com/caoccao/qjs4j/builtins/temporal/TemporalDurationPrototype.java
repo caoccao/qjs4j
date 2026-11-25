@@ -1222,8 +1222,8 @@ public final class TemporalDurationPrototype {
         if (duration == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue locales = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue locales = JSValue.argumentOrUndefined(args, 0);
+        JSValue options = JSValue.argumentOrUndefined(args, 1);
         JSValue durationFormat = JSIntlObject.createDurationFormat(context, null, new JSValue[]{locales, options});
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -1237,7 +1237,7 @@ public final class TemporalDurationPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue optionsValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue optionsValue = JSValue.argumentOrUndefined(args, 0);
         TemporalDurationToStringOptions options = parseDurationToStringOptions(context, optionsValue);
         if (context.hasPendingException() || options == null) {
             return JSUndefined.INSTANCE;

@@ -376,7 +376,7 @@ public final class ObjectConstructor {
         if (args.length == 0 && context.getVirtualMachine().getCurrentFrame() == null) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
-        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue arg = JSValue.argumentOrUndefined(args, 0);
         if (!(arg instanceof JSObject jsObject)) {
             return arg; // Primitives are returned as-is
         }
@@ -457,13 +457,13 @@ public final class ObjectConstructor {
                 }
 
                 // Step 4e: Get(nextItem, "0") — key. Errors close the iterator.
-                JSValue keyValue = entryObj.get(PropertyKey.fromString("0"));
+                JSValue keyValue = entryObj.get(PropertyKey.ZERO);
                 if (context.hasPendingException()) {
                     return closeIteratorPreserveError(context, iterator);
                 }
 
                 // Step 4g: Get(nextItem, "1") — value. Errors close the iterator.
-                JSValue entryValue = entryObj.get(PropertyKey.fromString("1"));
+                JSValue entryValue = entryObj.get(PropertyKey.ONE);
                 if (context.hasPendingException()) {
                     return closeIteratorPreserveError(context, iterator);
                 }
@@ -507,7 +507,7 @@ public final class ObjectConstructor {
      */
     public static JSValue getOwnPropertyDescriptor(JSContext context, JSValue thisArg, JSValue[] args) {
         // ES2015 19.1.2.6 step 1: Let obj be ? ToObject(O)
-        JSValue objArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue objArg = JSValue.argumentOrUndefined(args, 0);
         if (objArg.isNullOrUndefined()) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
@@ -521,7 +521,7 @@ public final class ObjectConstructor {
             }
         }
 
-        JSValue propertyArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue propertyArg = JSValue.argumentOrUndefined(args, 1);
         PropertyKey key = PropertyKey.fromValue(context, propertyArg);
         PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
 
@@ -861,8 +861,8 @@ public final class ObjectConstructor {
      * algorithm. Unlike ===, Object.is treats NaN as equal to NaN and +0 as different from -0.
      */
     public static JSValue is(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue x = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue y = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue x = JSValue.argumentOrUndefined(args, 0);
+        JSValue y = JSValue.argumentOrUndefined(args, 1);
 
         // SameValue algorithm (ES2020 7.2.11)
 
@@ -917,7 +917,7 @@ public final class ObjectConstructor {
      * added to it).
      */
     public static JSValue isExtensible(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue arg = JSValue.argumentOrUndefined(args, 0);
 
         // Non-objects are not extensible
         if (!(arg instanceof JSObject obj)) {
@@ -934,7 +934,7 @@ public final class ObjectConstructor {
         if (args.length == 0 && context.getVirtualMachine().getCurrentFrame() == null) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
-        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue arg = JSValue.argumentOrUndefined(args, 0);
         if (!(arg instanceof JSObject obj)) {
             return JSBoolean.TRUE; // Primitives are always frozen
         }
@@ -949,7 +949,7 @@ public final class ObjectConstructor {
         if (args.length == 0 && context.getVirtualMachine().getCurrentFrame() == null) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
-        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue arg = JSValue.argumentOrUndefined(args, 0);
         if (!(arg instanceof JSObject obj)) {
             return JSBoolean.TRUE; // Primitives are always sealed
         }
@@ -1012,7 +1012,7 @@ public final class ObjectConstructor {
         if (args.length == 0 && context.getVirtualMachine().getCurrentFrame() == null) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
-        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue arg = JSValue.argumentOrUndefined(args, 0);
 
         // Non-objects are returned as-is
         if (!(arg instanceof JSObject obj)) {
@@ -1039,7 +1039,7 @@ public final class ObjectConstructor {
         if (args.length == 0 && context.getVirtualMachine().getCurrentFrame() == null) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
-        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue arg = JSValue.argumentOrUndefined(args, 0);
         if (!(arg instanceof JSObject obj)) {
             return arg; // Primitives are returned as-is
         }

@@ -29,7 +29,7 @@ public final class PromisePrototype {
      */
     public static JSValue catchMethod(JSContext context, JSValue thisArg, JSValue[] args) {
         // catch is just then(undefined, onRejected)
-        JSValue[] thenArgs = new JSValue[]{JSUndefined.INSTANCE, args.length > 0 ? args[0] : JSUndefined.INSTANCE};
+        JSValue[] thenArgs = new JSValue[]{JSUndefined.INSTANCE, JSValue.argumentOrUndefined(args, 0)};
         return invokeThen(context, thisArg, thenArgs);
     }
 
@@ -38,7 +38,7 @@ public final class PromisePrototype {
      * called when the promise is settled.
      */
     public static JSValue finallyMethod(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue onFinallyValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue onFinallyValue = JSValue.argumentOrUndefined(args, 0);
         JSValue constructor = speciesConstructor(context, thisArg, getDefaultPromiseConstructor(context));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;

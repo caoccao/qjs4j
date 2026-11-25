@@ -43,30 +43,15 @@ public final class JSFloat64Array extends JSTypedArray {
     }
 
     @Override
+    TypedArrayKind elementKind() {
+        return TypedArrayKind.FLOAT64;
+    }
+
+    @Override
     public double getElement(long index) {
         checkIndex(index);
         JSByteBuffer buf = getByteBuffer();
         return buf.getDouble(index * BYTES_PER_ELEMENT);
-    }
-
-    @Override
-    public String getObjectTag() {
-        return "[object " + NAME + "]";
-    }
-
-    @Override
-    public String getTypedArrayName() {
-        return NAME;
-    }
-
-    @Override
-    public boolean isAtomicsReadableAndWriteable() {
-        return false;
-    }
-
-    @Override
-    public boolean isAtomicsWriteable() {
-        return false;
     }
 
     @Override

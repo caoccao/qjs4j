@@ -79,12 +79,12 @@ public final class JSSuppressedError extends JSError {
         }
 
         // Step 4: CreateNonEnumerableDataPropertyOrThrow(O, "error", error)
-        JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue error = JSValue.argumentOrUndefined(args, 0);
         jsSuppressedError.defineProperty(PropertyKey.ERROR,
                 PropertyDescriptor.dataDescriptor(error, PropertyDescriptor.DataState.ConfigurableWritable));
 
         // Step 5: CreateNonEnumerableDataPropertyOrThrow(O, "suppressed", suppressed)
-        JSValue suppressed = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue suppressed = JSValue.argumentOrUndefined(args, 1);
         jsSuppressedError.defineProperty(PropertyKey.SUPPRESSED,
                 PropertyDescriptor.dataDescriptor(suppressed, PropertyDescriptor.DataState.ConfigurableWritable));
 
@@ -105,9 +105,9 @@ public final class JSSuppressedError extends JSError {
         context.transferPrototype(errorPrototype, JSError.NAME);
 
         // Properties: writable, non-enumerable, configurable
-        errorPrototype.defineProperty(PropertyKey.fromString("name"), new JSString(NAME),
+        errorPrototype.defineProperty(PropertyKey.NAME, new JSString(NAME),
                 PropertyDescriptor.DataState.ConfigurableWritable);
-        errorPrototype.defineProperty(PropertyKey.fromString("message"), new JSString(""),
+        errorPrototype.defineProperty(PropertyKey.MESSAGE, new JSString(""),
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // SuppressedError(error, suppressed, message)
@@ -115,11 +115,10 @@ public final class JSSuppressedError extends JSError {
 
         JSNativeFunction errorConstructor = new JSNativeFunction(context, NAME, length,
                 (childContext, thisObj, childArgs) -> create(childContext, childArgs), true);
-        errorConstructor.defineProperty(PropertyKey.fromString("prototype"), errorPrototype,
-                PropertyDescriptor.DataState.None);
+        errorConstructor.defineProperty(PropertyKey.PROTOTYPE, errorPrototype, PropertyDescriptor.DataState.None);
 
         // Set constructor property on prototype (writable, non-enumerable, configurable)
-        errorPrototype.defineProperty(PropertyKey.fromString("constructor"), errorConstructor,
+        errorPrototype.defineProperty(PropertyKey.CONSTRUCTOR, errorConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         return errorConstructor;

@@ -426,6 +426,39 @@ public final class TemporalUtils {
         return fields;
     }
 
+    /** Resolve the optional year and era fields after reading the calendar's other date fields. */
+    public static Integer resolveEraYear(JSContext context, JSObject fields, TemporalCalendarId calendar, Integer year,
+            String missingEraMessage) {
+        if (!calendar.hasEra()) {
+            return year;
+        }
+        String era = getStringOption(context, fields, "era", null);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        Integer eraYear = getOptionalIntegerField(context, fields, "eraYear");
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if ((era == null) != (eraYear == null)) {
+            context.throwTypeError(missingEraMessage);
+            return null;
+        }
+        if (era == null) {
+            return year;
+        }
+        TemporalEra canonicalEra = TemporalEra.createByCalendarId(context, calendar, era);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        int expectedYear = calendar.getEraYearFromEra(canonicalEra, eraYear);
+        if (year != null && year != expectedYear) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        return expectedYear;
+    }
+
     public static JSObject resolveTemporalPrototype(JSContext context, String typeName) {
         JSValue constructorNewTarget = context.getConstructorNewTarget();
         if (constructorNewTarget instanceof JSObject constructorObject) {
@@ -538,5 +571,4 @@ public final class TemporalUtils {
             return null;
         }
     }
-
 }

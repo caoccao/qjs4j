@@ -45,31 +45,16 @@ public final class JSFloat16Array extends JSTypedArray {
     }
 
     @Override
+    TypedArrayKind elementKind() {
+        return TypedArrayKind.FLOAT16;
+    }
+
+    @Override
     public double getElement(long index) {
         checkIndex(index);
         JSByteBuffer buf = getByteBuffer();
         short halfFloat = buf.getShort(index * BYTES_PER_ELEMENT);
         return Float16.toFloat(halfFloat);
-    }
-
-    @Override
-    public String getObjectTag() {
-        return "[object " + NAME + "]";
-    }
-
-    @Override
-    public String getTypedArrayName() {
-        return NAME;
-    }
-
-    @Override
-    public boolean isAtomicsReadableAndWriteable() {
-        return false;
-    }
-
-    @Override
-    public boolean isAtomicsWriteable() {
-        return false;
     }
 
     @Override

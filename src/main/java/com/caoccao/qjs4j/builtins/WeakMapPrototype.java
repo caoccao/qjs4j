@@ -32,7 +32,7 @@ public final class WeakMapPrototype {
             return context
                     .throwTypeError("Method WeakMap.prototype.delete called on incompatible receiver not weakmap");
         }
-        JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue key = JSValue.argumentOrUndefined(args, 0);
         if (!JSWeakMap.isWeakMapKey(key)) {
             return JSBoolean.FALSE;
         }
@@ -47,7 +47,7 @@ public final class WeakMapPrototype {
         if (!(thisArg instanceof JSWeakMap jsWeakMap)) {
             return context.throwTypeError("Method WeakMap.prototype.get called on incompatible receiver not weakmap");
         }
-        JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue key = JSValue.argumentOrUndefined(args, 0);
         if (!JSWeakMap.isWeakMapKey(key)) {
             return JSUndefined.INSTANCE;
         }
@@ -61,14 +61,14 @@ public final class WeakMapPrototype {
         if (!(thisArg instanceof JSWeakMap jsWeakMap)) {
             return context.throwTypeError("WeakMap.prototype.getOrInsert called on non-WeakMap");
         }
-        JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue key = JSValue.argumentOrUndefined(args, 0);
         if (!JSWeakMap.isWeakMapKey(key)) {
             return context.throwTypeError("Invalid value used as weak map key");
         }
         if (jsWeakMap.weakMapHas(key)) {
             return jsWeakMap.weakMapGet(key);
         }
-        JSValue value = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 1);
         jsWeakMap.weakMapSet(key, value);
         return value;
     }
@@ -83,7 +83,7 @@ public final class WeakMapPrototype {
         if (args.length < 2 || !(args[1] instanceof JSFunction callback)) {
             return context.throwTypeError("not a function");
         }
-        JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue key = JSValue.argumentOrUndefined(args, 0);
         if (!JSWeakMap.isWeakMapKey(key)) {
             return context.throwTypeError("Invalid value used as weak map key");
         }
@@ -108,7 +108,7 @@ public final class WeakMapPrototype {
         if (!(thisArg instanceof JSWeakMap jsWeakMap)) {
             return context.throwTypeError("Method WeakMap.prototype.has called on incompatible receiver not weakmap");
         }
-        JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue key = JSValue.argumentOrUndefined(args, 0);
         if (!JSWeakMap.isWeakMapKey(key)) {
             return JSBoolean.FALSE;
         }
@@ -123,11 +123,11 @@ public final class WeakMapPrototype {
         if (!(thisArg instanceof JSWeakMap jsWeakMap)) {
             return context.throwTypeError("Method WeakMap.prototype.set called on incompatible receiver not weakmap");
         }
-        JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue key = JSValue.argumentOrUndefined(args, 0);
         if (!JSWeakMap.isWeakMapKey(key)) {
             return context.throwTypeError("Invalid value used as weak map key");
         }
-        JSValue value = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 1);
         jsWeakMap.weakMapSet(key, value);
         return jsWeakMap;
     }

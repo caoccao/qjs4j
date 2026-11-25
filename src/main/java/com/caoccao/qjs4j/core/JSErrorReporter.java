@@ -198,7 +198,7 @@ final class JSErrorReporter {
                 if (thisArg instanceof JSObject owner) {
                     JSStackTrace stackTrace = getStackTrace(owner);
                     if (stackTrace != null) {
-                        stackTrace.setValue(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+                        stackTrace.setValue(JSValue.argumentOrUndefined(args, 0));
                     }
                 }
                 return JSUndefined.INSTANCE;

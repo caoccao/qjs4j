@@ -23,7 +23,7 @@ import java.util.Set;
 /**
  * Represents a function expression.
  */
-public final class FunctionExpression extends Expression {
+public final class FunctionExpression extends Expression implements FunctionNode {
     private final BlockStatement body;
     private final FunctionParams functionParams;
     private final Identifier id;
@@ -58,32 +58,13 @@ public final class FunctionExpression extends Expression {
         return body;
     }
 
-    public List<Expression> getDefaults() {
-        return functionParams.defaults();
-    }
-
+    @Override
     public FunctionParams getFunctionParams() {
         return functionParams;
     }
 
     public Identifier getId() {
         return id;
-    }
-
-    public Set<String> getParameterNames() {
-        Set<String> paramNames = new HashSet<>();
-        for (Pattern param : functionParams.params()) {
-            paramNames.addAll(param.getBoundNames());
-        }
-        return paramNames;
-    }
-
-    public List<Pattern> getParams() {
-        return functionParams.params();
-    }
-
-    public RestParameter getRestParameter() {
-        return functionParams.restParameter();
     }
 
     @Override

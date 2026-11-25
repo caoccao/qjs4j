@@ -172,12 +172,12 @@ public final class JSAsyncGenerator extends JSObject {
                     } else {
                         completionPromise.addReactions(new JSPromise.ReactionRecord(
                                 new JSNativeFunction(context, "onReturnResolve", 1, (childContext, thisArg, args) -> {
-                                    JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                    JSValue result = JSValue.argumentOrUndefined(args, 0);
                                     request.promise().fulfill(result);
                                     return JSUndefined.INSTANCE;
                                 }), null, context), new JSPromise.ReactionRecord(new JSNativeFunction(context,
                                         "onReturnReject", 1, (childContext, thisArg, args) -> {
-                                            JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                            JSValue error = JSValue.argumentOrUndefined(args, 0);
                                             request.promise().reject(error);
                                             return JSUndefined.INSTANCE;
                                         }), null, context));
@@ -240,7 +240,7 @@ public final class JSAsyncGenerator extends JSObject {
                         if (request.promise().getState() != JSPromise.PromiseState.PENDING) {
                             return JSUndefined.INSTANCE;
                         }
-                        JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                        JSValue result = JSValue.argumentOrUndefined(args, 0);
                         processResult(result);
                         request.promise().fulfill(result);
                         scheduleDrainRequestQueue();
@@ -251,7 +251,7 @@ public final class JSAsyncGenerator extends JSObject {
                                     return JSUndefined.INSTANCE;
                                 }
                                 state = AsyncGeneratorState.COMPLETED;
-                                JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                JSValue error = JSValue.argumentOrUndefined(args, 0);
                                 request.promise().reject(error);
                                 scheduleDrainRequestQueue();
                                 return JSUndefined.INSTANCE;

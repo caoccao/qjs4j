@@ -673,7 +673,7 @@ public final class VirtualMachine {
         JSNativeFunction getter = new JSNativeFunction(context, "get " + atomName, 0,
                 (childContext, thisArg, args) -> readReferenceValue(capturedFrame, makeRefOpcode, refIndex), false);
         JSNativeFunction setter = new JSNativeFunction(context, "set " + atomName, 1, (childContext, thisArg, args) -> {
-            JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+            JSValue value = JSValue.argumentOrUndefined(args, 0);
             writeReferenceValue(capturedFrame, makeRefOpcode, refIndex, value);
             return JSUndefined.INSTANCE;
         }, false);
@@ -1240,7 +1240,7 @@ public final class VirtualMachine {
         if (excludedKeys.contains(PropertyKey.fromIndex((int) canonicalIndex))) {
             return true;
         }
-        return excludedKeys.contains(PropertyKey.fromString(Long.toString(canonicalIndex)));
+        return excludedKeys.contains(PropertyKey.fromIndexString(canonicalIndex));
     }
 
     boolean isForOfIteratorExhausted(JSObject iteratorObject) {
@@ -1592,7 +1592,7 @@ public final class VirtualMachine {
             return;
         }
         if (objectValue instanceof JSNativeFunction) {
-            object.defineProperty(PropertyKey.fromString("name"), nameValue, PropertyDescriptor.DataState.Configurable);
+            object.defineProperty(PropertyKey.NAME, nameValue, PropertyDescriptor.DataState.Configurable);
             return;
         }
         PropertyDescriptor existingNameDescriptor = object.getOwnPropertyDescriptor(PropertyKey.NAME);
@@ -1613,7 +1613,7 @@ public final class VirtualMachine {
                 return;
             }
         }
-        object.defineProperty(PropertyKey.fromString("name"), nameValue, PropertyDescriptor.DataState.Configurable);
+        object.defineProperty(PropertyKey.NAME, nameValue, PropertyDescriptor.DataState.Configurable);
     }
 
     JSValue shiftBigInt(JSBigInt value, JSBigInt shiftCount, boolean leftShiftOperator) {

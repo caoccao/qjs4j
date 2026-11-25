@@ -68,7 +68,7 @@ public final class JSEvalOverlayBinding {
         });
         getter.initializePrototypeChain(context);
         JSNativeFunction setter = new JSNativeFunction(context, "set " + name, 1, (ctx, thisArg, args) -> {
-            set(args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+            set(JSValue.argumentOrUndefined(args, 0));
             return JSUndefined.INSTANCE;
         });
         setter.initializePrototypeChain(context);

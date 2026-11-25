@@ -16,75 +16,8 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
-import java.util.ArrayList;
-import java.util.List;
-
-/**
- * Represents a for-in statement: for (variable in object) { ... } *
- * <p>
- * * Based on ES5 for-in loops. * left can be a VariableDeclaration (e.g., var x) or a Pattern/Expression (e.g., x,
- * obj.prop).
- */
-public final class ForInStatement extends Statement {
-    private final Statement body;
-    private final ASTNode left;
-    private final Expression right;
-
+public final class ForInStatement extends ForEachStatement {
     public ForInStatement(ASTNode left, Expression right, Statement body, SourceLocation location) {
-        super(location);
-        this.left = left;
-        this.right = right;
-        this.body = body;
+        super(left, right, body, false, location);
     }
-
-    @Override
-    public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = left != null && left.containsAwait();
-            if (!awaitInside && ((right != null && right.containsAwait()) || (body != null && body.containsAwait()))) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
-    }
-
-    @Override
-    public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = left != null && left.containsYield();
-            if (!yieldInside && ((right != null && right.containsYield()) || (body != null && body.containsYield()))) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
-    }
-
-    public Statement getBody() {
-        return body;
-    }
-
-    public ASTNode getLeft() {
-        return left;
-    }
-
-    public Expression getRight() {
-        return right;
-    }
-
-    @Override
-    public List<VariableDeclarator> getVarDeclarators() {
-        if (varDeclarators == null) {
-            List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
-            if (left instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.getKind() == VariableKind.VAR) {
-                collectedVarDeclarators.addAll(variableDeclaration.getDeclarations());
-            }
-            if (body != null) {
-                collectedVarDeclarators.addAll(body.getVarDeclarators());
-            }
-            varDeclarators = collectedVarDeclarators;
-        }
-        return varDeclarators;
-    }
-
 }

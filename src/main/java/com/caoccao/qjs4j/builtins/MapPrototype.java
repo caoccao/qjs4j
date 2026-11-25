@@ -44,7 +44,7 @@ public final class MapPrototype {
             return context.throwTypeError("Map.prototype.delete called on non-Map");
         }
 
-        JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue key = JSValue.argumentOrUndefined(args, 0);
         return JSBoolean.valueOf(map.mapDelete(key));
     }
 
@@ -74,7 +74,7 @@ public final class MapPrototype {
         }
         JSValue callback = args[0];
 
-        JSValue callbackThisArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue callbackThisArg = JSValue.argumentOrUndefined(args, 1);
 
         JSMap.IterationCursor cursor = map.createIterationCursor();
         while (true) {
@@ -105,7 +105,7 @@ public final class MapPrototype {
             return context.throwTypeError("Map.prototype.get called on non-Map");
         }
 
-        JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue key = JSValue.argumentOrUndefined(args, 0);
         return map.mapGet(key);
     }
 
@@ -116,11 +116,11 @@ public final class MapPrototype {
         if (!(thisArg instanceof JSMap map)) {
             return context.throwTypeError("Map.prototype.getOrInsert called on non-Map");
         }
-        JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue key = JSValue.argumentOrUndefined(args, 0);
         if (map.mapHas(key)) {
             return map.mapGet(key);
         }
-        JSValue value = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue value = JSValue.argumentOrUndefined(args, 1);
         map.mapSet(key, value);
         return value;
     }
@@ -136,7 +136,7 @@ public final class MapPrototype {
             return context.throwTypeError("not a function");
         }
         JSValue callback = args[1];
-        JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue key = JSValue.argumentOrUndefined(args, 0);
         // CanonicalizeKeyedCollectionKey: -0 → +0
         if (key instanceof JSNumber number && number.value() == 0.0) {
             key = JSNumber.of(0.0);
@@ -181,7 +181,7 @@ public final class MapPrototype {
             return context.throwTypeError("Map.prototype.has called on non-Map");
         }
 
-        JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue key = JSValue.argumentOrUndefined(args, 0);
         return JSBoolean.valueOf(map.mapHas(key));
     }
 
@@ -205,8 +205,8 @@ public final class MapPrototype {
             return context.throwTypeError("Map.prototype.set called on non-Map");
         }
 
-        JSValue key = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue value = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue key = JSValue.argumentOrUndefined(args, 0);
+        JSValue value = JSValue.argumentOrUndefined(args, 1);
 
         map.mapSet(key, value);
         return map; // Return the Map object for chaining

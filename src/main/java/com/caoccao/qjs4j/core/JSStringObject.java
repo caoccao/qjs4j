@@ -65,7 +65,7 @@ public final class JSStringObject extends JSObject {
         this.value = value;
         this.setPrimitiveValue(value);
         // String objects have a non-writable, non-enumerable, non-configurable length property
-        defineProperty(PropertyKey.fromString("length"),
+        defineProperty(PropertyKey.LENGTH,
                 PropertyDescriptor.dataDescriptor(JSNumber.of(value.length()), PropertyDescriptor.DataState.None));
     }
 
