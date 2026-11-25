@@ -111,8 +111,7 @@ public class HighPriorityOpcodeTest extends BaseTest {
         emitter.emitOpcode(Opcode.RETURN);
 
         JSValue value = execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(value).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) value).value()).isEqualTo(9);
+        assertNumberValue(value, 9);
     }
 
     @Test
@@ -145,8 +144,7 @@ public class HighPriorityOpcodeTest extends BaseTest {
         setProtoEmitter.emitOpcode(Opcode.RETURN);
 
         JSValue marker = execute(setProtoEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(marker).isInstanceOf(JSString.class);
-        assertThat(((JSString) marker).value()).isEqualTo("ok");
+        assertStringValue(marker, "ok");
 
         JSObject homeObject = context.createJSObject();
         JSNativeFunction method = new JSNativeFunction(context, "m", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
@@ -178,8 +176,7 @@ public class HighPriorityOpcodeTest extends BaseTest {
 
         JSValue[] closureVars = new JSValue[]{JSUndefined.INSTANCE};
         JSValue localRefResult = execute(localRefEmitter, 1, closureVars, JSUndefined.INSTANCE);
-        assertThat(localRefResult).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) localRefResult).value()).isEqualTo(42);
+        assertNumberValue(localRefResult, 42);
 
         BytecodeEmitter varInitEmitter = new BytecodeEmitter();
         varInitEmitter.emitOpcodeU16(Opcode.GET_VAR_UNDEF, 0);
@@ -191,9 +188,7 @@ public class HighPriorityOpcodeTest extends BaseTest {
 
         JSValue[] initClosureVars = new JSValue[]{JSUndefined.INSTANCE};
         JSValue varInitResult = execute(varInitEmitter, 0, initClosureVars, JSUndefined.INSTANCE);
-        assertThat(varInitResult).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) varInitResult).value()).isEqualTo(7);
-        assertThat(initClosureVars[0]).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) initClosureVars[0]).value()).isEqualTo(7);
+        assertNumberValue(varInitResult, 7);
+        assertNumberValue(initClosureVars[0], 7);
     }
 }

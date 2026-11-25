@@ -162,18 +162,15 @@ public class RegExpConstructorTest extends BaseJavetTest {
         JSValue result = RegExpPrototype.exec(context, regexp, new JSValue[]{new JSString("hello world")});
         assertThat(result).isInstanceOfSatisfying(JSArray.class, arr -> {
             assertThat(arr.getLength()).isEqualTo(1); // Just the matched string, no captures
-            assertThat(arr.get(0)).isInstanceOfSatisfying(JSString.class,
-                    str -> assertThat(str.value()).isEqualTo("hello"));
+            assertStringValue(arr.get(0), "hello");
 
             // Check index property
             JSValue indexValue = arr.get("index");
-            assertThat(indexValue).isInstanceOfSatisfying(JSNumber.class,
-                    num -> assertThat(num.value()).isEqualTo(0.0));
+            assertNumberValue(indexValue, 0.0);
 
             // Check input property
             JSValue inputValue = arr.get("input");
-            assertThat(inputValue).isInstanceOfSatisfying(JSString.class,
-                    str -> assertThat(str.value()).isEqualTo("hello world"));
+            assertStringValue(inputValue, "hello world");
         });
 
         // Normal case: no match
@@ -208,16 +205,14 @@ public class RegExpConstructorTest extends BaseJavetTest {
         // First exec
         JSValue result = RegExpPrototype.exec(context, regexp, new JSValue[]{new JSString("foo bar")});
         assertThat(result).isInstanceOfSatisfying(JSArray.class, arr -> {
-            assertThat(arr.get(0)).isInstanceOfSatisfying(JSString.class,
-                    str -> assertThat(str.value()).isEqualTo("o"));
+            assertStringValue(arr.get(0), "o");
         });
         assertThat(regexp.getLastIndex() > 0).isTrue();
 
         // Second exec (should get next match)
         result = RegExpPrototype.exec(context, regexp, new JSValue[]{new JSString("foo bar")});
         assertThat(result).isInstanceOfSatisfying(JSArray.class, arr -> {
-            assertThat(arr.get(0)).isInstanceOfSatisfying(JSString.class,
-                    str -> assertThat(str.value()).isEqualTo("o"));
+            assertStringValue(arr.get(0), "o");
         });
 
         // Third exec (no more matches, should return null and reset lastIndex)
@@ -243,12 +238,12 @@ public class RegExpConstructorTest extends BaseJavetTest {
         JSRegExp regexp = new JSRegExp(context, "test", "gimsuy");
 
         JSValue result = RegExpPrototype.getFlags(context, regexp, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("gimsuy"));
+        assertStringValue(result, "gimsuy");
 
         // Edge case: no flags
         JSRegExp regexp2 = new JSRegExp(context, "test", "");
         result = RegExpPrototype.getFlags(context, regexp2, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo(""));
+        assertStringValue(result, "");
 
         // Edge case: called on non-RegExp
         assertTypeError(RegExpPrototype.getFlags(context, new JSArray(context), JSValue.NO_ARGS));
@@ -305,7 +300,7 @@ public class RegExpConstructorTest extends BaseJavetTest {
         JSRegExp regexp = new JSRegExp(context, "hello", "");
 
         JSValue result = RegExpPrototype.getSource(context, regexp, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("hello"));
+        assertStringValue(result, "hello");
 
         // Edge case: called on non-RegExp
         assertTypeError(RegExpPrototype.getSource(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
@@ -640,12 +635,12 @@ public class RegExpConstructorTest extends BaseJavetTest {
         JSRegExp regexp = context.createJSRegExp("test", "gi");
 
         JSValue result = RegExpPrototype.toStringMethod(context, regexp, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("/test/gi"));
+        assertStringValue(result, "/test/gi");
 
         // Edge case: empty pattern (should be /(?:)/ per ES spec)
         JSRegExp regexp2 = context.createJSRegExp("", "");
         result = RegExpPrototype.toStringMethod(context, regexp2, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("/(?:)/"));
+        assertStringValue(result, "/(?:)/");
 
         // Edge case: called on non-RegExp
         assertTypeError(RegExpPrototype.toStringMethod(context, new JSString("not regexp"), JSValue.NO_ARGS));

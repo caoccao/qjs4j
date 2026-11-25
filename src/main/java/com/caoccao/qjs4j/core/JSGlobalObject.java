@@ -72,15 +72,15 @@ public final class JSGlobalObject {
         this.jsonObject = new JSONObject(context);
     }
 
+    private void defineGetter(JSObject prototype, String name, JSNativeCallback getter) {
+        JSNativeFunction getterFunc = new JSNativeFunction(context, "get " + name, 0, getter);
+        prototype.defineProperty(PropertyKey.fromString(name), getterFunc,
+                PropertyDescriptor.AccessorState.Configurable);
+    }
+
     private void defineMethod(JSObject target, String name, int length, JSNativeCallback callback) {
         target.defineProperty(PropertyKey.fromString(name), new JSNativeFunction(context, name, length, callback),
                 PropertyDescriptor.DataState.ConfigurableWritable);
-    }
-
-    private void defineTemporalGetter(JSObject prototype, String name, JSNativeCallback getter) {
-        JSNativeFunction getterFunc = new JSNativeFunction(context, "get " + name, 0, getter);
-        prototype.defineProperty(PropertyKey.fromString(name),
-                PropertyDescriptor.accessorDescriptor(getterFunc, null, PropertyDescriptor.AccessorState.Configurable));
     }
 
     public JSConsole getConsole() {
@@ -187,32 +187,17 @@ public final class JSGlobalObject {
         defineMethod(arrayBufferPrototype, "transferToImmutable", 0, ArrayBufferPrototype::transferToImmutable);
 
         // Define getter properties
-        arrayBufferPrototype.defineProperty(PropertyKey.fromString("byteLength"),
-                new JSNativeFunction(context, "get byteLength", 0, ArrayBufferPrototype::getByteLength),
-                PropertyDescriptor.AccessorState.Configurable);
-        arrayBufferPrototype.defineProperty(PropertyKey.fromString("detached"),
-                new JSNativeFunction(context, "get detached", 0, ArrayBufferPrototype::getDetached),
-                PropertyDescriptor.AccessorState.Configurable);
-        arrayBufferPrototype.defineProperty(PropertyKey.fromString("immutable"),
-                new JSNativeFunction(context, "get immutable", 0, ArrayBufferPrototype::getImmutable),
-                PropertyDescriptor.AccessorState.Configurable);
-        arrayBufferPrototype.defineProperty(PropertyKey.fromString("maxByteLength"),
-                new JSNativeFunction(context, "get maxByteLength", 0, ArrayBufferPrototype::getMaxByteLength),
-                PropertyDescriptor.AccessorState.Configurable);
-        arrayBufferPrototype.defineProperty(PropertyKey.fromString("resizable"),
-                new JSNativeFunction(context, "get resizable", 0, ArrayBufferPrototype::getResizable),
-                PropertyDescriptor.AccessorState.Configurable);
-        arrayBufferPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString(JSArrayBuffer.NAME), PropertyDescriptor.DataState.Configurable);
+        defineGetter(arrayBufferPrototype, "byteLength", ArrayBufferPrototype::getByteLength);
+        defineGetter(arrayBufferPrototype, "detached", ArrayBufferPrototype::getDetached);
+        defineGetter(arrayBufferPrototype, "immutable", ArrayBufferPrototype::getImmutable);
+        defineGetter(arrayBufferPrototype, "maxByteLength", ArrayBufferPrototype::getMaxByteLength);
+        defineGetter(arrayBufferPrototype, "resizable", ArrayBufferPrototype::getResizable);
+        defineToStringTag(arrayBufferPrototype, JSArrayBuffer.NAME);
 
         // Create ArrayBuffer constructor as a function
         JSNativeFunction arrayBufferConstructor = new JSNativeFunction(context, JSArrayBuffer.NAME, 1,
                 ArrayBufferConstructor::call, true, true);
-        arrayBufferConstructor.defineProperty(PropertyKey.fromString("prototype"), arrayBufferPrototype,
-                PropertyDescriptor.DataState.None);
-        arrayBufferConstructor.setConstructorType(JSConstructorType.ARRAY_BUFFER);
-        arrayBufferPrototype.defineProperty(PropertyKey.fromString("constructor"), arrayBufferConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(arrayBufferConstructor, arrayBufferPrototype, JSConstructorType.ARRAY_BUFFER);
 
         // Static methods
         defineMethod(arrayBufferConstructor, "isView", 1, ArrayBufferConstructor::isView);
@@ -284,11 +269,7 @@ public final class JSGlobalObject {
         // Create Array constructor as a function
         JSNativeFunction arrayConstructor = new JSNativeFunction(context, JSArray.NAME, 1, ArrayConstructor::call,
                 true);
-        arrayConstructor.defineProperty(PropertyKey.fromString("prototype"), arrayPrototype,
-                PropertyDescriptor.DataState.None);
-        arrayConstructor.setConstructorType(JSConstructorType.ARRAY);
-        arrayPrototype.defineProperty(PropertyKey.fromString("constructor"), arrayConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(arrayConstructor, arrayPrototype, JSConstructorType.ARRAY);
 
         // Array static methods (writable, non-enumerable, configurable per spec)
         defineMethod(arrayConstructor, "from", 1, ArrayConstructor::from);
@@ -321,19 +302,13 @@ public final class JSGlobalObject {
         asyncDisposableStackPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.ASYNC_DISPOSE),
                 disposeAsyncFunction, PropertyDescriptor.DataState.ConfigurableWritable);
 
-        asyncDisposableStackPrototype.defineProperty(PropertyKey.fromString("disposed"),
-                new JSNativeFunction(context, "get disposed", 0, AsyncDisposableStackPrototype::getDisposed),
-                PropertyDescriptor.AccessorState.Configurable);
-        asyncDisposableStackPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString(JSAsyncDisposableStack.NAME), PropertyDescriptor.DataState.Configurable);
+        defineGetter(asyncDisposableStackPrototype, "disposed", AsyncDisposableStackPrototype::getDisposed);
+        defineToStringTag(asyncDisposableStackPrototype, JSAsyncDisposableStack.NAME);
 
         JSNativeFunction asyncDisposableStackConstructor = new JSNativeFunction(context, JSAsyncDisposableStack.NAME, 0,
                 AsyncDisposableStackConstructor::call, true, true);
-        asyncDisposableStackConstructor.defineProperty(PropertyKey.fromString("prototype"),
-                asyncDisposableStackPrototype, PropertyDescriptor.DataState.None);
-        asyncDisposableStackConstructor.setConstructorType(JSConstructorType.ASYNC_DISPOSABLE_STACK);
-        asyncDisposableStackPrototype.defineProperty(PropertyKey.fromString("constructor"),
-                asyncDisposableStackConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(asyncDisposableStackConstructor, asyncDisposableStackPrototype,
+                JSConstructorType.ASYNC_DISPOSABLE_STACK);
 
         globalObject.defineProperty(PropertyKey.fromString(JSAsyncDisposableStack.NAME),
                 asyncDisposableStackConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
@@ -347,8 +322,7 @@ public final class JSGlobalObject {
         // Create AsyncFunction.prototype that inherits from Function.prototype
         JSObject asyncFunctionPrototype = context.createJSObject();
         context.transferPrototype(asyncFunctionPrototype, JSFunction.NAME);
-        asyncFunctionPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString("AsyncFunction"), PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(asyncFunctionPrototype, "AsyncFunction");
 
         // Create AsyncFunction constructor
         // AsyncFunction is not normally exposed, but we need it for the prototype chain
@@ -358,10 +332,7 @@ public final class JSGlobalObject {
         if (functionConstructorValue instanceof JSObject functionConstructorObject) {
             asyncFunctionConstructor.setPrototype(functionConstructorObject);
         }
-        asyncFunctionConstructor.defineProperty(PropertyKey.fromString("prototype"), asyncFunctionPrototype,
-                PropertyDescriptor.DataState.None);
-        asyncFunctionPrototype.defineProperty(PropertyKey.fromString("constructor"), asyncFunctionConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(asyncFunctionConstructor, asyncFunctionPrototype);
 
         // Store AsyncFunction in the context (not in global scope)
         // This is used internally for setting up prototype chains for async bytecode functions
@@ -412,8 +383,7 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // AsyncGenerator.prototype[Symbol.toStringTag] = "AsyncGenerator" (configurable)
-        asyncGeneratorPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString("AsyncGenerator"), PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(asyncGeneratorPrototype, "AsyncGenerator");
         context.setAsyncGeneratorPrototype(asyncGeneratorPrototype);
 
         // Create AsyncGeneratorFunction.prototype (not exposed in global scope)
@@ -422,8 +392,7 @@ public final class JSGlobalObject {
         context.transferPrototype(asyncGeneratorFunctionPrototype, JSFunction.NAME);
 
         // AsyncGeneratorFunction.prototype[Symbol.toStringTag] = "AsyncGeneratorFunction" (configurable)
-        asyncGeneratorFunctionPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString("AsyncGeneratorFunction"), PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(asyncGeneratorFunctionPrototype, "AsyncGeneratorFunction");
 
         // Link: AsyncGeneratorFunction.prototype.prototype = AsyncGenerator.prototype (configurable)
         asyncGeneratorFunctionPrototype.defineProperty(PropertyKey.fromString("prototype"), asyncGeneratorPrototype,
@@ -468,8 +437,7 @@ public final class JSGlobalObject {
         defineMethod(atomics, "wait", 4, atomicsObject::wait);
         defineMethod(atomics, "waitAsync", 4, atomicsObject::waitAsync);
         defineMethod(atomics, "xor", 3, atomicsObject::xor);
-        atomics.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Atomics"),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(atomics, "Atomics");
 
         globalObject.defineProperty(PropertyKey.fromString("Atomics"), atomics,
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -484,8 +452,7 @@ public final class JSGlobalObject {
         defineMethod(bigIntPrototype, "toLocaleString", 0, BigIntPrototype::toLocaleString);
         defineMethod(bigIntPrototype, "toString", 0, BigIntPrototype::toString);
         defineMethod(bigIntPrototype, "valueOf", 0, BigIntPrototype::valueOf);
-        bigIntPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString(JSBigInt.NAME),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(bigIntPrototype, JSBigInt.NAME);
 
         // Create BigInt constructor
         JSNativeFunction bigIntConstructor = new JSNativeFunction(context, JSBigInt.NAME, 1, BigIntConstructor::call,
@@ -518,11 +485,7 @@ public final class JSGlobalObject {
         // Create Boolean constructor
         JSNativeFunction booleanConstructor = new JSNativeFunction(context, JSBoolean.NAME, 1, BooleanConstructor::call,
                 true);
-        booleanConstructor.defineProperty(PropertyKey.fromString("prototype"), booleanPrototype,
-                PropertyDescriptor.DataState.None);
-        booleanConstructor.setConstructorType(JSConstructorType.BOOLEAN_OBJECT);
-        booleanPrototype.defineProperty(PropertyKey.fromString("constructor"), booleanConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(booleanConstructor, booleanPrototype, JSConstructorType.BOOLEAN_OBJECT);
 
         globalObject.defineProperty(PropertyKey.fromString(JSBoolean.NAME), booleanConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -565,17 +528,10 @@ public final class JSGlobalObject {
         JSObject dataViewPrototype = context.createJSObject();
 
         // Define getter properties
-        dataViewPrototype.defineProperty(PropertyKey.fromString("buffer"),
-                new JSNativeFunction(context, "get buffer", 0, DataViewPrototype::getBuffer),
-                PropertyDescriptor.AccessorState.Configurable);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("byteLength"),
-                new JSNativeFunction(context, "get byteLength", 0, DataViewPrototype::getByteLength),
-                PropertyDescriptor.AccessorState.Configurable);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("byteOffset"),
-                new JSNativeFunction(context, "get byteOffset", 0, DataViewPrototype::getByteOffset),
-                PropertyDescriptor.AccessorState.Configurable);
-        dataViewPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("DataView"),
-                PropertyDescriptor.DataState.Configurable);
+        defineGetter(dataViewPrototype, "buffer", DataViewPrototype::getBuffer);
+        defineGetter(dataViewPrototype, "byteLength", DataViewPrototype::getByteLength);
+        defineGetter(dataViewPrototype, "byteOffset", DataViewPrototype::getByteOffset);
+        defineToStringTag(dataViewPrototype, "DataView");
 
         // Int8/Uint8 methods
         defineMethod(dataViewPrototype, "getInt8", 1, DataViewPrototype::getInt8);
@@ -612,11 +568,7 @@ public final class JSGlobalObject {
         // Create DataView constructor as a function that requires 'new'
         JSNativeFunction dataViewConstructor = new JSNativeFunction(context, "DataView", 1, DataViewConstructor::call,
                 true, true);
-        dataViewConstructor.defineProperty(PropertyKey.fromString("prototype"), dataViewPrototype,
-                PropertyDescriptor.DataState.None);
-        dataViewConstructor.setConstructorType(JSConstructorType.DATA_VIEW);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("constructor"), dataViewConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(dataViewConstructor, dataViewPrototype, JSConstructorType.DATA_VIEW);
 
         globalObject.defineProperty(PropertyKey.fromString("DataView"), dataViewConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -686,11 +638,7 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.Configurable);
 
         JSNativeFunction dateConstructor = new JSNativeFunction(context, JSDate.NAME, 7, DateConstructor::call, true);
-        dateConstructor.defineProperty(PropertyKey.fromString("prototype"), datePrototype,
-                PropertyDescriptor.DataState.None);
-        dateConstructor.setConstructorType(JSConstructorType.DATE);
-        datePrototype.defineProperty(PropertyKey.fromString("constructor"), dateConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(dateConstructor, datePrototype, JSConstructorType.DATE);
 
         defineMethod(dateConstructor, "UTC", 7, DateConstructor::UTC);
         defineMethod(dateConstructor, "now", 0, DateConstructor::now);
@@ -716,19 +664,12 @@ public final class JSGlobalObject {
         disposableStackPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.DISPOSE), disposeFunction,
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
-        disposableStackPrototype.defineProperty(PropertyKey.fromString("disposed"),
-                new JSNativeFunction(context, "get disposed", 0, DisposableStackPrototype::getDisposed),
-                PropertyDescriptor.AccessorState.Configurable);
-        disposableStackPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString(JSDisposableStack.NAME), PropertyDescriptor.DataState.Configurable);
+        defineGetter(disposableStackPrototype, "disposed", DisposableStackPrototype::getDisposed);
+        defineToStringTag(disposableStackPrototype, JSDisposableStack.NAME);
 
         JSNativeFunction disposableStackConstructor = new JSNativeFunction(context, JSDisposableStack.NAME, 0,
                 DisposableStackConstructor::call, true, true);
-        disposableStackConstructor.defineProperty(PropertyKey.fromString("prototype"), disposableStackPrototype,
-                PropertyDescriptor.DataState.None);
-        disposableStackConstructor.setConstructorType(JSConstructorType.DISPOSABLE_STACK);
-        disposableStackPrototype.defineProperty(PropertyKey.fromString("constructor"), disposableStackConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(disposableStackConstructor, disposableStackPrototype, JSConstructorType.DISPOSABLE_STACK);
 
         globalObject.defineProperty(PropertyKey.fromString(JSDisposableStack.NAME), disposableStackConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -757,16 +698,12 @@ public final class JSGlobalObject {
         JSObject finalizationRegistryPrototype = context.createJSObject();
         defineMethod(finalizationRegistryPrototype, "register", 2, FinalizationRegistryPrototype::register);
         defineMethod(finalizationRegistryPrototype, "unregister", 1, FinalizationRegistryPrototype::unregister);
-        finalizationRegistryPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString(JSFinalizationRegistry.NAME), PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(finalizationRegistryPrototype, JSFinalizationRegistry.NAME);
 
         JSNativeFunction finalizationRegistryConstructor = new JSNativeFunction(context, JSFinalizationRegistry.NAME, 1,
                 FinalizationRegistryConstructor::call, true, true);
-        finalizationRegistryConstructor.defineProperty(PropertyKey.fromString("prototype"),
-                finalizationRegistryPrototype, PropertyDescriptor.DataState.None);
-        finalizationRegistryConstructor.setConstructorType(JSConstructorType.FINALIZATION_REGISTRY);
-        finalizationRegistryPrototype.defineProperty(PropertyKey.fromString("constructor"),
-                finalizationRegistryConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(finalizationRegistryConstructor, finalizationRegistryPrototype,
+                JSConstructorType.FINALIZATION_REGISTRY);
 
         globalObject.defineProperty(PropertyKey.fromString(JSFinalizationRegistry.NAME),
                 finalizationRegistryConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
@@ -830,10 +767,7 @@ public final class JSGlobalObject {
         // Function constructor should be a function, not a plain object
         JSNativeFunction functionConstructor = new JSNativeFunction(context, JSFunction.NAME, 1,
                 FunctionConstructor::call, true);
-        functionConstructor.defineProperty(PropertyKey.fromString("prototype"), functionPrototype,
-                PropertyDescriptor.DataState.None);
-        functionPrototype.defineProperty(PropertyKey.fromString("constructor"), functionConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(functionConstructor, functionPrototype);
 
         globalObject.defineProperty(PropertyKey.fromString(JSFunction.NAME), functionConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -917,8 +851,7 @@ public final class JSGlobalObject {
 
         // Symbol.toStringTag = "Generator" (configurable only)
         // Matches QuickJS JS_PROP_STRING_DEF("[Symbol.toStringTag]", "Generator", JS_PROP_CONFIGURABLE)
-        generatorPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Generator"),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(generatorPrototype, "Generator");
 
         // Create GeneratorFunction.prototype (not exposed in global scope)
         // All generator function objects (function*) inherit from this
@@ -926,8 +859,7 @@ public final class JSGlobalObject {
         context.transferPrototype(generatorFunctionPrototype, JSFunction.NAME);
 
         // GeneratorFunction.prototype[Symbol.toStringTag] = "GeneratorFunction" (configurable)
-        generatorFunctionPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString("GeneratorFunction"), PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(generatorFunctionPrototype, "GeneratorFunction");
 
         // Link: GeneratorFunction.prototype.prototype = Generator.prototype (configurable)
         generatorFunctionPrototype.defineProperty(PropertyKey.fromString("prototype"), generatorPrototype,
@@ -992,8 +924,7 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Object.prototype.toString.call(globalThis) -> [object global]
-        globalObject.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("global"),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(globalObject, "global");
     }
 
     /**
@@ -1001,21 +932,17 @@ public final class JSGlobalObject {
      */
     private void initializeIntlObject() {
         JSObject intlObject = context.createJSObject();
-        intlObject.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Intl"),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(intlObject, "Intl");
         defineMethod(intlObject, "getCanonicalLocales", 1, JSIntlObject::getCanonicalLocales);
         defineMethod(intlObject, "supportedValuesOf", 1, JSIntlObject::supportedValuesOf_Intl);
 
         JSObject dateTimeFormatPrototype = context.createJSObject();
-        dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("format"),
-                new JSNativeFunction(context, "get format", 0, JSIntlObject::dateTimeFormatFormatGetter),
-                PropertyDescriptor.AccessorState.Configurable);
+        defineGetter(dateTimeFormatPrototype, "format", JSIntlObject::dateTimeFormatFormatGetter);
         defineMethod(dateTimeFormatPrototype, "resolvedOptions", 0, JSIntlObject::dateTimeFormatResolvedOptions);
         defineMethod(dateTimeFormatPrototype, "formatToParts", 1, JSIntlObject::dateTimeFormatFormatToParts);
         defineMethod(dateTimeFormatPrototype, "formatRange", 2, JSIntlObject::dateTimeFormatFormatRange);
         defineMethod(dateTimeFormatPrototype, "formatRangeToParts", 2, JSIntlObject::dateTimeFormatFormatRangeToParts);
-        dateTimeFormatPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString("Intl.DateTimeFormat"), PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(dateTimeFormatPrototype, "Intl.DateTimeFormat");
         JSNativeFunction dateTimeFormatConstructor = new JSNativeFunction(context, "DateTimeFormat", 0, (childContext,
                 thisArg, args) -> JSIntlObject.createDateTimeFormat(childContext, dateTimeFormatPrototype, args), true);
         dateTimeFormatConstructor.defineProperty(PropertyKey.fromString("prototype"), dateTimeFormatPrototype,
@@ -1029,8 +956,7 @@ public final class JSGlobalObject {
         JSObject displayNamesPrototype = context.createJSObject();
         defineMethod(displayNamesPrototype, "of", 1, JSIntlObject::displayNamesOf);
         defineMethod(displayNamesPrototype, "resolvedOptions", 0, JSIntlObject::displayNamesResolvedOptions);
-        displayNamesPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString("Intl.DisplayNames"), PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(displayNamesPrototype, "Intl.DisplayNames");
         JSNativeFunction displayNamesConstructor = new JSNativeFunction(context, "DisplayNames", 2, (childContext,
                 thisArg, args) -> JSIntlObject.createDisplayNames(childContext, displayNamesPrototype, args), true,
                 true);
@@ -1046,8 +972,7 @@ public final class JSGlobalObject {
         defineMethod(durationFormatPrototype, "format", 1, JSIntlObject::durationFormatFormat);
         defineMethod(durationFormatPrototype, "formatToParts", 1, JSIntlObject::durationFormatFormatToParts);
         defineMethod(durationFormatPrototype, "resolvedOptions", 0, JSIntlObject::durationFormatResolvedOptions);
-        durationFormatPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString("Intl.DurationFormat"), PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(durationFormatPrototype, "Intl.DurationFormat");
         JSNativeFunction durationFormatConstructor = new JSNativeFunction(context, "DurationFormat", 0, (childContext,
                 thisArg, args) -> JSIntlObject.createDurationFormat(childContext, durationFormatPrototype, args), true,
                 true);
@@ -1060,15 +985,12 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSObject numberFormatPrototype = context.createJSObject();
-        numberFormatPrototype.defineProperty(PropertyKey.fromString("format"),
-                new JSNativeFunction(context, "get format", 0, JSIntlObject::numberFormatFormatGetter),
-                PropertyDescriptor.AccessorState.Configurable);
+        defineGetter(numberFormatPrototype, "format", JSIntlObject::numberFormatFormatGetter);
         defineMethod(numberFormatPrototype, "formatRange", 2, JSIntlObject::numberFormatFormatRange);
         defineMethod(numberFormatPrototype, "formatRangeToParts", 2, JSIntlObject::numberFormatFormatRangeToParts);
         defineMethod(numberFormatPrototype, "formatToParts", 1, JSIntlObject::numberFormatFormatToParts);
         defineMethod(numberFormatPrototype, "resolvedOptions", 0, JSIntlObject::numberFormatResolvedOptions);
-        numberFormatPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString("Intl.NumberFormat"), PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(numberFormatPrototype, "Intl.NumberFormat");
         JSNativeFunction numberFormatConstructor = new JSNativeFunction(context, "NumberFormat", 0, (childContext,
                 thisArg, args) -> JSIntlObject.createNumberFormat(childContext, numberFormatPrototype, args), true);
         numberFormatConstructor.defineProperty(PropertyKey.fromString("prototype"), numberFormatPrototype,
@@ -1080,12 +1002,9 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSObject collatorPrototype = context.createJSObject();
-        collatorPrototype.defineProperty(PropertyKey.fromString("compare"),
-                new JSNativeFunction(context, "get compare", 0, JSIntlObject::collatorCompareGetter),
-                PropertyDescriptor.AccessorState.Configurable);
+        defineGetter(collatorPrototype, "compare", JSIntlObject::collatorCompareGetter);
         defineMethod(collatorPrototype, "resolvedOptions", 0, JSIntlObject::collatorResolvedOptions);
-        collatorPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Intl.Collator"),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(collatorPrototype, "Intl.Collator");
         JSNativeFunction collatorConstructor = new JSNativeFunction(context, "Collator", 0,
                 (childContext, thisArg, args) -> JSIntlObject.createCollator(childContext, collatorPrototype, args),
                 true);
@@ -1101,8 +1020,7 @@ public final class JSGlobalObject {
         defineMethod(pluralRulesPrototype, "select", 1, JSIntlObject::pluralRulesSelect);
         defineMethod(pluralRulesPrototype, "selectRange", 2, JSIntlObject::pluralRulesSelectRange);
         defineMethod(pluralRulesPrototype, "resolvedOptions", 0, JSIntlObject::pluralRulesResolvedOptions);
-        pluralRulesPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString("Intl.PluralRules"), PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(pluralRulesPrototype, "Intl.PluralRules");
         JSNativeFunction pluralRulesConstructor = new JSNativeFunction(context, "PluralRules", 0, (childContext,
                 thisArg, args) -> JSIntlObject.createPluralRules(childContext, pluralRulesPrototype, args), true, true);
         pluralRulesConstructor.defineProperty(PropertyKey.fromString("prototype"), pluralRulesPrototype,
@@ -1118,8 +1036,7 @@ public final class JSGlobalObject {
         defineMethod(relativeTimeFormatPrototype, "formatToParts", 2, JSIntlObject::relativeTimeFormatFormatToParts);
         defineMethod(relativeTimeFormatPrototype, "resolvedOptions", 0,
                 JSIntlObject::relativeTimeFormatResolvedOptions);
-        relativeTimeFormatPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString("Intl.RelativeTimeFormat"), PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(relativeTimeFormatPrototype, "Intl.RelativeTimeFormat");
         JSNativeFunction relativeTimeFormatConstructor = new JSNativeFunction(context, "RelativeTimeFormat", 0,
                 (childContext, thisArg, args) -> JSIntlObject.createRelativeTimeFormat(childContext,
                         relativeTimeFormatPrototype, args),
@@ -1146,8 +1063,7 @@ public final class JSGlobalObject {
         JSObject segmenterPrototype = context.createJSObject();
         defineMethod(segmenterPrototype, "segment", 1, JSIntlObject::segmenterSegment);
         defineMethod(segmenterPrototype, "resolvedOptions", 0, JSIntlObject::segmenterResolvedOptions);
-        segmenterPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString("Intl.Segmenter"), PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(segmenterPrototype, "Intl.Segmenter");
         JSNativeFunction segmenterConstructor = new JSNativeFunction(context, "Segmenter", 0, (childContext, thisArg,
                 args) -> JSIntlObject.createSegmenter(childContext, segmenterPrototype, segmentDataPrototype, args),
                 true, true);
@@ -1163,8 +1079,7 @@ public final class JSGlobalObject {
         defineMethod(listFormatPrototype, "format", 1, JSIntlObject::listFormatFormat);
         defineMethod(listFormatPrototype, "formatToParts", 1, JSIntlObject::listFormatFormatToParts);
         defineMethod(listFormatPrototype, "resolvedOptions", 0, JSIntlObject::listFormatResolvedOptions);
-        listFormatPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString("Intl.ListFormat"), PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(listFormatPrototype, "Intl.ListFormat");
         JSNativeFunction listFormatConstructor = new JSNativeFunction(context, "ListFormat", 0,
                 (childContext, thisArg, args) -> JSIntlObject.createListFormat(childContext, listFormatPrototype, args),
                 true, true);
@@ -1178,42 +1093,18 @@ public final class JSGlobalObject {
 
         JSObject localePrototype = context.createJSObject();
         defineMethod(localePrototype, "toString", 0, JSIntlObject::localeToString);
-        localePrototype.defineProperty(PropertyKey.fromString("baseName"),
-                new JSNativeFunction(context, "get baseName", 0, JSIntlObject::localeGetBaseName),
-                PropertyDescriptor.AccessorState.Configurable);
-        localePrototype.defineProperty(PropertyKey.fromString("calendar"),
-                new JSNativeFunction(context, "get calendar", 0, JSIntlObject::localeGetCalendar),
-                PropertyDescriptor.AccessorState.Configurable);
-        localePrototype.defineProperty(PropertyKey.fromString("caseFirst"),
-                new JSNativeFunction(context, "get caseFirst", 0, JSIntlObject::localeGetCaseFirst),
-                PropertyDescriptor.AccessorState.Configurable);
-        localePrototype.defineProperty(PropertyKey.fromString("collation"),
-                new JSNativeFunction(context, "get collation", 0, JSIntlObject::localeGetCollation),
-                PropertyDescriptor.AccessorState.Configurable);
-        localePrototype.defineProperty(PropertyKey.fromString("hourCycle"),
-                new JSNativeFunction(context, "get hourCycle", 0, JSIntlObject::localeGetHourCycle),
-                PropertyDescriptor.AccessorState.Configurable);
-        localePrototype.defineProperty(PropertyKey.fromString("language"),
-                new JSNativeFunction(context, "get language", 0, JSIntlObject::localeGetLanguage),
-                PropertyDescriptor.AccessorState.Configurable);
-        localePrototype.defineProperty(PropertyKey.fromString("numberingSystem"),
-                new JSNativeFunction(context, "get numberingSystem", 0, JSIntlObject::localeGetNumberingSystem),
-                PropertyDescriptor.AccessorState.Configurable);
-        localePrototype.defineProperty(PropertyKey.fromString("numeric"),
-                new JSNativeFunction(context, "get numeric", 0, JSIntlObject::localeGetNumeric),
-                PropertyDescriptor.AccessorState.Configurable);
-        localePrototype.defineProperty(PropertyKey.fromString("script"),
-                new JSNativeFunction(context, "get script", 0, JSIntlObject::localeGetScript),
-                PropertyDescriptor.AccessorState.Configurable);
-        localePrototype.defineProperty(PropertyKey.fromString("region"),
-                new JSNativeFunction(context, "get region", 0, JSIntlObject::localeGetRegion),
-                PropertyDescriptor.AccessorState.Configurable);
-        localePrototype.defineProperty(PropertyKey.fromString("variants"),
-                new JSNativeFunction(context, "get variants", 0, JSIntlObject::localeGetVariants),
-                PropertyDescriptor.AccessorState.Configurable);
-        localePrototype.defineProperty(PropertyKey.fromString("firstDayOfWeek"),
-                new JSNativeFunction(context, "get firstDayOfWeek", 0, JSIntlObject::localeGetFirstDayOfWeek),
-                PropertyDescriptor.AccessorState.Configurable);
+        defineGetter(localePrototype, "baseName", JSIntlObject::localeGetBaseName);
+        defineGetter(localePrototype, "calendar", JSIntlObject::localeGetCalendar);
+        defineGetter(localePrototype, "caseFirst", JSIntlObject::localeGetCaseFirst);
+        defineGetter(localePrototype, "collation", JSIntlObject::localeGetCollation);
+        defineGetter(localePrototype, "hourCycle", JSIntlObject::localeGetHourCycle);
+        defineGetter(localePrototype, "language", JSIntlObject::localeGetLanguage);
+        defineGetter(localePrototype, "numberingSystem", JSIntlObject::localeGetNumberingSystem);
+        defineGetter(localePrototype, "numeric", JSIntlObject::localeGetNumeric);
+        defineGetter(localePrototype, "script", JSIntlObject::localeGetScript);
+        defineGetter(localePrototype, "region", JSIntlObject::localeGetRegion);
+        defineGetter(localePrototype, "variants", JSIntlObject::localeGetVariants);
+        defineGetter(localePrototype, "firstDayOfWeek", JSIntlObject::localeGetFirstDayOfWeek);
         defineMethod(localePrototype, "maximize", 0, JSIntlObject::localeMaximize);
         defineMethod(localePrototype, "minimize", 0, JSIntlObject::localeMinimize);
         defineMethod(localePrototype, "getCalendars", 0, JSIntlObject::localeGetCalendars);
@@ -1223,15 +1114,11 @@ public final class JSGlobalObject {
         defineMethod(localePrototype, "getTextInfo", 0, JSIntlObject::localeGetTextInfo);
         defineMethod(localePrototype, "getTimeZones", 0, JSIntlObject::localeGetTimeZones);
         defineMethod(localePrototype, "getWeekInfo", 0, JSIntlObject::localeGetWeekInfo);
-        localePrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Intl.Locale"),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(localePrototype, "Intl.Locale");
         JSNativeFunction localeConstructor = new JSNativeFunction(context, "Locale", 1,
                 (childContext, thisArg, args) -> JSIntlObject.createLocale(childContext, localePrototype, args), true,
                 true);
-        localeConstructor.defineProperty(PropertyKey.fromString("prototype"), localePrototype,
-                PropertyDescriptor.DataState.None);
-        localePrototype.defineProperty(PropertyKey.fromString("constructor"), localeConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(localeConstructor, localePrototype);
         intlObject.defineProperty(PropertyKey.fromString("Locale"), localeConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
@@ -1390,8 +1277,7 @@ public final class JSGlobalObject {
                 new JSNativeFunction(context, "isRawJSON", 1,
                         (ignoredContext, thisArg, args) -> jsonObject.isRawJSON(thisArg, args)),
                 PropertyDescriptor.DataState.ConfigurableWritable);
-        json.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("JSON"),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(json, "JSON");
 
         globalObject.defineProperty(PropertyKey.fromString("JSON"), json,
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1423,11 +1309,8 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Map.prototype.size getter
-        mapPrototype.defineProperty(PropertyKey.fromString("size"),
-                new JSNativeFunction(context, "get size", 0, MapPrototype::getSize),
-                PropertyDescriptor.AccessorState.Configurable);
-        mapPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString(JSMap.NAME),
-                PropertyDescriptor.DataState.Configurable);
+        defineGetter(mapPrototype, "size", MapPrototype::getSize);
+        defineToStringTag(mapPrototype, JSMap.NAME);
 
         // Create Map constructor as JSNativeFunction
         JSNativeFunction mapConstructor = new JSNativeFunction(context, JSMap.NAME, 0, MapConstructor::call, true,
@@ -1509,8 +1392,7 @@ public final class JSGlobalObject {
         defineMethod(math, "tan", 1, MathObject::tan);
         defineMethod(math, "tanh", 1, MathObject::tanh);
         defineMethod(math, "trunc", 1, MathObject::trunc);
-        math.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Math"),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(math, "Math");
 
         globalObject.defineProperty(PropertyKey.fromString("Math"), math,
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1623,10 +1505,7 @@ public final class JSGlobalObject {
         // Create Object constructor
         JSNativeFunction objectConstructor = new JSNativeFunction(context, JSObject.NAME, 1, ObjectConstructor::call,
                 true);
-        objectConstructor.defineProperty(PropertyKey.fromString("prototype"), objectPrototype,
-                PropertyDescriptor.DataState.None);
-        objectPrototype.defineProperty(PropertyKey.fromString("constructor"), objectConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(objectConstructor, objectPrototype);
 
         // Object static methods
         defineMethod(objectConstructor, "assign", 2, ObjectConstructor::assign);
@@ -1666,8 +1545,7 @@ public final class JSGlobalObject {
         defineMethod(promisePrototype, "catch", 1, PromisePrototype::catchMethod);
         defineMethod(promisePrototype, "finally", 1, PromisePrototype::finallyMethod);
         defineMethod(promisePrototype, "then", 2, PromisePrototype::then);
-        promisePrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString(JSPromise.NAME),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(promisePrototype, JSPromise.NAME);
 
         // Create Promise constructor as JSNativeFunction
         JSNativeFunction promiseConstructor = new JSNativeFunction(context, JSPromise.NAME, 1, PromiseConstructor::call,
@@ -1737,8 +1615,7 @@ public final class JSGlobalObject {
         defineMethod(reflect, "preventExtensions", 1, JSReflectObject::preventExtensions);
         defineMethod(reflect, "set", 3, JSReflectObject::set);
         defineMethod(reflect, "setPrototypeOf", 2, JSReflectObject::setPrototypeOf);
-        reflect.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Reflect"),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(reflect, "Reflect");
 
         globalObject.defineProperty(PropertyKey.fromString("Reflect"), reflect,
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1773,45 +1650,21 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Accessor properties
-        regexpPrototype.defineProperty(PropertyKey.fromString("dotAll"),
-                new JSNativeFunction(context, "get dotAll", 0, RegExpPrototype::getDotAllAccessor),
-                PropertyDescriptor.AccessorState.Configurable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("flags"),
-                new JSNativeFunction(context, "get flags", 0, RegExpPrototype::getFlagsAccessor),
-                PropertyDescriptor.AccessorState.Configurable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("global"),
-                new JSNativeFunction(context, "get global", 0, RegExpPrototype::getGlobalAccessor),
-                PropertyDescriptor.AccessorState.Configurable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("hasIndices"),
-                new JSNativeFunction(context, "get hasIndices", 0, RegExpPrototype::getHasIndicesAccessor),
-                PropertyDescriptor.AccessorState.Configurable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("ignoreCase"),
-                new JSNativeFunction(context, "get ignoreCase", 0, RegExpPrototype::getIgnoreCaseAccessor),
-                PropertyDescriptor.AccessorState.Configurable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("multiline"),
-                new JSNativeFunction(context, "get multiline", 0, RegExpPrototype::getMultilineAccessor),
-                PropertyDescriptor.AccessorState.Configurable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("source"),
-                new JSNativeFunction(context, "get source", 0, RegExpPrototype::getSourceAccessor),
-                PropertyDescriptor.AccessorState.Configurable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("sticky"),
-                new JSNativeFunction(context, "get sticky", 0, RegExpPrototype::getStickyAccessor),
-                PropertyDescriptor.AccessorState.Configurable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("unicode"),
-                new JSNativeFunction(context, "get unicode", 0, RegExpPrototype::getUnicodeAccessor),
-                PropertyDescriptor.AccessorState.Configurable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("unicodeSets"),
-                new JSNativeFunction(context, "get unicodeSets", 0, RegExpPrototype::getUnicodeSetsAccessor),
-                PropertyDescriptor.AccessorState.Configurable);
+        defineGetter(regexpPrototype, "dotAll", RegExpPrototype::getDotAllAccessor);
+        defineGetter(regexpPrototype, "flags", RegExpPrototype::getFlagsAccessor);
+        defineGetter(regexpPrototype, "global", RegExpPrototype::getGlobalAccessor);
+        defineGetter(regexpPrototype, "hasIndices", RegExpPrototype::getHasIndicesAccessor);
+        defineGetter(regexpPrototype, "ignoreCase", RegExpPrototype::getIgnoreCaseAccessor);
+        defineGetter(regexpPrototype, "multiline", RegExpPrototype::getMultilineAccessor);
+        defineGetter(regexpPrototype, "source", RegExpPrototype::getSourceAccessor);
+        defineGetter(regexpPrototype, "sticky", RegExpPrototype::getStickyAccessor);
+        defineGetter(regexpPrototype, "unicode", RegExpPrototype::getUnicodeAccessor);
+        defineGetter(regexpPrototype, "unicodeSets", RegExpPrototype::getUnicodeSetsAccessor);
 
         // Create RegExp constructor as a function
         JSNativeFunction regexpConstructor = new JSNativeFunction(context, JSRegExp.NAME, 2, RegExpConstructor::call,
                 true);
-        regexpConstructor.defineProperty(PropertyKey.fromString("prototype"), regexpPrototype,
-                PropertyDescriptor.DataState.None);
-        regexpConstructor.setConstructorType(JSConstructorType.REGEXP);
-        regexpPrototype.defineProperty(PropertyKey.fromString("constructor"), regexpConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(regexpConstructor, regexpPrototype, JSConstructorType.REGEXP);
 
         // AnnexB legacy RegExp static accessor properties.
         // Each getter validates SameValue(C, thisValue) per GetLegacyRegExpStaticProperty.
@@ -1921,20 +1774,13 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Set.prototype.size getter
-        setPrototype.defineProperty(PropertyKey.fromString("size"),
-                new JSNativeFunction(context, "get size", 0, SetPrototype::getSize),
-                PropertyDescriptor.AccessorState.Configurable);
-        setPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString(JSSet.NAME),
-                PropertyDescriptor.DataState.Configurable);
+        defineGetter(setPrototype, "size", SetPrototype::getSize);
+        defineToStringTag(setPrototype, JSSet.NAME);
 
         // Create Set constructor as a function
         JSNativeFunction setConstructor = new JSNativeFunction(context, JSSet.NAME, 0, SetConstructor::call, true,
                 true);
-        setConstructor.defineProperty(PropertyKey.fromString("prototype"), setPrototype,
-                PropertyDescriptor.DataState.None);
-        setConstructor.setConstructorType(JSConstructorType.SET);
-        setPrototype.defineProperty(PropertyKey.fromString("constructor"), setConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(setConstructor, setPrototype, JSConstructorType.SET);
 
         defineMethod(setConstructor, "groupBy", 2, SetConstructor::groupBy);
         setConstructor.defineProperty(PropertyKey.fromSymbol(JSSymbol.SPECIES),
@@ -1953,15 +1799,11 @@ public final class JSGlobalObject {
         JSObject shadowRealmPrototype = context.createJSObject();
         defineMethod(shadowRealmPrototype, "evaluate", 1, ShadowRealmPrototype::evaluate);
         defineMethod(shadowRealmPrototype, "importValue", 2, ShadowRealmPrototype::importValue);
-        shadowRealmPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString(JSShadowRealm.NAME), PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(shadowRealmPrototype, JSShadowRealm.NAME);
 
         JSNativeFunction shadowRealmConstructor = new JSNativeFunction(context, JSShadowRealm.NAME, 0,
                 ShadowRealmConstructor::call, true, true);
-        shadowRealmConstructor.defineProperty(PropertyKey.fromString("prototype"), shadowRealmPrototype,
-                PropertyDescriptor.DataState.None);
-        shadowRealmPrototype.defineProperty(PropertyKey.fromString("constructor"), shadowRealmConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(shadowRealmConstructor, shadowRealmPrototype);
 
         globalObject.defineProperty(PropertyKey.fromString(JSShadowRealm.NAME), shadowRealmConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1977,28 +1819,18 @@ public final class JSGlobalObject {
         defineMethod(sharedArrayBufferPrototype, "slice", 2, SharedArrayBufferPrototype::slice);
 
         // Define getter properties
-        sharedArrayBufferPrototype.defineProperty(PropertyKey.fromString("byteLength"),
-                new JSNativeFunction(context, "get byteLength", 0, SharedArrayBufferPrototype::getByteLength),
-                PropertyDescriptor.AccessorState.Configurable);
-        sharedArrayBufferPrototype.defineProperty(PropertyKey.fromString("growable"),
-                new JSNativeFunction(context, "get growable", 0, SharedArrayBufferPrototype::getGrowable),
-                PropertyDescriptor.AccessorState.Configurable);
-        sharedArrayBufferPrototype.defineProperty(PropertyKey.fromString("maxByteLength"),
-                new JSNativeFunction(context, "get maxByteLength", 0, SharedArrayBufferPrototype::getMaxByteLength),
-                PropertyDescriptor.AccessorState.Configurable);
-        sharedArrayBufferPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString(JSSharedArrayBuffer.NAME), PropertyDescriptor.DataState.Configurable);
+        defineGetter(sharedArrayBufferPrototype, "byteLength", SharedArrayBufferPrototype::getByteLength);
+        defineGetter(sharedArrayBufferPrototype, "growable", SharedArrayBufferPrototype::getGrowable);
+        defineGetter(sharedArrayBufferPrototype, "maxByteLength", SharedArrayBufferPrototype::getMaxByteLength);
+        defineToStringTag(sharedArrayBufferPrototype, JSSharedArrayBuffer.NAME);
 
         // Create SharedArrayBuffer constructor as a function
         JSNativeFunction sharedArrayBufferConstructor = new JSNativeFunction(context, JSSharedArrayBuffer.NAME, 1,
                 SharedArrayBufferConstructor::call, true, // isConstructor
                 true // requiresNew - SharedArrayBuffer() must be called with new
         );
-        sharedArrayBufferConstructor.defineProperty(PropertyKey.fromString("prototype"), sharedArrayBufferPrototype,
-                PropertyDescriptor.DataState.None);
-        sharedArrayBufferConstructor.setConstructorType(JSConstructorType.SHARED_ARRAY_BUFFER);
-        sharedArrayBufferPrototype.defineProperty(PropertyKey.fromString("constructor"), sharedArrayBufferConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(sharedArrayBufferConstructor, sharedArrayBufferPrototype,
+                JSConstructorType.SHARED_ARRAY_BUFFER);
         sharedArrayBufferConstructor.defineProperty(PropertyKey.fromSymbol(JSSymbol.SPECIES),
                 new JSNativeFunction(context, "get [Symbol.species]", 0, SharedArrayBufferConstructor::getSpecies),
                 PropertyDescriptor.AccessorState.Configurable);
@@ -2121,9 +1953,7 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Symbol.prototype.description is a getter
-        symbolPrototype.defineProperty(PropertyKey.fromString("description"),
-                new JSNativeFunction(context, "get description", 0, SymbolPrototype::getDescription),
-                PropertyDescriptor.AccessorState.Configurable);
+        defineGetter(symbolPrototype, "description", SymbolPrototype::getDescription);
 
         JSNativeFunction symbolToPrimitive = new JSNativeFunction(context, "[Symbol.toPrimitive]", 1,
                 SymbolPrototype::toPrimitive);
@@ -2131,8 +1961,7 @@ public final class JSGlobalObject {
         symbolPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_PRIMITIVE), symbolToPrimitive,
                 PropertyDescriptor.DataState.Configurable);
 
-        symbolPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString(JSSymbol.NAME),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(symbolPrototype, JSSymbol.NAME);
 
         // Create Symbol constructor
         // Note: Symbol cannot be called with 'new' in JavaScript (throws TypeError)
@@ -2188,22 +2017,21 @@ public final class JSGlobalObject {
 
     private void initializeTemporalDuration(JSObject temporalObject) {
         JSObject prototype = context.createJSObject();
-        prototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Temporal.Duration"),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(prototype, "Temporal.Duration");
 
         // Getters
-        defineTemporalGetter(prototype, "years", TemporalDurationPrototype::years);
-        defineTemporalGetter(prototype, "months", TemporalDurationPrototype::months);
-        defineTemporalGetter(prototype, "weeks", TemporalDurationPrototype::weeks);
-        defineTemporalGetter(prototype, "days", TemporalDurationPrototype::days);
-        defineTemporalGetter(prototype, "hours", TemporalDurationPrototype::hours);
-        defineTemporalGetter(prototype, "minutes", TemporalDurationPrototype::minutes);
-        defineTemporalGetter(prototype, "seconds", TemporalDurationPrototype::seconds);
-        defineTemporalGetter(prototype, "milliseconds", TemporalDurationPrototype::milliseconds);
-        defineTemporalGetter(prototype, "microseconds", TemporalDurationPrototype::microseconds);
-        defineTemporalGetter(prototype, "nanoseconds", TemporalDurationPrototype::nanoseconds);
-        defineTemporalGetter(prototype, "sign", TemporalDurationPrototype::sign);
-        defineTemporalGetter(prototype, "blank", TemporalDurationPrototype::blank);
+        defineGetter(prototype, "years", TemporalDurationPrototype::years);
+        defineGetter(prototype, "months", TemporalDurationPrototype::months);
+        defineGetter(prototype, "weeks", TemporalDurationPrototype::weeks);
+        defineGetter(prototype, "days", TemporalDurationPrototype::days);
+        defineGetter(prototype, "hours", TemporalDurationPrototype::hours);
+        defineGetter(prototype, "minutes", TemporalDurationPrototype::minutes);
+        defineGetter(prototype, "seconds", TemporalDurationPrototype::seconds);
+        defineGetter(prototype, "milliseconds", TemporalDurationPrototype::milliseconds);
+        defineGetter(prototype, "microseconds", TemporalDurationPrototype::microseconds);
+        defineGetter(prototype, "nanoseconds", TemporalDurationPrototype::nanoseconds);
+        defineGetter(prototype, "sign", TemporalDurationPrototype::sign);
+        defineGetter(prototype, "blank", TemporalDurationPrototype::blank);
 
         // Methods
         defineMethod(prototype, "with", 1, TemporalDurationPrototype::with);
@@ -2235,12 +2063,11 @@ public final class JSGlobalObject {
 
     private void initializeTemporalInstant(JSObject temporalObject) {
         JSObject prototype = context.createJSObject();
-        prototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Temporal.Instant"),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(prototype, "Temporal.Instant");
 
         // Getters
-        defineTemporalGetter(prototype, "epochMilliseconds", TemporalInstantPrototype::epochMilliseconds);
-        defineTemporalGetter(prototype, "epochNanoseconds", TemporalInstantPrototype::epochNanoseconds);
+        defineGetter(prototype, "epochMilliseconds", TemporalInstantPrototype::epochMilliseconds);
+        defineGetter(prototype, "epochNanoseconds", TemporalInstantPrototype::epochNanoseconds);
 
         // Methods
         defineMethod(prototype, "add", 1, TemporalInstantPrototype::add);
@@ -2274,8 +2101,7 @@ public final class JSGlobalObject {
 
     private void initializeTemporalNow(JSObject temporalObject) {
         JSObject nowObject = context.createJSObject();
-        nowObject.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Temporal.Now"),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(nowObject, "Temporal.Now");
 
         defineMethod(nowObject, "instant", 0, TemporalNow::instant);
         defineMethod(nowObject, "timeZoneId", 0, TemporalNow::timeZoneId);
@@ -2290,8 +2116,7 @@ public final class JSGlobalObject {
 
     private void initializeTemporalObject() {
         JSObject temporalObject = context.createJSObject();
-        temporalObject.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Temporal"),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(temporalObject, "Temporal");
 
         // Register Temporal on globalThis first so prototype lookup works during construction
         globalObject.defineProperty(PropertyKey.fromString("Temporal"), temporalObject,
@@ -2327,26 +2152,25 @@ public final class JSGlobalObject {
 
     private void initializeTemporalPlainDate(JSObject temporalObject) {
         JSObject prototype = context.createJSObject();
-        prototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Temporal.PlainDate"),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(prototype, "Temporal.PlainDate");
 
         // Getters (registered as zero-arg functions accessed as properties via get accessor)
-        defineTemporalGetter(prototype, "calendarId", TemporalPlainDatePrototype::calendarId);
-        defineTemporalGetter(prototype, "day", TemporalPlainDatePrototype::day);
-        defineTemporalGetter(prototype, "dayOfWeek", TemporalPlainDatePrototype::dayOfWeek);
-        defineTemporalGetter(prototype, "dayOfYear", TemporalPlainDatePrototype::dayOfYear);
-        defineTemporalGetter(prototype, "daysInMonth", TemporalPlainDatePrototype::daysInMonth);
-        defineTemporalGetter(prototype, "daysInWeek", TemporalPlainDatePrototype::daysInWeek);
-        defineTemporalGetter(prototype, "daysInYear", TemporalPlainDatePrototype::daysInYear);
-        defineTemporalGetter(prototype, "era", TemporalPlainDatePrototype::era);
-        defineTemporalGetter(prototype, "eraYear", TemporalPlainDatePrototype::eraYear);
-        defineTemporalGetter(prototype, "inLeapYear", TemporalPlainDatePrototype::inLeapYear);
-        defineTemporalGetter(prototype, "month", TemporalPlainDatePrototype::month);
-        defineTemporalGetter(prototype, "monthCode", TemporalPlainDatePrototype::monthCode);
-        defineTemporalGetter(prototype, "monthsInYear", TemporalPlainDatePrototype::monthsInYear);
-        defineTemporalGetter(prototype, "weekOfYear", TemporalPlainDatePrototype::weekOfYear);
-        defineTemporalGetter(prototype, "year", TemporalPlainDatePrototype::year);
-        defineTemporalGetter(prototype, "yearOfWeek", TemporalPlainDatePrototype::yearOfWeek);
+        defineGetter(prototype, "calendarId", TemporalPlainDatePrototype::calendarId);
+        defineGetter(prototype, "day", TemporalPlainDatePrototype::day);
+        defineGetter(prototype, "dayOfWeek", TemporalPlainDatePrototype::dayOfWeek);
+        defineGetter(prototype, "dayOfYear", TemporalPlainDatePrototype::dayOfYear);
+        defineGetter(prototype, "daysInMonth", TemporalPlainDatePrototype::daysInMonth);
+        defineGetter(prototype, "daysInWeek", TemporalPlainDatePrototype::daysInWeek);
+        defineGetter(prototype, "daysInYear", TemporalPlainDatePrototype::daysInYear);
+        defineGetter(prototype, "era", TemporalPlainDatePrototype::era);
+        defineGetter(prototype, "eraYear", TemporalPlainDatePrototype::eraYear);
+        defineGetter(prototype, "inLeapYear", TemporalPlainDatePrototype::inLeapYear);
+        defineGetter(prototype, "month", TemporalPlainDatePrototype::month);
+        defineGetter(prototype, "monthCode", TemporalPlainDatePrototype::monthCode);
+        defineGetter(prototype, "monthsInYear", TemporalPlainDatePrototype::monthsInYear);
+        defineGetter(prototype, "weekOfYear", TemporalPlainDatePrototype::weekOfYear);
+        defineGetter(prototype, "year", TemporalPlainDatePrototype::year);
+        defineGetter(prototype, "yearOfWeek", TemporalPlainDatePrototype::yearOfWeek);
 
         // Methods
         defineMethod(prototype, "add", 1, TemporalPlainDatePrototype::add);
@@ -2382,32 +2206,31 @@ public final class JSGlobalObject {
 
     private void initializeTemporalPlainDateTime(JSObject temporalObject) {
         JSObject prototype = context.createJSObject();
-        prototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Temporal.PlainDateTime"),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(prototype, "Temporal.PlainDateTime");
 
         // Getters
-        defineTemporalGetter(prototype, "calendarId", TemporalPlainDateTimePrototype::calendarId);
-        defineTemporalGetter(prototype, "day", TemporalPlainDateTimePrototype::day);
-        defineTemporalGetter(prototype, "dayOfWeek", TemporalPlainDateTimePrototype::dayOfWeek);
-        defineTemporalGetter(prototype, "dayOfYear", TemporalPlainDateTimePrototype::dayOfYear);
-        defineTemporalGetter(prototype, "daysInMonth", TemporalPlainDateTimePrototype::daysInMonth);
-        defineTemporalGetter(prototype, "daysInWeek", TemporalPlainDateTimePrototype::daysInWeek);
-        defineTemporalGetter(prototype, "daysInYear", TemporalPlainDateTimePrototype::daysInYear);
-        defineTemporalGetter(prototype, "era", TemporalPlainDateTimePrototype::era);
-        defineTemporalGetter(prototype, "eraYear", TemporalPlainDateTimePrototype::eraYear);
-        defineTemporalGetter(prototype, "hour", TemporalPlainDateTimePrototype::hour);
-        defineTemporalGetter(prototype, "inLeapYear", TemporalPlainDateTimePrototype::inLeapYear);
-        defineTemporalGetter(prototype, "microsecond", TemporalPlainDateTimePrototype::microsecond);
-        defineTemporalGetter(prototype, "millisecond", TemporalPlainDateTimePrototype::millisecond);
-        defineTemporalGetter(prototype, "minute", TemporalPlainDateTimePrototype::minute);
-        defineTemporalGetter(prototype, "month", TemporalPlainDateTimePrototype::month);
-        defineTemporalGetter(prototype, "monthCode", TemporalPlainDateTimePrototype::monthCode);
-        defineTemporalGetter(prototype, "monthsInYear", TemporalPlainDateTimePrototype::monthsInYear);
-        defineTemporalGetter(prototype, "nanosecond", TemporalPlainDateTimePrototype::nanosecond);
-        defineTemporalGetter(prototype, "second", TemporalPlainDateTimePrototype::second);
-        defineTemporalGetter(prototype, "weekOfYear", TemporalPlainDateTimePrototype::weekOfYear);
-        defineTemporalGetter(prototype, "year", TemporalPlainDateTimePrototype::year);
-        defineTemporalGetter(prototype, "yearOfWeek", TemporalPlainDateTimePrototype::yearOfWeek);
+        defineGetter(prototype, "calendarId", TemporalPlainDateTimePrototype::calendarId);
+        defineGetter(prototype, "day", TemporalPlainDateTimePrototype::day);
+        defineGetter(prototype, "dayOfWeek", TemporalPlainDateTimePrototype::dayOfWeek);
+        defineGetter(prototype, "dayOfYear", TemporalPlainDateTimePrototype::dayOfYear);
+        defineGetter(prototype, "daysInMonth", TemporalPlainDateTimePrototype::daysInMonth);
+        defineGetter(prototype, "daysInWeek", TemporalPlainDateTimePrototype::daysInWeek);
+        defineGetter(prototype, "daysInYear", TemporalPlainDateTimePrototype::daysInYear);
+        defineGetter(prototype, "era", TemporalPlainDateTimePrototype::era);
+        defineGetter(prototype, "eraYear", TemporalPlainDateTimePrototype::eraYear);
+        defineGetter(prototype, "hour", TemporalPlainDateTimePrototype::hour);
+        defineGetter(prototype, "inLeapYear", TemporalPlainDateTimePrototype::inLeapYear);
+        defineGetter(prototype, "microsecond", TemporalPlainDateTimePrototype::microsecond);
+        defineGetter(prototype, "millisecond", TemporalPlainDateTimePrototype::millisecond);
+        defineGetter(prototype, "minute", TemporalPlainDateTimePrototype::minute);
+        defineGetter(prototype, "month", TemporalPlainDateTimePrototype::month);
+        defineGetter(prototype, "monthCode", TemporalPlainDateTimePrototype::monthCode);
+        defineGetter(prototype, "monthsInYear", TemporalPlainDateTimePrototype::monthsInYear);
+        defineGetter(prototype, "nanosecond", TemporalPlainDateTimePrototype::nanosecond);
+        defineGetter(prototype, "second", TemporalPlainDateTimePrototype::second);
+        defineGetter(prototype, "weekOfYear", TemporalPlainDateTimePrototype::weekOfYear);
+        defineGetter(prototype, "year", TemporalPlainDateTimePrototype::year);
+        defineGetter(prototype, "yearOfWeek", TemporalPlainDateTimePrototype::yearOfWeek);
 
         // Methods
         defineMethod(prototype, "add", 1, TemporalPlainDateTimePrototype::add);
@@ -2444,14 +2267,13 @@ public final class JSGlobalObject {
 
     private void initializeTemporalPlainMonthDay(JSObject temporalObject) {
         JSObject prototype = context.createJSObject();
-        prototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Temporal.PlainMonthDay"),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(prototype, "Temporal.PlainMonthDay");
 
         // Getters
-        defineTemporalGetter(prototype, "calendarId", TemporalPlainMonthDayPrototype::calendarId);
-        defineTemporalGetter(prototype, "day", TemporalPlainMonthDayPrototype::day);
-        defineTemporalGetter(prototype, "monthCode", TemporalPlainMonthDayPrototype::monthCode);
-        defineTemporalGetter(prototype, "referenceISOYear", TemporalPlainMonthDayPrototype::referenceISOYear);
+        defineGetter(prototype, "calendarId", TemporalPlainMonthDayPrototype::calendarId);
+        defineGetter(prototype, "day", TemporalPlainMonthDayPrototype::day);
+        defineGetter(prototype, "monthCode", TemporalPlainMonthDayPrototype::monthCode);
+        defineGetter(prototype, "referenceISOYear", TemporalPlainMonthDayPrototype::referenceISOYear);
 
         // Methods
         defineMethod(prototype, "equals", 1, TemporalPlainMonthDayPrototype::equals);
@@ -2478,16 +2300,15 @@ public final class JSGlobalObject {
 
     private void initializeTemporalPlainTime(JSObject temporalObject) {
         JSObject prototype = context.createJSObject();
-        prototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Temporal.PlainTime"),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(prototype, "Temporal.PlainTime");
 
         // Getters
-        defineTemporalGetter(prototype, "hour", TemporalPlainTimePrototype::hour);
-        defineTemporalGetter(prototype, "microsecond", TemporalPlainTimePrototype::microsecond);
-        defineTemporalGetter(prototype, "millisecond", TemporalPlainTimePrototype::millisecond);
-        defineTemporalGetter(prototype, "minute", TemporalPlainTimePrototype::minute);
-        defineTemporalGetter(prototype, "nanosecond", TemporalPlainTimePrototype::nanosecond);
-        defineTemporalGetter(prototype, "second", TemporalPlainTimePrototype::second);
+        defineGetter(prototype, "hour", TemporalPlainTimePrototype::hour);
+        defineGetter(prototype, "microsecond", TemporalPlainTimePrototype::microsecond);
+        defineGetter(prototype, "millisecond", TemporalPlainTimePrototype::millisecond);
+        defineGetter(prototype, "minute", TemporalPlainTimePrototype::minute);
+        defineGetter(prototype, "nanosecond", TemporalPlainTimePrototype::nanosecond);
+        defineGetter(prototype, "second", TemporalPlainTimePrototype::second);
 
         // Methods
         defineMethod(prototype, "add", 1, TemporalPlainTimePrototype::add);
@@ -2519,21 +2340,20 @@ public final class JSGlobalObject {
 
     private void initializeTemporalPlainYearMonth(JSObject temporalObject) {
         JSObject prototype = context.createJSObject();
-        prototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString("Temporal.PlainYearMonth"), PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(prototype, "Temporal.PlainYearMonth");
 
         // Getters
-        defineTemporalGetter(prototype, "calendarId", TemporalPlainYearMonthPrototype::calendarId);
-        defineTemporalGetter(prototype, "daysInMonth", TemporalPlainYearMonthPrototype::daysInMonth);
-        defineTemporalGetter(prototype, "daysInYear", TemporalPlainYearMonthPrototype::daysInYear);
-        defineTemporalGetter(prototype, "era", TemporalPlainYearMonthPrototype::era);
-        defineTemporalGetter(prototype, "eraYear", TemporalPlainYearMonthPrototype::eraYear);
-        defineTemporalGetter(prototype, "inLeapYear", TemporalPlainYearMonthPrototype::inLeapYear);
-        defineTemporalGetter(prototype, "month", TemporalPlainYearMonthPrototype::month);
-        defineTemporalGetter(prototype, "monthCode", TemporalPlainYearMonthPrototype::monthCode);
-        defineTemporalGetter(prototype, "monthsInYear", TemporalPlainYearMonthPrototype::monthsInYear);
-        defineTemporalGetter(prototype, "referenceISODay", TemporalPlainYearMonthPrototype::referenceISODay);
-        defineTemporalGetter(prototype, "year", TemporalPlainYearMonthPrototype::year);
+        defineGetter(prototype, "calendarId", TemporalPlainYearMonthPrototype::calendarId);
+        defineGetter(prototype, "daysInMonth", TemporalPlainYearMonthPrototype::daysInMonth);
+        defineGetter(prototype, "daysInYear", TemporalPlainYearMonthPrototype::daysInYear);
+        defineGetter(prototype, "era", TemporalPlainYearMonthPrototype::era);
+        defineGetter(prototype, "eraYear", TemporalPlainYearMonthPrototype::eraYear);
+        defineGetter(prototype, "inLeapYear", TemporalPlainYearMonthPrototype::inLeapYear);
+        defineGetter(prototype, "month", TemporalPlainYearMonthPrototype::month);
+        defineGetter(prototype, "monthCode", TemporalPlainYearMonthPrototype::monthCode);
+        defineGetter(prototype, "monthsInYear", TemporalPlainYearMonthPrototype::monthsInYear);
+        defineGetter(prototype, "referenceISODay", TemporalPlainYearMonthPrototype::referenceISODay);
+        defineGetter(prototype, "year", TemporalPlainYearMonthPrototype::year);
 
         // Methods
         defineMethod(prototype, "add", 1, TemporalPlainYearMonthPrototype::add);
@@ -2565,39 +2385,38 @@ public final class JSGlobalObject {
 
     private void initializeTemporalZonedDateTime(JSObject temporalObject) {
         JSObject prototype = context.createJSObject();
-        prototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Temporal.ZonedDateTime"),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(prototype, "Temporal.ZonedDateTime");
 
         // Getters (28)
-        defineTemporalGetter(prototype, "calendar", TemporalZonedDateTimePrototype::calendar);
-        defineTemporalGetter(prototype, "calendarId", TemporalZonedDateTimePrototype::calendarId);
-        defineTemporalGetter(prototype, "day", TemporalZonedDateTimePrototype::day);
-        defineTemporalGetter(prototype, "dayOfWeek", TemporalZonedDateTimePrototype::dayOfWeek);
-        defineTemporalGetter(prototype, "dayOfYear", TemporalZonedDateTimePrototype::dayOfYear);
-        defineTemporalGetter(prototype, "daysInMonth", TemporalZonedDateTimePrototype::daysInMonth);
-        defineTemporalGetter(prototype, "daysInWeek", TemporalZonedDateTimePrototype::daysInWeek);
-        defineTemporalGetter(prototype, "daysInYear", TemporalZonedDateTimePrototype::daysInYear);
-        defineTemporalGetter(prototype, "epochMilliseconds", TemporalZonedDateTimePrototype::epochMilliseconds);
-        defineTemporalGetter(prototype, "epochNanoseconds", TemporalZonedDateTimePrototype::epochNanoseconds);
-        defineTemporalGetter(prototype, "era", TemporalZonedDateTimePrototype::era);
-        defineTemporalGetter(prototype, "eraYear", TemporalZonedDateTimePrototype::eraYear);
-        defineTemporalGetter(prototype, "hour", TemporalZonedDateTimePrototype::hour);
-        defineTemporalGetter(prototype, "hoursInDay", TemporalZonedDateTimePrototype::hoursInDay);
-        defineTemporalGetter(prototype, "inLeapYear", TemporalZonedDateTimePrototype::inLeapYear);
-        defineTemporalGetter(prototype, "microsecond", TemporalZonedDateTimePrototype::microsecond);
-        defineTemporalGetter(prototype, "millisecond", TemporalZonedDateTimePrototype::millisecond);
-        defineTemporalGetter(prototype, "minute", TemporalZonedDateTimePrototype::minute);
-        defineTemporalGetter(prototype, "month", TemporalZonedDateTimePrototype::month);
-        defineTemporalGetter(prototype, "monthCode", TemporalZonedDateTimePrototype::monthCode);
-        defineTemporalGetter(prototype, "monthsInYear", TemporalZonedDateTimePrototype::monthsInYear);
-        defineTemporalGetter(prototype, "nanosecond", TemporalZonedDateTimePrototype::nanosecond);
-        defineTemporalGetter(prototype, "offset", TemporalZonedDateTimePrototype::offset);
-        defineTemporalGetter(prototype, "offsetNanoseconds", TemporalZonedDateTimePrototype::offsetNanoseconds);
-        defineTemporalGetter(prototype, "second", TemporalZonedDateTimePrototype::second);
-        defineTemporalGetter(prototype, "timeZoneId", TemporalZonedDateTimePrototype::timeZoneId);
-        defineTemporalGetter(prototype, "weekOfYear", TemporalZonedDateTimePrototype::weekOfYear);
-        defineTemporalGetter(prototype, "year", TemporalZonedDateTimePrototype::year);
-        defineTemporalGetter(prototype, "yearOfWeek", TemporalZonedDateTimePrototype::yearOfWeek);
+        defineGetter(prototype, "calendar", TemporalZonedDateTimePrototype::calendar);
+        defineGetter(prototype, "calendarId", TemporalZonedDateTimePrototype::calendarId);
+        defineGetter(prototype, "day", TemporalZonedDateTimePrototype::day);
+        defineGetter(prototype, "dayOfWeek", TemporalZonedDateTimePrototype::dayOfWeek);
+        defineGetter(prototype, "dayOfYear", TemporalZonedDateTimePrototype::dayOfYear);
+        defineGetter(prototype, "daysInMonth", TemporalZonedDateTimePrototype::daysInMonth);
+        defineGetter(prototype, "daysInWeek", TemporalZonedDateTimePrototype::daysInWeek);
+        defineGetter(prototype, "daysInYear", TemporalZonedDateTimePrototype::daysInYear);
+        defineGetter(prototype, "epochMilliseconds", TemporalZonedDateTimePrototype::epochMilliseconds);
+        defineGetter(prototype, "epochNanoseconds", TemporalZonedDateTimePrototype::epochNanoseconds);
+        defineGetter(prototype, "era", TemporalZonedDateTimePrototype::era);
+        defineGetter(prototype, "eraYear", TemporalZonedDateTimePrototype::eraYear);
+        defineGetter(prototype, "hour", TemporalZonedDateTimePrototype::hour);
+        defineGetter(prototype, "hoursInDay", TemporalZonedDateTimePrototype::hoursInDay);
+        defineGetter(prototype, "inLeapYear", TemporalZonedDateTimePrototype::inLeapYear);
+        defineGetter(prototype, "microsecond", TemporalZonedDateTimePrototype::microsecond);
+        defineGetter(prototype, "millisecond", TemporalZonedDateTimePrototype::millisecond);
+        defineGetter(prototype, "minute", TemporalZonedDateTimePrototype::minute);
+        defineGetter(prototype, "month", TemporalZonedDateTimePrototype::month);
+        defineGetter(prototype, "monthCode", TemporalZonedDateTimePrototype::monthCode);
+        defineGetter(prototype, "monthsInYear", TemporalZonedDateTimePrototype::monthsInYear);
+        defineGetter(prototype, "nanosecond", TemporalZonedDateTimePrototype::nanosecond);
+        defineGetter(prototype, "offset", TemporalZonedDateTimePrototype::offset);
+        defineGetter(prototype, "offsetNanoseconds", TemporalZonedDateTimePrototype::offsetNanoseconds);
+        defineGetter(prototype, "second", TemporalZonedDateTimePrototype::second);
+        defineGetter(prototype, "timeZoneId", TemporalZonedDateTimePrototype::timeZoneId);
+        defineGetter(prototype, "weekOfYear", TemporalZonedDateTimePrototype::weekOfYear);
+        defineGetter(prototype, "year", TemporalZonedDateTimePrototype::year);
+        defineGetter(prototype, "yearOfWeek", TemporalZonedDateTimePrototype::yearOfWeek);
 
         // Methods (20)
         defineMethod(prototype, "add", 1, TemporalZonedDateTimePrototype::add);
@@ -2696,18 +2515,10 @@ public final class JSGlobalObject {
         typedArrayPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.ITERATOR), valuesFunction,
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("buffer"),
-                new JSNativeFunction(context, "get buffer", 0, TypedArrayPrototype::getBuffer),
-                PropertyDescriptor.AccessorState.Configurable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("byteLength"),
-                new JSNativeFunction(context, "get byteLength", 0, TypedArrayPrototype::getByteLength),
-                PropertyDescriptor.AccessorState.Configurable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("byteOffset"),
-                new JSNativeFunction(context, "get byteOffset", 0, TypedArrayPrototype::getByteOffset),
-                PropertyDescriptor.AccessorState.Configurable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("length"),
-                new JSNativeFunction(context, "get length", 0, TypedArrayPrototype::getLength),
-                PropertyDescriptor.AccessorState.Configurable);
+        defineGetter(typedArrayPrototype, "buffer", TypedArrayPrototype::getBuffer);
+        defineGetter(typedArrayPrototype, "byteLength", TypedArrayPrototype::getByteLength);
+        defineGetter(typedArrayPrototype, "byteOffset", TypedArrayPrototype::getByteOffset);
+        defineGetter(typedArrayPrototype, "length", TypedArrayPrototype::getLength);
         typedArrayPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
                 new JSNativeFunction(context, "get [Symbol.toStringTag]", 0, TypedArrayPrototype::getToStringTag),
                 PropertyDescriptor.AccessorState.Configurable);
@@ -2718,10 +2529,7 @@ public final class JSGlobalObject {
                 (ctx, thisArg, args) -> ctx.throwTypeError("Abstract class TypedArray not directly constructable"),
                 true, true);
         context.transferPrototype(typedArrayConstructor, JSFunction.NAME);
-        typedArrayConstructor.defineProperty(PropertyKey.fromString("prototype"), typedArrayPrototype,
-                PropertyDescriptor.DataState.None);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("constructor"), typedArrayConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(typedArrayConstructor, typedArrayPrototype);
 
         // Add static methods to %TypedArray%
         defineMethod(typedArrayConstructor, "from", 1, TypedArrayConstructor::from);
@@ -2802,16 +2610,11 @@ public final class JSGlobalObject {
         defineMethod(weakMapPrototype, "getOrInsertComputed", 2, WeakMapPrototype::getOrInsertComputed);
         defineMethod(weakMapPrototype, "has", 1, WeakMapPrototype::has);
         defineMethod(weakMapPrototype, "delete", 1, WeakMapPrototype::delete);
-        weakMapPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString(JSWeakMap.NAME),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(weakMapPrototype, JSWeakMap.NAME);
 
         JSNativeFunction weakMapConstructor = new JSNativeFunction(context, JSWeakMap.NAME, 0, WeakMapConstructor::call,
                 true, true);
-        weakMapConstructor.defineProperty(PropertyKey.fromString("prototype"), weakMapPrototype,
-                PropertyDescriptor.DataState.None);
-        weakMapConstructor.setConstructorType(JSConstructorType.WEAK_MAP);
-        weakMapPrototype.defineProperty(PropertyKey.fromString("constructor"), weakMapConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(weakMapConstructor, weakMapPrototype, JSConstructorType.WEAK_MAP);
 
         globalObject.defineProperty(PropertyKey.fromString(JSWeakMap.NAME), weakMapConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -2823,16 +2626,11 @@ public final class JSGlobalObject {
     private void initializeWeakRefConstructor() {
         JSObject weakRefPrototype = context.createJSObject();
         defineMethod(weakRefPrototype, "deref", 0, WeakRefPrototype::deref);
-        weakRefPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString(JSWeakRef.NAME),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(weakRefPrototype, JSWeakRef.NAME);
 
         JSNativeFunction weakRefConstructor = new JSNativeFunction(context, JSWeakRef.NAME, 1, WeakRefConstructor::call,
                 true, true);
-        weakRefConstructor.defineProperty(PropertyKey.fromString("prototype"), weakRefPrototype,
-                PropertyDescriptor.DataState.None);
-        weakRefConstructor.setConstructorType(JSConstructorType.WEAK_REF);
-        weakRefPrototype.defineProperty(PropertyKey.fromString("constructor"), weakRefConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(weakRefConstructor, weakRefPrototype, JSConstructorType.WEAK_REF);
 
         globalObject.defineProperty(PropertyKey.fromString(JSWeakRef.NAME), weakRefConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -2846,18 +2644,31 @@ public final class JSGlobalObject {
         defineMethod(weakSetPrototype, "add", 1, WeakSetPrototype::add);
         defineMethod(weakSetPrototype, "has", 1, WeakSetPrototype::has);
         defineMethod(weakSetPrototype, "delete", 1, WeakSetPrototype::delete);
-        weakSetPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString(JSWeakSet.NAME),
-                PropertyDescriptor.DataState.Configurable);
+        defineToStringTag(weakSetPrototype, JSWeakSet.NAME);
 
         JSNativeFunction weakSetConstructor = new JSNativeFunction(context, JSWeakSet.NAME, 0, WeakSetConstructor::call,
                 true, true);
-        weakSetConstructor.defineProperty(PropertyKey.fromString("prototype"), weakSetPrototype,
-                PropertyDescriptor.DataState.None);
-        weakSetConstructor.setConstructorType(JSConstructorType.WEAK_SET);
-        weakSetPrototype.defineProperty(PropertyKey.fromString("constructor"), weakSetConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        linkConstructor(weakSetConstructor, weakSetPrototype, JSConstructorType.WEAK_SET);
 
         globalObject.defineProperty(PropertyKey.fromString(JSWeakSet.NAME), weakSetConstructor,
+                PropertyDescriptor.DataState.ConfigurableWritable);
+    }
+
+    private static void defineToStringTag(JSObject target, String tag) {
+        target.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString(tag),
+                PropertyDescriptor.DataState.Configurable);
+    }
+
+    private static void linkConstructor(JSObject constructor, JSObject prototype) {
+        linkConstructor(constructor, prototype, null);
+    }
+
+    private static void linkConstructor(JSObject constructor, JSObject prototype, JSConstructorType type) {
+        constructor.defineProperty(PropertyKey.PROTOTYPE, prototype, PropertyDescriptor.DataState.None);
+        if (type != null) {
+            constructor.setConstructorType(type);
+        }
+        prototype.defineProperty(PropertyKey.CONSTRUCTOR, constructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
     }
 

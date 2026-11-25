@@ -67,8 +67,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         JSValue copied = execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
         assertThat(copied).isSameAs(target);
         assertThat(target.get("a")).isSameAs(JSUndefined.INSTANCE);
-        assertThat(target.get("b")).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) target.get("b")).value()).isEqualTo(2);
+        assertNumberValue(target.get("b"), 2);
         assertThat(target.get("hidden")).isSameAs(JSUndefined.INSTANCE);
         assertThat(target.get(PropertyKey.fromSymbol(symbol))).isSameAs(JSUndefined.INSTANCE);
 
@@ -101,8 +100,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         assertThat(classCtorValue).isSameAs(constructor);
         assertThat(classCtorValue).isInstanceOf(JSObject.class);
         JSObject classCtor = (JSObject) classCtorValue;
-        assertThat(classCtor.get("name")).isInstanceOf(JSString.class);
-        assertThat(((JSString) classCtor.get("name")).value()).isEqualTo("DynamicClass");
+        assertStringValue(classCtor.get("name"), "DynamicClass");
         assertThat(classCtor.get("prototype")).isInstanceOf(JSObject.class);
 
         BytecodeEmitter fallbackEmitter = new BytecodeEmitter();
@@ -186,8 +184,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         emitter.emitOpcode(Opcode.RETURN);
 
         JSValue getterValue = execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(getterValue).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) getterValue).value()).isEqualTo(42);
+        assertNumberValue(getterValue, 42);
 
         PropertyDescriptor methodDescriptor = target.getOwnPropertyDescriptor(PropertyKey.fromString("m"));
         assertThat(methodDescriptor).isNotNull();
@@ -220,8 +217,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         getArrayEl2Emitter.emitOpcode(Opcode.RETURN);
 
         JSValue getArrayEl2Result = execute(getArrayEl2Emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(getArrayEl2Result).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) getArrayEl2Result).value()).isEqualTo(22);
+        assertNumberValue(getArrayEl2Result, 22);
 
         BytecodeEmitter getLengthStringEmitter = new BytecodeEmitter();
         getLengthStringEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("abcd"));
@@ -229,8 +225,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         getLengthStringEmitter.emitOpcode(Opcode.RETURN);
 
         JSValue getLengthStringResult = execute(getLengthStringEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(getLengthStringResult).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) getLengthStringResult).value()).isEqualTo(4);
+        assertNumberValue(getLengthStringResult, 4);
     }
 
     @Test
@@ -247,8 +242,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         locRefEmitter.emitOpcode(Opcode.RETURN);
 
         JSValue locRefResult = execute(locRefEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(locRefResult).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) locRefResult).value()).isEqualTo(9);
+        assertNumberValue(locRefResult, 9);
 
         BytecodeEmitter argRefEmitter = new BytecodeEmitter();
         argRefEmitter.emitOpcode(Opcode.MAKE_ARG_REF);
@@ -263,8 +257,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         argRefEmitter.emitOpcode(Opcode.RETURN);
 
         JSValue argRefResult = execute(argRefEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE, new JSNumber(5));
-        assertThat(argRefResult).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) argRefResult).value()).isEqualTo(12);
+        assertNumberValue(argRefResult, 12);
 
         BytecodeEmitter varRefRefEmitter = new BytecodeEmitter();
         varRefRefEmitter.emitOpcode(Opcode.MAKE_VAR_REF_REF);
@@ -277,8 +270,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
 
         JSValue[] closureVars = new JSValue[]{new JSNumber(1)};
         JSValue varRefRefResult = execute(varRefRefEmitter, 0, closureVars, JSUndefined.INSTANCE);
-        assertThat(varRefRefResult).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) varRefRefResult).value()).isEqualTo(15);
+        assertNumberValue(varRefRefResult, 15);
 
         context.getGlobalObject().set("g", new JSNumber(0));
         BytecodeEmitter varRefEmitter = new BytecodeEmitter();
@@ -289,8 +281,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         varRefEmitter.emitOpcode(Opcode.RETURN);
 
         JSValue varRefResult = execute(varRefEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(varRefResult).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) varRefResult).value()).isEqualTo(7);
+        assertNumberValue(varRefResult, 7);
     }
 
     @Test
@@ -304,8 +295,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         emitter.emitOpcode(Opcode.RETURN);
 
         JSValue result = execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(result).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) result).value()).isEqualTo(2);
+        assertNumberValue(result, 2);
 
         BytecodeEmitter noCatchEmitter = new BytecodeEmitter();
         noCatchEmitter.emitOpcodeU32(Opcode.PUSH_I32, 1);
@@ -328,8 +318,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         getRefEmitter.emitOpcode(Opcode.RETURN);
 
         JSValue getRefResult = execute(getRefEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(getRefResult).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) getRefResult).value()).isEqualTo(1);
+        assertNumberValue(getRefResult, 1);
 
         BytecodeEmitter putRefEmitter = new BytecodeEmitter();
         putRefEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, obj);
@@ -341,8 +330,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         putRefEmitter.emitOpcode(Opcode.RETURN);
 
         JSValue putRefResult = execute(putRefEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(putRefResult).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) putRefResult).value()).isEqualTo(5);
+        assertNumberValue(putRefResult, 5);
 
         BytecodeEmitter nonStrictGlobalEmitter = new BytecodeEmitter();
         nonStrictGlobalEmitter.emitOpcode(Opcode.UNDEFINED);
@@ -354,8 +342,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
 
         JSValue nonStrictResult = executeWithStrict(false, nonStrictGlobalEmitter, 0, JSValue.NO_ARGS,
                 JSUndefined.INSTANCE);
-        assertThat(nonStrictResult).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) nonStrictResult).value()).isEqualTo(11);
+        assertNumberValue(nonStrictResult, 11);
 
         BytecodeEmitter strictMissingGetEmitter = new BytecodeEmitter();
         strictMissingGetEmitter.emitOpcode(Opcode.UNDEFINED);
@@ -436,8 +423,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         setNameEmitter.emitOpcode(Opcode.RETURN);
 
         JSValue setNameResult = execute(setNameEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(setNameResult).isInstanceOf(JSString.class);
-        assertThat(((JSString) setNameResult).value()).isEqualTo("renamed");
+        assertStringValue(setNameResult, "renamed");
 
         JSNativeFunction f2 = new JSNativeFunction(context, "", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
         BytecodeEmitter setNameComputedEmitter = new BytecodeEmitter();
@@ -448,8 +434,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         setNameComputedEmitter.emitOpcode(Opcode.RETURN);
 
         JSValue setNameComputedResult = execute(setNameComputedEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(setNameComputedResult).isInstanceOf(JSString.class);
-        assertThat(((JSString) setNameComputedResult).value()).isEqualTo("dynamic");
+        assertStringValue(setNameComputedResult, "dynamic");
 
         JSNativeFunction f3 = new JSNativeFunction(context, "", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
         BytecodeEmitter setNameSymbolEmitter = new BytecodeEmitter();
@@ -460,8 +445,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         setNameSymbolEmitter.emitOpcode(Opcode.RETURN);
 
         JSValue setNameSymbolResult = execute(setNameSymbolEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(setNameSymbolResult).isInstanceOf(JSString.class);
-        assertThat(((JSString) setNameSymbolResult).value()).isEqualTo("[s]");
+        assertStringValue(setNameSymbolResult, "[s]");
     }
 
     @Test
@@ -543,8 +527,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
 
         JSValue putVarRefCheckInitResult = execute(putVarRefCheckInitEmitter, 1, new JSValue[]{JSUndefined.INSTANCE},
                 JSUndefined.INSTANCE);
-        assertThat(putVarRefCheckInitResult).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) putVarRefCheckInitResult).value()).isEqualTo(10);
+        assertNumberValue(putVarRefCheckInitResult, 10);
 
         BytecodeEmitter putVarRefCheckInitTwiceEmitter = new BytecodeEmitter();
         putVarRefCheckInitTwiceEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);

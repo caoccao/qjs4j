@@ -32,15 +32,15 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         // Normal case: various buffer sizes
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
         JSValue result = ArrayBufferPrototype.getByteLength(context, buffer, JSValue.NO_ARGS);
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(16.0);
+        assertNumberValue(result, 16.0);
 
         buffer = new JSArrayBuffer(context, 0);
         result = ArrayBufferPrototype.getByteLength(context, buffer, JSValue.NO_ARGS);
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(0.0);
+        assertNumberValue(result, 0.0);
 
         buffer = new JSArrayBuffer(context, 1024);
         result = ArrayBufferPrototype.getByteLength(context, buffer, JSValue.NO_ARGS);
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1024.0);
+        assertNumberValue(result, 1024.0);
 
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
@@ -73,12 +73,12 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         // Normal case: non-resizable buffer
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
         JSValue result = ArrayBufferPrototype.getMaxByteLength(context, buffer, JSValue.NO_ARGS);
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(16.0);
+        assertNumberValue(result, 16.0);
 
         // Normal case: resizable buffer
         JSArrayBuffer resizableBuffer = new JSArrayBuffer(context, 16, 64);
         result = ArrayBufferPrototype.getMaxByteLength(context, resizableBuffer, JSValue.NO_ARGS);
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(64.0);
+        assertNumberValue(result, 64.0);
 
         // Edge case: called on non-ArrayBuffer
         JSValue nonBuffer = new JSString("not a buffer");
@@ -111,11 +111,11 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         // Normal case: any this value should return "ArrayBuffer"
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
         JSValue result = ArrayBufferPrototype.getToStringTag(context, buffer, JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("ArrayBuffer");
+        assertStringValue(result, "ArrayBuffer");
 
         // It's a getter that returns a constant, so it works with any thisArg
         result = ArrayBufferPrototype.getToStringTag(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("ArrayBuffer");
+        assertStringValue(result, "ArrayBuffer");
     }
 
     @Test

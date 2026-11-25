@@ -37,16 +37,16 @@ public final class TemporalDurationPrototype {
     private static final BigInteger MICROSECOND_NANOSECONDS = TemporalConstants.BI_MICROSECOND_NANOSECONDS;
     private static final BigInteger MILLISECOND_NANOSECONDS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
     private static final BigInteger MINUTE_NANOSECONDS = TemporalConstants.BI_MINUTE_NANOSECONDS;
+    private static final TemporalReceiver<JSTemporalDuration> RECEIVER = new TemporalReceiver<>(
+            JSTemporalDuration.class, "Temporal.Duration");
     private static final BigInteger SECOND_NANOSECONDS = TemporalConstants.BI_SECOND_NANOSECONDS;
-    private static final String TYPE_NAME = "Temporal.Duration";
     private static final BigInteger WEEK_NANOSECONDS = TemporalConstants.BI_WEEK_NANOSECONDS;
 
     private TemporalDurationPrototype() {
     }
 
     public static JSValue abs(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "abs");
+        JSTemporalDuration duration = RECEIVER.require(context, thisArg, "abs");
         if (duration == null) {
             return JSUndefined.INSTANCE;
         }
@@ -54,8 +54,7 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "add");
+        JSTemporalDuration duration = RECEIVER.require(context, thisArg, "add");
         if (duration == null) {
             return JSUndefined.INSTANCE;
         }
@@ -184,12 +183,8 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue blank(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "blank");
-        if (duration == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return duration.getDuration().isBlank() ? JSBoolean.TRUE : JSBoolean.FALSE;
+        return RECEIVER.read(context, thisArg, "blank",
+                duration -> duration.getDuration().isBlank() ? JSBoolean.TRUE : JSBoolean.FALSE);
     }
 
     private static TemporalDuration buildBalancedDurationFromDateTimes(JSContext context, LocalDateTime startDateTime,
@@ -304,12 +299,7 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue days(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "days");
-        if (duration == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSNumber.of(duration.getDuration().days());
+        return RECEIVER.read(context, thisArg, "days", duration -> JSNumber.of(duration.getDuration().days()));
     }
 
     static TemporalDuration differencePlainDateTime(JSContext context, IsoDateTime startIsoDateTime,
@@ -424,57 +414,30 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue hours(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "hours");
-        if (duration == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSNumber.of(duration.getDuration().hours());
+        return RECEIVER.read(context, thisArg, "hours", duration -> JSNumber.of(duration.getDuration().hours()));
     }
 
     public static JSValue microseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "microseconds");
-        if (duration == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSNumber.of(duration.getDuration().microseconds());
+        return RECEIVER.read(context, thisArg, "microseconds",
+                duration -> JSNumber.of(duration.getDuration().microseconds()));
     }
 
     public static JSValue milliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "milliseconds");
-        if (duration == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSNumber.of(duration.getDuration().milliseconds());
+        return RECEIVER.read(context, thisArg, "milliseconds",
+                duration -> JSNumber.of(duration.getDuration().milliseconds()));
     }
 
     public static JSValue minutes(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "minutes");
-        if (duration == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSNumber.of(duration.getDuration().minutes());
+        return RECEIVER.read(context, thisArg, "minutes", duration -> JSNumber.of(duration.getDuration().minutes()));
     }
 
     public static JSValue months(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "months");
-        if (duration == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSNumber.of(duration.getDuration().months());
+        return RECEIVER.read(context, thisArg, "months", duration -> JSNumber.of(duration.getDuration().months()));
     }
 
     public static JSValue nanoseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "nanoseconds");
-        if (duration == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSNumber.of(duration.getDuration().nanoseconds());
+        return RECEIVER.read(context, thisArg, "nanoseconds",
+                duration -> JSNumber.of(duration.getDuration().nanoseconds()));
     }
 
     private static BigInteger nanosecondsBetween(JSContext context, LocalDateTime startDateTime,
@@ -511,8 +474,7 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue negated(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "negated");
+        JSTemporalDuration duration = RECEIVER.require(context, thisArg, "negated");
         if (duration == null) {
             return JSUndefined.INSTANCE;
         }
@@ -753,8 +715,7 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue round(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "round");
+        JSTemporalDuration duration = RECEIVER.require(context, thisArg, "round");
         if (duration == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1225,21 +1186,11 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue seconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "seconds");
-        if (duration == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSNumber.of(duration.getDuration().seconds());
+        return RECEIVER.read(context, thisArg, "seconds", duration -> JSNumber.of(duration.getDuration().seconds()));
     }
 
     public static JSValue sign(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "sign");
-        if (duration == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSNumber.of(duration.getDuration().sign());
+        return RECEIVER.read(context, thisArg, "sign", duration -> JSNumber.of(duration.getDuration().sign()));
     }
 
     private static TemporalUnit smallestUnitFromFractionalSecondDigits(int fractionalSecondDigits) {
@@ -1255,8 +1206,7 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "subtract");
+        JSTemporalDuration duration = RECEIVER.require(context, thisArg, "subtract");
         if (duration == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1264,17 +1214,11 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "toJSON");
-        if (duration == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(duration.getDuration().toString());
+        return RECEIVER.read(context, thisArg, "toJSON", duration -> new JSString(duration.getDuration().toString()));
     }
 
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "toLocaleString");
+        JSTemporalDuration duration = RECEIVER.require(context, thisArg, "toLocaleString");
         if (duration == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1288,8 +1232,7 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "toString");
+        JSTemporalDuration duration = RECEIVER.require(context, thisArg, "toString");
         if (duration == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1330,8 +1273,7 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue total(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "total");
+        JSTemporalDuration duration = RECEIVER.require(context, thisArg, "total");
         if (duration == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1592,17 +1534,11 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue weeks(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "weeks");
-        if (duration == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSNumber.of(duration.getDuration().weeks());
+        return RECEIVER.read(context, thisArg, "weeks", duration -> JSNumber.of(duration.getDuration().weeks()));
     }
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "with");
+        JSTemporalDuration duration = RECEIVER.require(context, thisArg, "with");
         if (duration == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1693,12 +1629,7 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue years(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME,
-                "years");
-        if (duration == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSNumber.of(duration.getDuration().years());
+        return RECEIVER.read(context, thisArg, "years", duration -> JSNumber.of(duration.getDuration().years()));
     }
 
 }

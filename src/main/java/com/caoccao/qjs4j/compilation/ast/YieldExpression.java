@@ -41,10 +41,7 @@ public final class YieldExpression extends Expression {
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = true;
-        }
-        return yieldInside;
+        return true;
     }
 
     public Expression getArgument() {

@@ -33,10 +33,7 @@ public final class AwaitExpression extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = true;
-        }
-        return awaitInside;
+        return true;
     }
 
     @Override

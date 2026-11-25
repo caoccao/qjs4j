@@ -500,8 +500,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
 
         // Normal case: object without custom toString
         JSValue result = ObjectPrototype.toLocaleString(context, obj, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class,
-                str -> assertThat(str.value()).isEqualTo("[object Object]"));
+        assertStringValue(result, "[object Object]");
 
         // Edge case: null thisArg
         result = ObjectPrototype.toLocaleString(context, JSNull.INSTANCE, JSValue.NO_ARGS);
@@ -513,47 +512,39 @@ public class ObjectPrototypeTest extends BaseJavetTest {
     public void testToString() {
         // Normal case: undefined
         JSValue result = ObjectPrototype.toString(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class,
-                jsStr -> assertThat(jsStr.value()).isEqualTo("[object Undefined]"));
+        assertStringValue(result, "[object Undefined]");
 
         // Normal case: null
         result = ObjectPrototype.toString(context, JSNull.INSTANCE, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class,
-                jsStr -> assertThat(jsStr.value()).isEqualTo("[object Null]"));
+        assertStringValue(result, "[object Null]");
 
         // Normal case: object
         JSObject obj = new JSObject(context);
         result = ObjectPrototype.toString(context, obj, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class,
-                jsStr -> assertThat(jsStr.value()).isEqualTo("[object Object]"));
+        assertStringValue(result, "[object Object]");
 
         // Normal case: array
         JSArray arr = new JSArray(context);
         result = ObjectPrototype.toString(context, arr, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class,
-                jsStr -> assertThat(jsStr.value()).isEqualTo("[object Array]"));
+        assertStringValue(result, "[object Array]");
 
         // Normal case: function
         JSFunction func = new JSNativeFunction(context, "test", 0,
                 (childContext, thisArg, args) -> JSUndefined.INSTANCE);
         result = ObjectPrototype.toString(context, func, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class,
-                jsStr -> assertThat(jsStr.value()).isEqualTo("[object Function]"));
+        assertStringValue(result, "[object Function]");
 
         // Normal case: string
         result = ObjectPrototype.toString(context, new JSString("test"), JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class,
-                jsStr -> assertThat(jsStr.value()).isEqualTo("[object String]"));
+        assertStringValue(result, "[object String]");
 
         // Normal case: number
         result = ObjectPrototype.toString(context, new JSNumber(42), JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class,
-                jsStr -> assertThat(jsStr.value()).isEqualTo("[object Number]"));
+        assertStringValue(result, "[object Number]");
 
         // Normal case: boolean
         result = ObjectPrototype.toString(context, JSBoolean.TRUE, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class,
-                jsStr -> assertThat(jsStr.value()).isEqualTo("[object Boolean]"));
+        assertStringValue(result, "[object Boolean]");
     }
 
     @Test

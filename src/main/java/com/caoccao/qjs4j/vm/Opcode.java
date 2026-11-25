@@ -93,7 +93,7 @@ public enum Opcode {
     /** -> bool (delete variable by atom name) */
     DELETE_VAR(151, 5, 0, 1, OpcodeHandler::handleDeleteVar),
     /** a b -> a/b */
-    DIV(153, 1, 2, 1, OpcodeHandler::handleDiv),
+    DIV(153, 1, 2, 1, OpcodeHandler::handleDivisionOrRemainder),
     /** a -> */
     DROP(14, 1, 1, 0, OpcodeHandler::handleDrop),
     /** a -> a a */
@@ -105,7 +105,7 @@ public enum Opcode {
     /** a b c -> a b c a b c */
     DUP3(20, 1, 3, 6, OpcodeHandler::handleDup3),
     /** a b -> a==b (abstract equality) */
-    EQ(167, 1, 2, 1, OpcodeHandler::handleEq),
+    EQ(167, 1, 2, 1, OpcodeHandler::handleAbstractEquality),
     /** func args... -> ret_val */
     EVAL(50, 5, -1, 1, OpcodeHandler::handleEval),
     /** create function closure from constant -> func */
@@ -143,7 +143,7 @@ public enum Opcode {
     /** obj -> val (get named property by atom) */
     GET_FIELD(61, 5, 1, 1, OpcodeHandler::handleGetField),
     /** obj -> obj val (get field, keep object) */
-    GET_FIELD2(62, 5, 1, 2, OpcodeHandler::handleGetField2),
+    GET_FIELD2(62, 5, 1, 2, OpcodeHandler::handleGetField),
     /** obj -> length (get length property) */
     GET_LENGTH(231, 1, 1, 1, OpcodeHandler::handleGetLength),
     /** -> val (get local variable by u16 index) */
@@ -259,13 +259,13 @@ public enum Opcode {
     /** -> obj prop (make closure var reference, atom+u16) */
     MAKE_VAR_REF_REF(120, 7, 0, 2, OpcodeHandler::handleMakeScopedRef),
     /** a b -> a%b */
-    MOD(154, 1, 2, 1, OpcodeHandler::handleMod),
+    MOD(154, 1, 2, 1, OpcodeHandler::handleDivisionOrRemainder),
     /** a b -> a*b */
     MUL(152, 1, 2, 1, OpcodeHandler::handleMul),
     /** val -> -val (unary minus) */
     NEG(138, 1, 1, 1, OpcodeHandler::handleNeg),
     /** a b -> a!=b */
-    NEQ(168, 1, 2, 1, OpcodeHandler::handleNeq),
+    NEQ(168, 1, 2, 1, OpcodeHandler::handleAbstractEquality),
     /** a b -> b */
     NIP(15, 1, 2, 1, OpcodeHandler::handleNip),
     /** catch ... a -> a (remove catch handler) */
@@ -323,7 +323,7 @@ public enum Opcode {
     /** push constant from pool -> val */
     PUSH_CONST(2, 5, 0, 1, OpcodeHandler::handlePushConst),
     /** -> val (push constant, u8 index) */
-    PUSH_CONST8(189, 2, 0, 1, OpcodeHandler::handlePushConst8),
+    PUSH_CONST8(189, 2, 0, 1, OpcodeHandler::handlePushConst),
     /** -> "" (push empty string) */
     PUSH_EMPTY_STRING(191, 1, 0, 1, OpcodeHandler::handlePushEmptyString),
     /** push false -> false */
@@ -469,9 +469,9 @@ public enum Opcode {
     /** create special object (u8 type) -> obj (only at function start) */
     SPECIAL_OBJECT(12, 2, 0, 1, OpcodeHandler::handleSpecialObject),
     /** a b -> a===b (strict equality) */
-    STRICT_EQ(169, 1, 2, 1, OpcodeHandler::handleStrictEq),
+    STRICT_EQ(169, 1, 2, 1, OpcodeHandler::handleStrictEquality),
     /** a b -> a!==b */
-    STRICT_NEQ(170, 1, 2, 1, OpcodeHandler::handleStrictNeq),
+    STRICT_NEQ(170, 1, 2, 1, OpcodeHandler::handleStrictEquality),
     /** a b -> a-b */
     SUB(156, 1, 2, 1, OpcodeHandler::handleSub),
     /** a b -> b a */

@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import java.util.List;
+
 /**
  * Base sealed class for all AST nodes.
  */
@@ -38,5 +40,31 @@ public abstract sealed class ASTNode permits Pattern, Statement, ModuleItem, Pro
 
     public final SourceLocation getLocation() {
         return location;
+    }
+
+    static boolean anyContainsAwait(List<? extends ASTNode> nodes) {
+        if (nodes != null) {
+            for (ASTNode node : nodes) {
+                if (node != null && node.containsAwait()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    static boolean anyContainsYield(List<? extends ASTNode> nodes) {
+        if (nodes != null) {
+            for (ASTNode node : nodes) {
+                if (node != null && node.containsYield()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    static boolean childContainsYield(ASTNode node) {
+        return node != null && node.containsYield();
     }
 }

@@ -41,10 +41,7 @@ public final class ForInStatement extends Statement {
     public boolean containsAwait() {
         if (awaitInside == null) {
             awaitInside = left != null && left.containsAwait();
-            if (!awaitInside && right != null && right.containsAwait()) {
-                awaitInside = true;
-            }
-            if (!awaitInside && body != null && body.containsAwait()) {
+            if (!awaitInside && ((right != null && right.containsAwait()) || (body != null && body.containsAwait()))) {
                 awaitInside = true;
             }
         }
@@ -55,10 +52,7 @@ public final class ForInStatement extends Statement {
     public boolean containsYield() {
         if (yieldInside == null) {
             yieldInside = left != null && left.containsYield();
-            if (!yieldInside && right != null && right.containsYield()) {
-                yieldInside = true;
-            }
-            if (!yieldInside && body != null && body.containsYield()) {
+            if (!yieldInside && ((right != null && right.containsYield()) || (body != null && body.containsYield()))) {
                 yieldInside = true;
             }
         }

@@ -31,14 +31,14 @@ public final class TemporalInstantPrototype {
     private static final BigInteger NS_PER_MS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
     private static final BigInteger NS_PER_SECOND = TemporalConstants.BI_SECOND_NANOSECONDS;
     private static final BigInteger NS_PER_US = TemporalConstants.BI_MICROSECOND_NANOSECONDS;
-    private static final String TYPE_NAME = "Temporal.Instant";
+    private static final TemporalReceiver<JSTemporalInstant> RECEIVER = new TemporalReceiver<>(JSTemporalInstant.class,
+            "Temporal.Instant");
 
     private TemporalInstantPrototype() {
     }
 
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalInstant instant = TemporalUtils.checkReceiver(context, thisArg, JSTemporalInstant.class, TYPE_NAME,
-                "add");
+        JSTemporalInstant instant = RECEIVER.require(context, thisArg, "add");
         if (instant == null) {
             return JSUndefined.INSTANCE;
         }
@@ -75,9 +75,25 @@ public final class TemporalInstantPrototype {
         return JSTemporalInstant.create(context, result);
     }
 
+    private static JSValue difference(JSContext context, JSValue thisArg, JSValue[] args, boolean since) {
+        JSTemporalInstant instant = RECEIVER.require(context, thisArg, since ? "since" : "until");
+        if (instant == null) {
+            return JSUndefined.INSTANCE;
+        }
+        JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSTemporalInstant other = TemporalInstantConstructor.toTemporalInstantObject(context, otherArg);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        return since
+                ? instantDifference(context, instant, other, optionsArg)
+                : instantDifference(context, other, instant, optionsArg);
+    }
+
     public static JSValue epochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalInstant instant = TemporalUtils.checkReceiver(context, thisArg, JSTemporalInstant.class, TYPE_NAME,
-                "epochMilliseconds");
+        JSTemporalInstant instant = RECEIVER.require(context, thisArg, "epochMilliseconds");
         if (instant == null) {
             return JSUndefined.INSTANCE;
         }
@@ -86,17 +102,12 @@ public final class TemporalInstantPrototype {
     }
 
     public static JSValue epochNanoseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalInstant instant = TemporalUtils.checkReceiver(context, thisArg, JSTemporalInstant.class, TYPE_NAME,
-                "epochNanoseconds");
-        if (instant == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSBigInt(instant.getEpochNanoseconds());
+        return RECEIVER.read(context, thisArg, "epochNanoseconds",
+                instant -> new JSBigInt(instant.getEpochNanoseconds()));
     }
 
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalInstant instant = TemporalUtils.checkReceiver(context, thisArg, JSTemporalInstant.class, TYPE_NAME,
-                "equals");
+        JSTemporalInstant instant = RECEIVER.require(context, thisArg, "equals");
         if (instant == null) {
             return JSUndefined.INSTANCE;
         }
@@ -321,8 +332,7 @@ public final class TemporalInstantPrototype {
     }
 
     public static JSValue round(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalInstant instant = TemporalUtils.checkReceiver(context, thisArg, JSTemporalInstant.class, TYPE_NAME,
-                "round");
+        JSTemporalInstant instant = RECEIVER.require(context, thisArg, "round");
         if (instant == null) {
             return JSUndefined.INSTANCE;
         }
@@ -490,24 +500,11 @@ public final class TemporalInstantPrototype {
     }
 
     public static JSValue since(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalInstant instant = TemporalUtils.checkReceiver(context, thisArg, JSTemporalInstant.class, TYPE_NAME,
-                "since");
-        if (instant == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSTemporalInstant other = TemporalInstantConstructor.toTemporalInstantObject(context, otherArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        return instantDifference(context, instant, other, optionsArg);
+        return difference(context, thisArg, args, true);
     }
 
     public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalInstant instant = TemporalUtils.checkReceiver(context, thisArg, JSTemporalInstant.class, TYPE_NAME,
-                "subtract");
+        JSTemporalInstant instant = RECEIVER.require(context, thisArg, "subtract");
         if (instant == null) {
             return JSUndefined.INSTANCE;
         }
@@ -515,8 +512,7 @@ public final class TemporalInstantPrototype {
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalInstant instant = TemporalUtils.checkReceiver(context, thisArg, JSTemporalInstant.class, TYPE_NAME,
-                "toJSON");
+        JSTemporalInstant instant = RECEIVER.require(context, thisArg, "toJSON");
         if (instant == null) {
             return JSUndefined.INSTANCE;
         }
@@ -528,8 +524,7 @@ public final class TemporalInstantPrototype {
     }
 
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalInstant instant = TemporalUtils.checkReceiver(context, thisArg, JSTemporalInstant.class, TYPE_NAME,
-                "toLocaleString");
+        JSTemporalInstant instant = RECEIVER.require(context, thisArg, "toLocaleString");
         if (instant == null) {
             return JSUndefined.INSTANCE;
         }
@@ -543,8 +538,7 @@ public final class TemporalInstantPrototype {
     }
 
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalInstant instant = TemporalUtils.checkReceiver(context, thisArg, JSTemporalInstant.class, TYPE_NAME,
-                "toString");
+        JSTemporalInstant instant = RECEIVER.require(context, thisArg, "toString");
         if (instant == null) {
             return JSUndefined.INSTANCE;
         }
@@ -557,8 +551,7 @@ public final class TemporalInstantPrototype {
     }
 
     public static JSValue toZonedDateTimeISO(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalInstant instant = TemporalUtils.checkReceiver(context, thisArg, JSTemporalInstant.class, TYPE_NAME,
-                "toZonedDateTimeISO");
+        JSTemporalInstant instant = RECEIVER.require(context, thisArg, "toZonedDateTimeISO");
         if (instant == null) {
             return JSUndefined.INSTANCE;
         }
@@ -582,19 +575,7 @@ public final class TemporalInstantPrototype {
     }
 
     public static JSValue until(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalInstant instant = TemporalUtils.checkReceiver(context, thisArg, JSTemporalInstant.class, TYPE_NAME,
-                "until");
-        if (instant == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSTemporalInstant other = TemporalInstantConstructor.toTemporalInstantObject(context, otherArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        return instantDifference(context, other, instant, optionsArg);
+        return difference(context, thisArg, args, false);
     }
 
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {

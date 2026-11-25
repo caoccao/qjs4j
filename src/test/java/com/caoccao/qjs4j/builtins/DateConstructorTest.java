@@ -257,8 +257,7 @@ public class DateConstructorTest extends BaseJavetTest {
         JSDate date = new JSDate(context, timestamp);
 
         JSValue result = DatePrototype.getTime(context, date, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class,
-                jsNum -> assertThat(jsNum.value()).isEqualTo(timestamp));
+        assertNumberValue(result, timestamp);
 
         // Edge case: called on non-Date
         assertTypeError(DatePrototype.getTime(context, new JSString("not date"), JSValue.NO_ARGS));
@@ -271,7 +270,7 @@ public class DateConstructorTest extends BaseJavetTest {
         JSDate date = new JSDate(context, 1735689600000L);
 
         JSValue result = DatePrototype.getUTCDate(context, date, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(1.0));
+        assertNumberValue(result, 1.0);
 
         // Edge case: called on non-Date
         assertTypeError(DatePrototype.getUTCDate(context, new JSNumber(42), JSValue.NO_ARGS));
@@ -284,7 +283,7 @@ public class DateConstructorTest extends BaseJavetTest {
         JSDate date = new JSDate(context, 1735689600000L);
 
         JSValue result = DatePrototype.getUTCFullYear(context, date, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(2025.0));
+        assertNumberValue(result, 2025.0);
 
         // Edge case: called on non-Date
         assertTypeError(DatePrototype.getUTCFullYear(context, new JSString("not date"), JSValue.NO_ARGS));
@@ -297,7 +296,7 @@ public class DateConstructorTest extends BaseJavetTest {
         JSDate date = new JSDate(context, 1735689600000L);
 
         JSValue result = DatePrototype.getUTCHours(context, date, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(0.0));
+        assertNumberValue(result, 0.0);
 
         // Edge case: called on non-Date
         assertTypeError(DatePrototype.getUTCHours(context, JSNull.INSTANCE, JSValue.NO_ARGS));
@@ -310,9 +309,9 @@ public class DateConstructorTest extends BaseJavetTest {
         JSDate date = new JSDate(context, 1735689600000L);
 
         JSValue result = DatePrototype.getUTCMonth(context, date, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(0.0)); // January
-                                                                                                                      // =
-                                                                                                                      // 0
+        assertNumberValue(result, 0.0); // January
+                                        // =
+                                        // 0
 
         // Edge case: called on non-Date
         assertTypeError(DatePrototype.getUTCMonth(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
@@ -436,8 +435,7 @@ public class DateConstructorTest extends BaseJavetTest {
         JSDate date = new JSDate(context, timestamp);
 
         JSValue result = DatePrototype.valueOf(context, date, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class,
-                jsNum -> assertThat(jsNum.value()).isEqualTo(timestamp));
+        assertNumberValue(result, timestamp);
 
         // Edge case: called on non-Date
         assertTypeError(DatePrototype.valueOf(context, new JSObject(context), JSValue.NO_ARGS));

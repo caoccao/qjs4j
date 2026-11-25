@@ -38,10 +38,8 @@ public final class TryStatement extends Statement {
     public boolean containsAwait() {
         if (awaitInside == null) {
             awaitInside = block != null && block.containsAwait();
-            if (!awaitInside && handler != null && handler.containsAwait()) {
-                awaitInside = true;
-            }
-            if (!awaitInside && finalizer != null && finalizer.containsAwait()) {
+            if (!awaitInside && ((handler != null && handler.containsAwait())
+                    || (finalizer != null && finalizer.containsAwait()))) {
                 awaitInside = true;
             }
         }
@@ -52,10 +50,8 @@ public final class TryStatement extends Statement {
     public boolean containsYield() {
         if (yieldInside == null) {
             yieldInside = block != null && block.containsYield();
-            if (!yieldInside && handler != null && handler.containsYield()) {
-                yieldInside = true;
-            }
-            if (!yieldInside && finalizer != null && finalizer.containsYield()) {
+            if (!yieldInside && ((handler != null && handler.containsYield())
+                    || (finalizer != null && finalizer.containsYield()))) {
                 yieldInside = true;
             }
         }

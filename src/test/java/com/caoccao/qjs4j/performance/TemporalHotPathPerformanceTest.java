@@ -43,8 +43,7 @@ public class TemporalHotPathPerformanceTest extends BaseTest {
                   return total;
                 })()
                 """);
-        assertThat(value).isInstanceOfSatisfying(JSNumber.class,
-                jsNumber -> assertThat(jsNumber.value()).isEqualTo(61725000D));
+        assertNumberValue(value, 61725000D);
     }
 
     @Test
@@ -60,8 +59,7 @@ public class TemporalHotPathPerformanceTest extends BaseTest {
                           return count;
                         })()
                         """);
-        assertThat(value).isInstanceOfSatisfying(JSNumber.class,
-                jsNumber -> assertThat(jsNumber.value()).isEqualTo(28000D));
+        assertNumberValue(value, 28000D);
     }
 
     @Test
@@ -79,7 +77,6 @@ public class TemporalHotPathPerformanceTest extends BaseTest {
                   return count;
                 })()
                 """);
-        assertThat(value).isInstanceOfSatisfying(JSNumber.class,
-                jsNumber -> assertThat(jsNumber.value()).isEqualTo(10000D));
+        assertNumberValue(value, 10000D);
     }
 }

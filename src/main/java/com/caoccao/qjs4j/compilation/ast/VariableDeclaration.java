@@ -35,13 +35,8 @@ public final class VariableDeclaration extends Statement {
     public boolean containsAwait() {
         if (awaitInside == null) {
             awaitInside = false;
-            if (declarations != null) {
-                for (VariableDeclarator declarator : declarations) {
-                    if (declarator != null && declarator.containsAwait()) {
-                        awaitInside = true;
-                        break;
-                    }
-                }
+            if (anyContainsAwait(declarations)) {
+                awaitInside = true;
             }
         }
         return awaitInside;
@@ -51,13 +46,8 @@ public final class VariableDeclaration extends Statement {
     public boolean containsYield() {
         if (yieldInside == null) {
             yieldInside = false;
-            if (declarations != null) {
-                for (VariableDeclarator declarator : declarations) {
-                    if (declarator != null && declarator.containsYield()) {
-                        yieldInside = true;
-                        break;
-                    }
-                }
+            if (anyContainsYield(declarations)) {
+                yieldInside = true;
             }
         }
         return yieldInside;

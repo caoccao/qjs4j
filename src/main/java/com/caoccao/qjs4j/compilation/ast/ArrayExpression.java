@@ -33,13 +33,8 @@ public final class ArrayExpression extends Expression {
     public boolean containsAwait() {
         if (awaitInside == null) {
             awaitInside = false;
-            if (elements != null) {
-                for (Expression element : elements) {
-                    if (element != null && element.containsAwait()) {
-                        awaitInside = true;
-                        break;
-                    }
-                }
+            if (anyContainsAwait(elements)) {
+                awaitInside = true;
             }
         }
         return awaitInside;
@@ -49,13 +44,8 @@ public final class ArrayExpression extends Expression {
     public boolean containsYield() {
         if (yieldInside == null) {
             yieldInside = false;
-            if (elements != null) {
-                for (Expression element : elements) {
-                    if (element != null && element.containsYield()) {
-                        yieldInside = true;
-                        break;
-                    }
-                }
+            if (anyContainsYield(elements)) {
+                yieldInside = true;
             }
         }
         return yieldInside;

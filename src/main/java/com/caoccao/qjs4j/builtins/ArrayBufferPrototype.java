@@ -156,35 +156,13 @@ public final class ArrayBufferPrototype {
         long len = buffer.getByteLength();
 
         // Compute first (start) per spec using ToIntegerOrInfinity + clamp
-        long first;
-        if (args.length > 0) {
-            double relativeStart = JSTypeConversions.toInteger(context, args[0]);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (relativeStart < 0) {
-                first = (long) Math.max(len + relativeStart, 0);
-            } else {
-                first = (long) Math.min(relativeStart, len);
-            }
-        } else {
-            first = 0;
+        long first = ArrayPrototype.relativeIndex(context, args, 0, len, 0);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
-
-        // Compute final (end) per spec using ToIntegerOrInfinity + clamp
-        long fin;
-        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-            double relativeEnd = JSTypeConversions.toInteger(context, args[1]);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (relativeEnd < 0) {
-                fin = (long) Math.max(len + relativeEnd, 0);
-            } else {
-                fin = (long) Math.min(relativeEnd, len);
-            }
-        } else {
-            fin = len;
+        long fin = ArrayPrototype.relativeIndex(context, args, 1, len, len);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
 
         long newLen = Math.max(fin - first, 0);

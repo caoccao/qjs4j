@@ -57,8 +57,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
             assertThat(closure.getCapturedThisArg()).isSameAs(receiver);
             assertThat(closure.getPrototype()).isSameAs(template.getPrototype());
             JSValue value = closure.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-            assertThat(value).isInstanceOfSatisfying(JSNumber.class,
-                    number -> assertThat(number.value()).isEqualTo(42));
+            assertNumberValue(value, 42);
         }
     }
 
@@ -79,8 +78,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         locEmitter.emitOpcode(Opcode.RETURN);
 
         JSValue locResult = execute(locEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(locResult).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) locResult).value()).isEqualTo(6);
+        assertNumberValue(locResult, 6);
 
         BytecodeEmitter stringAddLocEmitter = new BytecodeEmitter();
         stringAddLocEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("a"));
@@ -92,8 +90,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         stringAddLocEmitter.emitOpcode(Opcode.RETURN);
 
         JSValue stringAddLocResult = execute(stringAddLocEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(stringAddLocResult).isInstanceOf(JSString.class);
-        assertThat(((JSString) stringAddLocResult).value()).isEqualTo("ab");
+        assertStringValue(stringAddLocResult, "ab");
 
         JSArray array = context.createJSArray(new JSNumber(9), new JSNumber(4));
         BytecodeEmitter getArrayEl3Emitter = new BytecodeEmitter();
@@ -105,8 +102,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         getArrayEl3Emitter.emitOpcode(Opcode.RETURN);
 
         JSValue getArrayEl3Result = execute(getArrayEl3Emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(getArrayEl3Result).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) getArrayEl3Result).value()).isEqualTo(5);
+        assertNumberValue(getArrayEl3Result, 5);
 
         BytecodeEmitter getArrayEl3ErrorEmitter = new BytecodeEmitter();
         getArrayEl3ErrorEmitter.emitOpcode(Opcode.UNDEFINED);
@@ -169,8 +165,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
 
         JSValue argResult = execute(argEmitter, 4, JSValue.NO_ARGS, JSUndefined.INSTANCE, new JSNumber(1),
                 new JSNumber(2), new JSNumber(3), new JSNumber(4));
-        assertThat(argResult).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) argResult).value()).isEqualTo(389);
+        assertNumberValue(argResult, 389);
 
         JSValue[] closureVars = new JSValue[]{new JSNumber(1), new JSNumber(2), new JSNumber(3), new JSNumber(4)};
         BytecodeEmitter varRefEmitter = new BytecodeEmitter();
@@ -217,8 +212,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         varRefEmitter.emitOpcode(Opcode.RETURN);
 
         JSValue varRefResult = execute(varRefEmitter, 0, closureVars, JSUndefined.INSTANCE);
-        assertThat(varRefResult).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) varRefResult).value()).isEqualTo(459);
+        assertNumberValue(varRefResult, 459);
         assertThat(((JSNumber) closureVars[0]).value()).isEqualTo(80);
         assertThat(((JSNumber) closureVars[1]).value()).isEqualTo(90);
         assertThat(((JSNumber) closureVars[2]).value()).isEqualTo(72);
@@ -278,8 +272,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         emitter.emitOpcode(Opcode.RETURN);
 
         JSValue result = execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(result).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) result).value()).isEqualTo(25);
+        assertNumberValue(result, 25);
     }
 
     @Test
@@ -310,8 +303,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         emitter.emitOpcode(Opcode.RETURN);
 
         JSValue result = execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(result).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) result).value()).isEqualTo(7);
+        assertNumberValue(result, 7);
     }
 
     @Test
@@ -359,8 +351,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         emitter.emitOpcode(Opcode.RETURN);
 
         JSValue result = execute(emitter, 4, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(result).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) result).value()).isEqualTo(340);
+        assertNumberValue(result, 340);
     }
 
     @Test
@@ -378,8 +369,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         shortPushEmitter.emitOpcode(Opcode.RETURN);
 
         JSValue shortPushResult = execute(shortPushEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(shortPushResult).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) shortPushResult).value()).isEqualTo(-999);
+        assertNumberValue(shortPushResult, -999);
 
         BytecodeEmitter const8Emitter = new BytecodeEmitter();
         const8Emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSNumber(42));
@@ -389,8 +379,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         const8Emitter.emitOpcode(Opcode.RETURN);
 
         JSValue const8Result = execute(const8Emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(const8Result).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) const8Result).value()).isEqualTo(42);
+        assertNumberValue(const8Result, 42);
 
         JSNativeFunction callable = new JSNativeFunction(context, "c", 0, (ctx, thisArg, args) -> new JSNumber(77),
                 false);
@@ -406,7 +395,6 @@ public class LowPriorityOpcodeTest extends BaseTest {
         closure8Emitter.emitOpcode(Opcode.RETURN);
 
         JSValue closure8Result = execute(closure8Emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(closure8Result).isInstanceOf(JSNumber.class);
-        assertThat(((JSNumber) closure8Result).value()).isEqualTo(77);
+        assertNumberValue(closure8Result, 77);
     }
 }

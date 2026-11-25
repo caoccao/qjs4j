@@ -115,8 +115,7 @@ public class SymbolConstructorTest extends BaseJavetTest {
                 .symbolFor(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("registryKey")}).asSymbol()
                 .orElseThrow();
         JSValue result = SymbolConstructor.keyFor(context, JSUndefined.INSTANCE, new JSValue[]{symbol});
-        assertThat(result).isInstanceOfSatisfying(JSString.class,
-                jsStr -> assertThat(jsStr.value()).isEqualTo("registryKey"));
+        assertStringValue(result, "registryKey");
 
         // Normal case: symbol not in registry
         JSSymbol unregisteredSymbol = SymbolConstructor
@@ -238,10 +237,8 @@ public class SymbolConstructorTest extends BaseJavetTest {
             JSValue crossKey1 = SymbolConstructor.keyFor(context1, JSUndefined.INSTANCE, new JSValue[]{symbol2});
             JSValue crossKey2 = SymbolConstructor.keyFor(context2, JSUndefined.INSTANCE, new JSValue[]{symbol1});
 
-            assertThat(key1).isInstanceOfSatisfying(JSString.class,
-                    jsString -> assertThat(jsString.value()).isEqualTo("sameKey"));
-            assertThat(key2).isInstanceOfSatisfying(JSString.class,
-                    jsString -> assertThat(jsString.value()).isEqualTo("sameKey"));
+            assertStringValue(key1, "sameKey");
+            assertStringValue(key2, "sameKey");
             assertThat(crossKey1).isEqualTo(JSUndefined.INSTANCE);
             assertThat(crossKey2).isEqualTo(JSUndefined.INSTANCE);
         }

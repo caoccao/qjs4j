@@ -48,20 +48,20 @@ public class FunctionPrototypeTest extends BaseJavetTest {
 
         JSValue result = FunctionPrototype.apply(context, testFunc, new JSValue[]{JSUndefined.INSTANCE, // thisArg
                 argsArray});
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(6.0));
+        assertNumberValue(result, 6.0);
 
         // Normal case: apply with custom thisArg
         JSObject customThis = new JSObject(context);
         result = FunctionPrototype.apply(context, testFunc, new JSValue[]{customThis, argsArray});
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(6.0));
+        assertNumberValue(result, 6.0);
 
         // Normal case: apply with no arguments array
         result = FunctionPrototype.apply(context, testFunc, new JSValue[]{JSUndefined.INSTANCE});
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(0.0));
+        assertNumberValue(result, 0.0);
 
         // Normal case: apply with null/undefined arguments array
         result = FunctionPrototype.apply(context, testFunc, new JSValue[]{JSUndefined.INSTANCE, JSNull.INSTANCE});
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(0.0));
+        assertNumberValue(result, 0.0);
 
         // Normal case: apply with array-like object
         JSObject arrayLikeObject = new JSObject(context);
@@ -70,23 +70,17 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         arrayLikeObject.set("2", new JSNumber(6));
         arrayLikeObject.set("length", new JSNumber(3));
         result = FunctionPrototype.apply(context, testFunc, new JSValue[]{JSUndefined.INSTANCE, arrayLikeObject});
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(15.0));
+        assertNumberValue(result, 15.0);
 
         // Edge case: apply with non-array arguments
         result = FunctionPrototype.apply(context, testFunc,
                 new JSValue[]{JSUndefined.INSTANCE, new JSString("not an array")});
-        assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
-            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class,
-                    name -> assertThat(name.value()).isEqualTo("TypeError"));
-        });
+        assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
 
         // Edge case: called on non-function
         result = FunctionPrototype.apply(context, new JSString("not a function"), JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
-            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class,
-                    name -> assertThat(name.value()).isEqualTo("TypeError"));
-        });
+        assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
     }
 
@@ -116,29 +110,26 @@ public class FunctionPrototypeTest extends BaseJavetTest {
 
         // Call the bound function
         JSValue callResult = boundFunc.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(3)});
-        assertThat(callResult).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(16.0)); // 10
-                                                                                                                       // +
-                                                                                                                       // 1
-                                                                                                                       // +
-                                                                                                                       // 2
-                                                                                                                       // +
-                                                                                                                       // 3
+        assertNumberValue(callResult, 16.0); // 10
+                                             // +
+                                             // 1
+                                             // +
+                                             // 2
+                                             // +
+                                             // 3
 
         // Normal case: bind with no pre-bound arguments
         result = FunctionPrototype.bind(context, testFunc, new JSValue[]{boundThis});
         boundFunc = result.asBoundFunction().orElseThrow();
 
         callResult = boundFunc.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(5)});
-        assertThat(callResult).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(15.0)); // 10
-                                                                                                                       // +
-                                                                                                                       // 5
+        assertNumberValue(callResult, 15.0); // 10
+                                             // +
+                                             // 5
 
         // Edge case: called on non-function
         result = FunctionPrototype.bind(context, new JSString("not a function"), JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
-            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class,
-                    name -> assertThat(name.value()).isEqualTo("TypeError"));
-        });
+        assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
     }
 
@@ -158,27 +149,24 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         // Normal case: call with arguments
         JSValue result = FunctionPrototype.call(context, testFunc, new JSValue[]{JSUndefined.INSTANCE, // thisArg
                 new JSNumber(1), new JSNumber(2), new JSNumber(3)});
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(6.0));
+        assertNumberValue(result, 6.0);
 
         // Normal case: call with custom thisArg
         JSObject customThis = new JSObject(context);
         result = FunctionPrototype.call(context, testFunc, new JSValue[]{customThis, new JSNumber(5)});
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(5.0));
+        assertNumberValue(result, 5.0);
 
         // Normal case: call with no arguments
         result = FunctionPrototype.call(context, testFunc, new JSValue[]{JSUndefined.INSTANCE});
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(0.0));
+        assertNumberValue(result, 0.0);
 
         // Normal case: call with no thisArg and no arguments
         result = FunctionPrototype.call(context, testFunc, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(0.0));
+        assertNumberValue(result, 0.0);
 
         // Edge case: called on non-function
         result = FunctionPrototype.call(context, new JSString("not a function"), JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
-            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class,
-                    name -> assertThat(name.value()).isEqualTo("TypeError"));
-        });
+        assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
     }
 
@@ -226,16 +214,14 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         assertThat(result).isInstanceOfSatisfying(JSFunction.class, func -> {
             JSValue callResult = func.call(context, JSUndefined.INSTANCE,
                     new JSValue[]{new JSNumber(2), new JSNumber(3)});
-            assertThat(callResult).isInstanceOfSatisfying(JSNumber.class,
-                    num -> assertThat(num.value()).isEqualTo(5.0));
+            assertNumberValue(callResult, 5.0);
         });
 
         // Normal case: function with only body (no parameters)
         result = FunctionConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("return 42;")});
         assertThat(result).isInstanceOfSatisfying(JSFunction.class, func -> {
             JSValue callResult = func.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-            assertThat(callResult).isInstanceOfSatisfying(JSNumber.class,
-                    num -> assertThat(num.value()).isEqualTo(42.0));
+            assertNumberValue(callResult, 42.0);
         });
 
         // Normal case: function with empty body
@@ -251,8 +237,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         assertThat(result).isInstanceOfSatisfying(JSFunction.class, func -> {
             JSValue callResult = func.call(context, JSUndefined.INSTANCE,
                     new JSValue[]{new JSNumber(3), new JSNumber(4), new JSNumber(5)});
-            assertThat(callResult).isInstanceOfSatisfying(JSNumber.class,
-                    num -> assertThat(num.value()).isEqualTo(17.0));
+            assertNumberValue(callResult, 17.0);
         });
 
         // Edge case: syntax error in function body
@@ -352,20 +337,17 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         JSFunction testFunc = new JSNativeFunction(context, "test", 3,
                 (childContext, thisArg, args) -> JSUndefined.INSTANCE);
         JSValue result = FunctionPrototype.getLength(context, testFunc, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(3.0));
+        assertNumberValue(result, 3.0);
 
         // Normal case: function with zero length
         JSFunction zeroFunc = new JSNativeFunction(context, "zero", 0,
                 (childContext, thisArg, args) -> JSUndefined.INSTANCE);
         result = FunctionPrototype.getLength(context, zeroFunc, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(0.0));
+        assertNumberValue(result, 0.0);
 
         // Edge case: called on non-function
         result = FunctionPrototype.getLength(context, new JSString("not a function"), JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
-            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class,
-                    name -> assertThat(name.value()).isEqualTo("TypeError"));
-        });
+        assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
     }
 
@@ -375,21 +357,17 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         JSFunction testFunc = new JSNativeFunction(context, "myFunction", 1,
                 (childContext, thisArg, args) -> JSUndefined.INSTANCE);
         JSValue result = FunctionPrototype.getName(context, testFunc, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class,
-                str -> assertThat(str.value()).isEqualTo("myFunction"));
+        assertStringValue(result, "myFunction");
 
         // Normal case: function without name
         JSFunction anonFunc = new JSNativeFunction(context, "", 1,
                 (childContext, thisArg, args) -> JSUndefined.INSTANCE);
         result = FunctionPrototype.getName(context, anonFunc, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo(""));
+        assertStringValue(result, "");
 
         // Edge case: called on non-function
         result = FunctionPrototype.getName(context, new JSString("not a function"), JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
-            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class,
-                    name -> assertThat(name.value()).isEqualTo("TypeError"));
-        });
+        assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
     }
 
@@ -470,22 +448,17 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         JSFunction testFunc = new JSNativeFunction(context, "testFunction", 1,
                 (childContext, thisArg, args) -> JSUndefined.INSTANCE);
         JSValue result = FunctionPrototype.toString_(context, testFunc, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class,
-                str -> assertThat(str.value()).isEqualTo("function testFunction() { [native code] }"));
+        assertStringValue(result, "function testFunction() { [native code] }");
 
         // Normal case: function without name
         JSFunction anonFunc = new JSNativeFunction(context, "", 1,
                 (childContext, thisArg, args) -> JSUndefined.INSTANCE);
         result = FunctionPrototype.toString_(context, anonFunc, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class,
-                str -> assertThat(str.value()).isEqualTo("function () { [native code] }"));
+        assertStringValue(result, "function () { [native code] }");
 
         // Edge case: called on non-function
         result = FunctionPrototype.toString_(context, new JSString("not a function"), JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
-            assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class,
-                    name -> assertThat(name.value()).isEqualTo("TypeError"));
-        });
+        assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
         context.clearPendingException(); // Clear the exception before next test
 

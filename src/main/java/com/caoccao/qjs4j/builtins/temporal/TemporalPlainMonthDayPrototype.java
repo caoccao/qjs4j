@@ -25,18 +25,15 @@ import java.util.Locale;
  * Implementation of Temporal.PlainMonthDay prototype methods.
  */
 public final class TemporalPlainMonthDayPrototype {
-    private static final String TYPE_NAME = "Temporal.PlainMonthDay";
+    private static final TemporalReceiver<JSTemporalPlainMonthDay> RECEIVER = new TemporalReceiver<>(
+            JSTemporalPlainMonthDay.class, "Temporal.PlainMonthDay");
 
     private TemporalPlainMonthDayPrototype() {
     }
 
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainMonthDay plainMonthDay = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalPlainMonthDay.class, TYPE_NAME, "calendarId");
-        if (plainMonthDay == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(plainMonthDay.getCalendarId().identifier());
+        return RECEIVER.read(context, thisArg, "calendarId",
+                plainMonthDay -> new JSString(plainMonthDay.getCalendarId().identifier()));
     }
 
     private static void copyFieldIfPresent(JSContext context, JSObject sourceObject, JSObject targetObject,
@@ -51,8 +48,7 @@ public final class TemporalPlainMonthDayPrototype {
     }
 
     public static JSValue day(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainMonthDay plainMonthDay = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalPlainMonthDay.class, TYPE_NAME, "day");
+        JSTemporalPlainMonthDay plainMonthDay = RECEIVER.require(context, thisArg, "day");
         if (plainMonthDay == null) {
             return JSUndefined.INSTANCE;
         }
@@ -62,8 +58,7 @@ public final class TemporalPlainMonthDayPrototype {
     }
 
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainMonthDay plainMonthDay = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalPlainMonthDay.class, TYPE_NAME, "equals");
+        JSTemporalPlainMonthDay plainMonthDay = RECEIVER.require(context, thisArg, "equals");
         if (plainMonthDay == null) {
             return JSUndefined.INSTANCE;
         }
@@ -80,8 +75,7 @@ public final class TemporalPlainMonthDayPrototype {
     }
 
     public static JSValue monthCode(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainMonthDay plainMonthDay = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalPlainMonthDay.class, TYPE_NAME, "monthCode");
+        JSTemporalPlainMonthDay plainMonthDay = RECEIVER.require(context, thisArg, "monthCode");
         if (plainMonthDay == null) {
             return JSUndefined.INSTANCE;
         }
@@ -116,17 +110,12 @@ public final class TemporalPlainMonthDayPrototype {
     }
 
     public static JSValue referenceISOYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainMonthDay plainMonthDay = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalPlainMonthDay.class, TYPE_NAME, "referenceISOYear");
-        if (plainMonthDay == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSNumber.of(plainMonthDay.getIsoDate().year());
+        return RECEIVER.read(context, thisArg, "referenceISOYear",
+                plainMonthDay -> JSNumber.of(plainMonthDay.getIsoDate().year()));
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainMonthDay plainMonthDay = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalPlainMonthDay.class, TYPE_NAME, "toJSON");
+        JSTemporalPlainMonthDay plainMonthDay = RECEIVER.require(context, thisArg, "toJSON");
         if (plainMonthDay == null) {
             return JSUndefined.INSTANCE;
         }
@@ -134,8 +123,7 @@ public final class TemporalPlainMonthDayPrototype {
     }
 
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainMonthDay plainMonthDay = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalPlainMonthDay.class, TYPE_NAME, "toLocaleString");
+        JSTemporalPlainMonthDay plainMonthDay = RECEIVER.require(context, thisArg, "toLocaleString");
         if (plainMonthDay == null) {
             return JSUndefined.INSTANCE;
         }
@@ -179,8 +167,7 @@ public final class TemporalPlainMonthDayPrototype {
     }
 
     public static JSValue toPlainDate(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainMonthDay plainMonthDay = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalPlainMonthDay.class, TYPE_NAME, "toPlainDate");
+        JSTemporalPlainMonthDay plainMonthDay = RECEIVER.require(context, thisArg, "toPlainDate");
         if (plainMonthDay == null) {
             return JSUndefined.INSTANCE;
         }
@@ -214,8 +201,7 @@ public final class TemporalPlainMonthDayPrototype {
     }
 
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainMonthDay plainMonthDay = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalPlainMonthDay.class, TYPE_NAME, "toString");
+        JSTemporalPlainMonthDay plainMonthDay = RECEIVER.require(context, thisArg, "toString");
         if (plainMonthDay == null) {
             return JSUndefined.INSTANCE;
         }
@@ -249,8 +235,7 @@ public final class TemporalPlainMonthDayPrototype {
     }
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainMonthDay plainMonthDay = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalPlainMonthDay.class, TYPE_NAME, "with");
+        JSTemporalPlainMonthDay plainMonthDay = RECEIVER.require(context, thisArg, "with");
         if (plainMonthDay == null) {
             return JSUndefined.INSTANCE;
         }

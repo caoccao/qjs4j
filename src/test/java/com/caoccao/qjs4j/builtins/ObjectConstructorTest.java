@@ -185,12 +185,11 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
         // Normal case: freeze primitive (returns primitive)
         result = ObjectPrototype.freeze(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("string")});
-        assertThat(result).isInstanceOfSatisfying(JSString.class,
-                jsStr -> assertThat(jsStr.value()).isEqualTo("string"));
+        assertStringValue(result, "string");
 
         // Edge case: freeze number primitive
         result = ObjectPrototype.freeze(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42)});
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(42.0));
+        assertNumberValue(result, 42.0);
 
         // Edge case: freeze boolean primitive
         result = ObjectPrototype.freeze(context, JSUndefined.INSTANCE, new JSValue[]{JSBoolean.TRUE});
@@ -566,16 +565,16 @@ public class ObjectConstructorTest extends BaseJavetTest {
             JSValue evenGroup = groups.get("even");
             assertThat(evenGroup).isInstanceOfSatisfying(JSArray.class, evenArray -> {
                 assertThat(evenArray.getLength()).isEqualTo(2);
-                assertThat(evenArray.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
-                assertThat(evenArray.get(1).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(4.0);
+                assertNumberValue(evenArray.get(0), 2.0);
+                assertNumberValue(evenArray.get(1), 4.0);
             });
 
             // Check odd group
             JSValue oddGroup = groups.get("odd");
             assertThat(oddGroup).isInstanceOfSatisfying(JSArray.class, oddArray -> {
                 assertThat(oddArray.getLength()).isEqualTo(2);
-                assertThat(oddArray.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
-                assertThat(oddArray.get(1).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(3.0);
+                assertNumberValue(oddArray.get(0), 1.0);
+                assertNumberValue(oddArray.get(1), 3.0);
             });
         });
 

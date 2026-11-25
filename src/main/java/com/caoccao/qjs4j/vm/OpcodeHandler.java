@@ -126,6 +126,29 @@ public final class OpcodeHandler {
         return attributes;
     }
 
+    private static void compareRelationalOperands(ExecutionContext executionContext, boolean reverse, boolean negate) {
+        VirtualMachine vm = executionContext.virtualMachine;
+        vm.valueStack.stackTop = executionContext.sp;
+        JSValue right = vm.valueStack.pop();
+        JSValue left = vm.valueStack.pop();
+        try {
+            // Reversing the comparison still coerces the original left operand first.
+            JSTypeConversions.RelationalComparisonResult result = reverse
+                    ? JSTypeConversions.lessThanResult(vm.context, right, left, false)
+                    : JSTypeConversions.lessThanResult(vm.context, left, right);
+            vm.capturePendingException();
+            JSTypeConversions.RelationalComparisonResult expected = negate
+                    ? JSTypeConversions.RelationalComparisonResult.FALSE
+                    : JSTypeConversions.RelationalComparisonResult.TRUE;
+            vm.valueStack
+                    .push(vm.pendingException == null ? JSBoolean.valueOf(result == expected) : JSUndefined.INSTANCE);
+        } catch (JSVirtualMachineException e) {
+            vm.capturePendingExceptionFromVmOrContext(e);
+            vm.valueStack.push(JSUndefined.INSTANCE);
+        }
+        executionContext.sp = vm.valueStack.stackTop;
+    }
+
     private static JSError createCannotReadPropertiesTypeError(JSContext context, JSValue value) {
         return createCannotReadPropertiesTypeError(context, value, null);
     }
@@ -193,6 +216,10 @@ public final class OpcodeHandler {
             return symbolKey.toJavaObject();
         }
         return null;
+    }
+
+    private static JSNumber divideOrRemainder(Opcode op, JSNumber dividend, JSNumber divisor) {
+        return JSNumber.of(op == Opcode.DIV ? dividend.value() / divisor.value() : dividend.value() % divisor.value());
     }
 
     private static VarRef findClosureVarRef(ExecutionContext executionContext, String variableName) {
@@ -321,6 +348,34 @@ public final class OpcodeHandler {
      */
     private static JSNumber getStringLength(JSString string) {
         return JSNumber.of(string.length());
+    }
+
+    static void handleAbstractEquality(Opcode op, ExecutionContext executionContext) {
+        int sp = executionContext.sp;
+        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        if (stack[sp - 2] instanceof JSNumber x && stack[sp - 1] instanceof JSNumber y
+                && !executionContext.virtualMachine.context.hasPendingException()) {
+            boolean equal = x.value() == y.value();
+            stack[sp - 2] = JSBoolean.valueOf(op == Opcode.EQ ? equal : !equal);
+            executionContext.sp = sp - 1;
+            executionContext.pc += op.getSize();
+            return;
+        }
+
+        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
+        JSValue right = executionContext.virtualMachine.valueStack.pop();
+        JSValue left = executionContext.virtualMachine.valueStack.pop();
+        boolean result = JSTypeConversions.abstractEquals(executionContext.virtualMachine.context, left, right);
+        if (executionContext.virtualMachine.context.hasPendingException()) {
+            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
+                    .getPendingException();
+            executionContext.virtualMachine.context.clearPendingException();
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            return;
+        }
+        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(op == Opcode.EQ ? result : !result));
+        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+        executionContext.pc += op.getSize();
     }
 
     static void handleAdd(Opcode op, ExecutionContext executionContext) {
@@ -966,8 +1021,7 @@ public final class OpcodeHandler {
 
     static void handleCall(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        byte[] instructions = executionContext.instructions;
-        int argumentCount = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
+        int argumentCount = executionContext.bytecode.readU16(pc + 1);
         internalHandleCall(executionContext, argumentCount, false);
         executionContext.pc += op.getSize();
     }
@@ -994,8 +1048,7 @@ public final class OpcodeHandler {
 
     static void handleCallConstructor(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        byte[] instructions = executionContext.instructions;
-        int argumentCount = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
+        int argumentCount = executionContext.bytecode.readU16(pc + 1);
         VirtualMachine virtualMachine = executionContext.virtualMachine;
         JSContext context = virtualMachine.context;
         JSStackValue[] stack = virtualMachine.valueStack.stack;
@@ -1544,7 +1597,18 @@ public final class OpcodeHandler {
         executionContext.pc = pc + op.getSize();
     }
 
-    static void handleDiv(Opcode op, ExecutionContext executionContext) {
+    static void handleDivisionOrRemainder(Opcode op, ExecutionContext executionContext) {
+        int sp = executionContext.sp;
+        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        if (stack[sp - 2] instanceof JSNumber dividend && stack[sp - 1] instanceof JSNumber divisor
+                && executionContext.virtualMachine.pendingException == null
+                && !executionContext.virtualMachine.context.hasPendingException()) {
+            stack[sp - 2] = divideOrRemainder(op, dividend, divisor);
+            executionContext.sp = sp - 1;
+            executionContext.pc += op.getSize();
+            return;
+        }
+
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
         JSValue right = executionContext.virtualMachine.valueStack.pop();
         JSValue left = executionContext.virtualMachine.valueStack.pop();
@@ -1559,13 +1623,15 @@ public final class OpcodeHandler {
                         .throwRangeError("Division by zero");
                 executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
             } else {
-                executionContext.virtualMachine.valueStack
-                        .push(new JSBigInt(leftBigInt.value().divide(rightBigInt.value())));
+                BigInteger result = op == Opcode.DIV
+                        ? leftBigInt.value().divide(rightBigInt.value())
+                        : leftBigInt.value().remainder(rightBigInt.value());
+                executionContext.virtualMachine.valueStack.push(new JSBigInt(result));
             }
         } else {
             JSNumber leftNumber = (JSNumber) pair.left();
             JSNumber rightNumber = (JSNumber) pair.right();
-            executionContext.virtualMachine.valueStack.push(JSNumber.of(leftNumber.value() / rightNumber.value()));
+            executionContext.virtualMachine.valueStack.push(divideOrRemainder(op, leftNumber, rightNumber));
         }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
@@ -1610,23 +1676,6 @@ public final class OpcodeHandler {
         stack[sp + 2] = stack[sp - 1];
         executionContext.sp = sp + 3;
         executionContext.pc += 1;
-    }
-
-    static void handleEq(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        boolean result = JSTypeConversions.abstractEquals(executionContext.virtualMachine.context, left, right);
-        if (executionContext.virtualMachine.context.hasPendingException()) {
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                    .getPendingException();
-            executionContext.virtualMachine.context.clearPendingException();
-            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
-            return;
-        }
-        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
-        executionContext.pc += op.getSize();
     }
 
     static void handleEval(Opcode op, ExecutionContext executionContext) {
@@ -2504,40 +2553,8 @@ public final class OpcodeHandler {
         int pc = executionContext.pc;
         int atomIndex = executionContext.bytecode.readU32(pc + 1);
         String fieldName = executionContext.bytecode.getAtoms()[atomIndex];
-        JSValue objectValue = executionContext.pop();
-        if (objectValue instanceof JSString string && "length".equals(fieldName)) {
-            JSNumber stringLength = getStringLength(string);
-            executionContext.push(stringLength);
-            executionContext.pc = pc + op.getSize();
-            return;
-        }
-
-        JSObject targetObject = executionContext.virtualMachine.toObject(objectValue);
-        if (targetObject != null) {
-            JSValue result = targetObject.get(executionContext.bytecode.getCachedPropertyKey(atomIndex), objectValue);
-            if (executionContext.virtualMachine.context.hasPendingException()) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                        .getPendingException();
-                executionContext.virtualMachine.context.clearPendingException();
-                executionContext.push(JSUndefined.INSTANCE);
-            } else {
-                executionContext.push(result);
-            }
-        } else {
-            String typeName = objectValue instanceof JSNull ? "null" : "undefined";
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                    .throwTypeError("Cannot read properties of " + typeName + " (reading '" + fieldName + "')");
-            executionContext.push(JSUndefined.INSTANCE);
-        }
-        executionContext.pc = pc + op.getSize();
-    }
-
-    // obj -> obj val (get named property, keep object on stack)
-    static void handleGetField2(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
-        String fieldName = executionContext.bytecode.getAtoms()[atomIndex];
-        JSValue objectValue = executionContext.peek(0);
+        // GET_FIELD2 retains the receiver below the property value.
+        JSValue objectValue = op == Opcode.GET_FIELD2 ? executionContext.peek(0) : executionContext.pop();
         if (objectValue instanceof JSString string && "length".equals(fieldName)) {
             JSNumber stringLength = getStringLength(string);
             executionContext.push(stringLength);
@@ -2594,9 +2611,8 @@ public final class OpcodeHandler {
     }
 
     static void handleGetLoc(Opcode op, ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
         int pc = executionContext.pc;
-        int localIndex = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
+        int localIndex = executionContext.bytecode.readU16(pc + 1);
         JSValue localValue = executionContext.locals[localIndex];
         JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
         int sp = executionContext.sp;
@@ -3038,10 +3054,8 @@ public final class OpcodeHandler {
     }
 
     static void handleGosub(Opcode op, ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
         int pc = executionContext.pc;
-        int offset = ((instructions[pc + 1] & 0xFF) << 24) | ((instructions[pc + 2] & 0xFF) << 16)
-                | ((instructions[pc + 3] & 0xFF) << 8) | (instructions[pc + 4] & 0xFF);
+        int offset = executionContext.bytecode.readU32(pc + 1);
         // Push return address (instruction after this GOSUB) onto the stack
         int returnAddress = pc + op.getSize();
         executionContext.pushStackValue(new JSInternalValue(returnAddress));
@@ -3050,17 +3064,14 @@ public final class OpcodeHandler {
     }
 
     static void handleGoto(Opcode op, ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
         int pc = executionContext.pc;
-        int offset = ((instructions[pc + 1] & 0xFF) << 24) | ((instructions[pc + 2] & 0xFF) << 16)
-                | ((instructions[pc + 3] & 0xFF) << 8) | (instructions[pc + 4] & 0xFF);
+        int offset = executionContext.bytecode.readU32(pc + 1);
         executionContext.pc = pc + op.getSize() + offset;
     }
 
     static void handleGoto16(Opcode op, ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
         int pc = executionContext.pc;
-        int offset = (short) (((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF));
+        int offset = (short) (executionContext.bytecode.readU16(pc + 1));
         executionContext.pc = pc + op.getSize() + offset;
     }
 
@@ -3078,28 +3089,7 @@ public final class OpcodeHandler {
             stack[sp - 2] = JSBoolean.valueOf(leftNumber.value() > rightNumber.value());
             executionContext.sp = sp - 1;
         } else {
-            executionContext.virtualMachine.valueStack.stackTop = sp;
-            JSValue right = executionContext.virtualMachine.valueStack.pop();
-            JSValue left = executionContext.virtualMachine.valueStack.pop();
-            if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-                executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(leftNum.value() > rightNum.value()));
-            } else {
-                try {
-                    JSTypeConversions.RelationalComparisonResult comparisonResult = JSTypeConversions
-                            .lessThanResult(executionContext.virtualMachine.context, right, left, false);
-                    executionContext.virtualMachine.capturePendingException();
-                    if (executionContext.virtualMachine.pendingException != null) {
-                        executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                    } else {
-                        executionContext.virtualMachine.valueStack.push(JSBoolean
-                                .valueOf(comparisonResult == JSTypeConversions.RelationalComparisonResult.TRUE));
-                    }
-                } catch (JSVirtualMachineException e) {
-                    executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
-                    executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                }
-            }
-            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            compareRelationalOperands(executionContext, true, false);
         }
         executionContext.pc += op.getSize();
     }
@@ -3113,38 +3103,15 @@ public final class OpcodeHandler {
             stack[sp - 2] = JSBoolean.valueOf(leftNumber.value() >= rightNumber.value());
             executionContext.sp = sp - 1;
         } else {
-            executionContext.virtualMachine.valueStack.stackTop = sp;
-            JSValue right = executionContext.virtualMachine.valueStack.pop();
-            JSValue left = executionContext.virtualMachine.valueStack.pop();
-            if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-                executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(leftNum.value() >= rightNum.value()));
-            } else {
-                try {
-                    JSTypeConversions.RelationalComparisonResult comparisonResult = JSTypeConversions
-                            .lessThanResult(executionContext.virtualMachine.context, left, right);
-                    executionContext.virtualMachine.capturePendingException();
-                    if (executionContext.virtualMachine.pendingException != null) {
-                        executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                    } else {
-                        executionContext.virtualMachine.valueStack.push(JSBoolean
-                                .valueOf(comparisonResult == JSTypeConversions.RelationalComparisonResult.FALSE));
-                    }
-                } catch (JSVirtualMachineException e) {
-                    executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
-                    executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                }
-            }
-            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            compareRelationalOperands(executionContext, false, true);
         }
         executionContext.pc += op.getSize();
     }
 
     static void handleIfFalse(Opcode op, ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
         int pc = executionContext.pc;
         JSValue conditionValue = executionContext.pop();
-        int offset = ((instructions[pc + 1] & 0xFF) << 24) | ((instructions[pc + 2] & 0xFF) << 16)
-                | ((instructions[pc + 3] & 0xFF) << 8) | (instructions[pc + 4] & 0xFF);
+        int offset = executionContext.bytecode.readU32(pc + 1);
         if (executionContext.virtualMachine.isBranchTruthy(conditionValue)) {
             executionContext.pc = pc + op.getSize();
         } else {
@@ -3163,11 +3130,9 @@ public final class OpcodeHandler {
     }
 
     static void handleIfTrue(Opcode op, ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
         int pc = executionContext.pc;
         JSValue conditionValue = executionContext.pop();
-        int offset = ((instructions[pc + 1] & 0xFF) << 24) | ((instructions[pc + 2] & 0xFF) << 16)
-                | ((instructions[pc + 3] & 0xFF) << 8) | (instructions[pc + 4] & 0xFF);
+        int offset = executionContext.bytecode.readU32(pc + 1);
         if (executionContext.virtualMachine.isBranchTruthy(conditionValue)) {
             executionContext.pc = pc + op.getSize() + offset;
         } else {
@@ -3885,28 +3850,7 @@ public final class OpcodeHandler {
             stack[sp - 2] = JSBoolean.valueOf(leftNumber.value() < rightNumber.value());
             executionContext.sp = sp - 1;
         } else {
-            executionContext.virtualMachine.valueStack.stackTop = sp;
-            JSValue right = executionContext.virtualMachine.valueStack.pop();
-            JSValue left = executionContext.virtualMachine.valueStack.pop();
-            if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-                executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(leftNum.value() < rightNum.value()));
-            } else {
-                try {
-                    JSTypeConversions.RelationalComparisonResult comparisonResult = JSTypeConversions
-                            .lessThanResult(executionContext.virtualMachine.context, left, right);
-                    executionContext.virtualMachine.capturePendingException();
-                    if (executionContext.virtualMachine.pendingException != null) {
-                        executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                    } else {
-                        executionContext.virtualMachine.valueStack.push(JSBoolean
-                                .valueOf(comparisonResult == JSTypeConversions.RelationalComparisonResult.TRUE));
-                    }
-                } catch (JSVirtualMachineException e) {
-                    executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
-                    executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                }
-            }
-            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            compareRelationalOperands(executionContext, false, false);
         }
         executionContext.pc += op.getSize();
     }
@@ -3920,28 +3864,7 @@ public final class OpcodeHandler {
             stack[sp - 2] = JSBoolean.valueOf(leftNumber.value() <= rightNumber.value());
             executionContext.sp = sp - 1;
         } else {
-            executionContext.virtualMachine.valueStack.stackTop = sp;
-            JSValue right = executionContext.virtualMachine.valueStack.pop();
-            JSValue left = executionContext.virtualMachine.valueStack.pop();
-            if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-                executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(leftNum.value() <= rightNum.value()));
-            } else {
-                try {
-                    JSTypeConversions.RelationalComparisonResult comparisonResult = JSTypeConversions
-                            .lessThanResult(executionContext.virtualMachine.context, right, left, false);
-                    executionContext.virtualMachine.capturePendingException();
-                    if (executionContext.virtualMachine.pendingException != null) {
-                        executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                    } else {
-                        executionContext.virtualMachine.valueStack.push(JSBoolean
-                                .valueOf(comparisonResult == JSTypeConversions.RelationalComparisonResult.FALSE));
-                    }
-                } catch (JSVirtualMachineException e) {
-                    executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
-                    executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                }
-            }
-            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            compareRelationalOperands(executionContext, true, true);
         }
         executionContext.pc += op.getSize();
     }
@@ -3983,33 +3906,6 @@ public final class OpcodeHandler {
         executionContext.pc = pc + op.getSize();
     }
 
-    static void handleMod(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
-        if (pair == null) {
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-        } else if (pair.bigInt()) {
-            JSBigInt leftBigInt = (JSBigInt) pair.left();
-            JSBigInt rightBigInt = (JSBigInt) pair.right();
-            if (rightBigInt.value().equals(VirtualMachine.BIGINT_ZERO)) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                        .throwRangeError("Division by zero");
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            } else {
-                executionContext.virtualMachine.valueStack
-                        .push(new JSBigInt(leftBigInt.value().remainder(rightBigInt.value())));
-            }
-        } else {
-            JSNumber leftNumber = (JSNumber) pair.left();
-            JSNumber rightNumber = (JSNumber) pair.right();
-            executionContext.virtualMachine.valueStack.push(JSNumber.of(leftNumber.value() % rightNumber.value()));
-        }
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
-        executionContext.pc += op.getSize();
-    }
-
     static void handleMul(Opcode op, ExecutionContext executionContext) {
         JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
         int sp = executionContext.sp;
@@ -4049,23 +3945,6 @@ public final class OpcodeHandler {
         } else {
             executionContext.virtualMachine.valueStack.push(JSNumber.of(-((JSNumber) numeric).value()));
         }
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
-        executionContext.pc += op.getSize();
-    }
-
-    static void handleNeq(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        boolean result = !JSTypeConversions.abstractEquals(executionContext.virtualMachine.context, left, right);
-        if (executionContext.virtualMachine.context.hasPendingException()) {
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                    .getPendingException();
-            executionContext.virtualMachine.context.clearPendingException();
-            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
-            return;
-        }
-        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -4313,10 +4192,8 @@ public final class OpcodeHandler {
     }
 
     static void handlePushAtomValue(Opcode op, ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
         int pc = executionContext.pc;
-        int atomIndex = ((instructions[pc + 1] & 0xFF) << 24) | ((instructions[pc + 2] & 0xFF) << 16)
-                | ((instructions[pc + 3] & 0xFF) << 8) | (instructions[pc + 4] & 0xFF);
+        int atomIndex = executionContext.bytecode.readU32(pc + 1);
         executionContext.push(new JSString(executionContext.bytecode.getAtoms()[atomIndex]));
         executionContext.pc = pc + op.getSize();
     }
@@ -4327,29 +4204,10 @@ public final class OpcodeHandler {
     }
 
     static void handlePushConst(Opcode op, ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
         int pc = executionContext.pc;
-        int constIndex = ((instructions[pc + 1] & 0xFF) << 24) | ((instructions[pc + 2] & 0xFF) << 16)
-                | ((instructions[pc + 3] & 0xFF) << 8) | (instructions[pc + 4] & 0xFF);
-        JSValue constantValue = executionContext.bytecode.getConstants()[constIndex];
-        if (constantValue instanceof JSSymbol symbol) {
-            IdentityHashMap<JSSymbol, JSSymbol> symbolRemap = internalGetActivePrivateSymbolRemap(executionContext,
-                    executionContext.sp);
-            if (symbolRemap != null) {
-                JSSymbol remappedSymbol = symbolRemap.get(symbol);
-                if (remappedSymbol != null) {
-                    constantValue = remappedSymbol;
-                }
-            }
-        }
-        executionContext.virtualMachine.initializeConstantValueIfNeeded(constantValue);
-        executionContext.push(constantValue);
-        executionContext.pc = pc + op.getSize();
-    }
-
-    static void handlePushConst8(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int constIndex = executionContext.instructions[pc + 1] & 0xFF;
+        int constIndex = op == Opcode.PUSH_CONST8
+                ? executionContext.bytecode.readU8(pc + 1)
+                : executionContext.bytecode.readU32(pc + 1);
         JSValue constantValue = executionContext.bytecode.getConstants()[constIndex];
         if (constantValue instanceof JSSymbol symbol) {
             IdentityHashMap<JSSymbol, JSSymbol> symbolRemap = internalGetActivePrivateSymbolRemap(executionContext,
@@ -4377,18 +4235,14 @@ public final class OpcodeHandler {
     }
 
     static void handlePushI16(Opcode op, ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
         int pc = executionContext.pc;
-        executionContext
-                .push(JSNumber.of((short) (((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF))));
+        executionContext.push(JSNumber.of((short) (executionContext.bytecode.readU16(pc + 1))));
         executionContext.pc = pc + 3;
     }
 
     static void handlePushI32(Opcode op, ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
         int pc = executionContext.pc;
-        int intValue = ((instructions[pc + 1] & 0xFF) << 24) | ((instructions[pc + 2] & 0xFF) << 16)
-                | ((instructions[pc + 3] & 0xFF) << 8) | (instructions[pc + 4] & 0xFF);
+        int intValue = executionContext.bytecode.readU32(pc + 1);
         executionContext.push(JSNumber.of(intValue));
         executionContext.pc = pc + 5;
     }
@@ -4562,9 +4416,8 @@ public final class OpcodeHandler {
     }
 
     static void handlePutLoc(Opcode op, ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
         int pc = executionContext.pc;
-        int localIndex = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
+        int localIndex = executionContext.bytecode.readU16(pc + 1);
         executionContext.locals[localIndex] = executionContext.pop();
         executionContext.pc += op.getSize();
     }
@@ -5184,9 +5037,8 @@ public final class OpcodeHandler {
     }
 
     static void handleSetLoc(Opcode op, ExecutionContext executionContext) {
-        byte[] instructions = executionContext.instructions;
         int pc = executionContext.pc;
-        int localIndex = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
+        int localIndex = executionContext.bytecode.readU16(pc + 1);
         executionContext.locals[localIndex] = executionContext.peek(0);
         executionContext.pc += op.getSize();
     }
@@ -5408,22 +5260,12 @@ public final class OpcodeHandler {
         executionContext.pc = pc + op.getSize();
     }
 
-    static void handleStrictEq(Opcode op, ExecutionContext executionContext) {
+    static void handleStrictEquality(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
         JSValue right = executionContext.virtualMachine.valueStack.pop();
         JSValue left = executionContext.virtualMachine.valueStack.pop();
         boolean result = JSTypeConversions.strictEquals(left, right);
-        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
-        executionContext.pc += op.getSize();
-    }
-
-    static void handleStrictNeq(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        boolean result = !JSTypeConversions.strictEquals(left, right);
-        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
+        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(op == Opcode.STRICT_EQ ? result : !result));
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -5481,8 +5323,7 @@ public final class OpcodeHandler {
 
     static void handleTailCall(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        byte[] instructions = executionContext.instructions;
-        int argumentCount = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
+        int argumentCount = executionContext.bytecode.readU16(pc + 1);
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
 
         // Peek at the callee to check if we can use the trampoline

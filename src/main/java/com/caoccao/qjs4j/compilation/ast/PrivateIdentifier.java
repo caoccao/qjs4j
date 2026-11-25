@@ -29,22 +29,12 @@ public final class PrivateIdentifier extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            if (awaitInside == null) {
-                awaitInside = false;
-            }
-        }
-        return awaitInside;
+        return false;
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            if (yieldInside == null) {
-                yieldInside = false;
-            }
-        }
-        return yieldInside;
+        return false;
     }
 
     public String getName() {

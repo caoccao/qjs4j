@@ -49,12 +49,12 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
         // Test normal case: add to index 0
         JSValue result = atomics().add(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(5)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(10.0); // returns old value
+        assertNumberValue(result, 10.0); // returns old value
         assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(15); // new value is 10 + 5
 
         // Test add to index 1
         result = atomics().add(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(-3)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(20.0);
+        assertNumberValue(result, 20.0);
         assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(17);
 
         // Test edge cases
@@ -85,12 +85,12 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
         // Test AND operation: 15 & 10 = 10
         JSValue result = atomics().and(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(10)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(15.0); // returns old value
+        assertNumberValue(result, 15.0); // returns old value
         assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(10); // new value
 
         // Test AND with 0: 10 & 0 = 0
         result = atomics().and(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(0)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(10.0);
+        assertNumberValue(result, 10.0);
         assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(0);
     }
 
@@ -106,13 +106,13 @@ public class AtomicsObjectTest extends BaseJavetTest {
         // Test successful exchange: expected == current
         JSValue result = atomics().compareExchange(context, null,
                 new JSValue[]{arr, new JSNumber(0), new JSNumber(42), new JSNumber(99)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.0); // returns old value
+        assertNumberValue(result, 42.0); // returns old value
         assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(99); // new value
 
         // Test failed exchange: expected != current
         result = atomics().compareExchange(context, null,
                 new JSValue[]{arr, new JSNumber(1), new JSNumber(50), new JSNumber(200)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(100.0); // returns current value
+        assertNumberValue(result, 100.0); // returns current value
         assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(100); // unchanged
     }
 
@@ -127,11 +127,11 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
         // Test exchange
         JSValue result = atomics().exchange(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(789)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(123.0); // returns old value
+        assertNumberValue(result, 123.0); // returns old value
         assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(789); // new value
 
         result = atomics().exchange(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(0)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(456.0);
+        assertNumberValue(result, 456.0);
         assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(0);
     }
 
@@ -215,10 +215,10 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
         // Test load
         JSValue result = atomics().load(context, null, new JSValue[]{arr, new JSNumber(0)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(111.0);
+        assertNumberValue(result, 111.0);
 
         result = atomics().load(context, null, new JSValue[]{arr, new JSNumber(1)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(222.0);
+        assertNumberValue(result, 222.0);
     }
 
     @Test
@@ -234,7 +234,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         // Test 1: Notify with non-shared buffer - should still return 0
         JSValue result = atomics().notify(context, null, new JSValue[]{arr, new JSNumber(0)});
         assertThat(result.isNumber()).isTrue();
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(0.0);
+        assertNumberValue(result, 0.0);
 
         // Test 2: Invalid arguments
         JSValue error = atomics().notify(context, null, JSValue.NO_ARGS);
@@ -255,7 +255,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         JSValue negativeCountResult = atomics().notify(context, null,
                 new JSValue[]{arr, new JSNumber(0), new JSNumber(-1)});
         assertThat(negativeCountResult.isNumber()).isTrue();
-        assertThat(negativeCountResult.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(0.0);
+        assertNumberValue(negativeCountResult, 0.0);
     }
 
     @Test
@@ -368,12 +368,12 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
         // Test OR operation: 10 | 5 = 15 (0b1010 | 0b0101 = 0b1111)
         JSValue result = atomics().or(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(5)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(10.0); // returns old value
+        assertNumberValue(result, 10.0); // returns old value
         assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(15); // new value
 
         // Test OR with all bits set: 12 | 3 = 15
         result = atomics().or(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(3)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(12.0);
+        assertNumberValue(result, 12.0);
         assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(15);
     }
 
@@ -395,11 +395,11 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
         // Test store
         JSValue result = atomics().store(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(999)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(999.0); // returns stored value
+        assertNumberValue(result, 999.0); // returns stored value
         assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(999);
 
         result = atomics().store(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(-123)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(-123.0);
+        assertNumberValue(result, -123.0);
         assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(-123);
     }
 
@@ -415,12 +415,12 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
         // Test normal case: subtract from index 0
         JSValue result = atomics().sub(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(15)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(50.0); // returns old value
+        assertNumberValue(result, 50.0); // returns old value
         assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(35); // new value is 50 - 15
 
         // Test subtract to index 1
         result = atomics().sub(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(10)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(25.0);
+        assertNumberValue(result, 25.0);
         assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(15);
     }
 
@@ -438,12 +438,12 @@ public class AtomicsObjectTest extends BaseJavetTest {
         JSValue result = atomics().wait(context, null,
                 new JSValue[]{arr, new JSNumber(0), new JSNumber(0), new JSNumber(0)});
         assertThat(result.isString()).isTrue();
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("not-equal");
+        assertStringValue(result, "not-equal");
 
         // Test 2: Wait with matching value and immediate timeout - should return "timed-out"
         result = atomics().wait(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(42), new JSNumber(0)});
         assertThat(result.isString()).isTrue();
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("timed-out");
+        assertStringValue(result, "timed-out");
 
         // Test 3: Invalid arguments
         JSValue error = atomics().wait(context, null, new JSValue[]{arr, new JSNumber(0)});
@@ -543,7 +543,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
             context.processMicrotasks();
         }
         assertThat(waitPromise.getState()).isEqualTo(JSPromise.PromiseState.FULFILLED);
-        assertThat(waitPromise.getResult().asString().map(JSString::value).orElseThrow()).isEqualTo("timed-out");
+        assertStringValue(waitPromise.getResult(), "timed-out");
 
         // Test 3: Invalid arguments
         JSValue error = atomics().waitAsync(context, null, new JSValue[]{arr, new JSNumber(0)});
@@ -573,12 +573,12 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
         // Test XOR operation: 15 ^ 10 = 5 (0b1111 ^ 0b1010 = 0b0101)
         JSValue result = atomics().xor(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(10)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(15.0); // returns old value
+        assertNumberValue(result, 15.0); // returns old value
         assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(5); // new value
 
         // Test XOR with same value: 10 ^ 10 = 0
         result = atomics().xor(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(10)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(10.0);
+        assertNumberValue(result, 10.0);
         assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(0);
     }
 }

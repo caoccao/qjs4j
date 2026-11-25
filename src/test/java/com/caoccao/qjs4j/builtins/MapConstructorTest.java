@@ -51,15 +51,15 @@ public class MapConstructorTest extends BaseJavetTest {
         JSValue evenGroup = map.mapGet(new JSString("even"));
         JSArray evenArray = evenGroup.asArray().orElseThrow();
         assertThat(evenArray.getLength()).isEqualTo(2);
-        assertThat(evenArray.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
-        assertThat(evenArray.get(1).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(4.0);
+        assertNumberValue(evenArray.get(0), 2.0);
+        assertNumberValue(evenArray.get(1), 4.0);
 
         // Check odd group
         JSValue oddGroup = map.mapGet(new JSString("odd"));
         JSArray oddArray = oddGroup.asArray().orElseThrow();
         assertThat(oddArray.getLength()).isEqualTo(2);
-        assertThat(oddArray.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
-        assertThat(oddArray.get(1).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(3.0);
+        assertNumberValue(oddArray.get(0), 1.0);
+        assertNumberValue(oddArray.get(1), 3.0);
 
         // Edge case: empty array
         JSArray emptyItems = context.createJSArray();

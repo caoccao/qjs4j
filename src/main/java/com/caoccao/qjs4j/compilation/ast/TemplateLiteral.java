@@ -42,13 +42,8 @@ public final class TemplateLiteral extends Expression {
     public boolean containsAwait() {
         if (awaitInside == null) {
             awaitInside = false;
-            if (expressions != null) {
-                for (Expression expression : expressions) {
-                    if (expression != null && expression.containsAwait()) {
-                        awaitInside = true;
-                        break;
-                    }
-                }
+            if (anyContainsAwait(expressions)) {
+                awaitInside = true;
             }
         }
         return awaitInside;
@@ -58,13 +53,8 @@ public final class TemplateLiteral extends Expression {
     public boolean containsYield() {
         if (yieldInside == null) {
             yieldInside = false;
-            if (expressions != null) {
-                for (Expression expression : expressions) {
-                    if (expression != null && expression.containsYield()) {
-                        yieldInside = true;
-                        break;
-                    }
-                }
+            if (anyContainsYield(expressions)) {
+                yieldInside = true;
             }
         }
         return yieldInside;

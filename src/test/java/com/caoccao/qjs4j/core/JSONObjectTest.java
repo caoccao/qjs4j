@@ -71,8 +71,8 @@ public class JSONObjectTest extends BaseJavetTest {
 
         JSArray tags1 = user1.get("tags").asArray().orElseThrow();
         assertThat(tags1.getLength()).isEqualTo(2);
-        assertThat(tags1.get(0).asString().map(JSString::value).orElseThrow()).isEqualTo("developer");
-        assertThat(tags1.get(1).asString().map(JSString::value).orElseThrow()).isEqualTo("admin");
+        assertStringValue(tags1.get(0), "developer");
+        assertStringValue(tags1.get(1), "admin");
 
         // Check metadata
         JSObject metadata = root.get("metadata").asObject().orElseThrow();
@@ -104,19 +104,19 @@ public class JSONObjectTest extends BaseJavetTest {
 
         // Normal case: parse number
         result = jsonObject().parse(JSUndefined.INSTANCE, new JSValue[]{new JSString("42")});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.0);
+        assertNumberValue(result, 42.0);
 
         // Normal case: parse negative number
         result = jsonObject().parse(JSUndefined.INSTANCE, new JSValue[]{new JSString("-123.45")});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(-123.45);
+        assertNumberValue(result, -123.45);
 
         // Normal case: parse string
         result = jsonObject().parse(JSUndefined.INSTANCE, new JSValue[]{new JSString("\"hello world\"")});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("hello world");
+        assertStringValue(result, "hello world");
 
         // Normal case: parse string with escapes
         result = jsonObject().parse(JSUndefined.INSTANCE, new JSValue[]{new JSString("\"hello\\nworld\"")});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("hello\nworld");
+        assertStringValue(result, "hello\nworld");
 
         // Normal case: parse empty array
         result = jsonObject().parse(JSUndefined.INSTANCE, new JSValue[]{new JSString("[]")});
@@ -127,8 +127,8 @@ public class JSONObjectTest extends BaseJavetTest {
         result = jsonObject().parse(JSUndefined.INSTANCE, new JSValue[]{new JSString("[1, \"two\", true]")});
         JSArray arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(3);
-        assertThat(arr.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
-        assertThat(arr.get(1).asString().map(JSString::value).orElseThrow()).isEqualTo("two");
+        assertNumberValue(arr.get(0), 1.0);
+        assertStringValue(arr.get(1), "two");
         assertThat(arr.get(2)).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: parse empty object
@@ -177,7 +177,7 @@ public class JSONObjectTest extends BaseJavetTest {
 
         // Edge case: non-string argument (should be converted to string)
         result = jsonObject().parse(JSUndefined.INSTANCE, new JSValue[]{new JSNumber(123)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(123.0);
+        assertNumberValue(result, 123.0);
     }
 
     @Test
@@ -373,8 +373,8 @@ public class JSONObjectTest extends BaseJavetTest {
         JSValue result = jsonObject().parse(JSUndefined.INSTANCE, new JSValue[]{new JSString(json), reviver});
         JSArray arr = result.asArray().orElseThrow();
 
-        assertThat(arr.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
-        assertThat(arr.get(1).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(4.0);
+        assertNumberValue(arr.get(0), 2.0);
+        assertNumberValue(arr.get(1), 4.0);
     }
 
     @Test
@@ -599,8 +599,8 @@ public class JSONObjectTest extends BaseJavetTest {
 
         JSArray parsedArr = parsedObj.get("array").asArray().orElseThrow();
         assertThat(parsedArr.getLength()).isEqualTo(2);
-        assertThat(parsedArr.get(0).asString().map(JSString::value).orElseThrow()).isEqualTo("item1");
-        assertThat(parsedArr.get(1).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
+        assertStringValue(parsedArr.get(0), "item1");
+        assertNumberValue(parsedArr.get(1), 2.0);
     }
 
     @Test
@@ -903,7 +903,7 @@ public class JSONObjectTest extends BaseJavetTest {
         // Normal case: stringify empty array
         JSArray emptyArr = new JSArray(context);
         JSValue result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{emptyArr});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("[]");
+        assertStringValue(result, "[]");
 
         // Normal case: stringify array with values
         JSArray arr = new JSArray(context);
@@ -911,12 +911,12 @@ public class JSONObjectTest extends BaseJavetTest {
         arr.push(new JSString("two"));
         arr.push(JSBoolean.TRUE);
         result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{arr});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("[1,\"two\",true]");
+        assertStringValue(result, "[1,\"two\",true]");
 
         // Normal case: stringify empty object
         JSObject emptyObj = new JSObject(context);
         result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{emptyObj});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("{}");
+        assertStringValue(result, "{}");
 
         // Normal case: stringify object with properties
         JSObject obj = new JSObject(context);
@@ -964,31 +964,31 @@ public class JSONObjectTest extends BaseJavetTest {
     public void testStringifyForPrimitives() {
         // Normal case: stringify null
         JSValue result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("null");
+        assertStringValue(result, "null");
 
         // Normal case: stringify boolean true
         result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{JSBoolean.TRUE});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("true");
+        assertStringValue(result, "true");
 
         // Normal case: stringify boolean false
         result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{JSBoolean.FALSE});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("false");
+        assertStringValue(result, "false");
 
         // Normal case: stringify number
         result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42)});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("42");
+        assertStringValue(result, "42");
 
         // Normal case: stringify negative number
         result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{new JSNumber(-123.45)});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("-123.45");
+        assertStringValue(result, "-123.45");
 
         // Normal case: stringify string
         result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{new JSString("hello world")});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("\"hello world\"");
+        assertStringValue(result, "\"hello world\"");
 
         // Normal case: stringify string with special characters
         result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{new JSString("hello\nworld")});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("\"hello\\nworld\"");
+        assertStringValue(result, "\"hello\\nworld\"");
     }
 
     @Test

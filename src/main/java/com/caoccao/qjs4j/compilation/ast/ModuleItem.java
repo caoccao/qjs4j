@@ -27,17 +27,11 @@ public abstract sealed class ModuleItem extends ASTNode permits ImportDeclaratio
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = false;
-        }
-        return awaitInside;
+        return false;
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = false;
-        }
-        return yieldInside;
+        return false;
     }
 }

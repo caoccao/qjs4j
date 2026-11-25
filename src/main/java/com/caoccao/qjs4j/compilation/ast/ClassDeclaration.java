@@ -37,13 +37,8 @@ public final class ClassDeclaration extends Declaration {
     public boolean containsAwait() {
         if (awaitInside == null) {
             awaitInside = superClass != null && superClass.containsAwait();
-            if (!awaitInside && body != null) {
-                for (ClassElement classElement : body) {
-                    if (classElement != null && classElement.containsAwait()) {
-                        awaitInside = true;
-                        break;
-                    }
-                }
+            if (!awaitInside && anyContainsAwait(body)) {
+                awaitInside = true;
             }
         }
         return awaitInside;
@@ -53,13 +48,8 @@ public final class ClassDeclaration extends Declaration {
     public boolean containsYield() {
         if (yieldInside == null) {
             yieldInside = superClass != null && superClass.containsYield();
-            if (!yieldInside && body != null) {
-                for (ClassElement classElement : body) {
-                    if (classElement != null && classElement.containsYield()) {
-                        yieldInside = true;
-                        break;
-                    }
-                }
+            if (!yieldInside && anyContainsYield(body)) {
+                yieldInside = true;
             }
         }
         return yieldInside;

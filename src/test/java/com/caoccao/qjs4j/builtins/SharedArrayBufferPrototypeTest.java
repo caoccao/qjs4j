@@ -33,12 +33,12 @@ public class SharedArrayBufferPrototypeTest extends BaseJavetTest {
 
         // Normal case: get byte length
         JSValue result = SharedArrayBufferPrototype.getByteLength(context, sab, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(64.0));
+        assertNumberValue(result, 64.0);
 
         // Normal case: empty buffer
         JSSharedArrayBuffer emptySab = new JSSharedArrayBuffer(context, 0);
         result = SharedArrayBufferPrototype.getByteLength(context, emptySab, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(0.0));
+        assertNumberValue(result, 0.0);
 
         // Edge case: called on non-SharedArrayBuffer
         assertTypeError(SharedArrayBufferPrototype.getByteLength(context, new JSString("not sab"), JSValue.NO_ARGS));
@@ -63,11 +63,11 @@ public class SharedArrayBufferPrototypeTest extends BaseJavetTest {
     public void testGetMaxByteLength() {
         JSSharedArrayBuffer fixed = new JSSharedArrayBuffer(context, 32);
         JSValue result = SharedArrayBufferPrototype.getMaxByteLength(context, fixed, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(32.0));
+        assertNumberValue(result, 32.0);
 
         JSSharedArrayBuffer growable = new JSSharedArrayBuffer(context, 16, 64);
         result = SharedArrayBufferPrototype.getMaxByteLength(context, growable, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(64.0));
+        assertNumberValue(result, 64.0);
 
         assertTypeError(SharedArrayBufferPrototype.getMaxByteLength(context, new JSString("not sab"), JSValue.NO_ARGS));
         assertPendingException(context);

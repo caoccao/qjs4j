@@ -33,13 +33,8 @@ public final class ObjectExpression extends Expression {
     public boolean containsAwait() {
         if (awaitInside == null) {
             awaitInside = false;
-            if (properties != null) {
-                for (ObjectExpressionProperty property : properties) {
-                    if (property != null && property.containsAwait()) {
-                        awaitInside = true;
-                        break;
-                    }
-                }
+            if (anyContainsAwait(properties)) {
+                awaitInside = true;
             }
         }
         return awaitInside;
@@ -49,13 +44,8 @@ public final class ObjectExpression extends Expression {
     public boolean containsYield() {
         if (yieldInside == null) {
             yieldInside = false;
-            if (properties != null) {
-                for (ObjectExpressionProperty property : properties) {
-                    if (property != null && property.containsYield()) {
-                        yieldInside = true;
-                        break;
-                    }
-                }
+            if (anyContainsYield(properties)) {
+                yieldInside = true;
             }
         }
         return yieldInside;

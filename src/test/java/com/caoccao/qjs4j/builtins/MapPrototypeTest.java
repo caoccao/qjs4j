@@ -442,16 +442,16 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertThat((Boolean) iterResult1.get("done").toJavaObject()).isFalse();
         JSArray entry1 = iterResult1.get("value").asArray().orElseThrow();
         assertThat(entry1.getLength()).isEqualTo(2);
-        assertThat(entry1.get(0).asString().map(JSString::value).orElseThrow()).isEqualTo("key1");
-        assertThat(entry1.get(1).asString().map(JSString::value).orElseThrow()).isEqualTo("value1");
+        assertStringValue(entry1.get(0), "key1");
+        assertStringValue(entry1.get(1), "value1");
 
         // Check second entry
         JSObject iterResult2 = iterator.next();
         assertThat((Boolean) iterResult2.get("done").toJavaObject()).isFalse();
         JSArray entry2 = iterResult2.get("value").asArray().orElseThrow();
         assertThat(entry2.getLength()).isEqualTo(2);
-        assertThat(entry2.get(0).asString().map(JSString::value).orElseThrow()).isEqualTo("key2");
-        assertThat(entry2.get(1).asString().map(JSString::value).orElseThrow()).isEqualTo("value2");
+        assertStringValue(entry2.get(0), "key2");
+        assertStringValue(entry2.get(1), "value2");
 
         // Iterator should be exhausted
         JSObject iterResult3 = iterator.next();
@@ -823,7 +823,7 @@ public class MapPrototypeTest extends BaseJavetTest {
 
         // Normal case: existing key
         JSValue result = MapPrototype.get(context, map, new JSValue[]{new JSString("key1")});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("value1");
+        assertStringValue(result, "value1");
 
         // Normal case: non-existing key
         result = MapPrototype.get(context, map, new JSValue[]{new JSString("key2")});
@@ -888,13 +888,13 @@ public class MapPrototypeTest extends BaseJavetTest {
 
         // Normal case: empty map
         JSValue result = MapPrototype.getSize(context, map, JSValue.NO_ARGS);
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(0.0);
+        assertNumberValue(result, 0.0);
 
         // Normal case: map with entries
         map.mapSet(new JSString("key1"), new JSString("value1"));
         map.mapSet(new JSString("key2"), new JSString("value2"));
         result = MapPrototype.getSize(context, map, JSValue.NO_ARGS);
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
+        assertNumberValue(result, 2.0);
 
         // Edge case: called on non-Map
         assertTypeError(MapPrototype.getSize(context, new JSString("not map"), JSValue.NO_ARGS));

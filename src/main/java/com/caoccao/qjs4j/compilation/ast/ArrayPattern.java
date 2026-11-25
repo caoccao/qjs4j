@@ -34,13 +34,8 @@ public final class ArrayPattern extends Pattern {
     public boolean containsAwait() {
         if (awaitInside == null) {
             awaitInside = false;
-            if (elements != null) {
-                for (Pattern element : elements) {
-                    if (element != null && element.containsAwait()) {
-                        awaitInside = true;
-                        break;
-                    }
-                }
+            if (anyContainsAwait(elements)) {
+                awaitInside = true;
             }
         }
         return awaitInside;
@@ -50,13 +45,8 @@ public final class ArrayPattern extends Pattern {
     public boolean containsYield() {
         if (yieldInside == null) {
             yieldInside = false;
-            if (elements != null) {
-                for (Pattern element : elements) {
-                    if (element != null && element.containsYield()) {
-                        yieldInside = true;
-                        break;
-                    }
-                }
+            if (anyContainsYield(elements)) {
+                yieldInside = true;
             }
         }
         return yieldInside;

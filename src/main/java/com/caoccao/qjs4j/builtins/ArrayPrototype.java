@@ -42,18 +42,9 @@ public final class ArrayPrototype {
         }
 
         // Step 2: Let len be ? LengthOfArrayLike(O).
-        long length;
-        if (obj instanceof JSArray arr) {
-            length = arr.getLength();
-        } else {
-            JSValue lenVal = obj.get(PropertyKey.LENGTH);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            length = JSTypeConversions.toLength(context, lenVal);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
+        long length = lengthOfArrayLike(context, obj);
+        if (length < 0) {
+            return context.getPendingException();
         }
 
         // Step 3: Let relativeIndex be ? ToIntegerOrInfinity(index).
@@ -130,18 +121,9 @@ public final class ArrayPrototype {
             if (spreadable) {
                 // Step 4b: Spreadable case - iterate through elements
                 JSObject elementObj = (JSObject) element;
-                long elementLength;
-                if (elementObj instanceof JSArray eArr) {
-                    elementLength = eArr.getLength();
-                } else {
-                    JSValue lenVal = elementObj.get(PropertyKey.LENGTH);
-                    if (context.hasPendingException()) {
-                        return context.getPendingException();
-                    }
-                    elementLength = JSTypeConversions.toLength(context, lenVal);
-                    if (context.hasPendingException()) {
-                        return context.getPendingException();
-                    }
+                long elementLength = lengthOfArrayLike(context, elementObj);
+                if (elementLength < 0) {
+                    return context.getPendingException();
                 }
 
                 if (resultIndex + elementLength > NumberPrototype.MAX_SAFE_INTEGER) { // MAX_SAFE_INTEGER
@@ -197,6 +179,18 @@ public final class ArrayPrototype {
         return resultObj;
     }
 
+    private static boolean copyOrDeleteElement(JSContext context, JSObject object, PropertyKey from, PropertyKey to) {
+        boolean present = object.has(from);
+        if (context.hasPendingException()) {
+            return false;
+        }
+        if (!present) {
+            return deleteOrThrow(context, object, to);
+        }
+        JSValue value = object.get(from);
+        return !context.hasPendingException() && setOrThrow(context, object, to, value);
+    }
+
     /**
      * Array.prototype.copyWithin(target, start[, end]) ES2015 23.1.3.3 Copies a sequence of array elements within the
      * array.
@@ -209,56 +203,22 @@ public final class ArrayPrototype {
         }
 
         // Step 2: Let len be ? LengthOfArrayLike(O).
-        long length;
-        if (obj instanceof JSArray arr) {
-            length = arr.getLength();
-        } else {
-            JSValue lenVal = obj.get(PropertyKey.LENGTH);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            length = JSTypeConversions.toLength(context, lenVal);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
+        long length = lengthOfArrayLike(context, obj);
+        if (length < 0) {
+            return context.getPendingException();
         }
 
-        // Get target position (JS_ToInt64Clamp with min=0, max=len, neg_offset=len)
-        long target = (long) JSTypeConversions.toInteger(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        long target = relativeIndex(context, args, 0, length, 0);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        if (target < 0) {
-            target = Math.max(length + target, 0);
-        } else {
-            target = Math.min(target, length);
-        }
-
-        // Get start position
-        long start = (long) JSTypeConversions.toInteger(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
+        long start = relativeIndex(context, args, 1, length, 0);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        if (start < 0) {
-            start = Math.max(length + start, 0);
-        } else {
-            start = Math.min(start, length);
-        }
-
-        // Get end position
-        long end;
-        if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
-            end = (long) JSTypeConversions.toInteger(context, args[2]);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (end < 0) {
-                end = Math.max(length + end, 0);
-            } else {
-                end = Math.min(end, length);
-            }
-        } else {
-            end = length;
+        long end = relativeIndex(context, args, 2, length, length);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
 
         // Calculate count
@@ -276,22 +236,8 @@ public final class ArrayPrototype {
             final PropertyKey fromKey = PropertyKey.fromString(Long.toString(from));
             final PropertyKey toKey = PropertyKey.fromString(Long.toString(to));
 
-            boolean fromPresent = obj.has(fromKey);
-            if (context.hasPendingException()) {
+            if (!copyOrDeleteElement(context, obj, fromKey, toKey)) {
                 return context.getPendingException();
-            }
-            if (fromPresent) {
-                JSValue value = obj.get(fromKey);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                if (!setOrThrow(context, obj, toKey, value)) {
-                    return context.getPendingException();
-                }
-            } else {
-                if (!deleteOrThrow(context, obj, toKey)) {
-                    return context.getPendingException();
-                }
             }
         }
 
@@ -369,32 +315,13 @@ public final class ArrayPrototype {
 
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
-        // Step 4: Let relativeStart be ? ToIntegerOrInfinity(start).
-        long start = 0;
-        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-            start = (long) JSTypeConversions.toInteger(context, args[1]);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
+        long start = relativeIndex(context, args, 1, length, 0);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
-        if (start < 0) {
-            start = Math.max(length + start, 0);
-        } else {
-            start = Math.min(start, length);
-        }
-
-        // Step 6: Let relativeEnd be ? ToIntegerOrInfinity(end).
-        long end = length;
-        if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
-            end = (long) JSTypeConversions.toInteger(context, args[2]);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-        }
-        if (end < 0) {
-            end = Math.max(length + end, 0);
-        } else {
-            end = Math.min(end, length);
+        long end = relativeIndex(context, args, 2, length, length);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
 
         // Step 8: Repeat, while k < final
@@ -1324,6 +1251,14 @@ public final class ArrayPrototype {
         return reduceElements(context, thisArg, args, true);
     }
 
+    static long relativeIndex(JSContext context, JSValue[] args, int index, long length, long defaultValue) {
+        if (args.length <= index || args[index] instanceof JSUndefined) {
+            return defaultValue;
+        }
+        long value = (long) JSTypeConversions.toInteger(context, args[index]);
+        return value < 0 ? Math.max(length + value, 0) : Math.min(value, length);
+    }
+
     /**
      * Array.prototype.reverse() Reverses the elements of an array in place.
      */
@@ -1456,22 +1391,8 @@ public final class ArrayPrototype {
             context.getVirtualMachine().checkExecutionInterruptForNative();
             PropertyKey from = PropertyKey.fromString(Long.toString(k));
             PropertyKey to = PropertyKey.fromString(Long.toString(k - 1));
-            boolean fromPresent = obj.has(from);
-            if (context.hasPendingException()) {
+            if (!copyOrDeleteElement(context, obj, from, to)) {
                 return context.getPendingException();
-            }
-            if (fromPresent) {
-                JSValue val = obj.get(from);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                if (!setOrThrow(context, obj, to, val)) {
-                    return context.getPendingException();
-                }
-            } else {
-                if (!deleteOrThrow(context, obj, to)) {
-                    return context.getPendingException();
-                }
             }
         }
         if (!deleteOrThrow(context, obj, PropertyKey.fromString(Long.toString(length - 1)))) {
@@ -1500,31 +1421,13 @@ public final class ArrayPrototype {
             return context.getPendingException();
         }
 
-        long begin = 0;
-        long end = length;
-
-        if (args.length > 0) {
-            double d = JSTypeConversions.toInteger(context, args[0]);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (d < 0) {
-                begin = Math.max(length + (long) d, 0);
-            } else {
-                begin = (long) Math.min(d, length);
-            }
+        long begin = relativeIndex(context, args, 0, length, 0);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
-
-        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-            double d = JSTypeConversions.toInteger(context, args[1]);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (d < 0) {
-                end = Math.max(length + (long) d, 0);
-            } else {
-                end = (long) Math.min(d, length);
-            }
+        long end = relativeIndex(context, args, 1, length, length);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
 
         long count = Math.max(end - begin, 0);
@@ -1685,36 +1588,13 @@ public final class ArrayPrototype {
             return context.getPendingException();
         }
 
-        long start;
-        if (args.length > 0) {
-            double d = JSTypeConversions.toInteger(context, args[0]);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (d < 0) {
-                start = Math.max(length + (long) d, 0);
-            } else {
-                start = (long) Math.min(d, length);
-            }
-        } else {
-            start = 0;
+        long start = relativeIndex(context, args, 0, length, 0);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
-
-        // ES2024 23.1.3.29 steps 7-10: determine actualDeleteCount based on argument count
-        long deleteCount;
-        if (args.length == 0) {
-            // Step 8: no arguments → actualDeleteCount = 0
-            deleteCount = 0;
-        } else if (args.length == 1) {
-            // Step 9: one argument → actualDeleteCount = len - actualStart
-            deleteCount = length - start;
-        } else {
-            // Step 10: two+ arguments → clamp deleteCount between 0 and len - actualStart
-            double d = JSTypeConversions.toInteger(context, args[1]);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            deleteCount = Math.max(0, Math.min((long) d, length - start));
+        long deleteCount = spliceDeleteCount(context, args, length - start);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
 
         // Step 12: Let A be ? ArraySpeciesCreate(O, actualDeleteCount).
@@ -1766,22 +1646,8 @@ public final class ArrayPrototype {
                 context.getVirtualMachine().checkExecutionInterruptForNative();
                 PropertyKey from = PropertyKey.fromString(Long.toString(k + deleteCount));
                 PropertyKey to = PropertyKey.fromString(Long.toString(k + insertCount));
-                boolean fromPresent = obj.has(from);
-                if (context.hasPendingException()) {
+                if (!copyOrDeleteElement(context, obj, from, to)) {
                     return context.getPendingException();
-                }
-                if (fromPresent) {
-                    JSValue val = obj.get(from);
-                    if (context.hasPendingException()) {
-                        return context.getPendingException();
-                    }
-                    if (!setOrThrow(context, obj, to, val)) {
-                        return context.getPendingException();
-                    }
-                } else {
-                    if (!deleteOrThrow(context, obj, to)) {
-                        return context.getPendingException();
-                    }
                 }
             }
             // Delete trailing elements
@@ -1797,22 +1663,8 @@ public final class ArrayPrototype {
                 context.getVirtualMachine().checkExecutionInterruptForNative();
                 PropertyKey from = PropertyKey.fromString(Long.toString(k + deleteCount));
                 PropertyKey to = PropertyKey.fromString(Long.toString(k + insertCount));
-                boolean fromPresent = obj.has(from);
-                if (context.hasPendingException()) {
+                if (!copyOrDeleteElement(context, obj, from, to)) {
                     return context.getPendingException();
-                }
-                if (fromPresent) {
-                    JSValue val = obj.get(from);
-                    if (context.hasPendingException()) {
-                        return context.getPendingException();
-                    }
-                    if (!setOrThrow(context, obj, to, val)) {
-                        return context.getPendingException();
-                    }
-                } else {
-                    if (!deleteOrThrow(context, obj, to)) {
-                        return context.getPendingException();
-                    }
                 }
             }
         }
@@ -1830,6 +1682,14 @@ public final class ArrayPrototype {
             return context.getPendingException();
         }
         return deletedObj;
+    }
+
+    private static long spliceDeleteCount(JSContext context, JSValue[] args, long remaining) {
+        if (args.length < 2) {
+            return args.length == 0 ? 0 : remaining;
+        }
+        long count = (long) JSTypeConversions.toInteger(context, args[1]);
+        return Math.max(0, Math.min(count, remaining));
     }
 
     private static JSValue testPredicate(JSContext context, JSValue thisArg, JSValue[] args, boolean every) {
@@ -2078,32 +1938,13 @@ public final class ArrayPrototype {
             return context.getPendingException();
         }
 
-        long start;
-        if (args.length > 0) {
-            double d = JSTypeConversions.toInteger(context, args[0]);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (d < 0) {
-                start = Math.max(length + (long) d, 0);
-            } else {
-                start = (long) Math.min(d, length);
-            }
-        } else {
-            start = 0;
+        long start = relativeIndex(context, args, 0, length, 0);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
-
-        // Calculate delete count: 0 args → del=0, 1 arg → del=len-start, 2+ args → clamp(arg)
-        long deleteCount = 0;
-        if (args.length > 0) {
-            deleteCount = length - start;
-        }
-        if (args.length > 1) {
-            double d = JSTypeConversions.toInteger(context, args[1]);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            deleteCount = Math.max(0, Math.min((long) d, length - start));
+        long deleteCount = spliceDeleteCount(context, args, length - start);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
 
         // Step 11: newLen = len + insertCount - actualDeleteCount
@@ -2230,22 +2071,8 @@ public final class ArrayPrototype {
                 context.getVirtualMachine().checkExecutionInterruptForNative();
                 PropertyKey from = PropertyKey.fromString(Long.toString(k));
                 PropertyKey to = PropertyKey.fromString(Long.toString(k + argCount));
-                boolean fromPresent = obj.has(from);
-                if (context.hasPendingException()) {
+                if (!copyOrDeleteElement(context, obj, from, to)) {
                     return context.getPendingException();
-                }
-                if (fromPresent) {
-                    JSValue val = obj.get(from);
-                    if (context.hasPendingException()) {
-                        return context.getPendingException();
-                    }
-                    if (!setOrThrow(context, obj, to, val)) {
-                        return context.getPendingException();
-                    }
-                } else {
-                    if (!deleteOrThrow(context, obj, to)) {
-                        return context.getPendingException();
-                    }
                 }
             }
         }

@@ -14,8 +14,7 @@ public class WithIdentifierResolutionTest extends BaseJavetTest {
         // Test262 requires HasProperty in both HasBinding and GetBindingValue.
         // The bundled V8 omits the second check, so it is not the oracle for these cases.
         for (String normalizedCode : getNormalizedCodeStrings(code)) {
-            assertThat(resetContext().eval(normalizedCode)).isInstanceOfSatisfying(JSString.class,
-                    value -> assertThat(value.value()).isEqualTo(expected));
+            assertStringValue(resetContext().eval(normalizedCode), expected);
         }
     }
 

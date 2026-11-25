@@ -33,8 +33,7 @@ public class PromiseConstructorTest extends BaseJavetTest {
     public void testArrayHasSymbolIterator() {
         // First, verify that arrays have Symbol.iterator
         JSValue result = context.eval("const arr = [1,2,3]; typeof arr[Symbol.iterator]");
-        assertThat(result).isInstanceOf(JSString.class);
-        assertThat(((JSString) result).value()).isEqualTo("function");
+        assertStringValue(result, "function");
     }
 
     @Test

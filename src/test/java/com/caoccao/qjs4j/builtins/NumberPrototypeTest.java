@@ -247,31 +247,31 @@ public class NumberPrototypeTest extends BaseJavetTest {
     public void testParseFloat() {
         // Normal case: valid float string
         JSValue result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("42.5")});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.5);
+        assertNumberValue(result, 42.5);
 
         // Normal case: integer string
         result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("42")});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.0);
+        assertNumberValue(result, 42.0);
 
         // Normal case: negative number
         result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("-123.45")});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(-123.45);
+        assertNumberValue(result, -123.45);
 
         // Normal case: scientific notation
         result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("1.23e4")});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(12300.0);
+        assertNumberValue(result, 12300.0);
 
         // Normal case: leading/trailing whitespace
         result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("  42.5  ")});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.5);
+        assertNumberValue(result, 42.5);
 
         // Normal case: string starting with number
         result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("42abc")});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.0);
+        assertNumberValue(result, 42.0);
 
         // Special case: Infinity
         result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("Infinity")});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(Double.POSITIVE_INFINITY);
+        assertNumberValue(result, Double.POSITIVE_INFINITY);
 
         // Special case: NaN string
         result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("NaN")});
@@ -291,44 +291,44 @@ public class NumberPrototypeTest extends BaseJavetTest {
 
         // Edge case: non-string argument (should coerce)
         result = NumberPrototype.parseFloat(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42.5)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.5);
+        assertNumberValue(result, 42.5);
     }
 
     @Test
     public void testParseInt() {
         // Normal case: valid integer string
         JSValue result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("42")});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.0);
+        assertNumberValue(result, 42.0);
 
         // Normal case: float string (truncates)
         result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("42.9")});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.0);
+        assertNumberValue(result, 42.0);
 
         // Normal case: negative number
         result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("-123")});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(-123.0);
+        assertNumberValue(result, -123.0);
 
         // Normal case: hexadecimal
         result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE,
                 new JSValue[]{new JSString("0xFF"), new JSNumber(16)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(255.0);
+        assertNumberValue(result, 255.0);
 
         // Normal case: auto-detect hex
         result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("0xFF")});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(255.0);
+        assertNumberValue(result, 255.0);
 
         // Normal case: binary
         result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE,
                 new JSValue[]{new JSString("1010"), new JSNumber(2)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(10.0);
+        assertNumberValue(result, 10.0);
 
         // Normal case: leading/trailing whitespace
         result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("  42  ")});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.0);
+        assertNumberValue(result, 42.0);
 
         // Normal case: string starting with number
         result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("42abc")});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.0);
+        assertNumberValue(result, 42.0);
 
         // Edge case: invalid string
         result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("abc")});
@@ -354,7 +354,7 @@ public class NumberPrototypeTest extends BaseJavetTest {
 
         // Edge case: non-string argument (should coerce)
         result = NumberPrototype.parseInt(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(42.9)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.0);
+        assertNumberValue(result, 42.0);
     }
 
     @Test
@@ -370,35 +370,35 @@ public class NumberPrototypeTest extends BaseJavetTest {
 
         // Normal case: default precision (no argument - uses minimal precision)
         JSValue result = NumberPrototype.toExponential(context, num, JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("1.23456e+2");
+        assertStringValue(result, "1.23456e+2");
         result = NumberPrototype.toExponential(context, new JSNumber(123123123123123.456D), JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("1.2312312312312345e+14");
+        assertStringValue(result, "1.2312312312312345e+14");
         result = NumberPrototype.toExponential(context, new JSNumber(123123123123123123.456D), JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("1.2312312312312312e+17");
+        assertStringValue(result, "1.2312312312312312e+17");
 
         // Normal case: specific precision
         result = NumberPrototype.toExponential(context, num, new JSValue[]{new JSNumber(2)});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("1.23e+2");
+        assertStringValue(result, "1.23e+2");
 
         // Normal case: zero
         result = NumberPrototype.toExponential(context, new JSNumber(0), new JSValue[]{new JSNumber(1)});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("0.0e+0");
+        assertStringValue(result, "0.0e+0");
 
         // Normal case: negative number
         result = NumberPrototype.toExponential(context, new JSNumber(-42.7), new JSValue[]{new JSNumber(3)});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("-4.270e+1");
+        assertStringValue(result, "-4.270e+1");
 
         // Special case: NaN
         result = NumberPrototype.toExponential(context, new JSNumber(Double.NaN), JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("NaN");
+        assertStringValue(result, "NaN");
 
         // Special case: Infinity
         result = NumberPrototype.toExponential(context, new JSNumber(Double.POSITIVE_INFINITY), JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("Infinity");
+        assertStringValue(result, "Infinity");
 
         // Special case: negative Infinity
         result = NumberPrototype.toExponential(context, new JSNumber(Double.NEGATIVE_INFINITY), JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("-Infinity");
+        assertStringValue(result, "-Infinity");
 
         // Edge case: precision too low - skip error check due to JSObject implementation
         assertRangeError(NumberPrototype.toExponential(context, num, new JSValue[]{new JSNumber(-1)}));
@@ -445,34 +445,34 @@ public class NumberPrototypeTest extends BaseJavetTest {
 
         // Normal case: default precision (0)
         JSValue result = NumberPrototype.toFixed(context, num, JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("123");
+        assertStringValue(result, "123");
         result = NumberPrototype.toFixed(context, num, new JSValue[]{new JSNumber(2)});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("123.46");
+        assertStringValue(result, "123.46");
         result = NumberPrototype.toFixed(context, num, new JSValue[]{new JSNumber(3)});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("123.456");
+        assertStringValue(result, "123.456");
         result = NumberPrototype.toFixed(context, num, new JSValue[]{new JSNumber(10)});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("123.4560000000");
+        assertStringValue(result, "123.4560000000");
 
         // Normal case: rounding - 1.005 is actually ~1.0049999... in binary
         // so it rounds down to 1.00, not up to 1.01 (this matches JavaScript behavior)
         result = NumberPrototype.toFixed(context, new JSNumber(1.005), new JSValue[]{new JSNumber(2)});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("1.00");
+        assertStringValue(result, "1.00");
 
         // Normal case: zero
         result = NumberPrototype.toFixed(context, new JSNumber(0), new JSValue[]{new JSNumber(2)});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("0.00");
+        assertStringValue(result, "0.00");
 
         // Normal case: negative number
         result = NumberPrototype.toFixed(context, new JSNumber(-42.7), new JSValue[]{new JSNumber(1)});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("-42.7");
+        assertStringValue(result, "-42.7");
 
         // Special case: NaN
         result = NumberPrototype.toFixed(context, new JSNumber(Double.NaN), JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("NaN");
+        assertStringValue(result, "NaN");
 
         // Special case: Infinity
         result = NumberPrototype.toFixed(context, new JSNumber(Double.POSITIVE_INFINITY), JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("Infinity");
+        assertStringValue(result, "Infinity");
 
         // Special case: large number
         result = NumberPrototype.toFixed(context, new JSNumber(1e22), JSValue.NO_ARGS);
@@ -521,15 +521,15 @@ public class NumberPrototypeTest extends BaseJavetTest {
         // Normal case: basic functionality
         JSValue result = NumberPrototype.toLocaleString(context, num, JSValue.NO_ARGS);
         // Without arguments the default Intl.NumberFormat applies, grouping included, as in V8
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("1,234.56");
+        assertStringValue(result, "1,234.56");
 
         // Special case: NaN
         result = NumberPrototype.toLocaleString(context, new JSNumber(Double.NaN), JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("NaN");
+        assertStringValue(result, "NaN");
 
         // Special case: Infinity
         result = NumberPrototype.toLocaleString(context, new JSNumber(Double.POSITIVE_INFINITY), JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("∞");
+        assertStringValue(result, "∞");
     }
 
     @Test
@@ -538,31 +538,31 @@ public class NumberPrototypeTest extends BaseJavetTest {
 
         // Normal case: default precision
         JSValue result = NumberPrototype.toPrecision(context, num, JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("123.456");
+        assertStringValue(result, "123.456");
 
         // Normal case: specific precision
         result = NumberPrototype.toPrecision(context, num, new JSValue[]{new JSNumber(4)});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("123.5");
+        assertStringValue(result, "123.5");
 
         // Normal case: exponential notation for small numbers
         result = NumberPrototype.toPrecision(context, new JSNumber(0.000123), new JSValue[]{new JSNumber(3)});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("0.000123");
+        assertStringValue(result, "0.000123");
 
         // Normal case: exponential notation for large numbers
         result = NumberPrototype.toPrecision(context, new JSNumber(123456789), new JSValue[]{new JSNumber(4)});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("1.235e+8");
+        assertStringValue(result, "1.235e+8");
 
         // Normal case: zero
         result = NumberPrototype.toPrecision(context, new JSNumber(0), new JSValue[]{new JSNumber(3)});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("0.00");
+        assertStringValue(result, "0.00");
 
         // Special case: NaN
         result = NumberPrototype.toPrecision(context, new JSNumber(Double.NaN), JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("NaN");
+        assertStringValue(result, "NaN");
 
         // Special case: Infinity
         result = NumberPrototype.toPrecision(context, new JSNumber(Double.POSITIVE_INFINITY), JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("Infinity");
+        assertStringValue(result, "Infinity");
 
         // Edge case: precision too low - skip error check due to JSObject implementation
         assertRangeError(NumberPrototype.toPrecision(context, num, new JSValue[]{new JSNumber(0)}));
@@ -597,35 +597,35 @@ public class NumberPrototypeTest extends BaseJavetTest {
 
         // Normal case: default radix (10)
         JSValue result = NumberPrototype.toString(context, num, JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("42");
+        assertStringValue(result, "42");
 
         // Normal case: decimal number
         result = NumberPrototype.toString(context, new JSNumber(123.456), JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("123.456");
+        assertStringValue(result, "123.456");
 
         // Normal case: different radix
         result = NumberPrototype.toString(context, num, new JSValue[]{new JSNumber(16)});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("2a");
+        assertStringValue(result, "2a");
 
         // Normal case: binary
         result = NumberPrototype.toString(context, num, new JSValue[]{new JSNumber(2)});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("101010");
+        assertStringValue(result, "101010");
 
         // Normal case: negative number
         result = NumberPrototype.toString(context, new JSNumber(-42), new JSValue[]{new JSNumber(16)});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("-2a");
+        assertStringValue(result, "-2a");
 
         // Special case: NaN
         result = NumberPrototype.toString(context, new JSNumber(Double.NaN), JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("NaN");
+        assertStringValue(result, "NaN");
 
         // Special case: Infinity
         result = NumberPrototype.toString(context, new JSNumber(Double.POSITIVE_INFINITY), JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("Infinity");
+        assertStringValue(result, "Infinity");
 
         // Special case: zero
         result = NumberPrototype.toString(context, new JSNumber(0), JSValue.NO_ARGS);
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("0");
+        assertStringValue(result, "0");
 
         // Edge case: radix too low - skip error check due to JSObject implementation
         assertRangeError(NumberPrototype.toString(context, num, new JSValue[]{new JSNumber(1)}));
@@ -637,7 +637,7 @@ public class NumberPrototypeTest extends BaseJavetTest {
 
         // Edge case: non-integer with non-10 radix (now supported for floating-point conversion)
         result = NumberPrototype.toString(context, new JSNumber(42.5), new JSValue[]{new JSNumber(16)});
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("2a.8");
+        assertStringValue(result, "2a.8");
     }
 
     @Test
@@ -696,7 +696,7 @@ public class NumberPrototypeTest extends BaseJavetTest {
         // Normal case: number object
         JSValue result = NumberPrototype.valueOf(context, num, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(num);
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.5);
+        assertNumberValue(result, 42.5);
 
         // Edge case: called on non-number
         assertTypeError(NumberPrototype.valueOf(context, new JSString("42"), JSValue.NO_ARGS));

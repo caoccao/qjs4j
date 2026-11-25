@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.compilation.ast;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,6 +43,18 @@ public class ExpressionContainsAwaitYieldTest {
 
         assertThat(yieldArrayExpression.containsYield()).isTrue();
         assertThat(identifierForYield.yieldInside).isNull();
+    }
+
+    @Test
+    public void testAwaitAndYieldAreCachedIndependently() {
+        List<Expression> elements = new ArrayList<>();
+        ArrayExpression array = new ArrayExpression(elements, LOCATION);
+        assertThat(array.containsAwait()).isFalse();
+
+        elements.add(new AwaitExpression(new Literal(1, LOCATION), LOCATION));
+        elements.add(new YieldExpression(new Literal(2, LOCATION), false, LOCATION));
+        assertThat(array.containsYield()).isTrue();
+        assertThat(array.containsAwait()).isFalse();
     }
 
     @Test

@@ -36,13 +36,8 @@ public final class SwitchStatement extends Statement {
     public boolean containsAwait() {
         if (awaitInside == null) {
             awaitInside = discriminant != null && discriminant.containsAwait();
-            if (!awaitInside && cases != null) {
-                for (SwitchCase switchCase : cases) {
-                    if (switchCase != null && switchCase.containsAwait()) {
-                        awaitInside = true;
-                        break;
-                    }
-                }
+            if (!awaitInside && anyContainsAwait(cases)) {
+                awaitInside = true;
             }
         }
         return awaitInside;
@@ -52,13 +47,8 @@ public final class SwitchStatement extends Statement {
     public boolean containsYield() {
         if (yieldInside == null) {
             yieldInside = discriminant != null && discriminant.containsYield();
-            if (!yieldInside && cases != null) {
-                for (SwitchCase switchCase : cases) {
-                    if (switchCase != null && switchCase.containsYield()) {
-                        yieldInside = true;
-                        break;
-                    }
-                }
+            if (!yieldInside && anyContainsYield(cases)) {
+                yieldInside = true;
             }
         }
         return yieldInside;
@@ -106,13 +96,8 @@ public final class SwitchStatement extends Statement {
         public boolean containsAwait() {
             if (awaitInside == null) {
                 awaitInside = test != null && test.containsAwait();
-                if (!awaitInside && consequent != null) {
-                    for (Statement statement : consequent) {
-                        if (statement != null && statement.containsAwait()) {
-                            awaitInside = true;
-                            break;
-                        }
-                    }
+                if (!awaitInside && anyContainsAwait(consequent)) {
+                    awaitInside = true;
                 }
             }
             return awaitInside;
@@ -122,13 +107,8 @@ public final class SwitchStatement extends Statement {
         public boolean containsYield() {
             if (yieldInside == null) {
                 yieldInside = test != null && test.containsYield();
-                if (!yieldInside && consequent != null) {
-                    for (Statement statement : consequent) {
-                        if (statement != null && statement.containsYield()) {
-                            yieldInside = true;
-                            break;
-                        }
-                    }
+                if (!yieldInside && anyContainsYield(consequent)) {
+                    yieldInside = true;
                 }
             }
             return yieldInside;

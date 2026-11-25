@@ -42,32 +42,21 @@ public final class MathObject {
      * Math.abs(x) ES2020 20.2.2.1
      */
     public static JSValue abs(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return JSNumber.of(Math.abs(x));
+        return JSNumber.of(Math.abs(numberArgument(context, args)));
     }
 
     /**
      * Math.acos(x) ES2020 20.2.2.2
      */
     public static JSValue acos(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return JSNumber.of(Math.acos(x));
+        return JSNumber.of(Math.acos(numberArgument(context, args)));
     }
 
     /**
      * Math.acosh(x) ES2020 20.2.2.3
      */
     public static JSValue acosh(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
+        double x = numberArgument(context, args);
         if (Double.isNaN(x)) {
             return JSNumber.of(Double.NaN);
         }
@@ -97,21 +86,14 @@ public final class MathObject {
      * Math.asin(x) ES2020 20.2.2.4
      */
     public static JSValue asin(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return JSNumber.of(Math.asin(x));
+        return JSNumber.of(Math.asin(numberArgument(context, args)));
     }
 
     /**
      * Math.asinh(x) ES2020 20.2.2.5
      */
     public static JSValue asinh(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
+        double x = numberArgument(context, args);
         if (x == 0.0 || Double.isNaN(x) || Double.isInfinite(x)) {
             return JSNumber.of(x);
         }
@@ -136,11 +118,7 @@ public final class MathObject {
      * Math.atan(x) ES2020 20.2.2.6
      */
     public static JSValue atan(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return JSNumber.of(Math.atan(x));
+        return JSNumber.of(Math.atan(numberArgument(context, args)));
     }
 
     /**
@@ -156,10 +134,7 @@ public final class MathObject {
      * Math.atanh(x) ES2020 20.2.2.7
      */
     public static JSValue atanh(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
+        double x = numberArgument(context, args);
         if (Double.isNaN(x)) {
             return JSNumber.of(Double.NaN);
         }
@@ -191,22 +166,14 @@ public final class MathObject {
      * Math.cbrt(x) ES2020 20.2.2.9
      */
     public static JSValue cbrt(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return JSNumber.of(Math.cbrt(x));
+        return JSNumber.of(Math.cbrt(numberArgument(context, args)));
     }
 
     /**
      * Math.ceil(x) ES2020 20.2.2.10
      */
     public static JSValue ceil(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return JSNumber.of(Math.ceil(x));
+        return JSNumber.of(Math.ceil(numberArgument(context, args)));
     }
 
     private static void closeIterator(JSContext context, JSObject iterator) {
@@ -238,32 +205,21 @@ public final class MathObject {
      * Math.cos(x) ES2020 20.2.2.12
      */
     public static JSValue cos(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return JSNumber.of(Math.cos(x));
+        return JSNumber.of(Math.cos(numberArgument(context, args)));
     }
 
     /**
      * Math.cosh(x) ES2020 20.2.2.13
      */
     public static JSValue cosh(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return JSNumber.of(Math.cosh(x));
+        return JSNumber.of(Math.cosh(numberArgument(context, args)));
     }
 
     /**
      * Math.exp(x) ES2020 20.2.2.14
      */
     public static JSValue exp(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
+        double x = numberArgument(context, args);
         if (x == 1.0) {
             return JSNumber.of(E);
         }
@@ -277,21 +233,27 @@ public final class MathObject {
      * Math.expm1(x) ES2020 20.2.2.15 Returns e^x - 1
      */
     public static JSValue expm1(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
+        return JSNumber.of(Math.expm1(numberArgument(context, args)));
+    }
+
+    private static JSValue extremum(JSContext context, JSValue[] args, boolean maximum) {
+        double result = maximum ? Double.NEGATIVE_INFINITY : Double.POSITIVE_INFINITY;
+        // Even after a NaN, later arguments can have observable conversions.
+        for (JSValue arg : args) {
+            double value = JSTypeConversions.toNumber(context, arg).value();
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            result = maximum ? Math.max(result, value) : Math.min(result, value);
         }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return JSNumber.of(Math.expm1(x));
+        return JSNumber.of(result);
     }
 
     /**
      * Math.f16round(x) QuickJS extension.
      */
     public static JSValue f16round(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
+        double x = numberArgument(context, args);
         short half = Float16.toHalf(x);
         return JSNumber.of(Float16.toFloat(half));
     }
@@ -300,21 +262,14 @@ public final class MathObject {
      * Math.floor(x) ES2020 20.2.2.16
      */
     public static JSValue floor(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return JSNumber.of(Math.floor(x));
+        return JSNumber.of(Math.floor(numberArgument(context, args)));
     }
 
     /**
      * Math.fround(x) ES2020 20.2.2.17 Round to nearest 32-bit float
      */
     public static JSValue fround(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
+        double x = numberArgument(context, args);
         return JSNumber.of((float) x);
     }
 
@@ -350,43 +305,28 @@ public final class MathObject {
      * Math.log(x) ES2020 20.2.2.20
      */
     public static JSValue log(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return JSNumber.of(Math.log(x));
+        return JSNumber.of(Math.log(numberArgument(context, args)));
     }
 
     /**
      * Math.log10(x) ES2020 20.2.2.22
      */
     public static JSValue log10(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return JSNumber.of(Math.log10(x));
+        return JSNumber.of(Math.log10(numberArgument(context, args)));
     }
 
     /**
      * Math.log1p(x) ES2020 20.2.2.21 Returns ln(1 + x)
      */
     public static JSValue log1p(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return JSNumber.of(Math.log1p(x));
+        return JSNumber.of(Math.log1p(numberArgument(context, args)));
     }
 
     /**
      * Math.log2(x) ES2020 20.2.2.23
      */
     public static JSValue log2(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
+        double x = numberArgument(context, args);
         return JSNumber.of(Math.log(x) / Math.log(2));
     }
 
@@ -394,50 +334,18 @@ public final class MathObject {
      * Math.max(...values) ES2020 20.2.2.24
      */
     public static JSValue max(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NEGATIVE_INFINITY);
-        }
-
-        // Per ES spec, coerce all arguments to numbers first, then compute max
-        double max = Double.NEGATIVE_INFINITY;
-        boolean hasNaN = false;
-        for (JSValue arg : args) {
-            double x = JSTypeConversions.toNumber(context, arg).value();
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (Double.isNaN(x)) {
-                hasNaN = true;
-            } else if (!hasNaN) {
-                max = Math.max(max, x);
-            }
-        }
-        return hasNaN ? JSNumber.of(Double.NaN) : JSNumber.of(max);
+        return extremum(context, args, true);
     }
 
     /**
      * Math.min(...values) ES2020 20.2.2.25
      */
     public static JSValue min(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.POSITIVE_INFINITY);
-        }
+        return extremum(context, args, false);
+    }
 
-        // Per ES spec, coerce all arguments to numbers first, then compute min
-        double min = Double.POSITIVE_INFINITY;
-        boolean hasNaN = false;
-        for (JSValue arg : args) {
-            double x = JSTypeConversions.toNumber(context, arg).value();
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (Double.isNaN(x)) {
-                hasNaN = true;
-            } else if (!hasNaN) {
-                min = Math.min(min, x);
-            }
-        }
-        return hasNaN ? JSNumber.of(Double.NaN) : JSNumber.of(min);
+    private static double numberArgument(JSContext context, JSValue[] args) {
+        return args.length == 0 ? Double.NaN : JSTypeConversions.toNumber(context, args[0]).value();
     }
 
     /**
@@ -460,10 +368,7 @@ public final class MathObject {
      * Math.round(x) ES2020 20.2.2.28
      */
     public static JSValue round(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
+        double x = numberArgument(context, args);
         if (Double.isNaN(x) || x == 0.0 || Double.isInfinite(x)) {
             return JSNumber.of(x);
         }
@@ -483,44 +388,28 @@ public final class MathObject {
      * Math.sign(x) ES2020 20.2.2.29
      */
     public static JSValue sign(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return JSNumber.of(Math.signum(x));
+        return JSNumber.of(Math.signum(numberArgument(context, args)));
     }
 
     /**
      * Math.sin(x) ES2020 20.2.2.30
      */
     public static JSValue sin(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return JSNumber.of(Math.sin(x));
+        return JSNumber.of(Math.sin(numberArgument(context, args)));
     }
 
     /**
      * Math.sinh(x) ES2020 20.2.2.31
      */
     public static JSValue sinh(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return JSNumber.of(Math.sinh(x));
+        return JSNumber.of(Math.sinh(numberArgument(context, args)));
     }
 
     /**
      * Math.sqrt(x) ES2020 20.2.2.32
      */
     public static JSValue sqrt(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return JSNumber.of(Math.sqrt(x));
+        return JSNumber.of(Math.sqrt(numberArgument(context, args)));
     }
 
     /**
@@ -562,32 +451,21 @@ public final class MathObject {
      * Math.tan(x) ES2020 20.2.2.33
      */
     public static JSValue tan(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return JSNumber.of(Math.tan(x));
+        return JSNumber.of(Math.tan(numberArgument(context, args)));
     }
 
     /**
      * Math.tanh(x) ES2020 20.2.2.34
      */
     public static JSValue tanh(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
-        return JSNumber.of(Math.tanh(x));
+        return JSNumber.of(Math.tanh(numberArgument(context, args)));
     }
 
     /**
      * Math.trunc(x) ES2020 20.2.2.35
      */
     public static JSValue trunc(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSNumber.of(Double.NaN);
-        }
-        double x = JSTypeConversions.toNumber(context, args[0]).value();
+        double x = numberArgument(context, args);
         if (Double.isNaN(x) || Double.isInfinite(x) || x == 0.0) {
             return JSNumber.of(x);
         }

@@ -39,13 +39,8 @@ public final class Program extends ASTNode {
     public boolean containsAwait() {
         if (awaitInside == null) {
             awaitInside = false;
-            if (body != null) {
-                for (Statement item : body) {
-                    if (item != null && item.containsAwait()) {
-                        awaitInside = true;
-                        break;
-                    }
-                }
+            if (anyContainsAwait(body)) {
+                awaitInside = true;
             }
         }
         return awaitInside;
@@ -55,13 +50,8 @@ public final class Program extends ASTNode {
     public boolean containsYield() {
         if (yieldInside == null) {
             yieldInside = false;
-            if (body != null) {
-                for (Statement item : body) {
-                    if (item != null && item.containsYield()) {
-                        yieldInside = true;
-                        break;
-                    }
-                }
+            if (anyContainsYield(body)) {
+                yieldInside = true;
             }
         }
         return yieldInside;

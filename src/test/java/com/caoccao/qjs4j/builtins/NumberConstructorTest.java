@@ -128,31 +128,31 @@ public class NumberConstructorTest extends BaseTest {
     @Test
     public void testNumberObjectToFixed() {
         JSValue result = context.eval("(new Number(3.14159)).toFixed(2);");
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("3.14");
+        assertStringValue(result, "3.14");
     }
 
     @Test
     public void testNumberObjectToPrecision() {
         JSValue result = context.eval("(new Number(123.456)).toPrecision(4);");
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("123.5");
+        assertStringValue(result, "123.5");
     }
 
     @Test
     public void testNumberObjectToString() {
         JSValue result1 = context.eval("(new Number(42)).toString();");
-        assertThat(result1.asString().map(JSString::value).orElseThrow()).isEqualTo("42");
+        assertStringValue(result1, "42");
 
         JSValue result2 = context.eval("(new Number(3.14)).toString();");
-        assertThat(result2.asString().map(JSString::value).orElseThrow()).isEqualTo("3.14");
+        assertStringValue(result2, "3.14");
 
         JSValue result3 = context.eval("(new Number(-5)).toString();");
-        assertThat(result3.asString().map(JSString::value).orElseThrow()).isEqualTo("-5");
+        assertStringValue(result3, "-5");
     }
 
     @Test
     public void testNumberObjectTypeof() {
         JSValue result = context.eval("typeof new Number(42);");
-        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("object");
+        assertStringValue(result, "object");
     }
 
     @Test
@@ -160,7 +160,7 @@ public class NumberConstructorTest extends BaseTest {
         JSValue result = context.eval("(new Number(42)).valueOf();");
         assertThat(result).isInstanceOf(JSNumber.class);
         assertThat(result).isNotInstanceOf(JSNumberObject.class);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(42.0));
+        assertNumberValue(result, 42.0);
     }
 
     @Test
@@ -169,7 +169,7 @@ public class NumberConstructorTest extends BaseTest {
         JSValue result1 = context.eval("Number(42);");
         assertThat(result1).isInstanceOf(JSNumber.class);
         assertThat(result1).isNotInstanceOf(JSNumberObject.class);
-        assertThat(result1).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(42.0));
+        assertNumberValue(result1, 42.0);
 
         // Test Number(3.14) without new returns primitive
         JSValue result2 = context.eval("Number(3.14);");

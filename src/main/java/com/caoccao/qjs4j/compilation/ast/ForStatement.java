@@ -40,13 +40,8 @@ public final class ForStatement extends Statement {
     public boolean containsAwait() {
         if (awaitInside == null) {
             awaitInside = init != null && init.containsAwait();
-            if (!awaitInside && test != null && test.containsAwait()) {
-                awaitInside = true;
-            }
-            if (!awaitInside && update != null && update.containsAwait()) {
-                awaitInside = true;
-            }
-            if (!awaitInside && body != null && body.containsAwait()) {
+            if (!awaitInside && ((test != null && test.containsAwait()) || (update != null && update.containsAwait())
+                    || (body != null && body.containsAwait()))) {
                 awaitInside = true;
             }
         }
@@ -57,13 +52,8 @@ public final class ForStatement extends Statement {
     public boolean containsYield() {
         if (yieldInside == null) {
             yieldInside = init != null && init.containsYield();
-            if (!yieldInside && test != null && test.containsYield()) {
-                yieldInside = true;
-            }
-            if (!yieldInside && update != null && update.containsYield()) {
-                yieldInside = true;
-            }
-            if (!yieldInside && body != null && body.containsYield()) {
+            if (!yieldInside && ((test != null && test.containsYield()) || (update != null && update.containsYield())
+                    || (body != null && body.containsYield()))) {
                 yieldInside = true;
             }
         }

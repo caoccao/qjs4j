@@ -36,13 +36,8 @@ public final class StaticBlock extends ClassElement {
     public boolean containsAwait() {
         if (awaitInside == null) {
             awaitInside = false;
-            if (body != null) {
-                for (Statement statement : body) {
-                    if (statement != null && statement.containsAwait()) {
-                        awaitInside = true;
-                        break;
-                    }
-                }
+            if (anyContainsAwait(body)) {
+                awaitInside = true;
             }
         }
         return awaitInside;
@@ -52,13 +47,8 @@ public final class StaticBlock extends ClassElement {
     public boolean containsYield() {
         if (yieldInside == null) {
             yieldInside = false;
-            if (body != null) {
-                for (Statement statement : body) {
-                    if (statement != null && statement.containsYield()) {
-                        yieldInside = true;
-                        break;
-                    }
-                }
+            if (anyContainsYield(body)) {
+                yieldInside = true;
             }
         }
         return yieldInside;

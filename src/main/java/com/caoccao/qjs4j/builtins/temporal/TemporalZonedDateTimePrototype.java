@@ -31,14 +31,14 @@ public final class TemporalZonedDateTimePrototype {
     private static final long MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
     private static final BigInteger NS_PER_HOUR = TemporalConstants.BI_HOUR_NANOSECONDS;
     private static final BigInteger NS_PER_MS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
-    private static final String TYPE_NAME = "Temporal.ZonedDateTime";
+    private static final TemporalReceiver<JSTemporalZonedDateTime> RECEIVER = new TemporalReceiver<>(
+            JSTemporalZonedDateTime.class, "Temporal.ZonedDateTime");
 
     private TemporalZonedDateTimePrototype() {
     }
 
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "add");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "add");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -108,21 +108,13 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue calendar(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "calendar");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(zonedDateTime.getCalendarId().identifier());
+        return RECEIVER.read(context, thisArg, "calendar",
+                zonedDateTime -> new JSString(zonedDateTime.getCalendarId().identifier()));
     }
 
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "calendarId");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(zonedDateTime.getCalendarId().identifier());
+        return RECEIVER.read(context, thisArg, "calendarId",
+                zonedDateTime -> new JSString(zonedDateTime.getCalendarId().identifier()));
     }
 
     private static JSObject createDateTimeFormatOptionsForZonedDateTime(JSContext context, JSValue options,
@@ -185,21 +177,11 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue day(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "day");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSTemporalPlainDate plainDate = toPlainDate(context, zonedDateTime);
-        if (context.hasPendingException() || plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return TemporalPlainDatePrototype.day(context, plainDate, args);
+        return readDateField(context, thisArg, "day", TemporalPlainDatePrototype::day);
     }
 
     public static JSValue dayOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "dayOfWeek");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "dayOfWeek");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -209,51 +191,55 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue dayOfYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "dayOfYear");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSTemporalPlainDate plainDate = toPlainDate(context, zonedDateTime);
-        if (context.hasPendingException() || plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return TemporalPlainDatePrototype.dayOfYear(context, plainDate, args);
+        return readDateField(context, thisArg, "dayOfYear", TemporalPlainDatePrototype::dayOfYear);
     }
 
     public static JSValue daysInMonth(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "daysInMonth");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSTemporalPlainDate plainDate = toPlainDate(context, zonedDateTime);
-        if (context.hasPendingException() || plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return TemporalPlainDatePrototype.daysInMonth(context, plainDate, args);
+        return readDateField(context, thisArg, "daysInMonth", TemporalPlainDatePrototype::daysInMonth);
     }
 
     public static JSValue daysInWeek(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "daysInWeek");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSNumber.of(7);
+        return RECEIVER.read(context, thisArg, "daysInWeek", zonedDateTime -> JSNumber.of(7));
     }
 
     public static JSValue daysInYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "daysInYear");
+        return readDateField(context, thisArg, "daysInYear", TemporalPlainDatePrototype::daysInYear);
+    }
+
+    private static JSValue difference(JSContext context, JSValue thisArg, JSValue[] args, boolean since) {
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, since ? "since" : "until");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        JSTemporalPlainDate plainDate = toPlainDate(context, zonedDateTime);
-        if (context.hasPendingException() || plainDate == null) {
+        JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSTemporalZonedDateTime other = TemporalZonedDateTimeConstructor.toTemporalZonedDateTimeObject(context,
+                otherArg);
+        if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDatePrototype.daysInYear(context, plainDate, args);
+        if (!zonedDateTime.getCalendarId().equals(other.getCalendarId())) {
+            context.throwRangeError("Temporal error: Mismatched calendars.");
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        TemporalDifferenceSettings settings = getDifferenceSettings(context, since, optionsArg);
+        if (context.hasPendingException() || settings == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        TemporalDuration durationRecord = differenceTemporalZonedDateTime(context, zonedDateTime, other, settings);
+        if (context.hasPendingException() || durationRecord == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        TemporalDuration resultRecord = (since ? durationRecord.negated() : durationRecord)
+                .normalizeFloat64RepresentableFields();
+        if (!resultRecord.isValid() || !TemporalDuration.isDurationRecordTimeRangeValid(resultRecord)) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return JSUndefined.INSTANCE;
+        }
+        return JSTemporalDuration.create(context, resultRecord);
     }
 
     private static TemporalDuration differenceTemporalZonedDateTime(JSContext context,
@@ -325,8 +311,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue epochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "epochMilliseconds");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "epochMilliseconds");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -335,17 +320,12 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue epochNanoseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "epochNanoseconds");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSBigInt(zonedDateTime.getEpochNanoseconds());
+        return RECEIVER.read(context, thisArg, "epochNanoseconds",
+                zonedDateTime -> new JSBigInt(zonedDateTime.getEpochNanoseconds()));
     }
 
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "equals");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "equals");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -376,8 +356,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue era(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "era");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "era");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -393,8 +372,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue eraYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "eraYear");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "eraYear");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -508,8 +486,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue getTimeZoneTransition(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "getTimeZoneTransition");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "getTimeZoneTransition");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -688,8 +665,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue hour(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "hour");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "hour");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -699,8 +675,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue hoursInDay(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "hoursInDay");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "hoursInDay");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -739,16 +714,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue inLeapYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "inLeapYear");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSTemporalPlainDate plainDate = toPlainDate(context, zonedDateTime);
-        if (context.hasPendingException() || plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return TemporalPlainDatePrototype.inLeapYear(context, plainDate, args);
+        return readDateField(context, thisArg, "inLeapYear", TemporalPlainDatePrototype::inLeapYear);
     }
 
     private static boolean isOffsetTimeZoneIdentifier(String timeZoneId) {
@@ -759,8 +725,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue microsecond(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "microsecond");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "microsecond");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -770,8 +735,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue millisecond(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "millisecond");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "millisecond");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -781,8 +745,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue minute(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "minute");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "minute");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -792,47 +755,19 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue month(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "month");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSTemporalPlainDate plainDate = toPlainDate(context, zonedDateTime);
-        if (context.hasPendingException() || plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return TemporalPlainDatePrototype.month(context, plainDate, args);
+        return readDateField(context, thisArg, "month", TemporalPlainDatePrototype::month);
     }
 
     public static JSValue monthCode(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "monthCode");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSTemporalPlainDate plainDate = toPlainDate(context, zonedDateTime);
-        if (context.hasPendingException() || plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return TemporalPlainDatePrototype.monthCode(context, plainDate, args);
+        return readDateField(context, thisArg, "monthCode", TemporalPlainDatePrototype::monthCode);
     }
 
     public static JSValue monthsInYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "monthsInYear");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSTemporalPlainDate plainDate = toPlainDate(context, zonedDateTime);
-        if (context.hasPendingException() || plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return TemporalPlainDatePrototype.monthsInYear(context, plainDate, args);
+        return readDateField(context, thisArg, "monthsInYear", TemporalPlainDatePrototype::monthsInYear);
     }
 
     public static JSValue nanosecond(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "nanosecond");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "nanosecond");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -842,8 +777,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue offset(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "offset");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "offset");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -853,8 +787,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue offsetNanoseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "offsetNanoseconds");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "offsetNanoseconds");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -863,9 +796,20 @@ public final class TemporalZonedDateTimePrototype {
         return JSNumber.of((long) offsetSeconds * 1_000_000_000L);
     }
 
+    private static JSValue readDateField(JSContext context, JSValue thisArg, String name, JSNativeCallback getter) {
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, name);
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+        JSTemporalPlainDate date = toPlainDate(context, zonedDateTime);
+        if (date == null || context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return getter.call(context, date, JSValue.NO_ARGS);
+    }
+
     public static JSValue round(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "round");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "round");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -978,8 +922,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue second(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "second");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "second");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1020,44 +963,11 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue since(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "since");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSTemporalZonedDateTime other = TemporalZonedDateTimeConstructor.toTemporalZonedDateTimeObject(context,
-                otherArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!zonedDateTime.getCalendarId().equals(other.getCalendarId())) {
-            context.throwRangeError("Temporal error: Mismatched calendars.");
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        TemporalDifferenceSettings settings = getDifferenceSettings(context, true, optionsArg);
-        if (context.hasPendingException() || settings == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        TemporalDuration durationRecord = differenceTemporalZonedDateTime(context, zonedDateTime, other, settings);
-        if (context.hasPendingException() || durationRecord == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        TemporalDuration resultRecord = durationRecord.negated().normalizeFloat64RepresentableFields();
-        if (!resultRecord.isValid() || !TemporalDuration.isDurationRecordTimeRangeValid(resultRecord)) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return JSUndefined.INSTANCE;
-        }
-        return JSTemporalDuration.create(context, resultRecord);
+        return difference(context, thisArg, args, true);
     }
 
     public static JSValue startOfDay(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "startOfDay");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "startOfDay");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1085,8 +995,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "subtract");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "subtract");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1094,17 +1003,12 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue timeZoneId(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "timeZoneId");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(zonedDateTime.getTimeZoneId());
+        return RECEIVER.read(context, thisArg, "timeZoneId",
+                zonedDateTime -> new JSString(zonedDateTime.getTimeZoneId()));
     }
 
     public static JSValue toInstant(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "toInstant");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "toInstant");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1112,17 +1016,12 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "toJSON");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(formatZonedDateTime(zonedDateTime));
+        return RECEIVER.read(context, thisArg, "toJSON",
+                zonedDateTime -> new JSString(formatZonedDateTime(zonedDateTime)));
     }
 
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "toLocaleString");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "toLocaleString");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1179,8 +1078,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue toPlainDate(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "toPlainDate");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "toPlainDate");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1190,8 +1088,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue toPlainDateTime(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "toPlainDateTime");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "toPlainDateTime");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1201,8 +1098,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue toPlainTime(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "toPlainTime");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "toPlainTime");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1212,8 +1108,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "toString");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "toString");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1258,39 +1153,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue until(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "until");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSTemporalZonedDateTime other = TemporalZonedDateTimeConstructor.toTemporalZonedDateTimeObject(context,
-                otherArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!zonedDateTime.getCalendarId().equals(other.getCalendarId())) {
-            context.throwRangeError("Temporal error: Mismatched calendars.");
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        TemporalDifferenceSettings settings = getDifferenceSettings(context, false, optionsArg);
-        if (context.hasPendingException() || settings == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        TemporalDuration durationRecord = differenceTemporalZonedDateTime(context, zonedDateTime, other, settings);
-        if (context.hasPendingException() || durationRecord == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        TemporalDuration resultRecord = durationRecord.normalizeFloat64RepresentableFields();
-        if (!resultRecord.isValid() || !TemporalDuration.isDurationRecordTimeRangeValid(resultRecord)) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return JSUndefined.INSTANCE;
-        }
-        return JSTemporalDuration.create(context, resultRecord);
+        return difference(context, thisArg, args, false);
     }
 
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1300,8 +1163,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue weekOfYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "weekOfYear");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "weekOfYear");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1314,8 +1176,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "with");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "with");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1528,8 +1389,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue withCalendar(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "withCalendar");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "withCalendar");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1546,8 +1406,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue withPlainTime(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "withPlainTime");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "withPlainTime");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1575,8 +1434,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue withTimeZone(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "withTimeZone");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "withTimeZone");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1601,21 +1459,11 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue year(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "year");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSTemporalPlainDate plainDate = toPlainDate(context, zonedDateTime);
-        if (context.hasPendingException() || plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return TemporalPlainDatePrototype.year(context, plainDate, args);
+        return readDateField(context, thisArg, "year", TemporalPlainDatePrototype::year);
     }
 
     public static JSValue yearOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = TemporalUtils.checkReceiver(context, thisArg,
-                JSTemporalZonedDateTime.class, TYPE_NAME, "yearOfWeek");
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "yearOfWeek");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }

@@ -102,7 +102,7 @@ public class FunctionExpressionCompilerTest extends BaseTest {
                 let async = 3;
                 async;
                 """);
-        assertThat(value).isInstanceOfSatisfying(JSNumber.class, number -> assertThat(number.value()).isEqualTo(3));
+        assertNumberValue(value, 3);
     }
 
     @Test

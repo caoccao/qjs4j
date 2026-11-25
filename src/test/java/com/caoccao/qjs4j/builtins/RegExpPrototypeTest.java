@@ -38,12 +38,9 @@ public class RegExpPrototypeTest extends BaseJavetTest {
         JSValue result = RegExpPrototype.exec(context, regexp, new JSValue[]{new JSString("hello world")});
         JSArray matchArray = result.asArray().orElseThrow();
         assertThat(matchArray.getLength()).isEqualTo(1); // just the full match, no captures
-        assertThat(matchArray.get(0)).isInstanceOfSatisfying(JSString.class,
-                jsStr -> assertThat(jsStr.value()).isEqualTo("hello"));
-        assertThat(matchArray.get("index")).isInstanceOfSatisfying(JSNumber.class,
-                jsNum -> assertThat(jsNum.value()).isEqualTo(0.0));
-        assertThat(matchArray.get("input")).isInstanceOfSatisfying(JSString.class,
-                jsStr -> assertThat(jsStr.value()).isEqualTo("hello world"));
+        assertStringValue(matchArray.get(0), "hello");
+        assertNumberValue(matchArray.get("index"), 0.0);
+        assertStringValue(matchArray.get("input"), "hello world");
 
         // Edge case: called on non-RegExp
         result = RegExpPrototype.exec(context, new JSString("not a regexp"), JSValue.NO_ARGS);
@@ -62,17 +59,17 @@ public class RegExpPrototypeTest extends BaseJavetTest {
         // Normal case: no flags
         JSRegExp regexp = new JSRegExp(context, "test", "");
         JSValue result = RegExpPrototype.getFlags(context, regexp, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo(""));
+        assertStringValue(result, "");
 
         // Normal case: multiple flags
         JSRegExp withFlags = new JSRegExp(context, "hello", "gim");
         result = RegExpPrototype.getFlags(context, withFlags, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("gim"));
+        assertStringValue(result, "gim");
 
         // Normal case: single flag
         JSRegExp singleFlag = new JSRegExp(context, "world", "i");
         result = RegExpPrototype.getFlags(context, singleFlag, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("i"));
+        assertStringValue(result, "i");
 
         // Edge case: called on non-RegExp
         result = RegExpPrototype.getFlags(context, new JSString("not a regexp"), JSValue.NO_ARGS);
@@ -151,12 +148,12 @@ public class RegExpPrototypeTest extends BaseJavetTest {
         // Normal case: simple pattern
         JSRegExp regexp = new JSRegExp(context, "test", "");
         JSValue result = RegExpPrototype.getSource(context, regexp, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("test"));
+        assertStringValue(result, "test");
 
         // Normal case: pattern with special characters
         JSRegExp special = new JSRegExp(context, "test", "i");
         result = RegExpPrototype.getSource(context, special, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("test"));
+        assertStringValue(result, "test");
 
         // Edge case: called on non-RegExp
         result = RegExpPrototype.getSource(context, new JSString("not a regexp"), JSValue.NO_ARGS);
@@ -414,20 +411,17 @@ public class RegExpPrototypeTest extends BaseJavetTest {
         // Normal case: simple regex
         JSRegExp regexp = context.createJSRegExp("test", "");
         JSValue result = RegExpPrototype.toStringMethod(context, regexp, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class,
-                jsStr -> assertThat(jsStr.value()).isEqualTo("/test/"));
+        assertStringValue(result, "/test/");
 
         // Normal case: regex with flags
         JSRegExp withFlags = context.createJSRegExp("hello", "gi");
         result = RegExpPrototype.toStringMethod(context, withFlags, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class,
-                jsStr -> assertThat(jsStr.value()).isEqualTo("/hello/gi"));
+        assertStringValue(result, "/hello/gi");
 
         // Normal case: pattern with special characters
         JSRegExp special = context.createJSRegExp("test", "m");
         result = RegExpPrototype.toStringMethod(context, special, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class,
-                jsStr -> assertThat(jsStr.value()).isEqualTo("/test/m"));
+        assertStringValue(result, "/test/m");
 
         // Edge case: called on non-RegExp
         result = RegExpPrototype.toStringMethod(context, new JSString("not a regexp"), JSValue.NO_ARGS);

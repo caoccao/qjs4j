@@ -39,17 +39,17 @@ public class ArrayConstructorTest extends BaseJavetTest {
         JSArray arr = result.asArray().orElseThrow();
         assertThat(arr).isNotNull();
         assertThat(arr.getLength()).isEqualTo(3);
-        assertThat(arr.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
-        assertThat(arr.get(1).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
-        assertThat(arr.get(2).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(3.0);
+        assertNumberValue(arr.get(0), 1.0);
+        assertNumberValue(arr.get(1), 2.0);
+        assertNumberValue(arr.get(2), 3.0);
 
         // Normal case: from string
         result = ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("abc")});
         arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(3);
-        assertThat(arr.get(0).asString().map(JSString::value).orElseThrow()).isEqualTo("a");
-        assertThat(arr.get(1).asString().map(JSString::value).orElseThrow()).isEqualTo("b");
-        assertThat(arr.get(2).asString().map(JSString::value).orElseThrow()).isEqualTo("c");
+        assertStringValue(arr.get(0), "a");
+        assertStringValue(arr.get(1), "b");
+        assertStringValue(arr.get(2), "c");
 
         // Normal case: with mapping function
         JSFunction mapFn = new JSNativeFunction(context, "double", 1, (context, thisArg, args) -> {
@@ -66,8 +66,8 @@ public class ArrayConstructorTest extends BaseJavetTest {
         result = ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{sourceArr2, mapFn});
         arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(2);
-        assertThat(arr.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
-        assertThat(arr.get(1).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(4.0);
+        assertNumberValue(arr.get(0), 2.0);
+        assertNumberValue(arr.get(1), 4.0);
 
         // Normal case: from string with mapping function
         JSFunction upperFn = new JSNativeFunction(context, "upper", 1, (context, thisArg, args) -> {
@@ -80,8 +80,8 @@ public class ArrayConstructorTest extends BaseJavetTest {
         result = ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("hello"), upperFn});
         arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(5);
-        assertThat(arr.get(0).asString().map(JSString::value).orElseThrow()).isEqualTo("H");
-        assertThat(arr.get(1).asString().map(JSString::value).orElseThrow()).isEqualTo("E");
+        assertStringValue(arr.get(0), "H");
+        assertStringValue(arr.get(1), "E");
 
         // Edge case: empty array
         JSArray emptyArr = new JSArray(context);
@@ -125,9 +125,9 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.FULFILLED);
         JSArray arr = promise.getResult().asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(3);
-        assertThat(arr.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
-        assertThat(arr.get(1).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
-        assertThat(arr.get(2).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(3.0);
+        assertNumberValue(arr.get(0), 1.0);
+        assertNumberValue(arr.get(1), 2.0);
+        assertNumberValue(arr.get(2), 3.0);
 
         // Normal case: from regular array (sync fallback)
         JSArray sourceArr2 = new JSArray(context);
@@ -141,8 +141,8 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.FULFILLED);
         arr = promise.getResult().asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(2);
-        assertThat(arr.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(10.0);
-        assertThat(arr.get(1).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(20.0);
+        assertNumberValue(arr.get(0), 10.0);
+        assertNumberValue(arr.get(1), 20.0);
 
         // Normal case: with mapping function
         JSFunction mapFn = new JSNativeFunction(context, "double", 1, (context, thisArg, args) -> {
@@ -163,8 +163,8 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.FULFILLED);
         arr = promise.getResult().asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(2);
-        assertThat(arr.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
-        assertThat(arr.get(1).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(4.0);
+        assertNumberValue(arr.get(0), 2.0);
+        assertNumberValue(arr.get(1), 4.0);
 
         // Normal case: from string
         result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("abc")});
@@ -174,9 +174,9 @@ public class ArrayConstructorTest extends BaseJavetTest {
         assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.FULFILLED);
         arr = promise.getResult().asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(3);
-        assertThat(arr.get(0).asString().map(JSString::value).orElseThrow()).isEqualTo("a");
-        assertThat(arr.get(1).asString().map(JSString::value).orElseThrow()).isEqualTo("b");
-        assertThat(arr.get(2).asString().map(JSString::value).orElseThrow()).isEqualTo("c");
+        assertStringValue(arr.get(0), "a");
+        assertStringValue(arr.get(1), "b");
+        assertStringValue(arr.get(2), "c");
 
         // Edge case: empty array
         JSArray emptyArr = new JSArray(context);
@@ -308,9 +308,9 @@ public class ArrayConstructorTest extends BaseJavetTest {
                 new JSValue[]{new JSNumber(1), new JSNumber(2), new JSNumber(3)});
         JSArray arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(3);
-        assertThat(arr.get(0).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
-        assertThat(arr.get(1).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
-        assertThat(arr.get(2).asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(3.0);
+        assertNumberValue(arr.get(0), 1.0);
+        assertNumberValue(arr.get(1), 2.0);
+        assertNumberValue(arr.get(2), 3.0);
 
         // Edge case: no arguments
         result = ArrayConstructor.of(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
@@ -321,7 +321,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
         result = ArrayConstructor.of(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("hello")});
         arr = result.asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(1);
-        assertThat(arr.get(0).asString().map(JSString::value).orElseThrow()).isEqualTo("hello");
+        assertStringValue(arr.get(0), "hello");
 
         // Edge case: mixed types
         result = ArrayConstructor.of(context, JSUndefined.INSTANCE,

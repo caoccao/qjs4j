@@ -36,15 +36,7 @@ public final class ObjectPattern extends Pattern {
     public boolean containsAwait() {
         if (awaitInside == null) {
             awaitInside = false;
-            if (properties != null) {
-                for (ObjectPatternProperty property : properties) {
-                    if (property != null && property.containsAwait()) {
-                        awaitInside = true;
-                        break;
-                    }
-                }
-            }
-            if (!awaitInside && restElement != null && restElement.containsAwait()) {
+            if ((anyContainsAwait(properties) || (restElement != null && restElement.containsAwait()))) {
                 awaitInside = true;
             }
         }
@@ -55,15 +47,7 @@ public final class ObjectPattern extends Pattern {
     public boolean containsYield() {
         if (yieldInside == null) {
             yieldInside = false;
-            if (properties != null) {
-                for (ObjectPatternProperty property : properties) {
-                    if (property != null && property.containsYield()) {
-                        yieldInside = true;
-                        break;
-                    }
-                }
-            }
-            if (!yieldInside && restElement != null && restElement.containsYield()) {
+            if ((anyContainsYield(properties) || (restElement != null && restElement.containsYield()))) {
                 yieldInside = true;
             }
         }

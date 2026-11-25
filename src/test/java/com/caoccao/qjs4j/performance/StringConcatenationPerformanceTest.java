@@ -47,7 +47,6 @@ public class StringConcatenationPerformanceTest extends BaseTest {
                   return s.charAt(1500000) + s.length;
                 })()
                 """);
-        assertThat(value).isInstanceOfSatisfying(JSString.class,
-                jsString -> assertThat(jsString.value()).isEqualTo("x3000000"));
+        assertStringValue(value, "x3000000");
     }
 }

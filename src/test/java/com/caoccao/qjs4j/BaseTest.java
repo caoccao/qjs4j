@@ -50,6 +50,11 @@ public abstract class BaseTest {
         });
     }
 
+    protected void assertNumberValue(JSValue value, double expected) {
+        assertThat(value).isInstanceOfSatisfying(JSNumber.class,
+                number -> assertThat(number.value()).isEqualTo(expected));
+    }
+
     protected void assertPendingException(JSContext context) {
         assertThat(context.hasPendingException()).isTrue();
         context.clearPendingException();
@@ -57,6 +62,11 @@ public abstract class BaseTest {
 
     protected void assertRangeError(JSValue value) {
         assertError(value, "RangeError", null);
+    }
+
+    protected void assertStringValue(JSValue value, String expected) {
+        assertThat(value).isInstanceOfSatisfying(JSString.class,
+                string -> assertThat(string.value()).isEqualTo(expected));
     }
 
     protected void assertSyntaxError(JSValue value) {

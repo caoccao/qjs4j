@@ -855,13 +855,13 @@ public class SetPrototypeTest extends BaseJavetTest {
 
         // Normal case: empty set
         JSValue result = SetPrototype.getSize(context, set, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(0.0));
+        assertNumberValue(result, 0.0);
 
         // Normal case: set with values
         set.setAdd(new JSString("value1"));
         set.setAdd(new JSString("value2"));
         result = SetPrototype.getSize(context, set, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isEqualTo(2.0));
+        assertNumberValue(result, 2.0);
 
         // Edge case: called on non-Set
         assertTypeError(SetPrototype.getSize(context, new JSString("not set"), JSValue.NO_ARGS));
