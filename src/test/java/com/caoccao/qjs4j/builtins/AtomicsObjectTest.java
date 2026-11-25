@@ -136,6 +136,30 @@ public class AtomicsObjectTest extends BaseJavetTest {
     }
 
     @Test
+    public void testIntegerOperationsAcrossElementWidths() {
+        assertStringWithJavet("""
+                (() => {
+                    const results = [];
+                    for (const Type of [Int8Array, Uint8Array, Int16Array, Uint16Array,
+                                        Int32Array, Uint32Array, BigInt64Array, BigUint64Array]) {
+                        const array = new Type(new SharedArrayBuffer(4 * Type.BYTES_PER_ELEMENT));
+                        const value = Type === BigInt64Array || Type === BigUint64Array ? BigInt : Number;
+                        array[0] = value(42);
+                        array[2] = value(73);
+                        results.push(Atomics.store(array, 1, value(-1)));
+                        for (const op of ["add", "sub", "xor", "and", "or", "exchange"]) {
+                            results.push(Atomics[op](array, 1, value(3)), Atomics.load(array, 1));
+                        }
+                        results.push(Atomics.compareExchange(array, 1, value(0), value(99)), array[1]);
+                        results.push(Atomics.compareExchange(array, 1, value(3), value(-2)), array[1]);
+                        results.push(array[0], array[2]);
+                    }
+                    return results.join(",");
+                })()
+                """);
+    }
+
+    @Test
     public void testIsLockFree() {
         // Test various sizes
         JSValue result = atomics().isLockFree(context, null, new JSValue[]{new JSNumber(1)});

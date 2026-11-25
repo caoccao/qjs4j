@@ -115,4 +115,20 @@ class DirectEvalScopeTest extends BaseJavetTest {
                 })()
                 """);
     }
+
+    @Test
+    void nestedEvalRestoresShadowedGlobalVar() {
+        assertStringWithJavet("""
+                var shadowed = 'global';
+                function readNestedScope() {
+                    'use strict';
+                    var shadowed = 'function';
+                    const inner = eval("var shadowed = 'eval'; eval('shadowed')");
+                    return [inner, shadowed];
+                }
+                const readings = readNestedScope();
+                const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'shadowed');
+                JSON.stringify([readings, descriptor.value, descriptor.configurable, descriptor.writable]);
+                """);
+    }
 }

@@ -71,7 +71,7 @@ jobs:
       uses: gradle/actions/setup-gradle@v6
       with:
         cache-provider: basic
-        gradle-version: '9.4.1'
+        gradle-version: '9.9.2'
 
     - name: Check Java formatting
       run: gradle spotlessCheck
@@ -167,7 +167,7 @@ jobs:
       uses: gradle/actions/setup-gradle@v6
       with:
         cache-provider: basic
-        gradle-version: '9.4.1'
+        gradle-version: '9.9.2'
 
     - name: Check Java formatting
       run: gradle spotlessCheck
@@ -229,7 +229,7 @@ jobs:
       uses: gradle/actions/setup-gradle@v6
       with:
         cache-provider: basic
-        gradle-version: '9.4.1'
+        gradle-version: '9.9.2'
 
     - name: Check Java formatting
       working-directory: qjs4j

@@ -242,12 +242,9 @@ public final class TemporalPlainDateTimeConstructor {
             }
         }
 
-        TemporalCalendarId calendarId = TemporalCalendarId.ISO8601;
-        if (!(calendarValue instanceof JSUndefined) && calendarValue != null) {
-            calendarId = TemporalCalendarId.createFromCalendarValue(context, calendarValue);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+        TemporalCalendarId calendarId = TemporalCalendarId.createFromCalendarValue(context, calendarValue);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
 
         boolean hasEra = false;
@@ -255,29 +252,17 @@ public final class TemporalPlainDateTimeConstructor {
         String era = null;
         Integer eraYear = null;
         if (calendarId.hasEra()) {
-            JSValue eraValue = fields.get(PropertyKey.fromString("era"));
+            era = TemporalUtils.getStringOption(context, fields, "era", null);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            hasEra = !(eraValue instanceof JSUndefined) && eraValue != null;
-            if (hasEra) {
-                era = JSTypeConversions.toString(context, eraValue).value();
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-            }
+            hasEra = era != null;
 
-            JSValue eraYearValue = fields.get(PropertyKey.fromString("eraYear"));
+            eraYear = TemporalUtils.getOptionalIntegerField(context, fields, "eraYear");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            hasEraYear = !(eraYearValue instanceof JSUndefined) && eraYearValue != null;
-            if (hasEraYear) {
-                eraYear = TemporalUtils.toIntegerThrowOnInfinity(context, eraYearValue);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-            }
+            hasEraYear = eraYear != null;
 
             if (hasEra != hasEraYear) {
                 context.throwTypeError("Temporal error: DateTime argument must be object or string.");

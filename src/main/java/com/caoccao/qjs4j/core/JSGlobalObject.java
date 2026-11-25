@@ -72,6 +72,11 @@ public final class JSGlobalObject {
         this.jsonObject = new JSONObject(context);
     }
 
+    private void defineMethod(JSObject target, String name, int length, JSNativeCallback callback) {
+        target.defineProperty(PropertyKey.fromString(name), new JSNativeFunction(context, name, length, callback),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+    }
+
     private void defineTemporalGetter(JSObject prototype, String name, JSNativeCallback getter) {
         JSNativeFunction getterFunc = new JSNativeFunction(context, "get " + name, 0, getter);
         prototype.defineProperty(PropertyKey.fromString(name),
@@ -175,21 +180,11 @@ public final class JSGlobalObject {
     private void initializeArrayBufferConstructor() {
         // Create ArrayBuffer.prototype
         JSObject arrayBufferPrototype = context.createJSObject();
-        arrayBufferPrototype.defineProperty(PropertyKey.fromString("resize"),
-                new JSNativeFunction(context, "resize", 1, ArrayBufferPrototype::resize),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayBufferPrototype.defineProperty(PropertyKey.fromString("slice"),
-                new JSNativeFunction(context, "slice", 2, ArrayBufferPrototype::slice),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayBufferPrototype.defineProperty(PropertyKey.fromString("transfer"),
-                new JSNativeFunction(context, "transfer", 0, ArrayBufferPrototype::transfer),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayBufferPrototype.defineProperty(PropertyKey.fromString("transferToFixedLength"),
-                new JSNativeFunction(context, "transferToFixedLength", 0, ArrayBufferPrototype::transferToFixedLength),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayBufferPrototype.defineProperty(PropertyKey.fromString("transferToImmutable"),
-                new JSNativeFunction(context, "transferToImmutable", 0, ArrayBufferPrototype::transferToImmutable),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(arrayBufferPrototype, "resize", 1, ArrayBufferPrototype::resize);
+        defineMethod(arrayBufferPrototype, "slice", 2, ArrayBufferPrototype::slice);
+        defineMethod(arrayBufferPrototype, "transfer", 0, ArrayBufferPrototype::transfer);
+        defineMethod(arrayBufferPrototype, "transferToFixedLength", 0, ArrayBufferPrototype::transferToFixedLength);
+        defineMethod(arrayBufferPrototype, "transferToImmutable", 0, ArrayBufferPrototype::transferToImmutable);
 
         // Define getter properties
         arrayBufferPrototype.defineProperty(PropertyKey.fromString("byteLength"),
@@ -220,9 +215,7 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Static methods
-        arrayBufferConstructor.defineProperty(PropertyKey.fromString("isView"),
-                new JSNativeFunction(context, "isView", 1, ArrayBufferConstructor::isView),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(arrayBufferConstructor, "isView", 1, ArrayBufferConstructor::isView);
 
         // Symbol.species getter
         arrayBufferConstructor.defineProperty(PropertyKey.fromSymbol(JSSymbol.SPECIES),
@@ -242,119 +235,45 @@ public final class JSGlobalObject {
         JSArray arrayPrototype = new JSArray(context, 0, 0);
         context.transferPrototype(arrayPrototype, JSObject.NAME);
         JSNativeFunction valuesFunction = new JSNativeFunction(context, "values", 0, IteratorPrototype::arrayValues);
-        arrayPrototype.defineProperty(PropertyKey.fromString("at"),
-                new JSNativeFunction(context, "at", 1, ArrayPrototype::at),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("concat"),
-                new JSNativeFunction(context, "concat", 1, ArrayPrototype::concat),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("copyWithin"),
-                new JSNativeFunction(context, "copyWithin", 2, ArrayPrototype::copyWithin),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("entries"),
-                new JSNativeFunction(context, "entries", 0, IteratorPrototype::arrayEntries),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("every"),
-                new JSNativeFunction(context, "every", 1, ArrayPrototype::every),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("fill"),
-                new JSNativeFunction(context, "fill", 1, ArrayPrototype::fill),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("filter"),
-                new JSNativeFunction(context, "filter", 1, ArrayPrototype::filter),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("find"),
-                new JSNativeFunction(context, "find", 1, ArrayPrototype::find),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("findIndex"),
-                new JSNativeFunction(context, "findIndex", 1, ArrayPrototype::findIndex),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("findLast"),
-                new JSNativeFunction(context, "findLast", 1, ArrayPrototype::findLast),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("findLastIndex"),
-                new JSNativeFunction(context, "findLastIndex", 1, ArrayPrototype::findLastIndex),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("flat"),
-                new JSNativeFunction(context, "flat", 0, ArrayPrototype::flat),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("flatMap"),
-                new JSNativeFunction(context, "flatMap", 1, ArrayPrototype::flatMap),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("forEach"),
-                new JSNativeFunction(context, "forEach", 1, ArrayPrototype::forEach),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("includes"),
-                new JSNativeFunction(context, "includes", 1, ArrayPrototype::includes),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("indexOf"),
-                new JSNativeFunction(context, "indexOf", 1, ArrayPrototype::indexOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("join"),
-                new JSNativeFunction(context, "join", 1, ArrayPrototype::join),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("keys"),
-                new JSNativeFunction(context, "keys", 0, IteratorPrototype::arrayKeys),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("lastIndexOf"),
-                new JSNativeFunction(context, "lastIndexOf", 1, ArrayPrototype::lastIndexOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("map"),
-                new JSNativeFunction(context, "map", 1, ArrayPrototype::map),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("pop"),
-                new JSNativeFunction(context, "pop", 0, ArrayPrototype::pop),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("push"),
-                new JSNativeFunction(context, "push", 1, ArrayPrototype::push),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("reduce"),
-                new JSNativeFunction(context, "reduce", 1, ArrayPrototype::reduce),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("reduceRight"),
-                new JSNativeFunction(context, "reduceRight", 1, ArrayPrototype::reduceRight),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("reverse"),
-                new JSNativeFunction(context, "reverse", 0, ArrayPrototype::reverse),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("shift"),
-                new JSNativeFunction(context, "shift", 0, ArrayPrototype::shift),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("slice"),
-                new JSNativeFunction(context, "slice", 2, ArrayPrototype::slice),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("some"),
-                new JSNativeFunction(context, "some", 1, ArrayPrototype::some),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("sort"),
-                new JSNativeFunction(context, "sort", 1, ArrayPrototype::sort),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("splice"),
-                new JSNativeFunction(context, "splice", 2, ArrayPrototype::splice),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("toLocaleString"),
-                new JSNativeFunction(context, "toLocaleString", 0, ArrayPrototype::toLocaleString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("toReversed"),
-                new JSNativeFunction(context, "toReversed", 0, ArrayPrototype::toReversed),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("toSorted"),
-                new JSNativeFunction(context, "toSorted", 1, ArrayPrototype::toSorted),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("toSpliced"),
-                new JSNativeFunction(context, "toSpliced", 2, ArrayPrototype::toSpliced),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction(context, "toString", 0, ArrayPrototype::toString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("unshift"),
-                new JSNativeFunction(context, "unshift", 1, ArrayPrototype::unshift),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(arrayPrototype, "at", 1, ArrayPrototype::at);
+        defineMethod(arrayPrototype, "concat", 1, ArrayPrototype::concat);
+        defineMethod(arrayPrototype, "copyWithin", 2, ArrayPrototype::copyWithin);
+        defineMethod(arrayPrototype, "entries", 0, IteratorPrototype::arrayEntries);
+        defineMethod(arrayPrototype, "every", 1, ArrayPrototype::every);
+        defineMethod(arrayPrototype, "fill", 1, ArrayPrototype::fill);
+        defineMethod(arrayPrototype, "filter", 1, ArrayPrototype::filter);
+        defineMethod(arrayPrototype, "find", 1, ArrayPrototype::find);
+        defineMethod(arrayPrototype, "findIndex", 1, ArrayPrototype::findIndex);
+        defineMethod(arrayPrototype, "findLast", 1, ArrayPrototype::findLast);
+        defineMethod(arrayPrototype, "findLastIndex", 1, ArrayPrototype::findLastIndex);
+        defineMethod(arrayPrototype, "flat", 0, ArrayPrototype::flat);
+        defineMethod(arrayPrototype, "flatMap", 1, ArrayPrototype::flatMap);
+        defineMethod(arrayPrototype, "forEach", 1, ArrayPrototype::forEach);
+        defineMethod(arrayPrototype, "includes", 1, ArrayPrototype::includes);
+        defineMethod(arrayPrototype, "indexOf", 1, ArrayPrototype::indexOf);
+        defineMethod(arrayPrototype, "join", 1, ArrayPrototype::join);
+        defineMethod(arrayPrototype, "keys", 0, IteratorPrototype::arrayKeys);
+        defineMethod(arrayPrototype, "lastIndexOf", 1, ArrayPrototype::lastIndexOf);
+        defineMethod(arrayPrototype, "map", 1, ArrayPrototype::map);
+        defineMethod(arrayPrototype, "pop", 0, ArrayPrototype::pop);
+        defineMethod(arrayPrototype, "push", 1, ArrayPrototype::push);
+        defineMethod(arrayPrototype, "reduce", 1, ArrayPrototype::reduce);
+        defineMethod(arrayPrototype, "reduceRight", 1, ArrayPrototype::reduceRight);
+        defineMethod(arrayPrototype, "reverse", 0, ArrayPrototype::reverse);
+        defineMethod(arrayPrototype, "shift", 0, ArrayPrototype::shift);
+        defineMethod(arrayPrototype, "slice", 2, ArrayPrototype::slice);
+        defineMethod(arrayPrototype, "some", 1, ArrayPrototype::some);
+        defineMethod(arrayPrototype, "sort", 1, ArrayPrototype::sort);
+        defineMethod(arrayPrototype, "splice", 2, ArrayPrototype::splice);
+        defineMethod(arrayPrototype, "toLocaleString", 0, ArrayPrototype::toLocaleString);
+        defineMethod(arrayPrototype, "toReversed", 0, ArrayPrototype::toReversed);
+        defineMethod(arrayPrototype, "toSorted", 1, ArrayPrototype::toSorted);
+        defineMethod(arrayPrototype, "toSpliced", 2, ArrayPrototype::toSpliced);
+        defineMethod(arrayPrototype, "toString", 0, ArrayPrototype::toString);
+        defineMethod(arrayPrototype, "unshift", 1, ArrayPrototype::unshift);
         arrayPrototype.defineProperty(PropertyKey.fromString("values"), valuesFunction,
                 PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayPrototype.defineProperty(PropertyKey.fromString("with"),
-                new JSNativeFunction(context, "with", 2, ArrayPrototype::with),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(arrayPrototype, "with", 2, ArrayPrototype::with);
 
         // Array.prototype[Symbol.*]
         arrayPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.ITERATOR), valuesFunction,
@@ -372,18 +291,10 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Array static methods (writable, non-enumerable, configurable per spec)
-        arrayConstructor.defineProperty(PropertyKey.fromString("from"),
-                new JSNativeFunction(context, "from", 1, ArrayConstructor::from),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayConstructor.defineProperty(PropertyKey.fromString("fromAsync"),
-                new JSNativeFunction(context, "fromAsync", 1, ArrayConstructor::fromAsync),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayConstructor.defineProperty(PropertyKey.fromString("isArray"),
-                new JSNativeFunction(context, "isArray", 1, ArrayConstructor::isArray),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        arrayConstructor.defineProperty(PropertyKey.fromString("of"),
-                new JSNativeFunction(context, "of", 0, ArrayConstructor::of),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(arrayConstructor, "from", 1, ArrayConstructor::from);
+        defineMethod(arrayConstructor, "fromAsync", 1, ArrayConstructor::fromAsync);
+        defineMethod(arrayConstructor, "isArray", 1, ArrayConstructor::isArray);
+        defineMethod(arrayConstructor, "of", 0, ArrayConstructor::of);
 
         // Symbol.species getter
         arrayConstructor.defineProperty(PropertyKey.fromSymbol(JSSymbol.SPECIES),
@@ -399,22 +310,14 @@ public final class JSGlobalObject {
      */
     private void initializeAsyncDisposableStackConstructor() {
         JSObject asyncDisposableStackPrototype = context.createJSObject();
-        asyncDisposableStackPrototype.defineProperty(PropertyKey.fromString("adopt"),
-                new JSNativeFunction(context, "adopt", 2, AsyncDisposableStackPrototype::adopt),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        asyncDisposableStackPrototype.defineProperty(PropertyKey.fromString("defer"),
-                new JSNativeFunction(context, "defer", 1, AsyncDisposableStackPrototype::defer),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(asyncDisposableStackPrototype, "adopt", 2, AsyncDisposableStackPrototype::adopt);
+        defineMethod(asyncDisposableStackPrototype, "defer", 1, AsyncDisposableStackPrototype::defer);
         JSNativeFunction disposeAsyncFunction = new JSNativeFunction(context, "disposeAsync", 0,
                 AsyncDisposableStackPrototype::disposeAsync);
         asyncDisposableStackPrototype.defineProperty(PropertyKey.fromString("disposeAsync"), disposeAsyncFunction,
                 PropertyDescriptor.DataState.ConfigurableWritable);
-        asyncDisposableStackPrototype.defineProperty(PropertyKey.fromString("move"),
-                new JSNativeFunction(context, "move", 0, AsyncDisposableStackPrototype::move),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        asyncDisposableStackPrototype.defineProperty(PropertyKey.fromString("use"),
-                new JSNativeFunction(context, "use", 1, AsyncDisposableStackPrototype::use),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(asyncDisposableStackPrototype, "move", 0, AsyncDisposableStackPrototype::move);
+        defineMethod(asyncDisposableStackPrototype, "use", 1, AsyncDisposableStackPrototype::use);
         asyncDisposableStackPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.ASYNC_DISPOSE),
                 disposeAsyncFunction, PropertyDescriptor.DataState.ConfigurableWritable);
 
@@ -551,47 +454,20 @@ public final class JSGlobalObject {
         // the options between two createContext() calls must not put them on different ones.
         AtomicsObject atomicsObject = context.getRuntime().getAtomicsObject();
         JSObject atomics = context.createJSObject();
-        atomics.defineProperty(PropertyKey.fromString("add"),
-                new JSNativeFunction(context, "add", 3, atomicsObject::add),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("and"),
-                new JSNativeFunction(context, "and", 3, atomicsObject::and),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("compareExchange"),
-                new JSNativeFunction(context, "compareExchange", 4, atomicsObject::compareExchange),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("exchange"),
-                new JSNativeFunction(context, "exchange", 3, atomicsObject::exchange),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("isLockFree"),
-                new JSNativeFunction(context, "isLockFree", 1, atomicsObject::isLockFree),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("load"),
-                new JSNativeFunction(context, "load", 2, atomicsObject::load),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("notify"),
-                new JSNativeFunction(context, "notify", 3, atomicsObject::notify),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("or"), new JSNativeFunction(context, "or", 3, atomicsObject::or),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("pause"),
-                new JSNativeFunction(context, "pause", 0, atomicsObject::pause),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("store"),
-                new JSNativeFunction(context, "store", 3, atomicsObject::store),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("sub"),
-                new JSNativeFunction(context, "sub", 3, atomicsObject::sub),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("wait"),
-                new JSNativeFunction(context, "wait", 4, atomicsObject::wait),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("waitAsync"),
-                new JSNativeFunction(context, "waitAsync", 4, atomicsObject::waitAsync),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        atomics.defineProperty(PropertyKey.fromString("xor"),
-                new JSNativeFunction(context, "xor", 3, atomicsObject::xor),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(atomics, "add", 3, atomicsObject::add);
+        defineMethod(atomics, "and", 3, atomicsObject::and);
+        defineMethod(atomics, "compareExchange", 4, atomicsObject::compareExchange);
+        defineMethod(atomics, "exchange", 3, atomicsObject::exchange);
+        defineMethod(atomics, "isLockFree", 1, atomicsObject::isLockFree);
+        defineMethod(atomics, "load", 2, atomicsObject::load);
+        defineMethod(atomics, "notify", 3, atomicsObject::notify);
+        defineMethod(atomics, "or", 3, atomicsObject::or);
+        defineMethod(atomics, "pause", 0, atomicsObject::pause);
+        defineMethod(atomics, "store", 3, atomicsObject::store);
+        defineMethod(atomics, "sub", 3, atomicsObject::sub);
+        defineMethod(atomics, "wait", 4, atomicsObject::wait);
+        defineMethod(atomics, "waitAsync", 4, atomicsObject::waitAsync);
+        defineMethod(atomics, "xor", 3, atomicsObject::xor);
         atomics.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Atomics"),
                 PropertyDescriptor.DataState.Configurable);
 
@@ -605,15 +481,9 @@ public final class JSGlobalObject {
     private void initializeBigIntConstructor() {
         // Create BigInt.prototype
         JSObject bigIntPrototype = context.createJSObject();
-        bigIntPrototype.defineProperty(PropertyKey.fromString("toLocaleString"),
-                new JSNativeFunction(context, "toLocaleString", 0, BigIntPrototype::toLocaleString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        bigIntPrototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction(context, "toString", 0, BigIntPrototype::toString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        bigIntPrototype.defineProperty(PropertyKey.fromString("valueOf"),
-                new JSNativeFunction(context, "valueOf", 0, BigIntPrototype::valueOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(bigIntPrototype, "toLocaleString", 0, BigIntPrototype::toLocaleString);
+        defineMethod(bigIntPrototype, "toString", 0, BigIntPrototype::toString);
+        defineMethod(bigIntPrototype, "valueOf", 0, BigIntPrototype::valueOf);
         bigIntPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString(JSBigInt.NAME),
                 PropertyDescriptor.DataState.Configurable);
 
@@ -627,12 +497,8 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // BigInt static methods
-        bigIntConstructor.defineProperty(PropertyKey.fromString("asIntN"),
-                new JSNativeFunction(context, "asIntN", 2, BigIntConstructor::asIntN),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        bigIntConstructor.defineProperty(PropertyKey.fromString("asUintN"),
-                new JSNativeFunction(context, "asUintN", 2, BigIntConstructor::asUintN),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(bigIntConstructor, "asIntN", 2, BigIntConstructor::asIntN);
+        defineMethod(bigIntConstructor, "asUintN", 2, BigIntConstructor::asUintN);
 
         globalObject.defineProperty(PropertyKey.fromString(JSBigInt.NAME), bigIntConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -646,12 +512,8 @@ public final class JSGlobalObject {
         // Per QuickJS: JS_SetObjectData(ctx, ctx->class_proto[JS_CLASS_BOOLEAN], JS_NewBool(ctx, FALSE))
         JSBooleanObject booleanPrototype = new JSBooleanObject(context, false);
         context.transferPrototype(booleanPrototype, JSObject.NAME);
-        booleanPrototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction(context, "toString", 0, BooleanPrototype::toString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        booleanPrototype.defineProperty(PropertyKey.fromString("valueOf"),
-                new JSNativeFunction(context, "valueOf", 0, BooleanPrototype::valueOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(booleanPrototype, "toString", 0, BooleanPrototype::toString);
+        defineMethod(booleanPrototype, "valueOf", 0, BooleanPrototype::valueOf);
 
         // Create Boolean constructor
         JSNativeFunction booleanConstructor = new JSNativeFunction(context, JSBoolean.NAME, 1, BooleanConstructor::call,
@@ -716,80 +578,36 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.Configurable);
 
         // Int8/Uint8 methods
-        dataViewPrototype.defineProperty(PropertyKey.fromString("getInt8"),
-                new JSNativeFunction(context, "getInt8", 1, DataViewPrototype::getInt8),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("setInt8"),
-                new JSNativeFunction(context, "setInt8", 2, DataViewPrototype::setInt8),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("getUint8"),
-                new JSNativeFunction(context, "getUint8", 1, DataViewPrototype::getUint8),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("setUint8"),
-                new JSNativeFunction(context, "setUint8", 2, DataViewPrototype::setUint8),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(dataViewPrototype, "getInt8", 1, DataViewPrototype::getInt8);
+        defineMethod(dataViewPrototype, "setInt8", 2, DataViewPrototype::setInt8);
+        defineMethod(dataViewPrototype, "getUint8", 1, DataViewPrototype::getUint8);
+        defineMethod(dataViewPrototype, "setUint8", 2, DataViewPrototype::setUint8);
 
         // Int16/Uint16 methods
-        dataViewPrototype.defineProperty(PropertyKey.fromString("getInt16"),
-                new JSNativeFunction(context, "getInt16", 1, DataViewPrototype::getInt16),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("setInt16"),
-                new JSNativeFunction(context, "setInt16", 2, DataViewPrototype::setInt16),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("getUint16"),
-                new JSNativeFunction(context, "getUint16", 1, DataViewPrototype::getUint16),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("setUint16"),
-                new JSNativeFunction(context, "setUint16", 2, DataViewPrototype::setUint16),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(dataViewPrototype, "getInt16", 1, DataViewPrototype::getInt16);
+        defineMethod(dataViewPrototype, "setInt16", 2, DataViewPrototype::setInt16);
+        defineMethod(dataViewPrototype, "getUint16", 1, DataViewPrototype::getUint16);
+        defineMethod(dataViewPrototype, "setUint16", 2, DataViewPrototype::setUint16);
 
         // Int32/Uint32 methods
-        dataViewPrototype.defineProperty(PropertyKey.fromString("getInt32"),
-                new JSNativeFunction(context, "getInt32", 1, DataViewPrototype::getInt32),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("setInt32"),
-                new JSNativeFunction(context, "setInt32", 2, DataViewPrototype::setInt32),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("getUint32"),
-                new JSNativeFunction(context, "getUint32", 1, DataViewPrototype::getUint32),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("setUint32"),
-                new JSNativeFunction(context, "setUint32", 2, DataViewPrototype::setUint32),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(dataViewPrototype, "getInt32", 1, DataViewPrototype::getInt32);
+        defineMethod(dataViewPrototype, "setInt32", 2, DataViewPrototype::setInt32);
+        defineMethod(dataViewPrototype, "getUint32", 1, DataViewPrototype::getUint32);
+        defineMethod(dataViewPrototype, "setUint32", 2, DataViewPrototype::setUint32);
 
         // BigInt methods
-        dataViewPrototype.defineProperty(PropertyKey.fromString("getBigInt64"),
-                new JSNativeFunction(context, "getBigInt64", 1, DataViewPrototype::getBigInt64),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("setBigInt64"),
-                new JSNativeFunction(context, "setBigInt64", 2, DataViewPrototype::setBigInt64),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("getBigUint64"),
-                new JSNativeFunction(context, "getBigUint64", 1, DataViewPrototype::getBigUint64),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("setBigUint64"),
-                new JSNativeFunction(context, "setBigUint64", 2, DataViewPrototype::setBigUint64),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(dataViewPrototype, "getBigInt64", 1, DataViewPrototype::getBigInt64);
+        defineMethod(dataViewPrototype, "setBigInt64", 2, DataViewPrototype::setBigInt64);
+        defineMethod(dataViewPrototype, "getBigUint64", 1, DataViewPrototype::getBigUint64);
+        defineMethod(dataViewPrototype, "setBigUint64", 2, DataViewPrototype::setBigUint64);
 
         // Float methods
-        dataViewPrototype.defineProperty(PropertyKey.fromString("getFloat16"),
-                new JSNativeFunction(context, "getFloat16", 1, DataViewPrototype::getFloat16),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("setFloat16"),
-                new JSNativeFunction(context, "setFloat16", 2, DataViewPrototype::setFloat16),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("getFloat32"),
-                new JSNativeFunction(context, "getFloat32", 1, DataViewPrototype::getFloat32),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("setFloat32"),
-                new JSNativeFunction(context, "setFloat32", 2, DataViewPrototype::setFloat32),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("getFloat64"),
-                new JSNativeFunction(context, "getFloat64", 1, DataViewPrototype::getFloat64),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dataViewPrototype.defineProperty(PropertyKey.fromString("setFloat64"),
-                new JSNativeFunction(context, "setFloat64", 2, DataViewPrototype::setFloat64),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(dataViewPrototype, "getFloat16", 1, DataViewPrototype::getFloat16);
+        defineMethod(dataViewPrototype, "setFloat16", 2, DataViewPrototype::setFloat16);
+        defineMethod(dataViewPrototype, "getFloat32", 1, DataViewPrototype::getFloat32);
+        defineMethod(dataViewPrototype, "setFloat32", 2, DataViewPrototype::setFloat32);
+        defineMethod(dataViewPrototype, "getFloat64", 1, DataViewPrototype::getFloat64);
+        defineMethod(dataViewPrototype, "setFloat64", 2, DataViewPrototype::setFloat64);
 
         // Create DataView constructor as a function that requires 'new'
         JSNativeFunction dataViewConstructor = new JSNativeFunction(context, "DataView", 1, DataViewConstructor::call,
@@ -813,147 +631,57 @@ public final class JSGlobalObject {
         JSNativeFunction toPrimitive = new JSNativeFunction(context, "[Symbol.toPrimitive]", 1,
                 DatePrototype::symbolToPrimitive);
 
-        datePrototype.defineProperty(PropertyKey.fromString("getDate"),
-                new JSNativeFunction(context, "getDate", 0, DatePrototype::getDate),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("getDay"),
-                new JSNativeFunction(context, "getDay", 0, DatePrototype::getDay),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("getFullYear"),
-                new JSNativeFunction(context, "getFullYear", 0, DatePrototype::getFullYear),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("getHours"),
-                new JSNativeFunction(context, "getHours", 0, DatePrototype::getHours),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("getMilliseconds"),
-                new JSNativeFunction(context, "getMilliseconds", 0, DatePrototype::getMilliseconds),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("getMinutes"),
-                new JSNativeFunction(context, "getMinutes", 0, DatePrototype::getMinutes),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("getMonth"),
-                new JSNativeFunction(context, "getMonth", 0, DatePrototype::getMonth),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("getSeconds"),
-                new JSNativeFunction(context, "getSeconds", 0, DatePrototype::getSeconds),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("getTime"),
-                new JSNativeFunction(context, "getTime", 0, DatePrototype::getTime),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("getTimezoneOffset"),
-                new JSNativeFunction(context, "getTimezoneOffset", 0, DatePrototype::getTimezoneOffset),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("getUTCDate"),
-                new JSNativeFunction(context, "getUTCDate", 0, DatePrototype::getUTCDate),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("getUTCDay"),
-                new JSNativeFunction(context, "getUTCDay", 0, DatePrototype::getUTCDay),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("getUTCFullYear"),
-                new JSNativeFunction(context, "getUTCFullYear", 0, DatePrototype::getUTCFullYear),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("getUTCHours"),
-                new JSNativeFunction(context, "getUTCHours", 0, DatePrototype::getUTCHours),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("getUTCMilliseconds"),
-                new JSNativeFunction(context, "getUTCMilliseconds", 0, DatePrototype::getUTCMilliseconds),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("getUTCMinutes"),
-                new JSNativeFunction(context, "getUTCMinutes", 0, DatePrototype::getUTCMinutes),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("getUTCMonth"),
-                new JSNativeFunction(context, "getUTCMonth", 0, DatePrototype::getUTCMonth),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("getUTCSeconds"),
-                new JSNativeFunction(context, "getUTCSeconds", 0, DatePrototype::getUTCSeconds),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("getYear"),
-                new JSNativeFunction(context, "getYear", 0, DatePrototype::getYear),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("setDate"),
-                new JSNativeFunction(context, "setDate", 1, DatePrototype::setDate),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("setFullYear"),
-                new JSNativeFunction(context, "setFullYear", 3, DatePrototype::setFullYear),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("setHours"),
-                new JSNativeFunction(context, "setHours", 4, DatePrototype::setHours),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("setMilliseconds"),
-                new JSNativeFunction(context, "setMilliseconds", 1, DatePrototype::setMilliseconds),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("setMinutes"),
-                new JSNativeFunction(context, "setMinutes", 3, DatePrototype::setMinutes),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("setMonth"),
-                new JSNativeFunction(context, "setMonth", 2, DatePrototype::setMonth),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("setSeconds"),
-                new JSNativeFunction(context, "setSeconds", 2, DatePrototype::setSeconds),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("setTime"),
-                new JSNativeFunction(context, "setTime", 1, DatePrototype::setTime),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("setUTCDate"),
-                new JSNativeFunction(context, "setUTCDate", 1, DatePrototype::setUTCDate),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("setUTCFullYear"),
-                new JSNativeFunction(context, "setUTCFullYear", 3, DatePrototype::setUTCFullYear),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("setUTCHours"),
-                new JSNativeFunction(context, "setUTCHours", 4, DatePrototype::setUTCHours),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("setUTCMilliseconds"),
-                new JSNativeFunction(context, "setUTCMilliseconds", 1, DatePrototype::setUTCMilliseconds),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("setUTCMinutes"),
-                new JSNativeFunction(context, "setUTCMinutes", 3, DatePrototype::setUTCMinutes),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("setUTCMonth"),
-                new JSNativeFunction(context, "setUTCMonth", 2, DatePrototype::setUTCMonth),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("setUTCSeconds"),
-                new JSNativeFunction(context, "setUTCSeconds", 2, DatePrototype::setUTCSeconds),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("setYear"),
-                new JSNativeFunction(context, "setYear", 1, DatePrototype::setYear),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("toDateString"),
-                new JSNativeFunction(context, "toDateString", 0, DatePrototype::toDateString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(datePrototype, "getDate", 0, DatePrototype::getDate);
+        defineMethod(datePrototype, "getDay", 0, DatePrototype::getDay);
+        defineMethod(datePrototype, "getFullYear", 0, DatePrototype::getFullYear);
+        defineMethod(datePrototype, "getHours", 0, DatePrototype::getHours);
+        defineMethod(datePrototype, "getMilliseconds", 0, DatePrototype::getMilliseconds);
+        defineMethod(datePrototype, "getMinutes", 0, DatePrototype::getMinutes);
+        defineMethod(datePrototype, "getMonth", 0, DatePrototype::getMonth);
+        defineMethod(datePrototype, "getSeconds", 0, DatePrototype::getSeconds);
+        defineMethod(datePrototype, "getTime", 0, DatePrototype::getTime);
+        defineMethod(datePrototype, "getTimezoneOffset", 0, DatePrototype::getTimezoneOffset);
+        defineMethod(datePrototype, "getUTCDate", 0, DatePrototype::getUTCDate);
+        defineMethod(datePrototype, "getUTCDay", 0, DatePrototype::getUTCDay);
+        defineMethod(datePrototype, "getUTCFullYear", 0, DatePrototype::getUTCFullYear);
+        defineMethod(datePrototype, "getUTCHours", 0, DatePrototype::getUTCHours);
+        defineMethod(datePrototype, "getUTCMilliseconds", 0, DatePrototype::getUTCMilliseconds);
+        defineMethod(datePrototype, "getUTCMinutes", 0, DatePrototype::getUTCMinutes);
+        defineMethod(datePrototype, "getUTCMonth", 0, DatePrototype::getUTCMonth);
+        defineMethod(datePrototype, "getUTCSeconds", 0, DatePrototype::getUTCSeconds);
+        defineMethod(datePrototype, "getYear", 0, DatePrototype::getYear);
+        defineMethod(datePrototype, "setDate", 1, DatePrototype::setDate);
+        defineMethod(datePrototype, "setFullYear", 3, DatePrototype::setFullYear);
+        defineMethod(datePrototype, "setHours", 4, DatePrototype::setHours);
+        defineMethod(datePrototype, "setMilliseconds", 1, DatePrototype::setMilliseconds);
+        defineMethod(datePrototype, "setMinutes", 3, DatePrototype::setMinutes);
+        defineMethod(datePrototype, "setMonth", 2, DatePrototype::setMonth);
+        defineMethod(datePrototype, "setSeconds", 2, DatePrototype::setSeconds);
+        defineMethod(datePrototype, "setTime", 1, DatePrototype::setTime);
+        defineMethod(datePrototype, "setUTCDate", 1, DatePrototype::setUTCDate);
+        defineMethod(datePrototype, "setUTCFullYear", 3, DatePrototype::setUTCFullYear);
+        defineMethod(datePrototype, "setUTCHours", 4, DatePrototype::setUTCHours);
+        defineMethod(datePrototype, "setUTCMilliseconds", 1, DatePrototype::setUTCMilliseconds);
+        defineMethod(datePrototype, "setUTCMinutes", 3, DatePrototype::setUTCMinutes);
+        defineMethod(datePrototype, "setUTCMonth", 2, DatePrototype::setUTCMonth);
+        defineMethod(datePrototype, "setUTCSeconds", 2, DatePrototype::setUTCSeconds);
+        defineMethod(datePrototype, "setYear", 1, DatePrototype::setYear);
+        defineMethod(datePrototype, "toDateString", 0, DatePrototype::toDateString);
         datePrototype.defineProperty(PropertyKey.fromString("toGMTString"), toUTCString,
                 PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("toISOString"),
-                new JSNativeFunction(context, "toISOString", 0, DatePrototype::toISOString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("toJSON"),
-                new JSNativeFunction(context, "toJSON", 1, DatePrototype::toJSON),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("toLocaleDateString"),
-                new JSNativeFunction(context, "toLocaleDateString", 0, DatePrototype::toLocaleDateString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("toLocaleString"),
-                new JSNativeFunction(context, "toLocaleString", 0, DatePrototype::toLocaleString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("toLocaleTimeString"),
-                new JSNativeFunction(context, "toLocaleTimeString", 0, DatePrototype::toLocaleTimeString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction(context, "toString", 0, DatePrototype::toStringMethod),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        datePrototype.defineProperty(PropertyKey.fromString("toTimeString"),
-                new JSNativeFunction(context, "toTimeString", 0, DatePrototype::toTimeString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(datePrototype, "toISOString", 0, DatePrototype::toISOString);
+        defineMethod(datePrototype, "toJSON", 1, DatePrototype::toJSON);
+        defineMethod(datePrototype, "toLocaleDateString", 0, DatePrototype::toLocaleDateString);
+        defineMethod(datePrototype, "toLocaleString", 0, DatePrototype::toLocaleString);
+        defineMethod(datePrototype, "toLocaleTimeString", 0, DatePrototype::toLocaleTimeString);
+        defineMethod(datePrototype, "toString", 0, DatePrototype::toStringMethod);
+        defineMethod(datePrototype, "toTimeString", 0, DatePrototype::toTimeString);
         datePrototype.defineProperty(PropertyKey.fromString("toUTCString"), toUTCString,
                 PropertyDescriptor.DataState.ConfigurableWritable);
         if (context.getRuntime().getOptions().isTemporalEnabled()) {
-            datePrototype.defineProperty(PropertyKey.fromString("toTemporalInstant"),
-                    new JSNativeFunction(context, "toTemporalInstant", 0, DatePrototype::toTemporalInstant),
-                    PropertyDescriptor.DataState.ConfigurableWritable);
+            defineMethod(datePrototype, "toTemporalInstant", 0, DatePrototype::toTemporalInstant);
         }
-        datePrototype.defineProperty(PropertyKey.fromString("valueOf"),
-                new JSNativeFunction(context, "valueOf", 0, DatePrototype::valueOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(datePrototype, "valueOf", 0, DatePrototype::valueOf);
         datePrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_PRIMITIVE), toPrimitive,
                 PropertyDescriptor.DataState.Configurable);
 
@@ -964,15 +692,9 @@ public final class JSGlobalObject {
         datePrototype.defineProperty(PropertyKey.fromString("constructor"), dateConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
-        dateConstructor.defineProperty(PropertyKey.fromString("UTC"),
-                new JSNativeFunction(context, "UTC", 7, DateConstructor::UTC),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dateConstructor.defineProperty(PropertyKey.fromString("now"),
-                new JSNativeFunction(context, "now", 0, DateConstructor::now),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dateConstructor.defineProperty(PropertyKey.fromString("parse"),
-                new JSNativeFunction(context, "parse", 1, DateConstructor::parse),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(dateConstructor, "UTC", 7, DateConstructor::UTC);
+        defineMethod(dateConstructor, "now", 0, DateConstructor::now);
+        defineMethod(dateConstructor, "parse", 1, DateConstructor::parse);
 
         globalObject.defineProperty(PropertyKey.fromString(JSDate.NAME), dateConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -985,20 +707,12 @@ public final class JSGlobalObject {
         JSObject disposableStackPrototype = context.createJSObject();
         JSNativeFunction disposeFunction = new JSNativeFunction(context, "dispose", 0,
                 DisposableStackPrototype::dispose);
-        disposableStackPrototype.defineProperty(PropertyKey.fromString("adopt"),
-                new JSNativeFunction(context, "adopt", 2, DisposableStackPrototype::adopt),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        disposableStackPrototype.defineProperty(PropertyKey.fromString("defer"),
-                new JSNativeFunction(context, "defer", 1, DisposableStackPrototype::defer),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(disposableStackPrototype, "adopt", 2, DisposableStackPrototype::adopt);
+        defineMethod(disposableStackPrototype, "defer", 1, DisposableStackPrototype::defer);
         disposableStackPrototype.defineProperty(PropertyKey.fromString("dispose"), disposeFunction,
                 PropertyDescriptor.DataState.ConfigurableWritable);
-        disposableStackPrototype.defineProperty(PropertyKey.fromString("move"),
-                new JSNativeFunction(context, "move", 0, DisposableStackPrototype::move),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        disposableStackPrototype.defineProperty(PropertyKey.fromString("use"),
-                new JSNativeFunction(context, "use", 1, DisposableStackPrototype::use),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(disposableStackPrototype, "move", 0, DisposableStackPrototype::move);
+        defineMethod(disposableStackPrototype, "use", 1, DisposableStackPrototype::use);
         disposableStackPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.DISPOSE), disposeFunction,
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
@@ -1041,12 +755,8 @@ public final class JSGlobalObject {
      */
     private void initializeFinalizationRegistryConstructor() {
         JSObject finalizationRegistryPrototype = context.createJSObject();
-        finalizationRegistryPrototype.defineProperty(PropertyKey.fromString("register"),
-                new JSNativeFunction(context, "register", 2, FinalizationRegistryPrototype::register),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        finalizationRegistryPrototype.defineProperty(PropertyKey.fromString("unregister"),
-                new JSNativeFunction(context, "unregister", 1, FinalizationRegistryPrototype::unregister),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(finalizationRegistryPrototype, "register", 2, FinalizationRegistryPrototype::register);
+        defineMethod(finalizationRegistryPrototype, "unregister", 1, FinalizationRegistryPrototype::unregister);
         finalizationRegistryPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
                 new JSString(JSFinalizationRegistry.NAME), PropertyDescriptor.DataState.Configurable);
 
@@ -1076,18 +786,10 @@ public final class JSGlobalObject {
         functionPrototype.delete(PropertyKey.NAME);
         functionPrototype.delete(PropertyKey.PROTOTYPE);
 
-        functionPrototype.defineProperty(PropertyKey.fromString("apply"),
-                new JSNativeFunction(context, "apply", 2, FunctionPrototype::apply),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        functionPrototype.defineProperty(PropertyKey.fromString("bind"),
-                new JSNativeFunction(context, "bind", 1, FunctionPrototype::bind),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        functionPrototype.defineProperty(PropertyKey.fromString("call"),
-                new JSNativeFunction(context, "call", 1, FunctionPrototype::call),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        functionPrototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction(context, "toString", 0, FunctionPrototype::toString_),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(functionPrototype, "apply", 2, FunctionPrototype::apply);
+        defineMethod(functionPrototype, "bind", 1, FunctionPrototype::bind);
+        defineMethod(functionPrototype, "call", 1, FunctionPrototype::call);
+        defineMethod(functionPrototype, "toString", 0, FunctionPrototype::toString_);
 
         String restrictedFunctionPropertyMessage = "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them";
 
@@ -1209,15 +911,9 @@ public final class JSGlobalObject {
 
         // Generator.prototype methods: writable+configurable (not enumerable)
         // Matches QuickJS js_generator_proto_funcs using JS_ITERATOR_NEXT_DEF
-        generatorPrototype.defineProperty(PropertyKey.fromString("next"),
-                new JSNativeFunction(context, "next", 1, GeneratorPrototype::next),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        generatorPrototype.defineProperty(PropertyKey.fromString("return"),
-                new JSNativeFunction(context, "return", 1, GeneratorPrototype::returnMethod),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        generatorPrototype.defineProperty(PropertyKey.fromString("throw"),
-                new JSNativeFunction(context, "throw", 1, GeneratorPrototype::throwMethod),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(generatorPrototype, "next", 1, GeneratorPrototype::next);
+        defineMethod(generatorPrototype, "return", 1, GeneratorPrototype::returnMethod);
+        defineMethod(generatorPrototype, "throw", 1, GeneratorPrototype::throwMethod);
 
         // Symbol.toStringTag = "Generator" (configurable only)
         // Matches QuickJS JS_PROP_STRING_DEF("[Symbol.toStringTag]", "Generator", JS_PROP_CONFIGURABLE)
@@ -1275,38 +971,18 @@ public final class JSGlobalObject {
                 new JSNativeFunction(context, "eval", 1,
                         (callerContext, thisArg, args) -> GlobalFunction.eval(realmContext, callerContext, args)),
                 PropertyDescriptor.DataState.ConfigurableWritable);
-        globalObject.defineProperty(PropertyKey.fromString("isFinite"),
-                new JSNativeFunction(context, "isFinite", 1, GlobalFunction::isFinite),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        globalObject.defineProperty(PropertyKey.fromString("isNaN"),
-                new JSNativeFunction(context, "isNaN", 1, GlobalFunction::isNaN),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        globalObject.defineProperty(PropertyKey.fromString("parseFloat"),
-                new JSNativeFunction(context, "parseFloat", 1, GlobalFunction::parseFloat),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        globalObject.defineProperty(PropertyKey.fromString("parseInt"),
-                new JSNativeFunction(context, "parseInt", 2, GlobalFunction::parseInt),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(globalObject, "isFinite", 1, GlobalFunction::isFinite);
+        defineMethod(globalObject, "isNaN", 1, GlobalFunction::isNaN);
+        defineMethod(globalObject, "parseFloat", 1, GlobalFunction::parseFloat);
+        defineMethod(globalObject, "parseInt", 2, GlobalFunction::parseInt);
 
         // URI handling functions
-        globalObject.defineProperty(PropertyKey.fromString("decodeURI"),
-                new JSNativeFunction(context, "decodeURI", 1, GlobalFunction::decodeURI),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        globalObject.defineProperty(PropertyKey.fromString("decodeURIComponent"),
-                new JSNativeFunction(context, "decodeURIComponent", 1, GlobalFunction::decodeURIComponent),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        globalObject.defineProperty(PropertyKey.fromString("encodeURI"),
-                new JSNativeFunction(context, "encodeURI", 1, GlobalFunction::encodeURI),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        globalObject.defineProperty(PropertyKey.fromString("encodeURIComponent"),
-                new JSNativeFunction(context, "encodeURIComponent", 1, GlobalFunction::encodeURIComponent),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        globalObject.defineProperty(PropertyKey.fromString("escape"),
-                new JSNativeFunction(context, "escape", 1, GlobalFunction::escape),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        globalObject.defineProperty(PropertyKey.fromString("unescape"),
-                new JSNativeFunction(context, "unescape", 1, GlobalFunction::unescape),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(globalObject, "decodeURI", 1, GlobalFunction::decodeURI);
+        defineMethod(globalObject, "decodeURIComponent", 1, GlobalFunction::decodeURIComponent);
+        defineMethod(globalObject, "encodeURI", 1, GlobalFunction::encodeURI);
+        defineMethod(globalObject, "encodeURIComponent", 1, GlobalFunction::encodeURIComponent);
+        defineMethod(globalObject, "escape", 1, GlobalFunction::escape);
+        defineMethod(globalObject, "unescape", 1, GlobalFunction::unescape);
 
         // Console object for debugging
         initializeConsoleObject();
@@ -1327,50 +1003,32 @@ public final class JSGlobalObject {
         JSObject intlObject = context.createJSObject();
         intlObject.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Intl"),
                 PropertyDescriptor.DataState.Configurable);
-        intlObject.defineProperty(PropertyKey.fromString("getCanonicalLocales"),
-                new JSNativeFunction(context, "getCanonicalLocales", 1, JSIntlObject::getCanonicalLocales),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        intlObject.defineProperty(PropertyKey.fromString("supportedValuesOf"),
-                new JSNativeFunction(context, "supportedValuesOf", 1, JSIntlObject::supportedValuesOf_Intl),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(intlObject, "getCanonicalLocales", 1, JSIntlObject::getCanonicalLocales);
+        defineMethod(intlObject, "supportedValuesOf", 1, JSIntlObject::supportedValuesOf_Intl);
 
         JSObject dateTimeFormatPrototype = context.createJSObject();
         dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("format"),
                 new JSNativeFunction(context, "get format", 0, JSIntlObject::dateTimeFormatFormatGetter),
                 PropertyDescriptor.AccessorState.Configurable);
-        dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"),
-                new JSNativeFunction(context, "resolvedOptions", 0, JSIntlObject::dateTimeFormatResolvedOptions),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("formatToParts"),
-                new JSNativeFunction(context, "formatToParts", 1, JSIntlObject::dateTimeFormatFormatToParts),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("formatRange"),
-                new JSNativeFunction(context, "formatRange", 2, JSIntlObject::dateTimeFormatFormatRange),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("formatRangeToParts"),
-                new JSNativeFunction(context, "formatRangeToParts", 2, JSIntlObject::dateTimeFormatFormatRangeToParts),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(dateTimeFormatPrototype, "resolvedOptions", 0, JSIntlObject::dateTimeFormatResolvedOptions);
+        defineMethod(dateTimeFormatPrototype, "formatToParts", 1, JSIntlObject::dateTimeFormatFormatToParts);
+        defineMethod(dateTimeFormatPrototype, "formatRange", 2, JSIntlObject::dateTimeFormatFormatRange);
+        defineMethod(dateTimeFormatPrototype, "formatRangeToParts", 2, JSIntlObject::dateTimeFormatFormatRangeToParts);
         dateTimeFormatPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
                 new JSString("Intl.DateTimeFormat"), PropertyDescriptor.DataState.Configurable);
         JSNativeFunction dateTimeFormatConstructor = new JSNativeFunction(context, "DateTimeFormat", 0, (childContext,
                 thisArg, args) -> JSIntlObject.createDateTimeFormat(childContext, dateTimeFormatPrototype, args), true);
         dateTimeFormatConstructor.defineProperty(PropertyKey.fromString("prototype"), dateTimeFormatPrototype,
                 PropertyDescriptor.DataState.None);
-        dateTimeFormatConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"),
-                new JSNativeFunction(context, "supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(dateTimeFormatConstructor, "supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf);
         dateTimeFormatPrototype.defineProperty(PropertyKey.fromString("constructor"), dateTimeFormatConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
         intlObject.defineProperty(PropertyKey.fromString("DateTimeFormat"), dateTimeFormatConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSObject displayNamesPrototype = context.createJSObject();
-        displayNamesPrototype.defineProperty(PropertyKey.fromString("of"),
-                new JSNativeFunction(context, "of", 1, JSIntlObject::displayNamesOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        displayNamesPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"),
-                new JSNativeFunction(context, "resolvedOptions", 0, JSIntlObject::displayNamesResolvedOptions),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(displayNamesPrototype, "of", 1, JSIntlObject::displayNamesOf);
+        defineMethod(displayNamesPrototype, "resolvedOptions", 0, JSIntlObject::displayNamesResolvedOptions);
         displayNamesPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
                 new JSString("Intl.DisplayNames"), PropertyDescriptor.DataState.Configurable);
         JSNativeFunction displayNamesConstructor = new JSNativeFunction(context, "DisplayNames", 2, (childContext,
@@ -1378,24 +1036,16 @@ public final class JSGlobalObject {
                 true);
         displayNamesConstructor.defineProperty(PropertyKey.fromString("prototype"), displayNamesPrototype,
                 PropertyDescriptor.DataState.None);
-        displayNamesConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"),
-                new JSNativeFunction(context, "supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(displayNamesConstructor, "supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf);
         displayNamesPrototype.defineProperty(PropertyKey.fromString("constructor"), displayNamesConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
         intlObject.defineProperty(PropertyKey.fromString("DisplayNames"), displayNamesConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSObject durationFormatPrototype = context.createJSObject();
-        durationFormatPrototype.defineProperty(PropertyKey.fromString("format"),
-                new JSNativeFunction(context, "format", 1, JSIntlObject::durationFormatFormat),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        durationFormatPrototype.defineProperty(PropertyKey.fromString("formatToParts"),
-                new JSNativeFunction(context, "formatToParts", 1, JSIntlObject::durationFormatFormatToParts),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        durationFormatPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"),
-                new JSNativeFunction(context, "resolvedOptions", 0, JSIntlObject::durationFormatResolvedOptions),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(durationFormatPrototype, "format", 1, JSIntlObject::durationFormatFormat);
+        defineMethod(durationFormatPrototype, "formatToParts", 1, JSIntlObject::durationFormatFormatToParts);
+        defineMethod(durationFormatPrototype, "resolvedOptions", 0, JSIntlObject::durationFormatResolvedOptions);
         durationFormatPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
                 new JSString("Intl.DurationFormat"), PropertyDescriptor.DataState.Configurable);
         JSNativeFunction durationFormatConstructor = new JSNativeFunction(context, "DurationFormat", 0, (childContext,
@@ -1403,9 +1053,7 @@ public final class JSGlobalObject {
                 true);
         durationFormatConstructor.defineProperty(PropertyKey.fromString("prototype"), durationFormatPrototype,
                 PropertyDescriptor.DataState.None);
-        durationFormatConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"),
-                new JSNativeFunction(context, "supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(durationFormatConstructor, "supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf);
         durationFormatPrototype.defineProperty(PropertyKey.fromString("constructor"), durationFormatConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
         intlObject.defineProperty(PropertyKey.fromString("DurationFormat"), durationFormatConstructor,
@@ -1415,27 +1063,17 @@ public final class JSGlobalObject {
         numberFormatPrototype.defineProperty(PropertyKey.fromString("format"),
                 new JSNativeFunction(context, "get format", 0, JSIntlObject::numberFormatFormatGetter),
                 PropertyDescriptor.AccessorState.Configurable);
-        numberFormatPrototype.defineProperty(PropertyKey.fromString("formatRange"),
-                new JSNativeFunction(context, "formatRange", 2, JSIntlObject::numberFormatFormatRange),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        numberFormatPrototype.defineProperty(PropertyKey.fromString("formatRangeToParts"),
-                new JSNativeFunction(context, "formatRangeToParts", 2, JSIntlObject::numberFormatFormatRangeToParts),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        numberFormatPrototype.defineProperty(PropertyKey.fromString("formatToParts"),
-                new JSNativeFunction(context, "formatToParts", 1, JSIntlObject::numberFormatFormatToParts),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        numberFormatPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"),
-                new JSNativeFunction(context, "resolvedOptions", 0, JSIntlObject::numberFormatResolvedOptions),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(numberFormatPrototype, "formatRange", 2, JSIntlObject::numberFormatFormatRange);
+        defineMethod(numberFormatPrototype, "formatRangeToParts", 2, JSIntlObject::numberFormatFormatRangeToParts);
+        defineMethod(numberFormatPrototype, "formatToParts", 1, JSIntlObject::numberFormatFormatToParts);
+        defineMethod(numberFormatPrototype, "resolvedOptions", 0, JSIntlObject::numberFormatResolvedOptions);
         numberFormatPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
                 new JSString("Intl.NumberFormat"), PropertyDescriptor.DataState.Configurable);
         JSNativeFunction numberFormatConstructor = new JSNativeFunction(context, "NumberFormat", 0, (childContext,
                 thisArg, args) -> JSIntlObject.createNumberFormat(childContext, numberFormatPrototype, args), true);
         numberFormatConstructor.defineProperty(PropertyKey.fromString("prototype"), numberFormatPrototype,
                 PropertyDescriptor.DataState.None);
-        numberFormatConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"),
-                new JSNativeFunction(context, "supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(numberFormatConstructor, "supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf);
         numberFormatPrototype.defineProperty(PropertyKey.fromString("constructor"), numberFormatConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
         intlObject.defineProperty(PropertyKey.fromString("NumberFormat"), numberFormatConstructor,
@@ -1445,9 +1083,7 @@ public final class JSGlobalObject {
         collatorPrototype.defineProperty(PropertyKey.fromString("compare"),
                 new JSNativeFunction(context, "get compare", 0, JSIntlObject::collatorCompareGetter),
                 PropertyDescriptor.AccessorState.Configurable);
-        collatorPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"),
-                new JSNativeFunction(context, "resolvedOptions", 0, JSIntlObject::collatorResolvedOptions),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(collatorPrototype, "resolvedOptions", 0, JSIntlObject::collatorResolvedOptions);
         collatorPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Intl.Collator"),
                 PropertyDescriptor.DataState.Configurable);
         JSNativeFunction collatorConstructor = new JSNativeFunction(context, "Collator", 0,
@@ -1455,48 +1091,33 @@ public final class JSGlobalObject {
                 true);
         collatorConstructor.defineProperty(PropertyKey.fromString("prototype"), collatorPrototype,
                 PropertyDescriptor.DataState.None);
-        collatorConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"),
-                new JSNativeFunction(context, "supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(collatorConstructor, "supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf);
         collatorPrototype.defineProperty(PropertyKey.fromString("constructor"), collatorConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
         intlObject.defineProperty(PropertyKey.fromString("Collator"), collatorConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSObject pluralRulesPrototype = context.createJSObject();
-        pluralRulesPrototype.defineProperty(PropertyKey.fromString("select"),
-                new JSNativeFunction(context, "select", 1, JSIntlObject::pluralRulesSelect),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        pluralRulesPrototype.defineProperty(PropertyKey.fromString("selectRange"),
-                new JSNativeFunction(context, "selectRange", 2, JSIntlObject::pluralRulesSelectRange),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        pluralRulesPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"),
-                new JSNativeFunction(context, "resolvedOptions", 0, JSIntlObject::pluralRulesResolvedOptions),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(pluralRulesPrototype, "select", 1, JSIntlObject::pluralRulesSelect);
+        defineMethod(pluralRulesPrototype, "selectRange", 2, JSIntlObject::pluralRulesSelectRange);
+        defineMethod(pluralRulesPrototype, "resolvedOptions", 0, JSIntlObject::pluralRulesResolvedOptions);
         pluralRulesPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
                 new JSString("Intl.PluralRules"), PropertyDescriptor.DataState.Configurable);
         JSNativeFunction pluralRulesConstructor = new JSNativeFunction(context, "PluralRules", 0, (childContext,
                 thisArg, args) -> JSIntlObject.createPluralRules(childContext, pluralRulesPrototype, args), true, true);
         pluralRulesConstructor.defineProperty(PropertyKey.fromString("prototype"), pluralRulesPrototype,
                 PropertyDescriptor.DataState.None);
-        pluralRulesConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"),
-                new JSNativeFunction(context, "supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(pluralRulesConstructor, "supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf);
         pluralRulesPrototype.defineProperty(PropertyKey.fromString("constructor"), pluralRulesConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
         intlObject.defineProperty(PropertyKey.fromString("PluralRules"), pluralRulesConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSObject relativeTimeFormatPrototype = context.createJSObject();
-        relativeTimeFormatPrototype.defineProperty(PropertyKey.fromString("format"),
-                new JSNativeFunction(context, "format", 2, JSIntlObject::relativeTimeFormatFormat),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        relativeTimeFormatPrototype.defineProperty(PropertyKey.fromString("formatToParts"),
-                new JSNativeFunction(context, "formatToParts", 2, JSIntlObject::relativeTimeFormatFormatToParts),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        relativeTimeFormatPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"),
-                new JSNativeFunction(context, "resolvedOptions", 0, JSIntlObject::relativeTimeFormatResolvedOptions),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(relativeTimeFormatPrototype, "format", 2, JSIntlObject::relativeTimeFormatFormat);
+        defineMethod(relativeTimeFormatPrototype, "formatToParts", 2, JSIntlObject::relativeTimeFormatFormatToParts);
+        defineMethod(relativeTimeFormatPrototype, "resolvedOptions", 0,
+                JSIntlObject::relativeTimeFormatResolvedOptions);
         relativeTimeFormatPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
                 new JSString("Intl.RelativeTimeFormat"), PropertyDescriptor.DataState.Configurable);
         JSNativeFunction relativeTimeFormatConstructor = new JSNativeFunction(context, "RelativeTimeFormat", 0,
@@ -1505,9 +1126,7 @@ public final class JSGlobalObject {
                 true, true);
         relativeTimeFormatConstructor.defineProperty(PropertyKey.fromString("prototype"), relativeTimeFormatPrototype,
                 PropertyDescriptor.DataState.None);
-        relativeTimeFormatConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"),
-                new JSNativeFunction(context, "supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(relativeTimeFormatConstructor, "supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf);
         relativeTimeFormatPrototype.defineProperty(PropertyKey.fromString("constructor"), relativeTimeFormatConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
         intlObject.defineProperty(PropertyKey.fromString("RelativeTimeFormat"), relativeTimeFormatConstructor,
@@ -1525,12 +1144,8 @@ public final class JSGlobalObject {
         segmentDataPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.ITERATOR), segmentsIteratorFunction,
                 PropertyDescriptor.DataState.ConfigurableWritable);
         JSObject segmenterPrototype = context.createJSObject();
-        segmenterPrototype.defineProperty(PropertyKey.fromString("segment"),
-                new JSNativeFunction(context, "segment", 1, JSIntlObject::segmenterSegment),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        segmenterPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"),
-                new JSNativeFunction(context, "resolvedOptions", 0, JSIntlObject::segmenterResolvedOptions),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(segmenterPrototype, "segment", 1, JSIntlObject::segmenterSegment);
+        defineMethod(segmenterPrototype, "resolvedOptions", 0, JSIntlObject::segmenterResolvedOptions);
         segmenterPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
                 new JSString("Intl.Segmenter"), PropertyDescriptor.DataState.Configurable);
         JSNativeFunction segmenterConstructor = new JSNativeFunction(context, "Segmenter", 0, (childContext, thisArg,
@@ -1538,24 +1153,16 @@ public final class JSGlobalObject {
                 true, true);
         segmenterConstructor.defineProperty(PropertyKey.fromString("prototype"), segmenterPrototype,
                 PropertyDescriptor.DataState.None);
-        segmenterConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"),
-                new JSNativeFunction(context, "supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(segmenterConstructor, "supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf);
         segmenterPrototype.defineProperty(PropertyKey.fromString("constructor"), segmenterConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
         intlObject.defineProperty(PropertyKey.fromString("Segmenter"), segmenterConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSObject listFormatPrototype = context.createJSObject();
-        listFormatPrototype.defineProperty(PropertyKey.fromString("format"),
-                new JSNativeFunction(context, "format", 1, JSIntlObject::listFormatFormat),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        listFormatPrototype.defineProperty(PropertyKey.fromString("formatToParts"),
-                new JSNativeFunction(context, "formatToParts", 1, JSIntlObject::listFormatFormatToParts),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        listFormatPrototype.defineProperty(PropertyKey.fromString("resolvedOptions"),
-                new JSNativeFunction(context, "resolvedOptions", 0, JSIntlObject::listFormatResolvedOptions),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(listFormatPrototype, "format", 1, JSIntlObject::listFormatFormat);
+        defineMethod(listFormatPrototype, "formatToParts", 1, JSIntlObject::listFormatFormatToParts);
+        defineMethod(listFormatPrototype, "resolvedOptions", 0, JSIntlObject::listFormatResolvedOptions);
         listFormatPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
                 new JSString("Intl.ListFormat"), PropertyDescriptor.DataState.Configurable);
         JSNativeFunction listFormatConstructor = new JSNativeFunction(context, "ListFormat", 0,
@@ -1563,18 +1170,14 @@ public final class JSGlobalObject {
                 true, true);
         listFormatConstructor.defineProperty(PropertyKey.fromString("prototype"), listFormatPrototype,
                 PropertyDescriptor.DataState.None);
-        listFormatConstructor.defineProperty(PropertyKey.fromString("supportedLocalesOf"),
-                new JSNativeFunction(context, "supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(listFormatConstructor, "supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf);
         listFormatPrototype.defineProperty(PropertyKey.fromString("constructor"), listFormatConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
         intlObject.defineProperty(PropertyKey.fromString("ListFormat"), listFormatConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         JSObject localePrototype = context.createJSObject();
-        localePrototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction(context, "toString", 0, JSIntlObject::localeToString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(localePrototype, "toString", 0, JSIntlObject::localeToString);
         localePrototype.defineProperty(PropertyKey.fromString("baseName"),
                 new JSNativeFunction(context, "get baseName", 0, JSIntlObject::localeGetBaseName),
                 PropertyDescriptor.AccessorState.Configurable);
@@ -1611,33 +1214,15 @@ public final class JSGlobalObject {
         localePrototype.defineProperty(PropertyKey.fromString("firstDayOfWeek"),
                 new JSNativeFunction(context, "get firstDayOfWeek", 0, JSIntlObject::localeGetFirstDayOfWeek),
                 PropertyDescriptor.AccessorState.Configurable);
-        localePrototype.defineProperty(PropertyKey.fromString("maximize"),
-                new JSNativeFunction(context, "maximize", 0, JSIntlObject::localeMaximize),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        localePrototype.defineProperty(PropertyKey.fromString("minimize"),
-                new JSNativeFunction(context, "minimize", 0, JSIntlObject::localeMinimize),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        localePrototype.defineProperty(PropertyKey.fromString("getCalendars"),
-                new JSNativeFunction(context, "getCalendars", 0, JSIntlObject::localeGetCalendars),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        localePrototype.defineProperty(PropertyKey.fromString("getCollations"),
-                new JSNativeFunction(context, "getCollations", 0, JSIntlObject::localeGetCollations),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        localePrototype.defineProperty(PropertyKey.fromString("getHourCycles"),
-                new JSNativeFunction(context, "getHourCycles", 0, JSIntlObject::localeGetHourCycles),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        localePrototype.defineProperty(PropertyKey.fromString("getNumberingSystems"),
-                new JSNativeFunction(context, "getNumberingSystems", 0, JSIntlObject::localeGetNumberingSystems),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        localePrototype.defineProperty(PropertyKey.fromString("getTextInfo"),
-                new JSNativeFunction(context, "getTextInfo", 0, JSIntlObject::localeGetTextInfo),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        localePrototype.defineProperty(PropertyKey.fromString("getTimeZones"),
-                new JSNativeFunction(context, "getTimeZones", 0, JSIntlObject::localeGetTimeZones),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        localePrototype.defineProperty(PropertyKey.fromString("getWeekInfo"),
-                new JSNativeFunction(context, "getWeekInfo", 0, JSIntlObject::localeGetWeekInfo),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(localePrototype, "maximize", 0, JSIntlObject::localeMaximize);
+        defineMethod(localePrototype, "minimize", 0, JSIntlObject::localeMinimize);
+        defineMethod(localePrototype, "getCalendars", 0, JSIntlObject::localeGetCalendars);
+        defineMethod(localePrototype, "getCollations", 0, JSIntlObject::localeGetCollations);
+        defineMethod(localePrototype, "getHourCycles", 0, JSIntlObject::localeGetHourCycles);
+        defineMethod(localePrototype, "getNumberingSystems", 0, JSIntlObject::localeGetNumberingSystems);
+        defineMethod(localePrototype, "getTextInfo", 0, JSIntlObject::localeGetTextInfo);
+        defineMethod(localePrototype, "getTimeZones", 0, JSIntlObject::localeGetTimeZones);
+        defineMethod(localePrototype, "getWeekInfo", 0, JSIntlObject::localeGetWeekInfo);
         localePrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Intl.Locale"),
                 PropertyDescriptor.DataState.Configurable);
         JSNativeFunction localeConstructor = new JSNativeFunction(context, "Locale", 1,
@@ -1660,42 +1245,18 @@ public final class JSGlobalObject {
     private void initializeIteratorConstructor() {
         JSObject iteratorPrototype = context.createJSObject();
 
-        iteratorPrototype.defineProperty(PropertyKey.fromString("drop"),
-                new JSNativeFunction(context, "drop", 1, IteratorPrototype::drop),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        iteratorPrototype.defineProperty(PropertyKey.fromString("every"),
-                new JSNativeFunction(context, "every", 1, IteratorPrototype::every),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        iteratorPrototype.defineProperty(PropertyKey.fromString("filter"),
-                new JSNativeFunction(context, "filter", 1, IteratorPrototype::filter),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        iteratorPrototype.defineProperty(PropertyKey.fromString("find"),
-                new JSNativeFunction(context, "find", 1, IteratorPrototype::find),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        iteratorPrototype.defineProperty(PropertyKey.fromString("flatMap"),
-                new JSNativeFunction(context, "flatMap", 1, IteratorPrototype::flatMap),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        iteratorPrototype.defineProperty(PropertyKey.fromString("forEach"),
-                new JSNativeFunction(context, "forEach", 1, IteratorPrototype::forEach),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        iteratorPrototype.defineProperty(PropertyKey.fromString("map"),
-                new JSNativeFunction(context, "map", 1, IteratorPrototype::map),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        iteratorPrototype.defineProperty(PropertyKey.fromString("next"),
-                new JSNativeFunction(context, "next", 0, IteratorPrototype::next),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        iteratorPrototype.defineProperty(PropertyKey.fromString("reduce"),
-                new JSNativeFunction(context, "reduce", 1, IteratorPrototype::reduce),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        iteratorPrototype.defineProperty(PropertyKey.fromString("some"),
-                new JSNativeFunction(context, "some", 1, IteratorPrototype::some),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        iteratorPrototype.defineProperty(PropertyKey.fromString("take"),
-                new JSNativeFunction(context, "take", 1, IteratorPrototype::take),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        iteratorPrototype.defineProperty(PropertyKey.fromString("toArray"),
-                new JSNativeFunction(context, "toArray", 0, IteratorPrototype::toArray),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(iteratorPrototype, "drop", 1, IteratorPrototype::drop);
+        defineMethod(iteratorPrototype, "every", 1, IteratorPrototype::every);
+        defineMethod(iteratorPrototype, "filter", 1, IteratorPrototype::filter);
+        defineMethod(iteratorPrototype, "find", 1, IteratorPrototype::find);
+        defineMethod(iteratorPrototype, "flatMap", 1, IteratorPrototype::flatMap);
+        defineMethod(iteratorPrototype, "forEach", 1, IteratorPrototype::forEach);
+        defineMethod(iteratorPrototype, "map", 1, IteratorPrototype::map);
+        defineMethod(iteratorPrototype, "next", 0, IteratorPrototype::next);
+        defineMethod(iteratorPrototype, "reduce", 1, IteratorPrototype::reduce);
+        defineMethod(iteratorPrototype, "some", 1, IteratorPrototype::some);
+        defineMethod(iteratorPrototype, "take", 1, IteratorPrototype::take);
+        defineMethod(iteratorPrototype, "toArray", 0, IteratorPrototype::toArray);
         iteratorPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.ITERATOR),
                 new JSNativeFunction(context, "[Symbol.iterator]", 0, (childContext, thisArg, args) -> thisArg),
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1723,18 +1284,10 @@ public final class JSGlobalObject {
                 IteratorConstructor::call, true, true);
         iteratorConstructor.defineProperty(PropertyKey.PROTOTYPE,
                 PropertyDescriptor.dataDescriptor(iteratorPrototype, PropertyDescriptor.DataState.None));
-        iteratorConstructor.defineProperty(PropertyKey.fromString("concat"),
-                new JSNativeFunction(context, "concat", 0, IteratorPrototype::concat),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        iteratorConstructor.defineProperty(PropertyKey.fromString("from"),
-                new JSNativeFunction(context, "from", 1, IteratorPrototype::from),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        iteratorConstructor.defineProperty(PropertyKey.fromString("zip"),
-                new JSNativeFunction(context, "zip", 1, IteratorPrototype::zip),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        iteratorConstructor.defineProperty(PropertyKey.fromString("zipKeyed"),
-                new JSNativeFunction(context, "zipKeyed", 1, IteratorPrototype::zipKeyed),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(iteratorConstructor, "concat", 0, IteratorPrototype::concat);
+        defineMethod(iteratorConstructor, "from", 1, IteratorPrototype::from);
+        defineMethod(iteratorConstructor, "zip", 1, IteratorPrototype::zip);
+        defineMethod(iteratorConstructor, "zipKeyed", 1, IteratorPrototype::zipKeyed);
 
         JSNativeFunction constructorAccessor = new JSNativeFunction(context, "constructor", 0,
                 (childContext, thisArg, args) -> {
@@ -1783,9 +1336,7 @@ public final class JSGlobalObject {
         for (String tag : new String[]{"Array Iterator", "Map Iterator", "Set Iterator", "String Iterator"}) {
             JSObject proto = new JSObject(context);
             proto.setPrototype(iteratorPrototype);
-            proto.defineProperty(PropertyKey.fromString("next"),
-                    new JSNativeFunction(context, "next", 0, IteratorPrototype::next),
-                    PropertyDescriptor.DataState.ConfigurableWritable);
+            defineMethod(proto, "next", 0, IteratorPrototype::next);
             proto.defineProperty(PropertyKey.SYMBOL_TO_STRING_TAG,
                     PropertyDescriptor.dataDescriptor(new JSString(tag), PropertyDescriptor.DataState.Configurable));
             context.registerIteratorPrototype(tag, proto);
@@ -1793,21 +1344,15 @@ public final class JSGlobalObject {
 
         JSObject iteratorHelperPrototype = new JSObject(context);
         iteratorHelperPrototype.setPrototype(iteratorPrototype);
-        iteratorHelperPrototype.defineProperty(PropertyKey.fromString("next"),
-                new JSNativeFunction(context, "next", 0, IteratorPrototype::wrapOrHelperNext),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        iteratorHelperPrototype.defineProperty(PropertyKey.fromString("return"),
-                new JSNativeFunction(context, "return", 0, IteratorPrototype::wrapOrHelperReturn),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(iteratorHelperPrototype, "next", 0, IteratorPrototype::wrapOrHelperNext);
+        defineMethod(iteratorHelperPrototype, "return", 0, IteratorPrototype::wrapOrHelperReturn);
         iteratorHelperPrototype.defineProperty(PropertyKey.SYMBOL_TO_STRING_TAG, PropertyDescriptor
                 .dataDescriptor(new JSString("Iterator Helper"), PropertyDescriptor.DataState.Configurable));
         context.registerIteratorPrototype("Iterator Helper", iteratorHelperPrototype);
 
         JSObject regExpStringIteratorPrototype = new JSObject(context);
         regExpStringIteratorPrototype.setPrototype(iteratorPrototype);
-        regExpStringIteratorPrototype.defineProperty(PropertyKey.fromString("next"),
-                new JSNativeFunction(context, "next", 0, RegExpPrototype::regExpStringIteratorNext),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(regExpStringIteratorPrototype, "next", 0, RegExpPrototype::regExpStringIteratorNext);
         regExpStringIteratorPrototype.defineProperty(PropertyKey.SYMBOL_TO_STRING_TAG, PropertyDescriptor
                 .dataDescriptor(new JSString("RegExp String Iterator"), PropertyDescriptor.DataState.Configurable));
         context.registerIteratorPrototype("RegExp String Iterator", regExpStringIteratorPrototype);
@@ -1816,12 +1361,8 @@ public final class JSGlobalObject {
         // This prototype inherits from Iterator.prototype and provides next/return methods
         JSObject wrapForValidIteratorPrototype = new JSObject(context);
         wrapForValidIteratorPrototype.setPrototype(iteratorPrototype);
-        wrapForValidIteratorPrototype.defineProperty(PropertyKey.fromString("next"),
-                new JSNativeFunction(context, "next", 0, IteratorPrototype::wrapOrHelperNext),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        wrapForValidIteratorPrototype.defineProperty(PropertyKey.fromString("return"),
-                new JSNativeFunction(context, "return", 0, IteratorPrototype::wrapOrHelperReturn),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(wrapForValidIteratorPrototype, "next", 0, IteratorPrototype::wrapOrHelperNext);
+        defineMethod(wrapForValidIteratorPrototype, "return", 0, IteratorPrototype::wrapOrHelperReturn);
         context.registerIteratorPrototype("Iterator Wrap", wrapForValidIteratorPrototype);
 
         globalObject.defineProperty(PropertyKey.fromString(JSIterator.NAME), iteratorConstructor,
@@ -1862,41 +1403,21 @@ public final class JSGlobalObject {
     private void initializeMapConstructor() {
         // Create Map.prototype
         JSObject mapPrototype = context.createJSObject();
-        mapPrototype.defineProperty(PropertyKey.fromString("clear"),
-                new JSNativeFunction(context, "clear", 0, MapPrototype::clear),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        mapPrototype.defineProperty(PropertyKey.fromString("delete"),
-                new JSNativeFunction(context, "delete", 1, MapPrototype::delete),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        mapPrototype.defineProperty(PropertyKey.fromString("forEach"),
-                new JSNativeFunction(context, "forEach", 1, MapPrototype::forEach),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        mapPrototype.defineProperty(PropertyKey.fromString("get"),
-                new JSNativeFunction(context, "get", 1, MapPrototype::get),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        mapPrototype.defineProperty(PropertyKey.fromString("getOrInsert"),
-                new JSNativeFunction(context, "getOrInsert", 2, MapPrototype::getOrInsert),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        mapPrototype.defineProperty(PropertyKey.fromString("getOrInsertComputed"),
-                new JSNativeFunction(context, "getOrInsertComputed", 2, MapPrototype::getOrInsertComputed),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        mapPrototype.defineProperty(PropertyKey.fromString("has"),
-                new JSNativeFunction(context, "has", 1, MapPrototype::has),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        mapPrototype.defineProperty(PropertyKey.fromString("set"),
-                new JSNativeFunction(context, "set", 2, MapPrototype::set),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(mapPrototype, "clear", 0, MapPrototype::clear);
+        defineMethod(mapPrototype, "delete", 1, MapPrototype::delete);
+        defineMethod(mapPrototype, "forEach", 1, MapPrototype::forEach);
+        defineMethod(mapPrototype, "get", 1, MapPrototype::get);
+        defineMethod(mapPrototype, "getOrInsert", 2, MapPrototype::getOrInsert);
+        defineMethod(mapPrototype, "getOrInsertComputed", 2, MapPrototype::getOrInsertComputed);
+        defineMethod(mapPrototype, "has", 1, MapPrototype::has);
+        defineMethod(mapPrototype, "set", 2, MapPrototype::set);
         // Create entries function once and use it for both entries and Symbol.iterator (ES spec requirement)
         JSNativeFunction entriesFunction = new JSNativeFunction(context, "entries", 0,
                 IteratorPrototype::mapEntriesIterator);
         mapPrototype.defineProperty(PropertyKey.fromString("entries"), entriesFunction,
                 PropertyDescriptor.DataState.ConfigurableWritable);
-        mapPrototype.defineProperty(PropertyKey.fromString("keys"),
-                new JSNativeFunction(context, "keys", 0, IteratorPrototype::mapKeysIterator),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        mapPrototype.defineProperty(PropertyKey.fromString("values"),
-                new JSNativeFunction(context, "values", 0, IteratorPrototype::mapValuesIterator),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(mapPrototype, "keys", 0, IteratorPrototype::mapKeysIterator);
+        defineMethod(mapPrototype, "values", 0, IteratorPrototype::mapValuesIterator);
         // Map.prototype[Symbol.iterator] is the same function object as entries() (QuickJS uses JS_ALIAS_DEF)
         mapPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.ITERATOR), entriesFunction,
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1918,9 +1439,7 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Map static methods
-        mapConstructor.defineProperty(PropertyKey.fromString("groupBy"),
-                new JSNativeFunction(context, "groupBy", 2, MapConstructor::groupBy),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(mapConstructor, "groupBy", 2, MapConstructor::groupBy);
         mapConstructor.defineProperty(PropertyKey.fromSymbol(JSSymbol.SPECIES),
                 new JSNativeFunction(context, "get [Symbol.species]", 0, MapConstructor::getSpecies),
                 PropertyDescriptor.AccessorState.Configurable);
@@ -1953,96 +1472,43 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.None);
 
         // Math methods
-        math.defineProperty(PropertyKey.fromString("abs"), new JSNativeFunction(context, "abs", 1, MathObject::abs),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("acos"), new JSNativeFunction(context, "acos", 1, MathObject::acos),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("acosh"),
-                new JSNativeFunction(context, "acosh", 1, MathObject::acosh),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("asin"), new JSNativeFunction(context, "asin", 1, MathObject::asin),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("asinh"),
-                new JSNativeFunction(context, "asinh", 1, MathObject::asinh),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("atan"), new JSNativeFunction(context, "atan", 1, MathObject::atan),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("atanh"),
-                new JSNativeFunction(context, "atanh", 1, MathObject::atanh),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("atan2"),
-                new JSNativeFunction(context, "atan2", 2, MathObject::atan2),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("cbrt"), new JSNativeFunction(context, "cbrt", 1, MathObject::cbrt),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("ceil"), new JSNativeFunction(context, "ceil", 1, MathObject::ceil),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("clz32"),
-                new JSNativeFunction(context, "clz32", 1, MathObject::clz32),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("cos"), new JSNativeFunction(context, "cos", 1, MathObject::cos),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("cosh"), new JSNativeFunction(context, "cosh", 1, MathObject::cosh),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("exp"), new JSNativeFunction(context, "exp", 1, MathObject::exp),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("expm1"),
-                new JSNativeFunction(context, "expm1", 1, MathObject::expm1),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("f16round"),
-                new JSNativeFunction(context, "f16round", 1, MathObject::f16round),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("floor"),
-                new JSNativeFunction(context, "floor", 1, MathObject::floor),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("fround"),
-                new JSNativeFunction(context, "fround", 1, MathObject::fround),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("hypot"),
-                new JSNativeFunction(context, "hypot", 2, MathObject::hypot),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("imul"), new JSNativeFunction(context, "imul", 2, MathObject::imul),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("log"), new JSNativeFunction(context, "log", 1, MathObject::log),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("log1p"),
-                new JSNativeFunction(context, "log1p", 1, MathObject::log1p),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("log10"),
-                new JSNativeFunction(context, "log10", 1, MathObject::log10),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("log2"), new JSNativeFunction(context, "log2", 1, MathObject::log2),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("max"), new JSNativeFunction(context, "max", 2, MathObject::max),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("min"), new JSNativeFunction(context, "min", 2, MathObject::min),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("pow"), new JSNativeFunction(context, "pow", 2, MathObject::pow),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("random"),
-                new JSNativeFunction(context, "random", 0, MathObject::random),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("round"),
-                new JSNativeFunction(context, "round", 1, MathObject::round),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("sign"), new JSNativeFunction(context, "sign", 1, MathObject::sign),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("sin"), new JSNativeFunction(context, "sin", 1, MathObject::sin),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("sinh"), new JSNativeFunction(context, "sinh", 1, MathObject::sinh),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("sqrt"), new JSNativeFunction(context, "sqrt", 1, MathObject::sqrt),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("sumPrecise"),
-                new JSNativeFunction(context, "sumPrecise", 1, MathObject::sumPrecise),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("tan"), new JSNativeFunction(context, "tan", 1, MathObject::tan),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("tanh"), new JSNativeFunction(context, "tanh", 1, MathObject::tanh),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        math.defineProperty(PropertyKey.fromString("trunc"),
-                new JSNativeFunction(context, "trunc", 1, MathObject::trunc),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(math, "abs", 1, MathObject::abs);
+        defineMethod(math, "acos", 1, MathObject::acos);
+        defineMethod(math, "acosh", 1, MathObject::acosh);
+        defineMethod(math, "asin", 1, MathObject::asin);
+        defineMethod(math, "asinh", 1, MathObject::asinh);
+        defineMethod(math, "atan", 1, MathObject::atan);
+        defineMethod(math, "atanh", 1, MathObject::atanh);
+        defineMethod(math, "atan2", 2, MathObject::atan2);
+        defineMethod(math, "cbrt", 1, MathObject::cbrt);
+        defineMethod(math, "ceil", 1, MathObject::ceil);
+        defineMethod(math, "clz32", 1, MathObject::clz32);
+        defineMethod(math, "cos", 1, MathObject::cos);
+        defineMethod(math, "cosh", 1, MathObject::cosh);
+        defineMethod(math, "exp", 1, MathObject::exp);
+        defineMethod(math, "expm1", 1, MathObject::expm1);
+        defineMethod(math, "f16round", 1, MathObject::f16round);
+        defineMethod(math, "floor", 1, MathObject::floor);
+        defineMethod(math, "fround", 1, MathObject::fround);
+        defineMethod(math, "hypot", 2, MathObject::hypot);
+        defineMethod(math, "imul", 2, MathObject::imul);
+        defineMethod(math, "log", 1, MathObject::log);
+        defineMethod(math, "log1p", 1, MathObject::log1p);
+        defineMethod(math, "log10", 1, MathObject::log10);
+        defineMethod(math, "log2", 1, MathObject::log2);
+        defineMethod(math, "max", 2, MathObject::max);
+        defineMethod(math, "min", 2, MathObject::min);
+        defineMethod(math, "pow", 2, MathObject::pow);
+        defineMethod(math, "random", 0, MathObject::random);
+        defineMethod(math, "round", 1, MathObject::round);
+        defineMethod(math, "sign", 1, MathObject::sign);
+        defineMethod(math, "sin", 1, MathObject::sin);
+        defineMethod(math, "sinh", 1, MathObject::sinh);
+        defineMethod(math, "sqrt", 1, MathObject::sqrt);
+        defineMethod(math, "sumPrecise", 1, MathObject::sumPrecise);
+        defineMethod(math, "tan", 1, MathObject::tan);
+        defineMethod(math, "tanh", 1, MathObject::tanh);
+        defineMethod(math, "trunc", 1, MathObject::trunc);
         math.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Math"),
                 PropertyDescriptor.DataState.Configurable);
 
@@ -2077,24 +1543,12 @@ public final class JSGlobalObject {
         // Create Number.prototype as a Number object with [[NumberData]] = +0 (ES2024 20.1.3)
         JSNumberObject numberPrototype = new JSNumberObject(context, 0.0);
         context.transferPrototype(numberPrototype, JSObject.NAME);
-        numberPrototype.defineProperty(PropertyKey.fromString("toExponential"),
-                new JSNativeFunction(context, "toExponential", 1, NumberPrototype::toExponential),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        numberPrototype.defineProperty(PropertyKey.fromString("toFixed"),
-                new JSNativeFunction(context, "toFixed", 1, NumberPrototype::toFixed),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        numberPrototype.defineProperty(PropertyKey.fromString("toLocaleString"),
-                new JSNativeFunction(context, "toLocaleString", 0, NumberPrototype::toLocaleString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        numberPrototype.defineProperty(PropertyKey.fromString("toPrecision"),
-                new JSNativeFunction(context, "toPrecision", 1, NumberPrototype::toPrecision),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        numberPrototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction(context, "toString", 1, NumberPrototype::toString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        numberPrototype.defineProperty(PropertyKey.fromString("valueOf"),
-                new JSNativeFunction(context, "valueOf", 0, NumberPrototype::valueOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(numberPrototype, "toExponential", 1, NumberPrototype::toExponential);
+        defineMethod(numberPrototype, "toFixed", 1, NumberPrototype::toFixed);
+        defineMethod(numberPrototype, "toLocaleString", 0, NumberPrototype::toLocaleString);
+        defineMethod(numberPrototype, "toPrecision", 1, NumberPrototype::toPrecision);
+        defineMethod(numberPrototype, "toString", 1, NumberPrototype::toString);
+        defineMethod(numberPrototype, "valueOf", 0, NumberPrototype::valueOf);
 
         // Create Number constructor
         JSNativeFunction numberConstructor = new JSNativeFunction(context, JSNumberObject.NAME, 1,
@@ -2106,18 +1560,10 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Number static methods
-        numberConstructor.defineProperty(PropertyKey.fromString("isFinite"),
-                new JSNativeFunction(context, "isFinite", 1, NumberPrototype::isFinite),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        numberConstructor.defineProperty(PropertyKey.fromString("isInteger"),
-                new JSNativeFunction(context, "isInteger", 1, NumberPrototype::isInteger),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        numberConstructor.defineProperty(PropertyKey.fromString("isNaN"),
-                new JSNativeFunction(context, "isNaN", 1, NumberPrototype::isNaN),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        numberConstructor.defineProperty(PropertyKey.fromString("isSafeInteger"),
-                new JSNativeFunction(context, "isSafeInteger", 1, NumberPrototype::isSafeInteger),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(numberConstructor, "isFinite", 1, NumberPrototype::isFinite);
+        defineMethod(numberConstructor, "isInteger", 1, NumberPrototype::isInteger);
+        defineMethod(numberConstructor, "isNaN", 1, NumberPrototype::isNaN);
+        defineMethod(numberConstructor, "isSafeInteger", 1, NumberPrototype::isSafeInteger);
 
         // QuickJS compatibility: Number.parseInt/parseFloat are aliases of global parseInt/parseFloat.
         JSValue globalParseInt = globalObject.get("parseInt");
@@ -2153,36 +1599,16 @@ public final class JSGlobalObject {
     private void initializeObjectConstructor() {
         // Create Object.prototype
         JSObject objectPrototype = context.createJSObject();
-        objectPrototype.defineProperty(PropertyKey.fromString("__defineGetter__"),
-                new JSNativeFunction(context, "__defineGetter__", 2, ObjectPrototype::__defineGetter__),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectPrototype.defineProperty(PropertyKey.fromString("__defineSetter__"),
-                new JSNativeFunction(context, "__defineSetter__", 2, ObjectPrototype::__defineSetter__),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectPrototype.defineProperty(PropertyKey.fromString("__lookupGetter__"),
-                new JSNativeFunction(context, "__lookupGetter__", 1, ObjectPrototype::__lookupGetter__),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectPrototype.defineProperty(PropertyKey.fromString("__lookupSetter__"),
-                new JSNativeFunction(context, "__lookupSetter__", 1, ObjectPrototype::__lookupSetter__),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectPrototype.defineProperty(PropertyKey.fromString("hasOwnProperty"),
-                new JSNativeFunction(context, "hasOwnProperty", 1, ObjectPrototype::hasOwnProperty),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectPrototype.defineProperty(PropertyKey.fromString("isPrototypeOf"),
-                new JSNativeFunction(context, "isPrototypeOf", 1, ObjectPrototype::isPrototypeOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectPrototype.defineProperty(PropertyKey.fromString("propertyIsEnumerable"),
-                new JSNativeFunction(context, "propertyIsEnumerable", 1, ObjectPrototype::propertyIsEnumerable),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectPrototype.defineProperty(PropertyKey.fromString("toLocaleString"),
-                new JSNativeFunction(context, "toLocaleString", 0, ObjectPrototype::toLocaleString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectPrototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction(context, "toString", 0, ObjectPrototype::toString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectPrototype.defineProperty(PropertyKey.fromString("valueOf"),
-                new JSNativeFunction(context, "valueOf", 0, ObjectPrototype::valueOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(objectPrototype, "__defineGetter__", 2, ObjectPrototype::__defineGetter__);
+        defineMethod(objectPrototype, "__defineSetter__", 2, ObjectPrototype::__defineSetter__);
+        defineMethod(objectPrototype, "__lookupGetter__", 1, ObjectPrototype::__lookupGetter__);
+        defineMethod(objectPrototype, "__lookupSetter__", 1, ObjectPrototype::__lookupSetter__);
+        defineMethod(objectPrototype, "hasOwnProperty", 1, ObjectPrototype::hasOwnProperty);
+        defineMethod(objectPrototype, "isPrototypeOf", 1, ObjectPrototype::isPrototypeOf);
+        defineMethod(objectPrototype, "propertyIsEnumerable", 1, ObjectPrototype::propertyIsEnumerable);
+        defineMethod(objectPrototype, "toLocaleString", 0, ObjectPrototype::toLocaleString);
+        defineMethod(objectPrototype, "toString", 0, ObjectPrototype::toString);
+        defineMethod(objectPrototype, "valueOf", 0, ObjectPrototype::valueOf);
 
         // Define __proto__ as an accessor property
         PropertyDescriptor protoDesc = PropertyDescriptor.accessorDescriptor(
@@ -2203,77 +1629,29 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Object static methods
-        objectConstructor.defineProperty(PropertyKey.fromString("assign"),
-                new JSNativeFunction(context, "assign", 2, ObjectConstructor::assign),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("create"),
-                new JSNativeFunction(context, "create", 2, ObjectConstructor::create),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("defineProperties"),
-                new JSNativeFunction(context, "defineProperties", 2, ObjectConstructor::defineProperties),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("defineProperty"),
-                new JSNativeFunction(context, "defineProperty", 3, ObjectPrototype::defineProperty),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("entries"),
-                new JSNativeFunction(context, "entries", 1, ObjectConstructor::entries),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("freeze"),
-                new JSNativeFunction(context, "freeze", 1, ObjectConstructor::freeze),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("fromEntries"),
-                new JSNativeFunction(context, "fromEntries", 1, ObjectConstructor::fromEntries),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("getOwnPropertyDescriptor"),
-                new JSNativeFunction(context, "getOwnPropertyDescriptor", 2,
-                        ObjectConstructor::getOwnPropertyDescriptor),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("getOwnPropertyDescriptors"),
-                new JSNativeFunction(context, "getOwnPropertyDescriptors", 1,
-                        ObjectConstructor::getOwnPropertyDescriptors),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("getOwnPropertyNames"),
-                new JSNativeFunction(context, "getOwnPropertyNames", 1, ObjectConstructor::getOwnPropertyNames),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("getOwnPropertySymbols"),
-                new JSNativeFunction(context, "getOwnPropertySymbols", 1, ObjectConstructor::getOwnPropertySymbols),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("getPrototypeOf"),
-                new JSNativeFunction(context, "getPrototypeOf", 1, ObjectConstructor::getPrototypeOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("groupBy"),
-                new JSNativeFunction(context, "groupBy", 2, ObjectConstructor::groupBy),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("hasOwn"),
-                new JSNativeFunction(context, "hasOwn", 2, ObjectConstructor::hasOwn),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("is"),
-                new JSNativeFunction(context, "is", 2, ObjectConstructor::is),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("isExtensible"),
-                new JSNativeFunction(context, "isExtensible", 1, ObjectConstructor::isExtensible),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("isFrozen"),
-                new JSNativeFunction(context, "isFrozen", 1, ObjectConstructor::isFrozen),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("isSealed"),
-                new JSNativeFunction(context, "isSealed", 1, ObjectConstructor::isSealed),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("keys"),
-                new JSNativeFunction(context, "keys", 1, ObjectConstructor::keys),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("preventExtensions"),
-                new JSNativeFunction(context, "preventExtensions", 1, ObjectConstructor::preventExtensions),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("seal"),
-                new JSNativeFunction(context, "seal", 1, ObjectConstructor::seal),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("setPrototypeOf"),
-                new JSNativeFunction(context, "setPrototypeOf", 2, ObjectConstructor::setPrototypeOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        objectConstructor.defineProperty(PropertyKey.fromString("values"),
-                new JSNativeFunction(context, "values", 1, ObjectConstructor::values),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(objectConstructor, "assign", 2, ObjectConstructor::assign);
+        defineMethod(objectConstructor, "create", 2, ObjectConstructor::create);
+        defineMethod(objectConstructor, "defineProperties", 2, ObjectConstructor::defineProperties);
+        defineMethod(objectConstructor, "defineProperty", 3, ObjectPrototype::defineProperty);
+        defineMethod(objectConstructor, "entries", 1, ObjectConstructor::entries);
+        defineMethod(objectConstructor, "freeze", 1, ObjectConstructor::freeze);
+        defineMethod(objectConstructor, "fromEntries", 1, ObjectConstructor::fromEntries);
+        defineMethod(objectConstructor, "getOwnPropertyDescriptor", 2, ObjectConstructor::getOwnPropertyDescriptor);
+        defineMethod(objectConstructor, "getOwnPropertyDescriptors", 1, ObjectConstructor::getOwnPropertyDescriptors);
+        defineMethod(objectConstructor, "getOwnPropertyNames", 1, ObjectConstructor::getOwnPropertyNames);
+        defineMethod(objectConstructor, "getOwnPropertySymbols", 1, ObjectConstructor::getOwnPropertySymbols);
+        defineMethod(objectConstructor, "getPrototypeOf", 1, ObjectConstructor::getPrototypeOf);
+        defineMethod(objectConstructor, "groupBy", 2, ObjectConstructor::groupBy);
+        defineMethod(objectConstructor, "hasOwn", 2, ObjectConstructor::hasOwn);
+        defineMethod(objectConstructor, "is", 2, ObjectConstructor::is);
+        defineMethod(objectConstructor, "isExtensible", 1, ObjectConstructor::isExtensible);
+        defineMethod(objectConstructor, "isFrozen", 1, ObjectConstructor::isFrozen);
+        defineMethod(objectConstructor, "isSealed", 1, ObjectConstructor::isSealed);
+        defineMethod(objectConstructor, "keys", 1, ObjectConstructor::keys);
+        defineMethod(objectConstructor, "preventExtensions", 1, ObjectConstructor::preventExtensions);
+        defineMethod(objectConstructor, "seal", 1, ObjectConstructor::seal);
+        defineMethod(objectConstructor, "setPrototypeOf", 2, ObjectConstructor::setPrototypeOf);
+        defineMethod(objectConstructor, "values", 1, ObjectConstructor::values);
 
         globalObject.defineProperty(PropertyKey.fromString(JSObject.NAME), objectConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -2285,15 +1663,9 @@ public final class JSGlobalObject {
     private void initializePromiseConstructor() {
         // Create Promise.prototype
         JSObject promisePrototype = context.createJSObject();
-        promisePrototype.defineProperty(PropertyKey.fromString("catch"),
-                new JSNativeFunction(context, "catch", 1, PromisePrototype::catchMethod),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        promisePrototype.defineProperty(PropertyKey.fromString("finally"),
-                new JSNativeFunction(context, "finally", 1, PromisePrototype::finallyMethod),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        promisePrototype.defineProperty(PropertyKey.fromString("then"),
-                new JSNativeFunction(context, "then", 2, PromisePrototype::then),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(promisePrototype, "catch", 1, PromisePrototype::catchMethod);
+        defineMethod(promisePrototype, "finally", 1, PromisePrototype::finallyMethod);
+        defineMethod(promisePrototype, "then", 2, PromisePrototype::then);
         promisePrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString(JSPromise.NAME),
                 PropertyDescriptor.DataState.Configurable);
 
@@ -2308,36 +1680,16 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Static methods
-        promiseConstructor.defineProperty(PropertyKey.fromString("all"),
-                new JSNativeFunction(context, "all", 1, PromiseConstructor::all),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        promiseConstructor.defineProperty(PropertyKey.fromString("allKeyed"),
-                new JSNativeFunction(context, "allKeyed", 1, PromiseConstructor::allKeyed),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        promiseConstructor.defineProperty(PropertyKey.fromString("allSettled"),
-                new JSNativeFunction(context, "allSettled", 1, PromiseConstructor::allSettled),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        promiseConstructor.defineProperty(PropertyKey.fromString("allSettledKeyed"),
-                new JSNativeFunction(context, "allSettledKeyed", 1, PromiseConstructor::allSettledKeyed),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        promiseConstructor.defineProperty(PropertyKey.fromString("any"),
-                new JSNativeFunction(context, "any", 1, PromiseConstructor::any),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        promiseConstructor.defineProperty(PropertyKey.fromString("race"),
-                new JSNativeFunction(context, "race", 1, PromiseConstructor::race),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        promiseConstructor.defineProperty(PropertyKey.fromString("reject"),
-                new JSNativeFunction(context, "reject", 1, PromiseConstructor::reject),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        promiseConstructor.defineProperty(PropertyKey.fromString("resolve"),
-                new JSNativeFunction(context, "resolve", 1, PromiseConstructor::resolve),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        promiseConstructor.defineProperty(PropertyKey.fromString("try"),
-                new JSNativeFunction(context, "try", 1, PromiseConstructor::tryMethod),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        promiseConstructor.defineProperty(PropertyKey.fromString("withResolvers"),
-                new JSNativeFunction(context, "withResolvers", 0, PromiseConstructor::withResolvers),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(promiseConstructor, "all", 1, PromiseConstructor::all);
+        defineMethod(promiseConstructor, "allKeyed", 1, PromiseConstructor::allKeyed);
+        defineMethod(promiseConstructor, "allSettled", 1, PromiseConstructor::allSettled);
+        defineMethod(promiseConstructor, "allSettledKeyed", 1, PromiseConstructor::allSettledKeyed);
+        defineMethod(promiseConstructor, "any", 1, PromiseConstructor::any);
+        defineMethod(promiseConstructor, "race", 1, PromiseConstructor::race);
+        defineMethod(promiseConstructor, "reject", 1, PromiseConstructor::reject);
+        defineMethod(promiseConstructor, "resolve", 1, PromiseConstructor::resolve);
+        defineMethod(promiseConstructor, "try", 1, PromiseConstructor::tryMethod);
+        defineMethod(promiseConstructor, "withResolvers", 0, PromiseConstructor::withResolvers);
         promiseConstructor.defineProperty(PropertyKey.fromSymbol(JSSymbol.SPECIES),
                 new JSNativeFunction(context, "get [Symbol.species]", 0, PromiseConstructor::getSpecies),
                 PropertyDescriptor.AccessorState.Configurable);
@@ -2361,9 +1713,7 @@ public final class JSGlobalObject {
         proxyConstructor.delete(PropertyKey.PROTOTYPE);
 
         // Add static methods.
-        proxyConstructor.defineProperty(PropertyKey.fromString("revocable"),
-                new JSNativeFunction(context, "revocable", 2, ProxyConstructor::revocable),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(proxyConstructor, "revocable", 2, ProxyConstructor::revocable);
 
         globalObject.defineProperty(PropertyKey.fromString(JSProxy.NAME), proxyConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -2374,45 +1724,19 @@ public final class JSGlobalObject {
      */
     private void initializeReflectObject() {
         JSObject reflect = context.createJSObject();
-        reflect.defineProperty(PropertyKey.fromString("apply"),
-                new JSNativeFunction(context, "apply", 3, JSReflectObject::apply),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        reflect.defineProperty(PropertyKey.fromString("construct"),
-                new JSNativeFunction(context, "construct", 2, JSReflectObject::construct),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        reflect.defineProperty(PropertyKey.fromString("defineProperty"),
-                new JSNativeFunction(context, "defineProperty", 3, JSReflectObject::defineProperty),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        reflect.defineProperty(PropertyKey.fromString("deleteProperty"),
-                new JSNativeFunction(context, "deleteProperty", 2, JSReflectObject::deleteProperty),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        reflect.defineProperty(PropertyKey.fromString("get"),
-                new JSNativeFunction(context, "get", 2, JSReflectObject::get),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        reflect.defineProperty(PropertyKey.fromString("getOwnPropertyDescriptor"),
-                new JSNativeFunction(context, "getOwnPropertyDescriptor", 2, JSReflectObject::getOwnPropertyDescriptor),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        reflect.defineProperty(PropertyKey.fromString("getPrototypeOf"),
-                new JSNativeFunction(context, "getPrototypeOf", 1, JSReflectObject::getPrototypeOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        reflect.defineProperty(PropertyKey.fromString("has"),
-                new JSNativeFunction(context, "has", 2, JSReflectObject::has),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        reflect.defineProperty(PropertyKey.fromString("isExtensible"),
-                new JSNativeFunction(context, "isExtensible", 1, JSReflectObject::isExtensible),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        reflect.defineProperty(PropertyKey.fromString("ownKeys"),
-                new JSNativeFunction(context, "ownKeys", 1, JSReflectObject::ownKeys),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        reflect.defineProperty(PropertyKey.fromString("preventExtensions"),
-                new JSNativeFunction(context, "preventExtensions", 1, JSReflectObject::preventExtensions),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        reflect.defineProperty(PropertyKey.fromString("set"),
-                new JSNativeFunction(context, "set", 3, JSReflectObject::set),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        reflect.defineProperty(PropertyKey.fromString("setPrototypeOf"),
-                new JSNativeFunction(context, "setPrototypeOf", 2, JSReflectObject::setPrototypeOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(reflect, "apply", 3, JSReflectObject::apply);
+        defineMethod(reflect, "construct", 2, JSReflectObject::construct);
+        defineMethod(reflect, "defineProperty", 3, JSReflectObject::defineProperty);
+        defineMethod(reflect, "deleteProperty", 2, JSReflectObject::deleteProperty);
+        defineMethod(reflect, "get", 2, JSReflectObject::get);
+        defineMethod(reflect, "getOwnPropertyDescriptor", 2, JSReflectObject::getOwnPropertyDescriptor);
+        defineMethod(reflect, "getPrototypeOf", 1, JSReflectObject::getPrototypeOf);
+        defineMethod(reflect, "has", 2, JSReflectObject::has);
+        defineMethod(reflect, "isExtensible", 1, JSReflectObject::isExtensible);
+        defineMethod(reflect, "ownKeys", 1, JSReflectObject::ownKeys);
+        defineMethod(reflect, "preventExtensions", 1, JSReflectObject::preventExtensions);
+        defineMethod(reflect, "set", 3, JSReflectObject::set);
+        defineMethod(reflect, "setPrototypeOf", 2, JSReflectObject::setPrototypeOf);
         reflect.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Reflect"),
                 PropertyDescriptor.DataState.Configurable);
 
@@ -2426,18 +1750,12 @@ public final class JSGlobalObject {
     private void initializeRegExpConstructor() {
         // Create RegExp.prototype
         JSObject regexpPrototype = context.createJSObject();
-        regexpPrototype.defineProperty(PropertyKey.fromString("test"),
-                new JSNativeFunction(context, "test", 1, RegExpPrototype::test),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(regexpPrototype, "test", 1, RegExpPrototype::test);
         regexpPrototype.defineProperty(PropertyKey.EXEC,
                 new JSNativeFunction(context, "exec", 1, RegExpPrototype::exec),
                 PropertyDescriptor.DataState.ConfigurableWritable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("compile"),
-                new JSNativeFunction(context, "compile", 2, RegExpPrototype::compile),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        regexpPrototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction(context, "toString", 0, RegExpPrototype::toStringMethod),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(regexpPrototype, "compile", 2, RegExpPrototype::compile);
+        defineMethod(regexpPrototype, "toString", 0, RegExpPrototype::toStringMethod);
         regexpPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.SPLIT),
                 new JSNativeFunction(context, "[Symbol.split]", 2, RegExpPrototype::symbolSplit),
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -2565,9 +1883,7 @@ public final class JSGlobalObject {
                 new JSNativeFunction(context, "get [Symbol.species]", 0, RegExpConstructor::getSpecies),
                 PropertyDescriptor.AccessorState.Configurable);
         // ES2024 RegExp.escape static method
-        regexpConstructor.defineProperty(PropertyKey.fromString("escape"),
-                new JSNativeFunction(context, "escape", 1, RegExpConstructor::escape),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(regexpConstructor, "escape", 1, RegExpConstructor::escape);
 
         globalObject.defineProperty(PropertyKey.fromString(JSRegExp.NAME), regexpConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -2579,45 +1895,19 @@ public final class JSGlobalObject {
     private void initializeSetConstructor() {
         // Create Set.prototype
         JSObject setPrototype = context.createJSObject();
-        setPrototype.defineProperty(PropertyKey.fromString("add"),
-                new JSNativeFunction(context, "add", 1, SetPrototype::add),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        setPrototype.defineProperty(PropertyKey.fromString("clear"),
-                new JSNativeFunction(context, "clear", 0, SetPrototype::clear),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        setPrototype.defineProperty(PropertyKey.fromString("delete"),
-                new JSNativeFunction(context, "delete", 1, SetPrototype::delete),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        setPrototype.defineProperty(PropertyKey.fromString("difference"),
-                new JSNativeFunction(context, "difference", 1, SetPrototype::difference),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        setPrototype.defineProperty(PropertyKey.fromString("entries"),
-                new JSNativeFunction(context, "entries", 0, SetPrototype::entries),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        setPrototype.defineProperty(PropertyKey.fromString("forEach"),
-                new JSNativeFunction(context, "forEach", 1, SetPrototype::forEach),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        setPrototype.defineProperty(PropertyKey.fromString("has"),
-                new JSNativeFunction(context, "has", 1, SetPrototype::has),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        setPrototype.defineProperty(PropertyKey.fromString("intersection"),
-                new JSNativeFunction(context, "intersection", 1, SetPrototype::intersection),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        setPrototype.defineProperty(PropertyKey.fromString("isDisjointFrom"),
-                new JSNativeFunction(context, "isDisjointFrom", 1, SetPrototype::isDisjointFrom),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        setPrototype.defineProperty(PropertyKey.fromString("isSubsetOf"),
-                new JSNativeFunction(context, "isSubsetOf", 1, SetPrototype::isSubsetOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        setPrototype.defineProperty(PropertyKey.fromString("isSupersetOf"),
-                new JSNativeFunction(context, "isSupersetOf", 1, SetPrototype::isSupersetOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        setPrototype.defineProperty(PropertyKey.fromString("symmetricDifference"),
-                new JSNativeFunction(context, "symmetricDifference", 1, SetPrototype::symmetricDifference),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        setPrototype.defineProperty(PropertyKey.fromString("union"),
-                new JSNativeFunction(context, "union", 1, SetPrototype::union),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(setPrototype, "add", 1, SetPrototype::add);
+        defineMethod(setPrototype, "clear", 0, SetPrototype::clear);
+        defineMethod(setPrototype, "delete", 1, SetPrototype::delete);
+        defineMethod(setPrototype, "difference", 1, SetPrototype::difference);
+        defineMethod(setPrototype, "entries", 0, SetPrototype::entries);
+        defineMethod(setPrototype, "forEach", 1, SetPrototype::forEach);
+        defineMethod(setPrototype, "has", 1, SetPrototype::has);
+        defineMethod(setPrototype, "intersection", 1, SetPrototype::intersection);
+        defineMethod(setPrototype, "isDisjointFrom", 1, SetPrototype::isDisjointFrom);
+        defineMethod(setPrototype, "isSubsetOf", 1, SetPrototype::isSubsetOf);
+        defineMethod(setPrototype, "isSupersetOf", 1, SetPrototype::isSupersetOf);
+        defineMethod(setPrototype, "symmetricDifference", 1, SetPrototype::symmetricDifference);
+        defineMethod(setPrototype, "union", 1, SetPrototype::union);
 
         // Create values function - keys and Symbol.iterator will alias to this
         JSNativeFunction valuesFunction = new JSNativeFunction(context, "values", 0, SetPrototype::values);
@@ -2646,9 +1936,7 @@ public final class JSGlobalObject {
         setPrototype.defineProperty(PropertyKey.fromString("constructor"), setConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
-        setConstructor.defineProperty(PropertyKey.fromString("groupBy"),
-                new JSNativeFunction(context, "groupBy", 2, SetConstructor::groupBy),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(setConstructor, "groupBy", 2, SetConstructor::groupBy);
         setConstructor.defineProperty(PropertyKey.fromSymbol(JSSymbol.SPECIES),
                 new JSNativeFunction(context, "get [Symbol.species]", 0, SetConstructor::getSpecies),
                 PropertyDescriptor.AccessorState.Configurable);
@@ -2663,12 +1951,8 @@ public final class JSGlobalObject {
      */
     private void initializeShadowRealmConstructor() {
         JSObject shadowRealmPrototype = context.createJSObject();
-        shadowRealmPrototype.defineProperty(PropertyKey.fromString("evaluate"),
-                new JSNativeFunction(context, "evaluate", 1, ShadowRealmPrototype::evaluate),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        shadowRealmPrototype.defineProperty(PropertyKey.fromString("importValue"),
-                new JSNativeFunction(context, "importValue", 2, ShadowRealmPrototype::importValue),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(shadowRealmPrototype, "evaluate", 1, ShadowRealmPrototype::evaluate);
+        defineMethod(shadowRealmPrototype, "importValue", 2, ShadowRealmPrototype::importValue);
         shadowRealmPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
                 new JSString(JSShadowRealm.NAME), PropertyDescriptor.DataState.Configurable);
 
@@ -2689,12 +1973,8 @@ public final class JSGlobalObject {
     private void initializeSharedArrayBufferConstructor() {
         // Create SharedArrayBuffer.prototype
         JSObject sharedArrayBufferPrototype = context.createJSObject();
-        sharedArrayBufferPrototype.defineProperty(PropertyKey.fromString("grow"),
-                new JSNativeFunction(context, "grow", 1, SharedArrayBufferPrototype::grow),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        sharedArrayBufferPrototype.defineProperty(PropertyKey.fromString("slice"),
-                new JSNativeFunction(context, "slice", 2, SharedArrayBufferPrototype::slice),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(sharedArrayBufferPrototype, "grow", 1, SharedArrayBufferPrototype::grow);
+        defineMethod(sharedArrayBufferPrototype, "slice", 2, SharedArrayBufferPrototype::slice);
 
         // Define getter properties
         sharedArrayBufferPrototype.defineProperty(PropertyKey.fromString("byteLength"),
@@ -2734,87 +2014,33 @@ public final class JSGlobalObject {
         // Create String.prototype - per ES spec, it is itself a String object whose value is ""
         JSObject stringPrototype = new JSStringObject(context);
         context.transferPrototype(stringPrototype, JSObject.NAME);
-        stringPrototype.defineProperty(PropertyKey.fromString("at"),
-                new JSNativeFunction(context, "at", 1, StringPrototype::at),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("charAt"),
-                new JSNativeFunction(context, "charAt", 1, StringPrototype::charAt),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("charCodeAt"),
-                new JSNativeFunction(context, "charCodeAt", 1, StringPrototype::charCodeAt),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("codePointAt"),
-                new JSNativeFunction(context, "codePointAt", 1, StringPrototype::codePointAt),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("concat"),
-                new JSNativeFunction(context, "concat", 1, StringPrototype::concat),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("endsWith"),
-                new JSNativeFunction(context, "endsWith", 1, StringPrototype::endsWith),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("includes"),
-                new JSNativeFunction(context, "includes", 1, StringPrototype::includes),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("indexOf"),
-                new JSNativeFunction(context, "indexOf", 1, StringPrototype::indexOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("lastIndexOf"),
-                new JSNativeFunction(context, "lastIndexOf", 1, StringPrototype::lastIndexOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("localeCompare"),
-                new JSNativeFunction(context, "localeCompare", 1, StringPrototype::localeCompare),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("match"),
-                new JSNativeFunction(context, "match", 1, StringPrototype::match),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("matchAll"),
-                new JSNativeFunction(context, "matchAll", 1, StringPrototype::matchAll),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("padEnd"),
-                new JSNativeFunction(context, "padEnd", 1, StringPrototype::padEnd),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("padStart"),
-                new JSNativeFunction(context, "padStart", 1, StringPrototype::padStart),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("repeat"),
-                new JSNativeFunction(context, "repeat", 1, StringPrototype::repeat),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("replace"),
-                new JSNativeFunction(context, "replace", 2, StringPrototype::replace),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("replaceAll"),
-                new JSNativeFunction(context, "replaceAll", 2, StringPrototype::replaceAll),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("search"),
-                new JSNativeFunction(context, "search", 1, StringPrototype::search),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("slice"),
-                new JSNativeFunction(context, "slice", 2, StringPrototype::slice),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("split"),
-                new JSNativeFunction(context, "split", 2, StringPrototype::split),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("startsWith"),
-                new JSNativeFunction(context, "startsWith", 1, StringPrototype::startsWith),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("substr"),
-                new JSNativeFunction(context, "substr", 2, StringPrototype::substr),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("substring"),
-                new JSNativeFunction(context, "substring", 2, StringPrototype::substring),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("toLowerCase"),
-                new JSNativeFunction(context, "toLowerCase", 0, StringPrototype::toLowerCase),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction(context, "toString", 0, StringPrototype::toString_),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("toUpperCase"),
-                new JSNativeFunction(context, "toUpperCase", 0, StringPrototype::toUpperCase),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("trim"),
-                new JSNativeFunction(context, "trim", 0, StringPrototype::trim),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(stringPrototype, "at", 1, StringPrototype::at);
+        defineMethod(stringPrototype, "charAt", 1, StringPrototype::charAt);
+        defineMethod(stringPrototype, "charCodeAt", 1, StringPrototype::charCodeAt);
+        defineMethod(stringPrototype, "codePointAt", 1, StringPrototype::codePointAt);
+        defineMethod(stringPrototype, "concat", 1, StringPrototype::concat);
+        defineMethod(stringPrototype, "endsWith", 1, StringPrototype::endsWith);
+        defineMethod(stringPrototype, "includes", 1, StringPrototype::includes);
+        defineMethod(stringPrototype, "indexOf", 1, StringPrototype::indexOf);
+        defineMethod(stringPrototype, "lastIndexOf", 1, StringPrototype::lastIndexOf);
+        defineMethod(stringPrototype, "localeCompare", 1, StringPrototype::localeCompare);
+        defineMethod(stringPrototype, "match", 1, StringPrototype::match);
+        defineMethod(stringPrototype, "matchAll", 1, StringPrototype::matchAll);
+        defineMethod(stringPrototype, "padEnd", 1, StringPrototype::padEnd);
+        defineMethod(stringPrototype, "padStart", 1, StringPrototype::padStart);
+        defineMethod(stringPrototype, "repeat", 1, StringPrototype::repeat);
+        defineMethod(stringPrototype, "replace", 2, StringPrototype::replace);
+        defineMethod(stringPrototype, "replaceAll", 2, StringPrototype::replaceAll);
+        defineMethod(stringPrototype, "search", 1, StringPrototype::search);
+        defineMethod(stringPrototype, "slice", 2, StringPrototype::slice);
+        defineMethod(stringPrototype, "split", 2, StringPrototype::split);
+        defineMethod(stringPrototype, "startsWith", 1, StringPrototype::startsWith);
+        defineMethod(stringPrototype, "substr", 2, StringPrototype::substr);
+        defineMethod(stringPrototype, "substring", 2, StringPrototype::substring);
+        defineMethod(stringPrototype, "toLowerCase", 0, StringPrototype::toLowerCase);
+        defineMethod(stringPrototype, "toString", 0, StringPrototype::toString_);
+        defineMethod(stringPrototype, "toUpperCase", 0, StringPrototype::toUpperCase);
+        defineMethod(stringPrototype, "trim", 0, StringPrototype::trim);
         JSNativeFunction trimEnd = new JSNativeFunction(context, "trimEnd", 0, StringPrototype::trimEnd);
         JSNativeFunction trimStart = new JSNativeFunction(context, "trimStart", 0, StringPrototype::trimStart);
         stringPrototype.defineProperty(PropertyKey.fromString("trimEnd"), trimEnd,
@@ -2825,67 +2051,29 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
         stringPrototype.defineProperty(PropertyKey.fromString("trimLeft"), trimStart,
                 PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("valueOf"),
-                new JSNativeFunction(context, "valueOf", 0, StringPrototype::valueOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(stringPrototype, "valueOf", 0, StringPrototype::valueOf);
 
         // HTML wrapper methods (deprecated but still part of spec)
-        stringPrototype.defineProperty(PropertyKey.fromString("anchor"),
-                new JSNativeFunction(context, "anchor", 1, StringPrototype::anchor),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("big"),
-                new JSNativeFunction(context, "big", 0, StringPrototype::big),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("blink"),
-                new JSNativeFunction(context, "blink", 0, StringPrototype::blink),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("bold"),
-                new JSNativeFunction(context, "bold", 0, StringPrototype::bold),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("fixed"),
-                new JSNativeFunction(context, "fixed", 0, StringPrototype::fixed),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("fontcolor"),
-                new JSNativeFunction(context, "fontcolor", 1, StringPrototype::fontcolor),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("fontsize"),
-                new JSNativeFunction(context, "fontsize", 1, StringPrototype::fontsize),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("italics"),
-                new JSNativeFunction(context, "italics", 0, StringPrototype::italics),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("link"),
-                new JSNativeFunction(context, "link", 1, StringPrototype::link),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("small"),
-                new JSNativeFunction(context, "small", 0, StringPrototype::small),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("strike"),
-                new JSNativeFunction(context, "strike", 0, StringPrototype::strike),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("sub"),
-                new JSNativeFunction(context, "sub", 0, StringPrototype::sub),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("sup"),
-                new JSNativeFunction(context, "sup", 0, StringPrototype::sup),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(stringPrototype, "anchor", 1, StringPrototype::anchor);
+        defineMethod(stringPrototype, "big", 0, StringPrototype::big);
+        defineMethod(stringPrototype, "blink", 0, StringPrototype::blink);
+        defineMethod(stringPrototype, "bold", 0, StringPrototype::bold);
+        defineMethod(stringPrototype, "fixed", 0, StringPrototype::fixed);
+        defineMethod(stringPrototype, "fontcolor", 1, StringPrototype::fontcolor);
+        defineMethod(stringPrototype, "fontsize", 1, StringPrototype::fontsize);
+        defineMethod(stringPrototype, "italics", 0, StringPrototype::italics);
+        defineMethod(stringPrototype, "link", 1, StringPrototype::link);
+        defineMethod(stringPrototype, "small", 0, StringPrototype::small);
+        defineMethod(stringPrototype, "strike", 0, StringPrototype::strike);
+        defineMethod(stringPrototype, "sub", 0, StringPrototype::sub);
+        defineMethod(stringPrototype, "sup", 0, StringPrototype::sup);
 
         // Unicode methods
-        stringPrototype.defineProperty(PropertyKey.fromString("isWellFormed"),
-                new JSNativeFunction(context, "isWellFormed", 0, StringPrototype::isWellFormed),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("normalize"),
-                new JSNativeFunction(context, "normalize", 0, StringPrototype::normalize),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("toLocaleLowerCase"),
-                new JSNativeFunction(context, "toLocaleLowerCase", 0, StringPrototype::toLocaleLowerCase),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("toLocaleUpperCase"),
-                new JSNativeFunction(context, "toLocaleUpperCase", 0, StringPrototype::toLocaleUpperCase),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringPrototype.defineProperty(PropertyKey.fromString("toWellFormed"),
-                new JSNativeFunction(context, "toWellFormed", 0, StringPrototype::toWellFormed),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(stringPrototype, "isWellFormed", 0, StringPrototype::isWellFormed);
+        defineMethod(stringPrototype, "normalize", 0, StringPrototype::normalize);
+        defineMethod(stringPrototype, "toLocaleLowerCase", 0, StringPrototype::toLocaleLowerCase);
+        defineMethod(stringPrototype, "toLocaleUpperCase", 0, StringPrototype::toLocaleUpperCase);
+        defineMethod(stringPrototype, "toWellFormed", 0, StringPrototype::toWellFormed);
 
         // String.prototype[Symbol.iterator]
         stringPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.ITERATOR),
@@ -2906,15 +2094,9 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Add static methods
-        stringConstructor.defineProperty(PropertyKey.fromString("fromCharCode"),
-                new JSNativeFunction(context, "fromCharCode", 1, StringConstructor::fromCharCode),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringConstructor.defineProperty(PropertyKey.fromString("fromCodePoint"),
-                new JSNativeFunction(context, "fromCodePoint", 1, StringConstructor::fromCodePoint),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        stringConstructor.defineProperty(PropertyKey.fromString("raw"),
-                new JSNativeFunction(context, "raw", 1, StringConstructor::raw),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(stringConstructor, "fromCharCode", 1, StringConstructor::fromCharCode);
+        defineMethod(stringConstructor, "fromCodePoint", 1, StringConstructor::fromCodePoint);
+        defineMethod(stringConstructor, "raw", 1, StringConstructor::raw);
 
         globalObject.defineProperty(PropertyKey.fromString(JSString.NAME), stringConstructor,
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -2964,12 +2146,8 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Symbol static methods
-        symbolConstructor.defineProperty(PropertyKey.fromString("for"),
-                new JSNativeFunction(context, "for", 1, SymbolConstructor::symbolFor),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        symbolConstructor.defineProperty(PropertyKey.fromString("keyFor"),
-                new JSNativeFunction(context, "keyFor", 1, SymbolConstructor::keyFor),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(symbolConstructor, "for", 1, SymbolConstructor::symbolFor);
+        defineMethod(symbolConstructor, "keyFor", 1, SymbolConstructor::keyFor);
 
         // Well-known symbols (ES2015+)
         symbolConstructor.defineProperty(PropertyKey.fromString("iterator"), JSSymbol.ITERATOR,
@@ -3028,49 +2206,23 @@ public final class JSGlobalObject {
         defineTemporalGetter(prototype, "blank", TemporalDurationPrototype::blank);
 
         // Methods
-        prototype.defineProperty(PropertyKey.fromString("with"),
-                new JSNativeFunction(context, "with", 1, TemporalDurationPrototype::with),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("negated"),
-                new JSNativeFunction(context, "negated", 0, TemporalDurationPrototype::negated),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("abs"),
-                new JSNativeFunction(context, "abs", 0, TemporalDurationPrototype::abs),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("add"),
-                new JSNativeFunction(context, "add", 1, TemporalDurationPrototype::add),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("subtract"),
-                new JSNativeFunction(context, "subtract", 1, TemporalDurationPrototype::subtract),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("round"),
-                new JSNativeFunction(context, "round", 1, TemporalDurationPrototype::round),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("total"),
-                new JSNativeFunction(context, "total", 1, TemporalDurationPrototype::total),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction(context, "toString", 0, TemporalDurationPrototype::toStringMethod),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toJSON"),
-                new JSNativeFunction(context, "toJSON", 0, TemporalDurationPrototype::toJSON),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toLocaleString"),
-                new JSNativeFunction(context, "toLocaleString", 0, TemporalDurationPrototype::toLocaleString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("valueOf"),
-                new JSNativeFunction(context, "valueOf", 0, TemporalDurationPrototype::valueOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(prototype, "with", 1, TemporalDurationPrototype::with);
+        defineMethod(prototype, "negated", 0, TemporalDurationPrototype::negated);
+        defineMethod(prototype, "abs", 0, TemporalDurationPrototype::abs);
+        defineMethod(prototype, "add", 1, TemporalDurationPrototype::add);
+        defineMethod(prototype, "subtract", 1, TemporalDurationPrototype::subtract);
+        defineMethod(prototype, "round", 1, TemporalDurationPrototype::round);
+        defineMethod(prototype, "total", 1, TemporalDurationPrototype::total);
+        defineMethod(prototype, "toString", 0, TemporalDurationPrototype::toStringMethod);
+        defineMethod(prototype, "toJSON", 0, TemporalDurationPrototype::toJSON);
+        defineMethod(prototype, "toLocaleString", 0, TemporalDurationPrototype::toLocaleString);
+        defineMethod(prototype, "valueOf", 0, TemporalDurationPrototype::valueOf);
 
         // Constructor
         JSNativeFunction constructor = new JSNativeFunction(context, "Duration", 0,
                 TemporalDurationConstructor::construct, true, false);
-        constructor.defineProperty(PropertyKey.fromString("from"),
-                new JSNativeFunction(context, "from", 1, TemporalDurationConstructor::from),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        constructor.defineProperty(PropertyKey.fromString("compare"),
-                new JSNativeFunction(context, "compare", 2, TemporalDurationConstructor::compare),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(constructor, "from", 1, TemporalDurationConstructor::from);
+        defineMethod(constructor, "compare", 2, TemporalDurationConstructor::compare);
 
         // Link constructor <-> prototype
         constructor.defineProperty(PropertyKey.PROTOTYPE, prototype, PropertyDescriptor.DataState.None);
@@ -3091,57 +2243,25 @@ public final class JSGlobalObject {
         defineTemporalGetter(prototype, "epochNanoseconds", TemporalInstantPrototype::epochNanoseconds);
 
         // Methods
-        prototype.defineProperty(PropertyKey.fromString("add"),
-                new JSNativeFunction(context, "add", 1, TemporalInstantPrototype::add),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("subtract"),
-                new JSNativeFunction(context, "subtract", 1, TemporalInstantPrototype::subtract),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("until"),
-                new JSNativeFunction(context, "until", 1, TemporalInstantPrototype::until),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("since"),
-                new JSNativeFunction(context, "since", 1, TemporalInstantPrototype::since),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("round"),
-                new JSNativeFunction(context, "round", 1, TemporalInstantPrototype::round),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("equals"),
-                new JSNativeFunction(context, "equals", 1, TemporalInstantPrototype::equals),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction(context, "toString", 0, TemporalInstantPrototype::toStringMethod),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toJSON"),
-                new JSNativeFunction(context, "toJSON", 0, TemporalInstantPrototype::toJSON),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toLocaleString"),
-                new JSNativeFunction(context, "toLocaleString", 0, TemporalInstantPrototype::toLocaleString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("valueOf"),
-                new JSNativeFunction(context, "valueOf", 0, TemporalInstantPrototype::valueOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toZonedDateTimeISO"),
-                new JSNativeFunction(context, "toZonedDateTimeISO", 1, TemporalInstantPrototype::toZonedDateTimeISO),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(prototype, "add", 1, TemporalInstantPrototype::add);
+        defineMethod(prototype, "subtract", 1, TemporalInstantPrototype::subtract);
+        defineMethod(prototype, "until", 1, TemporalInstantPrototype::until);
+        defineMethod(prototype, "since", 1, TemporalInstantPrototype::since);
+        defineMethod(prototype, "round", 1, TemporalInstantPrototype::round);
+        defineMethod(prototype, "equals", 1, TemporalInstantPrototype::equals);
+        defineMethod(prototype, "toString", 0, TemporalInstantPrototype::toStringMethod);
+        defineMethod(prototype, "toJSON", 0, TemporalInstantPrototype::toJSON);
+        defineMethod(prototype, "toLocaleString", 0, TemporalInstantPrototype::toLocaleString);
+        defineMethod(prototype, "valueOf", 0, TemporalInstantPrototype::valueOf);
+        defineMethod(prototype, "toZonedDateTimeISO", 1, TemporalInstantPrototype::toZonedDateTimeISO);
 
         // Constructor
         JSNativeFunction constructor = new JSNativeFunction(context, "Instant", 1,
                 TemporalInstantConstructor::construct, true, false);
-        constructor.defineProperty(PropertyKey.fromString("from"),
-                new JSNativeFunction(context, "from", 1, TemporalInstantConstructor::from),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        constructor.defineProperty(PropertyKey.fromString("fromEpochMilliseconds"),
-                new JSNativeFunction(context, "fromEpochMilliseconds", 1,
-                        TemporalInstantConstructor::fromEpochMilliseconds),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        constructor.defineProperty(PropertyKey.fromString("fromEpochNanoseconds"),
-                new JSNativeFunction(context, "fromEpochNanoseconds", 1,
-                        TemporalInstantConstructor::fromEpochNanoseconds),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        constructor.defineProperty(PropertyKey.fromString("compare"),
-                new JSNativeFunction(context, "compare", 2, TemporalInstantConstructor::compare),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(constructor, "from", 1, TemporalInstantConstructor::from);
+        defineMethod(constructor, "fromEpochMilliseconds", 1, TemporalInstantConstructor::fromEpochMilliseconds);
+        defineMethod(constructor, "fromEpochNanoseconds", 1, TemporalInstantConstructor::fromEpochNanoseconds);
+        defineMethod(constructor, "compare", 2, TemporalInstantConstructor::compare);
 
         // Link constructor <-> prototype
         constructor.defineProperty(PropertyKey.PROTOTYPE, prototype, PropertyDescriptor.DataState.None);
@@ -3157,24 +2277,12 @@ public final class JSGlobalObject {
         nowObject.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Temporal.Now"),
                 PropertyDescriptor.DataState.Configurable);
 
-        nowObject.defineProperty(PropertyKey.fromString("instant"),
-                new JSNativeFunction(context, "instant", 0, TemporalNow::instant),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        nowObject.defineProperty(PropertyKey.fromString("timeZoneId"),
-                new JSNativeFunction(context, "timeZoneId", 0, TemporalNow::timeZoneId),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        nowObject.defineProperty(PropertyKey.fromString("plainDateTimeISO"),
-                new JSNativeFunction(context, "plainDateTimeISO", 0, TemporalNow::plainDateTimeISO),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        nowObject.defineProperty(PropertyKey.fromString("plainDateISO"),
-                new JSNativeFunction(context, "plainDateISO", 0, TemporalNow::plainDateISO),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        nowObject.defineProperty(PropertyKey.fromString("plainTimeISO"),
-                new JSNativeFunction(context, "plainTimeISO", 0, TemporalNow::plainTimeISO),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        nowObject.defineProperty(PropertyKey.fromString("zonedDateTimeISO"),
-                new JSNativeFunction(context, "zonedDateTimeISO", 0, TemporalNow::zonedDateTimeISO),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(nowObject, "instant", 0, TemporalNow::instant);
+        defineMethod(nowObject, "timeZoneId", 0, TemporalNow::timeZoneId);
+        defineMethod(nowObject, "plainDateTimeISO", 0, TemporalNow::plainDateTimeISO);
+        defineMethod(nowObject, "plainDateISO", 0, TemporalNow::plainDateISO);
+        defineMethod(nowObject, "plainTimeISO", 0, TemporalNow::plainTimeISO);
+        defineMethod(nowObject, "zonedDateTimeISO", 0, TemporalNow::zonedDateTimeISO);
 
         temporalObject.defineProperty(PropertyKey.fromString("Now"), nowObject,
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -3241,61 +2349,27 @@ public final class JSGlobalObject {
         defineTemporalGetter(prototype, "yearOfWeek", TemporalPlainDatePrototype::yearOfWeek);
 
         // Methods
-        prototype.defineProperty(PropertyKey.fromString("add"),
-                new JSNativeFunction(context, "add", 1, TemporalPlainDatePrototype::add),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("equals"),
-                new JSNativeFunction(context, "equals", 1, TemporalPlainDatePrototype::equals),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("since"),
-                new JSNativeFunction(context, "since", 1, TemporalPlainDatePrototype::since),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("subtract"),
-                new JSNativeFunction(context, "subtract", 1, TemporalPlainDatePrototype::subtract),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toJSON"),
-                new JSNativeFunction(context, "toJSON", 0, TemporalPlainDatePrototype::toJSON),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toLocaleString"),
-                new JSNativeFunction(context, "toLocaleString", 0, TemporalPlainDatePrototype::toLocaleString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toPlainDateTime"),
-                new JSNativeFunction(context, "toPlainDateTime", 0, TemporalPlainDatePrototype::toPlainDateTime),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toPlainMonthDay"),
-                new JSNativeFunction(context, "toPlainMonthDay", 0, TemporalPlainDatePrototype::toPlainMonthDay),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toPlainYearMonth"),
-                new JSNativeFunction(context, "toPlainYearMonth", 0, TemporalPlainDatePrototype::toPlainYearMonth),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction(context, "toString", 0, TemporalPlainDatePrototype::toStringMethod),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toZonedDateTime"),
-                new JSNativeFunction(context, "toZonedDateTime", 1, TemporalPlainDatePrototype::toZonedDateTime),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("until"),
-                new JSNativeFunction(context, "until", 1, TemporalPlainDatePrototype::until),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("valueOf"),
-                new JSNativeFunction(context, "valueOf", 0, TemporalPlainDatePrototype::valueOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("with"),
-                new JSNativeFunction(context, "with", 1, TemporalPlainDatePrototype::with),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("withCalendar"),
-                new JSNativeFunction(context, "withCalendar", 1, TemporalPlainDatePrototype::withCalendar),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(prototype, "add", 1, TemporalPlainDatePrototype::add);
+        defineMethod(prototype, "equals", 1, TemporalPlainDatePrototype::equals);
+        defineMethod(prototype, "since", 1, TemporalPlainDatePrototype::since);
+        defineMethod(prototype, "subtract", 1, TemporalPlainDatePrototype::subtract);
+        defineMethod(prototype, "toJSON", 0, TemporalPlainDatePrototype::toJSON);
+        defineMethod(prototype, "toLocaleString", 0, TemporalPlainDatePrototype::toLocaleString);
+        defineMethod(prototype, "toPlainDateTime", 0, TemporalPlainDatePrototype::toPlainDateTime);
+        defineMethod(prototype, "toPlainMonthDay", 0, TemporalPlainDatePrototype::toPlainMonthDay);
+        defineMethod(prototype, "toPlainYearMonth", 0, TemporalPlainDatePrototype::toPlainYearMonth);
+        defineMethod(prototype, "toString", 0, TemporalPlainDatePrototype::toStringMethod);
+        defineMethod(prototype, "toZonedDateTime", 1, TemporalPlainDatePrototype::toZonedDateTime);
+        defineMethod(prototype, "until", 1, TemporalPlainDatePrototype::until);
+        defineMethod(prototype, "valueOf", 0, TemporalPlainDatePrototype::valueOf);
+        defineMethod(prototype, "with", 1, TemporalPlainDatePrototype::with);
+        defineMethod(prototype, "withCalendar", 1, TemporalPlainDatePrototype::withCalendar);
 
         // Constructor
         JSNativeFunction constructor = new JSNativeFunction(context, "PlainDate", 3,
                 TemporalPlainDateConstructor::construct, true, false);
-        constructor.defineProperty(PropertyKey.fromString("compare"),
-                new JSNativeFunction(context, "compare", 2, TemporalPlainDateConstructor::compare),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        constructor.defineProperty(PropertyKey.fromString("from"),
-                new JSNativeFunction(context, "from", 1, TemporalPlainDateConstructor::from),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(constructor, "compare", 2, TemporalPlainDateConstructor::compare);
+        defineMethod(constructor, "from", 1, TemporalPlainDateConstructor::from);
 
         // Link constructor <-> prototype
         constructor.defineProperty(PropertyKey.PROTOTYPE, prototype, PropertyDescriptor.DataState.None);
@@ -3336,64 +2410,28 @@ public final class JSGlobalObject {
         defineTemporalGetter(prototype, "yearOfWeek", TemporalPlainDateTimePrototype::yearOfWeek);
 
         // Methods
-        prototype.defineProperty(PropertyKey.fromString("add"),
-                new JSNativeFunction(context, "add", 1, TemporalPlainDateTimePrototype::add),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("equals"),
-                new JSNativeFunction(context, "equals", 1, TemporalPlainDateTimePrototype::equals),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("round"),
-                new JSNativeFunction(context, "round", 1, TemporalPlainDateTimePrototype::round),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("since"),
-                new JSNativeFunction(context, "since", 1, TemporalPlainDateTimePrototype::since),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("subtract"),
-                new JSNativeFunction(context, "subtract", 1, TemporalPlainDateTimePrototype::subtract),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toJSON"),
-                new JSNativeFunction(context, "toJSON", 0, TemporalPlainDateTimePrototype::toJSON),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toLocaleString"),
-                new JSNativeFunction(context, "toLocaleString", 0, TemporalPlainDateTimePrototype::toLocaleString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toPlainDate"),
-                new JSNativeFunction(context, "toPlainDate", 0, TemporalPlainDateTimePrototype::toPlainDate),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toPlainTime"),
-                new JSNativeFunction(context, "toPlainTime", 0, TemporalPlainDateTimePrototype::toPlainTime),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction(context, "toString", 0, TemporalPlainDateTimePrototype::toStringMethod),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toZonedDateTime"),
-                new JSNativeFunction(context, "toZonedDateTime", 1, TemporalPlainDateTimePrototype::toZonedDateTime),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("until"),
-                new JSNativeFunction(context, "until", 1, TemporalPlainDateTimePrototype::until),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("valueOf"),
-                new JSNativeFunction(context, "valueOf", 0, TemporalPlainDateTimePrototype::valueOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("with"),
-                new JSNativeFunction(context, "with", 1, TemporalPlainDateTimePrototype::with),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("withCalendar"),
-                new JSNativeFunction(context, "withCalendar", 1, TemporalPlainDateTimePrototype::withCalendar),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("withPlainTime"),
-                new JSNativeFunction(context, "withPlainTime", 0, TemporalPlainDateTimePrototype::withPlainTime),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(prototype, "add", 1, TemporalPlainDateTimePrototype::add);
+        defineMethod(prototype, "equals", 1, TemporalPlainDateTimePrototype::equals);
+        defineMethod(prototype, "round", 1, TemporalPlainDateTimePrototype::round);
+        defineMethod(prototype, "since", 1, TemporalPlainDateTimePrototype::since);
+        defineMethod(prototype, "subtract", 1, TemporalPlainDateTimePrototype::subtract);
+        defineMethod(prototype, "toJSON", 0, TemporalPlainDateTimePrototype::toJSON);
+        defineMethod(prototype, "toLocaleString", 0, TemporalPlainDateTimePrototype::toLocaleString);
+        defineMethod(prototype, "toPlainDate", 0, TemporalPlainDateTimePrototype::toPlainDate);
+        defineMethod(prototype, "toPlainTime", 0, TemporalPlainDateTimePrototype::toPlainTime);
+        defineMethod(prototype, "toString", 0, TemporalPlainDateTimePrototype::toStringMethod);
+        defineMethod(prototype, "toZonedDateTime", 1, TemporalPlainDateTimePrototype::toZonedDateTime);
+        defineMethod(prototype, "until", 1, TemporalPlainDateTimePrototype::until);
+        defineMethod(prototype, "valueOf", 0, TemporalPlainDateTimePrototype::valueOf);
+        defineMethod(prototype, "with", 1, TemporalPlainDateTimePrototype::with);
+        defineMethod(prototype, "withCalendar", 1, TemporalPlainDateTimePrototype::withCalendar);
+        defineMethod(prototype, "withPlainTime", 0, TemporalPlainDateTimePrototype::withPlainTime);
 
         // Constructor
         JSNativeFunction constructor = new JSNativeFunction(context, "PlainDateTime", 3,
                 TemporalPlainDateTimeConstructor::construct, true, false);
-        constructor.defineProperty(PropertyKey.fromString("from"),
-                new JSNativeFunction(context, "from", 1, TemporalPlainDateTimeConstructor::from),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        constructor.defineProperty(PropertyKey.fromString("compare"),
-                new JSNativeFunction(context, "compare", 2, TemporalPlainDateTimeConstructor::compare),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(constructor, "from", 1, TemporalPlainDateTimeConstructor::from);
+        defineMethod(constructor, "compare", 2, TemporalPlainDateTimeConstructor::compare);
 
         // Link constructor <-> prototype
         constructor.defineProperty(PropertyKey.PROTOTYPE, prototype, PropertyDescriptor.DataState.None);
@@ -3416,34 +2454,18 @@ public final class JSGlobalObject {
         defineTemporalGetter(prototype, "referenceISOYear", TemporalPlainMonthDayPrototype::referenceISOYear);
 
         // Methods
-        prototype.defineProperty(PropertyKey.fromString("equals"),
-                new JSNativeFunction(context, "equals", 1, TemporalPlainMonthDayPrototype::equals),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toJSON"),
-                new JSNativeFunction(context, "toJSON", 0, TemporalPlainMonthDayPrototype::toJSON),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toLocaleString"),
-                new JSNativeFunction(context, "toLocaleString", 0, TemporalPlainMonthDayPrototype::toLocaleString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toPlainDate"),
-                new JSNativeFunction(context, "toPlainDate", 1, TemporalPlainMonthDayPrototype::toPlainDate),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction(context, "toString", 0, TemporalPlainMonthDayPrototype::toStringMethod),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("valueOf"),
-                new JSNativeFunction(context, "valueOf", 0, TemporalPlainMonthDayPrototype::valueOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("with"),
-                new JSNativeFunction(context, "with", 1, TemporalPlainMonthDayPrototype::with),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(prototype, "equals", 1, TemporalPlainMonthDayPrototype::equals);
+        defineMethod(prototype, "toJSON", 0, TemporalPlainMonthDayPrototype::toJSON);
+        defineMethod(prototype, "toLocaleString", 0, TemporalPlainMonthDayPrototype::toLocaleString);
+        defineMethod(prototype, "toPlainDate", 1, TemporalPlainMonthDayPrototype::toPlainDate);
+        defineMethod(prototype, "toString", 0, TemporalPlainMonthDayPrototype::toStringMethod);
+        defineMethod(prototype, "valueOf", 0, TemporalPlainMonthDayPrototype::valueOf);
+        defineMethod(prototype, "with", 1, TemporalPlainMonthDayPrototype::with);
 
         // Constructor
         JSNativeFunction constructor = new JSNativeFunction(context, "PlainMonthDay", 2,
                 TemporalPlainMonthDayConstructor::construct, true, false);
-        constructor.defineProperty(PropertyKey.fromString("from"),
-                new JSNativeFunction(context, "from", 1, TemporalPlainMonthDayConstructor::from),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(constructor, "from", 1, TemporalPlainMonthDayConstructor::from);
 
         // Link constructor <-> prototype
         constructor.defineProperty(PropertyKey.PROTOTYPE, prototype, PropertyDescriptor.DataState.None);
@@ -3468,49 +2490,23 @@ public final class JSGlobalObject {
         defineTemporalGetter(prototype, "second", TemporalPlainTimePrototype::second);
 
         // Methods
-        prototype.defineProperty(PropertyKey.fromString("add"),
-                new JSNativeFunction(context, "add", 1, TemporalPlainTimePrototype::add),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("equals"),
-                new JSNativeFunction(context, "equals", 1, TemporalPlainTimePrototype::equals),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("round"),
-                new JSNativeFunction(context, "round", 1, TemporalPlainTimePrototype::round),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("since"),
-                new JSNativeFunction(context, "since", 1, TemporalPlainTimePrototype::since),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("subtract"),
-                new JSNativeFunction(context, "subtract", 1, TemporalPlainTimePrototype::subtract),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toJSON"),
-                new JSNativeFunction(context, "toJSON", 0, TemporalPlainTimePrototype::toJSON),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toLocaleString"),
-                new JSNativeFunction(context, "toLocaleString", 0, TemporalPlainTimePrototype::toLocaleString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction(context, "toString", 0, TemporalPlainTimePrototype::toStringMethod),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("until"),
-                new JSNativeFunction(context, "until", 1, TemporalPlainTimePrototype::until),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("valueOf"),
-                new JSNativeFunction(context, "valueOf", 0, TemporalPlainTimePrototype::valueOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("with"),
-                new JSNativeFunction(context, "with", 1, TemporalPlainTimePrototype::with),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(prototype, "add", 1, TemporalPlainTimePrototype::add);
+        defineMethod(prototype, "equals", 1, TemporalPlainTimePrototype::equals);
+        defineMethod(prototype, "round", 1, TemporalPlainTimePrototype::round);
+        defineMethod(prototype, "since", 1, TemporalPlainTimePrototype::since);
+        defineMethod(prototype, "subtract", 1, TemporalPlainTimePrototype::subtract);
+        defineMethod(prototype, "toJSON", 0, TemporalPlainTimePrototype::toJSON);
+        defineMethod(prototype, "toLocaleString", 0, TemporalPlainTimePrototype::toLocaleString);
+        defineMethod(prototype, "toString", 0, TemporalPlainTimePrototype::toStringMethod);
+        defineMethod(prototype, "until", 1, TemporalPlainTimePrototype::until);
+        defineMethod(prototype, "valueOf", 0, TemporalPlainTimePrototype::valueOf);
+        defineMethod(prototype, "with", 1, TemporalPlainTimePrototype::with);
 
         // Constructor
         JSNativeFunction constructor = new JSNativeFunction(context, "PlainTime", 0,
                 TemporalPlainTimeConstructor::construct, true, false);
-        constructor.defineProperty(PropertyKey.fromString("compare"),
-                new JSNativeFunction(context, "compare", 2, TemporalPlainTimeConstructor::compare),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        constructor.defineProperty(PropertyKey.fromString("from"),
-                new JSNativeFunction(context, "from", 1, TemporalPlainTimeConstructor::from),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(constructor, "compare", 2, TemporalPlainTimeConstructor::compare);
+        defineMethod(constructor, "from", 1, TemporalPlainTimeConstructor::from);
 
         // Link constructor <-> prototype
         constructor.defineProperty(PropertyKey.PROTOTYPE, prototype, PropertyDescriptor.DataState.None);
@@ -3540,49 +2536,23 @@ public final class JSGlobalObject {
         defineTemporalGetter(prototype, "year", TemporalPlainYearMonthPrototype::year);
 
         // Methods
-        prototype.defineProperty(PropertyKey.fromString("add"),
-                new JSNativeFunction(context, "add", 1, TemporalPlainYearMonthPrototype::add),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("equals"),
-                new JSNativeFunction(context, "equals", 1, TemporalPlainYearMonthPrototype::equals),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("since"),
-                new JSNativeFunction(context, "since", 1, TemporalPlainYearMonthPrototype::since),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("subtract"),
-                new JSNativeFunction(context, "subtract", 1, TemporalPlainYearMonthPrototype::subtract),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toJSON"),
-                new JSNativeFunction(context, "toJSON", 0, TemporalPlainYearMonthPrototype::toJSON),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toLocaleString"),
-                new JSNativeFunction(context, "toLocaleString", 0, TemporalPlainYearMonthPrototype::toLocaleString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toPlainDate"),
-                new JSNativeFunction(context, "toPlainDate", 1, TemporalPlainYearMonthPrototype::toPlainDate),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction(context, "toString", 0, TemporalPlainYearMonthPrototype::toStringMethod),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("until"),
-                new JSNativeFunction(context, "until", 1, TemporalPlainYearMonthPrototype::until),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("valueOf"),
-                new JSNativeFunction(context, "valueOf", 0, TemporalPlainYearMonthPrototype::valueOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("with"),
-                new JSNativeFunction(context, "with", 1, TemporalPlainYearMonthPrototype::with),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(prototype, "add", 1, TemporalPlainYearMonthPrototype::add);
+        defineMethod(prototype, "equals", 1, TemporalPlainYearMonthPrototype::equals);
+        defineMethod(prototype, "since", 1, TemporalPlainYearMonthPrototype::since);
+        defineMethod(prototype, "subtract", 1, TemporalPlainYearMonthPrototype::subtract);
+        defineMethod(prototype, "toJSON", 0, TemporalPlainYearMonthPrototype::toJSON);
+        defineMethod(prototype, "toLocaleString", 0, TemporalPlainYearMonthPrototype::toLocaleString);
+        defineMethod(prototype, "toPlainDate", 1, TemporalPlainYearMonthPrototype::toPlainDate);
+        defineMethod(prototype, "toString", 0, TemporalPlainYearMonthPrototype::toStringMethod);
+        defineMethod(prototype, "until", 1, TemporalPlainYearMonthPrototype::until);
+        defineMethod(prototype, "valueOf", 0, TemporalPlainYearMonthPrototype::valueOf);
+        defineMethod(prototype, "with", 1, TemporalPlainYearMonthPrototype::with);
 
         // Constructor
         JSNativeFunction constructor = new JSNativeFunction(context, "PlainYearMonth", 2,
                 TemporalPlainYearMonthConstructor::construct, true, false);
-        constructor.defineProperty(PropertyKey.fromString("compare"),
-                new JSNativeFunction(context, "compare", 2, TemporalPlainYearMonthConstructor::compare),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        constructor.defineProperty(PropertyKey.fromString("from"),
-                new JSNativeFunction(context, "from", 1, TemporalPlainYearMonthConstructor::from),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(constructor, "compare", 2, TemporalPlainYearMonthConstructor::compare);
+        defineMethod(constructor, "from", 1, TemporalPlainYearMonthConstructor::from);
 
         // Link constructor <-> prototype
         constructor.defineProperty(PropertyKey.PROTOTYPE, prototype, PropertyDescriptor.DataState.None);
@@ -3630,77 +2600,32 @@ public final class JSGlobalObject {
         defineTemporalGetter(prototype, "yearOfWeek", TemporalZonedDateTimePrototype::yearOfWeek);
 
         // Methods (20)
-        prototype.defineProperty(PropertyKey.fromString("add"),
-                new JSNativeFunction(context, "add", 1, TemporalZonedDateTimePrototype::add),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("equals"),
-                new JSNativeFunction(context, "equals", 1, TemporalZonedDateTimePrototype::equals),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("getTimeZoneTransition"),
-                new JSNativeFunction(context, "getTimeZoneTransition", 1,
-                        TemporalZonedDateTimePrototype::getTimeZoneTransition),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("round"),
-                new JSNativeFunction(context, "round", 1, TemporalZonedDateTimePrototype::round),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("since"),
-                new JSNativeFunction(context, "since", 1, TemporalZonedDateTimePrototype::since),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("startOfDay"),
-                new JSNativeFunction(context, "startOfDay", 0, TemporalZonedDateTimePrototype::startOfDay),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("subtract"),
-                new JSNativeFunction(context, "subtract", 1, TemporalZonedDateTimePrototype::subtract),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toInstant"),
-                new JSNativeFunction(context, "toInstant", 0, TemporalZonedDateTimePrototype::toInstant),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toJSON"),
-                new JSNativeFunction(context, "toJSON", 0, TemporalZonedDateTimePrototype::toJSON),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toLocaleString"),
-                new JSNativeFunction(context, "toLocaleString", 0, TemporalZonedDateTimePrototype::toLocaleString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toPlainDate"),
-                new JSNativeFunction(context, "toPlainDate", 0, TemporalZonedDateTimePrototype::toPlainDate),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toPlainDateTime"),
-                new JSNativeFunction(context, "toPlainDateTime", 0, TemporalZonedDateTimePrototype::toPlainDateTime),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toPlainTime"),
-                new JSNativeFunction(context, "toPlainTime", 0, TemporalZonedDateTimePrototype::toPlainTime),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction(context, "toString", 0, TemporalZonedDateTimePrototype::toStringMethod),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("until"),
-                new JSNativeFunction(context, "until", 1, TemporalZonedDateTimePrototype::until),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("valueOf"),
-                new JSNativeFunction(context, "valueOf", 0, TemporalZonedDateTimePrototype::valueOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("with"),
-                new JSNativeFunction(context, "with", 1, TemporalZonedDateTimePrototype::with),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("withCalendar"),
-                new JSNativeFunction(context, "withCalendar", 1, TemporalZonedDateTimePrototype::withCalendar),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("withPlainTime"),
-                new JSNativeFunction(context, "withPlainTime", 0, TemporalZonedDateTimePrototype::withPlainTime),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("withTimeZone"),
-                new JSNativeFunction(context, "withTimeZone", 1, TemporalZonedDateTimePrototype::withTimeZone),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(prototype, "add", 1, TemporalZonedDateTimePrototype::add);
+        defineMethod(prototype, "equals", 1, TemporalZonedDateTimePrototype::equals);
+        defineMethod(prototype, "getTimeZoneTransition", 1, TemporalZonedDateTimePrototype::getTimeZoneTransition);
+        defineMethod(prototype, "round", 1, TemporalZonedDateTimePrototype::round);
+        defineMethod(prototype, "since", 1, TemporalZonedDateTimePrototype::since);
+        defineMethod(prototype, "startOfDay", 0, TemporalZonedDateTimePrototype::startOfDay);
+        defineMethod(prototype, "subtract", 1, TemporalZonedDateTimePrototype::subtract);
+        defineMethod(prototype, "toInstant", 0, TemporalZonedDateTimePrototype::toInstant);
+        defineMethod(prototype, "toJSON", 0, TemporalZonedDateTimePrototype::toJSON);
+        defineMethod(prototype, "toLocaleString", 0, TemporalZonedDateTimePrototype::toLocaleString);
+        defineMethod(prototype, "toPlainDate", 0, TemporalZonedDateTimePrototype::toPlainDate);
+        defineMethod(prototype, "toPlainDateTime", 0, TemporalZonedDateTimePrototype::toPlainDateTime);
+        defineMethod(prototype, "toPlainTime", 0, TemporalZonedDateTimePrototype::toPlainTime);
+        defineMethod(prototype, "toString", 0, TemporalZonedDateTimePrototype::toStringMethod);
+        defineMethod(prototype, "until", 1, TemporalZonedDateTimePrototype::until);
+        defineMethod(prototype, "valueOf", 0, TemporalZonedDateTimePrototype::valueOf);
+        defineMethod(prototype, "with", 1, TemporalZonedDateTimePrototype::with);
+        defineMethod(prototype, "withCalendar", 1, TemporalZonedDateTimePrototype::withCalendar);
+        defineMethod(prototype, "withPlainTime", 0, TemporalZonedDateTimePrototype::withPlainTime);
+        defineMethod(prototype, "withTimeZone", 1, TemporalZonedDateTimePrototype::withTimeZone);
 
         // Constructor
         JSNativeFunction constructor = new JSNativeFunction(context, "ZonedDateTime", 2,
                 TemporalZonedDateTimeConstructor::construct, true, false);
-        constructor.defineProperty(PropertyKey.fromString("compare"),
-                new JSNativeFunction(context, "compare", 2, TemporalZonedDateTimeConstructor::compare),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        constructor.defineProperty(PropertyKey.fromString("from"),
-                new JSNativeFunction(context, "from", 1, TemporalZonedDateTimeConstructor::from),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(constructor, "compare", 2, TemporalZonedDateTimeConstructor::compare);
+        defineMethod(constructor, "from", 1, TemporalZonedDateTimeConstructor::from);
 
         // Link constructor <-> prototype
         constructor.defineProperty(PropertyKey.PROTOTYPE, prototype, PropertyDescriptor.DataState.None);
@@ -3731,101 +2656,41 @@ public final class JSGlobalObject {
         JSObject typedArrayPrototype = context.createJSObject();
 
         JSNativeFunction valuesFunction = new JSNativeFunction(context, "values", 0, TypedArrayPrototype::values);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("at"),
-                new JSNativeFunction(context, "at", 1, TypedArrayPrototype::at),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("copyWithin"),
-                new JSNativeFunction(context, "copyWithin", 2, TypedArrayPrototype::copyWithin),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("entries"),
-                new JSNativeFunction(context, "entries", 0, TypedArrayPrototype::entries),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("every"),
-                new JSNativeFunction(context, "every", 1, TypedArrayPrototype::every),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("fill"),
-                new JSNativeFunction(context, "fill", 1, TypedArrayPrototype::fill),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("filter"),
-                new JSNativeFunction(context, "filter", 1, TypedArrayPrototype::filter),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("find"),
-                new JSNativeFunction(context, "find", 1, TypedArrayPrototype::find),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("findIndex"),
-                new JSNativeFunction(context, "findIndex", 1, TypedArrayPrototype::findIndex),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("findLast"),
-                new JSNativeFunction(context, "findLast", 1, TypedArrayPrototype::findLast),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("findLastIndex"),
-                new JSNativeFunction(context, "findLastIndex", 1, TypedArrayPrototype::findLastIndex),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("forEach"),
-                new JSNativeFunction(context, "forEach", 1, TypedArrayPrototype::forEach),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("includes"),
-                new JSNativeFunction(context, "includes", 1, TypedArrayPrototype::includes),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("indexOf"),
-                new JSNativeFunction(context, "indexOf", 1, TypedArrayPrototype::indexOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("join"),
-                new JSNativeFunction(context, "join", 1, TypedArrayPrototype::join),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("keys"),
-                new JSNativeFunction(context, "keys", 0, TypedArrayPrototype::keys),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("lastIndexOf"),
-                new JSNativeFunction(context, "lastIndexOf", 1, TypedArrayPrototype::lastIndexOf),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("map"),
-                new JSNativeFunction(context, "map", 1, TypedArrayPrototype::map),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("reduce"),
-                new JSNativeFunction(context, "reduce", 1, TypedArrayPrototype::reduce),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("reduceRight"),
-                new JSNativeFunction(context, "reduceRight", 1, TypedArrayPrototype::reduceRight),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("reverse"),
-                new JSNativeFunction(context, "reverse", 0, TypedArrayPrototype::reverse),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("set"),
-                new JSNativeFunction(context, "set", 1, TypedArrayPrototype::set),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("slice"),
-                new JSNativeFunction(context, "slice", 2, TypedArrayPrototype::slice),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("some"),
-                new JSNativeFunction(context, "some", 1, TypedArrayPrototype::some),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("sort"),
-                new JSNativeFunction(context, "sort", 1, TypedArrayPrototype::sort),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("subarray"),
-                new JSNativeFunction(context, "subarray", 2, TypedArrayPrototype::subarray),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("toLocaleString"),
-                new JSNativeFunction(context, "toLocaleString", 0, TypedArrayPrototype::toLocaleString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("toReversed"),
-                new JSNativeFunction(context, "toReversed", 0, TypedArrayPrototype::toReversed),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("toSorted"),
-                new JSNativeFunction(context, "toSorted", 1, TypedArrayPrototype::toSorted),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(typedArrayPrototype, "at", 1, TypedArrayPrototype::at);
+        defineMethod(typedArrayPrototype, "copyWithin", 2, TypedArrayPrototype::copyWithin);
+        defineMethod(typedArrayPrototype, "entries", 0, TypedArrayPrototype::entries);
+        defineMethod(typedArrayPrototype, "every", 1, TypedArrayPrototype::every);
+        defineMethod(typedArrayPrototype, "fill", 1, TypedArrayPrototype::fill);
+        defineMethod(typedArrayPrototype, "filter", 1, TypedArrayPrototype::filter);
+        defineMethod(typedArrayPrototype, "find", 1, TypedArrayPrototype::find);
+        defineMethod(typedArrayPrototype, "findIndex", 1, TypedArrayPrototype::findIndex);
+        defineMethod(typedArrayPrototype, "findLast", 1, TypedArrayPrototype::findLast);
+        defineMethod(typedArrayPrototype, "findLastIndex", 1, TypedArrayPrototype::findLastIndex);
+        defineMethod(typedArrayPrototype, "forEach", 1, TypedArrayPrototype::forEach);
+        defineMethod(typedArrayPrototype, "includes", 1, TypedArrayPrototype::includes);
+        defineMethod(typedArrayPrototype, "indexOf", 1, TypedArrayPrototype::indexOf);
+        defineMethod(typedArrayPrototype, "join", 1, TypedArrayPrototype::join);
+        defineMethod(typedArrayPrototype, "keys", 0, TypedArrayPrototype::keys);
+        defineMethod(typedArrayPrototype, "lastIndexOf", 1, TypedArrayPrototype::lastIndexOf);
+        defineMethod(typedArrayPrototype, "map", 1, TypedArrayPrototype::map);
+        defineMethod(typedArrayPrototype, "reduce", 1, TypedArrayPrototype::reduce);
+        defineMethod(typedArrayPrototype, "reduceRight", 1, TypedArrayPrototype::reduceRight);
+        defineMethod(typedArrayPrototype, "reverse", 0, TypedArrayPrototype::reverse);
+        defineMethod(typedArrayPrototype, "set", 1, TypedArrayPrototype::set);
+        defineMethod(typedArrayPrototype, "slice", 2, TypedArrayPrototype::slice);
+        defineMethod(typedArrayPrototype, "some", 1, TypedArrayPrototype::some);
+        defineMethod(typedArrayPrototype, "sort", 1, TypedArrayPrototype::sort);
+        defineMethod(typedArrayPrototype, "subarray", 2, TypedArrayPrototype::subarray);
+        defineMethod(typedArrayPrototype, "toLocaleString", 0, TypedArrayPrototype::toLocaleString);
+        defineMethod(typedArrayPrototype, "toReversed", 0, TypedArrayPrototype::toReversed);
+        defineMethod(typedArrayPrototype, "toSorted", 1, TypedArrayPrototype::toSorted);
         if (arrayToString instanceof JSFunction) {
             typedArrayPrototype.defineProperty(PropertyKey.fromString("toString"), arrayToString,
                     PropertyDescriptor.DataState.ConfigurableWritable);
         } else {
-            typedArrayPrototype.defineProperty(PropertyKey.fromString("toString"),
-                    new JSNativeFunction(context, "toString", 0, TypedArrayPrototype::toString),
-                    PropertyDescriptor.DataState.ConfigurableWritable);
+            defineMethod(typedArrayPrototype, "toString", 0, TypedArrayPrototype::toString);
         }
-        typedArrayPrototype.defineProperty(PropertyKey.fromString("with"),
-                new JSNativeFunction(context, "with", 2, TypedArrayPrototype::withMethod),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(typedArrayPrototype, "with", 2, TypedArrayPrototype::withMethod);
         typedArrayPrototype.defineProperty(PropertyKey.fromString("values"), valuesFunction,
                 PropertyDescriptor.DataState.ConfigurableWritable);
         typedArrayPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.ITERATOR), valuesFunction,
@@ -3859,12 +2724,8 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Add static methods to %TypedArray%
-        typedArrayConstructor.defineProperty(PropertyKey.fromString("from"),
-                new JSNativeFunction(context, "from", 1, TypedArrayConstructor::from),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        typedArrayConstructor.defineProperty(PropertyKey.fromString("of"),
-                new JSNativeFunction(context, "of", 0, TypedArrayConstructor::of),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(typedArrayConstructor, "from", 1, TypedArrayConstructor::from);
+        defineMethod(typedArrayConstructor, "of", 0, TypedArrayConstructor::of);
         typedArrayConstructor.defineProperty(PropertyKey.fromSymbol(JSSymbol.SPECIES),
                 new JSNativeFunction(context, "get [Symbol.species]", 0, TypedArrayConstructor::getSpecies),
                 PropertyDescriptor.AccessorState.Configurable);
@@ -3915,26 +2776,14 @@ public final class JSGlobalObject {
             // Add Uint8Array-specific base64/hex methods
             if (JSUint8Array.NAME.equals(def.name)) {
                 // Static methods on constructor
-                constructor.defineProperty(PropertyKey.fromString("fromBase64"),
-                        new JSNativeFunction(context, "fromBase64", 1, Uint8ArrayBase64Hex::fromBase64),
-                        PropertyDescriptor.DataState.ConfigurableWritable);
-                constructor.defineProperty(PropertyKey.fromString("fromHex"),
-                        new JSNativeFunction(context, "fromHex", 1, Uint8ArrayBase64Hex::fromHex),
-                        PropertyDescriptor.DataState.ConfigurableWritable);
+                defineMethod(constructor, "fromBase64", 1, Uint8ArrayBase64Hex::fromBase64);
+                defineMethod(constructor, "fromHex", 1, Uint8ArrayBase64Hex::fromHex);
 
                 // Prototype methods
-                prototype.defineProperty(PropertyKey.fromString("toBase64"),
-                        new JSNativeFunction(context, "toBase64", 0, Uint8ArrayBase64Hex::toBase64),
-                        PropertyDescriptor.DataState.ConfigurableWritable);
-                prototype.defineProperty(PropertyKey.fromString("toHex"),
-                        new JSNativeFunction(context, "toHex", 0, Uint8ArrayBase64Hex::toHex),
-                        PropertyDescriptor.DataState.ConfigurableWritable);
-                prototype.defineProperty(PropertyKey.fromString("setFromBase64"),
-                        new JSNativeFunction(context, "setFromBase64", 1, Uint8ArrayBase64Hex::setFromBase64),
-                        PropertyDescriptor.DataState.ConfigurableWritable);
-                prototype.defineProperty(PropertyKey.fromString("setFromHex"),
-                        new JSNativeFunction(context, "setFromHex", 1, Uint8ArrayBase64Hex::setFromHex),
-                        PropertyDescriptor.DataState.ConfigurableWritable);
+                defineMethod(prototype, "toBase64", 0, Uint8ArrayBase64Hex::toBase64);
+                defineMethod(prototype, "toHex", 0, Uint8ArrayBase64Hex::toHex);
+                defineMethod(prototype, "setFromBase64", 1, Uint8ArrayBase64Hex::setFromBase64);
+                defineMethod(prototype, "setFromHex", 1, Uint8ArrayBase64Hex::setFromHex);
             }
 
             globalObject.defineProperty(PropertyKey.fromString(def.name), constructor,
@@ -3947,24 +2796,12 @@ public final class JSGlobalObject {
      */
     private void initializeWeakMapConstructor() {
         JSObject weakMapPrototype = context.createJSObject();
-        weakMapPrototype.defineProperty(PropertyKey.fromString("set"),
-                new JSNativeFunction(context, "set", 2, WeakMapPrototype::set),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        weakMapPrototype.defineProperty(PropertyKey.fromString("get"),
-                new JSNativeFunction(context, "get", 1, WeakMapPrototype::get),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        weakMapPrototype.defineProperty(PropertyKey.fromString("getOrInsert"),
-                new JSNativeFunction(context, "getOrInsert", 2, WeakMapPrototype::getOrInsert),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        weakMapPrototype.defineProperty(PropertyKey.fromString("getOrInsertComputed"),
-                new JSNativeFunction(context, "getOrInsertComputed", 2, WeakMapPrototype::getOrInsertComputed),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        weakMapPrototype.defineProperty(PropertyKey.fromString("has"),
-                new JSNativeFunction(context, "has", 1, WeakMapPrototype::has),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        weakMapPrototype.defineProperty(PropertyKey.fromString("delete"),
-                new JSNativeFunction(context, "delete", 1, WeakMapPrototype::delete),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(weakMapPrototype, "set", 2, WeakMapPrototype::set);
+        defineMethod(weakMapPrototype, "get", 1, WeakMapPrototype::get);
+        defineMethod(weakMapPrototype, "getOrInsert", 2, WeakMapPrototype::getOrInsert);
+        defineMethod(weakMapPrototype, "getOrInsertComputed", 2, WeakMapPrototype::getOrInsertComputed);
+        defineMethod(weakMapPrototype, "has", 1, WeakMapPrototype::has);
+        defineMethod(weakMapPrototype, "delete", 1, WeakMapPrototype::delete);
         weakMapPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString(JSWeakMap.NAME),
                 PropertyDescriptor.DataState.Configurable);
 
@@ -3985,9 +2822,7 @@ public final class JSGlobalObject {
      */
     private void initializeWeakRefConstructor() {
         JSObject weakRefPrototype = context.createJSObject();
-        weakRefPrototype.defineProperty(PropertyKey.fromString("deref"),
-                new JSNativeFunction(context, "deref", 0, WeakRefPrototype::deref),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(weakRefPrototype, "deref", 0, WeakRefPrototype::deref);
         weakRefPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString(JSWeakRef.NAME),
                 PropertyDescriptor.DataState.Configurable);
 
@@ -4008,15 +2843,9 @@ public final class JSGlobalObject {
      */
     private void initializeWeakSetConstructor() {
         JSObject weakSetPrototype = context.createJSObject();
-        weakSetPrototype.defineProperty(PropertyKey.fromString("add"),
-                new JSNativeFunction(context, "add", 1, WeakSetPrototype::add),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        weakSetPrototype.defineProperty(PropertyKey.fromString("has"),
-                new JSNativeFunction(context, "has", 1, WeakSetPrototype::has),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        weakSetPrototype.defineProperty(PropertyKey.fromString("delete"),
-                new JSNativeFunction(context, "delete", 1, WeakSetPrototype::delete),
-                PropertyDescriptor.DataState.ConfigurableWritable);
+        defineMethod(weakSetPrototype, "add", 1, WeakSetPrototype::add);
+        defineMethod(weakSetPrototype, "has", 1, WeakSetPrototype::has);
+        defineMethod(weakSetPrototype, "delete", 1, WeakSetPrototype::delete);
         weakSetPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString(JSWeakSet.NAME),
                 PropertyDescriptor.DataState.Configurable);
 
@@ -5339,7 +4168,14 @@ public final class JSGlobalObject {
             PropertyKey key = PropertyKey.fromString(name);
             JSValue overlayValue = value != null ? value : JSUndefined.INSTANCE;
             if (global.getContext().hasEvalOverlayBinding(name)) {
-                global.defineProperty(key, overlayValue, PropertyDescriptor.DataState.All);
+                PropertyDescriptor current = global.getOwnPropertyDescriptor(key);
+                if (current != null && !current.isConfigurable() && current.isDataDescriptor()
+                        && current.isWritable()) {
+                    // A global var keeps its descriptor when a nested eval overlays its value.
+                    global.set(key, overlayValue);
+                } else {
+                    global.defineProperty(key, overlayValue, PropertyDescriptor.DataState.All);
+                }
             } else {
                 global.set(key, overlayValue);
             }

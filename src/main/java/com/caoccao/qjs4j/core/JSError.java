@@ -18,6 +18,8 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 
+import java.util.function.BiFunction;
+
 /**
  * Represents a JavaScript Error object. Base class for all JavaScript error types.
  * <p>
@@ -194,6 +196,11 @@ public sealed class JSError extends JSObject permits JSAggregateError, JSRangeEr
     }
 
     public static JSValue create(JSContext context, JSValue... args) {
+        return createNativeError(context, args, JSContext::createJSError);
+    }
+
+    static JSValue createNativeError(JSContext context, JSValue[] args,
+            BiFunction<JSContext, String, JSError> factory) {
         String message = "";
         if (args.length > 0 && !args[0].isUndefined()) {
             message = JSTypeConversions.toString(context, args[0]).value();
@@ -201,17 +208,33 @@ public sealed class JSError extends JSObject permits JSAggregateError, JSRangeEr
                 return JSUndefined.INSTANCE;
             }
         }
-        JSError jsError = context.createJSError(message);
+        JSError jsError = factory.apply(context, message);
         if (args.length > 0 && !args[0].isUndefined()) {
             defineEmptyMessage(jsError, message);
         }
-        if (args.length > 1) {
-            if (!installErrorCause(context, jsError, args[1])) {
-                return JSUndefined.INSTANCE;
-            }
+        if (args.length > 1 && !installErrorCause(context, jsError, args[1])) {
+            return JSUndefined.INSTANCE;
         }
         captureStackTraceBelowNewTarget(context, jsError);
         return jsError;
+    }
+
+    static JSObject createNativeErrorPrototype(JSContext context, String name, JSNativeCallback constructor) {
+        JSObject errorPrototype = new JSObject(context);
+        context.transferPrototype(errorPrototype, JSError.NAME);
+
+        errorPrototype.defineProperty(PropertyKey.fromString("name"), new JSString(name),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        errorPrototype.defineProperty(PropertyKey.fromString("message"), new JSString(""),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+
+        JSNativeFunction errorConstructor = new JSNativeFunction(context, name, 1, constructor, true);
+        errorConstructor.defineProperty(PropertyKey.fromString("prototype"), errorPrototype,
+                PropertyDescriptor.DataState.None);
+        errorPrototype.defineProperty(PropertyKey.fromString("constructor"), errorConstructor,
+                PropertyDescriptor.DataState.ConfigurableWritable);
+
+        return errorConstructor;
     }
 
     public static JSObject createPrototype(JSContext context, JSValue... args) {

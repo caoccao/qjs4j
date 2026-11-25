@@ -129,11 +129,8 @@ java {
     // Gradle still ran on whatever JDK was on PATH, and the compiled bytecode silently followed the
     // launcher. The toolchain fixes compilation at JDK 17 wherever the build runs from.
     //
-    // It does not, however, make every launcher work: Gradle's Kotlin DSL compiles the build script
-    // before any toolchain is resolved, so a launcher its embedded Kotlin compiler does not know
-    // aborts first, with a bare version number. That is a property of the Gradle version, not of
-    // this project — hence the wrapper at 9.4.1, which accepts launchers through JDK 25. Launching
-    // on a JDK newer than the wrapper supports still fails early; upgrade the wrapper for that.
+    // Gradle compiles this Kotlin build script before resolving the toolchain, so the launching
+    // JDK must also be supported by the Gradle wrapper.
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(Config.Versions.JAVA_VERSION.toInt()))
     }

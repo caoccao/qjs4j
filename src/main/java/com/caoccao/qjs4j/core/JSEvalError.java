@@ -64,21 +64,7 @@ public final class JSEvalError extends JSError {
     }
 
     public static JSObject createPrototype(JSContext context, JSValue... args) {
-        JSObject errorPrototype = new JSObject(context);
-        context.transferPrototype(errorPrototype, JSError.NAME);
-
-        errorPrototype.defineProperty(PropertyKey.fromString("name"), new JSString(NAME),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        errorPrototype.defineProperty(PropertyKey.fromString("message"), new JSString(""),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-
-        JSNativeFunction errorConstructor = new JSNativeFunction(context, NAME, 1,
-                (childContext, thisObj, childArgs) -> create(childContext, childArgs), true);
-        errorConstructor.defineProperty(PropertyKey.fromString("prototype"), errorPrototype,
-                PropertyDescriptor.DataState.None);
-        errorPrototype.defineProperty(PropertyKey.fromString("constructor"), errorConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
-
-        return errorConstructor;
+        return createNativeErrorPrototype(context, NAME,
+                (childContext, thisObj, childArgs) -> create(childContext, childArgs));
     }
 }

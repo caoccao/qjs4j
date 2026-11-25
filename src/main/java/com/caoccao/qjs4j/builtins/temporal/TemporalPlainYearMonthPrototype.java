@@ -978,32 +978,9 @@ public final class TemporalPlainYearMonthPrototype {
         if (plainYearMonth == null) {
             return JSUndefined.INSTANCE;
         }
-        if (args.length == 0 || !(args[0] instanceof JSObject fields)) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
-            return JSUndefined.INSTANCE;
-        }
-        if (fields instanceof JSTemporalPlainDate || fields instanceof JSTemporalPlainDateTime
-                || fields instanceof JSTemporalPlainMonthDay || fields instanceof JSTemporalPlainTime
-                || fields instanceof JSTemporalPlainYearMonth || fields instanceof JSTemporalZonedDateTime) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue calendarLike = fields.get(PropertyKey.fromString("calendar"));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(calendarLike instanceof JSUndefined) && calendarLike != null) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue timeZoneLike = fields.get(PropertyKey.fromString("timeZone"));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(timeZoneLike instanceof JSUndefined) && timeZoneLike != null) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
+        JSObject fields = TemporalUtils.requirePartialTemporalObject(context, args,
+                "Temporal error: Argument to with() must contain some date/time fields.");
+        if (fields == null) {
             return JSUndefined.INSTANCE;
         }
 
@@ -1013,44 +990,23 @@ public final class TemporalPlainYearMonthPrototype {
         PropertyKey eraKey = PropertyKey.fromString("era");
         PropertyKey eraYearKey = PropertyKey.fromString("eraYear");
 
-        JSValue monthValue = fields.get(monthKey);
+        Integer month = TemporalUtils.getOptionalIntegerField(context, fields, "month");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasMonth = !(monthValue instanceof JSUndefined) && monthValue != null;
-        Integer month = null;
-        if (hasMonth) {
-            month = TemporalUtils.toIntegerThrowOnInfinity(context, monthValue);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
+        boolean hasMonth = month != null;
 
-        JSValue monthCodeValue = fields.get(monthCodeKey);
+        String monthCode = TemporalUtils.getStringOption(context, fields, "monthCode", null);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasMonthCode = !(monthCodeValue instanceof JSUndefined) && monthCodeValue != null;
-        String monthCode = null;
-        if (hasMonthCode) {
-            monthCode = JSTypeConversions.toString(context, monthCodeValue).value();
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
+        boolean hasMonthCode = monthCode != null;
 
-        JSValue yearValue = fields.get(yearKey);
+        Integer year = TemporalUtils.getOptionalIntegerField(context, fields, "year");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasYear = !(yearValue instanceof JSUndefined) && yearValue != null;
-        Integer year = null;
-        if (hasYear) {
-            year = TemporalUtils.toIntegerThrowOnInfinity(context, yearValue);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
+        boolean hasYear = year != null;
 
         TemporalCalendarId calendarId = plainYearMonth.getCalendarId();
         boolean calendarSupportsEras = calendarId != TemporalCalendarId.ISO8601
@@ -1060,29 +1016,17 @@ public final class TemporalPlainYearMonthPrototype {
         String era = null;
         Integer eraYear = null;
         if (calendarSupportsEras) {
-            JSValue eraValue = fields.get(eraKey);
+            era = TemporalUtils.getStringOption(context, fields, "era", null);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            hasEra = !(eraValue instanceof JSUndefined) && eraValue != null;
-            if (hasEra) {
-                era = JSTypeConversions.toString(context, eraValue).value();
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-            }
+            hasEra = era != null;
 
-            JSValue eraYearValue = fields.get(eraYearKey);
+            eraYear = TemporalUtils.getOptionalIntegerField(context, fields, "eraYear");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            hasEraYear = !(eraYearValue instanceof JSUndefined) && eraYearValue != null;
-            if (hasEraYear) {
-                eraYear = TemporalUtils.toIntegerThrowOnInfinity(context, eraYearValue);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-            }
+            hasEraYear = eraYear != null;
         } else if (calendarId != TemporalCalendarId.ISO8601) {
             JSValue eraValue = fields.get(eraKey);
             if (context.hasPendingException()) {

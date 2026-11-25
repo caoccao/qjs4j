@@ -254,32 +254,9 @@ public final class TemporalPlainMonthDayPrototype {
         if (plainMonthDay == null) {
             return JSUndefined.INSTANCE;
         }
-        if (args.length == 0 || !(args[0] instanceof JSObject fields)) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
-            return JSUndefined.INSTANCE;
-        }
-        if (fields instanceof JSTemporalPlainDate || fields instanceof JSTemporalPlainDateTime
-                || fields instanceof JSTemporalPlainMonthDay || fields instanceof JSTemporalPlainTime
-                || fields instanceof JSTemporalPlainYearMonth || fields instanceof JSTemporalZonedDateTime) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue calendarLike = fields.get(PropertyKey.fromString("calendar"));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(calendarLike instanceof JSUndefined) && calendarLike != null) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue timeZoneLike = fields.get(PropertyKey.fromString("timeZone"));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(timeZoneLike instanceof JSUndefined) && timeZoneLike != null) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
+        JSObject fields = TemporalUtils.requirePartialTemporalObject(context, args,
+                "Temporal error: Argument to with() must contain some date/time fields.");
+        if (fields == null) {
             return JSUndefined.INSTANCE;
         }
 
@@ -315,18 +292,11 @@ public final class TemporalPlainMonthDayPrototype {
             }
         }
 
-        JSValue monthCodeValue = fields.get(PropertyKey.fromString("monthCode"));
+        String monthCode = TemporalUtils.getStringOption(context, fields, "monthCode", null);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasMonthCode = !(monthCodeValue instanceof JSUndefined) && monthCodeValue != null;
-        String monthCode = null;
-        if (hasMonthCode) {
-            monthCode = JSTypeConversions.toString(context, monthCodeValue).value();
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
+        boolean hasMonthCode = monthCode != null;
 
         JSValue yearValue = fields.get(PropertyKey.fromString("year"));
         if (context.hasPendingException()) {

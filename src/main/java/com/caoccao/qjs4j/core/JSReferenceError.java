@@ -42,42 +42,11 @@ public final class JSReferenceError extends JSError {
     }
 
     public static JSValue create(JSContext context, JSValue... args) {
-        String message = "";
-        if (args.length > 0 && !args[0].isUndefined()) {
-            message = JSTypeConversions.toString(context, args[0]).value();
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        JSReferenceError jsReferenceError = context.createJSReferenceError(message);
-        if (args.length > 0 && !args[0].isUndefined()) {
-            JSError.defineEmptyMessage(jsReferenceError, message);
-        }
-        if (args.length > 1) {
-            if (!JSError.installErrorCause(context, jsReferenceError, args[1])) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        JSError.captureStackTraceBelowNewTarget(context, jsReferenceError);
-        return jsReferenceError;
+        return createNativeError(context, args, JSContext::createJSReferenceError);
     }
 
     public static JSObject createPrototype(JSContext context, JSValue... args) {
-        JSObject errorPrototype = new JSObject(context);
-        context.transferPrototype(errorPrototype, JSError.NAME);
-
-        errorPrototype.defineProperty(PropertyKey.fromString("name"), new JSString(NAME),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        errorPrototype.defineProperty(PropertyKey.fromString("message"), new JSString(""),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-
-        JSNativeFunction errorConstructor = new JSNativeFunction(context, NAME, 1,
-                (childContext, thisObj, childArgs) -> create(childContext, childArgs), true);
-        errorConstructor.defineProperty(PropertyKey.fromString("prototype"), errorPrototype,
-                PropertyDescriptor.DataState.None);
-        errorPrototype.defineProperty(PropertyKey.fromString("constructor"), errorConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
-
-        return errorConstructor;
+        return createNativeErrorPrototype(context, NAME,
+                (childContext, thisObj, childArgs) -> create(childContext, childArgs));
     }
 }

@@ -489,25 +489,6 @@ public final class TemporalZonedDateTimePrototype {
         return null;
     }
 
-    private static Integer getOptionalIntegerWithField(JSContext context, JSObject fieldsObject, String fieldName) {
-        JSValue fieldValue = fieldsObject.get(PropertyKey.fromString(fieldName));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (fieldValue instanceof JSUndefined || fieldValue == null) {
-            return null;
-        }
-        double numericValue = JSTypeConversions.toNumber(context, fieldValue).value();
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (!Double.isFinite(numericValue)) {
-            context.throwRangeError("Temporal error: Expected finite integer.");
-            return null;
-        }
-        return (int) numericValue;
-    }
-
     private static String getOptionalOffsetStringWithField(JSContext context, JSObject fieldsObject) {
         JSValue offsetValue = fieldsObject.get(PropertyKey.fromString("offset"));
         if (context.hasPendingException()) {
@@ -524,17 +505,6 @@ public final class TemporalZonedDateTimePrototype {
         }
         context.throwTypeError("Temporal error: Offset must be string.");
         return null;
-    }
-
-    private static String getOptionalStringWithField(JSContext context, JSObject fieldsObject, String fieldName) {
-        JSValue fieldValue = fieldsObject.get(PropertyKey.fromString(fieldName));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (fieldValue instanceof JSUndefined || fieldValue == null) {
-            return null;
-        }
-        return JSTypeConversions.toString(context, fieldValue).value();
     }
 
     public static JSValue getTimeZoneTransition(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1379,35 +1349,35 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        Integer dayField = getOptionalIntegerWithField(context, fieldsObject, "day");
+        Integer dayField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "day");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        Integer hourField = getOptionalIntegerWithField(context, fieldsObject, "hour");
+        Integer hourField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "hour");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        Integer microsecondField = getOptionalIntegerWithField(context, fieldsObject, "microsecond");
+        Integer microsecondField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "microsecond");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        Integer millisecondField = getOptionalIntegerWithField(context, fieldsObject, "millisecond");
+        Integer millisecondField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "millisecond");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        Integer minuteField = getOptionalIntegerWithField(context, fieldsObject, "minute");
+        Integer minuteField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "minute");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        Integer monthField = getOptionalIntegerWithField(context, fieldsObject, "month");
+        Integer monthField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "month");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        String monthCodeField = getOptionalStringWithField(context, fieldsObject, "monthCode");
+        String monthCodeField = TemporalUtils.getStringOption(context, fieldsObject, "monthCode", null);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        Integer nanosecondField = getOptionalIntegerWithField(context, fieldsObject, "nanosecond");
+        Integer nanosecondField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "nanosecond");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1415,11 +1385,11 @@ public final class TemporalZonedDateTimePrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        Integer secondField = getOptionalIntegerWithField(context, fieldsObject, "second");
+        Integer secondField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "second");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        Integer yearField = getOptionalIntegerWithField(context, fieldsObject, "year");
+        Integer yearField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "year");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1430,11 +1400,11 @@ public final class TemporalZonedDateTimePrototype {
         String eraField = null;
         Integer eraYearField = null;
         if (calendarSupportsEraFields) {
-            eraField = getOptionalStringWithField(context, fieldsObject, "era");
+            eraField = TemporalUtils.getStringOption(context, fieldsObject, "era", null);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            eraYearField = getOptionalIntegerWithField(context, fieldsObject, "eraYear");
+            eraYearField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "eraYear");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }

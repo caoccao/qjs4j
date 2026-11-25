@@ -669,7 +669,11 @@ public final class JSTypeConversions {
      * ToInt32 for a primitive double value. Mirrors QuickJS JS_ToInt32Free() bit-level conversion semantics.
      */
     public static int toInt32(double d) {
-        if (!Double.isFinite(d) || d == 0.0d) {
+        int intValue = (int) d;
+        if (intValue == d) {
+            return intValue;
+        }
+        if (!Double.isFinite(d)) {
             return 0;
         }
         double integer = Math.copySign(Math.floor(Math.abs(d)), d);

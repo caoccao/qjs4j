@@ -57,7 +57,7 @@
 
 ### Build and Tooling
 
-- A Gradle toolchain pins compilation to JDK 17. The wrapper is Gradle 9.4.1, so the build can be launched from any JDK up to 25.
+- A Gradle toolchain pins compilation to JDK 17. The Gradle 9.9.2 wrapper supports launching the build on JDK 17 through 27.
 - Compiler lint is enforced with `-Werror`; Javadoc lint enabled; JaCoCo now verifies coverage rather than only reporting it.
 - CI runs Test262 with a failure-preserving pipeline, and runs the test suite on JDK 17 and 21 rather than compiling for 17 in both.
 

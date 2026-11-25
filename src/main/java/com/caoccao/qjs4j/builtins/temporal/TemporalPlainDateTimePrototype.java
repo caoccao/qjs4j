@@ -732,33 +732,9 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        if (args.length == 0 || !(args[0] instanceof JSObject fields)) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
-            return JSUndefined.INSTANCE;
-        }
-
-        if (fields instanceof JSTemporalPlainDate || fields instanceof JSTemporalPlainDateTime
-                || fields instanceof JSTemporalPlainMonthDay || fields instanceof JSTemporalPlainTime
-                || fields instanceof JSTemporalPlainYearMonth || fields instanceof JSTemporalZonedDateTime) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue calendarLike = fields.get(PropertyKey.fromString("calendar"));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(calendarLike instanceof JSUndefined) && calendarLike != null) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue timeZoneLike = fields.get(PropertyKey.fromString("timeZone"));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(timeZoneLike instanceof JSUndefined) && timeZoneLike != null) {
-            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
+        JSObject fields = TemporalUtils.requirePartialTemporalObject(context, args,
+                "Temporal error: Argument to with() must contain some date/time fields.");
+        if (fields == null) {
             return JSUndefined.INSTANCE;
         }
 
@@ -767,178 +743,96 @@ public final class TemporalPlainDateTimePrototype {
         boolean calendarSupportsEraFields = calendarId != TemporalCalendarId.ISO8601
                 && calendarId != TemporalCalendarId.CHINESE && calendarId != TemporalCalendarId.DANGI;
 
-        JSValue dayFieldValue = fields.get(PropertyKey.fromString("day"));
+        Integer day = TemporalUtils.getOptionalIntegerField(context, fields, "day");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasDayField = !(dayFieldValue instanceof JSUndefined) && dayFieldValue != null;
-        Integer day = null;
-        if (hasDayField) {
-            day = TemporalUtils.toIntegerThrowOnInfinity(context, dayFieldValue);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (day < 1) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
+        boolean hasDayField = day != null;
+        if (day != null && day < 1) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
         }
 
-        JSValue hourFieldValue = fields.get(PropertyKey.fromString("hour"));
+        Integer hourField = TemporalUtils.getOptionalIntegerField(context, fields, "hour");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasHourField = !(hourFieldValue instanceof JSUndefined) && hourFieldValue != null;
-        int hour = originalTime.hour();
-        if (hasHourField) {
-            hour = TemporalUtils.toIntegerThrowOnInfinity(context, hourFieldValue);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+        int hour = hourField != null ? hourField : originalTime.hour();
+
+        Integer microsecondField = TemporalUtils.getOptionalIntegerField(context, fields, "microsecond");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        int microsecond = microsecondField != null ? microsecondField : originalTime.microsecond();
+
+        Integer millisecondField = TemporalUtils.getOptionalIntegerField(context, fields, "millisecond");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        int millisecond = millisecondField != null ? millisecondField : originalTime.millisecond();
+
+        Integer minuteField = TemporalUtils.getOptionalIntegerField(context, fields, "minute");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        int minute = minuteField != null ? minuteField : originalTime.minute();
+
+        Integer month = TemporalUtils.getOptionalIntegerField(context, fields, "month");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        boolean hasMonthField = month != null;
+        if (month != null && month < 1) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
         }
 
-        JSValue microsecondFieldValue = fields.get(PropertyKey.fromString("microsecond"));
+        String monthCode = TemporalUtils.getStringOption(context, fields, "monthCode", null);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasMicrosecondField = !(microsecondFieldValue instanceof JSUndefined) && microsecondFieldValue != null;
-        int microsecond = originalTime.microsecond();
-        if (hasMicrosecondField) {
-            microsecond = TemporalUtils.toIntegerThrowOnInfinity(context, microsecondFieldValue);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
+        boolean hasMonthCodeField = monthCode != null;
 
-        JSValue millisecondFieldValue = fields.get(PropertyKey.fromString("millisecond"));
+        Integer nanosecondField = TemporalUtils.getOptionalIntegerField(context, fields, "nanosecond");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasMillisecondField = !(millisecondFieldValue instanceof JSUndefined) && millisecondFieldValue != null;
-        int millisecond = originalTime.millisecond();
-        if (hasMillisecondField) {
-            millisecond = TemporalUtils.toIntegerThrowOnInfinity(context, millisecondFieldValue);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
+        int nanosecond = nanosecondField != null ? nanosecondField : originalTime.nanosecond();
 
-        JSValue minuteFieldValue = fields.get(PropertyKey.fromString("minute"));
+        Integer secondField = TemporalUtils.getOptionalIntegerField(context, fields, "second");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasMinuteField = !(minuteFieldValue instanceof JSUndefined) && minuteFieldValue != null;
-        int minute = originalTime.minute();
-        if (hasMinuteField) {
-            minute = TemporalUtils.toIntegerThrowOnInfinity(context, minuteFieldValue);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
+        int second = secondField != null ? secondField : originalTime.second();
 
-        JSValue monthFieldValue = fields.get(PropertyKey.fromString("month"));
+        Integer year = TemporalUtils.getOptionalIntegerField(context, fields, "year");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasMonthField = !(monthFieldValue instanceof JSUndefined) && monthFieldValue != null;
-        Integer month = null;
-        if (hasMonthField) {
-            month = TemporalUtils.toIntegerThrowOnInfinity(context, monthFieldValue);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (month < 1) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
-        }
-
-        JSValue monthCodeFieldValue = fields.get(PropertyKey.fromString("monthCode"));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        boolean hasMonthCodeField = !(monthCodeFieldValue instanceof JSUndefined) && monthCodeFieldValue != null;
-        String monthCode = null;
-        if (hasMonthCodeField) {
-            monthCode = JSTypeConversions.toString(context, monthCodeFieldValue).value();
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-
-        JSValue nanosecondFieldValue = fields.get(PropertyKey.fromString("nanosecond"));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        boolean hasNanosecondField = !(nanosecondFieldValue instanceof JSUndefined) && nanosecondFieldValue != null;
-        int nanosecond = originalTime.nanosecond();
-        if (hasNanosecondField) {
-            nanosecond = TemporalUtils.toIntegerThrowOnInfinity(context, nanosecondFieldValue);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-
-        JSValue secondFieldValue = fields.get(PropertyKey.fromString("second"));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        boolean hasSecondField = !(secondFieldValue instanceof JSUndefined) && secondFieldValue != null;
-        int second = originalTime.second();
-        if (hasSecondField) {
-            second = TemporalUtils.toIntegerThrowOnInfinity(context, secondFieldValue);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-
-        JSValue yearFieldValue = fields.get(PropertyKey.fromString("year"));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        boolean hasYearField = !(yearFieldValue instanceof JSUndefined) && yearFieldValue != null;
-        Integer year = null;
-        if (hasYearField) {
-            year = TemporalUtils.toIntegerThrowOnInfinity(context, yearFieldValue);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
+        boolean hasYearField = year != null;
 
         boolean hasEraField = false;
         boolean hasEraYearField = false;
         String era = null;
         Integer eraYear = null;
         if (calendarSupportsEraFields) {
-            JSValue eraFieldValue = fields.get(PropertyKey.fromString("era"));
+            era = TemporalUtils.getStringOption(context, fields, "era", null);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            hasEraField = !(eraFieldValue instanceof JSUndefined) && eraFieldValue != null;
-            if (hasEraField) {
-                era = JSTypeConversions.toString(context, eraFieldValue).value();
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-            }
+            hasEraField = era != null;
 
-            JSValue eraYearFieldValue = fields.get(PropertyKey.fromString("eraYear"));
+            eraYear = TemporalUtils.getOptionalIntegerField(context, fields, "eraYear");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            hasEraYearField = !(eraYearFieldValue instanceof JSUndefined) && eraYearFieldValue != null;
-            if (hasEraYearField) {
-                eraYear = TemporalUtils.toIntegerThrowOnInfinity(context, eraYearFieldValue);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-            }
+            hasEraYearField = eraYear != null;
         }
 
         boolean hasDateField = hasDayField || hasMonthField || hasMonthCodeField || hasYearField || hasEraField
                 || hasEraYearField;
-        boolean hasTimeField = hasHourField || hasMinuteField || hasSecondField || hasMillisecondField
-                || hasMicrosecondField || hasNanosecondField;
+        boolean hasTimeField = hourField != null || minuteField != null || secondField != null
+                || millisecondField != null || microsecondField != null || nanosecondField != null;
         if (!hasDateField && !hasTimeField) {
             context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
             return JSUndefined.INSTANCE;

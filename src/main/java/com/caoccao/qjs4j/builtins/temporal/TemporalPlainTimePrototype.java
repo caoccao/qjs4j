@@ -378,117 +378,52 @@ public final class TemporalPlainTimePrototype {
         if (plainTime == null) {
             return JSUndefined.INSTANCE;
         }
-        if (args.length == 0 || !(args[0] instanceof JSObject fields)) {
-            context.throwTypeError("Temporal error: Must specify at least one time field.");
-            return JSUndefined.INSTANCE;
-        }
-
-        if (fields instanceof JSTemporalPlainDate || fields instanceof JSTemporalPlainDateTime
-                || fields instanceof JSTemporalPlainMonthDay || fields instanceof JSTemporalPlainTime
-                || fields instanceof JSTemporalPlainYearMonth || fields instanceof JSTemporalZonedDateTime) {
-            context.throwTypeError("Temporal error: Must specify at least one time field.");
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue calendarLike = fields.get(PropertyKey.fromString("calendar"));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(calendarLike instanceof JSUndefined) && calendarLike != null) {
-            context.throwTypeError("Temporal error: Must specify at least one time field.");
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue timeZoneLike = fields.get(PropertyKey.fromString("timeZone"));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(timeZoneLike instanceof JSUndefined) && timeZoneLike != null) {
-            context.throwTypeError("Temporal error: Must specify at least one time field.");
+        JSObject fields = TemporalUtils.requirePartialTemporalObject(context, args,
+                "Temporal error: Must specify at least one time field.");
+        if (fields == null) {
             return JSUndefined.INSTANCE;
         }
 
         IsoTime original = plainTime.getIsoTime();
 
-        JSValue hourValue = fields.get(PropertyKey.fromString("hour"));
+        Integer hourField = TemporalUtils.getOptionalIntegerField(context, fields, "hour");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasHour = !(hourValue instanceof JSUndefined) && hourValue != null;
-        int hour = original.hour();
-        if (hasHour) {
-            hour = TemporalUtils.toIntegerThrowOnInfinity(context, hourValue);
-        }
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
+        int hour = hourField != null ? hourField : original.hour();
 
-        JSValue microsecondValue = fields.get(PropertyKey.fromString("microsecond"));
+        Integer microsecondField = TemporalUtils.getOptionalIntegerField(context, fields, "microsecond");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasMicrosecond = !(microsecondValue instanceof JSUndefined) && microsecondValue != null;
-        int microsecond = original.microsecond();
-        if (hasMicrosecond) {
-            microsecond = TemporalUtils.toIntegerThrowOnInfinity(context, microsecondValue);
-        }
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
+        int microsecond = microsecondField != null ? microsecondField : original.microsecond();
 
-        JSValue millisecondValue = fields.get(PropertyKey.fromString("millisecond"));
+        Integer millisecondField = TemporalUtils.getOptionalIntegerField(context, fields, "millisecond");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasMillisecond = !(millisecondValue instanceof JSUndefined) && millisecondValue != null;
-        int millisecond = original.millisecond();
-        if (hasMillisecond) {
-            millisecond = TemporalUtils.toIntegerThrowOnInfinity(context, millisecondValue);
-        }
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
+        int millisecond = millisecondField != null ? millisecondField : original.millisecond();
 
-        JSValue minuteValue = fields.get(PropertyKey.fromString("minute"));
+        Integer minuteField = TemporalUtils.getOptionalIntegerField(context, fields, "minute");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasMinute = !(minuteValue instanceof JSUndefined) && minuteValue != null;
-        int minute = original.minute();
-        if (hasMinute) {
-            minute = TemporalUtils.toIntegerThrowOnInfinity(context, minuteValue);
-        }
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
+        int minute = minuteField != null ? minuteField : original.minute();
 
-        JSValue nanosecondValue = fields.get(PropertyKey.fromString("nanosecond"));
+        Integer nanosecondField = TemporalUtils.getOptionalIntegerField(context, fields, "nanosecond");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasNanosecond = !(nanosecondValue instanceof JSUndefined) && nanosecondValue != null;
-        int nanosecond = original.nanosecond();
-        if (hasNanosecond) {
-            nanosecond = TemporalUtils.toIntegerThrowOnInfinity(context, nanosecondValue);
-        }
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
+        int nanosecond = nanosecondField != null ? nanosecondField : original.nanosecond();
 
-        JSValue secondValue = fields.get(PropertyKey.fromString("second"));
+        Integer secondField = TemporalUtils.getOptionalIntegerField(context, fields, "second");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasSecond = !(secondValue instanceof JSUndefined) && secondValue != null;
-        int second = original.second();
-        if (hasSecond) {
-            second = TemporalUtils.toIntegerThrowOnInfinity(context, secondValue);
-        }
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
+        int second = secondField != null ? secondField : original.second();
 
-        boolean hasAnyField = hasHour || hasMicrosecond || hasMillisecond || hasMinute || hasNanosecond || hasSecond;
+        boolean hasAnyField = hourField != null || microsecondField != null || millisecondField != null
+                || minuteField != null || nanosecondField != null || secondField != null;
         if (!hasAnyField) {
             context.throwTypeError("Temporal error: Must specify at least one time field.");
             return JSUndefined.INSTANCE;

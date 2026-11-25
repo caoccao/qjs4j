@@ -145,11 +145,8 @@ try (JSContext context = new JSContext(new JSRuntime())) {
 Java formatting is enforced by Spotless with Eclipse JDT. Run `./gradlew spotlessApply` to format sources and sort members, or `./gradlew spotlessCheck` to verify them without editing files. Both `build` and `check` include the formatting check. The formatter uses four-space indentation and the member order `SF,SI,F,I,C,M,SM,T`, with field sorting enabled; its settings are in `build.gradle.kts` and `config/eclipse-java-formatter.properties`.
 
 The Gradle toolchain compiles and tests against JDK 17 wherever the build is launched from, so a
-JDK 17 installation must be discoverable (Gradle will provision one if it is not). Gradle's Kotlin
-DSL compiles the build script before any toolchain is selected, so the *launching* JDK also has to
-be one the wrapper's Gradle release understands: Gradle 9.4.1 accepts JDK 17 through 25. On a newer
-JDK the build aborts with a bare version number — upgrade the wrapper, or set `JAVA_HOME` to a
-supported release.
+JDK 17 installation must be discoverable (Gradle will provision one if it is not). The Gradle 9.9.2
+wrapper runs on JDK 17 through 27. Set `JAVA_HOME` to a supported JDK when launching the build.
 
 Test JVM: `./gradlew test -PtestJavaVersion=21` runs the suite on JDK 21 instead of 17, and
 `-PtestJavaVersion=25` on JDK 25. Running the engine — not just launching Gradle — on each release

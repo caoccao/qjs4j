@@ -42,42 +42,11 @@ public final class JSSyntaxError extends JSError {
     }
 
     public static JSValue create(JSContext context, JSValue... args) {
-        String message = "";
-        if (args.length > 0 && !args[0].isUndefined()) {
-            message = JSTypeConversions.toString(context, args[0]).value();
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        JSSyntaxError jsSyntaxError = context.createJSSyntaxError(message);
-        if (args.length > 0 && !args[0].isUndefined()) {
-            JSError.defineEmptyMessage(jsSyntaxError, message);
-        }
-        if (args.length > 1) {
-            if (!JSError.installErrorCause(context, jsSyntaxError, args[1])) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        JSError.captureStackTraceBelowNewTarget(context, jsSyntaxError);
-        return jsSyntaxError;
+        return createNativeError(context, args, JSContext::createJSSyntaxError);
     }
 
     public static JSObject createPrototype(JSContext context, JSValue... args) {
-        JSObject errorPrototype = new JSObject(context);
-        context.transferPrototype(errorPrototype, JSError.NAME);
-
-        errorPrototype.defineProperty(PropertyKey.fromString("name"), new JSString(NAME),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        errorPrototype.defineProperty(PropertyKey.fromString("message"), new JSString(""),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-
-        JSNativeFunction errorConstructor = new JSNativeFunction(context, NAME, 1,
-                (childContext, thisObj, childArgs) -> create(childContext, childArgs), true);
-        errorConstructor.defineProperty(PropertyKey.fromString("prototype"), errorPrototype,
-                PropertyDescriptor.DataState.None);
-        errorPrototype.defineProperty(PropertyKey.fromString("constructor"), errorConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
-
-        return errorConstructor;
+        return createNativeErrorPrototype(context, NAME,
+                (childContext, thisObj, childArgs) -> create(childContext, childArgs));
     }
 }

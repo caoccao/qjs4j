@@ -42,6 +42,7 @@ import java.util.logging.Logger;
  * (runtime), not shared globally across the JVM.
  */
 public final class AtomicsObject implements AutoCloseable {
+    private static final String INTEGER_ARRAY_REQUIREMENT = " only works on Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, or BigUint64Array";
     /**
      * How long {@link #close()} waits for the {@code waitAsync} executor to stop.
      */
@@ -80,195 +81,14 @@ public final class AtomicsObject implements AutoCloseable {
      * old value.
      */
     public JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length < 3) {
-            return context.throwTypeError("Atomics.add requires typedArray, index, and value");
-        }
-
-        // Validate typed array
-        if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return context.throwTypeError("Atomics.add requires a TypedArray");
-        }
-        if (!typedArray.isAtomicsReadableAndWriteable()) {
-            return context.throwTypeError(
-                    "Atomics.add only works on Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, or BigUint64Array");
-        }
-
-        try {
-            long index = getAtomicIndex(context, typedArray, args[1]);
-            if (typedArray instanceof JSInt8Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                byte oldValue = ByteArrayAtomics.getAndAddByte(arr, byteOffset, (byte) value);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint8Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                byte oldValue = ByteArrayAtomics.getAndAddByte(arr, byteOffset, (byte) value);
-                return JSNumber.of(Byte.toUnsignedInt(oldValue));
-            } else if (typedArray instanceof JSInt16Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                short oldValue = shortGetAndAdd(arr, byteOffset, (short) value);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint16Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                short oldValue = shortGetAndAdd(arr, byteOffset, (short) value);
-                return JSNumber.of(Short.toUnsignedInt(oldValue));
-            } else if (typedArray instanceof JSInt32Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                int oldValue = ByteArrayAtomics.getAndAddInt(arr, byteOffset, value);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint32Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                int oldValue = ByteArrayAtomics.getAndAddInt(arr, byteOffset, value);
-                return JSNumber.of(Integer.toUnsignedLong(oldValue));
-            } else if (typedArray instanceof JSBigInt64Array) {
-                long value = JSTypeConversions.toBigInt64(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                long oldValue = ByteArrayAtomics.getAndAddLong(arr, byteOffset, value);
-                return new JSBigInt(BigInteger.valueOf(oldValue));
-            } else if (typedArray instanceof JSBigUint64Array) {
-                long value = JSTypeConversions.toBigInt64(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                long oldValue = ByteArrayAtomics.getAndAddLong(arr, byteOffset, value);
-                return createBigUint64(oldValue);
-            }
-        } catch (JSErrorException e) {
-            return context.throwError(e);
-        }
-        return context.throwTypeError("Atomics.add invalid typed array");
+        return readModifyWrite(context, args, AtomicOperation.ADD);
     }
 
     /**
      * Atomics.and(typedArray, index, value) ES2017 24.4.4 Atomically computes bitwise AND and returns the old value.
      */
     public JSValue and(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length < 3) {
-            return context.throwTypeError("Atomics.and requires typedArray, index, and value");
-        }
-
-        if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return context.throwTypeError("Atomics.and requires a TypedArray");
-        }
-        if (!typedArray.isAtomicsReadableAndWriteable()) {
-            return context.throwTypeError(
-                    "Atomics.and only works on Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, or BigUint64Array");
-        }
-
-        try {
-            long index = getAtomicIndex(context, typedArray, args[1]);
-            if (typedArray instanceof JSInt8Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                byte oldValue = ByteArrayAtomics.getAndBitwiseAndByte(arr, byteOffset, (byte) value);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint8Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                byte oldValue = ByteArrayAtomics.getAndBitwiseAndByte(arr, byteOffset, (byte) value);
-                return JSNumber.of(Byte.toUnsignedInt(oldValue));
-            } else if (typedArray instanceof JSInt16Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                short oldValue = shortGetAndBitwiseAnd(arr, byteOffset, (short) value);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint16Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                short oldValue = shortGetAndBitwiseAnd(arr, byteOffset, (short) value);
-                return JSNumber.of(Short.toUnsignedInt(oldValue));
-            } else if (typedArray instanceof JSInt32Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                int oldValue = ByteArrayAtomics.getAndBitwiseAndInt(arr, byteOffset, value);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint32Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                int oldValue = ByteArrayAtomics.getAndBitwiseAndInt(arr, byteOffset, value);
-                return JSNumber.of(Integer.toUnsignedLong(oldValue));
-            } else if (typedArray instanceof JSBigInt64Array) {
-                long value = JSTypeConversions.toBigInt64(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                long oldValue = ByteArrayAtomics.getAndBitwiseAndLong(arr, byteOffset, value);
-                return new JSBigInt(BigInteger.valueOf(oldValue));
-            } else if (typedArray instanceof JSBigUint64Array) {
-                long value = JSTypeConversions.toBigInt64(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                long oldValue = ByteArrayAtomics.getAndBitwiseAndLong(arr, byteOffset, value);
-                return createBigUint64(oldValue);
-            }
-        } catch (JSErrorException e) {
-            return context.throwError(e);
-        }
-        return context.throwTypeError("Atomics.and invalid typed array");
+        return readModifyWrite(context, args, AtomicOperation.AND);
     }
 
     /**
@@ -340,137 +160,7 @@ public final class AtomicsObject implements AutoCloseable {
      * exchanges if equal, returns the old value.
      */
     public JSValue compareExchange(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length < 4) {
-            return context.throwTypeError(
-                    "Atomics.compareExchange requires typedArray, index, expectedValue, and replacementValue");
-        }
-
-        if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return context.throwTypeError("Atomics.compareExchange requires a TypedArray");
-        }
-
-        if (!typedArray.isAtomicsReadableAndWriteable()) {
-            return context.throwTypeError(
-                    "Atomics.compareExchange only works on Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, or BigUint64Array");
-        }
-
-        try {
-            long index = getAtomicIndex(context, typedArray, args[1]);
-            if (typedArray instanceof JSInt8Array) {
-                int expectedValue = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                int replacementValue = JSTypeConversions.toInt32(context, args[3]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                byte oldValue = ByteArrayAtomics.compareAndExchangeByte(arr, byteOffset, (byte) expectedValue,
-                        (byte) replacementValue);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint8Array) {
-                int expectedValue = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                int replacementValue = JSTypeConversions.toInt32(context, args[3]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                byte oldValue = ByteArrayAtomics.compareAndExchangeByte(arr, byteOffset, (byte) expectedValue,
-                        (byte) replacementValue);
-                return JSNumber.of(Byte.toUnsignedInt(oldValue));
-            } else if (typedArray instanceof JSInt16Array) {
-                int expectedValue = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                int replacementValue = JSTypeConversions.toInt32(context, args[3]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                short oldValue = shortCompareAndExchange(arr, byteOffset, (short) expectedValue,
-                        (short) replacementValue);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint16Array) {
-                int expectedValue = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                int replacementValue = JSTypeConversions.toInt32(context, args[3]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                short oldValue = shortCompareAndExchange(arr, byteOffset, (short) expectedValue,
-                        (short) replacementValue);
-                return JSNumber.of(Short.toUnsignedInt(oldValue));
-            } else if (typedArray instanceof JSInt32Array) {
-                int expectedValue = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                int replacementValue = JSTypeConversions.toInt32(context, args[3]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                int oldValue = ByteArrayAtomics.compareAndExchangeInt(arr, byteOffset, expectedValue, replacementValue);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint32Array) {
-                int expectedValue = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                int replacementValue = JSTypeConversions.toInt32(context, args[3]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                int oldValue = ByteArrayAtomics.compareAndExchangeInt(arr, byteOffset, expectedValue, replacementValue);
-                return JSNumber.of(Integer.toUnsignedLong(oldValue));
-            } else if (typedArray instanceof JSBigInt64Array) {
-                long expectedValue = JSTypeConversions.toBigInt64(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                long replacementValue = JSTypeConversions.toBigInt64(context, args[3]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                long oldValue = ByteArrayAtomics.compareAndExchangeLong(arr, byteOffset, expectedValue,
-                        replacementValue);
-                return new JSBigInt(BigInteger.valueOf(oldValue));
-            } else if (typedArray instanceof JSBigUint64Array) {
-                long expectedValue = JSTypeConversions.toBigInt64(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                long replacementValue = JSTypeConversions.toBigInt64(context, args[3]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                long oldValue = ByteArrayAtomics.compareAndExchangeLong(arr, byteOffset, expectedValue,
-                        replacementValue);
-                return createBigUint64(oldValue);
-            }
-        } catch (JSErrorException e) {
-            return context.throwError(e);
-        }
-        return context.throwTypeError("Atomics.compareExchange invalid typed array");
+        return readModifyWrite(context, args, AtomicOperation.COMPARE_EXCHANGE);
     }
 
     /**
@@ -478,98 +168,7 @@ public final class AtomicsObject implements AutoCloseable {
      * old value.
      */
     public JSValue exchange(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length < 3) {
-            return context.throwTypeError("Atomics.exchange requires typedArray, index, and value");
-        }
-
-        if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return context.throwTypeError("Atomics.exchange requires a TypedArray");
-        }
-
-        if (!typedArray.isAtomicsReadableAndWriteable()) {
-            return context.throwTypeError(
-                    "Atomics.exchange only works on Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, or BigUint64Array");
-        }
-
-        try {
-            long index = getAtomicIndex(context, typedArray, args[1]);
-            if (typedArray instanceof JSInt8Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                byte oldValue = ByteArrayAtomics.getAndSetByte(arr, byteOffset, (byte) value);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint8Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                byte oldValue = ByteArrayAtomics.getAndSetByte(arr, byteOffset, (byte) value);
-                return JSNumber.of(Byte.toUnsignedInt(oldValue));
-            } else if (typedArray instanceof JSInt16Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                short oldValue = shortGetAndSet(arr, byteOffset, (short) value);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint16Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                short oldValue = shortGetAndSet(arr, byteOffset, (short) value);
-                return JSNumber.of(Short.toUnsignedInt(oldValue));
-            } else if (typedArray instanceof JSInt32Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                int oldValue = ByteArrayAtomics.getAndSetInt(arr, byteOffset, value);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint32Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                int oldValue = ByteArrayAtomics.getAndSetInt(arr, byteOffset, value);
-                return JSNumber.of(Integer.toUnsignedLong(oldValue));
-            } else if (typedArray instanceof JSBigInt64Array) {
-                long value = JSTypeConversions.toBigInt64(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                long oldValue = ByteArrayAtomics.getAndSetLong(arr, byteOffset, value);
-                return new JSBigInt(BigInteger.valueOf(oldValue));
-            } else if (typedArray instanceof JSBigUint64Array) {
-                long value = JSTypeConversions.toBigInt64(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                long oldValue = ByteArrayAtomics.getAndSetLong(arr, byteOffset, value);
-                return createBigUint64(oldValue);
-            }
-        } catch (JSErrorException e) {
-            return context.throwError(e);
-        }
-        return context.throwTypeError("Atomics.exchange invalid typed array");
+        return readModifyWrite(context, args, AtomicOperation.EXCHANGE);
     }
 
     /**
@@ -650,49 +249,24 @@ public final class AtomicsObject implements AutoCloseable {
             return context.throwTypeError("Atomics.load requires a TypedArray");
         }
         if (!typedArray.isAtomicsReadableAndWriteable()) {
-            return context.throwTypeError(
-                    "Atomics.load only works on Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, or BigUint64Array");
+            return context.throwTypeError("Atomics.load" + INTEGER_ARRAY_REQUIREMENT);
         }
 
         try {
             long index = getAtomicIndex(context, typedArray, args[1]);
-            if (typedArray instanceof JSInt8Array) {
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                return JSNumber.of(ByteArrayAtomics.getVolatileByte(arr, byteOffset));
-            } else if (typedArray instanceof JSUint8Array) {
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                return JSNumber.of(Byte.toUnsignedInt(ByteArrayAtomics.getVolatileByte(arr, byteOffset)));
-            } else if (typedArray instanceof JSInt16Array) {
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                return JSNumber.of(ByteArrayAtomics.getVolatileShort(arr, byteOffset));
-            } else if (typedArray instanceof JSUint16Array) {
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                return JSNumber.of(Short.toUnsignedInt(ByteArrayAtomics.getVolatileShort(arr, byteOffset)));
-            } else if (typedArray instanceof JSInt32Array) {
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                return JSNumber.of(ByteArrayAtomics.getVolatileInt(arr, byteOffset));
-            } else if (typedArray instanceof JSUint32Array) {
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                return JSNumber.of(Integer.toUnsignedLong(ByteArrayAtomics.getVolatileInt(arr, byteOffset)));
-            } else if (typedArray instanceof JSBigInt64Array) {
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                return new JSBigInt(BigInteger.valueOf(ByteArrayAtomics.getVolatileLong(arr, byteOffset)));
-            } else if (typedArray instanceof JSBigUint64Array) {
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                return createBigUint64(ByteArrayAtomics.getVolatileLong(arr, byteOffset));
-            }
+            byte[] array = requireAtomicArray(typedArray, index);
+            int offset = getWaitOffset(typedArray, index);
+            long value = switch (typedArray.getBytesPerElement()) {
+                case 1 -> ByteArrayAtomics.getVolatileByte(array, offset);
+                case 2 -> ByteArrayAtomics.getVolatileShort(array, offset);
+                case 4 -> ByteArrayAtomics.getVolatileInt(array, offset);
+                case 8 -> ByteArrayAtomics.getVolatileLong(array, offset);
+                default -> throw new AssertionError(typedArray.getBytesPerElement());
+            };
+            return atomicResult(typedArray, value);
         } catch (JSErrorException e) {
             return context.throwError(e);
         }
-        return context.throwTypeError("Atomics.load invalid typed array");
     }
 
     /**
@@ -739,107 +313,11 @@ public final class AtomicsObject implements AutoCloseable {
         }
     }
 
-    // --- CAS-loop helpers for short (Int16/Uint16) atomics ---
-    // byteArrayViewVarHandle(short[].class) only supports getVolatile/setVolatile.
-    // RMW operations use a CAS loop on the enclosing aligned int word.
-    // Backing arrays are padded to a multiple of 4 bytes to ensure the enclosing int
-    // is always in bounds.
-
     /**
      * Atomics.or(typedArray, index, value) ES2017 24.4.8 Atomically computes bitwise OR and returns the old value.
      */
     public JSValue or(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length < 3) {
-            return context.throwTypeError("Atomics.or requires typedArray, index, and value");
-        }
-
-        if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return context.throwTypeError("Atomics.or requires a TypedArray");
-        }
-        if (!typedArray.isAtomicsReadableAndWriteable()) {
-            return context.throwTypeError(
-                    "Atomics.or only works on Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, or BigUint64Array");
-        }
-
-        try {
-            long index = getAtomicIndex(context, typedArray, args[1]);
-            if (typedArray instanceof JSInt8Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                byte oldValue = ByteArrayAtomics.getAndBitwiseOrByte(arr, byteOffset, (byte) value);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint8Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                byte oldValue = ByteArrayAtomics.getAndBitwiseOrByte(arr, byteOffset, (byte) value);
-                return JSNumber.of(Byte.toUnsignedInt(oldValue));
-            } else if (typedArray instanceof JSInt16Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                short oldValue = shortGetAndBitwiseOr(arr, byteOffset, (short) value);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint16Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                short oldValue = shortGetAndBitwiseOr(arr, byteOffset, (short) value);
-                return JSNumber.of(Short.toUnsignedInt(oldValue));
-            } else if (typedArray instanceof JSInt32Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                int oldValue = ByteArrayAtomics.getAndBitwiseOrInt(arr, byteOffset, value);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint32Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                int oldValue = ByteArrayAtomics.getAndBitwiseOrInt(arr, byteOffset, value);
-                return JSNumber.of(Integer.toUnsignedLong(oldValue));
-            } else if (typedArray instanceof JSBigInt64Array) {
-                long value = JSTypeConversions.toBigInt64(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                long oldValue = ByteArrayAtomics.getAndBitwiseOrLong(arr, byteOffset, value);
-                return new JSBigInt(BigInteger.valueOf(oldValue));
-            } else if (typedArray instanceof JSBigUint64Array) {
-                long value = JSTypeConversions.toBigInt64(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                long oldValue = ByteArrayAtomics.getAndBitwiseOrLong(arr, byteOffset, value);
-                return createBigUint64(oldValue);
-            }
-        } catch (JSErrorException e) {
-            return context.throwError(e);
-        }
-        return context.throwTypeError("Atomics.or invalid typed array");
+        return readModifyWrite(context, args, AtomicOperation.OR);
     }
 
     /**
@@ -924,8 +402,7 @@ public final class AtomicsObject implements AutoCloseable {
             return context.throwTypeError("Atomics.store requires a TypedArray");
         }
         if (!typedArray.isAtomicsReadableAndWriteable()) {
-            return context.throwTypeError(
-                    "Atomics.store only works on Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, or BigUint64Array");
+            return context.throwTypeError("Atomics.store" + INTEGER_ARRAY_REQUIREMENT);
         }
 
         try {
@@ -949,45 +426,18 @@ public final class AtomicsObject implements AutoCloseable {
                 returnValue = 0.0;
             }
             int int32Value = JSTypeConversions.toInt32(context, JSNumber.of(returnValue));
-            if (typedArray instanceof JSInt8Array) {
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                byte storedValue = (byte) int32Value;
-                ByteArrayAtomics.setVolatileByte(arr, byteOffset, storedValue);
-                return JSNumber.of(returnValue);
-            } else if (typedArray instanceof JSUint8Array) {
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                byte storedValue = (byte) int32Value;
-                ByteArrayAtomics.setVolatileByte(arr, byteOffset, storedValue);
-                return JSNumber.of(returnValue);
-            } else if (typedArray instanceof JSInt16Array) {
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                short storedValue = (short) int32Value;
-                ByteArrayAtomics.setVolatileShort(arr, byteOffset, storedValue);
-                return JSNumber.of(returnValue);
-            } else if (typedArray instanceof JSUint16Array) {
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                short storedValue = (short) int32Value;
-                ByteArrayAtomics.setVolatileShort(arr, byteOffset, storedValue);
-                return JSNumber.of(returnValue);
-            } else if (typedArray instanceof JSInt32Array) {
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                ByteArrayAtomics.setVolatileInt(arr, byteOffset, int32Value);
-                return JSNumber.of(returnValue);
-            } else if (typedArray instanceof JSUint32Array) {
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                ByteArrayAtomics.setVolatileInt(arr, byteOffset, int32Value);
-                return JSNumber.of(returnValue);
+            byte[] array = requireAtomicArray(typedArray, index);
+            int offset = getWaitOffset(typedArray, index);
+            switch (typedArray.getBytesPerElement()) {
+                case 1 -> ByteArrayAtomics.setVolatileByte(array, offset, (byte) int32Value);
+                case 2 -> ByteArrayAtomics.setVolatileShort(array, offset, (short) int32Value);
+                case 4 -> ByteArrayAtomics.setVolatileInt(array, offset, int32Value);
+                default -> throw new AssertionError(typedArray.getBytesPerElement());
             }
+            return JSNumber.of(returnValue);
         } catch (JSErrorException e) {
             return context.throwError(e);
         }
-        return context.throwTypeError("Atomics.store invalid typed array");
     }
 
     /**
@@ -995,97 +445,7 @@ public final class AtomicsObject implements AutoCloseable {
      * returns the old value.
      */
     public JSValue sub(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length < 3) {
-            return context.throwTypeError("Atomics.sub requires typedArray, index, and value");
-        }
-
-        if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return context.throwTypeError("Atomics.sub requires a TypedArray");
-        }
-        if (!typedArray.isAtomicsReadableAndWriteable()) {
-            return context.throwTypeError(
-                    "Atomics.sub only works on Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, or BigUint64Array");
-        }
-
-        try {
-            long index = getAtomicIndex(context, typedArray, args[1]);
-            if (typedArray instanceof JSInt8Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                byte oldValue = ByteArrayAtomics.getAndAddByte(arr, byteOffset, (byte) -value);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint8Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                byte oldValue = ByteArrayAtomics.getAndAddByte(arr, byteOffset, (byte) -value);
-                return JSNumber.of(Byte.toUnsignedInt(oldValue));
-            } else if (typedArray instanceof JSInt16Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                short oldValue = shortGetAndAdd(arr, byteOffset, (short) -value);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint16Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                short oldValue = shortGetAndAdd(arr, byteOffset, (short) -value);
-                return JSNumber.of(Short.toUnsignedInt(oldValue));
-            } else if (typedArray instanceof JSInt32Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                int oldValue = ByteArrayAtomics.getAndAddInt(arr, byteOffset, -value);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint32Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                int oldValue = ByteArrayAtomics.getAndAddInt(arr, byteOffset, -value);
-                return JSNumber.of(Integer.toUnsignedLong(oldValue));
-            } else if (typedArray instanceof JSBigInt64Array) {
-                long value = JSTypeConversions.toBigInt64(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                long oldValue = ByteArrayAtomics.getAndAddLong(arr, byteOffset, -value);
-                return new JSBigInt(BigInteger.valueOf(oldValue));
-            } else if (typedArray instanceof JSBigUint64Array) {
-                long value = JSTypeConversions.toBigInt64(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                long oldValue = ByteArrayAtomics.getAndAddLong(arr, byteOffset, -value);
-                return createBigUint64(oldValue);
-            }
-        } catch (JSErrorException e) {
-            return context.throwError(e);
-        }
-        return context.throwTypeError("Atomics.sub invalid typed array");
+        return readModifyWrite(context, args, AtomicOperation.SUB);
     }
 
     /**
@@ -1283,98 +643,26 @@ public final class AtomicsObject implements AutoCloseable {
      * Atomics.xor(typedArray, index, value) ES2017 24.4.14 Atomically computes bitwise XOR and returns the old value.
      */
     public JSValue xor(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length < 3) {
-            return context.throwTypeError("Atomics.xor requires typedArray, index, and value");
-        }
+        return readModifyWrite(context, args, AtomicOperation.XOR);
+    }
 
-        if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return context.throwTypeError("Atomics.xor requires a TypedArray");
+    private static JSValue atomicResult(JSTypedArray typedArray, long value) {
+        if (typedArray instanceof JSBigUint64Array) {
+            return createBigUint64(value);
         }
-
-        if (!typedArray.isAtomicsReadableAndWriteable()) {
-            return context.throwTypeError(
-                    "Atomics.xor only works on Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, or BigUint64Array");
+        if (typedArray instanceof JSBigInt64Array) {
+            return new JSBigInt(BigInteger.valueOf(value));
         }
-
-        try {
-            long index = getAtomicIndex(context, typedArray, args[1]);
-            if (typedArray instanceof JSInt8Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                byte oldValue = ByteArrayAtomics.getAndBitwiseXorByte(arr, byteOffset, (byte) value);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint8Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                byte oldValue = ByteArrayAtomics.getAndBitwiseXorByte(arr, byteOffset, (byte) value);
-                return JSNumber.of(Byte.toUnsignedInt(oldValue));
-            } else if (typedArray instanceof JSInt16Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                short oldValue = shortGetAndBitwiseXor(arr, byteOffset, (short) value);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint16Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                short oldValue = shortGetAndBitwiseXor(arr, byteOffset, (short) value);
-                return JSNumber.of(Short.toUnsignedInt(oldValue));
-            } else if (typedArray instanceof JSInt32Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                int oldValue = ByteArrayAtomics.getAndBitwiseXorInt(arr, byteOffset, value);
-                return JSNumber.of(oldValue);
-            } else if (typedArray instanceof JSUint32Array) {
-                int value = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                int oldValue = ByteArrayAtomics.getAndBitwiseXorInt(arr, byteOffset, value);
-                return JSNumber.of(Integer.toUnsignedLong(oldValue));
-            } else if (typedArray instanceof JSBigInt64Array) {
-                long value = JSTypeConversions.toBigInt64(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                long oldValue = ByteArrayAtomics.getAndBitwiseXorLong(arr, byteOffset, value);
-                return new JSBigInt(BigInteger.valueOf(oldValue));
-            } else if (typedArray instanceof JSBigUint64Array) {
-                long value = JSTypeConversions.toBigInt64(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                long oldValue = ByteArrayAtomics.getAndBitwiseXorLong(arr, byteOffset, value);
-                return createBigUint64(oldValue);
-            }
-        } catch (JSErrorException e) {
-            return context.throwError(e);
+        if (typedArray instanceof JSUint32Array) {
+            return JSNumber.of(Integer.toUnsignedLong((int) value));
         }
-        return context.throwTypeError("Atomics.xor invalid typed array");
+        if (typedArray instanceof JSUint16Array) {
+            return JSNumber.of(Short.toUnsignedInt((short) value));
+        }
+        if (typedArray instanceof JSUint8Array) {
+            return JSNumber.of(Byte.toUnsignedInt((byte) value));
+        }
+        return JSNumber.of((int) value);
     }
 
     private static JSValue createBigUint64(long value) {
@@ -1396,14 +684,7 @@ public final class AtomicsObject implements AutoCloseable {
             throw new JSTypeErrorException("TypedArray buffer is detached or out of bounds");
         }
         long typedArrayLength = typedArray.getLength();
-        final long indexLong;
-        try {
-            indexLong = JSTypeConversions.toIndex(context, indexValue);
-        } catch (JSRangeErrorException e) {
-            throw e;
-        } catch (JSErrorException e) {
-            throw e;
-        }
+        long indexLong = JSTypeConversions.toIndex(context, indexValue);
         if (context.hasPendingException()) {
             throw new com.caoccao.qjs4j.exceptions.JSException(context.getPendingException());
         }
@@ -1436,9 +717,54 @@ public final class AtomicsObject implements AutoCloseable {
                 .arrayOffsetAt(typedArray.getByteOffset() + index * typedArray.getBytesPerElement());
     }
 
+    private static JSValue readModifyWrite(JSContext context, JSValue[] args, AtomicOperation operation) {
+        boolean compare = operation == AtomicOperation.COMPARE_EXCHANGE;
+        if (args.length < (compare ? 4 : 3)) {
+            return context.throwTypeError(operation.methodName + (compare
+                    ? " requires typedArray, index, expectedValue, and replacementValue"
+                    : " requires typedArray, index, and value"));
+        }
+        if (!(args[0] instanceof JSTypedArray typedArray)) {
+            return context.throwTypeError(operation.methodName + " requires a TypedArray");
+        }
+        if (!typedArray.isAtomicsReadableAndWriteable()) {
+            return context.throwTypeError(operation.methodName + INTEGER_ARRAY_REQUIREMENT);
+        }
+
+        try {
+            long index = getAtomicIndex(context, typedArray, args[1]);
+            int width = typedArray.getBytesPerElement();
+            long operand = toAtomicOperand(context, width, args[2]);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            long replacement = 0;
+            if (compare) {
+                replacement = toAtomicOperand(context, width, args[3]);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+            }
+            // User code can detach or resize the buffer during either coercion.
+            byte[] array = requireAtomicArray(typedArray, index);
+            int offset = getWaitOffset(typedArray, index);
+            long previous = switch (width) {
+                case 1 -> operation.updateByte(array, offset, (byte) operand, (byte) replacement);
+                case 2 -> operation.updateShort(array, offset, (short) operand, (short) replacement);
+                case 4 -> operation.updateInt(array, offset, (int) operand, (int) replacement);
+                case 8 -> operation.updateLong(array, offset, operand, replacement);
+                default -> throw new AssertionError(width);
+            };
+            return atomicResult(typedArray, previous);
+        } catch (JSErrorException e) {
+            return context.throwError(e);
+        }
+    }
+
     private static byte[] requireAtomicArray(JSTypedArray typedArray, long index) {
         // Conversion of the index or value can resize or detach an ordinary ArrayBuffer.
-        if (typedArray.isOutOfBounds() || index >= typedArray.getLength()) {
+        // An out-of-bounds or detached view has length zero.
+        if (index >= typedArray.getLength()) {
             throw new JSTypeErrorException("TypedArray buffer is detached or out of bounds");
         }
         JSByteBuffer byteBuffer = typedArray.getBuffer().getBuffer();
@@ -1448,95 +774,11 @@ public final class AtomicsObject implements AutoCloseable {
         return byteBuffer.arrayAt(typedArray.getByteOffset() + index * typedArray.getBytesPerElement());
     }
 
-    private static short shortCompareAndExchange(byte[] arr, int byteOffset, short expected, short replacement) {
-        int intOffset = byteOffset & ~3;
-        int shift = (byteOffset & 2) << 3;
-        int mask = 0xFFFF << shift;
-        while (true) {
-            int oldInt = ByteArrayAtomics.getVolatileInt(arr, intOffset);
-            short oldShort = (short) ((oldInt >>> shift) & 0xFFFF);
-            if (oldShort != expected) {
-                return oldShort;
-            }
-            int newInt = (oldInt & ~mask) | ((replacement & 0xFFFF) << shift);
-            if (ByteArrayAtomics.compareAndExchangeInt(arr, intOffset, oldInt, newInt) == oldInt) {
-                return oldShort;
-            }
-        }
-    }
-
-    private static short shortGetAndAdd(byte[] arr, int byteOffset, short delta) {
-        int intOffset = byteOffset & ~3;
-        int shift = (byteOffset & 2) << 3;
-        int mask = 0xFFFF << shift;
-        while (true) {
-            int oldInt = ByteArrayAtomics.getVolatileInt(arr, intOffset);
-            short oldShort = (short) ((oldInt >>> shift) & 0xFFFF);
-            short newShort = (short) (oldShort + delta);
-            int newInt = (oldInt & ~mask) | ((newShort & 0xFFFF) << shift);
-            if (ByteArrayAtomics.compareAndExchangeInt(arr, intOffset, oldInt, newInt) == oldInt) {
-                return oldShort;
-            }
-        }
-    }
-
-    private static short shortGetAndBitwiseAnd(byte[] arr, int byteOffset, short operand) {
-        int intOffset = byteOffset & ~3;
-        int shift = (byteOffset & 2) << 3;
-        int mask = 0xFFFF << shift;
-        while (true) {
-            int oldInt = ByteArrayAtomics.getVolatileInt(arr, intOffset);
-            short oldShort = (short) ((oldInt >>> shift) & 0xFFFF);
-            short newShort = (short) (oldShort & operand);
-            int newInt = (oldInt & ~mask) | ((newShort & 0xFFFF) << shift);
-            if (ByteArrayAtomics.compareAndExchangeInt(arr, intOffset, oldInt, newInt) == oldInt) {
-                return oldShort;
-            }
-        }
-    }
-
-    private static short shortGetAndBitwiseOr(byte[] arr, int byteOffset, short operand) {
-        int intOffset = byteOffset & ~3;
-        int shift = (byteOffset & 2) << 3;
-        int mask = 0xFFFF << shift;
-        while (true) {
-            int oldInt = ByteArrayAtomics.getVolatileInt(arr, intOffset);
-            short oldShort = (short) ((oldInt >>> shift) & 0xFFFF);
-            short newShort = (short) (oldShort | operand);
-            int newInt = (oldInt & ~mask) | ((newShort & 0xFFFF) << shift);
-            if (ByteArrayAtomics.compareAndExchangeInt(arr, intOffset, oldInt, newInt) == oldInt) {
-                return oldShort;
-            }
-        }
-    }
-
-    private static short shortGetAndBitwiseXor(byte[] arr, int byteOffset, short operand) {
-        int intOffset = byteOffset & ~3;
-        int shift = (byteOffset & 2) << 3;
-        int mask = 0xFFFF << shift;
-        while (true) {
-            int oldInt = ByteArrayAtomics.getVolatileInt(arr, intOffset);
-            short oldShort = (short) ((oldInt >>> shift) & 0xFFFF);
-            short newShort = (short) (oldShort ^ operand);
-            int newInt = (oldInt & ~mask) | ((newShort & 0xFFFF) << shift);
-            if (ByteArrayAtomics.compareAndExchangeInt(arr, intOffset, oldInt, newInt) == oldInt) {
-                return oldShort;
-            }
-        }
-    }
-
-    private static short shortGetAndSet(byte[] arr, int byteOffset, short newValue) {
-        int intOffset = byteOffset & ~3;
-        int shift = (byteOffset & 2) << 3;
-        int mask = 0xFFFF << shift;
-        while (true) {
-            int oldInt = ByteArrayAtomics.getVolatileInt(arr, intOffset);
-            short oldShort = (short) ((oldInt >>> shift) & 0xFFFF);
-            int newInt = (oldInt & ~mask) | ((newValue & 0xFFFF) << shift);
-            if (ByteArrayAtomics.compareAndExchangeInt(arr, intOffset, oldInt, newInt) == oldInt) {
-                return oldShort;
-            }
-        }
+    private static long toAtomicOperand(JSContext context, int width, JSValue value) {
+        // The only 8-byte integer typed arrays are BigInt64Array and BigUint64Array.
+        return width == Long.BYTES
+                ? JSTypeConversions.toBigInt64(context, value)
+                : JSTypeConversions.toInt32(context, value);
     }
 
     /**
@@ -1565,6 +807,81 @@ public final class AtomicsObject implements AutoCloseable {
 
         private boolean isCancelled() {
             return cancelled.get();
+        }
+    }
+
+    private enum AtomicOperation {
+        ADD("add"), AND("and"), COMPARE_EXCHANGE("compareExchange"), EXCHANGE("exchange"), OR("or"), SUB("sub"), XOR(
+                "xor");
+
+        final String methodName;
+
+        AtomicOperation(String name) {
+            methodName = "Atomics." + name;
+        }
+
+        byte updateByte(byte[] array, int offset, byte operand, byte replacement) {
+            return switch (this) {
+                case ADD -> ByteArrayAtomics.getAndAddByte(array, offset, operand);
+                case SUB -> ByteArrayAtomics.getAndAddByte(array, offset, (byte) -operand);
+                case AND -> ByteArrayAtomics.getAndBitwiseAndByte(array, offset, operand);
+                case OR -> ByteArrayAtomics.getAndBitwiseOrByte(array, offset, operand);
+                case XOR -> ByteArrayAtomics.getAndBitwiseXorByte(array, offset, operand);
+                case EXCHANGE -> ByteArrayAtomics.getAndSetByte(array, offset, operand);
+                case COMPARE_EXCHANGE -> ByteArrayAtomics.compareAndExchangeByte(array, offset, operand, replacement);
+            };
+        }
+
+        int updateInt(byte[] array, int offset, int operand, int replacement) {
+            return switch (this) {
+                case ADD -> ByteArrayAtomics.getAndAddInt(array, offset, operand);
+                case SUB -> ByteArrayAtomics.getAndAddInt(array, offset, -operand);
+                case AND -> ByteArrayAtomics.getAndBitwiseAndInt(array, offset, operand);
+                case OR -> ByteArrayAtomics.getAndBitwiseOrInt(array, offset, operand);
+                case XOR -> ByteArrayAtomics.getAndBitwiseXorInt(array, offset, operand);
+                case EXCHANGE -> ByteArrayAtomics.getAndSetInt(array, offset, operand);
+                case COMPARE_EXCHANGE -> ByteArrayAtomics.compareAndExchangeInt(array, offset, operand, replacement);
+            };
+        }
+
+        long updateLong(byte[] array, int offset, long operand, long replacement) {
+            return switch (this) {
+                case ADD -> ByteArrayAtomics.getAndAddLong(array, offset, operand);
+                case SUB -> ByteArrayAtomics.getAndAddLong(array, offset, -operand);
+                case AND -> ByteArrayAtomics.getAndBitwiseAndLong(array, offset, operand);
+                case OR -> ByteArrayAtomics.getAndBitwiseOrLong(array, offset, operand);
+                case XOR -> ByteArrayAtomics.getAndBitwiseXorLong(array, offset, operand);
+                case EXCHANGE -> ByteArrayAtomics.getAndSetLong(array, offset, operand);
+                case COMPARE_EXCHANGE -> ByteArrayAtomics.compareAndExchangeLong(array, offset, operand, replacement);
+            };
+        }
+
+        short updateShort(byte[] array, int offset, short operand, short replacement) {
+            // Short views lack atomic read-modify-write operations. Storage pages are padded to
+            // a multiple of four bytes so the CAS can preserve the neighboring halfword.
+            int wordOffset = offset & ~3;
+            int shift = (offset & 2) << 3;
+            int mask = 0xFFFF << shift;
+            while (true) {
+                int word = ByteArrayAtomics.getVolatileInt(array, wordOffset);
+                short previous = (short) (word >>> shift);
+                if (this == COMPARE_EXCHANGE && previous != operand) {
+                    return previous;
+                }
+                int next = switch (this) {
+                    case ADD -> previous + operand;
+                    case SUB -> previous - operand;
+                    case AND -> previous & operand;
+                    case OR -> previous | operand;
+                    case XOR -> previous ^ operand;
+                    case EXCHANGE -> operand;
+                    case COMPARE_EXCHANGE -> replacement;
+                };
+                int updated = (word & ~mask) | ((next & 0xFFFF) << shift);
+                if (ByteArrayAtomics.compareAndExchangeInt(array, wordOffset, word, updated) == word) {
+                    return previous;
+                }
+            }
         }
     }
 

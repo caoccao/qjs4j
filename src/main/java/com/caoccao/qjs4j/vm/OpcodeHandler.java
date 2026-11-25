@@ -6376,10 +6376,8 @@ public final class OpcodeHandler {
         }
         JSContext context = executionContext.virtualMachine.context;
         if (context.hasEvalOverlayFrames()) {
-            StackFrame callerFrame = executionContext.frame != null ? executionContext.frame.getCaller() : null;
-            if (callerFrame != null) {
-                return callerFrame;
-            }
+            // The creating frame owns eval-local let and const bindings. Its caller chain
+            // supplies the outer scopes when the closure itself performs a direct eval.
             return executionContext.frame;
         }
         if (currentBytecodeFunction.isEvalDynamicScopeLookupEnabled()) {

@@ -158,15 +158,16 @@ public final class TemporalUtils {
         if (value instanceof JSUndefined || value == null) {
             return defaultValue;
         }
-        double numericValue = JSTypeConversions.toNumber(context, value).value();
-        if (context.hasPendingException()) {
-            return Integer.MIN_VALUE;
+        return toIntegerThrowOnInfinity(context, value);
+    }
+
+    public static Integer getOptionalIntegerField(JSContext context, JSObject fields, String name) {
+        JSValue value = fields.get(PropertyKey.fromString(name));
+        if (context.hasPendingException() || value == null || value instanceof JSUndefined) {
+            return null;
         }
-        if (!Double.isFinite(numericValue)) {
-            context.throwRangeError("Temporal error: Expected finite integer.");
-            return Integer.MIN_VALUE;
-        }
-        return (int) numericValue;
+        int integer = toIntegerThrowOnInfinity(context, value);
+        return context.hasPendingException() ? null : integer;
     }
 
     /**
@@ -395,6 +396,34 @@ public final class TemporalUtils {
             }
             cache.remove(oldestValue);
         }
+    }
+
+    /** Validate the partial object for a plain date or time's with() method, in observable property-read order. */
+    public static JSObject requirePartialTemporalObject(JSContext context, JSValue[] args, String errorMessage) {
+        if (args.length == 0 || !(args[0] instanceof JSObject fields) || fields instanceof JSTemporalPlainDate
+                || fields instanceof JSTemporalPlainDateTime || fields instanceof JSTemporalPlainMonthDay
+                || fields instanceof JSTemporalPlainTime || fields instanceof JSTemporalPlainYearMonth
+                || fields instanceof JSTemporalZonedDateTime) {
+            context.throwTypeError(errorMessage);
+            return null;
+        }
+        JSValue calendar = fields.get(PropertyKey.fromString("calendar"));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (calendar != null && !(calendar instanceof JSUndefined)) {
+            context.throwTypeError(errorMessage);
+            return null;
+        }
+        JSValue timeZone = fields.get(PropertyKey.fromString("timeZone"));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (timeZone != null && !(timeZone instanceof JSUndefined)) {
+            context.throwTypeError(errorMessage);
+            return null;
+        }
+        return fields;
     }
 
     public static JSObject resolveTemporalPrototype(JSContext context, String typeName) {
