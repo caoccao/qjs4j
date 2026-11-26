@@ -26,6 +26,9 @@ public final class CharacterProperties {
      * it's the same as toLowerCase, but there are exceptions.
      */
     public static int caseFold(int codePoint) {
+        if (codePoint >= 0 && codePoint < 128) {
+            return codePoint >= 'A' && codePoint <= 'Z' ? codePoint + ('a' - 'A') : codePoint;
+        }
         // Unicode CaseFolding.txt "C" (Common) and special entries.
         // For most characters, case folding equals toLowerCase,
         // but these entries differ from Java's Character.toLowerCase().
@@ -54,35 +57,17 @@ public final class CharacterProperties {
             case 0x1C86 -> 0x044A; // CYRILLIC SMALL LETTER TALL HARD SIGN → HARD SIGN
             case 0x1C87 -> 0x0463; // CYRILLIC SMALL LETTER TALL YAT → YAT
             case 0x1C88 -> 0xA64B; // CYRILLIC SMALL LETTER UNBLENDED UK → UK
-            case 0x1C89 -> 0x1C8A; // CYRILLIC CAPITAL LETTER TJE → small (Unicode 15.0)
+
             case 0x1E9B -> 0x1E61; // LATIN SMALL LETTER LONG S WITH DOT ABOVE → S WITH DOT ABOVE
             case 0x1E9E -> 0x00DF; // LATIN CAPITAL LETTER SHARP S → sharp s
             case 0x1FBE -> 0x03B9; // GREEK PROSGEGRAMMENI → GREEK SMALL LETTER IOTA
-            case 0xA7CB -> 0x0264; // LATIN CAPITAL LETTER RAMS HORN → small (Unicode 15.0)
-            case 0xA7CC -> 0xA7CD; // LATIN CAPITAL LETTER S WITH DIAGONAL STROKE → small (Unicode 15.0)
-            case 0xA7D0 -> 0xA7D1; // LATIN CAPITAL LETTER CLOSED INSULAR G → small (Unicode 15.0)
-            case 0xA7D6 -> 0xA7D7; // LATIN CAPITAL LETTER MIDDLE SCOTS S → small (Unicode 15.0)
-            case 0xA7D8 -> 0xA7D9; // LATIN CAPITAL LETTER SIGMOID S → small (Unicode 15.0)
-            case 0xA7DA -> 0xA7DB; // LATIN CAPITAL LETTER LAMBDA → small (Unicode 15.0)
-            case 0xA7DC -> 0x019B; // LATIN CAPITAL LETTER LAMBDA WITH STROKE → small (Unicode 16.0)
-            case 0x2C2F -> 0x2C5F; // GLAGOLITIC CAPITAL LETTER CAUDATE CHRIVI → small (Unicode 14.0)
-            case 0xA7C0 -> 0xA7C1; // LATIN CAPITAL LETTER OLD POLISH O → small (Unicode 14.0)
-            case 0xA7CE -> 0xA7CF; // LATIN CAPITAL LETTER PHARYNGEAL VOICED FRICATIVE → small (Unicode 15.0)
-            case 0xA7D2 -> 0xA7D3; // LATIN CAPITAL LETTER DOUBLE THORN → small (Unicode 15.0)
-            case 0xA7D4 -> 0xA7D5; // LATIN CAPITAL LETTER HALF H → small (Unicode 15.0)
+
             case 0x212A -> 0x006B; // KELVIN SIGN → k
             case 0x212B -> 0x00E5; // ANGSTROM SIGN → a with ring
             case 0xFB05, 0xFB06 -> 0xFB06; // Latin ligatures long-s-t / st
             default -> {
-                // Vithkuqi capital → small (Unicode 15.0, offset 0x27)
-                if (codePoint >= 0x10570 && codePoint <= 0x10595 && codePoint != 0x1057B && codePoint != 0x1058B) {
-                    yield codePoint + 0x27;
-                }
-                // Garay script uppercase → lowercase (Unicode 16.0)
-                if (codePoint >= 0x10D50 && codePoint <= 0x10D65) {
-                    yield codePoint + 0x20;
-                }
-                yield Character.toLowerCase(codePoint);
+                int mapped = UnicodeCaseMapping.codePointToLower16(codePoint);
+                yield mapped == codePoint ? Character.toLowerCase(codePoint) : mapped;
             }
         };
     }

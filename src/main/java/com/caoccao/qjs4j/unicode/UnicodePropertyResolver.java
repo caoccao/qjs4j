@@ -143,7 +143,7 @@ public final class UnicodePropertyResolver {
             mask |= foldMask;
         }
 
-        List<Integer> ranges = new ArrayList<>();
+        UnicodeRangeBuilder ranges = new UnicodeRangeBuilder();
         for (int idx = 0; idx < CASE_CONV_TABLE1.length; idx++) {
             int v = CASE_CONV_TABLE1[idx];
             int type = (v >> 4) & 0xF;
@@ -154,42 +154,35 @@ public final class UnicodePropertyResolver {
                 if (type == RUN_TYPE_UL) {
                     if ((caseMask & CASE_U) != 0 && (caseMask & (CASE_L | CASE_F)) != 0) {
                         // Both upper and lower/fold: add entire range
-                        ranges.add(code);
-                        ranges.add(code + len - 1);
+                        ranges.add(code, code + len - 1);
                     } else {
                         // Only upper or only lower/fold: add alternating code points
                         int start = code + (((caseMask & CASE_U) != 0) ? 1 : 0);
                         for (int i = start; i < code + len; i += 2) {
-                            ranges.add(i);
-                            ranges.add(i);
+                            ranges.add(i, i);
                         }
                     }
                 } else if (type == RUN_TYPE_LSU) {
                     if ((caseMask & CASE_U) != 0 && (caseMask & (CASE_L | CASE_F)) != 0) {
                         // Both: add entire range
-                        ranges.add(code);
-                        ranges.add(code + len - 1);
+                        ranges.add(code, code + len - 1);
                     } else {
                         if ((caseMask & CASE_U) == 0) {
-                            ranges.add(code);
-                            ranges.add(code);
+                            ranges.add(code, code);
                         }
-                        ranges.add(code + 1);
-                        ranges.add(code + 1);
+                        ranges.add(code + 1, code + 1);
                         if ((caseMask & CASE_U) != 0) {
-                            ranges.add(code + 2);
-                            ranges.add(code + 2);
+                            ranges.add(code + 2, code + 2);
                         }
                     }
                 } else {
                     // Default: add entire range
-                    ranges.add(code);
-                    ranges.add(code + len - 1);
+                    ranges.add(code, code + len - 1);
                 }
             }
         }
 
-        return sortAndMergeRanges(toIntArray(ranges));
+        return UnicodeRangeBuilder.normalize(ranges.toArray());
     }
 
     /**
@@ -201,7 +194,7 @@ public final class UnicodePropertyResolver {
             return new int[0];
         }
         byte[] table = PROP_TABLES[propIndex];
-        List<Integer> ranges = new ArrayList<>();
+        UnicodeRangeBuilder ranges = new UnicodeRangeBuilder();
         int pos = 0;
         int codePoint = 0;
         boolean bit = false;
@@ -213,8 +206,7 @@ public final class UnicodePropertyResolver {
                 // Two packed 3-bit lengths
                 codePoint += (b >> 3) + 1;
                 if (bit) {
-                    ranges.add(start);
-                    ranges.add(codePoint - 1);
+                    ranges.add(start, codePoint - 1);
                 }
                 bit = !bit;
                 start = codePoint;
@@ -227,13 +219,12 @@ public final class UnicodePropertyResolver {
                 codePoint += (((b - 0x60) << 16) | ((table[pos++] & 0xFF) << 8) | (table[pos++] & 0xFF)) + 1;
             }
             if (bit) {
-                ranges.add(start);
-                ranges.add(codePoint - 1);
+                ranges.add(start, codePoint - 1);
             }
             bit = !bit;
         }
 
-        return toIntArray(ranges);
+        return ranges.toArray();
     }
 
     /**
@@ -242,7 +233,7 @@ public final class UnicodePropertyResolver {
      */
     private static int[] decodeGeneralCategory(long gcMask) {
         byte[] table = GC_TABLE;
-        List<Integer> ranges = new ArrayList<>();
+        UnicodeRangeBuilder ranges = new UnicodeRangeBuilder();
         int pos = 0;
         int codePoint = 0;
 
@@ -269,23 +260,20 @@ public final class UnicodePropertyResolver {
                 long b2 = gcMask & ((1L << GC_LU) | (1L << GC_LL));
                 if (b2 != 0) {
                     if (b2 == ((1L << GC_LU) | (1L << GC_LL))) {
-                        ranges.add(start);
-                        ranges.add(codePoint - 1);
+                        ranges.addSorted(start, codePoint - 1);
                     } else {
                         int s = start + (((gcMask & (1L << GC_LL)) != 0) ? 1 : 0);
                         for (; s < codePoint; s += 2) {
-                            ranges.add(s);
-                            ranges.add(s);
+                            ranges.addSorted(s, s);
                         }
                     }
                 }
             } else if (((gcMask >> v) & 1) != 0) {
-                ranges.add(start);
-                ranges.add(codePoint - 1);
+                ranges.addSorted(start, codePoint - 1);
             }
         }
 
-        return mergeAdjacentRanges(toIntArray(ranges));
+        return ranges.toArray();
     }
 
     /**
@@ -321,7 +309,7 @@ public final class UnicodePropertyResolver {
      */
     private static int[] decodeScriptBase(int scriptIndex) {
         byte[] table = SCRIPT_TABLE;
-        List<Integer> ranges = new ArrayList<>();
+        UnicodeRangeBuilder ranges = new UnicodeRangeBuilder();
         int pos = 0;
         int codePoint = 0;
 
@@ -340,14 +328,13 @@ public final class UnicodePropertyResolver {
             if (type != 0) {
                 int scriptId = table[pos++] & 0xFF;
                 if (scriptId == scriptIndex || scriptIndex == SCRIPT_UNKNOWN) {
-                    ranges.add(codePoint);
-                    ranges.add(nextCodePoint - 1);
+                    ranges.addSorted(codePoint, nextCodePoint - 1);
                 }
             }
             codePoint = nextCodePoint;
         }
 
-        return mergeAdjacentRanges(toIntArray(ranges));
+        return ranges.toArray();
     }
 
     /**
@@ -357,7 +344,7 @@ public final class UnicodePropertyResolver {
      */
     private static int[] decodeScriptExtensions(int scriptIndex, boolean isCommon) {
         byte[] table = SCRIPT_EXT_TABLE;
-        List<Integer> ranges = new ArrayList<>();
+        UnicodeRangeBuilder ranges = new UnicodeRangeBuilder();
         int pos = 0;
         int codePoint = 0;
 
@@ -377,14 +364,12 @@ public final class UnicodePropertyResolver {
             int extCount = table[pos++] & 0xFF;
             if (isCommon) {
                 if (extCount != 0) {
-                    ranges.add(codePoint);
-                    ranges.add(nextCodePoint - 1);
+                    ranges.addSorted(codePoint, nextCodePoint - 1);
                 }
             } else {
                 for (int i = 0; i < extCount; i++) {
                     if ((table[pos + i] & 0xFF) == scriptIndex) {
-                        ranges.add(codePoint);
-                        ranges.add(nextCodePoint - 1);
+                        ranges.addSorted(codePoint, nextCodePoint - 1);
                         break;
                     }
                 }
@@ -393,7 +378,7 @@ public final class UnicodePropertyResolver {
             codePoint = nextCodePoint;
         }
 
-        return mergeAdjacentRanges(toIntArray(ranges));
+        return ranges.toArray();
     }
 
     /**
@@ -457,7 +442,7 @@ public final class UnicodePropertyResolver {
         if (a == null || a.length == 0 || b == null || b.length == 0) {
             return new int[0];
         }
-        List<Integer> result = new ArrayList<>();
+        UnicodeRangeBuilder result = new UnicodeRangeBuilder();
         int i = 0;
         int j = 0;
         while (i < a.length && j < b.length) {
@@ -469,8 +454,7 @@ public final class UnicodePropertyResolver {
             int overlapStart = Math.max(aStart, bStart);
             int overlapEnd = Math.min(aEnd, bEnd);
             if (overlapStart <= overlapEnd) {
-                result.add(overlapStart);
-                result.add(overlapEnd);
+                result.add(overlapStart, overlapEnd);
             }
 
             if (aEnd < bEnd) {
@@ -479,7 +463,7 @@ public final class UnicodePropertyResolver {
                 j += 2;
             }
         }
-        return toIntArray(result);
+        return result.toArray();
     }
 
     /**
@@ -489,47 +473,20 @@ public final class UnicodePropertyResolver {
         if (ranges == null || ranges.length == 0) {
             return new int[]{0, 0x10FFFF};
         }
-        List<Integer> result = new ArrayList<>();
+        UnicodeRangeBuilder result = new UnicodeRangeBuilder();
         int prev = 0;
         for (int i = 0; i < ranges.length; i += 2) {
             int start = ranges[i];
             int end = ranges[i + 1];
             if (prev < start) {
-                result.add(prev);
-                result.add(start - 1);
+                result.add(prev, start - 1);
             }
             prev = end + 1;
         }
         if (prev <= 0x10FFFF) {
-            result.add(prev);
-            result.add(0x10FFFF);
+            result.add(prev, 0x10FFFF);
         }
-        return toIntArray(result);
-    }
-
-    /**
-     * Merge adjacent ranges [a, b], [b+1, c] -> [a, c].
-     */
-    private static int[] mergeAdjacentRanges(int[] ranges) {
-        if (ranges.length <= 2) {
-            return ranges;
-        }
-        List<Integer> result = new ArrayList<>();
-        int currentStart = ranges[0];
-        int currentEnd = ranges[1];
-        for (int i = 2; i < ranges.length; i += 2) {
-            if (ranges[i] <= currentEnd + 1) {
-                currentEnd = Math.max(currentEnd, ranges[i + 1]);
-            } else {
-                result.add(currentStart);
-                result.add(currentEnd);
-                currentStart = ranges[i];
-                currentEnd = ranges[i + 1];
-            }
-        }
-        result.add(currentStart);
-        result.add(currentEnd);
-        return toIntArray(result);
+        return result.toArray();
     }
 
     // --- Range set operations ---
@@ -989,48 +946,6 @@ public final class UnicodePropertyResolver {
     }
 
     /**
-     * Sort ranges by start value and merge overlapping/adjacent ranges.
-     */
-    private static int[] sortAndMergeRanges(int[] ranges) {
-        if (ranges.length <= 2) {
-            return ranges;
-        }
-        // Sort pairs by start value
-        int pairCount = ranges.length / 2;
-        int[][] pairs = new int[pairCount][2];
-        for (int i = 0; i < pairCount; i++) {
-            pairs[i][0] = ranges[i * 2];
-            pairs[i][1] = ranges[i * 2 + 1];
-        }
-        java.util.Arrays.sort(pairs, (a, b) -> Integer.compare(a[0], b[0]));
-
-        List<Integer> result = new ArrayList<>();
-        int currentStart = pairs[0][0];
-        int currentEnd = pairs[0][1];
-        for (int i = 1; i < pairCount; i++) {
-            if (pairs[i][0] <= currentEnd + 1) {
-                currentEnd = Math.max(currentEnd, pairs[i][1]);
-            } else {
-                result.add(currentStart);
-                result.add(currentEnd);
-                currentStart = pairs[i][0];
-                currentEnd = pairs[i][1];
-            }
-        }
-        result.add(currentStart);
-        result.add(currentEnd);
-        return toIntArray(result);
-    }
-
-    private static int[] toIntArray(List<Integer> list) {
-        int[] arr = new int[list.size()];
-        for (int i = 0; i < list.size(); i++) {
-            arr[i] = list.get(i);
-        }
-        return arr;
-    }
-
-    /**
      * Union of two sorted range arrays.
      */
     public static int[] unionRanges(int[] a, int[] b) {
@@ -1040,45 +955,19 @@ public final class UnicodePropertyResolver {
         if (b == null || b.length == 0) {
             return a;
         }
-        List<Integer> result = new ArrayList<>();
+        UnicodeRangeBuilder result = new UnicodeRangeBuilder();
         int i = 0;
         int j = 0;
-        int currentStart = -1;
-        int currentEnd = -1;
-
         while (i < a.length || j < b.length) {
-            int aStart = i < a.length ? a[i] : Integer.MAX_VALUE;
-            int bStart = j < b.length ? b[j] : Integer.MAX_VALUE;
-
-            int nextStart;
-            int nextEnd;
-            if (aStart <= bStart) {
-                nextStart = a[i];
-                nextEnd = a[i + 1];
+            if (j == b.length || i < a.length && a[i] <= b[j]) {
+                result.addSorted(a[i], a[i + 1]);
                 i += 2;
             } else {
-                nextStart = b[j];
-                nextEnd = b[j + 1];
+                result.addSorted(b[j], b[j + 1]);
                 j += 2;
             }
-
-            if (currentStart < 0) {
-                currentStart = nextStart;
-                currentEnd = nextEnd;
-            } else if (nextStart <= currentEnd + 1) {
-                currentEnd = Math.max(currentEnd, nextEnd);
-            } else {
-                result.add(currentStart);
-                result.add(currentEnd);
-                currentStart = nextStart;
-                currentEnd = nextEnd;
-            }
         }
-        if (currentStart >= 0) {
-            result.add(currentStart);
-            result.add(currentEnd);
-        }
-        return toIntArray(result);
+        return result.toArray();
     }
 
     /**

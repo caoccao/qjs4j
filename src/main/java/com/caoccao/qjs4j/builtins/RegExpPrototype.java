@@ -648,25 +648,6 @@ public final class RegExpPrototype {
         return true;
     }
 
-    private static boolean sameValue(JSValue leftValue, JSValue rightValue) {
-        if (leftValue == rightValue) {
-            return true;
-        }
-        if (leftValue == null || rightValue == null) {
-            return false;
-        }
-        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
-            return Double.doubleToRawLongBits(leftNumber.value()) == Double.doubleToRawLongBits(rightNumber.value());
-        }
-        if (leftValue instanceof JSString leftString && rightValue instanceof JSString rightString) {
-            return leftString.value().equals(rightString.value());
-        }
-        if (leftValue instanceof JSBoolean leftBoolean && rightValue instanceof JSBoolean rightBoolean) {
-            return leftBoolean.value() == rightBoolean.value();
-        }
-        return false;
-    }
-
     private static JSValue setLastIndexOrThrow(JSContext context, JSObject regexpObject, JSValue value) {
         boolean success = regexpObject.setWithResult(PropertyKey.LAST_INDEX, value);
         if (context.hasPendingException()) {
@@ -910,8 +891,8 @@ public final class RegExpPrototype {
                 return context.throwTypeError("Cannot convert undefined or null to object");
             }
 
-            JSString replacement = StringPrototype.applyRegExpReplacementWithNamedCapturesObject(context, replaceValue,
-                    inputString, position, tailPosition, captures, groupsValue);
+            JSString replacement = StringReplacement.forRegExpMatch(context, replaceValue, inputString, position,
+                    tailPosition, captures, groupsValue);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -919,17 +900,16 @@ public final class RegExpPrototype {
             if (position >= nextSourcePosition) {
                 // The result is bounded like every other string, so an oversized replacement is a RangeError rather
                 // than the OutOfMemoryError this used to catch and report as a catchable InternalError.
-                if ((long) accumulated.length() + (position - nextSourcePosition)
-                        + replacement.length() > JSString.MAX_LENGTH) {
-                    return context.throwRangeError("Invalid string length");
+                if (accumulated.exceedsMaxLength((long) position - nextSourcePosition + replacement.length())) {
+                    return context.getPendingException();
                 }
                 accumulated.append(inputString, nextSourcePosition, position);
                 accumulated.append(replacement);
                 nextSourcePosition = tailPosition;
             }
         }
-        if ((long) accumulated.length() + inputString.length() - nextSourcePosition > JSString.MAX_LENGTH) {
-            return context.throwRangeError("Invalid string length");
+        if (accumulated.exceedsMaxLength(inputString.length() - nextSourcePosition)) {
+            return context.getPendingException();
         }
         if (nextSourcePosition < inputString.length()) {
             accumulated.append(inputString.substring(nextSourcePosition));
@@ -978,7 +958,7 @@ public final class RegExpPrototype {
             }
             return JSUndefined.INSTANCE;
         }
-        if (!sameValue(currentLastIndex, previousLastIndex)) {
+        if (!JSObject.sameValue(currentLastIndex, previousLastIndex)) {
             if (!restoreLastIndex(context, regexpObject, previousLastIndex)) {
                 return JSUndefined.INSTANCE;
             }

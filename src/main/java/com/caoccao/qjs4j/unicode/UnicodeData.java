@@ -87,7 +87,7 @@ public final class UnicodeData {
         return 0x10000 + 0x400 * (high - 0xD800) + (low - 0xDC00);
     }
 
-    private static boolean isCodePointInRanges(int[] ranges, int codePoint) {
+    static boolean isCodePointInRanges(int[] ranges, int codePoint) {
         int low = 0;
         int high = (ranges.length / 2) - 1;
         while (low <= high) {

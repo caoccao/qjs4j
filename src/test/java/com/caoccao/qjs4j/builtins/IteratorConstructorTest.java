@@ -96,4 +96,22 @@ public class IteratorConstructorTest extends BaseJavetTest {
                 "typeof Iterator.prototype.toArray");
         assertIntegerWithJavet("Iterator.length;");
     }
+
+    @Test
+    public void testZipRowsKeepTheirOwnValuesAndProperties() {
+        JSValue result = context.eval("""
+                (() => {
+                    const rows = Iterator.zip([[1, 2, 3], [4, 5, 6]]);
+                    const first = rows.next().value;
+                    first[0] = 9;
+                    const rest = Array.from(rows);
+                    const keyed = Iterator.zipKeyed({a: [1, 2], b: [3, 4]});
+                    const before = keyed.next().value;
+                    delete before.b;
+                    const after = keyed.next().value;
+                    return JSON.stringify([first, rest, before, after]);
+                })()
+                """);
+        assertThat(result.toString()).isEqualTo("[[9,4],[[2,5],[3,6]],{\"a\":1},{\"a\":2,\"b\":4}]");
+    }
 }

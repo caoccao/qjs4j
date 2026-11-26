@@ -18,7 +18,7 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.unicode.UnicodeNormalization;
-import com.caoccao.qjs4j.unicode.UnicodePropertyResolver;
+import com.caoccao.qjs4j.unicode.UnicodeCaseMapping;
 
 import java.util.Locale;
 
@@ -32,183 +32,6 @@ public final class StringPrototype {
      */
     public static JSValue anchor(JSContext context, JSValue thisArg, JSValue[] args) {
         return createHTML(context, thisArg, args, "a", "name");
-    }
-
-    /**
-     * Append a capture to a substitution, refusing to pass the string length limit. "$1" repeated in a replacement
-     * multiplies a capture's length: GetSubstitution used to build such a string until the JVM ran out of memory.
-     *
-     * @return false with a pending RangeError when the result would be too long
-     */
-    private static boolean appendCapture(JSContext context, StringResultBuilder builder, String capture) {
-        String text = capture != null ? capture : "";
-        if (exceedsMaxLength(context, builder, text.length())) {
-            return false;
-        }
-        builder.append(text);
-        return true;
-    }
-
-    /**
-     * GetSubstitution: expand the replacement template's tokens. Named-group property access and conversion stay lazy
-     * and in template order.
-     *
-     * @param captures
-     *            the match followed by its captures, a missing capture being null
-     * @param namedCapturesValue
-     *            the match result's groups, or null when there are none
-     * @return the substitution, or null with a pending exception
-     */
-    private static JSString applyRegExpReplacementPattern(JSContext context, String replacementTemplate, String input,
-            int matchStart, int matchEnd, String[] captures, JSValue namedCapturesValue) {
-        // RegExp.prototype[Symbol.replace] has already refused null groups (ToObject), so only undefined means none.
-        boolean hasNamedCaptures = namedCapturesValue != null && !(namedCapturesValue instanceof JSUndefined);
-        StringResultBuilder resultBuilder = new StringResultBuilder(context);
-        String prefix = null;
-        String suffix = null;
-        int replacementIndex = 0;
-        while (replacementIndex < replacementTemplate.length()) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            char currentChar = replacementTemplate.charAt(replacementIndex);
-            if (currentChar != '$') {
-                // Preserve literal runs as a single leaf. Per-character appends rebuild short rope leaves for every
-                // match and can allocate gigabytes of temporary strings before the result's length check fires.
-                int nextToken = replacementTemplate.indexOf('$', replacementIndex + 1);
-                int literalEnd = nextToken >= 0 ? nextToken : replacementTemplate.length();
-                resultBuilder.append(replacementTemplate, replacementIndex, literalEnd);
-                replacementIndex = literalEnd;
-                continue;
-            }
-            if (replacementIndex + 1 >= replacementTemplate.length()) {
-                resultBuilder.append(currentChar);
-                replacementIndex++;
-                continue;
-            }
-            char nextChar = replacementTemplate.charAt(replacementIndex + 1);
-            if (nextChar == '$') {
-                resultBuilder.append('$');
-                replacementIndex += 2;
-                continue;
-            }
-            if (nextChar == '&') {
-                if (exceedsMaxLength(context, resultBuilder, captures[0].length())) {
-                    return null;
-                }
-                resultBuilder.append(captures[0]);
-                replacementIndex += 2;
-                continue;
-            }
-            if (nextChar == '`') {
-                if (exceedsMaxLength(context, resultBuilder, matchStart)) {
-                    return null;
-                }
-                if (prefix == null) {
-                    prefix = input.substring(0, matchStart);
-                }
-                resultBuilder.append(prefix);
-                replacementIndex += 2;
-                continue;
-            }
-            if (nextChar == '\'') {
-                if (exceedsMaxLength(context, resultBuilder, input.length() - matchEnd)) {
-                    return null;
-                }
-                if (suffix == null) {
-                    suffix = input.substring(matchEnd);
-                }
-                resultBuilder.append(suffix);
-                replacementIndex += 2;
-                continue;
-            }
-            if (nextChar == '<') {
-                if (!hasNamedCaptures) {
-                    // Without named captures, consume only "$<" so later substitutions still run.
-                    resultBuilder.append("$<");
-                    replacementIndex += 2;
-                    continue;
-                }
-                int closeIndex = replacementTemplate.indexOf('>', replacementIndex + 2);
-                if (closeIndex >= 0) {
-                    String groupName = replacementTemplate.substring(replacementIndex + 2, closeIndex);
-                    JSObject namedCapturesObject = JSTypeConversions.toObject(context, namedCapturesValue);
-                    JSValue groupValue = namedCapturesObject.get(PropertyKey.fromString(groupName));
-                    if (context.hasPendingException()) {
-                        return null;
-                    }
-                    if (!(groupValue instanceof JSUndefined)) {
-                        String replacement = JSTypeConversions.toString(context, groupValue).value();
-                        if (context.hasPendingException()
-                                || exceedsMaxLength(context, resultBuilder, replacement.length())) {
-                            return null;
-                        }
-                        resultBuilder.append(replacement);
-                    }
-                    replacementIndex = closeIndex + 1;
-                    continue;
-                }
-            }
-            if (nextChar == '0') {
-                if (replacementIndex + 2 < replacementTemplate.length()) {
-                    char secondDigit = replacementTemplate.charAt(replacementIndex + 2);
-                    if (secondDigit >= '1' && secondDigit <= '9') {
-                        int captureIndex = secondDigit - '0';
-                        if (captureIndex < captures.length) {
-                            if (!appendCapture(context, resultBuilder, captures[captureIndex])) {
-                                return null;
-                            }
-                            replacementIndex += 3;
-                            continue;
-                        }
-                    }
-                }
-            }
-            if (nextChar >= '1' && nextChar <= '9') {
-                int captureIndex = nextChar - '0';
-                int consumedDigits = 1;
-                if (replacementIndex + 2 < replacementTemplate.length()) {
-                    char secondDigit = replacementTemplate.charAt(replacementIndex + 2);
-                    if (secondDigit >= '0' && secondDigit <= '9') {
-                        int twoDigitCaptureIndex = captureIndex * 10 + (secondDigit - '0');
-                        if (twoDigitCaptureIndex < captures.length) {
-                            captureIndex = twoDigitCaptureIndex;
-                            consumedDigits = 2;
-                        }
-                    }
-                }
-                if (captureIndex < captures.length) {
-                    if (!appendCapture(context, resultBuilder, captures[captureIndex])) {
-                        return null;
-                    }
-                    replacementIndex += 1 + consumedDigits;
-                    continue;
-                }
-            }
-            resultBuilder.append('$');
-            replacementIndex++;
-        }
-        return resultBuilder.build();
-    }
-
-    static JSString applyRegExpReplacementWithNamedCapturesObject(JSContext context, JSValue replaceValue, String input,
-            int matchStart, int matchEnd, String[] captures, JSValue namedCapturesValue) {
-        if (JSTypeChecking.isCallable(replaceValue)) {
-            JSValue[] callbackArgs = buildRegExpReplaceCallbackArgs(context, input, matchStart, captures,
-                    namedCapturesValue);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            JSValue callbackResult = JSCall.call(context, replaceValue, JSUndefined.INSTANCE, callbackArgs);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            return JSTypeConversions.toString(context, callbackResult);
-        }
-        String replacementTemplate = JSTypeConversions.toString(context, replaceValue).value();
-        if (context.hasPendingException()) {
-            return null;
-        }
-        return applyRegExpReplacementPattern(context, replacementTemplate, input, matchStart, matchEnd, captures,
-                namedCapturesValue);
     }
 
     /**
@@ -257,22 +80,11 @@ public final class StringPrototype {
         return createHTML(context, thisArg, args, "b", null);
     }
 
-    private static JSValue[] buildRegExpReplaceCallbackArgs(JSContext context, String input, int matchStart,
-            String[] captures, JSValue namedCapturesValue) {
-        boolean hasNamedCaptures = !(namedCapturesValue instanceof JSUndefined);
-        int callbackArgCount = captures.length + 2 + (hasNamedCaptures ? 1 : 0);
-        JSValue[] callbackArgs = new JSValue[callbackArgCount];
-        for (int captureIndex = 0; captureIndex < captures.length; captureIndex++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            String captureValue = captures[captureIndex];
-            callbackArgs[captureIndex] = captureValue != null ? new JSString(captureValue) : JSUndefined.INSTANCE;
+    private static JSValue callRegExpMethod(JSContext context, JSValue method, JSObject object, JSValue input) {
+        if (!JSTypeChecking.isCallable(method)) {
+            return context.throwTypeError("not a function");
         }
-        callbackArgs[captures.length] = JSNumber.of(matchStart);
-        callbackArgs[captures.length + 1] = new JSString(input);
-        if (hasNamedCaptures) {
-            callbackArgs[captures.length + 2] = namedCapturesValue;
-        }
-        return callbackArgs;
+        return JSCall.call(context, method, object, new JSValue[]{input});
     }
 
     /**
@@ -315,64 +127,6 @@ public final class StringPrototype {
         }
 
         return JSNumber.of(s.codePointAt((int) pos));
-    }
-
-    private static int codePointToLower16(int codePoint) {
-        return switch (codePoint) {
-            case 0xA7DC -> 0x019B; // LATIN CAPITAL LETTER LAMBDA WITH STROKE -> small (Unicode 16.0)
-            case 0xA7CB -> 0x0264; // LATIN CAPITAL LETTER RAMS HORN -> small (Unicode 15.0)
-            case 0x1C89 -> 0x1C8A; // CYRILLIC CAPITAL LETTER TJE -> small (Unicode 15.0)
-            case 0xA7CC -> 0xA7CD; // LATIN CAPITAL LETTER S WITH DIAGONAL STROKE -> small (Unicode 15.0)
-            case 0xA7D0 -> 0xA7D1; // LATIN CAPITAL LETTER CLOSED INSULAR G -> small (Unicode 15.0)
-            case 0xA7D6 -> 0xA7D7; // LATIN CAPITAL LETTER MIDDLE SCOTS S -> small (Unicode 15.0)
-            case 0xA7D8 -> 0xA7D9; // LATIN CAPITAL LETTER SIGMOID S -> small (Unicode 15.0)
-            case 0xA7DA -> 0xA7DB; // LATIN CAPITAL LETTER LAMBDA -> small (Unicode 15.0)
-            case 0x2C2F -> 0x2C5F; // GLAGOLITIC CAPITAL LETTER CAUDATE CHRIVI -> small (Unicode 14.0)
-            case 0xA7C0 -> 0xA7C1; // LATIN CAPITAL LETTER OLD POLISH O -> small (Unicode 14.0)
-            case 0xA7CE -> 0xA7CF; // LATIN CAPITAL LETTER PHARYNGEAL VOICED FRICATIVE -> small (Unicode 15.0)
-            case 0xA7D2 -> 0xA7D3; // LATIN CAPITAL LETTER DOUBLE THORN -> small (Unicode 15.0)
-            case 0xA7D4 -> 0xA7D5; // LATIN CAPITAL LETTER HALF H -> small (Unicode 15.0)
-            default -> {
-                // Vithkuqi capital -> small (Unicode 15.0, offset 0x27)
-                if (codePoint >= 0x10570 && codePoint <= 0x10595 && codePoint != 0x1057B && codePoint != 0x1058B) {
-                    yield codePoint + 0x27;
-                }
-                // Garay uppercase -> lowercase (Unicode 16.0, offset 0x20)
-                if (codePoint >= 0x10D50 && codePoint <= 0x10D65) {
-                    yield codePoint + 0x20;
-                }
-                yield codePoint;
-            }
-        };
-    }
-
-    private static int codePointToUpper16(int codePoint) {
-        return switch (codePoint) {
-            case 0x019B -> 0xA7DC; // LATIN SMALL LETTER LAMBDA WITH STROKE -> CAPITAL (Unicode 16.0)
-            case 0x0264 -> 0xA7CB; // LATIN SMALL LETTER RAMS HORN -> CAPITAL (Unicode 15.0)
-            case 0x1C8A -> 0x1C89; // CYRILLIC SMALL LETTER TJE -> CAPITAL (Unicode 15.0)
-            case 0xA7CD -> 0xA7CC; // LATIN SMALL LETTER S WITH DIAGONAL STROKE -> CAPITAL (Unicode 15.0)
-            case 0xA7D1 -> 0xA7D0; // LATIN SMALL LETTER CLOSED INSULAR G -> CAPITAL (Unicode 15.0)
-            case 0xA7D7 -> 0xA7D6; // LATIN SMALL LETTER MIDDLE SCOTS S -> CAPITAL (Unicode 15.0)
-            case 0xA7D9 -> 0xA7D8; // LATIN SMALL LETTER SIGMOID S -> CAPITAL (Unicode 15.0)
-            case 0xA7DB -> 0xA7DA; // LATIN SMALL LETTER LAMBDA -> CAPITAL (Unicode 15.0)
-            case 0x2C5F -> 0x2C2F; // GLAGOLITIC SMALL LETTER CAUDATE CHRIVI -> CAPITAL (Unicode 14.0)
-            case 0xA7C1 -> 0xA7C0; // LATIN SMALL LETTER OLD POLISH O -> CAPITAL (Unicode 14.0)
-            case 0xA7CF -> 0xA7CE; // LATIN SMALL LETTER PHARYNGEAL VOICED FRICATIVE -> CAPITAL (Unicode 15.0)
-            case 0xA7D3 -> 0xA7D2; // LATIN SMALL LETTER DOUBLE THORN -> CAPITAL (Unicode 15.0)
-            case 0xA7D5 -> 0xA7D4; // LATIN SMALL LETTER HALF H -> CAPITAL (Unicode 15.0)
-            default -> {
-                // Vithkuqi small -> capital (Unicode 15.0, offset 0x27)
-                if (codePoint >= 0x10597 && codePoint <= 0x105BC && codePoint != 0x105A2 && codePoint != 0x105B2) {
-                    yield codePoint - 0x27;
-                }
-                // Garay lowercase -> uppercase (Unicode 16.0, offset 0x20)
-                if (codePoint >= 0x10D70 && codePoint <= 0x10D85) {
-                    yield codePoint - 0x20;
-                }
-                yield codePoint;
-            }
-        };
     }
 
     /**
@@ -455,17 +209,6 @@ public final class StringPrototype {
     }
 
     /**
-     * Whether appending would pass {@link JSString#MAX_LENGTH}; if so, raise {@code RangeError: Invalid string length}.
-     */
-    private static boolean exceedsMaxLength(JSContext context, StringResultBuilder builder, long addition) {
-        if (builder.length() + addition > JSString.MAX_LENGTH) {
-            context.throwRangeError("Invalid string length");
-            return true;
-        }
-        return false;
-    }
-
-    /**
      * Helper method to find the first invalid code point in a string. Returns the index of the first unpaired
      * surrogate, or -1 if the string is well-formed.
      */
@@ -532,15 +275,6 @@ public final class StringPrototype {
     }
 
     /**
-     * ES2024 GetSubstitution for string replace/replaceAll.
-     */
-    private static JSString getSubstitution(JSContext context, String matched, String str, int position,
-            String replacement) {
-        return applyRegExpReplacementPattern(context, replacement, str, position, position + matched.length(),
-                new String[]{matched}, null);
-    }
-
-    /**
      * String.prototype.includes(searchString[, position]) ES2020 21.1.3.7
      */
     public static JSValue includes(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -573,76 +307,39 @@ public final class StringPrototype {
         if (thisArg == null || thisArg.isNullOrUndefined()) {
             return context.throwTypeError("cannot convert to object");
         }
-
-        JSValue regexpArg = JSValue.argumentOrUndefined(args, 0);
-        if (regexpArg instanceof JSObject regexpObj) {
-            JSValue matcher = regexpObj.get(methodKey);
+        boolean all = methodKey == PropertyKey.SYMBOL_MATCH_ALL;
+        JSValue argument = JSValue.argumentOrUndefined(args, 0);
+        if (argument instanceof JSObject object) {
+            if (all && !requireGlobalRegExp(context, object, "matchAll")) {
+                return JSUndefined.INSTANCE;
+            }
+            JSValue method = object.get(methodKey);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            if (!(matcher instanceof JSUndefined) && !(matcher instanceof JSNull)) {
-                if (!(matcher instanceof JSFunction matcherFunction)) {
-                    return context.throwTypeError("not a function");
-                }
-                return matcherFunction.call(context, regexpObj, new JSValue[]{thisArg});
+            if (!method.isNullOrUndefined()) {
+                return callRegExpMethod(context, method, object, thisArg);
             }
         }
-
-        JSString str = toStringCheckObject(context, thisArg);
-
-        // Step 6: Let rx be RegExpCreate(regexp, undefined).
-        String pattern;
-        if (regexpArg instanceof JSUndefined) {
-            pattern = "";
-        } else {
-            pattern = JSTypeConversions.toString(context, regexpArg).value();
-        }
-        JSRegExp rx = context.createJSRegExp(pattern, "");
-        // Invoke the method on the newly created RegExp with the coerced string.
-        JSValue method = rx.get(methodKey);
+        JSString input = toStringCheckObject(context, thisArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        if (method instanceof JSFunction function) {
-            return function.call(context, rx, new JSValue[]{str});
+        String pattern;
+        if (all && argument instanceof JSRegExp regexp) {
+            pattern = regexp.getPattern();
+        } else {
+            pattern = argument instanceof JSUndefined ? "" : JSTypeConversions.toString(context, argument).value();
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
-        return context.throwTypeError("not a function");
-    }
-
-    /**
-     * Check if a code point is "Cased" per Unicode property. Uses the full Unicode Cased property table.
-     */
-    private static boolean isCasedUnicode(UnicodePropertyResolver resolver, int codePoint) {
-        int[] ranges = resolver.resolveBinaryProperty("Cased");
-        if (ranges == null) {
-            return Character.isUpperCase(codePoint) || Character.isLowerCase(codePoint)
-                    || Character.isTitleCase(codePoint);
+        JSRegExp regexp = context.createJSRegExp(pattern, all ? "g" : "");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
-        return isInRanges(codePoint, ranges);
-    }
-
-    /**
-     * Check if a code point is "Case_Ignorable" per Unicode property. Uses the full Unicode Case_Ignorable property
-     * table.
-     */
-    private static boolean isCaseIgnorableUnicode(UnicodePropertyResolver resolver, int codePoint) {
-        int type = Character.getType(codePoint);
-        boolean fallbackCaseIgnorable = type == Character.NON_SPACING_MARK || type == Character.ENCLOSING_MARK
-                || type == Character.FORMAT || type == Character.MODIFIER_LETTER || type == Character.MODIFIER_SYMBOL;
-        int[] ranges = resolver.resolveBinaryProperty("Case_Ignorable");
-        if (ranges == null) {
-            return fallbackCaseIgnorable;
-        }
-        return isInRanges(codePoint, ranges) || fallbackCaseIgnorable;
-    }
-
-    /**
-     * Check if a code point is a combining mark.
-     */
-    private static boolean isCombiningMark(int codePoint) {
-        int type = Character.getType(codePoint);
-        return type == Character.NON_SPACING_MARK || type == Character.COMBINING_SPACING_MARK
-                || type == Character.ENCLOSING_MARK;
+        JSValue method = regexp.get(methodKey);
+        return context.hasPendingException() ? JSUndefined.INSTANCE : callRegExpMethod(context, method, regexp, input);
     }
 
     /**
@@ -653,71 +350,6 @@ public final class StringPrototype {
         return ch == '\t' || ch == '\n' || ch == '\u000B' || ch == '\f' || ch == '\r' || ch == ' ' || ch == '\u00A0'
                 || ch == '\uFEFF' || ch == '\u1680' || (ch >= '\u2000' && ch <= '\u200A') || ch == '\u2028'
                 || ch == '\u2029' || ch == '\u202F' || ch == '\u205F' || ch == '\u3000';
-    }
-
-    /**
-     * Test if sigma at position sigmaPos is in a "final" context. Final sigma: preceded by a cased letter (skipping
-     * case-ignorable) and NOT followed by a cased letter (skipping case-ignorable).
-     */
-    private static boolean isFinalSigma(UnicodePropertyResolver resolver, String s, int sigmaPos) {
-        // Look backward: skip case-ignorable, check for cased
-        int k = sigmaPos;
-        int prevCodePoint = -1;
-        while (k > 0) {
-            int cp = Character.codePointBefore(s, k);
-            k -= Character.charCount(cp);
-            if (!isCaseIgnorableUnicode(resolver, cp)) {
-                prevCodePoint = cp;
-                break;
-            }
-        }
-        if (prevCodePoint == -1 || !isCasedUnicode(resolver, prevCodePoint)) {
-            return false;
-        }
-
-        // Look forward: skip case-ignorable, check for NOT cased
-        k = sigmaPos + 1;
-        while (k < s.length()) {
-            int cp = s.codePointAt(k);
-            k += Character.charCount(cp);
-            if (!isCaseIgnorableUnicode(resolver, cp)) {
-                return !isCasedUnicode(resolver, cp);
-            }
-        }
-        return true; // End of string, no following cased letter
-    }
-
-    /**
-     * Binary search to check if a code point is in any of the given ranges. Ranges are stored as [start1, end1, start2,
-     * end2, ...] (inclusive).
-     */
-    private static boolean isInRanges(int codePoint, int[] ranges) {
-        int low = 0;
-        int high = ranges.length / 2 - 1;
-        while (low <= high) {
-            int mid = (low + high) >>> 1;
-            int start = ranges[mid * 2];
-            int end = ranges[mid * 2 + 1];
-            if (codePoint < start) {
-                high = mid - 1;
-            } else if (codePoint > end) {
-                low = mid + 1;
-            } else {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Check if a code point has the Unicode Soft_Dotted property.
-     */
-    private static boolean isSoftDottedUnicode(UnicodePropertyResolver resolver, int codePoint) {
-        int[] ranges = resolver.resolveBinaryProperty("Soft_Dotted");
-        if (ranges == null) {
-            return false;
-        }
-        return isInRanges(codePoint, ranges);
     }
 
     /**
@@ -807,81 +439,7 @@ public final class StringPrototype {
      * regular expression, including capturing groups.
      */
     public static JSValue matchAll(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg == null || thisArg.isNullOrUndefined()) {
-            return context.throwTypeError("cannot convert to object");
-        }
-
-        JSValue regexpArg = JSValue.argumentOrUndefined(args, 0);
-        // Step 2: If regexp is neither undefined nor null
-        if (!(regexpArg instanceof JSUndefined) && !(regexpArg instanceof JSNull)) {
-            // Step 2a: isRegExp check
-            if (JSTypeChecking.isRegExp(context, regexpArg) == 1) {
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                // Step 2a.ii: Check flags contain "g"
-                if (regexpArg instanceof JSObject regObj) {
-                    JSValue flags = regObj.get(PropertyKey.fromString("flags"));
-                    if (context.hasPendingException()) {
-                        return JSUndefined.INSTANCE;
-                    }
-                    if (flags instanceof JSUndefined || flags instanceof JSNull) {
-                        return context.throwTypeError("flags is null or undefined");
-                    }
-                    String flagsStr = JSTypeConversions.toString(context, flags).value();
-                    if (!flagsStr.contains("g")) {
-                        return context
-                                .throwTypeError("String.prototype.matchAll called with a non-global RegExp argument");
-                    }
-                }
-            }
-            // Step 2b: GetMethod(regexp, @@matchAll)
-            if (regexpArg instanceof JSObject regexpObj) {
-                JSValue matcher = regexpObj.get(PropertyKey.SYMBOL_MATCH_ALL);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                if (!(matcher instanceof JSUndefined) && !(matcher instanceof JSNull)) {
-                    if (!(matcher instanceof JSFunction matcherFunction)) {
-                        return context.throwTypeError("not a function");
-                    }
-                    return matcherFunction.call(context, regexpObj, new JSValue[]{thisArg});
-                }
-            }
-        }
-
-        // Step 3: Let S be ? ToString(O).
-        JSString str = toStringCheckObject(context, thisArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        // Step 4: Let rx be ? RegExpCreate(regexp, "g").
-        String pattern;
-        if (regexpArg instanceof JSRegExp inputRegExp) {
-            pattern = inputRegExp.getPattern();
-        } else if (regexpArg instanceof JSUndefined || regexpArg instanceof JSNull) {
-            pattern = regexpArg instanceof JSUndefined ? "" : "null";
-        } else {
-            pattern = JSTypeConversions.toString(context, regexpArg).value();
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        JSRegExp rx = context.createJSRegExp(pattern, "g");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        // Step 5: Return ? Invoke(rx, @@matchAll, « S »).
-        JSValue matchAllMethod = rx.get(PropertyKey.SYMBOL_MATCH_ALL);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (matchAllMethod instanceof JSFunction matchAllFunction) {
-            return matchAllFunction.call(context, rx, new JSValue[]{str});
-        }
-        return context.throwTypeError("RegExp.prototype[Symbol.matchAll] is not a function");
+        return invokeRegExpMethod(context, thisArg, args, PropertyKey.SYMBOL_MATCH_ALL);
     }
 
     /**
@@ -981,37 +539,6 @@ public final class StringPrototype {
     }
 
     /**
-     * Lithuanian uppercasing removes U+0307 when it follows a Soft_Dotted code point with only combining marks in
-     * between.
-     */
-    private static String removeLithuanianSoftDottedDots(UnicodePropertyResolver resolver, String input) {
-        StringBuilder result = new StringBuilder(input.length());
-        int index = 0;
-        while (index < input.length()) {
-            int codePoint = input.codePointAt(index);
-            int charCount = Character.charCount(codePoint);
-            if (codePoint == 0x0307) {
-                int lookBackIndex = result.length();
-                int previousCodePoint = -1;
-                while (lookBackIndex > 0) {
-                    previousCodePoint = Character.codePointBefore(result, lookBackIndex);
-                    lookBackIndex -= Character.charCount(previousCodePoint);
-                    if (!isCombiningMark(previousCodePoint)) {
-                        break;
-                    }
-                }
-                if (previousCodePoint != -1 && isSoftDottedUnicode(resolver, previousCodePoint)) {
-                    index += charCount;
-                    continue;
-                }
-            }
-            result.appendCodePoint(codePoint);
-            index += charCount;
-        }
-        return result.toString();
-    }
-
-    /**
      * String.prototype.repeat(count) ES2020 21.1.3.13
      */
     public static JSValue repeat(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1071,31 +598,10 @@ public final class StringPrototype {
 
         JSValue searchValue = JSValue.argumentOrUndefined(args, 0);
         JSValue replaceValue = JSValue.argumentOrUndefined(args, 1);
-        // Step 2: If searchValue is neither undefined nor null
-        if (all && !(searchValue instanceof JSUndefined) && !(searchValue instanceof JSNull)) {
-            // Step 2a: isRegExp check
-            if (JSTypeChecking.isRegExp(context, searchValue) == 1) {
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                // Step 2a.ii: Check flags contain "g"
-                if (searchValue instanceof JSObject searchObj) {
-                    JSValue flags = searchObj.get(PropertyKey.fromString("flags"));
-                    if (context.hasPendingException()) {
-                        return JSUndefined.INSTANCE;
-                    }
-                    String flagsStr = JSTypeConversions.toString(context, flags).value();
-                    if (context.hasPendingException()) {
-                        return JSUndefined.INSTANCE;
-                    }
-                    if (!flagsStr.contains("g")) {
-                        return context
-                                .throwTypeError("String.prototype.replaceAll called with a non-global RegExp argument");
-                    }
-                }
-            }
-        }
         if (searchValue instanceof JSObject searchValueObject) {
+            if (all && !requireGlobalRegExp(context, searchValueObject, "replaceAll")) {
+                return JSUndefined.INSTANCE;
+            }
             JSValue replacer = searchValueObject.get(PropertyKey.SYMBOL_REPLACE);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -1131,7 +637,7 @@ public final class StringPrototype {
             return str;
         }
 
-        JSString replacement = replacementAt(context, searchStr, s, index, replaceValue, replaceStr);
+        JSString replacement = StringReplacement.forStringMatch(context, searchStr, s, index, replaceValue, replaceStr);
         if (replacement == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1149,52 +655,61 @@ public final class StringPrototype {
 
     private static JSValue replaceAllMatches(JSContext context, JSString str, String searchStr, JSValue replaceValue,
             String replaceStr) {
-        String s = str.value();
-        // Collect all match positions
-        java.util.List<Integer> matchPositions = new java.util.ArrayList<>();
-        int searchLen = searchStr.length();
-        int pos = 0;
-        if (searchLen == 0) {
-            // Empty search: match at every position including end
-            for (int i = 0; i <= s.length(); i++) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
-                matchPositions.add(i);
-            }
-        } else {
-            while ((pos = s.indexOf(searchStr, pos)) >= 0) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
-                matchPositions.add(pos);
-                pos += searchLen;
-            }
+        String input = str.value();
+        int position = input.indexOf(searchStr);
+        if (position < 0) {
+            return str;
         }
-
-        // Build result
         StringResultBuilder result = new StringResultBuilder(context);
-        int endOfLastMatch = 0;
-        for (int matchPosition : matchPositions) {
+        int end = 0;
+        while (position >= 0) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            result.append(s, endOfLastMatch, matchPosition);
-            JSString replacement = replacementAt(context, searchStr, s, matchPosition, replaceValue, replaceStr);
-            if (replacement == null) {
-                return JSUndefined.INSTANCE;
-            }
-            if (exceedsMaxLength(context, result, replacement.length())) {
+            result.append(input, end, position);
+            JSString replacement = StringReplacement.forStringMatch(context, searchStr, input, position, replaceValue,
+                    replaceStr);
+            if (replacement == null || context.hasPendingException() || result.exceedsMaxLength(replacement.length())) {
                 return JSUndefined.INSTANCE;
             }
             result.append(replacement);
-            endOfLastMatch = matchPosition + searchLen;
+            end = position + searchStr.length();
+            if (searchStr.isEmpty()) {
+                if (position == input.length()) {
+                    break;
+                }
+                position++;
+            } else {
+                position = input.indexOf(searchStr, end);
+            }
         }
-        return concatenateReplacement(context, result.build(), new JSString(""), s.substring(endOfLastMatch));
+        if (result.exceedsMaxLength(input.length() - end)) {
+            return JSUndefined.INSTANCE;
+        }
+        result.append(input, end, input.length());
+        return result.build();
     }
 
-    private static JSString replacementAt(JSContext context, String search, String input, int index,
-            JSValue replaceValue, String substitute) {
-        if (substitute != null) {
-            return getSubstitution(context, search, input, index, substitute);
+    private static boolean requireGlobalRegExp(JSContext context, JSObject object, String operation) {
+        int isRegExp = JSTypeChecking.isRegExp(context, object);
+        if (context.hasPendingException() || isRegExp != 1) {
+            return !context.hasPendingException();
         }
-        JSValue value = JSCall.call(context, replaceValue, JSUndefined.INSTANCE,
-                new JSValue[]{new JSString(search), JSNumber.of(index), new JSString(input)});
-        return context.hasPendingException() ? null : JSTypeConversions.toString(context, value);
+        JSValue flags = object.get(PropertyKey.fromString("flags"));
+        if (context.hasPendingException()) {
+            return false;
+        }
+        if (flags.isNullOrUndefined()) {
+            context.throwTypeError("flags is null or undefined");
+            return false;
+        }
+        JSString text = JSTypeConversions.toString(context, flags);
+        if (context.hasPendingException()) {
+            return false;
+        }
+        if (text.value().indexOf('g') < 0) {
+            context.throwTypeError("String.prototype." + operation + " called with a non-global RegExp argument");
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -1411,11 +926,7 @@ public final class StringPrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        String language = locale.getLanguage();
-        if ("tr".equals(language) || "az".equals(language) || "lt".equals(language)) {
-            return new JSString(str.value().toLowerCase(locale));
-        }
-        return new JSString(toLowerCaseWithSigma(context.getUnicodePropertyResolver(), str.value()));
+        return new JSString(UnicodeCaseMapping.lower(context.getUnicodePropertyResolver(), str.value(), locale));
     }
 
     /**
@@ -1428,11 +939,7 @@ public final class StringPrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        String source = str.value();
-        if ("lt".equals(locale.getLanguage())) {
-            source = removeLithuanianSoftDottedDots(context.getUnicodePropertyResolver(), source);
-        }
-        return new JSString(toUpperCaseUnicode16(source.toUpperCase(locale)));
+        return new JSString(UnicodeCaseMapping.upper(context.getUnicodePropertyResolver(), str.value(), locale));
     }
 
     /**
@@ -1440,49 +947,7 @@ public final class StringPrototype {
      */
     public static JSValue toLowerCase(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
-        return new JSString(toLowerCaseWithSigma(context.getUnicodePropertyResolver(), str.value()));
-    }
-
-    /**
-     * Custom toLowerCase that handles the Greek final sigma rule. When U+03A3 (SIGMA) is at a "final" position
-     * (preceded by a cased letter with possible case-ignorable characters in between, and NOT followed by a cased
-     * letter), it maps to U+03C2 (final sigma) instead of U+03C3.
-     */
-    private static String toLowerCaseWithSigma(UnicodePropertyResolver resolver, String s) {
-        boolean needsCustom = false;
-        for (int i = 0; i < s.length();) {
-            int codePoint = s.codePointAt(i);
-            if (codePoint == 0x03A3 || codePointToLower16(codePoint) != codePoint) {
-                needsCustom = true;
-                break;
-            }
-            i += Character.charCount(codePoint);
-        }
-        if (!needsCustom) {
-            return s.toLowerCase();
-        }
-
-        StringBuilder result = new StringBuilder(s.length());
-        int i = 0;
-        while (i < s.length()) {
-            int codePoint = s.codePointAt(i);
-            int charCount = Character.charCount(codePoint);
-            if (codePoint == 0x03A3) {
-                // Check final sigma condition
-                if (isFinalSigma(resolver, s, i)) {
-                    result.append('\u03C2'); // final sigma
-                } else {
-                    result.append('\u03C3'); // regular sigma
-                }
-            } else {
-                int lower = Character.toLowerCase(codePoint);
-                // Apply Unicode 16.0 additions
-                int lower16 = codePointToLower16(lower);
-                result.appendCodePoint(lower16);
-            }
-            i += charCount;
-        }
-        return result.toString();
+        return new JSString(UnicodeCaseMapping.lower(context.getUnicodePropertyResolver(), str.value(), Locale.ROOT));
     }
 
     /**
@@ -1509,34 +974,7 @@ public final class StringPrototype {
      */
     public static JSValue toUpperCase(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
-        return new JSString(toUpperCaseUnicode16(str.value()));
-    }
-
-    /**
-     * toUpperCase with Unicode 16.0 case mappings that Java 17 (Unicode 14.0) lacks.
-     */
-    private static String toUpperCaseUnicode16(String s) {
-        String result = s.toUpperCase();
-        // Apply Unicode 16.0 additions
-        boolean needsPatch = false;
-        for (int i = 0; i < result.length();) {
-            int codePoint = result.codePointAt(i);
-            if (codePointToUpper16(codePoint) != codePoint) {
-                needsPatch = true;
-                break;
-            }
-            i += Character.charCount(codePoint);
-        }
-        if (!needsPatch) {
-            return result;
-        }
-        StringBuilder sb = new StringBuilder(result.length());
-        for (int i = 0; i < result.length();) {
-            int codePoint = result.codePointAt(i);
-            sb.appendCodePoint(codePointToUpper16(codePoint));
-            i += Character.charCount(codePoint);
-        }
-        return sb.toString();
+        return new JSString(UnicodeCaseMapping.upper(context.getUnicodePropertyResolver(), str.value(), Locale.ROOT));
     }
 
     /**
@@ -1582,47 +1020,37 @@ public final class StringPrototype {
      * String.prototype.trim() ES2020 21.1.3.26
      */
     public static JSValue trim(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = toStringCheckObject(context, thisArg);
-        String s = str.value();
-        int start = 0;
-        int end = s.length();
-        while (start < end && isEcmaWhitespace(s.charAt(start))) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            start++;
-        }
-        while (end > start && isEcmaWhitespace(s.charAt(end - 1))) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            end--;
-        }
-        return new JSString(s.substring(start, end));
+        return trimString(context, thisArg, true, true);
     }
 
     /**
      * String.prototype.trimEnd() / trimRight() ES2020 21.1.3.28
      */
     public static JSValue trimEnd(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = toStringCheckObject(context, thisArg);
-        String s = str.value();
-        int end = s.length();
-        while (end > 0 && isEcmaWhitespace(s.charAt(end - 1))) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            end--;
-        }
-        return new JSString(s.substring(0, end));
+        return trimString(context, thisArg, false, true);
     }
 
     /**
      * String.prototype.trimStart() / trimLeft() ES2020 21.1.3.27
      */
     public static JSValue trimStart(JSContext context, JSValue thisArg, JSValue[] args) {
+        return trimString(context, thisArg, true, false);
+    }
+
+    private static JSValue trimString(JSContext context, JSValue thisArg, boolean leading, boolean trailing) {
         JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
         int start = 0;
-        while (start < s.length() && isEcmaWhitespace(s.charAt(start))) {
+        int end = s.length();
+        while (leading && start < end && isEcmaWhitespace(s.charAt(start))) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
             start++;
         }
-        return new JSString(s.substring(start));
+        while (trailing && end > start && isEcmaWhitespace(s.charAt(end - 1))) {
+            context.getVirtualMachine().checkExecutionInterruptForNative();
+            end--;
+        }
+        return new JSString(s.substring(start, end));
     }
 
     /**

@@ -52,6 +52,14 @@ final class StringResultBuilder {
         return value;
     }
 
+    boolean exceedsMaxLength(long addition) {
+        if ((long) value.length() + addition <= JSString.MAX_LENGTH) {
+            return false;
+        }
+        context.throwRangeError("Invalid string length");
+        return true;
+    }
+
     int length() {
         return value.length();
     }

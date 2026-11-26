@@ -17,10 +17,7 @@
 package com.caoccao.qjs4j.regexp;
 
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import com.caoccao.qjs4j.unicode.UnicodeRangeBuilder;
 
 /**
  * Represents a character class in a regex. Character classes match sets of characters (e.g., [a-z], \d, \w). Based on
@@ -69,49 +66,6 @@ public record CharacterClass(boolean inverted, int[] ranges) {
     }
 
     /**
-     * Normalize and merge overlapping ranges.
-     */
-    private static int[] normalizeRanges(int[] ranges) {
-        if (ranges.length == 0) {
-            return ranges;
-        }
-
-        // Sort ranges by start position
-        Integer[] pairs = new Integer[ranges.length / 2];
-        for (int i = 0; i < pairs.length; i++) {
-            pairs[i] = i * 2;
-        }
-        Arrays.sort(pairs, (a, b) -> Integer.compare(ranges[a], ranges[b]));
-
-        List<Integer> result = new ArrayList<>();
-        int currentStart = ranges[pairs[0]];
-        int currentEnd = ranges[pairs[0] + 1];
-
-        for (int i = 1; i < pairs.length; i++) {
-            int idx = pairs[i];
-            int start = ranges[idx];
-            int end = ranges[idx + 1];
-
-            if (start <= currentEnd + 1) {
-                // Merge overlapping or adjacent ranges
-                currentEnd = Math.max(currentEnd, end);
-            } else {
-                // Add current range and start new one
-                result.add(currentStart);
-                result.add(currentEnd);
-                currentStart = start;
-                currentEnd = end;
-            }
-        }
-
-        // Add final range
-        result.add(currentStart);
-        result.add(currentEnd);
-
-        return result.stream().mapToInt(Integer::intValue).toArray();
-    }
-
-    /**
      * \D - Non-digit character class [^0-9]
      */
     public static CharacterClass notDigit() {
@@ -154,7 +108,7 @@ public record CharacterClass(boolean inverted, int[] ranges) {
      * Merge multiple character classes.
      */
     public static CharacterClass union(CharacterClass... classes) {
-        List<Integer> rangeList = new ArrayList<>();
+        UnicodeRangeBuilder ranges = new UnicodeRangeBuilder();
 
         for (CharacterClass cc : classes) {
             if (cc.inverted) {
@@ -162,13 +116,10 @@ public record CharacterClass(boolean inverted, int[] ranges) {
                 // flag that used to be set here was never read: the throw made it unreachable.
                 throw new UnsupportedOperationException("Union with inverted classes not yet supported");
             }
-            for (int r : cc.ranges) {
-                rangeList.add(r);
-            }
+            ranges.addAll(cc.ranges);
         }
 
-        int[] merged = rangeList.stream().mapToInt(Integer::intValue).toArray();
-        return new CharacterClass(false, normalizeRanges(merged));
+        return new CharacterClass(false, UnicodeRangeBuilder.normalize(ranges.toArray()));
     }
 
     /**

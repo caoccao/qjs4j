@@ -246,6 +246,12 @@ public class StringPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testFullLowercaseMappingAlongsideFinalSigma() {
+        assertStringWithJavet("'İΟΣ'.toLowerCase()");
+        assertStringWithJavet("'İΟΣ'.toLocaleLowerCase('en')");
+    }
+
+    @Test
     public void testGetLength() {
         // ASCII string
         assertThat(str.value().length()).isEqualTo(11);
@@ -408,6 +414,14 @@ public class StringPrototypeTest extends BaseJavetTest {
                 stringArgs("http://example.com?q=\"hello\""));
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value())
                 .isEqualTo("<a href=\"http://example.com?q=&quot;hello&quot;\">test</a>"));
+    }
+
+    @Test
+    public void testLithuanianSoftDottedUppercase() {
+        assertStringWithJavet("""
+                ['i\\u0307', 'j\\u0307', 'a\\u0307', 'i\\u0307b', 'I\\u0301'].map(
+                    text => text.toLocaleUpperCase('lt')).join('|')
+                """);
     }
 
     @Test
@@ -889,6 +903,21 @@ public class StringPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testStringMatchProtocolsAcceptCallableProxy() {
+        for (String method : new String[]{"match", "search", "matchAll"}) {
+            assertStringWithJavet("""
+                    (() => {
+                        const receiver = {toString() { throw new Error('unexpected coercion'); }};
+                        const pattern = {[Symbol.%1$s]: new Proxy(function (input) {
+                            return input === receiver && this === pattern ? 'matched' : 'wrong receiver';
+                        }, {})};
+                        return String.prototype.%1$s.call(receiver, pattern);
+                    })()
+                    """.formatted(method));
+        }
+    }
+
+    @Test
     public void testSub() {
         assertStringWithJavet("'test'.sub()", "'H2O'.sub()", "''.sub()");
     }
@@ -1009,6 +1038,24 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testSup() {
         assertStringWithJavet("'test'.sup()", "'x2'.sup()", "''.sup()");
+    }
+
+    @Test
+    public void testSupplementalUnicodeCasePairs() {
+        // Recent Latin, Cyrillic, Glagolitic, Vithkuqi and Garay letters on the Java 17 Unicode tables.
+        assertStringWithJavet("""
+                (() => {
+                    const pairs = [[0xA7DC,0x019B], [0xA7CB,0x0264], [0x1C89,0x1C8A],
+                        [0xA7CC,0xA7CD], [0xA7D0,0xA7D1], [0xA7D6,0xA7D7], [0xA7D8,0xA7D9],
+                        [0xA7DA,0xA7DB], [0x2C2F,0x2C5F], [0xA7C0,0xA7C1], [0xA7CE,0xA7CF],
+                        [0xA7D2,0xA7D3], [0xA7D4,0xA7D5], [0x10570,0x10597], [0x10D50,0x10D70]];
+                    return pairs.map(([u,l]) => {
+                        const upper = String.fromCodePoint(u), lower = String.fromCodePoint(l);
+                        return [upper.toLowerCase().codePointAt(0), lower.toUpperCase().codePointAt(0),
+                            new RegExp(upper, 'iu').test(lower)].join(':');
+                    }).join(',');
+                })()
+                """);
     }
 
     @Test
