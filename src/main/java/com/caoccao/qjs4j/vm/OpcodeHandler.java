@@ -197,6 +197,15 @@ public final class OpcodeHandler {
         };
     }
 
+    private static void branchIf(Opcode op, ExecutionContext ctx, boolean expected, boolean shortOffset) {
+        int pc = ctx.pc;
+        int next = pc + op.getSize();
+        if (ctx.virtualMachine.isBranchTruthy(ctx.pop()) == expected) {
+            next += shortOffset ? ctx.instructions[pc + 1] : ctx.bytecode.readU32(pc + 1);
+        }
+        ctx.pc = next;
+    }
+
     /**
      * Convert a JSVirtualMachineException (thrown from a nested execute() call) into a VM pendingException so the outer
      * execution loop can route it to the appropriate JS try-catch handler.
@@ -255,6 +264,15 @@ public final class OpcodeHandler {
         vm.pendingException = vm.context.takePendingException();
         executionContext.finishStackOpcode(nextPc);
         return true;
+    }
+
+    private static void captureJavaScriptException(ExecutionContext ctx, JSException exception) {
+        JSValue error = exception.getErrorValue();
+        if (error == null) {
+            String message = exception.getMessage();
+            error = ctx.virtualMachine.context.throwError("Error", message == null ? "Unhandled exception" : message);
+        }
+        setErrorAsPending(ctx, error);
     }
 
     private static boolean capturePendingException(ExecutionContext executionContext) {
@@ -320,6 +338,20 @@ public final class OpcodeHandler {
             attributes.put(key.asString(), attributeString.value());
         }
         return attributes;
+    }
+
+    private static void compareRelational(Opcode op, ExecutionContext ctx, boolean reverse, boolean inclusive) {
+        JSStackValue[] stack = ctx.virtualMachine.valueStack.stack;
+        int sp = ctx.sp;
+        if (stack[sp - 2] instanceof JSNumber left && stack[sp - 1] instanceof JSNumber right) {
+            double x = reverse ? right.value() : left.value();
+            double y = reverse ? left.value() : right.value();
+            stack[sp - 2] = JSBoolean.valueOf(inclusive ? x >= y : x < y);
+            ctx.sp = sp - 1;
+        } else {
+            compareRelationalOperands(ctx, reverse, inclusive);
+        }
+        ctx.pc += op.getSize();
     }
 
     private static void compareRelationalOperands(ExecutionContext executionContext, boolean reverse, boolean negate) {
@@ -637,13 +669,7 @@ public final class OpcodeHandler {
                 executionContext.virtualMachine.captureVMException(e);
                 executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
             } catch (JSException e) {
-                if (e.getErrorValue() != null) {
-                    executionContext.virtualMachine.pendingException = e.getErrorValue();
-                } else {
-                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                            .throwError("Error", e.getMessage() != null ? e.getMessage() : "Unhandled exception");
-                }
-                executionContext.virtualMachine.context.clearPendingException();
+                captureJavaScriptException(executionContext, e);
                 executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
             } catch (JSErrorException e) {
                 setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwError(e));
@@ -665,13 +691,7 @@ public final class OpcodeHandler {
         } catch (JSVirtualMachineException e) {
             executionContext.virtualMachine.captureVMException(e);
         } catch (JSException e) {
-            if (e.getErrorValue() != null) {
-                executionContext.virtualMachine.pendingException = e.getErrorValue();
-            } else {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                        .throwError("Error", e.getMessage() != null ? e.getMessage() : "Unhandled exception");
-            }
-            executionContext.virtualMachine.context.clearPendingException();
+            captureJavaScriptException(executionContext, e);
         } catch (JSErrorException e) {
             setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwError(e));
         }
@@ -2368,73 +2388,27 @@ public final class OpcodeHandler {
     }
 
     static void handleGt(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
-        int sp = executionContext.sp;
-        JSValue rightValue = (JSValue) stack[sp - 1];
-        JSValue leftValue = (JSValue) stack[sp - 2];
-        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
-            stack[sp - 2] = JSBoolean.valueOf(leftNumber.value() > rightNumber.value());
-            executionContext.sp = sp - 1;
-        } else {
-            compareRelationalOperands(executionContext, true, false);
-        }
-        executionContext.pc += op.getSize();
+        compareRelational(op, executionContext, true, false);
     }
 
     static void handleGte(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
-        int sp = executionContext.sp;
-        JSValue rightValue = (JSValue) stack[sp - 1];
-        JSValue leftValue = (JSValue) stack[sp - 2];
-        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
-            stack[sp - 2] = JSBoolean.valueOf(leftNumber.value() >= rightNumber.value());
-            executionContext.sp = sp - 1;
-        } else {
-            compareRelationalOperands(executionContext, false, true);
-        }
-        executionContext.pc += op.getSize();
+        compareRelational(op, executionContext, false, true);
     }
 
     static void handleIfFalse(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSValue conditionValue = executionContext.pop();
-        int offset = executionContext.bytecode.readU32(pc + 1);
-        if (executionContext.virtualMachine.isBranchTruthy(conditionValue)) {
-            executionContext.pc = pc + op.getSize();
-        } else {
-            executionContext.pc = pc + op.getSize() + offset;
-        }
+        branchIf(op, executionContext, false, false);
     }
 
     static void handleIfFalse8(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSValue conditionValue = executionContext.pop();
-        if (executionContext.virtualMachine.isBranchTruthy(conditionValue)) {
-            executionContext.pc = pc + op.getSize();
-        } else {
-            executionContext.pc = pc + op.getSize() + executionContext.instructions[pc + 1];
-        }
+        branchIf(op, executionContext, false, true);
     }
 
     static void handleIfTrue(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSValue conditionValue = executionContext.pop();
-        int offset = executionContext.bytecode.readU32(pc + 1);
-        if (executionContext.virtualMachine.isBranchTruthy(conditionValue)) {
-            executionContext.pc = pc + op.getSize() + offset;
-        } else {
-            executionContext.pc = pc + op.getSize();
-        }
+        branchIf(op, executionContext, true, false);
     }
 
     static void handleIfTrue8(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSValue conditionValue = executionContext.pop();
-        if (executionContext.virtualMachine.isBranchTruthy(conditionValue)) {
-            executionContext.pc = pc + op.getSize() + executionContext.instructions[pc + 1];
-        } else {
-            executionContext.pc = pc + op.getSize();
-        }
+        branchIf(op, executionContext, true, true);
     }
 
     // specifier options -> promise (dynamic module import)
@@ -3053,31 +3027,11 @@ public final class OpcodeHandler {
     }
 
     static void handleLt(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
-        int sp = executionContext.sp;
-        JSValue rightValue = (JSValue) stack[sp - 1];
-        JSValue leftValue = (JSValue) stack[sp - 2];
-        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
-            stack[sp - 2] = JSBoolean.valueOf(leftNumber.value() < rightNumber.value());
-            executionContext.sp = sp - 1;
-        } else {
-            compareRelationalOperands(executionContext, false, false);
-        }
-        executionContext.pc += op.getSize();
+        compareRelational(op, executionContext, false, false);
     }
 
     static void handleLte(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
-        int sp = executionContext.sp;
-        JSValue rightValue = (JSValue) stack[sp - 1];
-        JSValue leftValue = (JSValue) stack[sp - 2];
-        if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
-            stack[sp - 2] = JSBoolean.valueOf(leftNumber.value() <= rightNumber.value());
-            executionContext.sp = sp - 1;
-        } else {
-            compareRelationalOperands(executionContext, true, true);
-        }
-        executionContext.pc += op.getSize();
+        compareRelational(op, executionContext, true, true);
     }
 
     static void handleMakeScopedRef(Opcode op, ExecutionContext executionContext) {
@@ -3598,15 +3552,7 @@ public final class OpcodeHandler {
     }
 
     static void handlePutLocCheck(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int localIndex = executionContext.bytecode.readU16(pc + 1);
-        JSValue[] localValues = executionContext.frame.getLocals();
-        if (executionContext.virtualMachine.isUninitialized(localValues[localIndex])) {
-            executionContext.virtualMachine.throwVariableUninitializedReferenceError(
-                    VirtualMachine.localVariableName(executionContext.frame, localIndex));
-        }
-        localValues[localIndex] = executionContext.pop();
-        executionContext.pc = pc + op.getSize();
+        writeCheckedLocal(op, executionContext, true);
     }
 
     static void handlePutLocCheckInit(Opcode op, ExecutionContext executionContext) {
@@ -4082,15 +4028,7 @@ public final class OpcodeHandler {
     }
 
     static void handleSetLocCheck(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int localIndex = executionContext.bytecode.readU16(pc + 1);
-        JSValue[] localValues = executionContext.frame.getLocals();
-        if (executionContext.virtualMachine.isUninitialized(localValues[localIndex])) {
-            executionContext.virtualMachine.throwVariableUninitializedReferenceError(
-                    VirtualMachine.localVariableName(executionContext.frame, localIndex));
-        }
-        localValues[localIndex] = executionContext.peek(0);
-        executionContext.pc = pc + op.getSize();
+        writeCheckedLocal(op, executionContext, false);
     }
 
     static void handleSetLocUninitialized(Opcode op, ExecutionContext executionContext) {
@@ -4160,76 +4098,32 @@ public final class OpcodeHandler {
     }
 
     static void handleShr(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        JSValue leftPrimitive = null;
-        JSValue leftNumeric = null;
-        boolean leftIsBigInt = false;
-        JSValue rightPrimitive = null;
-        JSValue rightNumeric = null;
-        try {
-            leftPrimitive = JSTypeConversions.toPrimitive(executionContext.virtualMachine.context, left,
-                    JSTypeConversions.PreferredType.NUMBER);
-        } catch (JSVirtualMachineException e) {
-            executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
-        } catch (JSException e) {
-            if (e.getErrorValue() != null) {
-                executionContext.virtualMachine.pendingException = e.getErrorValue();
-            } else {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                        .throwError(e.getMessage() != null ? e.getMessage() : "toPrimitive");
+        VirtualMachine vm = executionContext.virtualMachine;
+        JSStackValue[] stack = vm.valueStack.stack;
+        int sp = executionContext.sp;
+        if (stack[sp - 2] instanceof JSNumber left && stack[sp - 1] instanceof JSNumber right) {
+            stack[sp - 2] = unsignedShift(left, right);
+            executionContext.sp = sp - 1;
+            executionContext.pc += op.getSize();
+            return;
+        }
+
+        vm.valueStack.stackTop = sp;
+        JSValue right = vm.valueStack.pop();
+        JSValue left = vm.valueStack.pop();
+        JSValue leftNumeric = unsignedShiftOperand(vm, left);
+        JSValue rightNumeric = leftNumeric != null && vm.pendingException == null
+                ? unsignedShiftOperand(vm, right)
+                : null;
+        JSValue result = JSUndefined.INSTANCE;
+        if (vm.pendingException == null) {
+            if (leftNumeric instanceof JSBigInt || rightNumeric instanceof JSBigInt) {
+                raiseTypeError(executionContext, "BigInts do not support >>>");
+            } else if (leftNumeric instanceof JSNumber x && rightNumeric instanceof JSNumber y) {
+                result = unsignedShift(x, y);
             }
         }
-        if (leftPrimitive != null && executionContext.virtualMachine.pendingException == null) {
-            if (leftPrimitive instanceof JSBigInt) {
-                leftIsBigInt = true;
-                leftNumeric = leftPrimitive;
-            } else {
-                leftNumeric = JSTypeConversions.toNumber(executionContext.virtualMachine.context, leftPrimitive);
-                executionContext.virtualMachine.capturePendingException();
-            }
-        }
-        if (leftNumeric != null && executionContext.virtualMachine.pendingException == null) {
-            try {
-                rightPrimitive = JSTypeConversions.toPrimitive(executionContext.virtualMachine.context, right,
-                        JSTypeConversions.PreferredType.NUMBER);
-            } catch (JSVirtualMachineException e) {
-                executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
-            } catch (JSException e) {
-                if (e.getErrorValue() != null) {
-                    executionContext.virtualMachine.pendingException = e.getErrorValue();
-                } else {
-                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                            .throwError("Error", e.getMessage() != null ? e.getMessage() : "toPrimitive");
-                }
-            }
-        }
-        if (rightPrimitive != null && executionContext.virtualMachine.pendingException == null) {
-            if (rightPrimitive instanceof JSBigInt) {
-                rightNumeric = rightPrimitive;
-            } else {
-                rightNumeric = JSTypeConversions.toNumber(executionContext.virtualMachine.context, rightPrimitive);
-                executionContext.virtualMachine.capturePendingException();
-            }
-        }
-        if (executionContext.virtualMachine.pendingException == null
-                && (leftIsBigInt || rightNumeric instanceof JSBigInt)) {
-            raiseTypeError(executionContext, "BigInts do not support >>>");
-        }
-        if (leftNumeric instanceof JSNumber leftNum && rightNumeric instanceof JSNumber rightNum
-                && executionContext.virtualMachine.pendingException == null) {
-            int leftInt = JSTypeConversions.toInt32(leftNum.value());
-            int rightInt = JSTypeConversions.toInt32(rightNum.value());
-            executionContext.virtualMachine.valueStack.push(JSNumber.of((leftInt >>> (rightInt & 0x1F)) & 0xFFFFFFFFL));
-        } else if (leftNumeric != null && rightNumeric != null
-                && executionContext.virtualMachine.pendingException == null) {
-            int leftInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, leftNumeric);
-            int rightInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, rightNumeric);
-            executionContext.virtualMachine.valueStack.push(JSNumber.of((leftInt >>> (rightInt & 0x1F)) & 0xFFFFFFFFL));
-        } else {
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-        }
+        vm.valueStack.push(result);
         executionContext.finishStackOpcode(executionContext.pc + op.getSize());
     }
 
@@ -5384,6 +5278,44 @@ public final class OpcodeHandler {
     private static JSValue uninitializedReference(VirtualMachine vm, String name) {
         vm.pendingException = vm.context.throwReferenceError("Cannot access '" + name + "' before initialization");
         return JSUndefined.INSTANCE;
+    }
+
+    private static JSNumber unsignedShift(JSNumber left, JSNumber right) {
+        return JSNumber.of(Integer
+                .toUnsignedLong(JSTypeConversions.toInt32(left.value()) >>> JSTypeConversions.toInt32(right.value())));
+    }
+
+    private static JSValue unsignedShiftOperand(VirtualMachine vm, JSValue value) {
+        JSValue primitive;
+        try {
+            primitive = JSTypeConversions.toPrimitive(vm.context, value, JSTypeConversions.PreferredType.NUMBER);
+        } catch (JSVirtualMachineException e) {
+            vm.capturePendingExceptionFromVmOrContext(e);
+            return null;
+        } catch (JSException e) {
+            vm.pendingException = e.getErrorValue() != null
+                    ? e.getErrorValue()
+                    : vm.context.throwError(e.getMessage() != null ? e.getMessage() : "toPrimitive");
+            return null;
+        }
+        if (primitive == null || vm.pendingException != null || primitive instanceof JSBigInt) {
+            return primitive;
+        }
+        JSValue number = JSTypeConversions.toNumber(vm.context, primitive);
+        vm.capturePendingException();
+        return number;
+    }
+
+    private static void writeCheckedLocal(Opcode op, ExecutionContext executionContext, boolean pop) {
+        int pc = executionContext.pc;
+        int localIndex = executionContext.bytecode.readU16(pc + 1);
+        JSValue[] localValues = executionContext.frame.getLocals();
+        if (executionContext.virtualMachine.isUninitialized(localValues[localIndex])) {
+            executionContext.virtualMachine.throwVariableUninitializedReferenceError(
+                    VirtualMachine.localVariableName(executionContext.frame, localIndex));
+        }
+        localValues[localIndex] = pop ? executionContext.pop() : executionContext.peek(0);
+        executionContext.pc = pc + op.getSize();
     }
 
     private static boolean writeDynamicReference(ExecutionContext executionContext, String name, PropertyKey key,

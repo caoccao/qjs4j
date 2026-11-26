@@ -92,10 +92,7 @@ final class IfStatementCompiler extends AstNodeCompiler<IfStatement> {
             compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
             compilerContext.scopeManager.exitScope();
         } else {
-            boolean savedIsLastInProgram = compilerContext.isLastInProgram;
-            compilerContext.isLastInProgram = false;
-            compilerContext.statementCompiler.compile(stmt);
-            compilerContext.isLastInProgram = savedIsLastInProgram;
+            compilerContext.statementCompiler.compileNestedStatement(stmt);
         }
     }
 }

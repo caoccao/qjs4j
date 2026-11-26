@@ -107,12 +107,11 @@ public final class AsyncIteratorPrototype {
         }
 
         JSPromise wrapperPromise = createPromiseResolve(context, returnResult);
-        wrapperPromise.addReactions(new JSPromise.ReactionRecord(
+        wrapperPromise.observe(context,
                 new JSNativeFunction(context, "", 1, (childContext, callbackThisArg, callbackArgs) -> {
                     resultPromise.fulfill(JSUndefined.INSTANCE);
                     return JSUndefined.INSTANCE;
-                }), null, context),
-                new JSPromise.ReactionRecord(resultPromise.rejectHandler(context, ""), null, context));
+                }), resultPromise.rejectHandler(context, ""));
         return resultPromise;
     }
 

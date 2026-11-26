@@ -680,12 +680,12 @@ public final class RegExpCompiler {
                 isCapturing = false;
             } else if (groupType == '=') {
                 // Positive lookahead (?=...)
-                compileLookahead(context, false);
+                compileLookaround(context, false, false);
                 context.lastAtomCanRepeat = !context.isUnicodeMode();
                 return;
             } else if (groupType == '!') {
                 // Negative lookahead (?!...)
-                compileLookahead(context, true);
+                compileLookaround(context, true, false);
                 context.lastAtomCanRepeat = !context.isUnicodeMode();
                 return;
             } else if (groupType == '<') {
@@ -693,7 +693,7 @@ public final class RegExpCompiler {
                         && (context.codePoints[context.pos] == '=' || context.codePoints[context.pos] == '!')) {
                     boolean isNegative = context.codePoints[context.pos] == '!';
                     context.pos++;
-                    compileLookbehind(context, isNegative);
+                    compileLookaround(context, isNegative, true);
                     context.lastAtomCanRepeat = false;
                     return;
                 }
@@ -764,49 +764,22 @@ public final class RegExpCompiler {
         }
     }
 
-    private void compileLookahead(CompileContext context, boolean isNegative) {
-        // (?=...) positive lookahead or (?!...) negative lookahead
-        int lookaheadStart = context.buffer.size();
-
-        // Emit LOOKAHEAD or NEGATIVE_LOOKAHEAD opcode
-        context.buffer
-                .appendU8(isNegative ? RegExpOpcode.NEGATIVE_LOOKAHEAD.getCode() : RegExpOpcode.LOOKAHEAD.getCode());
-        context.buffer.appendU32(0); // Placeholder for length
-
-        // Compile lookahead contents (forward direction)
-        compileDisjunction(context, false);
-
-        // Emit LOOKAHEAD_MATCH or NEGATIVE_LOOKAHEAD_MATCH
-        context.buffer.appendU8(
-                isNegative ? RegExpOpcode.NEGATIVE_LOOKAHEAD_MATCH.getCode() : RegExpOpcode.LOOKAHEAD_MATCH.getCode());
-
-        // Patch the length
-        int lookaheadLen = context.buffer.size() - (lookaheadStart + 5);
-        context.buffer.setU32(lookaheadStart + 1, lookaheadLen);
-
-        if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != ')') {
-            throw new RegExpSyntaxException("Unterminated group");
+    private void compileLookaround(CompileContext context, boolean isNegative, boolean backward) {
+        RegExpOpcode start;
+        RegExpOpcode match;
+        if (backward) {
+            start = isNegative ? RegExpOpcode.NEGATIVE_LOOKBEHIND : RegExpOpcode.LOOKBEHIND;
+            match = isNegative ? RegExpOpcode.NEGATIVE_LOOKBEHIND_MATCH : RegExpOpcode.LOOKBEHIND_MATCH;
+        } else {
+            start = isNegative ? RegExpOpcode.NEGATIVE_LOOKAHEAD : RegExpOpcode.LOOKAHEAD;
+            match = isNegative ? RegExpOpcode.NEGATIVE_LOOKAHEAD_MATCH : RegExpOpcode.LOOKAHEAD_MATCH;
         }
-        context.pos++; // Skip ')'
-    }
-
-    private void compileLookbehind(CompileContext context, boolean isNegative) {
-        // (?<=...) positive lookbehind or (?<!...) negative lookbehind
-        int lookbehindStart = context.buffer.size();
-
-        context.buffer
-                .appendU8(isNegative ? RegExpOpcode.NEGATIVE_LOOKBEHIND.getCode() : RegExpOpcode.LOOKBEHIND.getCode());
-        context.buffer.appendU32(0); // Placeholder for length
-
-        compileDisjunction(context, true);
-
-        context.buffer.appendU8(isNegative
-                ? RegExpOpcode.NEGATIVE_LOOKBEHIND_MATCH.getCode()
-                : RegExpOpcode.LOOKBEHIND_MATCH.getCode());
-
-        int lookbehindLen = context.buffer.size() - (lookbehindStart + 5);
-        context.buffer.setU32(lookbehindStart + 1, lookbehindLen);
-
+        context.buffer.appendU8(start.getCode());
+        int lengthOffset = context.buffer.size();
+        context.buffer.appendU32(0);
+        compileDisjunction(context, backward);
+        context.buffer.appendU8(match.getCode());
+        context.buffer.setU32(lengthOffset, context.buffer.size() - lengthOffset - 4);
         if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != ')') {
             throw new RegExpSyntaxException("Unterminated group");
         }

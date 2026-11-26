@@ -34,24 +34,8 @@ final class ExpressionParser {
         this.assignmentParser = new ExpressionAssignmentParser(parserContext, delegates, this);
     }
 
-    Expression parseAdditiveExpression() {
-        return binaryParser.parseAdditiveExpression();
-    }
-
     Expression parseAssignmentExpression() {
         return assignmentParser.parseAssignmentExpression();
-    }
-
-    Expression parseBitwiseAndExpression() {
-        return binaryParser.parseBitwiseAndExpression();
-    }
-
-    Expression parseBitwiseOrExpression() {
-        return binaryParser.parseBitwiseOrExpression();
-    }
-
-    Expression parseBitwiseXorExpression() {
-        return binaryParser.parseBitwiseXorExpression();
     }
 
     Expression parseCallExpression() {
@@ -60,14 +44,6 @@ final class ExpressionParser {
 
     Expression parseConditionalExpression() {
         return binaryParser.parseConditionalExpression();
-    }
-
-    Expression parseEqualityExpression() {
-        return binaryParser.parseEqualityExpression();
-    }
-
-    Expression parseExponentiationExpression() {
-        return binaryParser.parseExponentiationExpression();
     }
 
     Expression parseExpression() {
@@ -86,10 +62,6 @@ final class ExpressionParser {
         return primaryParser.parseMemberExpression();
     }
 
-    Expression parseMultiplicativeExpression() {
-        return binaryParser.parseMultiplicativeExpression();
-    }
-
     Expression parsePostfixExpression() {
         return primaryParser.parsePostfixExpression();
     }
@@ -104,14 +76,6 @@ final class ExpressionParser {
 
     Expression parsePropertyName() {
         return primaryParser.parsePropertyName();
-    }
-
-    Expression parseRelationalExpression() {
-        return binaryParser.parseRelationalExpression();
-    }
-
-    Expression parseShiftExpression() {
-        return binaryParser.parseShiftExpression();
     }
 
     Expression parseUnaryExpression() {

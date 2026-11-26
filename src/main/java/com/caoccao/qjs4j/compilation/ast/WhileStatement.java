@@ -16,45 +16,23 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
-import java.util.List;
-
 /**
  * Represents a while statement.
  */
-public final class WhileStatement extends Statement {
-    private final Statement body;
-    private final Expression test;
+public final class WhileStatement extends WhileLoop {
 
     public WhileStatement(Expression test, Statement body, SourceLocation location) {
-        super(location);
-        this.test = test;
-        this.body = body;
+        super(test, body, location);
     }
 
     @Override
     public boolean containsAwait() {
-        return containsAwaitIn(test, body);
+        return containsAwaitIn(getTest(), getBody());
     }
 
     @Override
     public boolean containsYield() {
-        return containsYieldIn(test, body);
-    }
-
-    public Statement getBody() {
-        return body;
-    }
-
-    public Expression getTest() {
-        return test;
-    }
-
-    @Override
-    public List<VariableDeclarator> getVarDeclarators() {
-        if (varDeclarators == null) {
-            varDeclarators = body != null ? body.getVarDeclarators() : List.of();
-        }
-        return varDeclarators;
+        return containsYieldIn(getTest(), getBody());
     }
 
 }

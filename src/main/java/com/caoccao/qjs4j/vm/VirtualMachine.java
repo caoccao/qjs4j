@@ -1821,8 +1821,7 @@ public final class VirtualMachine {
             continuation.reject(throwing ? completion : args[0]);
             return JSUndefined.INSTANCE;
         });
-        awaited.addReactions(new JSPromise.ReactionRecord(fulfilled, null, context),
-                new JSPromise.ReactionRecord(rejected, null, context));
+        awaited.observe(context, fulfilled, rejected);
         return continuation;
     }
 

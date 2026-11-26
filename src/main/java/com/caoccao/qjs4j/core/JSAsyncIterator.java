@@ -128,9 +128,7 @@ public class JSAsyncIterator extends JSObject {
             }
             if (returnMethod.isNullOrUndefined()) {
                 // Step 7: no return method — resolve with { value: undefined, done: true }.
-                JSObject iteratorResult = context.createJSObject();
-                iteratorResult.set(PropertyKey.VALUE, JSUndefined.INSTANCE);
-                iteratorResult.set(PropertyKey.DONE, JSBoolean.TRUE);
+                JSObject iteratorResult = JSIteratorHelper.createResult(context, JSUndefined.INSTANCE, true);
                 JSPromise promise = context.createJSPromise();
                 promise.resolve(context, iteratorResult);
                 return promise;
@@ -277,23 +275,20 @@ public class JSAsyncIterator extends JSObject {
         }
 
         JSPromise resultPromise = context.createJSPromise();
-        valueWrapperPromise.addReactions(new JSPromise.ReactionRecord(
+        valueWrapperPromise.observe(context,
                 new JSNativeFunction(context, "onResolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                     JSValue resolved = JSValue.argumentOrUndefined(callbackArgs, 0);
-                    JSObject result = context.createJSObject();
-                    result.set(PropertyKey.VALUE, resolved);
-                    result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+                    JSObject result = JSIteratorHelper.createResult(context, resolved, done);
                     resultPromise.fulfill(result);
                     return JSUndefined.INSTANCE;
-                }), null, context), new JSPromise.ReactionRecord(new JSNativeFunction(context, "onReject", 1,
-                        (callbackContext, callbackThisArg, callbackArgs) -> {
-                            JSValue reason = JSValue.argumentOrUndefined(callbackArgs, 0);
-                            if (!done) {
-                                closeSyncIteratorAfterRejection(context, syncIterator);
-                            }
-                            resultPromise.reject(reason);
-                            return JSUndefined.INSTANCE;
-                        }), null, context));
+                }), new JSNativeFunction(context, "onReject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                    JSValue reason = JSValue.argumentOrUndefined(callbackArgs, 0);
+                    if (!done) {
+                        closeSyncIteratorAfterRejection(context, syncIterator);
+                    }
+                    resultPromise.reject(reason);
+                    return JSUndefined.INSTANCE;
+                }));
         return resultPromise;
     }
 
@@ -310,9 +305,7 @@ public class JSAsyncIterator extends JSObject {
      */
     public static JSPromise createIteratorResultPromise(JSContext context, JSValue value, boolean done) {
         JSPromise promise = context.createJSPromise();
-        JSObject result = context.createJSObject();
-        result.set(PropertyKey.VALUE, value);
-        result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+        JSObject result = JSIteratorHelper.createResult(context, value, done);
         promise.fulfill(result);
         return promise;
     }
@@ -479,9 +472,7 @@ public class JSAsyncIterator extends JSObject {
                 promise.addReactions(new JSPromise.ReactionRecord(
                         new JSNativeFunction(context, "onFulfilled", 1, (childContext, thisArg, args) -> {
                             JSValue value = JSValue.argumentOrUndefined(args, 0);
-                            JSObject result = childContext.createJSObject();
-                            result.set(PropertyKey.VALUE, value);
-                            result.set(PropertyKey.DONE, JSBoolean.FALSE);
+                            JSObject result = JSIteratorHelper.createResult(childContext, value, false);
                             resultPromise.fulfill(result);
                             return JSUndefined.INSTANCE;
                         }), resultPromise, context), new JSPromise.ReactionRecord(
@@ -578,7 +569,7 @@ public class JSAsyncIterator extends JSObject {
         JSPromise nextPromise = iterator.next();
 
         // When next promise resolves, process the result
-        nextPromise.addReactions(new JSPromise.ReactionRecord(
+        nextPromise.observe(context,
                 new JSNativeFunction(context, "onNextFulfilled", 1, (childContext, thisArg, args) -> {
                     JSValue result = JSValue.argumentOrUndefined(args, 0);
 
@@ -602,41 +593,40 @@ public class JSAsyncIterator extends JSObject {
                     JSPromise processingPromise = callback.iterate(value);
 
                     // When processing completes, continue to next iteration
-                    processingPromise.addReactions(new JSPromise.ReactionRecord(
+                    processingPromise.observe(childContext,
                             new JSNativeFunction(context, "onProcessed", 1, (innerContext, innerThisArg, innerArgs) -> {
                                 // Continue iteration
                                 iterateNext(iterator, callback, childContext, completionPromise);
                                 return JSUndefined.INSTANCE;
-                            }), null, childContext), new JSPromise.ReactionRecord(new JSNativeFunction(context,
-                                    "onProcessError", 1, (innerContext, innerThisArg, innerArgs) -> {
+                            }), new JSNativeFunction(context, "onProcessError", 1,
+                                    (innerContext, innerThisArg, innerArgs) -> {
                                         // If processing fails, reject completion promise
                                         JSValue error = innerArgs.length > 0 ? innerArgs[0] : JSUndefined.INSTANCE;
                                         completionPromise.reject(error);
                                         return JSUndefined.INSTANCE;
-                                    }), null, childContext));
+                                    }));
 
                     return JSUndefined.INSTANCE;
-                }), null, context), new JSPromise.ReactionRecord(
-                        new JSNativeFunction(context, "onNextRejected", 1, (childContext, thisArg, args) -> {
-                            // If next() fails, reject completion promise
-                            JSValue error = JSValue.argumentOrUndefined(args, 0);
-                            JSPromise closePromise = iterator.close();
-                            if (closePromise == null) {
+                }), new JSNativeFunction(context, "onNextRejected", 1, (childContext, thisArg, args) -> {
+                    // If next() fails, reject completion promise
+                    JSValue error = JSValue.argumentOrUndefined(args, 0);
+                    JSPromise closePromise = iterator.close();
+                    if (closePromise == null) {
+                        completionPromise.reject(error);
+                        return JSUndefined.INSTANCE;
+                    }
+                    closePromise.observe(childContext, new JSNativeFunction(context, "onCloseResolve", 1,
+                            (innerContext, innerThisArg, innerArgs) -> {
                                 completionPromise.reject(error);
                                 return JSUndefined.INSTANCE;
-                            }
-                            closePromise.addReactions(new JSPromise.ReactionRecord(new JSNativeFunction(context,
-                                    "onCloseResolve", 1, (innerContext, innerThisArg, innerArgs) -> {
+                            }), new JSNativeFunction(context, "onCloseReject", 1,
+                                    (innerContext, innerThisArg, innerArgs) -> {
+                                        // Preserve the original next() rejection reason.
                                         completionPromise.reject(error);
                                         return JSUndefined.INSTANCE;
-                                    }), null, childContext), new JSPromise.ReactionRecord(new JSNativeFunction(context,
-                                            "onCloseReject", 1, (innerContext, innerThisArg, innerArgs) -> {
-                                                // Preserve the original next() rejection reason.
-                                                completionPromise.reject(error);
-                                                return JSUndefined.INSTANCE;
-                                            }), null, childContext));
-                            return JSUndefined.INSTANCE;
-                        }), null, context));
+                                    }));
+                    return JSUndefined.INSTANCE;
+                }));
     }
 
     static JSPromise rejectPendingException(JSContext context) {

@@ -506,7 +506,7 @@ public final class TemporalTimeZone {
                 .add(BigInteger.valueOf(instant.getNano()));
     }
 
-    private static Instant toJavaInstant(BigInteger epochNs) {
+    static Instant toJavaInstant(BigInteger epochNs) {
         BigInteger[] secAndNano = epochNs.divideAndRemainder(BILLION);
         long seconds = secAndNano[0].longValueExact();
         int nanoAdjust = secAndNano[1].intValue();

@@ -184,10 +184,7 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
             compilerContext.patternCompiler.compileForOfValueAssignment(pattern, isVar);
         }
 
-        boolean savedIsLastInProgram = compilerContext.isLastInProgram;
-        compilerContext.isLastInProgram = false;
-        compilerContext.statementCompiler.compile(forOfStmt.getBody());
-        compilerContext.isLastInProgram = savedIsLastInProgram;
+        compilerContext.statementCompiler.compileNestedStatement(forOfStmt.getBody());
 
         if (!isExpressionBased && !isVar) {
             compilerContext.emitHelpers.emitCloseLocForPattern(pattern);
@@ -198,9 +195,7 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
             compilerContext.emitHelpers.emitScopeUsingDisposal(compilerContext.scopeManager.currentScope());
         }
 
-        compilerContext.emitter.emitOpcode(Opcode.GOTO);
-        int backJumpPos = compilerContext.emitter.currentOffset();
-        compilerContext.emitter.emitU32(loopStart - (backJumpPos + 4));
+        compilerContext.emitter.emitGoto(loopStart);
 
         int loopEnd = compilerContext.emitter.currentOffset();
         compilerContext.emitter.patchJump(jumpToEnd, loopEnd);

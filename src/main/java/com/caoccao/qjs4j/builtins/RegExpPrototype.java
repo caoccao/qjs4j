@@ -23,6 +23,8 @@ import com.caoccao.qjs4j.regexp.RegExpEngine;
  * Implementation of JavaScript RegExp.prototype methods. Based on ES2020 RegExp specification.
  */
 public final class RegExpPrototype {
+    private static final String FLAG_CHARACTERS = "dgimsuvy";
+    private static final PropertyKey[] FLAG_PROPERTIES;
     private static final PropertyKey PROPERTY_DOT_ALL = PropertyKey.fromString("dotAll");
     private static final PropertyKey PROPERTY_EXEC = PropertyKey.EXEC;
     private static final PropertyKey PROPERTY_FLAGS = PropertyKey.fromString("flags");
@@ -33,6 +35,10 @@ public final class RegExpPrototype {
     private static final PropertyKey PROPERTY_STICKY = PropertyKey.fromString("sticky");
     private static final PropertyKey PROPERTY_UNICODE = PropertyKey.fromString("unicode");
     private static final PropertyKey PROPERTY_UNICODE_SETS = PropertyKey.fromString("unicodeSets");
+    static {
+        FLAG_PROPERTIES = new PropertyKey[]{PROPERTY_HAS_INDICES, PROPERTY_GLOBAL, PROPERTY_IGNORE_CASE,
+                PROPERTY_MULTILINE, PROPERTY_DOT_ALL, PROPERTY_UNICODE, PROPERTY_UNICODE_SETS, PROPERTY_STICKY};
+    }
 
     private static int advanceStringIndexUnicode(String s, int index) {
         if (index + 1 >= s.length()) {
@@ -46,64 +52,17 @@ public final class RegExpPrototype {
     }
 
     private static String buildFlagsStringFromObject(JSContext context, JSObject regexpObject) {
-        StringBuilder flagsBuilder = new StringBuilder(8);
-        JSValue hasIndicesValue = regexpObject.get(PROPERTY_HAS_INDICES);
-        if (context.hasPendingException()) {
-            return null;
+        StringBuilder flags = new StringBuilder(FLAG_PROPERTIES.length);
+        for (int i = 0; i < FLAG_PROPERTIES.length; i++) {
+            JSValue enabled = regexpObject.get(FLAG_PROPERTIES[i]);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (JSTypeConversions.toBoolean(enabled).value()) {
+                flags.append(FLAG_CHARACTERS.charAt(i));
+            }
         }
-        if (JSTypeConversions.toBoolean(hasIndicesValue).value()) {
-            flagsBuilder.append('d');
-        }
-        JSValue globalValue = regexpObject.get(PROPERTY_GLOBAL);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (JSTypeConversions.toBoolean(globalValue).value()) {
-            flagsBuilder.append('g');
-        }
-        JSValue ignoreCaseValue = regexpObject.get(PROPERTY_IGNORE_CASE);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (JSTypeConversions.toBoolean(ignoreCaseValue).value()) {
-            flagsBuilder.append('i');
-        }
-        JSValue multilineValue = regexpObject.get(PROPERTY_MULTILINE);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (JSTypeConversions.toBoolean(multilineValue).value()) {
-            flagsBuilder.append('m');
-        }
-        JSValue dotAllValue = regexpObject.get(PROPERTY_DOT_ALL);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (JSTypeConversions.toBoolean(dotAllValue).value()) {
-            flagsBuilder.append('s');
-        }
-        JSValue unicodeValue = regexpObject.get(PROPERTY_UNICODE);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (JSTypeConversions.toBoolean(unicodeValue).value()) {
-            flagsBuilder.append('u');
-        }
-        JSValue unicodeSetsValue = regexpObject.get(PROPERTY_UNICODE_SETS);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (JSTypeConversions.toBoolean(unicodeSetsValue).value()) {
-            flagsBuilder.append('v');
-        }
-        JSValue stickyValue = regexpObject.get(PROPERTY_STICKY);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (JSTypeConversions.toBoolean(stickyValue).value()) {
-            flagsBuilder.append('y');
-        }
-        return flagsBuilder.toString();
+        return flags.toString();
     }
 
     /**
@@ -618,6 +577,11 @@ public final class RegExpPrototype {
         return Double.doubleToRawLongBits(numericValue) == Double.doubleToRawLongBits(0.0d);
     }
 
+    private static JSString matchedString(JSContext context, JSObject match) {
+        JSValue matched = match.get(PropertyKey.ZERO);
+        return context.hasPendingException() ? null : JSTypeConversions.toString(context, matched);
+    }
+
     private static JSValue regExpExec(JSContext context, JSObject regexpObject, JSString inputString) {
         // ES2024 22.2.5.2 RegExpExec
         // Step 3: Let exec be ? Get(R, "exec").
@@ -750,11 +714,7 @@ public final class RegExpPrototype {
             if (!(result instanceof JSObject resultObj)) {
                 return context.throwTypeError("RegExpExec must return an Object or null");
             }
-            JSValue matchValue = resultObj.get(PropertyKey.fromIndex(0));
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            JSString matchStr = JSTypeConversions.toString(context, matchValue);
+            JSString matchStr = matchedString(context, resultObj);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -887,11 +847,7 @@ public final class RegExpPrototype {
                 break;
             }
 
-            JSValue matchedValue = nextObject.get(PropertyKey.fromIndex(0));
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            JSString matchedString = JSTypeConversions.toString(context, matchedValue);
+            JSString matchedString = matchedString(context, nextObject);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }

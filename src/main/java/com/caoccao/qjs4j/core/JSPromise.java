@@ -144,6 +144,11 @@ public final class JSPromise extends JSObject {
         }
     }
 
+    /** Attach handlers without creating a chained promise. */
+    public void observe(JSContext context, JSFunction fulfilled, JSFunction rejected) {
+        addReactions(new ReactionRecord(fulfilled, null, context), new ReactionRecord(rejected, null, context));
+    }
+
     /**
      * Reject the promise with a reason. ES2020 25.6.1.7
      */

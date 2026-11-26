@@ -224,20 +224,6 @@ public final class JSIntlNumberFormat extends JSObject {
         }
     }
 
-    private void appendCurrencyParts(List<PartToken> tokens, String body, DecimalFormatSymbols symbols) {
-        int[] numericRange = findNumericCoreRange(body, symbols);
-        if (numericRange[0] < 0) {
-            appendCurrencyAffix(tokens, body, symbols);
-            return;
-        }
-        String prefix = body.substring(0, numericRange[0]);
-        String numberPortion = body.substring(numericRange[0], numericRange[1] + 1);
-        String suffix = body.substring(numericRange[1] + 1);
-        appendCurrencyAffix(tokens, prefix, symbols);
-        appendNumberParts(tokens, numberPortion, symbols);
-        appendCurrencyAffix(tokens, suffix, symbols);
-    }
-
     private void appendLiteral(List<PartToken> tokens, String text) {
         if (!text.isEmpty()) {
             tokens.add(new PartToken("literal", text));
@@ -289,20 +275,6 @@ public final class JSIntlNumberFormat extends JSObject {
         }
     }
 
-    private void appendPercentParts(List<PartToken> tokens, String body, DecimalFormatSymbols symbols) {
-        int[] numericRange = findNumericCoreRange(body, symbols);
-        if (numericRange[0] < 0) {
-            appendAffixWithType(tokens, body, "percentSign");
-            return;
-        }
-        String prefix = body.substring(0, numericRange[0]);
-        String numberPortion = body.substring(numericRange[0], numericRange[1] + 1);
-        String suffix = body.substring(numericRange[1] + 1);
-        appendAffixWithType(tokens, prefix, "percentSign");
-        appendNumberParts(tokens, numberPortion, symbols);
-        appendAffixWithType(tokens, suffix, "percentSign");
-    }
-
     private void appendScientificParts(List<PartToken> tokens, String body, DecimalFormatSymbols symbols) {
         String exponentSeparator = symbols.getExponentSeparator();
         int exponentIndex = body.indexOf(exponentSeparator);
@@ -329,6 +301,28 @@ public final class JSIntlNumberFormat extends JSObject {
         }
     }
 
+    private void appendStyledAffix(List<PartToken> tokens, String affix, DecimalFormatSymbols symbols) {
+        switch (style) {
+            case "currency" -> appendCurrencyAffix(tokens, affix, symbols);
+            case "percent" -> appendAffixWithType(tokens, affix, "percentSign");
+            case "unit" -> appendUnitAffix(tokens, affix, symbols);
+        }
+    }
+
+    private void appendStyledParts(List<PartToken> tokens, String body, DecimalFormatSymbols symbols) {
+        int[] numericRange = findNumericCoreRange(body, symbols);
+        if (numericRange[0] < 0) {
+            appendStyledAffix(tokens, body, symbols);
+            return;
+        }
+        String prefix = body.substring(0, numericRange[0]);
+        String numberPortion = body.substring(numericRange[0], numericRange[1] + 1);
+        String suffix = body.substring(numericRange[1] + 1);
+        appendStyledAffix(tokens, prefix, symbols);
+        appendNumberParts(tokens, numberPortion, symbols);
+        appendStyledAffix(tokens, suffix, symbols);
+    }
+
     private void appendUnitAffix(List<PartToken> tokens, String affix, DecimalFormatSymbols symbols) {
         if (affix.isEmpty()) {
             return;
@@ -347,20 +341,6 @@ public final class JSIntlNumberFormat extends JSObject {
             }
         }
         appendUnitText(tokens, affix.substring(segmentStart));
-    }
-
-    private void appendUnitParts(List<PartToken> tokens, String body, DecimalFormatSymbols symbols) {
-        int[] numericRange = findNumericCoreRange(body, symbols);
-        if (numericRange[0] < 0) {
-            appendUnitAffix(tokens, body, symbols);
-            return;
-        }
-        String prefix = body.substring(0, numericRange[0]);
-        String numberPortion = body.substring(numericRange[0], numericRange[1] + 1);
-        String suffix = body.substring(numericRange[1] + 1);
-        appendUnitAffix(tokens, prefix, symbols);
-        appendNumberParts(tokens, numberPortion, symbols);
-        appendUnitAffix(tokens, suffix, symbols);
     }
 
     private void appendUnitText(List<PartToken> tokens, String text) {
@@ -861,12 +841,8 @@ public final class JSIntlNumberFormat extends JSObject {
             tokens.add(new PartToken("infinity", body));
         } else if ("scientific".equals(notation) || "engineering".equals(notation)) {
             appendScientificParts(tokens, body, symbols);
-        } else if ("unit".equals(style)) {
-            appendUnitParts(tokens, body, symbols);
-        } else if ("percent".equals(style)) {
-            appendPercentParts(tokens, body, symbols);
-        } else if ("currency".equals(style)) {
-            appendCurrencyParts(tokens, body, symbols);
+        } else if ("unit".equals(style) || "percent".equals(style) || "currency".equals(style)) {
+            appendStyledParts(tokens, body, symbols);
         } else if ("compact".equals(notation)) {
             appendCompactParts(tokens, body, symbols);
         } else {

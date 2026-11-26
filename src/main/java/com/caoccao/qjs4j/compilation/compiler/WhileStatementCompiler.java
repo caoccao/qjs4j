@@ -16,19 +16,20 @@
 
 package com.caoccao.qjs4j.compilation.compiler;
 
-import com.caoccao.qjs4j.compilation.ast.WhileStatement;
+import com.caoccao.qjs4j.compilation.ast.WhileLoop;
+import com.caoccao.qjs4j.compilation.ast.DoWhileStatement;
 import com.caoccao.qjs4j.vm.Opcode;
 
 /**
  * Compiles while-statement AST nodes into bytecode.
  */
-final class WhileStatementCompiler extends AstNodeCompiler<WhileStatement> {
+final class WhileStatementCompiler extends AstNodeCompiler<WhileLoop> {
     WhileStatementCompiler(CompilerContext compilerContext) {
         super(compilerContext);
     }
 
     @Override
-    void compile(WhileStatement whileStmt) {
+    void compile(WhileLoop statement) {
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 
         int loopStart = compilerContext.emitter.currentOffset();
@@ -36,18 +37,18 @@ final class WhileStatementCompiler extends AstNodeCompiler<WhileStatement> {
                 compilerContext.scopeManager.getScopeDepth(), compilerContext.scopeManager.getScopeDepth());
         compilerContext.loopManager.pushLoop(loop);
 
-        compilerContext.expressionCompiler.compile(whileStmt.getTest());
+        boolean testAfterBody = statement instanceof DoWhileStatement;
+        if (testAfterBody) {
+            compileBody(statement);
+        }
+        int testStart = compilerContext.emitter.currentOffset();
+        compilerContext.expressionCompiler.compile(statement.getTest());
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
-        compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
+        if (!testAfterBody) {
+            compileBody(statement);
+        }
 
-        boolean savedIsLastInProgram = compilerContext.isLastInProgram;
-        compilerContext.isLastInProgram = false;
-        compilerContext.statementCompiler.compile(whileStmt.getBody());
-        compilerContext.isLastInProgram = savedIsLastInProgram;
-
-        compilerContext.emitter.emitOpcode(Opcode.GOTO);
-        int backJumpPos = compilerContext.emitter.currentOffset();
-        compilerContext.emitter.emitU32(loopStart - (backJumpPos + 4));
+        compilerContext.emitter.emitGoto(loopStart);
 
         int loopEnd = compilerContext.emitter.currentOffset();
         compilerContext.emitter.patchJump(jumpToEnd, loopEnd);
@@ -56,9 +57,14 @@ final class WhileStatementCompiler extends AstNodeCompiler<WhileStatement> {
             compilerContext.emitter.patchJump(breakPos, loopEnd);
         }
         for (int continuePos : loop.continuePositions) {
-            compilerContext.emitter.patchJump(continuePos, loopStart);
+            compilerContext.emitter.patchJump(continuePos, testStart);
         }
 
         compilerContext.loopManager.popLoop();
+    }
+
+    private void compileBody(WhileLoop statement) {
+        compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
+        compilerContext.statementCompiler.compileNestedStatement(statement.getBody());
     }
 }

@@ -77,10 +77,7 @@ public final class JSGenerator extends JSObject {
      * Create an iterator result object: { value: any, done: boolean }
      */
     private JSObject createIteratorResult(JSValue value, boolean isDone) {
-        JSObject result = context.createJSObject();
-        result.set(PropertyKey.VALUE, value);
-        result.set(PropertyKey.DONE, JSBoolean.valueOf(isDone));
-        return result;
+        return JSIteratorHelper.createResult(context, value, isDone);
     }
 
     /**

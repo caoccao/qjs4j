@@ -28,6 +28,15 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
  */
 public class DateConstructorTest extends BaseJavetTest {
 
+    private void assertLocalDateField(JSNativeCallback getter, double minimum, double maximum,
+            JSValue invalidReceiver) {
+        JSDate date = new JSDate(context, 1750000000000L);
+        JSValue value = getter.call(context, date, JSValue.NO_ARGS);
+        assertThat(value).isInstanceOfSatisfying(JSNumber.class,
+                number -> assertThat(number.value()).isBetween(minimum, maximum));
+        assertPendingTypeError(context, getter.call(context, invalidReceiver, JSValue.NO_ARGS));
+    }
+
     @Test
     public void testDateCalledWithNew() {
         // new Date() creates a Date object
@@ -133,30 +142,12 @@ public class DateConstructorTest extends BaseJavetTest {
 
     @Test
     public void testGetDate() {
-        JSDate date = new JSDate(context, 1750000000000L);
-
-        JSValue result = DatePrototype.getDate(context, date, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
-            double day = jsNum.value();
-            assertThat(day).isBetween(1.0, 31.0);
-        });
-
-        // Edge case: called on non-Date
-        assertPendingTypeError(context, DatePrototype.getDate(context, new JSNumber(123), JSValue.NO_ARGS));
+        assertLocalDateField(DatePrototype::getDate, 1.0, 31.0, new JSNumber(123));
     }
 
     @Test
     public void testGetDay() {
-        JSDate date = new JSDate(context, 1750000000000L);
-
-        JSValue result = DatePrototype.getDay(context, date, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
-            double day = jsNum.value();
-            assertThat(day).isBetween(0.0, 6.0);
-        });
-
-        // Edge case: called on non-Date
-        assertPendingTypeError(context, DatePrototype.getDay(context, JSNull.INSTANCE, JSValue.NO_ARGS));
+        assertLocalDateField(DatePrototype::getDay, 0.0, 6.0, JSNull.INSTANCE);
     }
 
     @Test
@@ -174,16 +165,7 @@ public class DateConstructorTest extends BaseJavetTest {
 
     @Test
     public void testGetHours() {
-        JSDate date = new JSDate(context, 1750000000000L);
-
-        JSValue result = DatePrototype.getHours(context, date, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
-            double hours = jsNum.value();
-            assertThat(hours).isBetween(0.0, 23.0);
-        });
-
-        // Edge case: called on non-Date
-        assertPendingTypeError(context, DatePrototype.getHours(context, new JSArray(context), JSValue.NO_ARGS));
+        assertLocalDateField(DatePrototype::getHours, 0.0, 23.0, new JSArray(context));
     }
 
     @Test
@@ -202,44 +184,17 @@ public class DateConstructorTest extends BaseJavetTest {
 
     @Test
     public void testGetMinutes() {
-        JSDate date = new JSDate(context, 1750000000000L);
-
-        JSValue result = DatePrototype.getMinutes(context, date, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
-            double minutes = jsNum.value();
-            assertThat(minutes).isBetween(0.0, 59.0);
-        });
-
-        // Edge case: called on non-Date
-        assertPendingTypeError(context, DatePrototype.getMinutes(context, new JSString("not date"), JSValue.NO_ARGS));
+        assertLocalDateField(DatePrototype::getMinutes, 0.0, 59.0, new JSString("not date"));
     }
 
     @Test
     public void testGetMonth() {
-        JSDate date = new JSDate(context, 1750000000000L);
-
-        JSValue result = DatePrototype.getMonth(context, date, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
-            double month = jsNum.value();
-            assertThat(month).isBetween(0.0, 11.0);
-        });
-
-        // Edge case: called on non-Date
-        assertPendingTypeError(context, DatePrototype.getMonth(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
+        assertLocalDateField(DatePrototype::getMonth, 0.0, 11.0, JSUndefined.INSTANCE);
     }
 
     @Test
     public void testGetSeconds() {
-        JSDate date = new JSDate(context, 1750000000000L);
-
-        JSValue result = DatePrototype.getSeconds(context, date, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
-            double seconds = jsNum.value();
-            assertThat(seconds).isBetween(0.0, 59.0);
-        });
-
-        // Edge case: called on non-Date
-        assertPendingTypeError(context, DatePrototype.getSeconds(context, JSBoolean.TRUE, JSValue.NO_ARGS));
+        assertLocalDateField(DatePrototype::getSeconds, 0.0, 59.0, JSBoolean.TRUE);
     }
 
     @Test

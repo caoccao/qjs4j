@@ -461,7 +461,7 @@ public final class ArrayConstructor {
 
         // Await the value
         JSPromise awaitValue = resolveThenable(context, value);
-        awaitValue.addReactions(new JSPromise.ReactionRecord(
+        awaitValue.observe(context,
                 new JSNativeFunction(context, "onValueResolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                     JSValue awaitedValue = JSValue.argumentOrUndefined(callbackArgs, 0);
 
@@ -480,8 +480,8 @@ public final class ArrayConstructor {
                             return JSUndefined.INSTANCE;
                         }
                         JSPromise awaitMapped = resolveThenable(context, mapped);
-                        awaitMapped.addReactions(new JSPromise.ReactionRecord(new JSNativeFunction(context,
-                                "onMapResolve", 1, (innerContext, innerThisArg, innerArgs) -> {
+                        awaitMapped.observe(context, new JSNativeFunction(context, "onMapResolve", 1,
+                                (innerContext, innerThisArg, innerArgs) -> {
                                     JSValue finalValue = innerArgs.length > 0 ? innerArgs[0] : JSUndefined.INSTANCE;
                                     // Per spec: CreateDataPropertyOrThrow(A, Pk, mappedValue)
                                     target.defineProperty(PropertyKey.fromIndexString(index), finalValue,
@@ -489,12 +489,12 @@ public final class ArrayConstructor {
                                     fromAsyncArrayLikeStep(context, resultPromise, target, isArray, arrayLikeObj,
                                             index + 1, length, mapFn, mapThisArg);
                                     return JSUndefined.INSTANCE;
-                                }), null, context), new JSPromise.ReactionRecord(new JSNativeFunction(context,
-                                        "onMapReject", 1, (innerContext, innerThisArg, innerArgs) -> {
+                                }), new JSNativeFunction(context, "onMapReject", 1,
+                                        (innerContext, innerThisArg, innerArgs) -> {
                                             resultPromise
                                                     .reject(innerArgs.length > 0 ? innerArgs[0] : JSUndefined.INSTANCE);
                                             return JSUndefined.INSTANCE;
-                                        }), null, context));
+                                        }));
                     } else {
                         // No mapFn: use awaited value directly
                         // Per spec: CreateDataPropertyOrThrow(A, Pk, mappedValue)
@@ -504,8 +504,7 @@ public final class ArrayConstructor {
                                 mapFn, mapThisArg);
                     }
                     return JSUndefined.INSTANCE;
-                }), null, context),
-                new JSPromise.ReactionRecord(resultPromise.rejectHandler(context, "onValueReject"), null, context));
+                }), resultPromise.rejectHandler(context, "onValueReject"));
     }
 
     private static JSPromise fromAsyncIterablePath(JSContext context, JSPromise resultPromise,
@@ -547,7 +546,7 @@ public final class ArrayConstructor {
                 }
                 JSPromise awaitPromise = resolveThenable(context, mappedValue);
                 JSPromise processingPromise = context.createJSPromise();
-                awaitPromise.addReactions(new JSPromise.ReactionRecord(new JSNativeFunction(context, "onResolve", 1,
+                awaitPromise.observe(context, new JSNativeFunction(context, "onResolve", 1,
                         (callbackContext, callbackThisArg, callbackArgs) -> {
                             JSValue resolved = JSValue.argumentOrUndefined(callbackArgs, 0);
                             // CreateDataPropertyOrThrow
@@ -566,16 +565,14 @@ public final class ArrayConstructor {
                             index[0]++;
                             processingPromise.fulfill(JSUndefined.INSTANCE);
                             return JSUndefined.INSTANCE;
-                        }), null, context), new JSPromise.ReactionRecord(
-                                // IfAbruptCloseAsyncIterator: async mapFn rejection
-                                new JSNativeFunction(context, "onReject", 1,
-                                        (callbackContext, callbackThisArg, callbackArgs) -> {
-                                            asyncIterator.close();
-                                            context.processMicrotasks();
-                                            processingPromise.reject(JSValue.argumentOrUndefined(callbackArgs, 0));
-                                            return JSUndefined.INSTANCE;
-                                        }),
-                                null, context));
+                        }), // IfAbruptCloseAsyncIterator: async mapFn rejection
+                        new JSNativeFunction(context, "onReject", 1,
+                                (callbackContext, callbackThisArg, callbackArgs) -> {
+                                    asyncIterator.close();
+                                    context.processMicrotasks();
+                                    processingPromise.reject(JSValue.argumentOrUndefined(callbackArgs, 0));
+                                    return JSUndefined.INSTANCE;
+                                }));
                 return processingPromise;
             } else {
                 // No mapFn: use value directly, no Await
@@ -599,7 +596,7 @@ public final class ArrayConstructor {
             }
         });
 
-        iterationPromise.addReactions(new JSPromise.ReactionRecord(
+        iterationPromise.observe(context,
                 new JSNativeFunction(context, "onComplete", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                     if (!isArray) {
                         // Per spec: Perform ? Set(A, "length", len, true)
@@ -623,8 +620,7 @@ public final class ArrayConstructor {
                     }
                     resultPromise.fulfill(target);
                     return JSUndefined.INSTANCE;
-                }), null, context),
-                new JSPromise.ReactionRecord(resultPromise.rejectHandler(context, "onError"), null, context));
+                }), resultPromise.rejectHandler(context, "onError"));
 
         return resultPromise;
     }

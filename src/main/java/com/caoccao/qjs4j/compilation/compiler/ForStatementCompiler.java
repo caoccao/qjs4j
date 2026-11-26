@@ -80,10 +80,7 @@ final class ForStatementCompiler extends AstNodeCompiler<ForStatement> {
         }
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 
-        boolean savedIsLastInProgram = compilerContext.isLastInProgram;
-        compilerContext.isLastInProgram = false;
-        compilerContext.statementCompiler.compile(forStmt.getBody());
-        compilerContext.isLastInProgram = savedIsLastInProgram;
+        compilerContext.statementCompiler.compileNestedStatement(forStmt.getBody());
 
         if (forStmt.getInit() instanceof VariableDeclaration varDeclForClose
                 && varDeclForClose.getKind() != VariableKind.VAR) {
@@ -97,9 +94,7 @@ final class ForStatementCompiler extends AstNodeCompiler<ForStatement> {
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
 
-        compilerContext.emitter.emitOpcode(Opcode.GOTO);
-        int backJumpPos = compilerContext.emitter.currentOffset();
-        compilerContext.emitter.emitU32(loopStart - (backJumpPos + 4));
+        compilerContext.emitter.emitGoto(loopStart);
 
         int loopEnd = compilerContext.emitter.currentOffset();
 

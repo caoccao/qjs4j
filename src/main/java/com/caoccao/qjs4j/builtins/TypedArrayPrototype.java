@@ -34,17 +34,11 @@ public final class TypedArrayPrototype {
         // Step 3: Capture length before coercion
         long length = typedArray.getLength();
         // Step 4: Coerce index (may resize buffer)
-        double relativeIndex = args.length > 0 ? JSTypeConversions.toInteger(context, args[0]) : 0;
+        long index = elementIndex(context, args, length);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        // Steps 5-8: Use original length for bounds computation
-        long index;
-        if (relativeIndex >= 0) {
-            index = (long) relativeIndex;
-        } else {
-            index = (long) (length + relativeIndex);
-        }
+
         // Step 9: Check against original length
         if (index < 0 || index >= length) {
             return JSUndefined.INSTANCE;
@@ -101,6 +95,10 @@ public final class TypedArrayPrototype {
             return context.throwTypeError("TypedArray species constructor did not return a TypedArray");
         }
         return result;
+    }
+
+    private static JSValue convertElement(JSContext context, boolean bigInt, JSValue value) {
+        return bigInt ? JSTypeConversions.toBigInt(context, value) : JSTypeConversions.toNumber(context, value);
     }
 
     public static JSValue copyWithin(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -234,6 +232,11 @@ public final class TypedArrayPrototype {
         return resultArray;
     }
 
+    private static long elementIndex(JSContext context, JSValue[] args, long length) {
+        double index = args.length > 0 ? JSTypeConversions.toInteger(context, args[0]) : 0;
+        return (long) (index >= 0 ? index : length + index);
+    }
+
     public static JSValue entries(JSContext context, JSValue thisArg, JSValue[] args) {
         return createIterator(context, thisArg, "TypedArray.prototype.entries", IteratorKind.ENTRIES);
     }
@@ -253,17 +256,9 @@ public final class TypedArrayPrototype {
         long length = typedArray.getLength();
 
         // Step 4/5: Convert value ONCE before coercing start/end
-        JSValue convertedValue;
-        if (isBigIntTypedArray(typedArray)) {
-            convertedValue = JSTypeConversions.toBigInt(context, rawValue);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-        } else {
-            convertedValue = JSTypeConversions.toNumber(context, rawValue);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
+        JSValue convertedValue = convertElement(context, isBigIntTypedArray(typedArray), rawValue);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
 
         long start = relativeIndex(context, args, 1, 0, length);
@@ -443,41 +438,11 @@ public final class TypedArrayPrototype {
     }
 
     public static JSValue includes(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTypedArray typedArray = validateTypedArray(context, thisArg, "TypedArray.prototype.includes");
-        if (typedArray == null) {
-            return context.getPendingException();
-        }
-        long length = typedArray.getLength();
-        if (length == 0) {
-            return JSBoolean.FALSE;
-        }
-        JSValue searchElement = JSValue.argumentOrUndefined(args, 0);
-        double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-        long fromIndex;
-        if (fromIndexD >= length) {
-            return JSBoolean.FALSE;
-        } else if (fromIndexD < 0) {
-            fromIndex = Math.max(0, (long) (length + fromIndexD));
-        } else {
-            fromIndex = (long) fromIndexD;
-        }
-        // After coercion of fromIndex, buffer may have been detached
-        for (long k = fromIndex; k < length; k++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            JSValue element = safeGetElement(typedArray, k);
-            // SameValueZero: NaN === NaN, +0 === -0
-            if (sameValueZero(element, searchElement)) {
-                return JSBoolean.TRUE;
-            }
-        }
-        return JSBoolean.FALSE;
+        return searchIndex(context, thisArg, args, Search.INCLUDES);
     }
 
     public static JSValue indexOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        return searchIndex(context, thisArg, args, false);
+        return searchIndex(context, thisArg, args, Search.FIRST);
     }
 
     private static boolean isBigIntTypedArray(JSTypedArray typedArray) {
@@ -546,7 +511,7 @@ public final class TypedArrayPrototype {
     }
 
     public static JSValue lastIndexOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        return searchIndex(context, thisArg, args, true);
+        return searchIndex(context, thisArg, args, Search.LAST);
     }
 
     public static JSValue map(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -682,38 +647,38 @@ public final class TypedArrayPrototype {
         return false;
     }
 
-    private static JSValue searchIndex(JSContext context, JSValue thisArg, JSValue[] args, boolean fromEnd) {
-        JSTypedArray typedArray = validateTypedArray(context, thisArg,
-                fromEnd ? "TypedArray.prototype.lastIndexOf" : "TypedArray.prototype.indexOf");
+    private static JSValue searchIndex(JSContext context, JSValue thisArg, JSValue[] args, Search search) {
+        JSTypedArray typedArray = validateTypedArray(context, thisArg, search.method);
         if (typedArray == null) {
             return context.getPendingException();
         }
         long length = typedArray.getLength();
+        boolean includes = search == Search.INCLUDES;
+        JSValue missing = includes ? JSBoolean.FALSE : JSNumber.of(-1);
         if (length == 0) {
-            return JSNumber.of(-1);
+            return missing;
         }
-        JSValue searchElement = JSValue.argumentOrUndefined(args, 0);
-        double fromIndexD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : fromEnd ? length - 1 : 0;
+        boolean fromEnd = search == Search.LAST;
+        JSValue needle = JSValue.argumentOrUndefined(args, 0);
+        double offset = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : fromEnd ? length - 1 : 0;
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        // After coercion of fromIndex, check if TA went OOB (fixed-length shrink)
-        if (typedArray.isOutOfBounds()) {
-            return JSNumber.of(-1);
+        // includes reads missing elements as undefined after a resize. Index searches skip them.
+        if (!includes && typedArray.isOutOfBounds()) {
+            return missing;
         }
-        // Use ORIGINAL length for index computation and loop bounds (ES2024 taRecord caching)
-        long start = ArrayPrototype.searchStart(fromIndexD, length, fromEnd);
+        long start = ArrayPrototype.searchStart(offset, length, fromEnd);
         long end = fromEnd ? -1 : length;
-        int step = fromEnd ? -1 : 1;
+        long step = fromEnd ? -1 : 1;
         for (long k = start; k != end; k += step) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
             JSValue element = safeGetElement(typedArray, k);
-            // indexOf uses strict equality (===)
-            if (JSTypeConversions.strictEquals(element, searchElement)) {
-                return JSNumber.of(k);
+            if (includes ? sameValueZero(element, needle) : JSTypeConversions.strictEquals(element, needle)) {
+                return includes ? JSBoolean.TRUE : JSNumber.of(k);
             }
         }
-        return JSNumber.of(-1);
+        return missing;
     }
 
     public static JSValue set(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -723,14 +688,6 @@ public final class TypedArrayPrototype {
         }
         JSValue source = JSValue.argumentOrUndefined(args, 0);
 
-        if (source instanceof JSTypedArray srcTypedArray) {
-            return setFromTypedArray(context, target, srcTypedArray, args);
-        } else {
-            return setFromArrayLike(context, target, source, args);
-        }
-    }
-
-    private static JSValue setFromArrayLike(JSContext context, JSTypedArray target, JSValue source, JSValue[] args) {
         // Step 3: ToIntegerOrInfinity(offset) - may detach buffer
         double targetOffsetD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
         if (context.hasPendingException()) {
@@ -747,6 +704,15 @@ public final class TypedArrayPrototype {
         }
         long targetLength = target.getLength();
 
+        if (source instanceof JSTypedArray srcTypedArray) {
+            return setFromTypedArray(context, target, srcTypedArray, targetOffset, targetLength);
+        } else {
+            return setFromArrayLike(context, target, source, targetOffset, targetLength);
+        }
+    }
+
+    private static JSValue setFromArrayLike(JSContext context, JSTypedArray target, JSValue source, long targetOffset,
+            long targetLength) {
         // Step 7: ToObject(source)
         JSObject src = JSTypeConversions.toObject(context, source);
         if (src == null || context.hasPendingException()) {
@@ -782,12 +748,7 @@ public final class TypedArrayPrototype {
             }
 
             // Convert value (may cause side effects including detaching/resizing buffer)
-            JSValue convertedValue;
-            if (isBigInt) {
-                convertedValue = JSTypeConversions.toBigInt(context, value);
-            } else {
-                convertedValue = JSTypeConversions.toNumber(context, value);
-            }
+            JSValue convertedValue = convertElement(context, isBigInt, value);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -805,23 +766,7 @@ public final class TypedArrayPrototype {
     }
 
     private static JSValue setFromTypedArray(JSContext context, JSTypedArray target, JSTypedArray source,
-            JSValue[] args) {
-        // Step 3: ToIntegerOrInfinity(offset) - may detach buffer
-        double targetOffsetD = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-        if (targetOffsetD < 0) {
-            return context.throwRangeError("offset is out of bounds");
-        }
-        long targetOffset = (long) targetOffsetD;
-
-        // Step 5: Check if target is OOB (after offset coercion)
-        if (target.isOutOfBounds()) {
-            return context.throwTypeError("TypedArray is detached or out of bounds");
-        }
-        long targetLength = target.getLength();
-
+            long targetOffset, long targetLength) {
         // Step 9: Check source buffer detached
         if (source.getBuffer().isDetached()) {
             return context.throwTypeError("Source TypedArray buffer is detached");
@@ -1274,26 +1219,14 @@ public final class TypedArrayPrototype {
         long length = typedArray.getLength();
 
         // Step 4: ToIntegerOrInfinity(index)
-        double relativeIndex = args.length > 0 ? JSTypeConversions.toInteger(context, args[0]) : 0;
+        long actualIndex = elementIndex(context, args, length);
         if (context.hasPendingException()) {
             return context.getPendingException();
-        }
-        // Steps 5-6: Compute actualIndex using ORIGINAL length
-        long actualIndex;
-        if (relativeIndex >= 0) {
-            actualIndex = (long) relativeIndex;
-        } else {
-            actualIndex = (long) (length + relativeIndex);
         }
 
         // Steps 7-8: Convert value (may resize/detach buffer)
         JSValue value = JSValue.argumentOrUndefined(args, 1);
-        JSValue convertedValue;
-        if (isBigIntTypedArray(typedArray)) {
-            convertedValue = JSTypeConversions.toBigInt(context, value);
-        } else {
-            convertedValue = JSTypeConversions.toNumber(context, value);
-        }
+        JSValue convertedValue = convertElement(context, isBigIntTypedArray(typedArray), value);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1325,5 +1258,14 @@ public final class TypedArrayPrototype {
 
     private enum IteratorKind {
         ENTRIES, KEYS, VALUES
+    }
+
+    private enum Search {
+        FIRST("TypedArray.prototype.indexOf"), INCLUDES("TypedArray.prototype.includes"), LAST(
+                "TypedArray.prototype.lastIndexOf");
+        final String method;
+        Search(String method) {
+            this.method = method;
+        }
     }
 }

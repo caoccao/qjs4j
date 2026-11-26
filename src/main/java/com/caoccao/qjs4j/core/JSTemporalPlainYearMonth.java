@@ -20,22 +20,10 @@ import com.caoccao.qjs4j.core.temporal.IsoDate;
 import com.caoccao.qjs4j.core.temporal.TemporalCalendarId;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
-public final class JSTemporalPlainYearMonth extends JSObject {
-    private final TemporalCalendarId calendarId;
-    private final IsoDate isoDate;
+public final class JSTemporalPlainYearMonth extends JSTemporalCalendarDate {
 
     public JSTemporalPlainYearMonth(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId) {
-        super(context);
-        this.isoDate = isoDate;
-        this.calendarId = calendarId;
-    }
-
-    public TemporalCalendarId getCalendarId() {
-        return calendarId;
-    }
-
-    public IsoDate getIsoDate() {
-        return isoDate;
+        super(context, isoDate, calendarId);
     }
 
     public static JSTemporalPlainYearMonth create(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId) {

@@ -23,30 +23,10 @@ import java.time.LocalDate;
 /**
  * JSObject subclass representing a Temporal.PlainDate value. Internal slots: [[ISODate]], [[Calendar]]
  */
-public final class JSTemporalPlainDate extends JSObject {
-    private final TemporalCalendarId calendarId;
-    private final IsoDate isoDate;
+public final class JSTemporalPlainDate extends JSTemporalCalendarDate {
 
     public JSTemporalPlainDate(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId) {
-        super(context);
-        this.isoDate = isoDate;
-        this.calendarId = calendarId;
-    }
-
-    public TemporalCalendarId getCalendarId() {
-        return calendarId;
-    }
-
-    public IsoDate getIsoDate() {
-        return isoDate;
-    }
-
-    public IsoCalendarDate toIsoCalendarDate() {
-        return isoDate.toIsoCalendarDate(calendarId);
-    }
-
-    public TemporalEraYear toTemporalEraYear() {
-        return isoDate.toTemporalEraYear(calendarId);
+        super(context, isoDate, calendarId);
     }
 
     public static JSTemporalPlainDate create(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId) {

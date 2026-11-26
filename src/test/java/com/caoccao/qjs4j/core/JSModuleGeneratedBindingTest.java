@@ -21,7 +21,6 @@ import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -71,15 +70,9 @@ public class JSModuleGeneratedBindingTest extends ModuleFileTest {
 
     @Test
     public void testADefaultExportOfAMemberChainSpanningLinesIsTheValueExported() throws IOException {
-        Path dependency = moduleDirectory.resolve("default-member.mjs");
-        Files.writeString(dependency, "export default [1, 2]\n  .map(x => x * 2)\n  .join('-');\n");
-        Path entry = moduleDirectory.resolve("default-member-main.mjs");
-        String entrySource = "import chained from './default-member.mjs';\nglobalThis.result = chained;\n";
-        Files.writeString(entry, entrySource);
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            context.eval(entrySource, entry.toString(), true);
-            assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString()).isEqualTo("2-4");
-        }
+        writeModule("default-member.mjs", "export default [1, 2]\n  .map(x => x * 2)\n  .join('-');\n");
+        assertThat(evaluateModuleResult("default-member-main.mjs",
+                "import chained from './default-member.mjs';\nglobalThis.result = chained;\n")).isEqualTo("2-4");
     }
 
     @Test
@@ -115,15 +108,9 @@ public class JSModuleGeneratedBindingTest extends ModuleFileTest {
     public void testADefaultExportWithAnOperatorContinuationIsTheValueExported() throws IOException {
         // The review's reproduction: balanced delimiters do not mark the end of an expression, so
         // `export default 1 +` was taken as the whole of it.
-        Path dependency = moduleDirectory.resolve("default-operator.mjs");
-        Files.writeString(dependency, "export default 40 +\n  2;\n");
-        Path entry = moduleDirectory.resolve("default-operator-main.mjs");
-        String entrySource = "import answer from './default-operator.mjs';\nglobalThis.result = answer;\n";
-        Files.writeString(entry, entrySource);
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            context.eval(entrySource, entry.toString(), true);
-            assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString()).isEqualTo("42");
-        }
+        writeModule("default-operator.mjs", "export default 40 +\n  2;\n");
+        assertThat(evaluateModuleResult("default-operator-main.mjs",
+                "import answer from './default-operator.mjs';\nglobalThis.result = answer;\n")).isEqualTo("42");
     }
 
     @Test
@@ -182,15 +169,9 @@ public class JSModuleGeneratedBindingTest extends ModuleFileTest {
     @Test
     public void testAMultiLineDefaultExportIsStillTheValueThatIsExported() throws IOException {
         // Not just "it parses": the value that spans the lines is the one the module exports.
-        Path dependency = moduleDirectory.resolve("multiline-value.mjs");
-        Files.writeString(dependency, "export default (\n  40\n  + 2\n);\n");
-        Path entry = moduleDirectory.resolve("multiline-value-main.mjs");
-        String entrySource = "import answer from './multiline-value.mjs';\nglobalThis.result = answer;\n";
-        Files.writeString(entry, entrySource);
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            context.eval(entrySource, entry.toString(), true);
-            assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString()).isEqualTo("42");
-        }
+        writeModule("multiline-value.mjs", "export default (\n  40\n  + 2\n);\n");
+        assertThat(evaluateModuleResult("multiline-value-main.mjs",
+                "import answer from './multiline-value.mjs';\nglobalThis.result = answer;\n")).isEqualTo("42");
     }
 
     @Test
@@ -211,8 +192,7 @@ public class JSModuleGeneratedBindingTest extends ModuleFileTest {
         // one the caller can find. A generated-source offset — line 4, offset 263, of a 52-character
         // module — names no character of what was passed in.
         String entrySource = "export default (\n  1 +\n);\nglobalThis.result = 'ok';\n";
-        Path entry = moduleDirectory.resolve("default-invalid.mjs");
-        Files.writeString(entry, entrySource);
+        Path entry = writeModule("default-invalid.mjs", entrySource);
         try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
             JSException failure = catchThrowableOfType(JSException.class,
                     () -> context.eval(entrySource, entry.toString(), true));

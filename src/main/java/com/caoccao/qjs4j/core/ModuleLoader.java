@@ -98,28 +98,17 @@ final class ModuleLoader {
 
     void chainImportPromiseOntoAsyncDependencies(List<JSPromise> dependencyPromises, JSObject namespace,
             JSPromise importPromise, JSPromise.ResolveState resolveState) {
-        int[] remaining = new int[]{dependencyPromises.size()};
+        int[] remaining = {dependencyPromises.size()};
+        JSNativeFunction onFulfill = new JSNativeFunction(context, "", 0, (ctx, thisArg, args) -> {
+            if (--remaining[0] == 0) {
+                resolveImportPromise(ctx, namespace, importPromise, resolveState);
+            }
+            return JSUndefined.INSTANCE;
+        });
+        onFulfill.initializePrototypeChain(context);
+        JSNativeFunction onReject = importRejectionHandler(importPromise, resolveState);
         for (JSPromise dependencyPromise : dependencyPromises) {
-            JSNativeFunction onFulfill = new JSNativeFunction(context, "", 0, (ctx, thisArg, args) -> {
-                remaining[0]--;
-                if (remaining[0] == 0 && !resolveState.alreadyResolved) {
-                    resolveState.alreadyResolved = true;
-                    importPromise.resolve(ctx, namespace);
-                }
-                return JSUndefined.INSTANCE;
-            });
-            onFulfill.initializePrototypeChain(context);
-            JSNativeFunction onReject = new JSNativeFunction(context, "", 1, (ctx, thisArg, args) -> {
-                if (!resolveState.alreadyResolved) {
-                    resolveState.alreadyResolved = true;
-                    JSValue reason = JSValue.argumentOrUndefined(args, 0);
-                    importPromise.reject(reason);
-                }
-                return JSUndefined.INSTANCE;
-            });
-            onReject.initializePrototypeChain(context);
-            dependencyPromise.addReactions(new JSPromise.ReactionRecord(onFulfill, context, null, null),
-                    new JSPromise.ReactionRecord(onReject, context, null, null));
+            dependencyPromise.observe(context, onFulfill, onReject);
         }
     }
 
@@ -127,24 +116,12 @@ final class ModuleLoader {
             JSPromise.ResolveState resolveState) {
         JSObject namespace = moduleRecord.namespace();
         JSNativeFunction onFulfill = new JSNativeFunction(context, "", 0, (ctx, thisArg, args) -> {
-            if (!resolveState.alreadyResolved) {
-                resolveState.alreadyResolved = true;
-                importPromise.resolve(ctx, namespace);
-            }
+            resolveImportPromise(ctx, namespace, importPromise, resolveState);
             return JSUndefined.INSTANCE;
         });
         onFulfill.initializePrototypeChain(context);
-        JSNativeFunction onReject = new JSNativeFunction(context, "", 1, (ctx, thisArg, args) -> {
-            if (!resolveState.alreadyResolved) {
-                resolveState.alreadyResolved = true;
-                JSValue reason = JSValue.argumentOrUndefined(args, 0);
-                importPromise.reject(reason);
-            }
-            return JSUndefined.INSTANCE;
-        });
-        onReject.initializePrototypeChain(context);
-        moduleRecord.asyncEvaluationPromise().addReactions(new JSPromise.ReactionRecord(onFulfill, context, null, null),
-                new JSPromise.ReactionRecord(onReject, context, null, null));
+        moduleRecord.asyncEvaluationPromise().observe(context, onFulfill,
+                importRejectionHandler(importPromise, resolveState));
     }
 
     /**
@@ -286,6 +263,18 @@ final class ModuleLoader {
             }
         }
         return false;
+    }
+
+    private JSNativeFunction importRejectionHandler(JSPromise importPromise, JSPromise.ResolveState resolveState) {
+        JSNativeFunction handler = new JSNativeFunction(context, "", 1, (ctx, thisArg, args) -> {
+            if (!resolveState.alreadyResolved) {
+                resolveState.alreadyResolved = true;
+                importPromise.reject(JSValue.argumentOrUndefined(args, 0));
+            }
+            return JSUndefined.INSTANCE;
+        });
+        handler.initializePrototypeChain(context);
+        return handler;
     }
 
     /**
@@ -453,30 +442,8 @@ final class ModuleLoader {
         // using a Promise.all-like counter. This avoids relying on context.processMicrotasks()
         // which is a no-op when called re-entrantly from within a microtask.
         if (importPromise != null && !tlaEvaluationPromises.isEmpty()) {
-            JSObject deferredNs = moduleRecord.deferredNamespace();
-            int[] remaining = {tlaEvaluationPromises.size()};
-            for (JSPromise tlaPromise : tlaEvaluationPromises) {
-                JSNativeFunction onFulfill = new JSNativeFunction(context, "", 0, (ctx, thisArg, args) -> {
-                    remaining[0]--;
-                    if (remaining[0] == 0 && !resolveState.alreadyResolved) {
-                        resolveState.alreadyResolved = true;
-                        importPromise.resolve(ctx, deferredNs);
-                    }
-                    return JSUndefined.INSTANCE;
-                });
-                onFulfill.initializePrototypeChain(context);
-                JSNativeFunction onReject = new JSNativeFunction(context, "", 1, (ctx, thisArg, args) -> {
-                    if (!resolveState.alreadyResolved) {
-                        resolveState.alreadyResolved = true;
-                        JSValue reason = JSValue.argumentOrUndefined(args, 0);
-                        importPromise.reject(reason);
-                    }
-                    return JSUndefined.INSTANCE;
-                });
-                onReject.initializePrototypeChain(context);
-                tlaPromise.addReactions(new JSPromise.ReactionRecord(onFulfill, context, null, null),
-                        new JSPromise.ReactionRecord(onReject, context, null, null));
-            }
+            chainImportPromiseOntoAsyncDependencies(tlaEvaluationPromises, moduleRecord.deferredNamespace(),
+                    importPromise, resolveState);
             return null; // Import promise will be resolved via TLA promise chain
         }
 
@@ -1027,5 +994,13 @@ final class ModuleLoader {
             JSDynamicImportModule moduleCycleRoot) {
         JSDynamicImportModule root = dependency.cycleRoot();
         return root != null && root != moduleCycleRoot ? root : dependency;
+    }
+
+    private static void resolveImportPromise(JSContext context, JSObject namespace, JSPromise importPromise,
+            JSPromise.ResolveState resolveState) {
+        if (!resolveState.alreadyResolved) {
+            resolveState.alreadyResolved = true;
+            importPromise.resolve(context, namespace);
+        }
     }
 }

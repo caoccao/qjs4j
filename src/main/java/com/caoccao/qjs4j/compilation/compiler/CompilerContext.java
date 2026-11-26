@@ -58,7 +58,6 @@ final class CompilerContext {
     ConditionalExpressionCompiler conditionalExpressionCompiler;
     JSContext context;
     ContinueStatementCompiler continueStatementCompiler;
-    DoWhileStatementCompiler doWhileStatementCompiler;
     EmitHelpers emitHelpers;
     // Flags (managed by state stack)
     boolean emitTailCalls;
@@ -254,7 +253,6 @@ final class CompilerContext {
         this.compilerAnalysis = new CompilerAnalysis(this);
         this.conditionalExpressionCompiler = new ConditionalExpressionCompiler(this);
         this.continueStatementCompiler = new ContinueStatementCompiler(this);
-        this.doWhileStatementCompiler = new DoWhileStatementCompiler(this);
         this.emitHelpers = new EmitHelpers(this);
         this.expressionCompiler = new ExpressionCompiler(this);
         this.expressionDestructuringAssignmentCompiler = new ExpressionDestructuringAssignmentCompiler(this);

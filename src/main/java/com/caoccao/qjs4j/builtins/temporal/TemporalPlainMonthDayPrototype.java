@@ -48,13 +48,7 @@ public final class TemporalPlainMonthDayPrototype {
     }
 
     public static JSValue day(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainMonthDay plainMonthDay = RECEIVER.require(context, thisArg, "day");
-        if (plainMonthDay == null) {
-            return JSUndefined.INSTANCE;
-        }
-        IsoCalendarDate calendarDateFields = plainMonthDay.getIsoDate()
-                .toIsoCalendarDate(plainMonthDay.getCalendarId());
-        return JSNumber.of(calendarDateFields.day());
+        return TemporalDateProperty.DAY.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -75,13 +69,7 @@ public final class TemporalPlainMonthDayPrototype {
     }
 
     public static JSValue monthCode(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainMonthDay plainMonthDay = RECEIVER.require(context, thisArg, "monthCode");
-        if (plainMonthDay == null) {
-            return JSUndefined.INSTANCE;
-        }
-        IsoCalendarDate calendarDateFields = plainMonthDay.getIsoDate()
-                .toIsoCalendarDate(plainMonthDay.getCalendarId());
-        return new JSString(calendarDateFields.monthCode());
+        return TemporalDateProperty.MONTH_CODE.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue referenceISOYear(JSContext context, JSValue thisArg, JSValue[] args) {

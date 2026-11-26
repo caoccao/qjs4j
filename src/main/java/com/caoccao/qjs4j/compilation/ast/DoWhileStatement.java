@@ -16,45 +16,23 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
-import java.util.List;
-
 /**
  * Represents a do-while statement.
  */
-public final class DoWhileStatement extends Statement {
-    private final Statement body;
-    private final Expression test;
+public final class DoWhileStatement extends WhileLoop {
 
     public DoWhileStatement(Statement body, Expression test, SourceLocation location) {
-        super(location);
-        this.body = body;
-        this.test = test;
+        super(test, body, location);
     }
 
     @Override
     public boolean containsAwait() {
-        return containsAwaitIn(body, test);
+        return containsAwaitIn(getBody(), getTest());
     }
 
     @Override
     public boolean containsYield() {
-        return containsYieldIn(body, test);
-    }
-
-    public Statement getBody() {
-        return body;
-    }
-
-    public Expression getTest() {
-        return test;
-    }
-
-    @Override
-    public List<VariableDeclarator> getVarDeclarators() {
-        if (varDeclarators == null) {
-            varDeclarators = body != null ? body.getVarDeclarators() : List.of();
-        }
-        return varDeclarators;
+        return containsYieldIn(getBody(), getTest());
     }
 
 }

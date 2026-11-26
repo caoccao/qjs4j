@@ -49,9 +49,7 @@ public final class AsyncGeneratorPrototype {
             // In a real implementation, this would use setTimeout or similar
             // For now, we enqueue as a microtask to simulate async behavior
             context.enqueueMicrotask(() -> {
-                JSObject result = context.createJSObject();
-                result.set(PropertyKey.VALUE, values[currentIndex]);
-                result.set(PropertyKey.DONE, JSBoolean.FALSE);
+                JSObject result = JSIteratorHelper.createResult(context, values[currentIndex], false);
                 promise.fulfill(result);
             });
 
@@ -88,9 +86,7 @@ public final class AsyncGeneratorPrototype {
             currentPromise.addReactions(new JSPromise.ReactionRecord(
                     new JSNativeFunction(context, "onFulfilled", 1, (childContext, thisArg, args) -> {
                         JSValue value = JSValue.argumentOrUndefined(args, 0);
-                        JSObject result = context.createJSObject();
-                        result.set(PropertyKey.VALUE, value);
-                        result.set(PropertyKey.DONE, JSBoolean.FALSE);
+                        JSObject result = JSIteratorHelper.createResult(context, value, false);
                         resultPromise.fulfill(result);
                         return JSUndefined.INSTANCE;
                     }), resultPromise, context), new JSPromise.ReactionRecord(

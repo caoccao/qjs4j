@@ -46,10 +46,8 @@ final class StatementCompiler extends AstNodeCompiler<Statement> {
             compilerContext.blockStatementCompiler.compile(block);
         } else if (stmt instanceof IfStatement ifStmt) {
             compilerContext.ifStatementCompiler.compile(ifStmt);
-        } else if (stmt instanceof WhileStatement whileStmt) {
-            compilerContext.whileStatementCompiler.compile(whileStmt);
-        } else if (stmt instanceof DoWhileStatement doWhileStmt) {
-            compilerContext.doWhileStatementCompiler.compile(doWhileStmt);
+        } else if (stmt instanceof WhileLoop loop) {
+            compilerContext.whileStatementCompiler.compile(loop);
         } else if (stmt instanceof ForStatement forStmt) {
             compilerContext.forStatementCompiler.compile(forStmt);
         } else if (stmt instanceof ForInStatement forInStmt) {
@@ -92,13 +90,22 @@ final class StatementCompiler extends AstNodeCompiler<Statement> {
         }
     }
 
+    void compileNestedStatement(Statement statement) {
+        boolean saved = compilerContext.isLastInProgram;
+        compilerContext.isLastInProgram = false;
+        try {
+            compile(statement);
+        } finally {
+            compilerContext.isLastInProgram = saved;
+        }
+    }
+
     public void emitEvalReturnUndefinedIfNeeded() {
         if (compilerContext.evalReturnLocalIndex >= 0) {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
         }
     }
-
     private void initializeLexicalBinding(String name, boolean immutable) {
         var scope = compilerContext.scopeManager.currentScope();
         Integer index = scope.getLocal(name);
@@ -111,6 +118,7 @@ final class StatementCompiler extends AstNodeCompiler<Statement> {
         compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, index);
         compilerContext.tdzLocals.add(name);
     }
+
     void predeclareLexicalBindings(List<Statement> statements, boolean includeFunctions) {
         for (Statement statement : statements) {
             if (statement instanceof VariableDeclaration declaration && declaration.getKind() != VariableKind.VAR) {

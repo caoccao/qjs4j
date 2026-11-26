@@ -114,19 +114,19 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     public static JSValue day(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "day", TemporalPlainDatePrototype::day);
+        return readDateField(context, thisArg, TemporalDateProperty.DAY);
     }
 
     public static JSValue dayOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "dayOfWeek", TemporalPlainDatePrototype::dayOfWeek);
+        return readDateField(context, thisArg, TemporalDateProperty.DAY_OF_WEEK);
     }
 
     public static JSValue dayOfYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "dayOfYear", TemporalPlainDatePrototype::dayOfYear);
+        return readDateField(context, thisArg, TemporalDateProperty.DAY_OF_YEAR);
     }
 
     public static JSValue daysInMonth(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "daysInMonth", TemporalPlainDatePrototype::daysInMonth);
+        return readDateField(context, thisArg, TemporalDateProperty.DAYS_IN_MONTH);
     }
 
     public static JSValue daysInWeek(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -134,7 +134,7 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     public static JSValue daysInYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "daysInYear", TemporalPlainDatePrototype::daysInYear);
+        return readDateField(context, thisArg, TemporalDateProperty.DAYS_IN_YEAR);
     }
 
     private static JSValue difference(JSContext context, JSValue thisArg, JSValue[] args, boolean since) {
@@ -206,11 +206,11 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     public static JSValue era(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "era", TemporalPlainDatePrototype::era);
+        return readDateField(context, thisArg, TemporalDateProperty.ERA);
     }
 
     public static JSValue eraYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "eraYear", TemporalPlainDatePrototype::eraYear);
+        return readDateField(context, thisArg, TemporalDateProperty.ERA_YEAR);
     }
 
     private static String getTemporalDisambiguation(JSContext context, JSValue optionsArg) {
@@ -266,7 +266,7 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     public static JSValue inLeapYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "inLeapYear", TemporalPlainDatePrototype::inLeapYear);
+        return readDateField(context, thisArg, TemporalDateProperty.IN_LEAP_YEAR);
     }
 
     public static JSValue microsecond(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -285,15 +285,15 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     public static JSValue month(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "month", TemporalPlainDatePrototype::month);
+        return readDateField(context, thisArg, TemporalDateProperty.MONTH);
     }
 
     public static JSValue monthCode(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "monthCode", TemporalPlainDatePrototype::monthCode);
+        return readDateField(context, thisArg, TemporalDateProperty.MONTH_CODE);
     }
 
     public static JSValue monthsInYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "monthsInYear", TemporalPlainDatePrototype::monthsInYear);
+        return readDateField(context, thisArg, TemporalDateProperty.MONTHS_IN_YEAR);
     }
 
     public static JSValue nanosecond(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -301,14 +301,14 @@ public final class TemporalPlainDateTimePrototype {
         return time == null ? JSUndefined.INSTANCE : JSNumber.of(time.nanosecond());
     }
 
-    private static JSValue readDateField(JSContext context, JSValue thisArg, String name, JSNativeCallback getter) {
-        JSTemporalPlainDateTime plainDateTime = RECEIVER.require(context, thisArg, name);
+    private static JSValue readDateField(JSContext context, JSValue thisArg, TemporalDateProperty property) {
+        JSTemporalPlainDateTime plainDateTime = RECEIVER.require(context, thisArg, property.key);
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
         JSTemporalPlainDate date = JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(),
                 plainDateTime.getCalendarId());
-        return getter.call(context, date, JSValue.NO_ARGS);
+        return property.read(date);
     }
 
     public static JSValue round(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -492,7 +492,7 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     public static JSValue weekOfYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "weekOfYear", TemporalPlainDatePrototype::weekOfYear);
+        return readDateField(context, thisArg, TemporalDateProperty.WEEK_OF_YEAR);
     }
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -607,10 +607,10 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     public static JSValue year(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "year", TemporalPlainDatePrototype::year);
+        return readDateField(context, thisArg, TemporalDateProperty.YEAR);
     }
 
     public static JSValue yearOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "yearOfWeek", TemporalPlainDatePrototype::yearOfWeek);
+        return readDateField(context, thisArg, TemporalDateProperty.YEAR_OF_WEEK);
     }
 }

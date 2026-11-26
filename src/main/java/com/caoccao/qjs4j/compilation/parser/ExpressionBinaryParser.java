@@ -36,57 +36,23 @@ final class ExpressionBinaryParser {
         };
     }
 
-    Expression parseAdditiveExpression() {
-        Expression left = expressions.parseMultiplicativeExpression();
-
-        while (parserContext.match(TokenType.PLUS) || parserContext.match(TokenType.MINUS)) {
-            BinaryOperator op = parserContext.match(TokenType.PLUS) ? BinaryOperator.ADD : BinaryOperator.SUB;
+    private Expression parseBinaryExpression(int minimumPrecedence) {
+        Expression left = minimumPrecedence <= Precedence.RELATIONAL.level && parserContext.inOperatorAllowed
+                && parserContext.match(TokenType.PRIVATE_NAME) && parserContext.nextToken.type() == TokenType.IN
+                        ? parsePrivateBrandCheckName()
+                        : parseExponentiationExpression();
+        while (true) {
+            Infix infix = Infix.BY_TOKEN[parserContext.currentToken.type().ordinal()];
+            if (infix == null || infix.precedence.level < minimumPrecedence
+                    || (infix.operator == BinaryOperator.IN && !parserContext.inOperatorAllowed)) {
+                return left;
+            }
             SourceLocation location = parserContext.getLocation();
             parserContext.advance();
-            Expression right = expressions.parseMultiplicativeExpression();
-            left = new BinaryExpression(op, left, right, location);
+            // Only strictly tighter operators belong to the right operand of a left-associative operator.
+            Expression right = parseBinaryExpression(infix.precedence.level + 1);
+            left = new BinaryExpression(infix.operator, left, right, location);
         }
-
-        return left;
-    }
-
-    Expression parseBitwiseAndExpression() {
-        Expression left = expressions.parseEqualityExpression();
-
-        while (parserContext.match(TokenType.BIT_AND)) {
-            SourceLocation location = parserContext.getLocation();
-            parserContext.advance();
-            Expression right = expressions.parseEqualityExpression();
-            left = new BinaryExpression(BinaryOperator.BIT_AND, left, right, location);
-        }
-
-        return left;
-    }
-
-    Expression parseBitwiseOrExpression() {
-        Expression left = expressions.parseBitwiseXorExpression();
-
-        while (parserContext.match(TokenType.BIT_OR)) {
-            SourceLocation location = parserContext.getLocation();
-            parserContext.advance();
-            Expression right = expressions.parseBitwiseXorExpression();
-            left = new BinaryExpression(BinaryOperator.BIT_OR, left, right, location);
-        }
-
-        return left;
-    }
-
-    Expression parseBitwiseXorExpression() {
-        Expression left = expressions.parseBitwiseAndExpression();
-
-        while (parserContext.match(TokenType.BIT_XOR)) {
-            SourceLocation location = parserContext.getLocation();
-            parserContext.advance();
-            Expression right = expressions.parseBitwiseAndExpression();
-            left = new BinaryExpression(BinaryOperator.BIT_XOR, left, right, location);
-        }
-
-        return left;
     }
 
     Expression parseConditionalExpression() {
@@ -108,27 +74,6 @@ final class ExpressionBinaryParser {
         return test;
     }
 
-    Expression parseEqualityExpression() {
-        Expression left = expressions.parseRelationalExpression();
-
-        while (parserContext.match(TokenType.EQ) || parserContext.match(TokenType.NE)
-                || parserContext.match(TokenType.STRICT_EQ) || parserContext.match(TokenType.STRICT_NE)) {
-            BinaryOperator op = switch (parserContext.currentToken.type()) {
-                case EQ -> BinaryOperator.EQ;
-                case NE -> BinaryOperator.NE;
-                case STRICT_EQ -> BinaryOperator.STRICT_EQ;
-                case STRICT_NE -> BinaryOperator.STRICT_NE;
-                default -> null;
-            };
-            SourceLocation location = parserContext.getLocation();
-            parserContext.advance();
-            Expression right = expressions.parseRelationalExpression();
-            left = new BinaryExpression(op, left, right, location);
-        }
-
-        return left;
-    }
-
     Expression parseExponentiationExpression() {
         TokenType firstTokenType = parserContext.currentToken.type();
         Expression left = expressions.parseUnaryExpression();
@@ -148,14 +93,14 @@ final class ExpressionBinaryParser {
     }
 
     Expression parseLogicalAndExpression() {
-        Expression left = expressions.parseBitwiseOrExpression();
+        Expression left = parseBinaryExpression(Precedence.BIT_OR.level);
 
         boolean hasLogicalAnd = false;
         while (parserContext.match(TokenType.LOGICAL_AND)) {
             hasLogicalAnd = true;
             SourceLocation location = parserContext.getLocation();
             parserContext.advance();
-            Expression right = expressions.parseBitwiseOrExpression();
+            Expression right = parseBinaryExpression(Precedence.BIT_OR.level);
             left = new BinaryExpression(BinaryOperator.LOGICAL_AND, left, right, location);
         }
 
@@ -175,7 +120,7 @@ final class ExpressionBinaryParser {
             do {
                 SourceLocation location = parserContext.getLocation();
                 parserContext.advance();
-                Expression right = expressions.parseBitwiseOrExpression();
+                Expression right = parseBinaryExpression(Precedence.BIT_OR.level);
                 left = new BinaryExpression(BinaryOperator.NULLISH_COALESCING, left, right, location);
             } while (parserContext.match(TokenType.NULLISH_COALESCING));
             if (parserContext.match(TokenType.LOGICAL_OR) || parserContext.match(TokenType.LOGICAL_AND)) {
@@ -200,26 +145,6 @@ final class ExpressionBinaryParser {
         return left;
     }
 
-    Expression parseMultiplicativeExpression() {
-        Expression left = expressions.parseExponentiationExpression();
-
-        while (parserContext.match(TokenType.MUL) || parserContext.match(TokenType.DIV)
-                || parserContext.match(TokenType.MOD)) {
-            BinaryOperator op = switch (parserContext.currentToken.type()) {
-                case DIV -> BinaryOperator.DIV;
-                case MOD -> BinaryOperator.MOD;
-                case MUL -> BinaryOperator.MUL;
-                default -> null;
-            };
-            SourceLocation location = parserContext.getLocation();
-            parserContext.advance();
-            Expression right = expressions.parseExponentiationExpression();
-            left = new BinaryExpression(op, left, right, location);
-        }
-
-        return left;
-    }
-
     /**
      * The private name that begins a brand check, {@code #x in o}: RelationalExpression : PrivateIdentifier in
      * ShiftExpression. This is the one place a private name can begin an expression, so {@code (#x in o)} is valid and
@@ -235,51 +160,43 @@ final class ExpressionBinaryParser {
         return new PrivateIdentifier(fieldName, location);
     }
 
-    Expression parseRelationalExpression() {
-        Expression left = parserContext.inOperatorAllowed && parserContext.match(TokenType.PRIVATE_NAME)
-                && parserContext.nextToken.type() == TokenType.IN
-                        ? parsePrivateBrandCheckName()
-                        : expressions.parseShiftExpression();
+    private record Infix(BinaryOperator operator, Precedence precedence) {
+        private static final Infix[] BY_TOKEN = new Infix[TokenType.values().length];
 
-        while (parserContext.match(TokenType.LT) || parserContext.match(TokenType.LE)
-                || parserContext.match(TokenType.GT) || parserContext.match(TokenType.GE)
-                || (parserContext.inOperatorAllowed && parserContext.match(TokenType.IN))
-                || parserContext.match(TokenType.INSTANCEOF)) {
-            BinaryOperator op = switch (parserContext.currentToken.type()) {
-                case LT -> BinaryOperator.LT;
-                case LE -> BinaryOperator.LE;
-                case GT -> BinaryOperator.GT;
-                case GE -> BinaryOperator.GE;
-                case IN -> BinaryOperator.IN;
-                case INSTANCEOF -> BinaryOperator.INSTANCEOF;
-                default -> null;
-            };
-            SourceLocation location = parserContext.getLocation();
-            parserContext.advance();
-            Expression right = expressions.parseShiftExpression();
-            left = new BinaryExpression(op, left, right, location);
+        static {
+            bind(TokenType.BIT_OR, BinaryOperator.BIT_OR, Precedence.BIT_OR);
+            bind(TokenType.BIT_XOR, BinaryOperator.BIT_XOR, Precedence.BIT_XOR);
+            bind(TokenType.BIT_AND, BinaryOperator.BIT_AND, Precedence.BIT_AND);
+            bind(TokenType.EQ, BinaryOperator.EQ, Precedence.EQUALITY);
+            bind(TokenType.NE, BinaryOperator.NE, Precedence.EQUALITY);
+            bind(TokenType.STRICT_EQ, BinaryOperator.STRICT_EQ, Precedence.EQUALITY);
+            bind(TokenType.STRICT_NE, BinaryOperator.STRICT_NE, Precedence.EQUALITY);
+            bind(TokenType.GE, BinaryOperator.GE, Precedence.RELATIONAL);
+            bind(TokenType.GT, BinaryOperator.GT, Precedence.RELATIONAL);
+            bind(TokenType.IN, BinaryOperator.IN, Precedence.RELATIONAL);
+            bind(TokenType.INSTANCEOF, BinaryOperator.INSTANCEOF, Precedence.RELATIONAL);
+            bind(TokenType.LE, BinaryOperator.LE, Precedence.RELATIONAL);
+            bind(TokenType.LT, BinaryOperator.LT, Precedence.RELATIONAL);
+            bind(TokenType.LSHIFT, BinaryOperator.LSHIFT, Precedence.SHIFT);
+            bind(TokenType.RSHIFT, BinaryOperator.RSHIFT, Precedence.SHIFT);
+            bind(TokenType.URSHIFT, BinaryOperator.URSHIFT, Precedence.SHIFT);
+            bind(TokenType.PLUS, BinaryOperator.ADD, Precedence.ADDITIVE);
+            bind(TokenType.MINUS, BinaryOperator.SUB, Precedence.ADDITIVE);
+            bind(TokenType.DIV, BinaryOperator.DIV, Precedence.MULTIPLICATIVE);
+            bind(TokenType.MOD, BinaryOperator.MOD, Precedence.MULTIPLICATIVE);
+            bind(TokenType.MUL, BinaryOperator.MUL, Precedence.MULTIPLICATIVE);
         }
 
-        return left;
+        private static void bind(TokenType token, BinaryOperator operator, Precedence precedence) {
+            BY_TOKEN[token.ordinal()] = new Infix(operator, precedence);
+        }
     }
 
-    Expression parseShiftExpression() {
-        Expression left = expressions.parseAdditiveExpression();
-
-        while (parserContext.match(TokenType.LSHIFT) || parserContext.match(TokenType.RSHIFT)
-                || parserContext.match(TokenType.URSHIFT)) {
-            BinaryOperator op = switch (parserContext.currentToken.type()) {
-                case LSHIFT -> BinaryOperator.LSHIFT;
-                case RSHIFT -> BinaryOperator.RSHIFT;
-                case URSHIFT -> BinaryOperator.URSHIFT;
-                default -> null;
-            };
-            SourceLocation location = parserContext.getLocation();
-            parserContext.advance();
-            Expression right = expressions.parseAdditiveExpression();
-            left = new BinaryExpression(op, left, right, location);
+    private enum Precedence {
+        ADDITIVE(7), BIT_AND(3), BIT_OR(1), BIT_XOR(2), EQUALITY(4), MULTIPLICATIVE(8), RELATIONAL(5), SHIFT(6);
+        final int level;
+        Precedence(int level) {
+            this.level = level;
         }
-
-        return left;
     }
 }

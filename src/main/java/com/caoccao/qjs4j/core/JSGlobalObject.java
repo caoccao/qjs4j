@@ -72,6 +72,12 @@ public final class JSGlobalObject {
         this.jsonObject = new JSONObject(context);
     }
 
+    private JSObject createTemporalPrototype(String tag) {
+        JSObject prototype = context.createJSObject();
+        defineToStringTag(prototype, tag);
+        return prototype;
+    }
+
     private void defineGetter(JSObject prototype, String name, JSNativeCallback getter) {
         JSNativeFunction getterFunc = new JSNativeFunction(context, "get " + name, 0, getter);
         prototype.defineProperty(PropertyKey.fromString(name), getterFunc,
@@ -1879,8 +1885,7 @@ public final class JSGlobalObject {
     }
 
     private void initializeTemporalDuration(JSObject temporalObject) {
-        JSObject prototype = context.createJSObject();
-        defineToStringTag(prototype, "Temporal.Duration");
+        JSObject prototype = createTemporalPrototype("Temporal.Duration");
 
         // Getters
         defineGetter(prototype, "years", TemporalDurationPrototype::years);
@@ -1915,15 +1920,11 @@ public final class JSGlobalObject {
         defineMethod(constructor, "from", 1, TemporalDurationConstructor::from);
         defineMethod(constructor, "compare", 2, TemporalDurationConstructor::compare);
 
-        // Link constructor <-> prototype
-        linkConstructor(constructor, prototype);
-
-        defineBuiltin(temporalObject, "Duration", constructor);
+        installTemporalConstructor(temporalObject, "Duration", constructor, prototype);
     }
 
     private void initializeTemporalInstant(JSObject temporalObject) {
-        JSObject prototype = context.createJSObject();
-        defineToStringTag(prototype, "Temporal.Instant");
+        JSObject prototype = createTemporalPrototype("Temporal.Instant");
 
         // Getters
         defineGetter(prototype, "epochMilliseconds", TemporalInstantPrototype::epochMilliseconds);
@@ -1950,10 +1951,7 @@ public final class JSGlobalObject {
         defineMethod(constructor, "fromEpochNanoseconds", 1, TemporalInstantConstructor::fromEpochNanoseconds);
         defineMethod(constructor, "compare", 2, TemporalInstantConstructor::compare);
 
-        // Link constructor <-> prototype
-        linkConstructor(constructor, prototype);
-
-        defineBuiltin(temporalObject, "Instant", constructor);
+        installTemporalConstructor(temporalObject, "Instant", constructor, prototype);
     }
 
     private void initializeTemporalNow(JSObject temporalObject) {
@@ -2006,8 +2004,7 @@ public final class JSGlobalObject {
     }
 
     private void initializeTemporalPlainDate(JSObject temporalObject) {
-        JSObject prototype = context.createJSObject();
-        defineToStringTag(prototype, "Temporal.PlainDate");
+        JSObject prototype = createTemporalPrototype("Temporal.PlainDate");
 
         // Getters (registered as zero-arg functions accessed as properties via get accessor)
         defineGetter(prototype, "calendarId", TemporalPlainDatePrototype::calendarId);
@@ -2050,15 +2047,11 @@ public final class JSGlobalObject {
         defineMethod(constructor, "compare", 2, TemporalPlainDateConstructor::compare);
         defineMethod(constructor, "from", 1, TemporalPlainDateConstructor::from);
 
-        // Link constructor <-> prototype
-        linkConstructor(constructor, prototype);
-
-        defineBuiltin(temporalObject, "PlainDate", constructor);
+        installTemporalConstructor(temporalObject, "PlainDate", constructor, prototype);
     }
 
     private void initializeTemporalPlainDateTime(JSObject temporalObject) {
-        JSObject prototype = context.createJSObject();
-        defineToStringTag(prototype, "Temporal.PlainDateTime");
+        JSObject prototype = createTemporalPrototype("Temporal.PlainDateTime");
 
         // Getters
         defineGetter(prototype, "calendarId", TemporalPlainDateTimePrototype::calendarId);
@@ -2108,15 +2101,11 @@ public final class JSGlobalObject {
         defineMethod(constructor, "from", 1, TemporalPlainDateTimeConstructor::from);
         defineMethod(constructor, "compare", 2, TemporalPlainDateTimeConstructor::compare);
 
-        // Link constructor <-> prototype
-        linkConstructor(constructor, prototype);
-
-        defineBuiltin(temporalObject, "PlainDateTime", constructor);
+        installTemporalConstructor(temporalObject, "PlainDateTime", constructor, prototype);
     }
 
     private void initializeTemporalPlainMonthDay(JSObject temporalObject) {
-        JSObject prototype = context.createJSObject();
-        defineToStringTag(prototype, "Temporal.PlainMonthDay");
+        JSObject prototype = createTemporalPrototype("Temporal.PlainMonthDay");
 
         // Getters
         defineGetter(prototype, "calendarId", TemporalPlainMonthDayPrototype::calendarId);
@@ -2138,15 +2127,11 @@ public final class JSGlobalObject {
                 TemporalPlainMonthDayConstructor::construct, true, false);
         defineMethod(constructor, "from", 1, TemporalPlainMonthDayConstructor::from);
 
-        // Link constructor <-> prototype
-        linkConstructor(constructor, prototype);
-
-        defineBuiltin(temporalObject, "PlainMonthDay", constructor);
+        installTemporalConstructor(temporalObject, "PlainMonthDay", constructor, prototype);
     }
 
     private void initializeTemporalPlainTime(JSObject temporalObject) {
-        JSObject prototype = context.createJSObject();
-        defineToStringTag(prototype, "Temporal.PlainTime");
+        JSObject prototype = createTemporalPrototype("Temporal.PlainTime");
 
         // Getters
         defineGetter(prototype, "hour", TemporalPlainTimePrototype::hour);
@@ -2175,15 +2160,11 @@ public final class JSGlobalObject {
         defineMethod(constructor, "compare", 2, TemporalPlainTimeConstructor::compare);
         defineMethod(constructor, "from", 1, TemporalPlainTimeConstructor::from);
 
-        // Link constructor <-> prototype
-        linkConstructor(constructor, prototype);
-
-        defineBuiltin(temporalObject, "PlainTime", constructor);
+        installTemporalConstructor(temporalObject, "PlainTime", constructor, prototype);
     }
 
     private void initializeTemporalPlainYearMonth(JSObject temporalObject) {
-        JSObject prototype = context.createJSObject();
-        defineToStringTag(prototype, "Temporal.PlainYearMonth");
+        JSObject prototype = createTemporalPrototype("Temporal.PlainYearMonth");
 
         // Getters
         defineGetter(prototype, "calendarId", TemporalPlainYearMonthPrototype::calendarId);
@@ -2217,15 +2198,11 @@ public final class JSGlobalObject {
         defineMethod(constructor, "compare", 2, TemporalPlainYearMonthConstructor::compare);
         defineMethod(constructor, "from", 1, TemporalPlainYearMonthConstructor::from);
 
-        // Link constructor <-> prototype
-        linkConstructor(constructor, prototype);
-
-        defineBuiltin(temporalObject, "PlainYearMonth", constructor);
+        installTemporalConstructor(temporalObject, "PlainYearMonth", constructor, prototype);
     }
 
     private void initializeTemporalZonedDateTime(JSObject temporalObject) {
-        JSObject prototype = context.createJSObject();
-        defineToStringTag(prototype, "Temporal.ZonedDateTime");
+        JSObject prototype = createTemporalPrototype("Temporal.ZonedDateTime");
 
         // Getters (28)
         defineGetter(prototype, "calendar", TemporalZonedDateTimePrototype::calendar);
@@ -2286,10 +2263,7 @@ public final class JSGlobalObject {
         defineMethod(constructor, "compare", 2, TemporalZonedDateTimeConstructor::compare);
         defineMethod(constructor, "from", 1, TemporalZonedDateTimeConstructor::from);
 
-        // Link constructor <-> prototype
-        linkConstructor(constructor, prototype);
-
-        defineBuiltin(temporalObject, "ZonedDateTime", constructor);
+        installTemporalConstructor(temporalObject, "ZonedDateTime", constructor, prototype);
     }
 
     /**
@@ -2474,6 +2448,12 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.Configurable);
     }
 
+    private static void installTemporalConstructor(JSObject temporalObject, String name, JSNativeFunction constructor,
+            JSObject prototype) {
+        linkConstructor(constructor, prototype);
+        defineBuiltin(temporalObject, name, constructor);
+    }
+
     private static void linkConstructor(JSObject constructor, JSObject prototype) {
         linkConstructor(constructor, prototype, null);
     }
@@ -2503,41 +2483,23 @@ public final class JSGlobalObject {
                 return null;
             }
             Expression functionLikeExpression = extractFunctionLikeExpression(source);
-            if (functionLikeExpression == null) {
+            if (!(functionLikeExpression instanceof FunctionNode function)) {
                 return null;
             }
-            Set<String> bodyVarNames = new HashSet<>();
-            Set<String> functionVarEnvironmentNames = new HashSet<>();
-            Set<String> constLexicalNames = new HashSet<>();
-            if (functionLikeExpression instanceof FunctionExpression functionExpression) {
-                for (Pattern parameter : functionExpression.getParams()) {
-                    functionVarEnvironmentNames.addAll(parameter.getBoundNames());
-                }
-                if (functionExpression.getRestParameter() != null) {
-                    functionVarEnvironmentNames
-                            .addAll(functionExpression.getRestParameter().getArgument().getBoundNames());
-                }
-                collectVarEnvironmentNamesFromStatements(functionExpression.getBody().getBody(), bodyVarNames);
-                collectConstLexicalNamesFromStatements(functionExpression.getBody().getBody(), constLexicalNames);
-                functionVarEnvironmentNames.addAll(bodyVarNames);
-                return new CallerVarEnvironmentAnalysis(bodyVarNames, functionVarEnvironmentNames, constLexicalNames);
+            Set<String> bodyVars = new HashSet<>();
+            Set<String> constants = new HashSet<>();
+            Set<String> names = function.getParameterNames();
+            if (function.getRestParameter() != null) {
+                names.addAll(function.getRestParameter().getArgument().getBoundNames());
             }
-            if (functionLikeExpression instanceof ArrowFunctionExpression arrowFunctionExpression) {
-                for (Pattern parameter : arrowFunctionExpression.getParams()) {
-                    functionVarEnvironmentNames.addAll(parameter.getBoundNames());
-                }
-                if (arrowFunctionExpression.getRestParameter() != null) {
-                    functionVarEnvironmentNames
-                            .addAll(arrowFunctionExpression.getRestParameter().getArgument().getBoundNames());
-                }
-                if (arrowFunctionExpression.getBody() instanceof BlockStatement blockStatement) {
-                    collectVarEnvironmentNamesFromStatements(blockStatement.getBody(), bodyVarNames);
-                    collectConstLexicalNamesFromStatements(blockStatement.getBody(), constLexicalNames);
-                }
-                functionVarEnvironmentNames.addAll(bodyVarNames);
-                return new CallerVarEnvironmentAnalysis(bodyVarNames, functionVarEnvironmentNames, constLexicalNames);
+            ASTNode body = function instanceof FunctionExpression ordinary
+                    ? ordinary.getBody()
+                    : ((ArrowFunctionExpression) function).getBody();
+            if (body instanceof BlockStatement block) {
+                collectCallerBindings(block, bodyVars, constants);
             }
-            return null;
+            names.addAll(bodyVars);
+            return new CallerVarEnvironmentAnalysis(bodyVars, names, constants);
         }
 
         private static void appendPercentHex(StringBuilder result, int c) {
@@ -2559,178 +2521,54 @@ public final class JSGlobalObject {
             return -1;
         }
 
-        private static void collectConstLexicalNamesFromStatement(Statement statement, Set<String> names) {
-            if (statement instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.getKind() == VariableKind.CONST) {
-                for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
-                    names.addAll(declaration.getId().getBoundNames());
-                }
-                return;
-            }
-            if (statement instanceof BlockStatement blockStatement) {
-                collectConstLexicalNamesFromStatements(blockStatement.getBody(), names);
-                return;
-            }
-            if (statement instanceof IfStatement ifStatement) {
-                collectConstLexicalNamesFromStatement(ifStatement.getConsequent(), names);
-                if (ifStatement.getAlternate() != null) {
-                    collectConstLexicalNamesFromStatement(ifStatement.getAlternate(), names);
-                }
-                return;
-            }
-            if (statement instanceof ForStatement forStatement) {
-                if (forStatement.getInit() instanceof VariableDeclaration variableDeclaration
-                        && variableDeclaration.getKind() == VariableKind.CONST) {
-                    for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
-                        names.addAll(declaration.getId().getBoundNames());
+        private static void collectCallerBindings(ASTNode node, Set<String> vars, Set<String> constants) {
+            if (node instanceof FunctionDeclaration function && function.getId() != null) {
+                vars.add(function.getId().getName());
+            } else if (node instanceof VariableDeclaration declaration) {
+                Set<String> target = switch (declaration.getKind()) {
+                    case VAR -> vars;
+                    case CONST -> constants;
+                    default -> null;
+                };
+                if (target != null) {
+                    for (VariableDeclarator binding : declaration.getDeclarations()) {
+                        target.addAll(binding.getId().getBoundNames());
                     }
                 }
-                collectConstLexicalNamesFromStatement(forStatement.getBody(), names);
-                return;
-            }
-            if (statement instanceof ForInStatement forInStatement) {
-                if (forInStatement.getLeft() instanceof VariableDeclaration variableDeclaration
-                        && variableDeclaration.getKind() == VariableKind.CONST) {
-                    for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
-                        names.addAll(declaration.getId().getBoundNames());
+            } else if (node instanceof BlockStatement block) {
+                collectCallerBindings(block.getBody(), vars, constants);
+            } else if (node instanceof IfStatement branch) {
+                collectCallerBindings(branch.getConsequent(), vars, constants);
+                collectCallerBindings(branch.getAlternate(), vars, constants);
+            } else if (node instanceof ForStatement loop) {
+                collectCallerBindings(loop.getInit(), vars, constants);
+                collectCallerBindings(loop.getBody(), vars, constants);
+            } else if (node instanceof ForEachStatement loop) {
+                collectCallerBindings(loop.getLeft(), vars, constants);
+                collectCallerBindings(loop.getBody(), vars, constants);
+            } else if (node instanceof WhileLoop loop) {
+                collectCallerBindings(loop.getBody(), vars, constants);
+            } else if (node instanceof SwitchStatement selection) {
+                for (SwitchStatement.SwitchCase clause : selection.getCases()) {
+                    collectCallerBindings(clause.getConsequent(), vars, constants);
+                }
+            } else if (node instanceof TryStatement attempt) {
+                collectCallerBindings(attempt.getBlock(), vars, constants);
+                if (attempt.getHandler() != null) {
+                    if (attempt.getHandler().getParam() != null) {
+                        vars.addAll(attempt.getHandler().getParam().getBoundNames());
                     }
+                    collectCallerBindings(attempt.getHandler().getBody(), vars, constants);
                 }
-                collectConstLexicalNamesFromStatement(forInStatement.getBody(), names);
-                return;
-            }
-            if (statement instanceof ForOfStatement forOfStatement) {
-                if (forOfStatement.getLeft() instanceof VariableDeclaration variableDeclaration
-                        && variableDeclaration.getKind() == VariableKind.CONST) {
-                    for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
-                        names.addAll(declaration.getId().getBoundNames());
-                    }
-                }
-                collectConstLexicalNamesFromStatement(forOfStatement.getBody(), names);
-                return;
-            }
-            if (statement instanceof WhileStatement whileStatement) {
-                collectConstLexicalNamesFromStatement(whileStatement.getBody(), names);
-                return;
-            }
-            if (statement instanceof DoWhileStatement doWhileStatement) {
-                collectConstLexicalNamesFromStatement(doWhileStatement.getBody(), names);
-                return;
-            }
-            if (statement instanceof SwitchStatement switchStatement) {
-                for (SwitchStatement.SwitchCase switchCase : switchStatement.getCases()) {
-                    collectConstLexicalNamesFromStatements(switchCase.getConsequent(), names);
-                }
-                return;
-            }
-            if (statement instanceof TryStatement tryStatement) {
-                collectConstLexicalNamesFromStatements(tryStatement.getBlock().getBody(), names);
-                if (tryStatement.getHandler() != null) {
-                    collectConstLexicalNamesFromStatements(tryStatement.getHandler().getBody().getBody(), names);
-                }
-                if (tryStatement.getFinalizer() != null) {
-                    collectConstLexicalNamesFromStatements(tryStatement.getFinalizer().getBody(), names);
-                }
-                return;
-            }
-            if (statement instanceof LabeledStatement labeledStatement) {
-                collectConstLexicalNamesFromStatement(labeledStatement.getBody(), names);
+                collectCallerBindings(attempt.getFinalizer(), vars, constants);
+            } else if (node instanceof LabeledStatement labeled) {
+                collectCallerBindings(labeled.getBody(), vars, constants);
             }
         }
 
-        private static void collectConstLexicalNamesFromStatements(List<Statement> statements, Set<String> names) {
+        private static void collectCallerBindings(List<Statement> statements, Set<String> vars, Set<String> constants) {
             for (Statement statement : statements) {
-                collectConstLexicalNamesFromStatement(statement, names);
-            }
-        }
-
-        private static void collectVarEnvironmentNamesFromStatement(Statement statement, Set<String> names) {
-            if (statement instanceof FunctionDeclaration functionDeclaration && functionDeclaration.getId() != null) {
-                names.add(functionDeclaration.getId().getName());
-                return;
-            }
-            if (statement instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.getKind() == VariableKind.VAR) {
-                for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
-                    names.addAll(declaration.getId().getBoundNames());
-                }
-                return;
-            }
-            if (statement instanceof BlockStatement blockStatement) {
-                collectVarEnvironmentNamesFromStatements(blockStatement.getBody(), names);
-                return;
-            }
-            if (statement instanceof IfStatement ifStatement) {
-                collectVarEnvironmentNamesFromStatement(ifStatement.getConsequent(), names);
-                if (ifStatement.getAlternate() != null) {
-                    collectVarEnvironmentNamesFromStatement(ifStatement.getAlternate(), names);
-                }
-                return;
-            }
-            if (statement instanceof ForStatement forStatement) {
-                if (forStatement.getInit() instanceof VariableDeclaration variableDeclaration
-                        && variableDeclaration.getKind() == VariableKind.VAR) {
-                    for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
-                        names.addAll(declaration.getId().getBoundNames());
-                    }
-                }
-                collectVarEnvironmentNamesFromStatement(forStatement.getBody(), names);
-                return;
-            }
-            if (statement instanceof ForInStatement forInStatement) {
-                if (forInStatement.getLeft() instanceof VariableDeclaration variableDeclaration
-                        && variableDeclaration.getKind() == VariableKind.VAR) {
-                    for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
-                        names.addAll(declaration.getId().getBoundNames());
-                    }
-                }
-                collectVarEnvironmentNamesFromStatement(forInStatement.getBody(), names);
-                return;
-            }
-            if (statement instanceof ForOfStatement forOfStatement) {
-                if (forOfStatement.getLeft() instanceof VariableDeclaration variableDeclaration
-                        && variableDeclaration.getKind() == VariableKind.VAR) {
-                    for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
-                        names.addAll(declaration.getId().getBoundNames());
-                    }
-                }
-                collectVarEnvironmentNamesFromStatement(forOfStatement.getBody(), names);
-                return;
-            }
-            if (statement instanceof WhileStatement whileStatement) {
-                collectVarEnvironmentNamesFromStatement(whileStatement.getBody(), names);
-                return;
-            }
-            if (statement instanceof DoWhileStatement doWhileStatement) {
-                collectVarEnvironmentNamesFromStatement(doWhileStatement.getBody(), names);
-                return;
-            }
-            if (statement instanceof SwitchStatement switchStatement) {
-                for (SwitchStatement.SwitchCase switchCase : switchStatement.getCases()) {
-                    collectVarEnvironmentNamesFromStatements(switchCase.getConsequent(), names);
-                }
-                return;
-            }
-            if (statement instanceof TryStatement tryStatement) {
-                collectVarEnvironmentNamesFromStatements(tryStatement.getBlock().getBody(), names);
-                if (tryStatement.getHandler() != null) {
-                    if (tryStatement.getHandler().getParam() != null) {
-                        names.addAll(tryStatement.getHandler().getParam().getBoundNames());
-                    }
-                    collectVarEnvironmentNamesFromStatements(tryStatement.getHandler().getBody().getBody(), names);
-                }
-                if (tryStatement.getFinalizer() != null) {
-                    collectVarEnvironmentNamesFromStatements(tryStatement.getFinalizer().getBody(), names);
-                }
-                return;
-            }
-            if (statement instanceof LabeledStatement labeledStatement) {
-                collectVarEnvironmentNamesFromStatement(labeledStatement.getBody(), names);
-            }
-        }
-
-        private static void collectVarEnvironmentNamesFromStatements(List<Statement> statements, Set<String> names) {
-            for (Statement statement : statements) {
-                collectVarEnvironmentNamesFromStatement(statement, names);
+                collectCallerBindings(statement, vars, constants);
             }
         }
 

@@ -120,27 +120,19 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue day(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = RECEIVER.require(context, thisArg, "day");
-        if (plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        IsoDate calendarDate = plainDate.toIsoCalendarDate().toIsoDate();
-        return JSNumber.of(calendarDate.day());
+        return TemporalDateProperty.DAY.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue dayOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "dayOfWeek",
-                plainDate -> JSNumber.of(plainDate.getIsoDate().dayOfWeek()));
+        return TemporalDateProperty.DAY_OF_WEEK.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue dayOfYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "dayOfYear",
-                plainDate -> JSNumber.of(plainDate.getIsoDate().dayOfYear(plainDate.getCalendarId())));
+        return TemporalDateProperty.DAY_OF_YEAR.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue daysInMonth(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "daysInMonth",
-                plainDate -> JSNumber.of(plainDate.getIsoDate().daysInMonth(plainDate.getCalendarId())));
+        return TemporalDateProperty.DAYS_IN_MONTH.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue daysInWeek(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -148,8 +140,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue daysInYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "daysInYear",
-                plainDate -> JSNumber.of(plainDate.getIsoDate().daysInYear(plainDate.getCalendarId())));
+        return TemporalDateProperty.DAYS_IN_YEAR.read(context, thisArg, RECEIVER);
     }
 
     private static JSValue difference(JSContext context, JSValue thisArg, JSValue[] args, boolean since) {
@@ -231,60 +222,27 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue era(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = RECEIVER.require(context, thisArg, "era");
-        if (plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        TemporalEraYear temporalEraYear = plainDate.toTemporalEraYear();
-        if (temporalEraYear == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(temporalEraYear.era().identifier());
+        return TemporalDateProperty.ERA.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue eraYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = RECEIVER.require(context, thisArg, "eraYear");
-        if (plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        TemporalEraYear temporalEraYear = plainDate.toTemporalEraYear();
-        if (temporalEraYear == null || temporalEraYear.eraYear() == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSNumber.of(temporalEraYear.eraYear());
+        return TemporalDateProperty.ERA_YEAR.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue inLeapYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = RECEIVER.require(context, thisArg, "inLeapYear");
-        if (plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        IsoCalendarDate calendarDateFields = plainDate.getIsoDate().toIsoCalendarDate(plainDate.getCalendarId());
-        boolean leapYear = plainDate.getCalendarId().isCalendarLeapYear(calendarDateFields.year());
-        if (leapYear) {
-            return JSBoolean.TRUE;
-        } else {
-            return JSBoolean.FALSE;
-        }
+        return TemporalDateProperty.IN_LEAP_YEAR.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue month(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = RECEIVER.require(context, thisArg, "month");
-        if (plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        IsoDate calendarDate = plainDate.toIsoCalendarDate().toIsoDate();
-        return JSNumber.of(calendarDate.month());
+        return TemporalDateProperty.MONTH.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue monthCode(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "monthCode",
-                plainDate -> new JSString(plainDate.toIsoCalendarDate().monthCode()));
+        return TemporalDateProperty.MONTH_CODE.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue monthsInYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "monthsInYear", plainDate -> JSNumber
-                .of(TemporalUtils.monthsInYear(plainDate.getIsoDate(), plainDate.getCalendarId())));
+        return TemporalDateProperty.MONTHS_IN_YEAR.read(context, thisArg, RECEIVER);
     }
 
     private static TemporalDurationDateWeek nudgeToCalendarUnit(JSContext context, int sign,
@@ -584,14 +542,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue weekOfYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = RECEIVER.require(context, thisArg, "weekOfYear");
-        if (plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        if (plainDate.getCalendarId() != TemporalCalendarId.ISO8601) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSNumber.of(plainDate.getIsoDate().weekOfYear());
+        return TemporalDateProperty.WEEK_OF_YEAR.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -634,22 +585,10 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue year(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = RECEIVER.require(context, thisArg, "year");
-        if (plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        IsoDate calendarDate = plainDate.toIsoCalendarDate().toIsoDate();
-        return JSNumber.of(calendarDate.year());
+        return TemporalDateProperty.YEAR.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue yearOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = RECEIVER.require(context, thisArg, "yearOfWeek");
-        if (plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        if (plainDate.getCalendarId() != TemporalCalendarId.ISO8601) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSNumber.of(plainDate.getIsoDate().yearOfWeek());
+        return TemporalDateProperty.YEAR_OF_WEEK.read(context, thisArg, RECEIVER);
     }
 }

@@ -193,9 +193,10 @@ public final class TemporalZonedDateTimeConstructor {
             }
         }
 
-        boolean hasExplicitOffset = TemporalTimeZone.hasOffsetDesignator(input, findDateTimeSeparatorIndex(input));
-        boolean hasZuluOffset = hasZuluDesignator(input);
-        boolean hasTimeComponent = findDateTimeSeparatorIndex(input) >= 0;
+        int timeSeparatorIndex = findDateTimeSeparatorIndex(input);
+        boolean hasExplicitOffset = TemporalTimeZone.hasOffsetDesignator(input, timeSeparatorIndex);
+        boolean hasZuluOffset = hasZuluDesignator(input, timeSeparatorIndex);
+        boolean hasTimeComponent = timeSeparatorIndex >= 0;
         if (!hasTimeComponent && !hasExplicitOffset) {
             BigInteger epochNanoseconds;
             try {
@@ -212,7 +213,7 @@ public final class TemporalZonedDateTimeConstructor {
         }
         boolean offsetIncludesSecondsOrFraction = false;
         if (hasExplicitOffset && !hasZuluOffset) {
-            String offsetText = TemporalTimeZone.extractOffsetText(input, findDateTimeSeparatorIndex(input));
+            String offsetText = TemporalTimeZone.extractOffsetText(input, timeSeparatorIndex);
             if (offsetText != null) {
                 offsetIncludesSecondsOrFraction = offsetTextIncludesSecondsOrFraction(offsetText);
             }
@@ -313,8 +314,7 @@ public final class TemporalZonedDateTimeConstructor {
         return JSUndefined.INSTANCE;
     }
 
-    private static boolean hasZuluDesignator(String text) {
-        int timeSeparatorIndex = findDateTimeSeparatorIndex(text);
+    private static boolean hasZuluDesignator(String text, int timeSeparatorIndex) {
         if (timeSeparatorIndex < 0) {
             return false;
         }

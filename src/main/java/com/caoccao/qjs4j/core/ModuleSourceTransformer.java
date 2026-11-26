@@ -129,6 +129,32 @@ final class ModuleSourceTransformer {
         this.context = context;
     }
 
+    private void appendDefaultDeclaration(ExportDeclaration declaration, String name, boolean anonymous,
+            boolean isClass, String specifier, StringBuilder output, StringBuilder nameFixups) {
+        if (!anonymous && !isClass) {
+            output.append(declaration.source()).append('\n');
+            return;
+        }
+        String part = declaration.declaration();
+        if (isClass) {
+            String binding = name;
+            if (anonymous) {
+                // Set the name before static field initializers run.
+                part = nameAnonymousDefaultClass(part, name);
+            } else {
+                binding = requireGeneratedIdentifier(name, "default export declaration name '" + name + "'", specifier);
+            }
+            output.append("let ").append(binding).append(" = ").append(part).append(";\n");
+            if (anonymous) {
+                appendDynamicImportDefaultExportNameFixup(output, name, specifier);
+            }
+        } else {
+            output.append(renameAnonymousDefaultExportDeclaration(part, name)).append('\n');
+            appendDynamicImportDefaultExportNameFixup(nameFixups, name, specifier);
+        }
+        declaration.appendTrailingCode(output);
+    }
+
     void appendDynamicImportDefaultExportNameFixup(StringBuilder transformedSourceBuilder, String rawLocalName,
             String moduleSpecifier) {
         String localName = requireGeneratedIdentifier(rawLocalName, "default export binding '" + rawLocalName + "'",
@@ -1174,6 +1200,20 @@ final class ModuleSourceTransformer {
         return new SourceLocation(token.line(), token.column(), token.offset(), endOffset);
     }
 
+    private String nameAnonymousDefaultClass(String declarationPart, String defaultLocalName) {
+        int openBrace = findLikelyClassBodyOpenBrace(declarationPart);
+        if (openBrace >= 0) {
+            // ES2024 15.2.3.11: Only set name to "default" if the class
+            // doesn't already have a "name" own property (e.g. static name method).
+            declarationPart = declarationPart.substring(0, openBrace + 1)
+                    + " static { if (!Object.prototype.hasOwnProperty.call(this, 'name')" + " || this.name === ''"
+                    + " || this.name === '" + defaultLocalName + "') { "
+                    + "Object.defineProperty(this, 'name', {value: 'default', configurable: true}); } }"
+                    + declarationPart.substring(openBrace + 1);
+        }
+        return declarationPart;
+    }
+
     /**
      * Rewrite module source so that every top-level {@code import} and {@code export} declaration occupies whole lines.
      * <p>
@@ -1320,13 +1360,11 @@ final class ModuleSourceTransformer {
         int defaultExportIndex = 0;
         StringBuilder defaultExportNameFixups = new StringBuilder();
 
-        String[] lines = sourceCode.split("\n", -1);
-        String[] scanLines = scanSourceCode.split("\n", -1);
+        String[] lines = moduleLines(sourceCode);
+        String[] scanLines = moduleLines(scanSourceCode);
         for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-            String line = lines[lineIndex];
-            String normalizedLine = line.endsWith("\r") ? line.substring(0, line.length() - 1) : line;
-            String scanLine = lineIndex < scanLines.length ? scanLines[lineIndex] : "";
-            String parseLine = scanLine.endsWith("\r") ? scanLine.substring(0, scanLine.length() - 1) : scanLine;
+            String normalizedLine = lines[lineIndex];
+            String parseLine = scanLines[lineIndex];
             String trimmedLine = parseLine.stripLeading();
             // Extract import lines to be placed before the IIFE wrapper
             boolean isDeclarationLine = moduleDeclarationLines == null || moduleDeclarationLines.contains(lineIndex);
@@ -1336,14 +1374,8 @@ final class ModuleSourceTransformer {
                 while (!isCompleteStaticImportStatement(importStatementScanBuilder.toString())
                         && lineIndex + 1 < lines.length) {
                     lineIndex++;
-                    String nextLine = lines[lineIndex];
-                    String normalizedNextLine = nextLine.endsWith("\r")
-                            ? nextLine.substring(0, nextLine.length() - 1)
-                            : nextLine;
-                    String nextScanLine = lineIndex < scanLines.length ? scanLines[lineIndex] : "";
-                    String normalizedNextScanLine = nextScanLine.endsWith("\r")
-                            ? nextScanLine.substring(0, nextScanLine.length() - 1)
-                            : nextScanLine;
+                    String normalizedNextLine = lines[lineIndex];
+                    String normalizedNextScanLine = scanLines[lineIndex];
                     importStatementBuilder.append('\n').append(normalizedNextLine);
                     importStatementScanBuilder.append('\n').append(normalizedNextScanLine);
                 }
@@ -1360,28 +1392,16 @@ final class ModuleSourceTransformer {
             }
 
             hasExportSyntax = true;
-            String exportClause;
-            if (trimmedLine.startsWith("export ")) {
-                exportClause = trimmedLine.substring("export ".length()).trim();
-            } else if (trimmedLine.equals("export")
-                    || trimmedLine.startsWith("export") && trimmedLine.substring("export".length()).isBlank()) {
-                exportClause = "";
-            } else {
-                // export{ or export* — no space after 'export'
-                exportClause = trimmedLine.substring("export".length()).trim();
-            }
+            String exportClause = trimmedLine.substring("export".length()).trim();
             // If the export clause is empty (bare 'export', 'export' with trailing comments/whitespace),
             // look ahead to subsequent lines for the continuation.
             if (exportClause.isEmpty()) {
                 StringBuilder exportContinuation = new StringBuilder();
                 while (lineIndex + 1 < lines.length) {
                     lineIndex++;
-                    String nextScanLine = lineIndex < scanLines.length ? scanLines[lineIndex] : "";
-                    String normalizedNextScanLine = nextScanLine.endsWith("\r")
-                            ? nextScanLine.substring(0, nextScanLine.length() - 1)
-                            : nextScanLine;
+                    String normalizedNextScanLine = scanLines[lineIndex];
                     exportContinuation.append(normalizedNextScanLine.stripLeading());
-                    if (exportContinuation.toString().contains("}") || exportContinuation.toString().contains("*")) {
+                    if (exportContinuation.indexOf("}") >= 0 || exportContinuation.indexOf("*") >= 0) {
                         break;
                     }
                 }
@@ -1392,96 +1412,14 @@ final class ModuleSourceTransformer {
                 if (isDynamicImportDefaultDeclarationClause(defaultClause)) {
                     String declarationName = extractExportedFunctionOrClassName(defaultClause);
                     String declarationLine = normalizedLine.replaceFirst("^(\\s*)export\\s+default\\s+", "$1");
-                    // For multi-line declarations (class/function body spans multiple lines),
-                    // accumulate subsequent lines until the body is complete.
-                    while (findEndOfDeclarationBody(declarationLine) < 0 && lineIndex + 1 < lines.length) {
-                        lineIndex++;
-                        String nextLine = lines[lineIndex];
-                        String normalizedNext = nextLine.endsWith("\r")
-                                ? nextLine.substring(0, nextLine.length() - 1)
-                                : nextLine;
-                        declarationLine = declarationLine + "\n" + normalizedNext;
+                    ExportDeclaration declaration = readExportDeclaration(declarationLine, lines, lineIndex);
+                    lineIndex = declaration.lastLine();
+                    boolean anonymous = declarationName == null || declarationName.isEmpty();
+                    if (anonymous) {
+                        declarationName = generatedNamePrefix + "DefaultExport$" + defaultExportIndex++;
                     }
-                    boolean anonymousDefaultDeclaration = false;
-                    if (declarationName == null || declarationName.isEmpty()) {
-                        String defaultLocalName = generatedNamePrefix + "DefaultExport$" + defaultExportIndex++;
-                        declarationName = defaultLocalName;
-                        // Use var assignment instead of renaming the declaration.
-                        // var hoists to the IIFE function scope, so the getter in the
-                        // export preamble can reference it before this line executes.
-                        // Split the declaration from any trailing statements on the same line
-                        // (e.g., `export default class {} if (...) { ... }`).
-                        int bodyEnd = findEndOfDeclarationBody(declarationLine);
-                        String declarationPart;
-                        String remainingCode;
-                        if (bodyEnd >= 0 && bodyEnd < declarationLine.length()) {
-                            declarationPart = declarationLine.substring(0, bodyEnd);
-                            remainingCode = declarationLine.substring(bodyEnd).trim();
-                        } else {
-                            declarationPart = declarationLine;
-                            remainingCode = "";
-                        }
-                        // For anonymous default class exports, insert a static block
-                        // at the start of the class body to set .name = "default" before
-                        // any static field initializers run. ES2024 specifies that
-                        // default-exported anonymous classes get the name "default" during
-                        // ClassDefinitionEvaluation, before static elements are evaluated.
-                        if (defaultClause.startsWith("class")) {
-                            int openBrace = findLikelyClassBodyOpenBrace(declarationPart);
-                            if (openBrace >= 0) {
-                                // ES2024 15.2.3.11: Only set name to "default" if the class
-                                // doesn't already have a "name" own property (e.g. static name method).
-                                declarationPart = declarationPart.substring(0, openBrace + 1)
-                                        + " static { if (!Object.prototype.hasOwnProperty.call(this, 'name')"
-                                        + " || this.name === ''" + " || this.name === '" + defaultLocalName + "') { "
-                                        + "Object.defineProperty(this, 'name', {value: 'default', configurable: true}); } }"
-                                        + declarationPart.substring(openBrace + 1);
-                            }
-                        }
-                        if (defaultClause.startsWith("class")) {
-                            transformedSourceBuilder.append("let ").append(defaultLocalName).append(" = ")
-                                    .append(declarationPart).append(";\n");
-                            appendDynamicImportDefaultExportNameFixup(transformedSourceBuilder, declarationName,
-                                    moduleRecord.resolvedSpecifier());
-                        } else {
-                            String renamedDeclaration = renameAnonymousDefaultExportDeclaration(declarationPart,
-                                    defaultLocalName);
-                            transformedSourceBuilder.append(renamedDeclaration).append('\n');
-                            appendDynamicImportDefaultExportNameFixup(defaultExportNameFixups, declarationName,
-                                    moduleRecord.resolvedSpecifier());
-                        }
-                        if (!remainingCode.isEmpty()) {
-                            transformedSourceBuilder.append(remainingCode).append('\n');
-                        }
-                        anonymousDefaultDeclaration = true;
-                    }
-                    if (!anonymousDefaultDeclaration) {
-                        // Named default exports (e.g., export default class Foo { ... })
-                        // need var hoisting so the export preamble getter can reference
-                        // the name before the declaration executes during self-import.
-                        if (defaultClause.startsWith("class")) {
-                            int bodyEnd = findEndOfDeclarationBody(declarationLine);
-                            String declarationPart;
-                            String remainingCode;
-                            if (bodyEnd >= 0 && bodyEnd < declarationLine.length()) {
-                                declarationPart = declarationLine.substring(0, bodyEnd);
-                                remainingCode = declarationLine.substring(bodyEnd).trim();
-                            } else {
-                                declarationPart = declarationLine;
-                                remainingCode = "";
-                            }
-                            transformedSourceBuilder.append("let ")
-                                    .append(requireGeneratedIdentifier(declarationName,
-                                            "default export declaration name '" + declarationName + "'",
-                                            moduleRecord.resolvedSpecifier()))
-                                    .append(" = ").append(declarationPart).append(";\n");
-                            if (!remainingCode.isEmpty()) {
-                                transformedSourceBuilder.append(remainingCode).append('\n');
-                            }
-                        } else {
-                            transformedSourceBuilder.append(declarationLine).append('\n');
-                        }
-                    }
+                    appendDefaultDeclaration(declaration, declarationName, anonymous, defaultClause.startsWith("class"),
+                            moduleRecord.resolvedSpecifier(), transformedSourceBuilder, defaultExportNameFixups);
                     localExportBindings.add(new JSDynamicImportModule.LocalExportBinding(declarationName, "default"));
                 } else {
                     // An expression may run past the end of its line, and where it ends is a
@@ -1500,15 +1438,10 @@ final class ModuleSourceTransformer {
                         while (!isBalancedExpressionText(defaultExpression) && lineIndex + 1 < lines.length) {
                             lineIndex++;
                             String continuationLine = lines[lineIndex];
-                            if (continuationLine.endsWith("\r")) {
-                                continuationLine = continuationLine.substring(0, continuationLine.length() - 1);
-                            }
                             defaultExpression = defaultExpression + "\n" + continuationLine;
                         }
                         defaultExpression = defaultExpression.trim();
-                        while (defaultExpression.endsWith(";")) {
-                            defaultExpression = defaultExpression.substring(0, defaultExpression.length() - 1).trim();
-                        }
+                        defaultExpression = stripTrailingSemicolons(defaultExpression);
                     }
                     String defaultLocalName = generatedNamePrefix + "DefaultExport$" + defaultExportIndex++;
                     transformedSourceBuilder.append("let ").append(defaultLocalName).append(" = (0, ")
@@ -1537,25 +1470,11 @@ final class ModuleSourceTransformer {
                     || exportClause.startsWith("async function ") || exportClause.startsWith("async function*")
                     || exportClause.startsWith("class ")) {
                 String declarationLine = normalizedLine.replaceFirst("^(\\s*)export\\s+", "$1");
-                while (findEndOfDeclarationBody(declarationLine) < 0 && lineIndex + 1 < lines.length) {
-                    lineIndex++;
-                    String nextLine = lines[lineIndex];
-                    String normalizedNextLine = nextLine.endsWith("\r")
-                            ? nextLine.substring(0, nextLine.length() - 1)
-                            : nextLine;
-                    declarationLine = declarationLine + "\n" + normalizedNextLine;
-                }
-                int declarationBodyEnd = findEndOfDeclarationBody(declarationLine);
-                String declarationPart = declarationLine;
-                String remainingCode = "";
-                if (declarationBodyEnd >= 0 && declarationBodyEnd < declarationLine.length()) {
-                    declarationPart = declarationLine.substring(0, declarationBodyEnd);
-                    remainingCode = declarationLine.substring(declarationBodyEnd).trim();
-                }
+                ExportDeclaration declaration = readExportDeclaration(declarationLine, lines, lineIndex);
+                lineIndex = declaration.lastLine();
+                String declarationPart = declaration.declaration();
                 transformedSourceBuilder.append(declarationPart).append('\n');
-                if (!remainingCode.isEmpty()) {
-                    transformedSourceBuilder.append(remainingCode).append('\n');
-                }
+                declaration.appendTrailingCode(transformedSourceBuilder);
                 String declarationName = extractExportedFunctionOrClassName(exportClause);
                 if (declarationName == null || declarationName.isEmpty()) {
                     throw new JSException(context.throwSyntaxError("Invalid export statement"));
@@ -1573,10 +1492,7 @@ final class ModuleSourceTransformer {
                 String exportSpecifiersText = exportClause;
                 while (findMatchingCloseBrace(exportSpecifiersText, 0) < 0 && lineIndex + 1 < lines.length) {
                     lineIndex++;
-                    String nextScanLine = lineIndex < scanLines.length ? scanLines[lineIndex] : "";
-                    String normalizedNextScanLine = nextScanLine.endsWith("\r")
-                            ? nextScanLine.substring(0, nextScanLine.length() - 1)
-                            : nextScanLine;
+                    String normalizedNextScanLine = scanLines[lineIndex];
                     exportSpecifiersText = exportSpecifiersText + "\n" + normalizedNextScanLine.stripLeading();
                 }
 
@@ -1586,9 +1502,7 @@ final class ModuleSourceTransformer {
                 }
                 String exportListText = exportSpecifiersText.substring(1, closeBraceIndex).trim();
                 String afterBraceText = exportSpecifiersText.substring(closeBraceIndex + 1).trim();
-                while (afterBraceText.endsWith(";")) {
-                    afterBraceText = afterBraceText.substring(0, afterBraceText.length() - 1).trim();
-                }
+                afterBraceText = stripTrailingSemicolons(afterBraceText);
                 String sourceSpecifier = null;
                 if (!afterBraceText.isEmpty()) {
                     if (!afterBraceText.startsWith("from ")) {
@@ -1649,9 +1563,7 @@ final class ModuleSourceTransformer {
                         throw new JSException(context.throwSyntaxError("Invalid export statement"));
                     }
                     String fromText = remainingAfterName.substring(5).trim();
-                    while (fromText.endsWith(";")) {
-                        fromText = fromText.substring(0, fromText.length() - 1).trim();
-                    }
+                    fromText = stripTrailingSemicolons(fromText);
                     String sourceSpecifier = stripQuotedSpecifier(fromText);
                     reExportBindings.add(new JSDynamicImportModule.ReExportBinding(sourceSpecifier,
                             MODULE_NAMESPACE_EXPORT_NAME, exportedName, false));
@@ -1661,9 +1573,7 @@ final class ModuleSourceTransformer {
                 }
                 if (afterStarText.startsWith("from ")) {
                     String fromText = afterStarText.substring("from ".length()).trim();
-                    while (fromText.endsWith(";")) {
-                        fromText = fromText.substring(0, fromText.length() - 1).trim();
-                    }
+                    fromText = stripTrailingSemicolons(fromText);
                     String sourceSpecifier = stripQuotedSpecifier(fromText);
                     reExportBindings.add(new JSDynamicImportModule.ReExportBinding(sourceSpecifier, "*", "*", true));
                     // Add side-effect import for source-order evaluation
@@ -1737,6 +1647,16 @@ final class ModuleSourceTransformer {
             return decodeModuleStringLiteralValue(trimmed.substring(1, trimmed.length() - 1));
         }
         return decodeIdentifierEscapes(trimmed);
+    }
+
+    private ExportDeclaration readExportDeclaration(String firstLine, String[] lines, int index) {
+        String source = firstLine;
+        int end = findEndOfDeclarationBody(source);
+        while (end < 0 && index + 1 < lines.length) {
+            source += "\n" + lines[++index];
+            end = findEndOfDeclarationBody(source);
+        }
+        return new ExportDeclaration(source, end, index);
     }
 
     void registerImportedBinding(String localName, String sourceSpecifier, String importedName, boolean deferredImport,
@@ -2151,6 +2071,17 @@ final class ModuleSourceTransformer {
         return true;
     }
 
+    private static String[] moduleLines(String source) {
+        String[] lines = source.split("\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            if (line.endsWith("\r")) {
+                lines[i] = line.substring(0, line.length() - 1);
+            }
+        }
+        return lines;
+    }
+
     static int parseHex(String text) {
         if (text == null || text.isEmpty()) {
             return -1;
@@ -2204,6 +2135,14 @@ final class ModuleSourceTransformer {
         return end;
     }
 
+    private static String stripTrailingSemicolons(String text) {
+        text = text.trim();
+        while (text.endsWith(";")) {
+            text = text.substring(0, text.length() - 1).trim();
+        }
+        return text;
+    }
+
     /**
      * Tokenise module source into a list.
      *
@@ -2234,6 +2173,20 @@ final class ModuleSourceTransformer {
      *            the code that followed it on that line, without the terminating semicolon; empty when nothing did
      */
     record DefaultExportExtent(String expression, int endLineIndex, String trailingText) {
+    }
+
+    private record ExportDeclaration(String source, int end, int lastLine) {
+        String declaration() {
+            return end < 0 ? source : source.substring(0, end);
+        }
+        void appendTrailingCode(StringBuilder output) {
+            if (end >= 0 && end < source.length()) {
+                String trailing = source.substring(end).trim();
+                if (!trailing.isEmpty()) {
+                    output.append(trailing).append('\n');
+                }
+            }
+        }
     }
 
     record ImportBinding(String sourceSpecifier, String importedName, boolean deferredImport) {

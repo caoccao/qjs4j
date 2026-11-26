@@ -35,22 +35,14 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
     private static final BigInteger NS_MIN_INSTANT = new BigInteger("-8640000000000000000000");
 
     public static IsoDateTime createByEpochNs(BigInteger epochNanoseconds) {
-        BigInteger[] secondAndNanosecond = epochNanoseconds.divideAndRemainder(TemporalConstants.BI_BILLION);
-        long epochSeconds = secondAndNanosecond[0].longValueExact();
-        int nanosecondAdjustment = secondAndNanosecond[1].intValue();
-        if (nanosecondAdjustment < 0) {
-            epochSeconds--;
-            nanosecondAdjustment += 1_000_000_000;
-        }
-        Instant instant = Instant.ofEpochSecond(epochSeconds, nanosecondAdjustment);
+        Instant instant = TemporalTimeZone.toJavaInstant(epochNanoseconds);
         LocalDateTime localDateTime = LocalDateTime.ofInstant(instant, ZoneOffset.UTC);
         return createFromLocalDateTime(localDateTime);
     }
 
     public static IsoDateTime createFromEpochNsAndTimeZoneId(BigInteger epochNanoseconds, String timeZoneId) {
-        int offsetSeconds = TemporalTimeZone.getOffsetSecondsFor(epochNanoseconds, timeZoneId);
-        BigInteger offsetNanoseconds = BigInteger.valueOf(offsetSeconds).multiply(TemporalConstants.BI_BILLION);
-        return createByEpochNs(epochNanoseconds.add(offsetNanoseconds));
+        return createFromEpochNsAndOffset(epochNanoseconds,
+                TemporalTimeZone.getOffsetSecondsFor(epochNanoseconds, timeZoneId));
     }
 
     public static IsoDateTime createFromLocalDateTime(LocalDateTime localDateTime) {
@@ -294,5 +286,13 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
             context.throwRangeError("Temporal error: Duration field out of range.");
             return null;
         }
+    }
+
+    public static IsoDateTime createFromEpochNsAndOffset(BigInteger epochNanoseconds, int offsetSeconds) {
+        if (offsetSeconds == 0) {
+            return createByEpochNs(epochNanoseconds);
+        }
+        BigInteger offsetNanoseconds = BigInteger.valueOf(offsetSeconds).multiply(TemporalConstants.BI_BILLION);
+        return createByEpochNs(epochNanoseconds.add(offsetNanoseconds));
     }
 }

@@ -40,6 +40,13 @@ public final class JSIteratorHelper {
         }
     }
 
+    public static JSObject createResult(JSContext context, JSValue value, boolean done) {
+        JSObject result = context.createJSObject();
+        result.set(PropertyKey.VALUE, value);
+        result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+        return result;
+    }
+
     /**
      * Execute a for...of loop over an iterable. This is a helper for bytecode that implements for...of loops.
      *

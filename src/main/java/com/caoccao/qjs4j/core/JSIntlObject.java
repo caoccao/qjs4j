@@ -651,6 +651,13 @@ public final class JSIntlObject {
         return locale;
     }
 
+    private static void appendMatchingExtension(StringBuilder tag, int baseLength, String key, String resolved,
+            String requested) {
+        if (resolved != null && resolved.equals(requested)) {
+            tag.append(tag.length() == baseLength ? "-u-" : "-").append(key).append('-').append(resolved);
+        }
+    }
+
     private static void appendRangePartsWithSource(JSContext context, JSArray target, JSArray sourceParts,
             String sourceName) {
         int length = (int) sourceParts.getLength();
@@ -858,78 +865,19 @@ public final class JSIntlObject {
      * Build resolved locale tag according to ECMA-402 ResolveLocale rules. Unicode extension keys are included only if:
      * - The extension value matched the resolved value AND - No option explicitly overrode it
      */
-    private static Locale buildResolvedLocale(Locale locale, Map<String, String> unicodeExtensions,
-            String calendarFromOption, String resolvedCalendar, String hourCycleFromOption, String resolvedHourCycle,
-            Boolean hour12, String numberingSystemFromOption, String resolvedNumberingSystem) {
-        // Start from base locale without unicode extensions
-        Locale baseLocale = stripUnicodeExtensions(locale);
-        String baseTag = baseLocale.toLanguageTag();
-
-        StringBuilder extensionBuilder = new StringBuilder();
-
-        // Calendar extension: include if extension value == resolved AND no option override
-        String extensionCalendar = unicodeExtensions.get("ca");
-        if (extensionCalendar != null && calendarFromOption == null) {
-            String canonicalizedExtCal = canonicalizeCalendar(extensionCalendar);
-            if (canonicalizedExtCal != null && canonicalizedExtCal.equals(resolvedCalendar)) {
-                if (extensionBuilder.length() > 0) {
-                    extensionBuilder.append("-");
-                }
-                extensionBuilder.append("ca-").append(resolvedCalendar);
-            }
-        } else if (extensionCalendar != null && calendarFromOption != null) {
-            // Option overrides extension: include only if they match
-            String canonicalizedExtCal = canonicalizeCalendar(extensionCalendar);
-            if (canonicalizedExtCal != null && canonicalizedExtCal.equals(resolvedCalendar)) {
-                if (extensionBuilder.length() > 0) {
-                    extensionBuilder.append("-");
-                }
-                extensionBuilder.append("ca-").append(resolvedCalendar);
-            }
+    private static Locale buildResolvedLocale(Locale locale, Map<String, String> unicodeExtensions, String calendar,
+            String hourCycle, Boolean hour12, String numberingSystem) {
+        Locale base = stripUnicodeExtensions(locale);
+        StringBuilder tag = new StringBuilder(base.toLanguageTag());
+        int baseLength = tag.length();
+        appendMatchingExtension(tag, baseLength, "ca", calendar, canonicalizeCalendar(unicodeExtensions.get("ca")));
+        if (hour12 == null) {
+            appendMatchingExtension(tag, baseLength, "hc", hourCycle, unicodeExtensions.get("hc"));
         }
-
-        // Hour cycle extension: include if extension value == resolved AND no option/hour12 override
-        String extensionHourCycle = unicodeExtensions.get("hc");
-        if (extensionHourCycle != null && hourCycleFromOption == null && hour12 == null) {
-            if (extensionHourCycle.equals(resolvedHourCycle)) {
-                if (extensionBuilder.length() > 0) {
-                    extensionBuilder.append("-");
-                }
-                extensionBuilder.append("hc-").append(resolvedHourCycle);
-            }
-        } else if (extensionHourCycle != null && hourCycleFromOption != null && hour12 == null) {
-            // hourCycle option overrides: include only if they match
-            if (extensionHourCycle.equals(resolvedHourCycle)) {
-                if (extensionBuilder.length() > 0) {
-                    extensionBuilder.append("-");
-                }
-                extensionBuilder.append("hc-").append(resolvedHourCycle);
-            }
-        }
-        // If hour12 was set, don't include hc extension (hour12 clears hc)
-
-        // Numbering system extension: include if extension value == resolved AND no option override
-        String extensionNu = unicodeExtensions.get("nu");
-        if (extensionNu != null && numberingSystemFromOption == null) {
-            if (extensionNu.toLowerCase(Locale.ROOT).equals(resolvedNumberingSystem)) {
-                if (extensionBuilder.length() > 0) {
-                    extensionBuilder.append("-");
-                }
-                extensionBuilder.append("nu-").append(resolvedNumberingSystem);
-            }
-        } else if (extensionNu != null && numberingSystemFromOption != null) {
-            if (extensionNu.toLowerCase(Locale.ROOT).equals(resolvedNumberingSystem)) {
-                if (extensionBuilder.length() > 0) {
-                    extensionBuilder.append("-");
-                }
-                extensionBuilder.append("nu-").append(resolvedNumberingSystem);
-            }
-        }
-
-        if (extensionBuilder.length() > 0) {
-            return Locale.forLanguageTag(baseTag + "-u-" + extensionBuilder);
-        }
-        return baseLocale;
+        String nu = unicodeExtensions.get("nu");
+        appendMatchingExtension(tag, baseLength, "nu", numberingSystem,
+                nu == null ? null : nu.toLowerCase(Locale.ROOT));
+        return tag.length() == baseLength ? base : Locale.forLanguageTag(tag.toString());
     }
 
     /**
@@ -938,46 +886,14 @@ public final class JSIntlObject {
      */
     private static String buildResolvedLocaleTag(Locale baseLocale, String collation, boolean numeric, String caseFirst,
             Map<String, String> unicodeExtensions) {
-        String baseTag = stripUnicodeExtensions(baseLocale).toLanguageTag();
-        TreeMap<String, String> extensions = new TreeMap<>();
-
-        // Include co extension only if resolved collation matches original extension
-        if (unicodeExtensions.containsKey("co")) {
-            String extCollation = unicodeExtensions.get("co");
-            if (collation != null && collation.equals(extCollation)) {
-                extensions.put("co", collation);
-            }
+        StringBuilder tag = new StringBuilder(stripUnicodeExtensions(baseLocale).toLanguageTag());
+        int baseLength = tag.length();
+        appendMatchingExtension(tag, baseLength, "co", collation, unicodeExtensions.get("co"));
+        appendMatchingExtension(tag, baseLength, "kf", caseFirst, unicodeExtensions.get("kf"));
+        if (numeric && unicodeExtensions.containsKey("kn") && !"false".equals(unicodeExtensions.get("kn"))) {
+            tag.append(tag.length() == baseLength ? "-u-kn" : "-kn");
         }
-
-        // Include kf extension only if resolved caseFirst matches original extension
-        if (unicodeExtensions.containsKey("kf")) {
-            String extCaseFirst = unicodeExtensions.get("kf");
-            if (caseFirst != null && caseFirst.equals(extCaseFirst)) {
-                extensions.put("kf", caseFirst);
-            }
-        }
-
-        // Include kn extension only if resolved numeric matches original extension
-        if (unicodeExtensions.containsKey("kn")) {
-            String extKnValue = unicodeExtensions.get("kn");
-            boolean extNumeric = !"false".equals(extKnValue);
-            if (numeric == extNumeric && numeric) {
-                extensions.put("kn", null); // canonical form: kn without value
-            }
-        }
-
-        if (extensions.isEmpty()) {
-            return baseTag;
-        }
-        StringBuilder builder = new StringBuilder(baseTag);
-        builder.append("-u");
-        for (Map.Entry<String, String> entry : extensions.entrySet()) {
-            builder.append("-").append(entry.getKey());
-            if (entry.getValue() != null) {
-                builder.append("-").append(entry.getValue());
-            }
-        }
-        return builder.toString();
+        return tag.toString();
     }
 
     /**
@@ -1830,10 +1746,8 @@ public final class JSIntlObject {
 
             // Resolve calendar from locale unicode extension if not specified in options
             Map<String, String> unicodeExtensions = parseUnicodeExtensions(locale.toLanguageTag());
-            String calendarFromOption = calendar;
             // If option value is not a supported calendar, treat as if not specified
-            if (calendarFromOption != null && !isSupportedCalendar(calendarFromOption)) {
-                calendarFromOption = null;
+            if (calendar != null && !isSupportedCalendar(calendar)) {
                 calendar = null;
             }
             if (calendar == null) {
@@ -1849,10 +1763,8 @@ public final class JSIntlObject {
             }
 
             // Resolve numberingSystem
-            String numberingSystemFromOption = numberingSystem;
             // If option value is not supported, treat as if not specified
-            if (numberingSystemFromOption != null && !isSupportedDateTimeNumberingSystem(numberingSystemFromOption)) {
-                numberingSystemFromOption = null;
+            if (numberingSystem != null && !isSupportedDateTimeNumberingSystem(numberingSystem)) {
                 numberingSystem = null;
             }
             if (numberingSystem == null && unicodeExtensions.containsKey("nu")) {
@@ -1874,7 +1786,6 @@ public final class JSIntlObject {
                 hourCycle = null;
             }
 
-            String hourCycleFromOption = hourCycle;
             String hourCycleFromExtension = unicodeExtensions.containsKey("hc") ? unicodeExtensions.get("hc") : null;
 
             if (hourCycle == null && hour12 == null && hourCycleFromExtension != null) {
@@ -1898,8 +1809,8 @@ public final class JSIntlObject {
             // Resolve the locale tag BEFORE modifying hourCycle for no-hour-component.
             // Per spec, ResolveLocale (step 9) runs before [[HourCycle]] nullification (step 32).
             // The pre-nullification hourCycle value determines which extensions appear in the locale tag.
-            Locale resolvedLocale = buildResolvedLocale(locale, unicodeExtensions, calendarFromOption, calendar,
-                    hourCycleFromOption, hourCycle, hour12, numberingSystemFromOption, numberingSystem);
+            Locale resolvedLocale = buildResolvedLocale(locale, unicodeExtensions, calendar, hourCycle, hour12,
+                    numberingSystem);
 
             // Finalize hourCycle for the instance:
             // - If no hour component, set to null (step 32 of CreateDateTimeFormat)
@@ -2787,10 +2698,15 @@ public final class JSIntlObject {
         }
     }
 
-    private static JSObject createPartObject(JSContext context, String type, String value, String source) {
+    private static JSObject createPartObject(JSContext context, String type, String value) {
         JSObject part = context.createJSObject();
         part.set("type", new JSString(type));
         part.set("value", new JSString(value));
+        return part;
+    }
+
+    private static JSObject createPartObject(JSContext context, String type, String value, String source) {
+        JSObject part = createPartObject(context, type, value);
         part.set("source", new JSString(source));
         return part;
     }
@@ -3124,9 +3040,7 @@ public final class JSIntlObject {
     private static JSValue datePartsToJSArray(JSContext context, List<JSIntlDateTimeFormat.DatePart> parts) {
         JSArray array = context.createJSArray();
         for (JSIntlDateTimeFormat.DatePart part : parts) {
-            JSObject partObj = context.createJSObject();
-            partObj.set("type", new JSString(part.type()));
-            partObj.set("value", new JSString(part.value()));
+            JSObject partObj = createPartObject(context, part.type(), part.value());
             array.push(partObj);
         }
         return array;
@@ -3235,6 +3149,13 @@ public final class JSIntlObject {
         return resolvedOptions;
     }
 
+    private static void defineDigitRange(JSObject options, boolean significant, int minimum, int maximum) {
+        createDataProperty(options, significant ? "minimumSignificantDigits" : "minimumFractionDigits",
+                JSNumber.of(minimum));
+        createDataProperty(options, significant ? "maximumSignificantDigits" : "maximumFractionDigits",
+                JSNumber.of(maximum));
+    }
+
     private static void defineStringOption(JSObject options, String key, String value) {
         if (value != null) {
             createDataProperty(options, key, new JSString(value));
@@ -3311,52 +3232,14 @@ public final class JSIntlObject {
      * Intl.DurationFormat.prototype.format(duration)
      */
     public static JSValue durationFormatFormat(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlDurationFormat durationFormat)) {
-            return context.throwTypeError("Intl.DurationFormat.prototype.format called on incompatible receiver");
-        }
-        if (args.length == 0) {
-            return context.throwTypeError("Invalid duration value");
-        }
-
-        Map<String, Double> durationRecord = JSIntlDurationFormat.toDurationRecord(context, args[0]);
-        if (durationRecord == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        String result = durationFormat.formatDuration(durationRecord);
-        return new JSString(result);
+        return formatDuration(context, thisArg, args, false);
     }
 
     /**
      * Intl.DurationFormat.prototype.formatToParts(duration)
      */
     public static JSValue durationFormatFormatToParts(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlDurationFormat durationFormat)) {
-            return context
-                    .throwTypeError("Intl.DurationFormat.prototype.formatToParts called on incompatible receiver");
-        }
-        if (args.length == 0) {
-            return context.throwTypeError("Invalid duration value");
-        }
-
-        Map<String, Double> durationRecord = JSIntlDurationFormat.toDurationRecord(context, args[0]);
-        if (durationRecord == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        List<JSIntlDurationFormat.FormatPart> parts = durationFormat.partitionDurationFormatPattern(durationRecord);
-        JSArray result = context.createJSArray();
-        for (int i = 0; i < parts.size(); i++) {
-            JSIntlDurationFormat.FormatPart part = parts.get(i);
-            JSObject partObj = context.createJSObject();
-            partObj.set("type", new JSString(part.type()));
-            partObj.set("value", new JSString(part.value()));
-            if (part.unit() != null) {
-                partObj.set("unit", new JSString(part.unit()));
-            }
-            result.set(i, partObj);
-        }
-        return result;
+        return formatDuration(context, thisArg, args, true);
     }
 
     /**
@@ -3510,6 +3393,37 @@ public final class JSIntlObject {
             return datePartsToJSArray(context, effectiveDateTimeFormat.formatToPartsList(formattable.epochMillis()));
         }
         return new JSString(effectiveDateTimeFormat.format(formattable.epochMillis()));
+    }
+
+    private static JSValue formatDuration(JSContext context, JSValue thisArg, JSValue[] args, boolean partsRequested) {
+        if (!(thisArg instanceof JSIntlDurationFormat durationFormat)) {
+            String method = partsRequested ? "formatToParts" : "format";
+            return context
+                    .throwTypeError("Intl.DurationFormat.prototype." + method + " called on incompatible receiver");
+        }
+        if (args.length == 0) {
+            return context.throwTypeError("Invalid duration value");
+        }
+
+        Map<String, Double> durationRecord = JSIntlDurationFormat.toDurationRecord(context, args[0]);
+        if (durationRecord == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        if (!partsRequested) {
+            return new JSString(durationFormat.formatDuration(durationRecord));
+        }
+        List<JSIntlDurationFormat.FormatPart> parts = durationFormat.partitionDurationFormatPattern(durationRecord);
+        JSArray result = context.createJSArray();
+        for (int i = 0; i < parts.size(); i++) {
+            JSIntlDurationFormat.FormatPart part = parts.get(i);
+            JSObject partObj = createPartObject(context, part.type(), part.value());
+            if (part.unit() != null) {
+                partObj.set("unit", new JSString(part.unit()));
+            }
+            result.set(i, partObj);
+        }
+        return result;
     }
 
     private static String formatIntlNumberValue(JSContext context, JSIntlNumberFormat numberFormat, JSValue value) {
@@ -4197,9 +4111,7 @@ public final class JSIntlObject {
         JSArray result = context.createJSArray();
         for (int i = 0; i < parts.size(); i++) {
             JSIntlDurationFormat.ListFormatPart part = parts.get(i);
-            JSObject partObj = context.createJSObject();
-            partObj.set("type", new JSString(part.type()));
-            partObj.set("value", new JSString(part.value()));
+            JSObject partObj = createPartObject(context, part.type(), part.value());
             result.set(i, partObj);
         }
         return result;
@@ -4572,6 +4484,8 @@ public final class JSIntlObject {
         return formatNumberRange(context, thisArg, args, false);
     }
 
+    // ---- Locale option validation helpers ----
+
     public static JSValue numberFormatFormatRangeToParts(JSContext context, JSValue thisArg, JSValue[] args) {
         return formatNumberRange(context, thisArg, args, true);
     }
@@ -4618,15 +4532,11 @@ public final class JSIntlObject {
         createDataProperty(resolvedOptions, "minimumIntegerDigits",
                 JSNumber.of(numberFormat.getMinimumIntegerDigits()));
         if (numberFormat.getUseSignificantDigits()) {
-            createDataProperty(resolvedOptions, "minimumSignificantDigits",
-                    JSNumber.of(numberFormat.getMinimumSignificantDigits()));
-            createDataProperty(resolvedOptions, "maximumSignificantDigits",
-                    JSNumber.of(numberFormat.getMaximumSignificantDigits()));
+            defineDigitRange(resolvedOptions, true, numberFormat.getMinimumSignificantDigits(),
+                    numberFormat.getMaximumSignificantDigits());
         } else {
-            createDataProperty(resolvedOptions, "minimumFractionDigits",
-                    JSNumber.of(numberFormat.getMinimumFractionDigits()));
-            createDataProperty(resolvedOptions, "maximumFractionDigits",
-                    JSNumber.of(numberFormat.getMaximumFractionDigits()));
+            defineDigitRange(resolvedOptions, false, numberFormat.getMinimumFractionDigits(),
+                    numberFormat.getMaximumFractionDigits());
         }
         if ("false".equals(numberFormat.getUseGroupingMode())) {
             createDataProperty(resolvedOptions, "useGrouping", JSBoolean.FALSE);
@@ -4673,8 +4583,6 @@ public final class JSIntlObject {
         appendRangePartsWithSource(context, result, endParts, "endRange");
         return result;
     }
-
-    // ---- Locale option validation helpers ----
 
     private static FormatStyle parseFormatStyle(String rawStyle) {
         if (rawStyle == null) {
@@ -4837,15 +4745,11 @@ public final class JSIntlObject {
         createDataProperty(resolvedOptions, "notation", new JSString(pluralRules.getNotation()));
         createDataProperty(resolvedOptions, "minimumIntegerDigits", JSNumber.of(pluralRules.getMinimumIntegerDigits()));
         if (pluralRules.getMinimumSignificantDigits() != null) {
-            createDataProperty(resolvedOptions, "minimumSignificantDigits",
-                    JSNumber.of(pluralRules.getMinimumSignificantDigits()));
-            createDataProperty(resolvedOptions, "maximumSignificantDigits",
-                    JSNumber.of(pluralRules.getMaximumSignificantDigits()));
+            defineDigitRange(resolvedOptions, true, pluralRules.getMinimumSignificantDigits(),
+                    pluralRules.getMaximumSignificantDigits());
         } else {
-            createDataProperty(resolvedOptions, "minimumFractionDigits",
-                    JSNumber.of(pluralRules.getMinimumFractionDigits()));
-            createDataProperty(resolvedOptions, "maximumFractionDigits",
-                    JSNumber.of(pluralRules.getMaximumFractionDigits()));
+            defineDigitRange(resolvedOptions, false, pluralRules.getMinimumFractionDigits(),
+                    pluralRules.getMaximumFractionDigits());
         }
         JSArray categories = context.createJSArray();
         for (String category : pluralRules.getPluralCategories()) {
@@ -4862,6 +4766,8 @@ public final class JSIntlObject {
         double value = args.length > 0 ? JSTypeConversions.toNumber(context, args[0]).value() : Double.NaN;
         return new JSString(pluralRules.select(value));
     }
+
+    // ---- New Locale prototype methods ----
 
     public static JSValue pluralRulesSelectRange(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlPluralRules pluralRules)) {
@@ -4948,8 +4854,6 @@ public final class JSIntlObject {
             return context.throwRangeError(e.getMessage());
         }
     }
-
-    // ---- New Locale prototype methods ----
 
     public static JSValue relativeTimeFormatFormatToParts(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlRelativeTimeFormat relativeTimeFormat)) {

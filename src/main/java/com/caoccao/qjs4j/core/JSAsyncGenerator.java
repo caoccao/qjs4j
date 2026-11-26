@@ -82,9 +82,7 @@ public final class JSAsyncGenerator extends JSObject {
     }
 
     private JSObject createIteratorResultObject(JSValue value, boolean done) {
-        JSObject result = context.createJSObject();
-        result.set(PropertyKey.VALUE, value);
-        result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+        JSObject result = JSIteratorHelper.createResult(context, value, done);
         return result;
     }
 
@@ -99,9 +97,7 @@ public final class JSAsyncGenerator extends JSObject {
      */
     private JSPromise createIteratorResultPromise(JSValue value, boolean done) {
         JSPromise promise = context.createJSPromise();
-        JSObject result = context.createJSObject();
-        result.set(PropertyKey.VALUE, value);
-        result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+        JSObject result = JSIteratorHelper.createResult(context, value, done);
         promise.fulfill(result);
         return promise;
     }
@@ -170,17 +166,17 @@ public final class JSAsyncGenerator extends JSObject {
                         JSValue completionError = completionPromise.getResult();
                         context.enqueueMicrotask(() -> request.promise().reject(completionError));
                     } else {
-                        completionPromise.addReactions(new JSPromise.ReactionRecord(
+                        completionPromise.observe(context,
                                 new JSNativeFunction(context, "onReturnResolve", 1, (childContext, thisArg, args) -> {
                                     JSValue result = JSValue.argumentOrUndefined(args, 0);
                                     request.promise().fulfill(result);
                                     return JSUndefined.INSTANCE;
-                                }), null, context), new JSPromise.ReactionRecord(new JSNativeFunction(context,
-                                        "onReturnReject", 1, (childContext, thisArg, args) -> {
-                                            JSValue error = JSValue.argumentOrUndefined(args, 0);
-                                            request.promise().reject(error);
-                                            return JSUndefined.INSTANCE;
-                                        }), null, context));
+                                }),
+                                new JSNativeFunction(context, "onReturnReject", 1, (childContext, thisArg, args) -> {
+                                    JSValue error = JSValue.argumentOrUndefined(args, 0);
+                                    request.promise().reject(error);
+                                    return JSUndefined.INSTANCE;
+                                }));
                     }
                 } else {
                     request.promise().fulfill(createIteratorResultObject(completedValue, true));
@@ -235,7 +231,7 @@ public final class JSAsyncGenerator extends JSObject {
             // Result is PENDING (e.g., await suspension, yield* delegation, thenable yield value).
             // Add fallback reactions that guard against double-fulfillment since the lambda's
             // await handler may directly fulfill request.promise() via completeCurrentRequest.
-            resultPromise.addReactions(new JSPromise.ReactionRecord(
+            resultPromise.observe(context,
                     new JSNativeFunction(context, "onFulfilled", 1, (childContext, thisArg, args) -> {
                         if (request.promise().getState() != JSPromise.PromiseState.PENDING) {
                             return JSUndefined.INSTANCE;
@@ -245,17 +241,16 @@ public final class JSAsyncGenerator extends JSObject {
                         request.promise().fulfill(result);
                         scheduleDrainRequestQueue();
                         return JSUndefined.INSTANCE;
-                    }), null, context), new JSPromise.ReactionRecord(
-                            new JSNativeFunction(context, "onRejected", 1, (childContext, thisArg, args) -> {
-                                if (request.promise().getState() != JSPromise.PromiseState.PENDING) {
-                                    return JSUndefined.INSTANCE;
-                                }
-                                state = AsyncGeneratorState.COMPLETED;
-                                JSValue error = JSValue.argumentOrUndefined(args, 0);
-                                request.promise().reject(error);
-                                scheduleDrainRequestQueue();
-                                return JSUndefined.INSTANCE;
-                            }), null, context));
+                    }), new JSNativeFunction(context, "onRejected", 1, (childContext, thisArg, args) -> {
+                        if (request.promise().getState() != JSPromise.PromiseState.PENDING) {
+                            return JSUndefined.INSTANCE;
+                        }
+                        state = AsyncGeneratorState.COMPLETED;
+                        JSValue error = JSValue.argumentOrUndefined(args, 0);
+                        request.promise().reject(error);
+                        scheduleDrainRequestQueue();
+                        return JSUndefined.INSTANCE;
+                    }));
         } catch (Exception e) {
             state = AsyncGeneratorState.COMPLETED;
             if (context.hasPendingException()) {

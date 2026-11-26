@@ -126,8 +126,7 @@ public final class JSAsyncDisposableStack extends JSObject {
                 });
                 context.transferPrototype(onFulfilled, JSFunction.NAME);
                 context.transferPrototype(onRejected, JSFunction.NAME);
-                awaitPromise.addReactions(new JSPromise.ReactionRecord(onFulfilled, null, context),
-                        new JSPromise.ReactionRecord(onRejected, null, context));
+                awaitPromise.observe(context, onFulfilled, onRejected);
                 return;
             }
             if (accumulatedError != null) {
@@ -190,8 +189,7 @@ public final class JSAsyncDisposableStack extends JSObject {
         });
         context.transferPrototype(onFulfilled, JSFunction.NAME);
         context.transferPrototype(onRejected, JSFunction.NAME);
-        awaitedResult.addReactions(new JSPromise.ReactionRecord(onFulfilled, null, context),
-                new JSPromise.ReactionRecord(onRejected, null, context));
+        awaitedResult.observe(context, onFulfilled, onRejected);
 
     }
 

@@ -143,6 +143,11 @@ public final class BytecodeEmitter {
         return index;
     }
 
+    void emitGoto(int target) {
+        emitOpcode(Opcode.GOTO);
+        emitU32(target - (currentOffset() + 4));
+    }
+
     /**
      * Emit a signed 32-bit integer value.
      */

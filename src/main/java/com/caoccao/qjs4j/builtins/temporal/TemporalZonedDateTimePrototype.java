@@ -175,7 +175,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue day(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "day", TemporalPlainDatePrototype::day);
+        return readDateField(context, thisArg, TemporalDateProperty.DAY);
     }
 
     public static JSValue dayOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -184,11 +184,11 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue dayOfYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "dayOfYear", TemporalPlainDatePrototype::dayOfYear);
+        return readDateField(context, thisArg, TemporalDateProperty.DAY_OF_YEAR);
     }
 
     public static JSValue daysInMonth(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "daysInMonth", TemporalPlainDatePrototype::daysInMonth);
+        return readDateField(context, thisArg, TemporalDateProperty.DAYS_IN_MONTH);
     }
 
     public static JSValue daysInWeek(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -196,7 +196,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue daysInYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "daysInYear", TemporalPlainDatePrototype::daysInYear);
+        return readDateField(context, thisArg, TemporalDateProperty.DAYS_IN_YEAR);
     }
 
     private static JSValue difference(JSContext context, JSValue thisArg, JSValue[] args, boolean since) {
@@ -348,11 +348,11 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue era(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "era", TemporalPlainDatePrototype::era);
+        return readDateField(context, thisArg, TemporalDateProperty.ERA);
     }
 
     public static JSValue eraYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "eraYear", TemporalPlainDatePrototype::eraYear);
+        return readDateField(context, thisArg, TemporalDateProperty.ERA_YEAR);
     }
 
     private static BigInteger floorDiv(BigInteger dividend, BigInteger divisor) {
@@ -621,7 +621,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue inLeapYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "inLeapYear", TemporalPlainDatePrototype::inLeapYear);
+        return readDateField(context, thisArg, TemporalDateProperty.IN_LEAP_YEAR);
     }
 
     private static boolean isOffsetTimeZoneIdentifier(String timeZoneId) {
@@ -647,15 +647,15 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue month(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "month", TemporalPlainDatePrototype::month);
+        return readDateField(context, thisArg, TemporalDateProperty.MONTH);
     }
 
     public static JSValue monthCode(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "monthCode", TemporalPlainDatePrototype::monthCode);
+        return readDateField(context, thisArg, TemporalDateProperty.MONTH_CODE);
     }
 
     public static JSValue monthsInYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "monthsInYear", TemporalPlainDatePrototype::monthsInYear);
+        return readDateField(context, thisArg, TemporalDateProperty.MONTHS_IN_YEAR);
     }
 
     public static JSValue nanosecond(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -683,8 +683,8 @@ public final class TemporalZonedDateTimePrototype {
         return JSNumber.of((long) offsetSeconds * 1_000_000_000L);
     }
 
-    private static JSValue readDateField(JSContext context, JSValue thisArg, String name, JSNativeCallback getter) {
-        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, name);
+    private static JSValue readDateField(JSContext context, JSValue thisArg, TemporalDateProperty property) {
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, property.key);
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -692,7 +692,7 @@ public final class TemporalZonedDateTimePrototype {
         if (date == null || context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return getter.call(context, date, JSValue.NO_ARGS);
+        return property.read(date);
     }
 
     public static JSValue round(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -946,8 +946,9 @@ public final class TemporalZonedDateTimePrototype {
             }
         }
 
-        IsoDateTime localDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(roundedEpochNanoseconds,
+        int offsetSeconds = TemporalTimeZone.getOffsetSecondsFor(roundedEpochNanoseconds,
                 zonedDateTime.getTimeZoneId());
+        IsoDateTime localDateTime = IsoDateTime.createFromEpochNsAndOffset(roundedEpochNanoseconds, offsetSeconds);
         String dateString = localDateTime.date().toString();
         String timeString = localDateTime.time().formatTimeString(toStringSettings.smallestUnit(),
                 toStringSettings.autoFractionalSecondDigits(), toStringSettings.fractionalSecondDigits());
@@ -955,8 +956,6 @@ public final class TemporalZonedDateTimePrototype {
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder.append(dateString).append('T').append(timeString);
         if ("auto".equals(toStringSettings.offsetOption())) {
-            int offsetSeconds = TemporalTimeZone.getOffsetSecondsFor(roundedEpochNanoseconds,
-                    zonedDateTime.getTimeZoneId());
             stringBuilder.append(TemporalTimeZone.formatOffsetRoundedToMinute(offsetSeconds));
         }
         if ("auto".equals(toStringSettings.timeZoneNameOption())) {
@@ -1245,7 +1244,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue year(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, "year", TemporalPlainDatePrototype::year);
+        return readDateField(context, thisArg, TemporalDateProperty.YEAR);
     }
 
     public static JSValue yearOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
