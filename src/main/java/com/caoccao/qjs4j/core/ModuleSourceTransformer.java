@@ -32,6 +32,7 @@ import com.caoccao.qjs4j.unicode.UnicodeData;
 import java.nio.file.Path;
 
 import java.util.*;
+import java.util.function.BiConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -263,31 +264,8 @@ final class ModuleSourceTransformer {
 
     void collectNamedImportBindings(String namedClause, String sourceSpecifier, Set<String> bindingNames,
             Map<String, ImportBinding> importedBindings) {
-        String clause = namedClause.trim();
-        if (!clause.startsWith("{") || !clause.endsWith("}")) {
-            return;
-        }
-        String specifiersText = clause.substring(1, clause.length() - 1).trim();
-        if (specifiersText.isEmpty()) {
-            return;
-        }
-        for (String rawSpecifier : splitOnTopLevelCommas(specifiersText)) {
-            String specifier = rawSpecifier.trim();
-            if (specifier.isEmpty()) {
-                continue;
-            }
-            String importedName;
-            String localName;
-            int asIndex = findTopLevelAs(specifier);
-            if (asIndex >= 0) {
-                importedName = parseModuleExportNameValue(specifier.substring(0, asIndex).trim());
-                localName = specifier.substring(asIndex + 2).trim();
-            } else {
-                importedName = parseModuleExportNameValue(specifier);
-                localName = importedName;
-            }
-            registerImportedBinding(localName, sourceSpecifier, importedName, false, bindingNames, importedBindings);
-        }
+        forEachNamedImport(namedClause, (importedName, localName) -> registerImportedBinding(localName, sourceSpecifier,
+                importedName, false, bindingNames, importedBindings));
     }
 
     String createModuleExportBindingName(String generatedNamePrefix, String resolvedSpecifier) {
@@ -489,8 +467,7 @@ final class ModuleSourceTransformer {
      *         scanned
      */
     Map<Integer, DefaultExportExtent> defaultExportExtents(String sourceCode) {
-        ModuleDeclarationScan scan = scanTopLevelModuleDeclarations(sourceCode);
-        if (scan == null || !scan.hasExportDeclaration()) {
+        if (sourceCode == null || !sourceCode.contains("export")) {
             return Map.of();
         }
         List<Token> tokens;
@@ -501,16 +478,10 @@ final class ModuleSourceTransformer {
             return Map.of();
         }
         Map<Integer, DefaultExportExtent> extents = new HashMap<>();
-        int depth = 0;
-        for (int index = 0; index < tokens.size(); index++) {
+        for (int index = nextModuleDeclaration(tokens, 0); index >= 0; index = nextModuleDeclaration(tokens,
+                index + 1)) {
             Token token = tokens.get(index);
-            switch (token.type()) {
-                case LBRACE, LPAREN, LBRACKET -> depth++;
-                case RBRACE, RPAREN, RBRACKET -> depth = Math.max(0, depth - 1);
-                default -> {
-                }
-            }
-            if (depth != 0 || token.type() != TokenType.EXPORT || index + 2 >= tokens.size()
+            if (token.type() != TokenType.EXPORT || index + 2 >= tokens.size()
                     || tokens.get(index + 1).type() != TokenType.DEFAULT) {
                 continue;
             }
@@ -523,13 +494,8 @@ final class ModuleSourceTransformer {
                 continue;
             }
             int expressionStart = firstExpressionToken.offset();
-            int boundary = sourceCode.length();
-            for (int declarationOffset : scan.declarationOffsets()) {
-                if (declarationOffset > expressionStart) {
-                    boundary = declarationOffset;
-                    break;
-                }
-            }
+            int nextDeclaration = nextModuleDeclaration(tokens, index + 1);
+            int boundary = nextDeclaration >= 0 ? tokens.get(nextDeclaration).offset() : sourceCode.length();
             int expressionEnd = defaultExportExpressionEnd(sourceCode, expressionStart, boundary);
             if (expressionEnd < 0) {
                 continue;
@@ -589,26 +555,18 @@ final class ModuleSourceTransformer {
         return escaped.toString();
     }
 
+    private void extractBindingName(String element, List<String> names) {
+        if ((element.startsWith("{") && element.endsWith("}")) || (element.startsWith("[") && element.endsWith("]"))) {
+            extractDestructuringNames(element.substring(1, element.length() - 1), names);
+        } else if (!element.isEmpty()) {
+            names.add(decodeIdentifierEscapes(element));
+        }
+    }
+
     void extractDestructuringNames(String innerText, List<String> names) {
-        // Split on top-level commas and extract bound names
-        String trimmed = innerText.trim();
-        if (trimmed.isEmpty()) {
-            return;
+        for (String element : splitOnTopLevelCommas(innerText)) {
+            extractSingleDestructuringName(element.trim(), names);
         }
-        int depth = 0;
-        int start = 0;
-        for (int i = 0; i < trimmed.length(); i++) {
-            char ch = trimmed.charAt(i);
-            if (ch == '(' || ch == '[' || ch == '{') {
-                depth++;
-            } else if (ch == ')' || ch == ']' || ch == '}') {
-                depth--;
-            } else if (ch == ',' && depth == 0) {
-                extractSingleDestructuringName(trimmed.substring(start, i).trim(), names);
-                start = i + 1;
-            }
-        }
-        extractSingleDestructuringName(trimmed.substring(start).trim(), names);
     }
 
     /**
@@ -682,31 +640,7 @@ final class ModuleSourceTransformer {
         if (declaratorsText.isEmpty()) {
             return List.of();
         }
-        // Split on commas at the top level only (not inside parens, brackets, braces, or strings)
-        List<String> declarators = new ArrayList<>();
-        int depth = 0;
-        int start = 0;
-        boolean inString = false;
-        char stringChar = 0;
-        for (int i = 0; i < declaratorsText.length(); i++) {
-            char ch = declaratorsText.charAt(i);
-            if (inString) {
-                if (ch == stringChar && (i == 0 || declaratorsText.charAt(i - 1) != '\\')) {
-                    inString = false;
-                }
-            } else if (ch == '\'' || ch == '"' || ch == '`') {
-                inString = true;
-                stringChar = ch;
-            } else if (ch == '(' || ch == '[' || ch == '{') {
-                depth++;
-            } else if (ch == ')' || ch == ']' || ch == '}') {
-                depth--;
-            } else if (ch == ',' && depth == 0) {
-                declarators.add(declaratorsText.substring(start, i));
-                start = i + 1;
-            }
-        }
-        declarators.add(declaratorsText.substring(start));
+        List<String> declarators = splitOnTopLevelCommas(declaratorsText);
         List<String> declarationNames = new ArrayList<>(declarators.size());
         for (String declarator : declarators) {
             String declaratorText = declarator.trim();
@@ -714,21 +648,7 @@ final class ModuleSourceTransformer {
             if (assignmentIndex >= 0) {
                 declaratorText = declaratorText.substring(0, assignmentIndex).trim();
             }
-            if (!declaratorText.isEmpty()) {
-                if (declaratorText.startsWith("{") && declaratorText.endsWith("}")) {
-                    // Object destructuring pattern: { a, b, c: d } → extract bound names
-                    extractDestructuringNames(declaratorText.substring(1, declaratorText.length() - 1),
-                            declarationNames);
-                } else if (declaratorText.startsWith("[") && declaratorText.endsWith("]")) {
-                    // Array destructuring pattern: [a, b, c] → extract bound names
-                    extractDestructuringNames(declaratorText.substring(1, declaratorText.length() - 1),
-                            declarationNames);
-                } else {
-                    // The binding is called by its decoded name: `export const \\u0078 = 1` declares
-                    // `x`, and the generated export bookkeeping has to name it that way too.
-                    declarationNames.add(decodeIdentifierEscapes(declaratorText));
-                }
-            }
+            extractBindingName(declaratorText, declarationNames);
         }
         return declarationNames;
     }
@@ -742,7 +662,7 @@ final class ModuleSourceTransformer {
             element = element.substring(3).trim();
         }
         // Handle rename: key: value
-        int colonIndex = element.indexOf(':');
+        int colonIndex = findTopLevelDelimiter(element, 0, ':');
         if (colonIndex >= 0) {
             element = element.substring(colonIndex + 1).trim();
         }
@@ -751,14 +671,7 @@ final class ModuleSourceTransformer {
         if (eqIndex >= 0) {
             element = element.substring(0, eqIndex).trim();
         }
-        // Check for nested destructuring
-        if (element.startsWith("{") && element.endsWith("}")) {
-            extractDestructuringNames(element.substring(1, element.length() - 1), names);
-        } else if (element.startsWith("[") && element.endsWith("]")) {
-            extractDestructuringNames(element.substring(1, element.length() - 1), names);
-        } else if (!element.isEmpty()) {
-            names.add(decodeIdentifierEscapes(element));
-        }
+        extractBindingName(element, names);
     }
 
     /**
@@ -833,16 +746,11 @@ final class ModuleSourceTransformer {
      * not found.
      */
     int findTopLevelAs(String text) {
-        boolean inSingleQuote = false;
-        boolean inDoubleQuote = false;
-        for (int i = 0; i < text.length() - 3; i++) {
+        for (int i = 0; i + 3 < text.length(); i++) {
             char ch = text.charAt(i);
-            if (ch == '\'' && !inDoubleQuote) {
-                inSingleQuote = !inSingleQuote;
-            } else if (ch == '"' && !inSingleQuote) {
-                inDoubleQuote = !inDoubleQuote;
-            } else if (!inSingleQuote && !inDoubleQuote && Character.isWhitespace(ch) && text.charAt(i + 1) == 'a'
-                    && text.charAt(i + 2) == 's' && i + 3 < text.length()
+            if (ch == '\'' || ch == '"') {
+                i = skipQuotedText(text, i);
+            } else if (Character.isWhitespace(ch) && text.startsWith("as", i + 1)
                     && Character.isWhitespace(text.charAt(i + 3))) {
                 return i + 1;
             }
@@ -851,27 +759,32 @@ final class ModuleSourceTransformer {
     }
 
     int findTopLevelAssignment(String text) {
-        int depth = 0;
-        boolean inString = false;
-        char stringChar = 0;
-        for (int i = 0; i < text.length(); i++) {
-            char ch = text.charAt(i);
-            if (inString) {
-                if (ch == stringChar && (i == 0 || text.charAt(i - 1) != '\\')) {
-                    inString = false;
-                }
-            } else if (ch == '\'' || ch == '"' || ch == '`') {
-                inString = true;
-                stringChar = ch;
-            } else if (ch == '(' || ch == '[' || ch == '{') {
-                depth++;
-            } else if (ch == ')' || ch == ']' || ch == '}') {
-                depth--;
-            } else if (ch == '=' && depth == 0 && i + 1 < text.length() && text.charAt(i + 1) != '=') {
-                return i;
+        return findTopLevelDelimiter(text, 0, '=');
+    }
+
+    private void forEachModuleSpecifier(String text, boolean export, BiConsumer<String, String> binding) {
+        for (String entry : splitOnTopLevelCommas(text)) {
+            String specifier = entry.trim();
+            if (specifier.isEmpty()) {
+                continue;
+            }
+            int as = findTopLevelAs(specifier);
+            if (as < 0) {
+                String name = parseModuleExportNameValue(specifier);
+                binding.accept(name, name);
+            } else {
+                String alias = specifier.substring(as + 2).trim();
+                binding.accept(parseModuleExportNameValue(specifier.substring(0, as)),
+                        export ? parseModuleExportNameValue(alias) : alias);
             }
         }
-        return -1;
+    }
+
+    void forEachNamedImport(String namedClause, BiConsumer<String, String> binding) {
+        String clause = namedClause.trim();
+        if (clause.startsWith("{") && clause.endsWith("}")) {
+            forEachModuleSpecifier(clause.substring(1, clause.length() - 1), false, binding);
+        }
     }
 
     /**
@@ -1277,33 +1190,14 @@ final class ModuleSourceTransformer {
     void parseDynamicImportExportList(String exportListText, String sourceSpecifier,
             List<JSDynamicImportModule.LocalExportBinding> localExportBindings,
             List<JSDynamicImportModule.ReExportBinding> reExportBindings) {
-        // Split on commas at the top level only (not inside quoted strings)
-        List<String> exportEntries = splitOnTopLevelCommas(exportListText);
-        for (String exportEntry : exportEntries) {
-            String exportText = exportEntry.trim();
-            if (exportText.isEmpty()) {
-                continue;
-            }
-            String localName;
-            String exportedName;
-            // Parse "localName as exportedName" with support for string literals
-            int asIndex = findTopLevelAs(exportText);
-            if (asIndex >= 0) {
-                String rawLocal = exportText.substring(0, asIndex).trim();
-                String rawExported = exportText.substring(asIndex + 2).trim();
-                localName = parseModuleExportNameValue(rawLocal);
-                exportedName = parseModuleExportNameValue(rawExported);
-            } else {
-                localName = parseModuleExportNameValue(exportText);
-                exportedName = localName;
-            }
+        forEachModuleSpecifier(exportListText, true, (localName, exportedName) -> {
             if (sourceSpecifier == null) {
                 localExportBindings.add(new JSDynamicImportModule.LocalExportBinding(localName, exportedName));
             } else {
                 reExportBindings.add(
                         new JSDynamicImportModule.ReExportBinding(sourceSpecifier, localName, exportedName, false));
             }
-        }
+        });
     }
 
     /**
@@ -1818,27 +1712,11 @@ final class ModuleSourceTransformer {
         boolean hasExportDeclaration = false;
         TreeSet<Integer> lineBreakOffsets = new TreeSet<>();
         List<Integer> declarationOffsets = new ArrayList<>();
-        int depth = 0;
-        for (int index = 0; index < tokens.size(); index++) {
+        for (int index = nextModuleDeclaration(tokens, 0); index >= 0; index = nextModuleDeclaration(tokens,
+                index + 1)) {
             Token token = tokens.get(index);
-            switch (token.type()) {
-                case LBRACE, LPAREN, LBRACKET -> depth++;
-                case RBRACE, RPAREN, RBRACKET -> depth = Math.max(0, depth - 1);
-                default -> {
-                }
-            }
-            if (depth != 0) {
-                continue;
-            }
-            boolean isImportDeclaration = token.type() == TokenType.IMPORT && index + 1 < tokens.size()
-                    && tokens.get(index + 1).type() != TokenType.LPAREN
-                    && tokens.get(index + 1).type() != TokenType.DOT;
-            boolean isExportDeclaration = token.type() == TokenType.EXPORT;
-            if (!isImportDeclaration && !isExportDeclaration) {
-                continue;
-            }
-            hasImportDeclaration |= isImportDeclaration;
-            hasExportDeclaration |= isExportDeclaration;
+            hasImportDeclaration |= token.type() == TokenType.IMPORT;
+            hasExportDeclaration |= token.type() == TokenType.EXPORT;
             declarationOffsets.add(token.offset());
 
             // A declaration that shares its line with earlier code needs a break in front of it.
@@ -1870,18 +1748,8 @@ final class ModuleSourceTransformer {
     List<String> splitOnTopLevelCommas(String text) {
         List<String> result = new ArrayList<>();
         int start = 0;
-        boolean inSingleQuote = false;
-        boolean inDoubleQuote = false;
-        for (int i = 0; i < text.length(); i++) {
-            char ch = text.charAt(i);
-            if (ch == '\'' && !inDoubleQuote) {
-                inSingleQuote = !inSingleQuote;
-            } else if (ch == '"' && !inSingleQuote) {
-                inDoubleQuote = !inDoubleQuote;
-            } else if (ch == ',' && !inSingleQuote && !inDoubleQuote) {
-                result.add(text.substring(start, i));
-                start = i + 1;
-            }
+        for (int comma; (comma = findTopLevelDelimiter(text, start, ',')) >= 0; start = comma + 1) {
+            result.add(text.substring(start, comma));
         }
         result.add(text.substring(start));
         return result;
@@ -2024,6 +1892,24 @@ final class ModuleSourceTransformer {
         return -1;
     }
 
+    private static int findTopLevelDelimiter(String text, int start, char delimiter) {
+        int depth = 0;
+        for (int i = start; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            if (ch == '\'' || ch == '"' || ch == '`') {
+                i = skipQuotedText(text, i);
+            } else if (depth == 0 && ch == delimiter
+                    && (delimiter != '=' || i + 1 < text.length() && text.charAt(i + 1) != '=')) {
+                return i;
+            } else if (ch == '(' || ch == '[' || ch == '{') {
+                depth++;
+            } else if (ch == ')' || ch == ']' || ch == '}') {
+                depth--;
+            }
+        }
+        return -1;
+    }
+
     /**
      * Whether a string token is the module specifier of a declaration rather than a module export name.
      * <p>
@@ -2082,6 +1968,32 @@ final class ModuleSourceTransformer {
         return lines;
     }
 
+    static int nextModuleDeclaration(List<Token> tokens, int start) {
+        int depth = 0;
+        for (int index = start; index < tokens.size(); index++) {
+            switch (tokens.get(index).type()) {
+                case LPAREN, LBRACKET, LBRACE -> depth++;
+                case RPAREN, RBRACKET, RBRACE -> depth = Math.max(0, depth - 1);
+                case EXPORT -> {
+                    if (depth == 0) {
+                        return index;
+                    }
+                }
+                case IMPORT -> {
+                    if (depth == 0 && index + 1 < tokens.size()) {
+                        TokenType next = tokens.get(index + 1).type();
+                        if (next != TokenType.LPAREN && next != TokenType.DOT) {
+                            return index;
+                        }
+                    }
+                }
+                default -> {
+                }
+            }
+        }
+        return -1;
+    }
+
     static int parseHex(String text) {
         if (text == null || text.isEmpty()) {
             return -1;
@@ -2133,6 +2045,19 @@ final class ModuleSourceTransformer {
             end = next;
         }
         return end;
+    }
+
+    private static int skipQuotedText(String text, int start) {
+        char quote = text.charAt(start);
+        int i = start + 1;
+        while (i < text.length()) {
+            char ch = text.charAt(i);
+            if (ch == quote) {
+                break;
+            }
+            i += ch == '\\' ? 2 : 1;
+        }
+        return i;
     }
 
     private static String stripTrailingSemicolons(String text) {

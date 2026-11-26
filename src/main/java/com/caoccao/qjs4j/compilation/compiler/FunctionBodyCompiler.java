@@ -36,7 +36,7 @@ enum FunctionBodyCompiler {
         context.compilerAnalysis.hoistAllDeclarationsAsLocals(statements);
         for (Statement statement : statements) {
             if (statement instanceof FunctionDeclaration declaration) {
-                context.functionDeclarationCompiler.compile(declaration);
+                FunctionDeclarationCompiler.compile(context, declaration);
             }
         }
         if (this != METHOD) {

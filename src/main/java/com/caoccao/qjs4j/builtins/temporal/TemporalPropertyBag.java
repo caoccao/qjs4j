@@ -40,6 +40,23 @@ final class TemporalPropertyBag {
         return context.hasPendingException() ? null : TemporalUtils.getOptionalIntegerField(context, fields, name);
     }
 
+    Integer integral(String name) {
+        if (context.hasPendingException()) {
+            return null;
+        }
+        JSValue value = fields.get(PropertyKey.fromString(name));
+        if (context.hasPendingException() || value == null || value instanceof JSUndefined) {
+            return null;
+        }
+        long result = TemporalUtils.toLongIfIntegral(context, value);
+        return context.hasPendingException() ? null : (int) result;
+    }
+
+    int integralOrZero(String name) {
+        Integer value = integral(name);
+        return value == null ? 0 : value;
+    }
+
     IsoMonth monthCode() {
         if (context.hasPendingException()) {
             return null;

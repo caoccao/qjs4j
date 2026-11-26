@@ -447,7 +447,19 @@ public final class OpcodeHandler {
     }
 
     private static JSNumber divideOrRemainder(Opcode op, JSNumber dividend, JSNumber divisor) {
-        return JSNumber.of(op == Opcode.DIV ? dividend.value() / divisor.value() : dividend.value() % divisor.value());
+        double x = dividend.value();
+        double y = divisor.value();
+        if (op == Opcode.DIV) {
+            return JSNumber.of(x / y);
+        }
+        // Positive integer operands give the same remainder under integer and floating-point division.
+        // All zero and negative dividends use floating point to preserve the sign of zero.
+        int a = (int) x;
+        int b = (int) y;
+        if (a > 0 && b > 0 && x == a && y == b) {
+            return JSNumber.of(a % b);
+        }
+        return JSNumber.of(x % y);
     }
 
     private static VarRef findClosureVarRef(ExecutionContext executionContext, String variableName) {

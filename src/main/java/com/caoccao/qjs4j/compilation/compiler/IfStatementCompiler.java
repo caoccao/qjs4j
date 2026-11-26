@@ -88,7 +88,7 @@ final class IfStatementCompiler extends AstNodeCompiler<IfStatement> {
             // are treated as if wrapped in a block scope.
             compilerContext.scopeManager.enterScope();
             compilerContext.scopeManager.currentScope().declareLocal(funcDecl.getId().getName());
-            compilerContext.functionDeclarationCompiler.compile(funcDecl);
+            FunctionDeclarationCompiler.compile(compilerContext, funcDecl);
             compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
             compilerContext.scopeManager.exitScope();
         } else {

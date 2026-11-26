@@ -20,13 +20,11 @@ import com.caoccao.qjs4j.compilation.ast.ImportExpression;
 import com.caoccao.qjs4j.core.JSImportDeferMarker;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class ImportExpressionCompiler extends AstNodeCompiler<ImportExpression> {
-    ImportExpressionCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class ImportExpressionCompiler {
+    private ImportExpressionCompiler() {
     }
 
-    @Override
-    void compile(ImportExpression importExpr) {
+    static void compile(CompilerContext compilerContext, ImportExpression importExpr) {
         compilerContext.expressionCompiler.compile(importExpr.getSource());
         if (importExpr.getOptions() != null) {
             compilerContext.expressionCompiler.compile(importExpr.getOptions());

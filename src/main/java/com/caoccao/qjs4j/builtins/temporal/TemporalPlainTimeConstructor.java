@@ -126,17 +126,9 @@ public final class TemporalPlainTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        if ("reject".equals(overflow)) {
-            IsoTime isoTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
-            if (!isoTime.isValid()) {
-                context.throwRangeError("Temporal error: Invalid time");
-                return JSUndefined.INSTANCE;
-            }
-            return JSTemporalPlainTime.create(context, isoTime);
-        } else {
-            IsoTime constrained = IsoTime.createNormalized(hour, minute, second, millisecond, microsecond, nanosecond);
-            return JSTemporalPlainTime.create(context, constrained);
-        }
+        IsoTime time = IsoTime.regulate(context, overflow, "Temporal error: Invalid time", hour, minute, second,
+                millisecond, microsecond, nanosecond);
+        return time == null ? JSUndefined.INSTANCE : JSTemporalPlainTime.create(context, time);
     }
 
     static JSValue timeFromString(JSContext context, String input) {

@@ -376,32 +376,6 @@ public enum TemporalUnit {
 
     private static BigInteger nanosecondsBetween(JSContext context, LocalDateTime startDateTime,
             LocalDateTime endDateTime, TemporalRelativeToOption relativeToOption) {
-        if (relativeToOption == null || !relativeToOption.zoned()) {
-            return TemporalUtils.nanosecondsBetween(startDateTime, endDateTime);
-        }
-
-        BigInteger startEpochNanoseconds;
-        if (startDateTime.equals(relativeToOption.startDateTime())) {
-            startEpochNanoseconds = relativeToOption.epochNanoseconds();
-        } else {
-            startEpochNanoseconds = IsoDateTime.zonedLocalDateTimeToEpochNanoseconds(context, relativeToOption,
-                    startDateTime);
-        }
-        if (context.hasPendingException() || startEpochNanoseconds == null) {
-            return BigInteger.ZERO;
-        }
-
-        BigInteger endEpochNanoseconds;
-        if (endDateTime.equals(relativeToOption.startDateTime())) {
-            endEpochNanoseconds = relativeToOption.epochNanoseconds();
-        } else {
-            endEpochNanoseconds = IsoDateTime.zonedLocalDateTimeToEpochNanoseconds(context, relativeToOption,
-                    endDateTime);
-        }
-        if (context.hasPendingException() || endEpochNanoseconds == null) {
-            return BigInteger.ZERO;
-        }
-
-        return endEpochNanoseconds.subtract(startEpochNanoseconds);
+        return TemporalUtils.nanosecondsBetween(context, startDateTime, null, endDateTime, null, relativeToOption);
     }
 }

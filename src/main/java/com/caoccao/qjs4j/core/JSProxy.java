@@ -78,7 +78,7 @@ public final class JSProxy extends JSObject {
         }
 
         // Create arguments array
-        JSArray argArray = createArgumentsArray(executionContext, args);
+        JSArray argArray = executionContext.createJSArray(args);
 
         // Call trap: handler.apply(target, thisArg, argumentsList)
         JSValue[] trapArgs = new JSValue[]{target, thisArg, argArray};
@@ -108,13 +108,11 @@ public final class JSProxy extends JSObject {
             // ES2024 10.5.13 [[Construct]] step 7:
             // If trap is undefined, forward using full Construct(target, args, newTarget)
             // semantics (including bound functions, proxies, and custom newTarget).
-            JSArray argumentListArray = createArgumentsArray(executionContext, args);
-            return JSReflectObject.construct(executionContext, JSUndefined.INSTANCE,
-                    new JSValue[]{target, argumentListArray, newTarget});
+            return JSReflectObject.constructWithNewTarget(executionContext, target, args, newTarget);
         }
 
         // Create arguments array
-        JSArray argArray = createArgumentsArray(executionContext, args);
+        JSArray argArray = executionContext.createJSArray(args);
 
         // Call trap: handler.construct(target, argumentsList, newTarget)
         JSValue[] trapArgs = new JSValue[]{target, argArray, newTarget};
@@ -132,14 +130,6 @@ public final class JSProxy extends JSObject {
     /**
      * Helper to create an arguments array from JSValue[].
      */
-    private JSArray createArgumentsArray(JSContext executionContext, JSValue[] args) {
-        JSArray array = executionContext.createJSArray(0, args.length);
-        for (int i = 0; i < args.length; i++) {
-            array.set(i, args[i]);
-        }
-        return array;
-    }
-
     /**
      * Private field operations must bypass proxy traps and operate on the proxy object itself.
      */

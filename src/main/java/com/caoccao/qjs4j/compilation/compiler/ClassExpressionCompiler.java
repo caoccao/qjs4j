@@ -27,13 +27,11 @@ import java.util.*;
 /**
  * Handles compilation of class expressions.
  */
-final class ClassExpressionCompiler extends AstNodeCompiler<ClassExpression> {
-    ClassExpressionCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class ClassExpressionCompiler {
+    private ClassExpressionCompiler() {
     }
 
-    @Override
-    void compile(ClassExpression classExpr) {
+    static void compile(CompilerContext compilerContext, ClassExpression classExpr) {
         String className = classExpr.getId() != null
                 ? classExpr.getId().getName()
                 : (compilerContext.inferredClassName != null ? compilerContext.inferredClassName : "");

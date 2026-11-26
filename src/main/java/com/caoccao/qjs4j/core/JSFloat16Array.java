@@ -40,11 +40,6 @@ public final class JSFloat16Array extends JSTypedArray {
     }
 
     @Override
-    protected JSTypedArray createView(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return new JSFloat16Array(context, buffer, byteOffset, length);
-    }
-
-    @Override
     TypedArrayKind elementKind() {
         return TypedArrayKind.FLOAT16;
     }
@@ -66,7 +61,6 @@ public final class JSFloat16Array extends JSTypedArray {
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        return createFromArguments(context, BYTES_PER_ELEMENT, context::createJSFloat16Array,
-                context::createJSFloat16Array, args);
+        return TypedArrayKind.FLOAT16.create(context, args);
     }
 }

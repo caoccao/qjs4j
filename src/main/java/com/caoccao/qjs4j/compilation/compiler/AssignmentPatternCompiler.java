@@ -24,14 +24,12 @@ import com.caoccao.qjs4j.vm.Opcode;
  * Compiles AssignmentPattern (destructuring with default value) into bytecode. Handles patterns like [x = defaultVal]
  * or { y = defaultVal }.
  */
-final class AssignmentPatternCompiler extends AstNodeCompiler<AssignmentPattern> {
+final class AssignmentPatternCompiler {
 
-    AssignmentPatternCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+    private AssignmentPatternCompiler() {
     }
 
-    @Override
-    void compile(AssignmentPattern assignPattern) {
+    static void compile(CompilerContext compilerContext, AssignmentPattern assignPattern) {
         // Stack: [value]
         // If value is undefined, use the default value instead
         compilerContext.emitter.emitOpcode(Opcode.DUP);

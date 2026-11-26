@@ -23,7 +23,6 @@ import com.caoccao.qjs4j.utils.DtoaConverter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.function.LongFunction;
 
 /**
  * Base class for JavaScript TypedArray objects. Based on ES2020 TypedArray specification.
@@ -138,7 +137,9 @@ public sealed abstract class JSTypedArray extends JSObject
         return createView(copy, 0, getLength());
     }
 
-    protected abstract JSTypedArray createView(IJSArrayBuffer buffer, long byteOffset, long length);
+    protected final JSTypedArray createView(IJSArrayBuffer buffer, long byteOffset, long length) {
+        return elementKind().rawViews.create(context, buffer, byteOffset, length);
+    }
 
     /**
      * Integer-Indexed exotic object [[DefineOwnProperty]]. Following QuickJS JS_DefineProperty for typed arrays (lines
@@ -672,17 +673,8 @@ public sealed abstract class JSTypedArray extends JSObject
     public JSTypedArray subarray(long begin, long end) {
         // Normalize indices
         long currentLength = getLength();
-        if (begin < 0) {
-            begin = Math.max(currentLength + begin, 0);
-        } else {
-            begin = Math.min(begin, currentLength);
-        }
-
-        if (end < 0) {
-            end = Math.max(currentLength + end, 0);
-        } else {
-            end = Math.min(end, currentLength);
-        }
+        begin = JSArrayBuffer.sliceIndex(begin, currentLength);
+        end = JSArrayBuffer.sliceIndex(end, currentLength);
 
         long newLength = Math.max(end - begin, 0);
         long newByteOffset = byteOffset + begin * bytesPerElement;
@@ -710,8 +702,8 @@ public sealed abstract class JSTypedArray extends JSObject
      * Shared constructor dispatch for every element type. Factories retain the concrete type and its realm prototype
      * while conversions run in source order.
      */
-    protected static JSTypedArray createFromArguments(JSContext context, int bytesPerElement,
-            LongFunction<? extends JSTypedArray> lengthFactory, BufferFactory bufferFactory, JSValue... args) {
+    static JSTypedArray createFromArguments(JSContext context, TypedArrayKind kind, JSValue[] args) {
+        int bytesPerElement = kind.bytesPerElement;
         long length = 0;
         if (args.length >= 1) {
             JSValue firstArg = normalizeConstructorSource(context, args[0]);
@@ -728,45 +720,42 @@ public sealed abstract class JSTypedArray extends JSObject
                         return null;
                     }
                 }
+                length = -1;
                 if (args.length >= 3 && !(args[2] instanceof JSUndefined)) {
                     length = toTypedArrayBufferLength(context, args[2], bytesPerElement);
                     if (context.hasPendingException()) {
                         return null;
                     }
-                    return bufferFactory.create(jsArrayBuffer, byteOffset, length);
                 }
-                return bufferFactory.create(jsArrayBuffer, byteOffset, -1);
+                return kind.view(context, jsArrayBuffer, byteOffset, length);
             } else if (firstArg instanceof JSTypedArray jsTypedArray) {
                 if (jsTypedArray.isOutOfBounds()) {
                     context.throwTypeError("source TypedArray is out of bounds");
                     return null;
                 }
                 length = jsTypedArray.getLength();
-                JSTypedArray newTypedArray = lengthFactory.apply(length);
+                JSTypedArray newTypedArray = kind.allocate(context, length);
                 newTypedArray.setArray(jsTypedArray, 0);
                 return newTypedArray;
-            } else if (firstArg instanceof JSArray jsArray) {
-                length = toTypedArrayLength(jsArray.getLength(), bytesPerElement);
-                JSTypedArray jsTypedArray = lengthFactory.apply(length);
-                jsTypedArray.setArray(jsArray, 0);
-                return jsTypedArray;
-            } else if (firstArg instanceof JSIterator jsIterator) {
-                JSArray jsArray = JSIteratorHelper.toArray(context, jsIterator);
-                length = toTypedArrayLength(jsArray.getLength(), bytesPerElement);
-                JSTypedArray jsTypedArray = lengthFactory.apply(length);
-                jsTypedArray.setArray(jsArray, 0);
-                return jsTypedArray;
+            } else if (firstArg instanceof JSArray || firstArg instanceof JSIterator) {
+                JSArray array = firstArg instanceof JSArray input
+                        ? input
+                        : JSIteratorHelper.toArray(context, (JSIterator) firstArg);
+                length = toTypedArrayLength(array.getLength(), bytesPerElement);
+                JSTypedArray result = kind.allocate(context, length);
+                result.setArray(array, 0);
+                return result;
             } else if (firstArg instanceof JSObject jsObject) {
                 JSValue lengthValue = jsObject.get(PropertyKey.LENGTH);
                 length = toTypedArrayLength(context, lengthValue, bytesPerElement);
-                JSTypedArray jsTypedArray = lengthFactory.apply(length);
+                JSTypedArray jsTypedArray = kind.allocate(context, length);
                 jsTypedArray.setArray(jsObject, 0);
                 return jsTypedArray;
             } else {
                 length = toTypedArrayLength(context, firstArg, bytesPerElement);
             }
         }
-        return lengthFactory.apply(length);
+        return kind.allocate(context, length);
     }
 
     private static boolean isValidDoubleString(String str) {
@@ -975,8 +964,4 @@ public sealed abstract class JSTypedArray extends JSObject
         }
     }
 
-    @FunctionalInterface
-    protected interface BufferFactory {
-        JSTypedArray create(IJSArrayBuffer buffer, long byteOffset, long length);
-    }
 }

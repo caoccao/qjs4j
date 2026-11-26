@@ -213,21 +213,8 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
         // One read of the shared length, so both ends are normalised against the same value.
         long currentByteLength = byteLength.get();
 
-        // Normalize begin
-        if (begin < 0) {
-            begin = Math.max(currentByteLength + begin, 0);
-        } else {
-            begin = Math.min(begin, currentByteLength);
-        }
-
-        // Normalize end
-        if (end < 0) {
-            end = Math.max(currentByteLength + end, 0);
-        } else {
-            end = Math.min(end, currentByteLength);
-        }
-
-        // Calculate new length
+        begin = JSArrayBuffer.sliceIndex(begin, currentByteLength);
+        end = JSArrayBuffer.sliceIndex(end, currentByteLength);
         long newLength = Math.max(end - begin, 0);
 
         // Create new buffer and copy bytes
@@ -271,27 +258,9 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
     public static JSSharedArrayBuffer createForConstruct(JSContext context, JSFunction constructor, JSValue newTarget,
             JSValue... args) {
         long[] validated = validateArgs(context, args);
-
-        JSObject resolvedPrototype = null;
-        if (newTarget instanceof JSObject newTargetObject) {
-            resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject, NAME);
-            if (context.hasPendingException()) {
-                throw new JSException(context.getPendingException());
-            }
-        }
-
+        JSObject prototype = JSArrayBuffer.bufferPrototype(context, newTarget, NAME);
         JSSharedArrayBuffer buffer = allocateBuffer(context, validated[0], validated[1], validated[2] != 0);
-        if (resolvedPrototype != null) {
-            buffer.setPrototype(resolvedPrototype);
-        } else if (constructor != null) {
-            JSObject constructorPrototype = context.getPrototypeFromConstructor(constructor, NAME);
-            if (context.hasPendingException()) {
-                throw new JSException(context.getPendingException());
-            }
-            if (constructorPrototype != null) {
-                buffer.setPrototype(constructorPrototype);
-            }
-        }
+        JSArrayBuffer.setBufferPrototype(context, buffer, prototype, constructor, NAME);
         return buffer;
     }
 

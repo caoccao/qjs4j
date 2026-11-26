@@ -320,107 +320,8 @@ public final class VirtualMachine {
 
         JSConstructorType constructorType = function.getConstructorType();
         if (constructorType == null) {
-            JSObject thisObject = new JSObject(context);
-            String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
-            if (newTarget instanceof JSObject newTargetObject) {
-                JSObject resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject,
-                        intrinsicDefaultPrototypeName);
-                if (context.hasPendingException()) {
-                    return null;
-                }
-                if (resolvedPrototype != null) {
-                    thisObject.setPrototype(resolvedPrototype);
-                }
-            } else {
-                JSObject resolvedPrototype = context.getPrototypeFromConstructor(function,
-                        intrinsicDefaultPrototypeName);
-                if (context.hasPendingException()) {
-                    return null;
-                }
-                if (resolvedPrototype != null) {
-                    thisObject.setPrototype(resolvedPrototype);
-                }
-            }
-
-            // Check if this is a derived constructor
-            boolean isDerived = function instanceof JSBytecodeFunction bcFunc && bcFunc.isDerivedConstructor();
-
-            // For derived constructors, use JSUndefined as initial this
-            // (this must be initialized by super() call)
-            JSValue constructThis = isDerived ? JSUndefined.INSTANCE : thisObject;
-
-            JSValue result;
-            JSContext constructorContext = function.getRealmContext() != null ? function.getRealmContext() : context;
-            JSValue savedNewTarget = context.getConstructorNewTarget();
-            JSValue savedConstructorContextNewTarget = null;
-            JSValue savedNativeConstructorContextNewTarget = null;
-            context.setConstructorNewTarget(newTarget);
-            if (constructorContext != context) {
-                savedConstructorContextNewTarget = constructorContext.getConstructorNewTarget();
-                constructorContext.setConstructorNewTarget(newTarget);
-            }
-            try {
-                if (function instanceof JSNativeFunction nativeFunc) {
-                    savedNativeConstructorContextNewTarget = constructorContext.getNativeConstructorNewTarget();
-                    constructorContext.setNativeConstructorNewTarget(newTarget);
-                    result = nativeFunc.call(context, constructThis, args);
-                    if (context.hasPendingException()) {
-                        return null;
-                    }
-                } else if (function instanceof JSBytecodeFunction bytecodeFunction) {
-                    result = constructorContext.getVirtualMachine().execute(bytecodeFunction, constructThis, args,
-                            newTarget);
-                    if (constructorContext != context && constructorContext.hasPendingException()) {
-                        context.setPendingException(constructorContext.getPendingException());
-                        constructorContext.clearPendingException();
-                    }
-                } else {
-                    result = function.call(constructorContext, constructThis, args);
-                    if (constructorContext != context && constructorContext.hasPendingException()) {
-                        context.setPendingException(constructorContext.getPendingException());
-                        constructorContext.clearPendingException();
-                    }
-                }
-            } finally {
-                context.setConstructorNewTarget(savedNewTarget);
-                if (function instanceof JSNativeFunction) {
-                    constructorContext.setNativeConstructorNewTarget(savedNativeConstructorContextNewTarget);
-                }
-                if (constructorContext != context) {
-                    constructorContext.setConstructorNewTarget(savedConstructorContextNewTarget);
-                }
-            }
-
-            // ES spec step 13: validate constructor return value
-            if (result instanceof JSObject) {
-                return result;
-            }
-            if (isDerived) {
-                // ES spec step 13c: If result is not undefined, throw TypeError
-                if (!(result instanceof JSUndefined)) {
-                    context.throwTypeError("Derived constructors may only return object or undefined");
-                    return null;
-                }
-                // ES spec step 15: Return GetThisBinding()
-                // If super() was never called, this is still uninitialized (JSUndefined)
-                // In that case throw ReferenceError
-                // Use lastConstructorThisArg saved by RETURN/RETURN_UNDEF before frame was popped
-                JSValue finalThis = constructorContext == context
-                        ? lastConstructorThisArg
-                        : constructorContext.getVirtualMachine().lastConstructorThisArg;
-                if (finalThis == null || finalThis instanceof JSUndefined) {
-                    context.throwReferenceError(
-                            "Must call super constructor in derived class before accessing 'this' or returning from derived constructor");
-                    return null;
-                }
-                if (finalThis instanceof JSObject finalThisObj) {
-                    return finalThisObj;
-                }
-                context.throwReferenceError(
-                        "Must call super constructor in derived class before accessing 'this' or returning from derived constructor");
-                return null;
-            }
-            return thisObject;
+            JSValue result = JSCall.constructOrdinary(context, function, args, newTarget);
+            return context.hasPendingException() ? null : result;
         }
 
         JSContext constructorContext = function.getRealmContext() != null ? function.getRealmContext() : context;
@@ -1331,10 +1232,7 @@ public final class VirtualMachine {
             throw new JSException(context.throwTypeError("apply trap is not a function"));
         }
 
-        JSArray argArray = context.createJSArray(0, args.length);
-        for (JSValue arg : args) {
-            argArray.push(arg);
-        }
+        JSArray argArray = context.createJSArray(args);
 
         JSValue[] trapArgs = new JSValue[]{proxy.getTarget(), thisArg, argArray};
         return applyFunc.call(context, proxy.getHandler(), trapArgs);
@@ -1385,10 +1283,7 @@ public final class VirtualMachine {
             throw new JSException(context.throwTypeError("construct trap is not a function"));
         }
 
-        JSArray argArray = context.createJSArray(0, args.length);
-        for (JSValue arg : args) {
-            argArray.push(arg);
-        }
+        JSArray argArray = context.createJSArray(args);
 
         JSValue[] trapArgs = new JSValue[]{target, argArray, newTarget};
 

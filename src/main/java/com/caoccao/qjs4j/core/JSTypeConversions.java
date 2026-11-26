@@ -440,6 +440,11 @@ public final class JSTypeConversions {
      * Strict Equality Comparison (===). ES2020 7.2.15
      */
     public static boolean strictEquals(JSValue x, JSValue y) {
+        // IEEE 754 equality also handles NaN and the two signs of zero.
+        if (x instanceof JSNumber xNum) {
+            return y instanceof JSNumber yNum && xNum.value() == yNum.value();
+        }
+
         // Different types
         if (x.getClass() != y.getClass()) {
             return false;
@@ -448,19 +453,6 @@ public final class JSTypeConversions {
         // Undefined and null
         if (x instanceof JSUndefined || x instanceof JSNull) {
             return true;
-        }
-
-        // Numbers
-        if (x instanceof JSNumber xNum && y instanceof JSNumber yNum) {
-            double xVal = xNum.value();
-            double yVal = yNum.value();
-
-            // NaN is not equal to anything, including itself
-            if (Double.isNaN(xVal) || Double.isNaN(yVal)) {
-                return false;
-            }
-
-            return xVal == yVal;
         }
 
         // Strings

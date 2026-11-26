@@ -90,11 +90,9 @@ public final class Lexer {
     int position;
     final String source;
     private boolean strictMode;
-    private final LexerTemplateScanner templateScanner;
 
     public Lexer(String source) {
         this.source = source;
-        this.templateScanner = new LexerTemplateScanner(this);
         this.position = 0;
         this.line = 1;
         this.column = 1;
@@ -174,25 +172,9 @@ public final class Lexer {
         return Character.digit(c, radix) >= 0;
     }
 
-    boolean isIdentifierPart(char c) {
-        if (c < 128) {
-            return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '$';
-        }
-        return UnicodeData.isIdentifierPart(c);
-    }
-
     private boolean isIdentifierPartCodePoint(int codePoint) {
         return UnicodeData.isIdentifierPart(codePoint);
     }
-
-    boolean isIdentifierStart(char c) {
-        if (c < 128) {
-            return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '$';
-        }
-        return UnicodeData.isIdentifierStart(c);
-    }
-
-    // Core scanning logic
 
     private boolean isIdentifierStartCodePoint(int codePoint) {
         return UnicodeData.isIdentifierStart(codePoint);
@@ -201,6 +183,8 @@ public final class Lexer {
     private Token makeToken(TokenType type, String value) {
         return new Token(type, value, line, column, position);
     }
+
+    // Core scanning logic
 
     private boolean match(char expected) {
         if (isAtEnd()) {
@@ -331,8 +315,6 @@ public final class Lexer {
         defaultFollowsPropertyAccess = false;
     }
 
-    // Character utilities
-
     public void restoreState(LexerState state) {
         this.position = state.position();
         this.line = state.line();
@@ -347,6 +329,8 @@ public final class Lexer {
         return new LexerState(position, line, column, lastTokenType, defaultFollowsPropertyAccess, lookahead,
                 strictMode);
     }
+
+    // Character utilities
 
     private Token scanBinaryNumber(int startPos, int startLine, int startColumn) {
         scanDigitsWithNumericSeparators(2, false, false);
@@ -929,7 +913,11 @@ public final class Lexer {
     }
 
     private Token scanTemplate(int startPos, int startLine, int startColumn) {
-        return templateScanner.scanTemplate(startPos, startLine, startColumn);
+        int end = LexerTemplateScanner.templateEnd(source, position);
+        String value = source.substring(position, end);
+        column += end + 1 - position;
+        position = end + 1;
+        return new Token(TokenType.TEMPLATE, value, startLine, startColumn, startPos);
     }
 
     private Token scanToken() {
@@ -1252,6 +1240,20 @@ public final class Lexer {
         if (isIdentifierStart(next) && next != 'n') {
             throw new JSSyntaxErrorException("Invalid or unexpected token");
         }
+    }
+
+    static boolean isIdentifierPart(char c) {
+        if (c < 128) {
+            return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '$';
+        }
+        return UnicodeData.isIdentifierPart(c);
+    }
+
+    static boolean isIdentifierStart(char c) {
+        if (c < 128) {
+            return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '$';
+        }
+        return UnicodeData.isIdentifierStart(c);
     }
 
     private static boolean isLineTerminator(char c) {

@@ -19,25 +19,8 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Represents a break statement.
  */
-public final class BreakStatement extends Statement {
-    private final Identifier label;
-
+public final class BreakStatement extends JumpStatement {
     public BreakStatement(Identifier label, SourceLocation location) {
-        super(location);
-        this.label = label;
-    }
-
-    @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(label);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(label);
-    }
-
-    public Identifier getLabel() {
-        return label;
+        super(label, location);
     }
 }

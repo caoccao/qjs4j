@@ -38,11 +38,6 @@ public final class JSUint8Array extends JSTypedArray {
     }
 
     @Override
-    protected JSTypedArray createView(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return new JSUint8Array(context, buffer, byteOffset, length);
-    }
-
-    @Override
     TypedArrayKind elementKind() {
         return TypedArrayKind.UINT8;
     }
@@ -62,7 +57,6 @@ public final class JSUint8Array extends JSTypedArray {
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        return createFromArguments(context, BYTES_PER_ELEMENT, context::createJSUint8Array, context::createJSUint8Array,
-                args);
+        return TypedArrayKind.UINT8.create(context, args);
     }
 }

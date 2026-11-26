@@ -376,21 +376,8 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
 
         long byteLength = getByteLength();
 
-        // Normalize begin
-        if (begin < 0) {
-            begin = Math.max(byteLength + begin, 0);
-        } else {
-            begin = Math.min(begin, byteLength);
-        }
-
-        // Normalize end
-        if (end < 0) {
-            end = Math.max(byteLength + end, 0);
-        } else {
-            end = Math.min(end, byteLength);
-        }
-
-        // Calculate new length
+        begin = sliceIndex(begin, byteLength);
+        end = sliceIndex(end, byteLength);
         long newLength = Math.max(end - begin, 0);
 
         // Create new buffer with proper prototype and copy bytes
@@ -493,6 +480,17 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
         return new JSArrayBuffer(context, byteLengthLong, maxByteLengthLong);
     }
 
+    static JSObject bufferPrototype(JSContext context, JSValue target, String name) {
+        if (!(target instanceof JSObject constructor)) {
+            return null;
+        }
+        JSObject prototype = context.getPrototypeFromConstructor(constructor, name);
+        if (context.hasPendingException()) {
+            throw new JSException(context.getPendingException());
+        }
+        return prototype;
+    }
+
     /**
      * ArrayBuffer constructor implementation. new ArrayBuffer(byteLength) new ArrayBuffer(byteLength, options)
      * <p>
@@ -511,34 +509,11 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      */
     public static JSArrayBuffer createForConstruct(JSContext context, JSFunction constructor, JSValue newTarget,
             JSValue... args) {
-        // Step 1: Argument validation (before prototype access)
         long[] validated = validateArgs(context, args);
-
-        // Step 2: OrdinaryCreateFromConstructor - access newTarget.prototype
-        JSObject resolvedPrototype = null;
-        if (newTarget instanceof JSObject newTargetObject) {
-            resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject, NAME);
-            if (context.hasPendingException()) {
-                throw new JSException(context.getPendingException());
-            }
-        }
-
-        // Step 3: Allocation limit check + buffer creation (CreateByteDataBlock)
-        JSArrayBuffer buf = allocateBuffer(context, validated[0], validated[1]);
-
-        // Set prototype
-        if (resolvedPrototype != null) {
-            buf.setPrototype(resolvedPrototype);
-        } else if (constructor != null) {
-            JSObject constructorPrototype = context.getPrototypeFromConstructor(constructor, NAME);
-            if (context.hasPendingException()) {
-                throw new JSException(context.getPendingException());
-            }
-            if (constructorPrototype != null) {
-                buf.setPrototype(constructorPrototype);
-            }
-        }
-        return buf;
+        JSObject prototype = bufferPrototype(context, newTarget, NAME);
+        JSArrayBuffer buffer = allocateBuffer(context, validated[0], validated[1]);
+        setBufferPrototype(context, buffer, prototype, constructor, NAME);
+        return buffer;
     }
 
     /** Pad to an aligned 32-bit atomic word without narrowing the logical length. */
@@ -547,6 +522,20 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
             throw new JSRangeErrorException("Invalid array buffer length");
         }
         return (byteLength + 3L) & ~3L;
+    }
+
+    static void setBufferPrototype(JSContext context, JSObject buffer, JSObject prototype, JSFunction constructor,
+            String name) {
+        if (prototype == null) {
+            prototype = bufferPrototype(context, constructor, name);
+        }
+        if (prototype != null) {
+            buffer.setPrototype(prototype);
+        }
+    }
+
+    static long sliceIndex(long relative, long length) {
+        return relative < 0 ? Math.max(length + relative, 0) : Math.min(relative, length);
     }
 
     /**

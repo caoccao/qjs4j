@@ -38,8 +38,7 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
 
     @Override
     void compile(ClassDeclaration classDecl) {
-        compilerContext.classExpressionCompiler.compile(new ClassExpression(classDecl.getId(),
-                classDecl.getSuperClass(), classDecl.getBody(), classDecl.getLocation()));
+        ClassExpressionCompiler.compile(compilerContext, classDecl.asExpression());
 
         // Store the class constructor in a variable
         if (classDecl.getId() != null) {

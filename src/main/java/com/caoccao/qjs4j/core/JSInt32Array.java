@@ -38,11 +38,6 @@ public final class JSInt32Array extends JSTypedArray {
     }
 
     @Override
-    protected JSTypedArray createView(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return new JSInt32Array(context, buffer, byteOffset, length);
-    }
-
-    @Override
     TypedArrayKind elementKind() {
         return TypedArrayKind.INT32;
     }
@@ -62,7 +57,6 @@ public final class JSInt32Array extends JSTypedArray {
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        return createFromArguments(context, BYTES_PER_ELEMENT, context::createJSInt32Array, context::createJSInt32Array,
-                args);
+        return TypedArrayKind.INT32.create(context, args);
     }
 }

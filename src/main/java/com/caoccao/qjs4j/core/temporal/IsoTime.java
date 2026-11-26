@@ -259,4 +259,17 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
         }
         result.append('.').append(padded, 1, end);
     }
+
+    public static IsoTime regulate(JSContext context, String overflow, String invalidTimeMessage, int hour, int minute,
+            int second, int millisecond, int microsecond, int nanosecond) {
+        if (!"reject".equals(overflow)) {
+            return createNormalized(hour, minute, second, millisecond, microsecond, nanosecond);
+        }
+        IsoTime time = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+        if (!time.isValid()) {
+            context.throwRangeError(invalidTimeMessage);
+            return null;
+        }
+        return time;
+    }
 }

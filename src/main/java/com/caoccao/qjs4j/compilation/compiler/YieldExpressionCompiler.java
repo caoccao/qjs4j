@@ -19,13 +19,11 @@ package com.caoccao.qjs4j.compilation.compiler;
 import com.caoccao.qjs4j.compilation.ast.YieldExpression;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class YieldExpressionCompiler extends AstNodeCompiler<YieldExpression> {
-    YieldExpressionCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class YieldExpressionCompiler {
+    private YieldExpressionCompiler() {
     }
 
-    @Override
-    void compile(YieldExpression yieldExpr) {
+    static void compile(CompilerContext compilerContext, YieldExpression yieldExpr) {
         if (yieldExpr.getArgument() != null) {
             compilerContext.expressionCompiler.compile(yieldExpr.getArgument());
         } else {

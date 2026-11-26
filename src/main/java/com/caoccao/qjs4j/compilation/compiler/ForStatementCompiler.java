@@ -19,18 +19,16 @@ package com.caoccao.qjs4j.compilation.compiler;
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class ForStatementCompiler extends AstNodeCompiler<ForStatement> {
-    ForStatementCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class ForStatementCompiler {
+    private ForStatementCompiler() {
     }
 
-    @Override
-    void compile(ForStatement forStmt) {
+    static void compile(CompilerContext compilerContext, ForStatement forStmt) {
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 
         boolean initCompiled = false;
         if (forStmt.getInit() instanceof VariableDeclaration varDecl && varDecl.getKind() == VariableKind.VAR) {
-            compilerContext.variableDeclarationCompiler.compile(varDecl);
+            VariableDeclarationCompiler.compile(compilerContext, varDecl);
             initCompiled = true;
         }
 
@@ -51,7 +49,7 @@ final class ForStatementCompiler extends AstNodeCompiler<ForStatement> {
                 if (compilerContext.inGlobalScope && varDecl.getKind() != VariableKind.VAR) {
                     compilerContext.inGlobalScope = false;
                 }
-                compilerContext.variableDeclarationCompiler.compile(varDecl);
+                VariableDeclarationCompiler.compile(compilerContext, varDecl);
                 compilerContext.popState();
             } else if (forStmt.getInit() instanceof Expression expr) {
                 compilerContext.expressionCompiler.compile(expr);

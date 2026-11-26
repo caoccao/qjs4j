@@ -36,28 +36,18 @@ final class CompilerContext {
     final Set<String> annexBFunctionNames;
     final Map<String, Integer> annexBFunctionScopeLocals;
     // Delegate compilers (initialized via initializeDelegates)
-    ArrayExpressionCompiler arrayExpressionCompiler;
     ArrayExpressionDestructuringAssignmentCompiler arrayExpressionDestructuringAssignmentCompiler;
-    ArrayPatternCompiler arrayPatternCompiler;
-    ArrowFunctionExpressionCompiler arrowFunctionExpressionCompiler;
     AssignmentExpressionCompiler assignmentExpressionCompiler;
-    AssignmentPatternCompiler assignmentPatternCompiler;
-    AwaitExpressionCompiler awaitExpressionCompiler;
     BinaryExpressionCompiler binaryExpressionCompiler;
-    BlockStatementCompiler blockStatementCompiler;
-    BreakStatementCompiler breakStatementCompiler;
     CallExpressionCompiler callExpressionCompiler;
     // Services
     final CaptureResolver captureResolver;
     ClassDeclarationCompiler classDeclarationCompiler;
-    ClassExpressionCompiler classExpressionCompiler;
     // Other flags (not stack-managed)
     boolean classFieldEvalContext;
     String classInnerNameToCapture;
     CompilerAnalysis compilerAnalysis;
-    ConditionalExpressionCompiler conditionalExpressionCompiler;
     JSContext context;
-    ContinueStatementCompiler continueStatementCompiler;
     EmitHelpers emitHelpers;
     // Flags (managed by state stack)
     boolean emitTailCalls;
@@ -67,17 +57,13 @@ final class CompilerContext {
     ExpressionCompiler expressionCompiler;
     ExpressionDestructuringAssignmentCompiler expressionDestructuringAssignmentCompiler;
     int finallySubroutineDepth;
-    ForInStatementCompiler forInStatementCompiler;
     ForOfStatementCompiler forOfStatementCompiler;
-    ForStatementCompiler forStatementCompiler;
-    FunctionDeclarationCompiler functionDeclarationCompiler;
     FunctionExpressionCompiler functionExpressionCompiler;
     boolean hasEnclosingArgumentsBinding;
     IdentifierCompiler identifierCompiler;
     IdentifierDestructuringAssignmentCompiler identifierDestructuringAssignmentCompiler;
     IdentifierPatternCompiler identifierPatternCompiler;
     IfStatementCompiler ifStatementCompiler;
-    ImportExpressionCompiler importExpressionCompiler;
     boolean inClassBody;
     boolean inClassFieldInitializer;
     String inferredClassName;
@@ -87,8 +73,8 @@ final class CompilerContext {
     boolean isInAsyncFunction;
     boolean isInGeneratorFunction;
     boolean isLastInProgram;
+    JumpStatementCompiler jumpStatementCompiler;
     LabeledStatementCompiler labeledStatementCompiler;
-    LiteralCompiler literalCompiler;
     final LoopManager loopManager;
     /**
      * Whether the code being compiled may contain a sloppy direct {@code eval}, which can declare a binding that
@@ -97,12 +83,8 @@ final class CompilerContext {
      */
     boolean mayContainDirectEval;
     MemberExpressionCompiler memberExpressionCompiler;
-    MemberExpressionDestructuringAssignmentCompiler memberExpressionDestructuringAssignmentCompiler;
-    NewExpressionCompiler newExpressionCompiler;
     // TDZ and global bindings
     final Set<String> nonDeletableGlobalBindings;
-    ObjectExpressionCompiler objectExpressionCompiler;
-    ObjectExpressionDestructuringAssignmentCompiler objectExpressionDestructuringAssignmentCompiler;
     ObjectPatternCompiler objectPatternCompiler;
     /**
      * The jumps to the end of the optional chain being compiled, or null outside one: QuickJS's
@@ -141,20 +123,15 @@ final class CompilerContext {
     final Map<String, Deque<PreResolvedReference>> preResolvedBindingReferences;
     Map<String, JSSymbol> privateSymbols;
     ProgramCompiler programCompiler;
-    ReturnStatementCompiler returnStatementCompiler;
     final ScopeManager scopeManager;
-    SequenceExpressionCompiler sequenceExpressionCompiler;
     String sourceCode;
     StatementCompiler statementCompiler;
     // State stack
     private final Deque<CompilerStateFrame> stateStack;
     boolean strictMode;
     boolean suppressAnnexBVarStore;
-    SwitchStatementCompiler switchStatementCompiler;
     TaggedTemplateExpressionCompiler taggedTemplateExpressionCompiler;
     final Set<String> tdzLocals;
-    TemplateLiteralCompiler templateLiteralCompiler;
-    ThrowStatementCompiler throwStatementCompiler;
     /**
      * How many try blocks enclose the code being compiled. A call in a try block is not in tail position (ES2024
      * 15.10.2 HasCallInTailPosition): its frame must survive for the catch handler to run.
@@ -164,12 +141,9 @@ final class CompilerContext {
     UnaryExpressionCompiler unaryExpressionCompiler;
     boolean useExistingBindingInParentScopes;
     CompilerScope varDeclarationScopeOverride;
-    VariableDeclarationCompiler variableDeclarationCompiler;
     boolean varInGlobalProgram;
     WhileStatementCompiler whileStatementCompiler;
     final WithObjectManager withObjectManager;
-    WithStatementCompiler withStatementCompiler;
-    YieldExpressionCompiler yieldExpressionCompiler;
 
     CompilerContext(boolean inheritedStrictMode, CaptureResolver parentCaptureResolver, JSContext context) {
         this.scopeManager = new ScopeManager();
@@ -237,60 +211,32 @@ final class CompilerContext {
     }
 
     private void initializeDelegates() {
-        this.arrayExpressionCompiler = new ArrayExpressionCompiler(this);
         this.arrayExpressionDestructuringAssignmentCompiler = new ArrayExpressionDestructuringAssignmentCompiler(this);
-        this.arrayPatternCompiler = new ArrayPatternCompiler(this);
-        this.arrowFunctionExpressionCompiler = new ArrowFunctionExpressionCompiler(this);
         this.assignmentExpressionCompiler = new AssignmentExpressionCompiler(this);
-        this.assignmentPatternCompiler = new AssignmentPatternCompiler(this);
-        this.awaitExpressionCompiler = new AwaitExpressionCompiler(this);
         this.binaryExpressionCompiler = new BinaryExpressionCompiler(this);
-        this.blockStatementCompiler = new BlockStatementCompiler(this);
-        this.breakStatementCompiler = new BreakStatementCompiler(this);
+        this.jumpStatementCompiler = new JumpStatementCompiler(this);
         this.callExpressionCompiler = new CallExpressionCompiler(this);
         this.classDeclarationCompiler = new ClassDeclarationCompiler(this);
-        this.classExpressionCompiler = new ClassExpressionCompiler(this);
         this.compilerAnalysis = new CompilerAnalysis(this);
-        this.conditionalExpressionCompiler = new ConditionalExpressionCompiler(this);
-        this.continueStatementCompiler = new ContinueStatementCompiler(this);
         this.emitHelpers = new EmitHelpers(this);
         this.expressionCompiler = new ExpressionCompiler(this);
         this.expressionDestructuringAssignmentCompiler = new ExpressionDestructuringAssignmentCompiler(this);
-        this.forInStatementCompiler = new ForInStatementCompiler(this);
         this.forOfStatementCompiler = new ForOfStatementCompiler(this);
-        this.forStatementCompiler = new ForStatementCompiler(this);
-        this.functionDeclarationCompiler = new FunctionDeclarationCompiler(this);
         this.functionExpressionCompiler = new FunctionExpressionCompiler(this);
         this.identifierCompiler = new IdentifierCompiler(this);
         this.identifierDestructuringAssignmentCompiler = new IdentifierDestructuringAssignmentCompiler(this);
         this.identifierPatternCompiler = new IdentifierPatternCompiler(this);
         this.ifStatementCompiler = new IfStatementCompiler(this);
-        this.importExpressionCompiler = new ImportExpressionCompiler(this);
         this.labeledStatementCompiler = new LabeledStatementCompiler(this);
-        this.literalCompiler = new LiteralCompiler(this);
         this.memberExpressionCompiler = new MemberExpressionCompiler(this);
-        this.memberExpressionDestructuringAssignmentCompiler = new MemberExpressionDestructuringAssignmentCompiler(
-                this);
-        this.newExpressionCompiler = new NewExpressionCompiler(this);
-        this.objectExpressionCompiler = new ObjectExpressionCompiler(this);
-        this.objectExpressionDestructuringAssignmentCompiler = new ObjectExpressionDestructuringAssignmentCompiler(
-                this);
         this.objectPatternCompiler = new ObjectPatternCompiler(this);
         this.patternCompiler = new PatternCompiler(this);
         this.programCompiler = new ProgramCompiler(this);
-        this.returnStatementCompiler = new ReturnStatementCompiler(this);
-        this.sequenceExpressionCompiler = new SequenceExpressionCompiler(this);
         this.statementCompiler = new StatementCompiler(this);
-        this.switchStatementCompiler = new SwitchStatementCompiler(this);
         this.taggedTemplateExpressionCompiler = new TaggedTemplateExpressionCompiler(this);
-        this.templateLiteralCompiler = new TemplateLiteralCompiler(this);
-        this.throwStatementCompiler = new ThrowStatementCompiler(this);
         this.tryStatementCompiler = new TryStatementCompiler(this);
         this.unaryExpressionCompiler = new UnaryExpressionCompiler(this);
-        this.variableDeclarationCompiler = new VariableDeclarationCompiler(this);
         this.whileStatementCompiler = new WhileStatementCompiler(this);
-        this.withStatementCompiler = new WithStatementCompiler(this);
-        this.yieldExpressionCompiler = new YieldExpressionCompiler(this);
     }
 
     BytecodeCompiler newFunctionCompiler(SourceLocation location) {

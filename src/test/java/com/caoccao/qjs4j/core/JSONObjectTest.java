@@ -35,6 +35,11 @@ public class JSONObjectTest extends BaseJavetTest {
         assertThat(stringifyIndented(obj, space)).as("indent %s", space).isEqualTo(expected);
     }
 
+    private JSFunction doubleNumbers(String name) {
+        return new JSNativeFunction(context, name, 2, (ctx, receiver,
+                args) -> args[1] instanceof JSNumber number ? new JSNumber(number.value() * 2) : args[1]);
+    }
+
     private JSValue parse(JSValue... args) {
         return context.getJSGlobalObject().getJSONObject().parse(JSUndefined.INSTANCE, args);
     }
@@ -86,8 +91,8 @@ public class JSONObjectTest extends BaseJavetTest {
 
         // Check first user
         JSObject user1 = users.get(0).asObject().orElseThrow();
-        assertThat(user1.get("name").asString().map(JSString::value).orElseThrow()).isEqualTo("Alice");
-        assertThat(user1.get("age").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(30.0);
+        assertStringValue(user1.get("name"), "Alice");
+        assertNumberValue(user1.get("age"), 30.0);
         assertThat(user1.get("active")).isEqualTo(JSBoolean.TRUE);
 
         JSArray tags1 = user1.get("tags").asArray().orElseThrow();
@@ -97,8 +102,8 @@ public class JSONObjectTest extends BaseJavetTest {
 
         // Check metadata
         JSObject metadata = root.get("metadata").asObject().orElseThrow();
-        assertThat(metadata.get("version").asString().map(JSString::value).orElseThrow()).isEqualTo("1.0");
-        assertThat(metadata.get("count").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
+        assertStringValue(metadata.get("version"), "1.0");
+        assertNumberValue(metadata.get("count"), 2.0);
 
         // Test stringify back
         JSValue stringified = stringify(result);
@@ -131,15 +136,15 @@ public class JSONObjectTest extends BaseJavetTest {
         parse("{}").asObject().orElseThrow();
 
         JSObject obj = parse("{\"name\": \"test\", \"value\": 123}").asObject().orElseThrow();
-        assertThat(obj.get("name").asString().map(JSString::value).orElseThrow()).isEqualTo("test");
-        assertThat(obj.get("value").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(123.0);
+        assertStringValue(obj.get("name"), "test");
+        assertNumberValue(obj.get("value"), 123.0);
 
         obj = parse("{\"data\": {\"nested\": true}}").asObject().orElseThrow();
         JSObject data = obj.get("data").asObject().orElseThrow();
         assertThat(data.get("nested")).isEqualTo(JSBoolean.TRUE);
 
         obj = parse("  {  \"key\"  :  \"value\"  }  ").asObject().orElseThrow();
-        assertThat(obj.get("key").asString().map(JSString::value).orElseThrow()).isEqualTo("value");
+        assertStringValue(obj.get("key"), "value");
         assertPendingSyntaxError(context, parse(""));
         assertPendingSyntaxError(context, parse("{invalid}"));
         assertPendingSyntaxError(context, parse("\"unterminated"));
@@ -239,21 +244,14 @@ public class JSONObjectTest extends BaseJavetTest {
         // Test basic reviver functionality
         String json = "{\"a\":1,\"b\":2,\"c\":3}";
 
-        // Create a reviver that doubles all numbers
-        JSFunction reviver = new JSNativeFunction(context, "reviver", 2, (context, thisArg, args) -> {
-            JSValue value = args[1];
-            if (value instanceof JSNumber num) {
-                return new JSNumber(num.value() * 2);
-            }
-            return value;
-        });
+        JSFunction reviver = doubleNumbers("reviver");
 
         JSValue result = parse(new JSString(json), reviver);
         JSObject obj = result.asObject().orElseThrow();
 
-        assertThat(obj.get("a").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
-        assertThat(obj.get("b").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(4.0);
-        assertThat(obj.get("c").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(6.0);
+        assertNumberValue(obj.get("a"), 2.0);
+        assertNumberValue(obj.get("b"), 4.0);
+        assertNumberValue(obj.get("c"), 6.0);
     }
 
     @Test
@@ -274,16 +272,7 @@ public class JSONObjectTest extends BaseJavetTest {
         // Test reviver with arrays - simplified test
         String json = "[1,2]";
 
-        // Create a reviver that doubles array elements (simpler logic)
-        JSFunction reviver = new JSNativeFunction(context, "reviver", 2, (context, thisArg, args) -> {
-            JSValue value = args[1];
-
-            // For all numbers, double them
-            if (value instanceof JSNumber num) {
-                return new JSNumber(num.value() * 2);
-            }
-            return value;
-        });
+        JSFunction reviver = doubleNumbers("reviver");
 
         JSValue result = parse(new JSString(json), reviver);
         JSArray arr = result.asArray().orElseThrow();
@@ -322,8 +311,8 @@ public class JSONObjectTest extends BaseJavetTest {
         JSValue result = parse(new JSString(json), reviver);
         JSObject obj = result.asObject().orElseThrow();
 
-        assertThat(obj.get("name").asString().map(JSString::value).orElseThrow()).isEqualTo("Alice");
-        assertThat(obj.get("age").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(30.0);
+        assertStringValue(obj.get("name"), "Alice");
+        assertNumberValue(obj.get("age"), 30.0);
         assertThat(obj.get("internal")).isInstanceOf(JSUndefined.class);
     }
 
@@ -359,7 +348,7 @@ public class JSONObjectTest extends BaseJavetTest {
         JSObject obj = result.asObject().orElseThrow();
         JSObject user = obj.get("user").asObject().orElseThrow();
 
-        assertThat(user.get("age").asString().map(JSString::value).orElseThrow()).isEqualTo("25 years");
+        assertStringValue(user.get("age"), "25 years");
     }
 
     @Test
@@ -490,8 +479,8 @@ public class JSONObjectTest extends BaseJavetTest {
         // Parse back
         JSValue parsed = parse(jsonString);
         JSObject parsedObj = parsed.asObject().orElseThrow();
-        assertThat(parsedObj.get("string").asString().map(JSString::value).orElseThrow()).isEqualTo("hello");
-        assertThat(parsedObj.get("number").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.0);
+        assertStringValue(parsedObj.get("string"), "hello");
+        assertNumberValue(parsedObj.get("number"), 42.0);
         assertThat(parsedObj.get("boolean")).isEqualTo(JSBoolean.TRUE);
         assertThat(parsedObj.get("null")).isEqualTo(JSNull.INSTANCE);
 
@@ -833,14 +822,7 @@ public class JSONObjectTest extends BaseJavetTest {
         });
         obj.set("toJSON", toJSON);
 
-        // Create a replacer that doubles numbers
-        JSFunction replacer = new JSNativeFunction(context, "replacer", 2, (context, thisArg, args) -> {
-            JSValue value = args[1];
-            if (value instanceof JSNumber num) {
-                return new JSNumber(num.value() * 2);
-            }
-            return value;
-        });
+        JSFunction replacer = doubleNumbers("replacer");
 
         JSValue result = stringify(obj, replacer);
         String jsonStr = result.asString().map(JSString::value).orElseThrow();

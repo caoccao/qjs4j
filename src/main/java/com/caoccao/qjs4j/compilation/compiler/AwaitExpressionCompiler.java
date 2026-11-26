@@ -19,13 +19,11 @@ package com.caoccao.qjs4j.compilation.compiler;
 import com.caoccao.qjs4j.compilation.ast.AwaitExpression;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class AwaitExpressionCompiler extends AstNodeCompiler<AwaitExpression> {
-    AwaitExpressionCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class AwaitExpressionCompiler {
+    private AwaitExpressionCompiler() {
     }
 
-    @Override
-    void compile(AwaitExpression awaitExpr) {
+    static void compile(CompilerContext compilerContext, AwaitExpression awaitExpr) {
         compilerContext.expressionCompiler.compile(awaitExpr.getArgument());
         compilerContext.emitter.emitOpcode(Opcode.AWAIT);
     }

@@ -141,15 +141,10 @@ public final class TemporalPlainDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        IsoTime resultTime;
-        if ("reject".equals(overflow)) {
-            resultTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
-            if (!resultTime.isValid()) {
-                context.throwRangeError("Temporal error: Invalid time");
-                return JSUndefined.INSTANCE;
-            }
-        } else {
-            resultTime = IsoTime.createNormalized(hour, minute, second, millisecond, microsecond, nanosecond);
+        IsoTime resultTime = IsoTime.regulate(context, overflow, "Temporal error: Invalid time", hour, minute, second,
+                millisecond, microsecond, nanosecond);
+        if (resultTime == null) {
+            return JSUndefined.INSTANCE;
         }
 
         if (!resultDate.isWithinPlainDateTimeRange(resultTime)) {

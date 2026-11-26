@@ -533,34 +533,15 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        IsoDate resultDate = plainDateTime.getIsoDateTime().date();
-        if (!dateFields.isEmpty()) {
-            JSTemporalPlainDate plainDate = JSTemporalPlainDate.create(context, resultDate, calendarId);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            JSValue mergedDateValue = dateFields.merge(context, plainDate,
-                    TemporalUtils.overflowOptions(context, overflow));
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (mergedDateValue instanceof JSTemporalPlainDate mergedDate) {
-                resultDate = mergedDate.getIsoDate();
-            } else {
-                context.throwTypeError("Temporal error: Date argument must be object or string.");
-                return JSUndefined.INSTANCE;
-            }
+        IsoDate resultDate = dateFields.mergeDate(context, plainDateTime.getIsoDateTime().date(), calendarId, overflow);
+        if (resultDate == null) {
+            return JSUndefined.INSTANCE;
         }
 
-        IsoTime resultTime;
-        if ("reject".equals(overflow)) {
-            resultTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
-            if (!resultTime.isValid()) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
-        } else {
-            resultTime = IsoTime.createNormalized(hour, minute, second, millisecond, microsecond, nanosecond);
+        IsoTime resultTime = IsoTime.regulate(context, overflow, "Temporal error: Invalid ISO date.", hour, minute,
+                second, millisecond, microsecond, nanosecond);
+        if (resultTime == null) {
+            return JSUndefined.INSTANCE;
         }
 
         if (!resultDate.isWithinPlainDateTimeRange(resultTime)) {

@@ -39,11 +39,11 @@ final class ExpressionDestructuringAssignmentCompiler extends AstNodeCompiler<Ex
         if (target instanceof Identifier id) {
             compilerContext.identifierDestructuringAssignmentCompiler.compile(id);
         } else if (target instanceof MemberExpression memberExpr) {
-            compilerContext.memberExpressionDestructuringAssignmentCompiler.compile(memberExpr);
+            MemberExpressionDestructuringAssignmentCompiler.compile(compilerContext, memberExpr);
         } else if (target instanceof ArrayExpression nestedArray) {
             compilerContext.arrayExpressionDestructuringAssignmentCompiler.compile(nestedArray);
         } else if (target instanceof ObjectExpression nestedObj) {
-            compilerContext.objectExpressionDestructuringAssignmentCompiler.compile(nestedObj);
+            ObjectExpressionDestructuringAssignmentCompiler.compile(compilerContext, nestedObj);
         } else {
             throw new JSSyntaxErrorException("Invalid destructuring assignment target", target.getLocation());
         }

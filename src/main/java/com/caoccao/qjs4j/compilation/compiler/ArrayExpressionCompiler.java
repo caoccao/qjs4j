@@ -21,13 +21,11 @@ import com.caoccao.qjs4j.compilation.ast.Expression;
 import com.caoccao.qjs4j.compilation.ast.SpreadElement;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class ArrayExpressionCompiler extends AstNodeCompiler<ArrayExpression> {
-    ArrayExpressionCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class ArrayExpressionCompiler {
+    private ArrayExpressionCompiler() {
     }
 
-    @Override
-    void compile(ArrayExpression arrayExpr) {
+    static void compile(CompilerContext compilerContext, ArrayExpression arrayExpr) {
         compilerContext.emitter.emitOpcodeU16(Opcode.ARRAY_FROM, 0);
 
         // Check if we have any spread elements or holes

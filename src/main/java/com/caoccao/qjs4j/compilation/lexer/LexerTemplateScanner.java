@@ -16,152 +16,125 @@
 
 package com.caoccao.qjs4j.compilation.lexer;
 
+import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
-final class LexerTemplateScanner {
-    private final Lexer lexer;
-
-    LexerTemplateScanner(Lexer lexer) {
-        this.lexer = lexer;
+/**
+ * Locates template delimiters without treating braces inside strings, comments, regexes, or nested templates as
+ * substitutions.
+ */
+public final class LexerTemplateScanner {
+    private LexerTemplateScanner() {
     }
 
-    Token scanTemplate(int startPos, int startLine, int startColumn) {
-        StringBuilder value = new StringBuilder();
-        if (!scanTemplateContents(value)) {
-            throw new JSSyntaxErrorException("Invalid or unexpected token");
-        }
-        return new Token(TokenType.TEMPLATE, value.toString(), startLine, startColumn, startPos);
-    }
-
-    private void scanTemplateBlockComment(StringBuilder value) {
-        value.append(lexer.advance());
-        value.append(lexer.advance());
-        while (!lexer.isAtEnd()) {
-            char c = lexer.advance();
-            value.append(c);
-            if (c == '*' && !lexer.isAtEnd() && lexer.peek() == '/') {
-                value.append(lexer.advance());
-                return;
-            }
-        }
-    }
-
-    private boolean scanTemplateContents(StringBuilder value) {
-        while (!lexer.isAtEnd()) {
-            char c = lexer.peek();
-            if (c == '`') {
-                lexer.advance();
-                return true;
-            }
-            if (c == '\\') {
-                value.append(lexer.advance());
-                if (!lexer.isAtEnd()) {
-                    value.append(lexer.advance());
-                }
-                continue;
-            }
-            if (c == '$' && lexer.position + 1 < lexer.source.length()
-                    && lexer.source.charAt(lexer.position + 1) == '{') {
-                value.append(lexer.advance());
-                value.append(lexer.advance());
-                scanTemplateExpression(value);
-                continue;
-            }
-            value.append(lexer.advance());
-        }
-        return false;
-    }
-
-    private void scanTemplateExpression(StringBuilder value) {
+    public static int expressionEnd(String templateStr, int expressionStart) {
         int braceDepth = 1;
+        int position = expressionStart;
         boolean regexAllowed = true;
-        while (!lexer.isAtEnd() && braceDepth > 0) {
-            char c = lexer.peek();
+
+        while (position < templateStr.length()) {
+            char c = templateStr.charAt(position);
+
             if (Character.isWhitespace(c)) {
-                value.append(lexer.advance());
+                position++;
                 continue;
             }
+
             if (c == '\'' || c == '"') {
-                scanTemplateQuotedString(value, c);
+                position = skipQuotedString(templateStr, position, c);
                 regexAllowed = false;
                 continue;
             }
+
             if (c == '`') {
-                scanTemplateNestedTemplate(value);
+                position = templateEnd(templateStr, position + 1) + 1;
                 regexAllowed = false;
                 continue;
             }
-            if (c == '/' && lexer.position + 1 < lexer.source.length()) {
-                char next = lexer.source.charAt(lexer.position + 1);
-                if (next == '/') {
-                    scanTemplateLineComment(value);
-                    regexAllowed = true;
-                    continue;
+
+            if (c == '/') {
+                if (position + 1 < templateStr.length()) {
+                    char next = templateStr.charAt(position + 1);
+                    if (next == '/') {
+                        position = skipLineComment(templateStr, position + 2);
+                        regexAllowed = true;
+                        continue;
+                    }
+                    if (next == '*') {
+                        position = skipBlockComment(templateStr, position + 2);
+                        regexAllowed = true;
+                        continue;
+                    }
                 }
-                if (next == '*') {
-                    scanTemplateBlockComment(value);
-                    regexAllowed = true;
-                    continue;
-                }
+
                 if (regexAllowed) {
-                    scanTemplateRegex(value);
+                    position = skipRegexLiteral(templateStr, position);
                     regexAllowed = false;
                     continue;
                 }
-                value.append(lexer.advance());
-                if (!lexer.isAtEnd() && lexer.peek() == '=') {
-                    value.append(lexer.advance());
+
+                position++;
+                if (position < templateStr.length() && templateStr.charAt(position) == '=') {
+                    position++;
                 }
                 regexAllowed = true;
                 continue;
             }
 
             if (c == '{') {
-                value.append(lexer.advance());
                 braceDepth++;
+                position++;
                 regexAllowed = true;
                 continue;
             }
+
             if (c == '}') {
-                value.append(lexer.advance());
                 braceDepth--;
+                if (braceDepth == 0) {
+                    return position;
+                }
+                position++;
                 regexAllowed = false;
                 continue;
             }
+
             if (c == '(' || c == '[' || c == ',' || c == ';' || c == ':') {
-                value.append(lexer.advance());
+                position++;
                 regexAllowed = true;
                 continue;
             }
+
             if (c == ')' || c == ']') {
-                value.append(lexer.advance());
+                position++;
                 regexAllowed = false;
                 continue;
             }
 
             if (c == '.') {
-                if (lexer.position + 2 < lexer.source.length() && lexer.source.charAt(lexer.position + 1) == '.'
-                        && lexer.source.charAt(lexer.position + 2) == '.') {
-                    value.append(lexer.advance());
-                    value.append(lexer.advance());
-                    value.append(lexer.advance());
+                if (position + 2 < templateStr.length() && templateStr.charAt(position + 1) == '.'
+                        && templateStr.charAt(position + 2) == '.') {
+                    position += 3;
                     regexAllowed = true;
-                } else if (lexer.position + 1 < lexer.source.length()
-                        && Character.isDigit(lexer.source.charAt(lexer.position + 1))) {
-                    scanTemplateNumber(value);
+                } else if (position + 1 < templateStr.length() && Character.isDigit(templateStr.charAt(position + 1))) {
+                    position = skipNumberLiteral(templateStr, position);
                     regexAllowed = false;
                 } else {
-                    value.append(lexer.advance());
+                    position++;
                     regexAllowed = false;
                 }
                 continue;
             }
 
-            if (lexer.isIdentifierStart(c)) {
-                String identifier = scanTemplateIdentifier(value);
+            if (Lexer.isIdentifierStart(c)) {
+                int start = position++;
+                while (position < templateStr.length() && Lexer.isIdentifierPart(templateStr.charAt(position))) {
+                    position++;
+                }
+                String identifier = templateStr.substring(start, position);
                 regexAllowed = switch (identifier) {
-                    case "return", "throw", "case", "delete", "void", "typeof", "instanceof", "in", "of", "new", "do",
-                            "else", "yield", "await" ->
+                    case JSKeyword.RETURN, JSKeyword.THROW, JSKeyword.CASE, JSKeyword.DELETE, JSKeyword.VOID,
+                            JSKeyword.TYPEOF, JSKeyword.INSTANCEOF, JSKeyword.IN, JSKeyword.OF, JSKeyword.NEW,
+                            JSKeyword.DO, JSKeyword.ELSE, JSKeyword.YIELD, JSKeyword.AWAIT ->
                         true;
                     default -> false;
                 };
@@ -169,153 +142,170 @@ final class LexerTemplateScanner {
             }
 
             if (Character.isDigit(c)) {
-                scanTemplateNumber(value);
+                position = skipNumberLiteral(templateStr, position);
                 regexAllowed = false;
                 continue;
             }
 
             if ("+-*%&|^!~<>=?".indexOf(c) >= 0) {
-                value.append(lexer.advance());
-                if (!lexer.isAtEnd()) {
-                    char next = lexer.peek();
+                position++;
+                if (position < templateStr.length()) {
+                    char next = templateStr.charAt(position);
                     if (next == '=' || (next == c && "&|+-<>?".indexOf(c) >= 0)) {
-                        value.append(lexer.advance());
+                        position++;
                     } else if (c == '=' && next == '>') {
-                        value.append(lexer.advance());
+                        position++;
                     }
                 }
-                if (c == '>' && !lexer.isAtEnd() && lexer.peek() == '>') {
-                    value.append(lexer.advance());
-                    if (!lexer.isAtEnd() && lexer.peek() == '>') {
-                        value.append(lexer.advance());
+                if (c == '>' && position < templateStr.length() && templateStr.charAt(position) == '>') {
+                    position++;
+                    if (position < templateStr.length() && templateStr.charAt(position) == '>') {
+                        position++;
                     }
-                    if (!lexer.isAtEnd() && lexer.peek() == '=') {
-                        value.append(lexer.advance());
+                    if (position < templateStr.length() && templateStr.charAt(position) == '=') {
+                        position++;
                     }
                 }
                 regexAllowed = true;
                 continue;
             }
 
-            value.append(lexer.advance());
+            position++;
             regexAllowed = false;
         }
-        if (braceDepth != 0) {
-            throw new JSSyntaxErrorException("Invalid or unexpected token");
-        }
+
+        throw new JSSyntaxErrorException("Unterminated template expression");
     }
 
-    private String scanTemplateIdentifier(StringBuilder value) {
-        int start = lexer.position;
-        value.append(lexer.advance());
-        while (!lexer.isAtEnd() && lexer.isIdentifierPart(lexer.peek())) {
-            value.append(lexer.advance());
-        }
-        return lexer.source.substring(start, lexer.position);
-    }
-
-    private void scanTemplateLineComment(StringBuilder value) {
-        value.append(lexer.advance());
-        value.append(lexer.advance());
-        while (!lexer.isAtEnd()) {
-            char c = lexer.advance();
-            value.append(c);
-            if (c == '\n' || c == '\r') {
-                return;
-            }
-        }
-    }
-
-    private void scanTemplateNestedTemplate(StringBuilder value) {
-        value.append(lexer.advance());
-        if (scanTemplateContents(value)) {
-            value.append('`');
-        }
-    }
-
-    private void scanTemplateNumber(StringBuilder value) {
-        if (lexer.peek() == '0' && lexer.position + 1 < lexer.source.length()) {
-            char prefix = lexer.source.charAt(lexer.position + 1);
-            if (prefix == 'x' || prefix == 'X' || prefix == 'b' || prefix == 'B' || prefix == 'o' || prefix == 'O') {
-                value.append(lexer.advance());
-                value.append(lexer.advance());
-                while (!lexer.isAtEnd() && lexer.isIdentifierPart(lexer.peek())) {
-                    value.append(lexer.advance());
-                }
-                return;
-            }
-        }
-
-        while (!lexer.isAtEnd() && Character.isDigit(lexer.peek())) {
-            value.append(lexer.advance());
-        }
-        if (!lexer.isAtEnd() && lexer.peek() == '.') {
-            value.append(lexer.advance());
-            while (!lexer.isAtEnd() && Character.isDigit(lexer.peek())) {
-                value.append(lexer.advance());
-            }
-        }
-        if (!lexer.isAtEnd() && (lexer.peek() == 'e' || lexer.peek() == 'E')) {
-            value.append(lexer.advance());
-            if (!lexer.isAtEnd() && (lexer.peek() == '+' || lexer.peek() == '-')) {
-                value.append(lexer.advance());
-            }
-            while (!lexer.isAtEnd() && Character.isDigit(lexer.peek())) {
-                value.append(lexer.advance());
-            }
-        }
-        if (!lexer.isAtEnd() && lexer.peek() == 'n') {
-            value.append(lexer.advance());
-        }
-    }
-
-    private void scanTemplateQuotedString(StringBuilder value, char quote) {
-        value.append(lexer.advance());
-        while (!lexer.isAtEnd()) {
-            char c = lexer.peek();
+    /** Returns the index of the next backtick or substitution, or the end of the input. */
+    public static int nextDelimiter(String source, int start) {
+        for (int i = start; i < source.length(); i++) {
+            char c = source.charAt(i);
             if (c == '\\') {
-                value.append(lexer.advance());
-                if (!lexer.isAtEnd()) {
-                    value.append(lexer.advance());
+                i++;
+            } else if (c == '`' || c == '$' && i + 1 < source.length() && source.charAt(i + 1) == '{') {
+                return i;
+            }
+        }
+        return source.length();
+    }
+
+    private static int skipBlockComment(String source, int position) {
+        while (position + 1 < source.length()) {
+            if (source.charAt(position) == '*' && source.charAt(position + 1) == '/') {
+                return position + 2;
+            }
+            position++;
+        }
+        throw new JSSyntaxErrorException("Unterminated block comment in template expression");
+    }
+
+    private static int skipLineComment(String source, int position) {
+        while (position < source.length() && source.charAt(position) != '\n' && source.charAt(position) != '\r') {
+            position++;
+        }
+        return position;
+    }
+
+    private static int skipNumberLiteral(String source, int position) {
+        int start = position;
+        if (source.charAt(position) == '0' && position + 1 < source.length()) {
+            char prefix = source.charAt(position + 1);
+            if (prefix == 'x' || prefix == 'X' || prefix == 'b' || prefix == 'B' || prefix == 'o' || prefix == 'O') {
+                position += 2;
+                while (position < source.length() && Lexer.isIdentifierPart(source.charAt(position))) {
+                    position++;
                 }
+                return position;
+            }
+        }
+
+        while (position < source.length() && Character.isDigit(source.charAt(position))) {
+            position++;
+        }
+        if (position < source.length() && source.charAt(position) == '.') {
+            position++;
+            while (position < source.length() && Character.isDigit(source.charAt(position))) {
+                position++;
+            }
+        }
+        if (position < source.length() && (source.charAt(position) == 'e' || source.charAt(position) == 'E')) {
+            int expPos = position + 1;
+            if (expPos < source.length() && (source.charAt(expPos) == '+' || source.charAt(expPos) == '-')) {
+                expPos++;
+            }
+            while (expPos < source.length() && Character.isDigit(source.charAt(expPos))) {
+                expPos++;
+            }
+            position = expPos;
+        }
+        if (position < source.length() && source.charAt(position) == 'n') {
+            position++;
+        }
+        return position == start ? start + 1 : position;
+    }
+
+    private static int skipQuotedString(String source, int quotePos, char quote) {
+        int position = quotePos + 1;
+        while (position < source.length()) {
+            char c = source.charAt(position);
+            if (c == '\\') {
+                position = Math.min(position + 2, source.length());
                 continue;
             }
-            value.append(lexer.advance());
             if (c == quote) {
-                return;
+                return position + 1;
             }
+            if (c == '\n' || c == '\r') {
+                throw new JSSyntaxErrorException("Unterminated string in template expression");
+            }
+            position++;
         }
+        throw new JSSyntaxErrorException("Unterminated string in template expression");
     }
 
-    private void scanTemplateRegex(StringBuilder value) {
-        value.append(lexer.advance());
-        boolean inClass = false;
-        while (!lexer.isAtEnd()) {
-            char c = lexer.advance();
-            value.append(c);
+    private static int skipRegexLiteral(String source, int slashPos) {
+        int position = slashPos + 1;
+        boolean inCharacterClass = false;
+        while (position < source.length()) {
+            char c = source.charAt(position);
             if (c == '\\') {
-                if (!lexer.isAtEnd()) {
-                    value.append(lexer.advance());
-                }
+                position = Math.min(position + 2, source.length());
                 continue;
             }
             if (c == '[') {
-                inClass = true;
+                inCharacterClass = true;
+                position++;
                 continue;
             }
-            if (c == ']' && inClass) {
-                inClass = false;
+            if (c == ']' && inCharacterClass) {
+                inCharacterClass = false;
+                position++;
                 continue;
             }
-            if (c == '/' && !inClass) {
-                break;
+            if (c == '/' && !inCharacterClass) {
+                position++;
+                while (position < source.length() && Lexer.isIdentifierPart(source.charAt(position))) {
+                    position++;
+                }
+                return position;
             }
             if (c == '\n' || c == '\r') {
-                return;
+                throw new JSSyntaxErrorException("Unterminated regex literal in template expression");
             }
+            position++;
         }
-        while (!lexer.isAtEnd() && lexer.isIdentifierPart(lexer.peek())) {
-            value.append(lexer.advance());
+        throw new JSSyntaxErrorException("Unterminated regex literal in template expression");
+    }
+
+    static int templateEnd(String source, int start) {
+        int index = nextDelimiter(source, start);
+        while (index < source.length() && source.charAt(index) == '$') {
+            index = nextDelimiter(source, expressionEnd(source, index + 2) + 1);
         }
+        if (index == source.length()) {
+            throw new JSSyntaxErrorException("Invalid or unexpected token");
+        }
+        return index;
     }
 }

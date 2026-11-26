@@ -140,7 +140,7 @@ public final class TemporalDurationPrototype {
         while (remainingTimeNanoseconds.signum() != 0) {
             int direction = remainingTimeNanoseconds.signum() < 0 ? -1 : 1;
             LocalDateTime adjacentDayDateTime = dayBalanceAnchorDateTime.plusDays(direction);
-            BigInteger oneDayNanoseconds = nanosecondsBetween(context, dayBalanceAnchorDateTime, null,
+            BigInteger oneDayNanoseconds = TemporalUtils.nanosecondsBetween(context, dayBalanceAnchorDateTime, null,
                     adjacentDayDateTime, null, relativeToOption).abs();
             if (context.hasPendingException()) {
                 return null;
@@ -191,8 +191,8 @@ public final class TemporalDurationPrototype {
             LocalDateTime endDateTime, TemporalUnit largestUnit, TemporalUnit smallestUnit,
             TemporalRelativeToOption relativeToOption) {
         if (largestUnit.isTimeUnit()) {
-            BigInteger totalNanoseconds = nanosecondsBetween(context, startDateTime, null, endDateTime, null,
-                    relativeToOption);
+            BigInteger totalNanoseconds = TemporalUtils.nanosecondsBetween(context, startDateTime, null, endDateTime,
+                    null, relativeToOption);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -264,8 +264,8 @@ public final class TemporalDurationPrototype {
             }
         }
 
-        BigInteger remainingNanoseconds = nanosecondsBetween(context, cursorDateTime, null, endDateTime, null,
-                relativeToOption);
+        BigInteger remainingNanoseconds = TemporalUtils.nanosecondsBetween(context, cursorDateTime, null, endDateTime,
+                null, relativeToOption);
         if (context.hasPendingException()) {
             return null;
         }
@@ -409,39 +409,6 @@ public final class TemporalDurationPrototype {
     public static JSValue nanoseconds(JSContext context, JSValue thisArg, JSValue[] args) {
         return RECEIVER.read(context, thisArg, "nanoseconds",
                 duration -> JSNumber.of(duration.getDuration().nanoseconds()));
-    }
-
-    private static BigInteger nanosecondsBetween(JSContext context, LocalDateTime startDateTime,
-            BigInteger knownStartEpochNanoseconds, LocalDateTime endDateTime, BigInteger knownEndEpochNanoseconds,
-            TemporalRelativeToOption relativeToOption) {
-        if (relativeToOption == null || !relativeToOption.zoned()) {
-            return TemporalUtils.nanosecondsBetween(startDateTime, endDateTime);
-        }
-        BigInteger startEpochNanoseconds;
-        if (knownStartEpochNanoseconds != null) {
-            startEpochNanoseconds = knownStartEpochNanoseconds;
-        } else if (startDateTime.equals(relativeToOption.startDateTime())) {
-            startEpochNanoseconds = relativeToOption.epochNanoseconds();
-        } else {
-            startEpochNanoseconds = IsoDateTime.zonedLocalDateTimeToEpochNanoseconds(context, relativeToOption,
-                    startDateTime);
-        }
-        if (context.hasPendingException() || startEpochNanoseconds == null) {
-            return BigInteger.ZERO;
-        }
-        BigInteger endEpochNanoseconds;
-        if (knownEndEpochNanoseconds != null) {
-            endEpochNanoseconds = knownEndEpochNanoseconds;
-        } else if (endDateTime.equals(relativeToOption.startDateTime())) {
-            endEpochNanoseconds = relativeToOption.epochNanoseconds();
-        } else {
-            endEpochNanoseconds = IsoDateTime.zonedLocalDateTimeToEpochNanoseconds(context, relativeToOption,
-                    endDateTime);
-        }
-        if (context.hasPendingException() || endEpochNanoseconds == null) {
-            return BigInteger.ZERO;
-        }
-        return endEpochNanoseconds.subtract(startEpochNanoseconds);
     }
 
     public static JSValue negated(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -763,7 +730,7 @@ public final class TemporalDurationPrototype {
                         unroundedEndDateTime);
                 weekAnchorDateTime = TemporalUnit.MONTH.addCalendarUnits(weekAnchorDateTime, monthStepCount);
             }
-            BigInteger weekRemainderNanoseconds = nanosecondsBetween(context, weekAnchorDateTime, null,
+            BigInteger weekRemainderNanoseconds = TemporalUtils.nanosecondsBetween(context, weekAnchorDateTime, null,
                     unroundedEndDateTime, unroundedEndEpochNanoseconds, relativeToOption);
             BigInteger weekIncrementNanoseconds = WEEK_NANOSECONDS.multiply(BigInteger.valueOf(roundingIncrement));
             BigInteger roundedWeekRemainderNanoseconds = roundingMode
@@ -799,8 +766,8 @@ public final class TemporalDurationPrototype {
                 return null;
             }
             LocalDateTime endAnchorDateTime = startAnchorDateTime.plusDays(durationSign);
-            BigInteger daySpanNanoseconds = nanosecondsBetween(context, startAnchorDateTime, null, endAnchorDateTime,
-                    null, relativeToOption);
+            BigInteger daySpanNanoseconds = TemporalUtils.nanosecondsBetween(context, startAnchorDateTime, null,
+                    endAnchorDateTime, null, relativeToOption);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -830,7 +797,7 @@ public final class TemporalDurationPrototype {
                 context.throwRangeError("Temporal error: Duration field out of range.");
                 return null;
             }
-            BigInteger timeRemainderNanoseconds = nanosecondsBetween(context, dayAdjustedDateTime, null,
+            BigInteger timeRemainderNanoseconds = TemporalUtils.nanosecondsBetween(context, dayAdjustedDateTime, null,
                     unroundedEndDateTime, unroundedEndEpochNanoseconds, relativeToOption);
             BigInteger incrementNanoseconds = unitToNanosecondsBigInteger(smallestUnit)
                     .multiply(BigInteger.valueOf(roundingIncrement));
@@ -840,8 +807,8 @@ public final class TemporalDurationPrototype {
                     roundedTimeRemainderNanoseconds, relativeToOption);
         }
 
-        BigInteger totalNanoseconds = nanosecondsBetween(context, startDateTime, null, unroundedEndDateTime,
-                unroundedEndEpochNanoseconds, relativeToOption);
+        BigInteger totalNanoseconds = TemporalUtils.nanosecondsBetween(context, startDateTime, null,
+                unroundedEndDateTime, unroundedEndEpochNanoseconds, relativeToOption);
         BigInteger incrementNanoseconds;
         if (relativeToOption.zoned() && smallestUnit == TemporalUnit.DAY) {
             return roundDateTimeToCalendarUnit(context, startDateTime, unroundedEndDateTime,
@@ -873,8 +840,8 @@ public final class TemporalDurationPrototype {
 
         int boundaryToEndDirection;
         if (relativeToOption != null && relativeToOption.zoned()) {
-            BigInteger boundaryToEndNanoseconds = nanosecondsBetween(context, truncatedBoundaryDateTime, null,
-                    endDateTime, knownEndEpochNanoseconds, relativeToOption);
+            BigInteger boundaryToEndNanoseconds = TemporalUtils.nanosecondsBetween(context, truncatedBoundaryDateTime,
+                    null, endDateTime, knownEndEpochNanoseconds, relativeToOption);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -920,8 +887,8 @@ public final class TemporalDurationPrototype {
 
         int direction;
         if (relativeToOption != null && relativeToOption.zoned()) {
-            BigInteger startToEndNanoseconds = nanosecondsBetween(context, startDateTime, null, endDateTime,
-                    knownEndEpochNanoseconds, relativeToOption);
+            BigInteger startToEndNanoseconds = TemporalUtils.nanosecondsBetween(context, startDateTime, null,
+                    endDateTime, knownEndEpochNanoseconds, relativeToOption);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -956,10 +923,12 @@ public final class TemporalDurationPrototype {
             case HALF_TRUNC :
             case HALF_CEIL :
             case HALF_FLOOR :
-                BigInteger lowerDistanceNanoseconds = nanosecondsBetween(context, lowerBoundaryDateTime, null,
-                        endDateTime, null, relativeToOption).abs();
-                BigInteger upperDistanceNanoseconds = nanosecondsBetween(context, endDateTime, null,
-                        upperBoundaryDateTime, null, relativeToOption).abs();
+                BigInteger lowerDistanceNanoseconds = TemporalUtils
+                        .nanosecondsBetween(context, lowerBoundaryDateTime, null, endDateTime, null, relativeToOption)
+                        .abs();
+                BigInteger upperDistanceNanoseconds = TemporalUtils
+                        .nanosecondsBetween(context, endDateTime, null, upperBoundaryDateTime, null, relativeToOption)
+                        .abs();
                 int distanceComparison = lowerDistanceNanoseconds.compareTo(upperDistanceNanoseconds);
                 if (distanceComparison < 0) {
                     return lowerBoundaryDateTime;
@@ -1137,8 +1106,8 @@ public final class TemporalDurationPrototype {
         }
 
         if (relativeToOption.zoned() && roundOptions.largestUnit().isTimeUnit()) {
-            BigInteger roundedNanoseconds = nanosecondsBetween(context, startDateTime, null, roundedEndDateTime, null,
-                    relativeToOption);
+            BigInteger roundedNanoseconds = TemporalUtils.nanosecondsBetween(context, startDateTime, null,
+                    roundedEndDateTime, null, relativeToOption);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -1316,7 +1285,7 @@ public final class TemporalDurationPrototype {
         }
         long direction;
         if (zoned) {
-            BigInteger deltaNanoseconds = nanosecondsBetween(context, startDateTime,
+            BigInteger deltaNanoseconds = TemporalUtils.nanosecondsBetween(context, startDateTime,
                     relativeToOption.epochNanoseconds(), endDateTime, endEpochNanoseconds, relativeToOption);
             if (context.hasPendingException()) {
                 return Double.NaN;
@@ -1338,12 +1307,12 @@ public final class TemporalDurationPrototype {
             }
         }
 
-        BigInteger remainderNanoseconds = nanosecondsBetween(context, boundaryDateTime,
+        BigInteger remainderNanoseconds = TemporalUtils.nanosecondsBetween(context, boundaryDateTime,
                 boundaryDateTime.equals(startDateTime) && zoned ? relativeToOption.epochNanoseconds() : null,
                 endDateTime,
                 endDateTime.equals(startDateTime) && zoned ? relativeToOption.epochNanoseconds() : endEpochNanoseconds,
                 relativeToOption).abs();
-        BigInteger intervalNanoseconds = nanosecondsBetween(context, boundaryDateTime,
+        BigInteger intervalNanoseconds = TemporalUtils.nanosecondsBetween(context, boundaryDateTime,
                 boundaryDateTime.equals(startDateTime) && zoned ? relativeToOption.epochNanoseconds() : null,
                 nextBoundaryDateTime, null, relativeToOption).abs();
         BigDecimal fraction = new BigDecimal(remainderNanoseconds).divide(new BigDecimal(intervalNanoseconds),

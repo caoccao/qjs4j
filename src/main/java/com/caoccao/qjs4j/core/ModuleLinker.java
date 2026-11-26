@@ -111,25 +111,14 @@ final class ModuleLinker {
             return null;
         }
         List<LinkedModuleRequest> requests = new ArrayList<>();
-        int depth = 0;
-        for (int index = 0; index < tokens.size(); index++) {
+        for (int index = ModuleSourceTransformer.nextModuleDeclaration(tokens,
+                0); index >= 0; index = ModuleSourceTransformer.nextModuleDeclaration(tokens, index + 1)) {
             Token token = tokens.get(index);
-            switch (token.type()) {
-                case LBRACE, LPAREN, LBRACKET -> depth++;
-                case RBRACE, RPAREN, RBRACKET -> depth = Math.max(0, depth - 1);
-                default -> {
-                }
-            }
-            if (depth != 0 || index + 1 >= tokens.size()) {
-                continue;
+            if (index + 1 >= tokens.size()) {
+                break;
             }
             if (token.type() == TokenType.EXPORT) {
                 index = readExportDeclaration(tokens, index, sourceCode, requests);
-                continue;
-            }
-            if (token.type() != TokenType.IMPORT || tokens.get(index + 1).type() == TokenType.LPAREN
-                    || tokens.get(index + 1).type() == TokenType.DOT) {
-                // `import(...)` and `import.meta` are expressions, not declarations.
                 continue;
             }
             index = readImportDeclaration(tokens, index, sourceCode, requests);
@@ -674,27 +663,7 @@ final class ModuleLinker {
     }
 
     private void validateNamedImportSpecifiers(String namedClause, Consumer<String> checkName) {
-        if (!namedClause.startsWith("{") || !namedClause.endsWith("}")) {
-            return;
-        }
-        String specifiersText = namedClause.substring(1, namedClause.length() - 1).trim();
-        if (specifiersText.isEmpty()) {
-            return;
-        }
-        for (String rawSpecifier : transformer.splitOnTopLevelCommas(specifiersText)) {
-            String specifier = rawSpecifier.trim();
-            if (specifier.isEmpty()) {
-                continue;
-            }
-            String importedName;
-            int asIndex = transformer.findTopLevelAs(specifier);
-            if (asIndex >= 0) {
-                importedName = transformer.parseModuleExportNameValue(specifier.substring(0, asIndex).trim());
-            } else {
-                importedName = transformer.parseModuleExportNameValue(specifier);
-            }
-            checkName.accept(importedName);
-        }
+        transformer.forEachNamedImport(namedClause, (importedName, localName) -> checkName.accept(importedName));
     }
 
     record DynamicImportExportResolution(JSDynamicImportModule moduleRecord, String bindingName, boolean ambiguous) {

@@ -20,13 +20,11 @@ import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class ForInStatementCompiler extends AstNodeCompiler<ForInStatement> {
-    ForInStatementCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class ForInStatementCompiler {
+    private ForInStatementCompiler() {
     }
 
-    @Override
-    void compile(ForInStatement forInStmt) {
+    static void compile(CompilerContext compilerContext, ForInStatement forInStmt) {
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 
         boolean isExpressionBased = forInStmt.getLeft() instanceof Expression;

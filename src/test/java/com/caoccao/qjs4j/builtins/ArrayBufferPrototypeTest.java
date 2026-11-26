@@ -27,6 +27,27 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class ArrayBufferPrototypeTest extends BaseTest {
 
+    private void assertTransfer(JSNativeCallback transfer, boolean fixed) {
+        for (int length : new int[]{16, 32, 8}) {
+            JSArrayBuffer source = new JSArrayBuffer(context, 16);
+            JSValue[] args = length == 16 ? JSValue.NO_ARGS : numberArgs(length);
+            JSArrayBuffer target = transfer.call(context, source, args).asArrayBuffer().orElseThrow();
+            assertThat(target.getByteLength()).isEqualTo(length);
+            assertThat(target.isDetached()).isFalse();
+            assertThat(target.isResizable()).isFalse();
+            assertThat(source.isDetached()).isTrue();
+        }
+
+        JSArrayBuffer source = new JSArrayBuffer(context, 16, 64);
+        JSArrayBuffer target = transfer.call(context, source, numberArgs(24)).asArrayBuffer().orElseThrow();
+        assertThat(target.getByteLength()).isEqualTo(24);
+        assertThat(target.getMaxByteLength()).isEqualTo(fixed ? 24 : 64);
+        assertThat(target.isResizable()).isEqualTo(!fixed);
+        assertThat(source.isDetached()).isTrue();
+        assertPendingTypeError(context, transfer.call(context, source, JSValue.NO_ARGS));
+        assertPendingTypeError(context, transfer.call(context, new JSString("not a buffer"), JSValue.NO_ARGS));
+    }
+
     @Test
     public void testGetByteLength() {
         // Normal case: various buffer sizes
@@ -211,91 +232,11 @@ public class ArrayBufferPrototypeTest extends BaseTest {
 
     @Test
     public void testTransfer() {
-        // Normal case: transfer with same size
-        JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
-        JSValue result = ArrayBufferPrototype.transfer(context, buffer, JSValue.NO_ARGS);
-        JSArrayBuffer transferred = result.asArrayBuffer().orElseThrow();
-        assertThat(transferred.getByteLength()).isEqualTo(16);
-        assertThat(buffer.isDetached()).isTrue();
-        assertThat(transferred.isDetached()).isFalse();
-
-        // Normal case: transfer to larger size
-        JSArrayBuffer buffer2 = new JSArrayBuffer(context, 16);
-        result = ArrayBufferPrototype.transfer(context, buffer2, numberArgs(32));
-        transferred = result.asArrayBuffer().orElseThrow();
-        assertThat(transferred.getByteLength()).isEqualTo(32);
-        assertThat(buffer2.isDetached()).isTrue();
-
-        // Normal case: transfer to smaller size
-        JSArrayBuffer buffer3 = new JSArrayBuffer(context, 16);
-        result = ArrayBufferPrototype.transfer(context, buffer3, numberArgs(8));
-        transferred = result.asArrayBuffer().orElseThrow();
-        assertThat(transferred.getByteLength()).isEqualTo(8);
-        assertThat(buffer3.isDetached()).isTrue();
-
-        // Normal case: transfer resizable buffer maintains resizability
-        JSArrayBuffer resizableBuffer = new JSArrayBuffer(context, 16, 64);
-        result = ArrayBufferPrototype.transfer(context, resizableBuffer, numberArgs(24));
-        transferred = result.asArrayBuffer().orElseThrow();
-        assertThat(transferred.getByteLength()).isEqualTo(24);
-        assertThat(transferred.getMaxByteLength()).isEqualTo(64);
-        assertThat(transferred.isResizable()).isTrue();
-
-        // Edge case: transfer already detached buffer
-        JSArrayBuffer detachedBuffer = new JSArrayBuffer(context, 16);
-        detachedBuffer.detach();
-        result = ArrayBufferPrototype.transfer(context, detachedBuffer, JSValue.NO_ARGS);
-        assertPendingTypeError(context, result);
-
-        // Edge case: called on non-ArrayBuffer
-        JSValue nonBuffer = new JSString("not a buffer");
-        result = ArrayBufferPrototype.transfer(context, nonBuffer, JSValue.NO_ARGS);
-        assertPendingTypeError(context, result);
+        assertTransfer(ArrayBufferPrototype::transfer, false);
     }
 
     @Test
     public void testTransferToFixedLength() {
-        // Normal case: transfer to fixed-length with same size
-        JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
-        JSValue result = ArrayBufferPrototype.transferToFixedLength(context, buffer, JSValue.NO_ARGS);
-        JSArrayBuffer transferred = result.asArrayBuffer().orElseThrow();
-        assertThat(transferred.getByteLength()).isEqualTo(16);
-        assertThat(transferred.isResizable()).isFalse();
-        assertThat(buffer.isDetached()).isTrue();
-
-        // Normal case: transfer to larger size
-        JSArrayBuffer buffer2 = new JSArrayBuffer(context, 16);
-        result = ArrayBufferPrototype.transferToFixedLength(context, buffer2, numberArgs(32));
-        transferred = result.asArrayBuffer().orElseThrow();
-        assertThat(transferred.getByteLength()).isEqualTo(32);
-        assertThat(transferred.isResizable()).isFalse();
-        assertThat(buffer2.isDetached()).isTrue();
-
-        // Normal case: transfer to smaller size
-        JSArrayBuffer buffer3 = new JSArrayBuffer(context, 16);
-        result = ArrayBufferPrototype.transferToFixedLength(context, buffer3, numberArgs(8));
-        transferred = result.asArrayBuffer().orElseThrow();
-        assertThat(transferred.getByteLength()).isEqualTo(8);
-        assertThat(transferred.isResizable()).isFalse();
-        assertThat(buffer3.isDetached()).isTrue();
-
-        // Normal case: transfer resizable buffer to fixed-length
-        JSArrayBuffer resizableBuffer = new JSArrayBuffer(context, 16, 64);
-        result = ArrayBufferPrototype.transferToFixedLength(context, resizableBuffer, numberArgs(24));
-        transferred = result.asArrayBuffer().orElseThrow();
-        assertThat(transferred.getByteLength()).isEqualTo(24);
-        assertThat(transferred.getMaxByteLength()).isEqualTo(24);
-        assertThat(transferred.isResizable()).isFalse();
-
-        // Edge case: transfer already detached buffer
-        JSArrayBuffer detachedBuffer = new JSArrayBuffer(context, 16);
-        detachedBuffer.detach();
-        result = ArrayBufferPrototype.transferToFixedLength(context, detachedBuffer, JSValue.NO_ARGS);
-        assertPendingTypeError(context, result);
-
-        // Edge case: called on non-ArrayBuffer
-        JSValue nonBuffer = new JSString("not a buffer");
-        result = ArrayBufferPrototype.transferToFixedLength(context, nonBuffer, JSValue.NO_ARGS);
-        assertPendingTypeError(context, result);
+        assertTransfer(ArrayBufferPrototype::transferToFixedLength, true);
     }
 }

@@ -278,14 +278,6 @@ final class ParserContext {
         };
     }
 
-    boolean isIdentifierPartChar(char c) {
-        return Character.isLetterOrDigit(c) || c == '_' || c == '$';
-    }
-
-    boolean isIdentifierStartChar(char c) {
-        return Character.isLetter(c) || c == '_' || c == '$';
-    }
-
     private boolean isLineTerminator(char c) {
         return c == '\n' || c == '\r' || c == '\u2028' || c == '\u2029';
     }

@@ -425,15 +425,7 @@ public final class Float16 {
      * @return True if x is greater than y, false otherwise
      */
     public static boolean greater(short x, short y) {
-        if (isNaN(x)) {
-            return false;
-        }
-        if (isNaN(y)) {
-            return false;
-        }
-        return ((x & SIGN_MASK) != 0 ? 0x8000 - (x & 0xffff) : x & 0xffff) > ((y & SIGN_MASK) != 0
-                ? 0x8000 - (y & 0xffff)
-                : y & 0xffff);
+        return !isNaN(x) && !isNaN(y) && orderedValue(x) > orderedValue(y);
     }
 
     /**
@@ -447,15 +439,7 @@ public final class Float16 {
      * @return True if x is greater than y, false otherwise
      */
     public static boolean greaterEquals(short x, short y) {
-        if (isNaN(x)) {
-            return false;
-        }
-        if (isNaN(y)) {
-            return false;
-        }
-        return ((x & SIGN_MASK) != 0 ? 0x8000 - (x & 0xffff) : x & 0xffff) >= ((y & SIGN_MASK) != 0
-                ? 0x8000 - (y & 0xffff)
-                : y & 0xffff);
+        return !isNaN(x) && !isNaN(y) && orderedValue(x) >= orderedValue(y);
     }
 
     /**
@@ -504,15 +488,7 @@ public final class Float16 {
      * @return True if x is less than y, false otherwise
      */
     public static boolean less(short x, short y) {
-        if (isNaN(x)) {
-            return false;
-        }
-        if (isNaN(y)) {
-            return false;
-        }
-        return ((x & SIGN_MASK) != 0 ? 0x8000 - (x & 0xffff) : x & 0xffff) < ((y & SIGN_MASK) != 0
-                ? 0x8000 - (y & 0xffff)
-                : y & 0xffff);
+        return !isNaN(x) && !isNaN(y) && orderedValue(x) < orderedValue(y);
     }
 
     /**
@@ -526,15 +502,7 @@ public final class Float16 {
      * @return True if x is less than or equal to y, false otherwise
      */
     public static boolean lessEquals(short x, short y) {
-        if (isNaN(x)) {
-            return false;
-        }
-        if (isNaN(y)) {
-            return false;
-        }
-        return ((x & SIGN_MASK) != 0 ? 0x8000 - (x & 0xffff) : x & 0xffff) <= ((y & SIGN_MASK) != 0
-                ? 0x8000 - (y & 0xffff)
-                : y & 0xffff);
+        return !isNaN(x) && !isNaN(y) && orderedValue(x) <= orderedValue(y);
     }
 
     /**
@@ -552,18 +520,13 @@ public final class Float16 {
      * @return The larger of the two specified half-precision values
      */
     public static short max(short x, short y) {
-        if (isNaN(x)) {
-            return NaN;
-        }
-        if (isNaN(y)) {
+        if (isNaN(x) || isNaN(y)) {
             return NaN;
         }
         if ((x & EXPONENT_SIGNIFICAND_MASK) == 0 && (y & EXPONENT_SIGNIFICAND_MASK) == 0) {
             return (x & SIGN_MASK) != 0 ? y : x;
         }
-        return ((x & SIGN_MASK) != 0 ? 0x8000 - (x & 0xffff) : x & 0xffff) > ((y & SIGN_MASK) != 0
-                ? 0x8000 - (y & 0xffff)
-                : y & 0xffff) ? x : y;
+        return orderedValue(x) > orderedValue(y) ? x : y;
     }
 
     /**
@@ -581,18 +544,17 @@ public final class Float16 {
      * @return The smaller of the two specified half-precision values
      */
     public static short min(short x, short y) {
-        if (isNaN(x)) {
-            return NaN;
-        }
-        if (isNaN(y)) {
+        if (isNaN(x) || isNaN(y)) {
             return NaN;
         }
         if ((x & EXPONENT_SIGNIFICAND_MASK) == 0 && (y & EXPONENT_SIGNIFICAND_MASK) == 0) {
             return (x & SIGN_MASK) != 0 ? x : y;
         }
-        return ((x & SIGN_MASK) != 0 ? 0x8000 - (x & 0xffff) : x & 0xffff) < ((y & SIGN_MASK) != 0
-                ? 0x8000 - (y & 0xffff)
-                : y & 0xffff) ? x : y;
+        return orderedValue(x) < orderedValue(y) ? x : y;
+    }
+
+    private static int orderedValue(short value) {
+        return value < 0 ? -(value & EXPONENT_SIGNIFICAND_MASK) : value;
     }
 
     /**

@@ -22,37 +22,36 @@ import java.util.List;
  * Represents a class declaration.
  */
 public final class ClassDeclaration extends Declaration {
-    private final List<ClassElement> body;
-    private final Identifier id;
-    private final Expression superClass;
+    private final ClassExpression expression;
 
     public ClassDeclaration(Identifier id, Expression superClass, List<ClassElement> body, SourceLocation location) {
         super(location);
-        this.id = id;
-        this.superClass = superClass;
-        this.body = body;
+        expression = new ClassExpression(id, superClass, body, location);
+    }
+
+    public ClassExpression asExpression() {
+        return expression;
     }
 
     @Override
     public boolean containsAwait() {
-        return containsAwaitIn(superClass, body);
+        return expression.containsAwait();
     }
 
     @Override
     public boolean containsYield() {
-        return containsYieldIn(superClass, body);
+        return expression.containsYield();
     }
 
     public List<ClassElement> getBody() {
-        return body;
+        return expression.getBody();
     }
 
     public Identifier getId() {
-        return id;
+        return expression.getId();
     }
 
     public Expression getSuperClass() {
-        return superClass;
+        return expression.getSuperClass();
     }
-
 }

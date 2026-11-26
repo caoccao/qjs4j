@@ -24,15 +24,13 @@ import java.util.*;
  * Module namespace exotic-like object for dynamic import(). It enforces non-extensible and non-configurable exported
  * bindings semantics.
  */
-public final class JSImportNamespaceObject extends JSObject {
-    private final JSContext context;
+public final class JSImportNamespaceObject extends JSModuleNamespace {
     private final Map<String, JSValue> earlyExportBindings;
     private final Set<String> exportNames;
     private boolean finalized;
 
     public JSImportNamespaceObject(JSContext context) {
         super(context);
-        this.context = context;
         this.earlyExportBindings = new HashMap<>();
         this.exportNames = new HashSet<>();
         this.finalized = false;
@@ -78,7 +76,6 @@ public final class JSImportNamespaceObject extends JSObject {
 
     @Override
     public boolean delete(PropertyKey key, boolean throwOnFailure) {
-        JSContext context = this.context;
         if (isExportProperty(key)) {
             if (throwOnFailure) {
                 context.throwTypeError("Cannot delete property '" + key.toPropertyString() + "' of [object Module]");
@@ -110,12 +107,7 @@ public final class JSImportNamespaceObject extends JSObject {
             if (context.hasPendingException()) {
                 throw new JSException(context.getPendingException());
             }
-            PropertyDescriptor descriptor = new PropertyDescriptor();
-            descriptor.setValue(value);
-            descriptor.setWritable(true);
-            descriptor.setEnumerable(true);
-            descriptor.setConfigurable(false);
-            return descriptor;
+            return PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.EnumerableWritable);
         }
         return super.getOwnPropertyDescriptorRaw(key);
     }
@@ -176,28 +168,12 @@ public final class JSImportNamespaceObject extends JSObject {
         return exportName != null && exportNames.contains(exportName);
     }
 
-    @Override
-    public boolean hasOwnProperty(PropertyKey key) {
-        return super.hasOwnProperty(key);
-    }
-
     private boolean isExportProperty(PropertyKey key) {
         return key != null && key.isString() && exportNames.contains(key.asString());
     }
 
-    // ES2024 10.4.6.3 [[IsExtensible]]: Always returns false.
-    @Override
-    public boolean isExtensible() {
-        return false;
-    }
-
     public boolean isFinalized() {
         return finalized;
-    }
-
-    @Override
-    public PropertyKey[] ownPropertyKeys() {
-        return getOwnPropertyKeys().toArray(new PropertyKey[0]);
     }
 
     public void registerExportName(String exportName) {
@@ -218,11 +194,6 @@ public final class JSImportNamespaceObject extends JSObject {
         exportNames.remove(exportName);
     }
 
-    @Override
-    public void set(PropertyKey key, JSValue value) {
-        setWithReceiverAndException(key, value, this);
-    }
-
     public void setEarlyExportBinding(String exportName, JSValue value) {
         if (exportName == null || exportName.isEmpty() || value == null) {
             return;
@@ -241,26 +212,7 @@ public final class JSImportNamespaceObject extends JSObject {
     }
 
     // ES2024 10.4.6.8 [[Set]]: Always returns false for module namespace objects.
-    @Override
-    public boolean setWithReceiverAndException(PropertyKey key, JSValue value, JSObject receiver) {
-        if (this.context.isStrictMode()) {
-            this.context.throwTypeError(
-                    "Cannot assign to read only property '" + key.toPropertyString() + "' of [object Module]");
-        }
-        return false;
-    }
-
-    @Override
-    public boolean setWithResult(PropertyKey key, JSValue value) {
-        return false;
-    }
-
     // ES2024 10.4.6.8 [[Set]]: Always returns false for module namespace objects.
-    @Override
-    public boolean setWithResult(PropertyKey key, JSValue value, JSObject receiver) {
-        return false;
-    }
-
     public void unregisterExportName(String exportName) {
         if (exportName != null && !exportName.isEmpty()) {
             exportNames.remove(exportName);

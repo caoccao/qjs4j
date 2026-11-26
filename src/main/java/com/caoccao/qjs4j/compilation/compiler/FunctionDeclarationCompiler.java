@@ -31,13 +31,11 @@ import java.util.Set;
 /**
  * Handles compilation of function declarations.
  */
-final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclaration> {
-    FunctionDeclarationCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class FunctionDeclarationCompiler {
+    private FunctionDeclarationCompiler() {
     }
 
-    @Override
-    void compile(FunctionDeclaration funcDecl) {
+    static void compile(CompilerContext compilerContext, FunctionDeclaration funcDecl) {
         // Pre-declare function name as a local in the current scope (if non-global and not
         // already declared). This must happen BEFORE creating the child compiler so the
         // function body can capture the name via closure for self-reference.

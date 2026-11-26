@@ -27,14 +27,12 @@ import com.caoccao.qjs4j.vm.Opcode;
 /**
  * Compiles MemberExpression destructuring assignment targets into bytecode.
  */
-final class MemberExpressionDestructuringAssignmentCompiler extends AstNodeCompiler<MemberExpression> {
+final class MemberExpressionDestructuringAssignmentCompiler {
 
-    MemberExpressionDestructuringAssignmentCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+    private MemberExpressionDestructuringAssignmentCompiler() {
     }
 
-    @Override
-    void compile(MemberExpression memberExpr) {
+    static void compile(CompilerContext compilerContext, MemberExpression memberExpr) {
         // Stack: [value]
         if (memberExpr.isOptional()) {
             throw new JSSyntaxErrorException("Invalid destructuring assignment target", memberExpr.getLocation());

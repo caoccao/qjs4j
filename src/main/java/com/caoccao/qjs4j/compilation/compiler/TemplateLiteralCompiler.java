@@ -24,13 +24,11 @@ import com.caoccao.qjs4j.vm.Opcode;
 
 import java.util.List;
 
-final class TemplateLiteralCompiler extends AstNodeCompiler<TemplateLiteral> {
-    TemplateLiteralCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class TemplateLiteralCompiler {
+    private TemplateLiteralCompiler() {
     }
 
-    @Override
-    void compile(TemplateLiteral templateLiteral) {
+    static void compile(CompilerContext compilerContext, TemplateLiteral templateLiteral) {
         // Follow QuickJS strategy for untagged templates:
         // emit first cooked quasi, then call String.prototype.concat with
         // interleaved substitutions and following quasis.

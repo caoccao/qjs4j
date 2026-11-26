@@ -16,9 +16,20 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
+import com.caoccao.qjs4j.core.JSContext;
+
 import java.math.BigInteger;
 import java.time.LocalDateTime;
 
 public record TemporalRelativeToOption(LocalDateTime startDateTime, boolean zoned, BigInteger epochNanoseconds,
         String timeZoneId, Integer offsetSeconds) {
+
+    BigInteger epochNanosecondsAt(JSContext context, LocalDateTime time, BigInteger known) {
+        if (known != null) {
+            return known;
+        }
+        return time.equals(startDateTime)
+                ? epochNanoseconds
+                : IsoDateTime.zonedLocalDateTimeToEpochNanoseconds(context, this, time);
+    }
 }

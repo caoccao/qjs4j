@@ -22,13 +22,11 @@ import com.caoccao.qjs4j.vm.Opcode;
 import java.util.ArrayList;
 import java.util.List;
 
-final class SwitchStatementCompiler extends AstNodeCompiler<SwitchStatement> {
-    SwitchStatementCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class SwitchStatementCompiler {
+    private SwitchStatementCompiler() {
     }
 
-    @Override
-    void compile(SwitchStatement switchStmt) {
+    static void compile(CompilerContext compilerContext, SwitchStatement switchStmt) {
         if (compilerContext.evalReturnLocalIndex >= 0) {
             // Default switch completion value is undefined.
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
@@ -55,7 +53,7 @@ final class SwitchStatementCompiler extends AstNodeCompiler<SwitchStatement> {
             for (Statement statement : switchCase.getConsequent()) {
                 FunctionDeclaration functionDeclaration = statement.unwrapLabeledFunctionDeclaration();
                 if (functionDeclaration != null) {
-                    compilerContext.functionDeclarationCompiler.compile(functionDeclaration);
+                    FunctionDeclarationCompiler.compile(compilerContext, functionDeclaration);
                 }
             }
         }

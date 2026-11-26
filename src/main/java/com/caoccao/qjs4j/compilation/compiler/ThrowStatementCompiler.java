@@ -20,13 +20,11 @@ import com.caoccao.qjs4j.compilation.ast.ThrowStatement;
 import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class ThrowStatementCompiler extends AstNodeCompiler<ThrowStatement> {
-    ThrowStatementCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class ThrowStatementCompiler {
+    private ThrowStatementCompiler() {
     }
 
-    @Override
-    void compile(ThrowStatement throwStmt) {
+    static void compile(CompilerContext compilerContext, ThrowStatement throwStmt) {
         if (compilerContext.evalReturnLocalIndex >= 0) {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);

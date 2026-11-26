@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 import java.util.Arrays;
+import java.util.Set;
 
 /**
  * Implements Uint8Array base64 and hex encoding/decoding methods.
@@ -26,10 +27,12 @@ import java.util.Arrays;
  * Static methods: fromBase64, fromHex Prototype methods: toBase64, toHex, setFromBase64, setFromHex
  */
 public final class Uint8ArrayBase64Hex {
+    private static final Set<String> ALPHABETS = Set.of("base64", "base64url");
     private static final String BASE64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     private static final int[] BASE64_DECODE = new int[128];
     private static final String BASE64URL_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
     private static final int[] BASE64URL_DECODE = new int[128];
+    private static final Set<String> LAST_CHUNK_HANDLING = Set.of("loose", "strict", "stop-before-partial");
 
     static {
         Arrays.fill(BASE64_DECODE, -1);
@@ -59,11 +62,11 @@ public final class Uint8ArrayBase64Hex {
     }
 
     private static JSValue decodeBase64(JSContext context, String input, JSValue options, JSUint8Array target) {
-        String alphabet = getAlphabetOption(context, options);
+        String alphabet = getStringOption(context, options, "alphabet", "base64", ALPHABETS);
         if (alphabet == null) {
             return context.getPendingException();
         }
-        String lastChunkHandling = getLastChunkHandlingOption(context, options);
+        String lastChunkHandling = getStringOption(context, options, "lastChunkHandling", "loose", LAST_CHUNK_HANDLING);
         if (lastChunkHandling == null || context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -324,65 +327,10 @@ public final class Uint8ArrayBase64Hex {
      * Parse the "alphabet" option from the options argument. Returns "base64" or "base64url", or null if an error was
      * thrown.
      */
-    private static String getAlphabetOption(JSContext context, JSValue options) {
-        if (options instanceof JSUndefined || options == null) {
-            return "base64";
-        }
-        JSObject optionsObj = JSTypeConversions.toObject(context, options);
-        if (context.hasPendingException() || optionsObj == null) {
-            return null;
-        }
-        JSValue alphabetValue = optionsObj.get(PropertyKey.fromString("alphabet"));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (alphabetValue instanceof JSUndefined) {
-            return "base64";
-        }
-        if (!(alphabetValue instanceof JSString alphabetString)) {
-            context.throwTypeError("invalid option " + alphabetValue.toJavaObject());
-            return null;
-        }
-        String alphabet = alphabetString.value();
-        if (!"base64".equals(alphabet) && !"base64url".equals(alphabet)) {
-            context.throwTypeError("invalid option " + alphabet);
-            return null;
-        }
-        return alphabet;
-    }
-
     /**
      * Parse the "lastChunkHandling" option from the options argument. Returns "loose", "strict", or
      * "stop-before-partial", or null if an error was thrown.
      */
-    private static String getLastChunkHandlingOption(JSContext context, JSValue options) {
-        if (options instanceof JSUndefined || options == null) {
-            return "loose";
-        }
-        JSObject optionsObj = JSTypeConversions.toObject(context, options);
-        if (context.hasPendingException() || optionsObj == null) {
-            return null;
-        }
-        JSValue lastChunkValue = optionsObj.get(PropertyKey.fromString("lastChunkHandling"));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (lastChunkValue instanceof JSUndefined) {
-            return "loose";
-        }
-        if (!(lastChunkValue instanceof JSString lastChunkString)) {
-            context.throwTypeError("invalid option " + lastChunkValue.toJavaObject());
-            return null;
-        }
-        String lastChunkHandling = lastChunkString.value();
-        if (!"loose".equals(lastChunkHandling) && !"strict".equals(lastChunkHandling)
-                && !"stop-before-partial".equals(lastChunkHandling)) {
-            context.throwTypeError("invalid option " + lastChunkHandling);
-            return null;
-        }
-        return lastChunkHandling;
-    }
-
     /**
      * Parse the "omitPadding" option from the options argument.
      */
@@ -399,6 +347,34 @@ public final class Uint8ArrayBase64Hex {
             return false;
         }
         return JSTypeConversions.toBoolean(omitPaddingValue).isBooleanTrue();
+    }
+
+    private static String getStringOption(JSContext context, JSValue options, String key, String fallback,
+            Set<String> allowed) {
+        if (options instanceof JSUndefined || options == null) {
+            return fallback;
+        }
+        JSObject optionsObj = JSTypeConversions.toObject(context, options);
+        if (context.hasPendingException() || optionsObj == null) {
+            return null;
+        }
+        JSValue raw = optionsObj.get(PropertyKey.fromString(key));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (raw instanceof JSUndefined) {
+            return fallback;
+        }
+        if (!(raw instanceof JSString str)) {
+            context.throwTypeError("invalid option " + raw.toJavaObject());
+            return null;
+        }
+        String value = str.value();
+        if (!allowed.contains(value)) {
+            context.throwTypeError("invalid option " + value);
+            return null;
+        }
+        return value;
     }
 
     private static int hexCharValue(char ch) {
@@ -473,7 +449,7 @@ public final class Uint8ArrayBase64Hex {
 
         JSValue options = JSValue.argumentOrUndefined(args, 0);
 
-        String alphabet = getAlphabetOption(context, options);
+        String alphabet = getStringOption(context, options, "alphabet", "base64", ALPHABETS);
         if (alphabet == null) {
             return context.getPendingException();
         }

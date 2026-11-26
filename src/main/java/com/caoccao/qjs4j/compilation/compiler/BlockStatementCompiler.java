@@ -22,13 +22,11 @@ import com.caoccao.qjs4j.vm.Opcode;
 import java.util.HashSet;
 import java.util.Set;
 
-final class BlockStatementCompiler extends AstNodeCompiler<BlockStatement> {
-    BlockStatementCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class BlockStatementCompiler {
+    private BlockStatementCompiler() {
     }
 
-    @Override
-    void compile(BlockStatement block) {
+    static void compile(CompilerContext compilerContext, BlockStatement block) {
         if (block.getBody().isEmpty()) {
             return;
         }
@@ -80,7 +78,7 @@ final class BlockStatementCompiler extends AstNodeCompiler<BlockStatement> {
         for (Statement stmt : block.getBody()) {
             FunctionDeclaration funcDecl = stmt.unwrapLabeledFunctionDeclaration();
             if (funcDecl != null) {
-                compilerContext.functionDeclarationCompiler.compile(funcDecl);
+                FunctionDeclarationCompiler.compile(compilerContext, funcDecl);
             }
         }
         compilerContext.suppressAnnexBVarStore = false;

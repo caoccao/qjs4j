@@ -680,28 +680,10 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             return null;
         }
 
-        long monthIndex = Math.addExact(month - 1L, months);
-        long yearDelta = Math.floorDiv(monthIndex, 12L);
-        int balancedMonth = (int) (Math.floorMod(monthIndex, 12L) + 1L);
-        long balancedYear = Math.addExact(year, years);
-        balancedYear = Math.addExact(balancedYear, yearDelta);
-        if (balancedYear < Integer.MIN_VALUE || balancedYear > Integer.MAX_VALUE) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
+        IsoDate intermediateDate = addYearsAndMonths(context, years, months, overflow);
+        if (intermediateDate == null) {
             return null;
         }
-        int balancedYearInt = (int) balancedYear;
-        int maxDay = daysInMonth(balancedYearInt, balancedMonth);
-        int regulatedDay = day;
-        if ("reject".equals(overflow)) {
-            if (regulatedDay > maxDay) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
-            }
-        } else {
-            regulatedDay = Math.min(regulatedDay, maxDay);
-        }
-
-        IsoDate intermediateDate = new IsoDate(balancedYearInt, balancedMonth, regulatedDay);
         long resultEpochDay;
         try {
             resultEpochDay = Math.addExact(intermediateDate.toEpochDay(), totalDays);
@@ -723,37 +705,16 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
 
     public IsoDate addIsoDateWithOverflow(JSContext context, long years, long months, long weeks, long days,
             String overflow) {
-        long monthIndex;
-        long balancedYear;
+        IsoDate intermediateDate;
         try {
-            monthIndex = Math.addExact(month - 1L, months);
-            long balancedYearDelta = Math.floorDiv(monthIndex, 12L);
-            balancedYear = Math.addExact(year, years);
-            balancedYear = Math.addExact(balancedYear, balancedYearDelta);
-        } catch (ArithmeticException arithmeticException) {
+            intermediateDate = addYearsAndMonths(context, years, months, overflow);
+        } catch (ArithmeticException e) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
-
-        if (balancedYear < Integer.MIN_VALUE || balancedYear > Integer.MAX_VALUE) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
+        if (intermediateDate == null) {
             return null;
         }
-
-        int balancedMonth = (int) (Math.floorMod(monthIndex, 12L) + 1L);
-        int balancedYearInt = (int) balancedYear;
-        int maximumDay = daysInMonth(balancedYearInt, balancedMonth);
-        int balancedDay = day;
-        if ("reject".equals(overflow)) {
-            if (balancedDay > maximumDay) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
-            }
-        } else {
-            balancedDay = Math.min(balancedDay, maximumDay);
-        }
-
-        IsoDate intermediateDate = new IsoDate(balancedYearInt, balancedMonth, balancedDay);
         long resultEpochDay;
         try {
             long daysFromWeeks = Math.multiplyExact(weeks, 7L);
@@ -1397,5 +1358,30 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
     private static long firstIsoWeekStart(int year) {
         IsoDate januaryFourth = new IsoDate(year, 1, 4);
         return januaryFourth.toEpochDay() - (januaryFourth.dayOfWeek() - 1);
+    }
+
+    private IsoDate addYearsAndMonths(JSContext context, long years, long months, String overflow) {
+        long monthIndex = Math.addExact(month - 1L, months);
+        long yearDelta = Math.floorDiv(monthIndex, 12L);
+        int balancedMonth = (int) (Math.floorMod(monthIndex, 12L) + 1L);
+        long balancedYear = Math.addExact(year, years);
+        balancedYear = Math.addExact(balancedYear, yearDelta);
+        if (balancedYear < Integer.MIN_VALUE || balancedYear > Integer.MAX_VALUE) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        int balancedYearInt = (int) balancedYear;
+        int maxDay = daysInMonth(balancedYearInt, balancedMonth);
+        int regulatedDay = day;
+        if ("reject".equals(overflow)) {
+            if (regulatedDay > maxDay) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
+        } else {
+            regulatedDay = Math.min(regulatedDay, maxDay);
+        }
+
+        return new IsoDate(balancedYearInt, balancedMonth, regulatedDay);
     }
 }

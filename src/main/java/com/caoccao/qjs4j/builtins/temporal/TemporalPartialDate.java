@@ -125,4 +125,23 @@ record TemporalPartialDate(Integer day, Integer month, String monthCode, Integer
 
         return mergedFieldsObject;
     }
+
+    IsoDate mergeDate(JSContext context, IsoDate original, TemporalCalendarId calendar, String overflow) {
+        if (isEmpty()) {
+            return original;
+        }
+        JSTemporalPlainDate date = JSTemporalPlainDate.create(context, original, calendar);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        JSValue merged = merge(context, date, TemporalUtils.overflowOptions(context, overflow));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (merged instanceof JSTemporalPlainDate result) {
+            return result.getIsoDate();
+        }
+        context.throwTypeError("Temporal error: Date argument must be object or string.");
+        return null;
+    }
 }

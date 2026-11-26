@@ -924,28 +924,23 @@ public final class JSGlobalObject {
         defineMethod(dateTimeFormatPrototype, "formatRange", 2, JSIntlObject::dateTimeFormatFormatRange);
         defineMethod(dateTimeFormatPrototype, "formatRangeToParts", 2, JSIntlObject::dateTimeFormatFormatRangeToParts);
         defineToStringTag(dateTimeFormatPrototype, "Intl.DateTimeFormat");
-        JSNativeFunction dateTimeFormatConstructor = new JSNativeFunction(context, "DateTimeFormat", 0, (childContext,
-                thisArg, args) -> JSIntlObject.createDateTimeFormat(childContext, dateTimeFormatPrototype, args), true);
-        installIntlConstructor(intlObject, "DateTimeFormat", dateTimeFormatConstructor, dateTimeFormatPrototype);
+        installIntlConstructor(intlObject, "DateTimeFormat", 0, dateTimeFormatPrototype, false, (childContext, thisArg,
+                args) -> JSIntlObject.createDateTimeFormat(childContext, dateTimeFormatPrototype, args));
 
         JSObject displayNamesPrototype = context.createJSObject();
         defineMethod(displayNamesPrototype, "of", 1, JSIntlObject::displayNamesOf);
         defineMethod(displayNamesPrototype, "resolvedOptions", 0, JSIntlObject::displayNamesResolvedOptions);
         defineToStringTag(displayNamesPrototype, "Intl.DisplayNames");
-        JSNativeFunction displayNamesConstructor = new JSNativeFunction(context, "DisplayNames", 2, (childContext,
-                thisArg, args) -> JSIntlObject.createDisplayNames(childContext, displayNamesPrototype, args), true,
-                true);
-        installIntlConstructor(intlObject, "DisplayNames", displayNamesConstructor, displayNamesPrototype);
+        installIntlConstructor(intlObject, "DisplayNames", 2, displayNamesPrototype, true, (childContext, thisArg,
+                args) -> JSIntlObject.createDisplayNames(childContext, displayNamesPrototype, args));
 
         JSObject durationFormatPrototype = context.createJSObject();
         defineMethod(durationFormatPrototype, "format", 1, JSIntlObject::durationFormatFormat);
         defineMethod(durationFormatPrototype, "formatToParts", 1, JSIntlObject::durationFormatFormatToParts);
         defineMethod(durationFormatPrototype, "resolvedOptions", 0, JSIntlObject::durationFormatResolvedOptions);
         defineToStringTag(durationFormatPrototype, "Intl.DurationFormat");
-        JSNativeFunction durationFormatConstructor = new JSNativeFunction(context, "DurationFormat", 0, (childContext,
-                thisArg, args) -> JSIntlObject.createDurationFormat(childContext, durationFormatPrototype, args), true,
-                true);
-        installIntlConstructor(intlObject, "DurationFormat", durationFormatConstructor, durationFormatPrototype);
+        installIntlConstructor(intlObject, "DurationFormat", 0, durationFormatPrototype, true, (childContext, thisArg,
+                args) -> JSIntlObject.createDurationFormat(childContext, durationFormatPrototype, args));
 
         JSObject numberFormatPrototype = context.createJSObject();
         defineGetter(numberFormatPrototype, "format", JSIntlObject::numberFormatFormatGetter);
@@ -954,27 +949,23 @@ public final class JSGlobalObject {
         defineMethod(numberFormatPrototype, "formatToParts", 1, JSIntlObject::numberFormatFormatToParts);
         defineMethod(numberFormatPrototype, "resolvedOptions", 0, JSIntlObject::numberFormatResolvedOptions);
         defineToStringTag(numberFormatPrototype, "Intl.NumberFormat");
-        JSNativeFunction numberFormatConstructor = new JSNativeFunction(context, "NumberFormat", 0, (childContext,
-                thisArg, args) -> JSIntlObject.createNumberFormat(childContext, numberFormatPrototype, args), true);
-        installIntlConstructor(intlObject, "NumberFormat", numberFormatConstructor, numberFormatPrototype);
+        installIntlConstructor(intlObject, "NumberFormat", 0, numberFormatPrototype, false, (childContext, thisArg,
+                args) -> JSIntlObject.createNumberFormat(childContext, numberFormatPrototype, args));
 
         JSObject collatorPrototype = context.createJSObject();
         defineGetter(collatorPrototype, "compare", JSIntlObject::collatorCompareGetter);
         defineMethod(collatorPrototype, "resolvedOptions", 0, JSIntlObject::collatorResolvedOptions);
         defineToStringTag(collatorPrototype, "Intl.Collator");
-        JSNativeFunction collatorConstructor = new JSNativeFunction(context, "Collator", 0,
-                (childContext, thisArg, args) -> JSIntlObject.createCollator(childContext, collatorPrototype, args),
-                true);
-        installIntlConstructor(intlObject, "Collator", collatorConstructor, collatorPrototype);
+        installIntlConstructor(intlObject, "Collator", 0, collatorPrototype, false,
+                (childContext, thisArg, args) -> JSIntlObject.createCollator(childContext, collatorPrototype, args));
 
         JSObject pluralRulesPrototype = context.createJSObject();
         defineMethod(pluralRulesPrototype, "select", 1, JSIntlObject::pluralRulesSelect);
         defineMethod(pluralRulesPrototype, "selectRange", 2, JSIntlObject::pluralRulesSelectRange);
         defineMethod(pluralRulesPrototype, "resolvedOptions", 0, JSIntlObject::pluralRulesResolvedOptions);
         defineToStringTag(pluralRulesPrototype, "Intl.PluralRules");
-        JSNativeFunction pluralRulesConstructor = new JSNativeFunction(context, "PluralRules", 0, (childContext,
-                thisArg, args) -> JSIntlObject.createPluralRules(childContext, pluralRulesPrototype, args), true, true);
-        installIntlConstructor(intlObject, "PluralRules", pluralRulesConstructor, pluralRulesPrototype);
+        installIntlConstructor(intlObject, "PluralRules", 0, pluralRulesPrototype, true, (childContext, thisArg,
+                args) -> JSIntlObject.createPluralRules(childContext, pluralRulesPrototype, args));
 
         JSObject relativeTimeFormatPrototype = context.createJSObject();
         defineMethod(relativeTimeFormatPrototype, "format", 2, JSIntlObject::relativeTimeFormatFormat);
@@ -982,12 +973,9 @@ public final class JSGlobalObject {
         defineMethod(relativeTimeFormatPrototype, "resolvedOptions", 0,
                 JSIntlObject::relativeTimeFormatResolvedOptions);
         defineToStringTag(relativeTimeFormatPrototype, "Intl.RelativeTimeFormat");
-        JSNativeFunction relativeTimeFormatConstructor = new JSNativeFunction(context, "RelativeTimeFormat", 0,
+        installIntlConstructor(intlObject, "RelativeTimeFormat", 0, relativeTimeFormatPrototype, true,
                 (childContext, thisArg, args) -> JSIntlObject.createRelativeTimeFormat(childContext,
-                        relativeTimeFormatPrototype, args),
-                true, true);
-        installIntlConstructor(intlObject, "RelativeTimeFormat", relativeTimeFormatConstructor,
-                relativeTimeFormatPrototype);
+                        relativeTimeFormatPrototype, args));
 
         JSObject segmentDataPrototype = context.createJSObject();
         JSNativeFunction segmentsContainingFunction = new JSNativeFunction(context, "containing", 1,
@@ -1003,20 +991,16 @@ public final class JSGlobalObject {
         defineMethod(segmenterPrototype, "segment", 1, JSIntlObject::segmenterSegment);
         defineMethod(segmenterPrototype, "resolvedOptions", 0, JSIntlObject::segmenterResolvedOptions);
         defineToStringTag(segmenterPrototype, "Intl.Segmenter");
-        JSNativeFunction segmenterConstructor = new JSNativeFunction(context, "Segmenter", 0, (childContext, thisArg,
-                args) -> JSIntlObject.createSegmenter(childContext, segmenterPrototype, segmentDataPrototype, args),
-                true, true);
-        installIntlConstructor(intlObject, "Segmenter", segmenterConstructor, segmenterPrototype);
+        installIntlConstructor(intlObject, "Segmenter", 0, segmenterPrototype, true, (childContext, thisArg,
+                args) -> JSIntlObject.createSegmenter(childContext, segmenterPrototype, segmentDataPrototype, args));
 
         JSObject listFormatPrototype = context.createJSObject();
         defineMethod(listFormatPrototype, "format", 1, JSIntlObject::listFormatFormat);
         defineMethod(listFormatPrototype, "formatToParts", 1, JSIntlObject::listFormatFormatToParts);
         defineMethod(listFormatPrototype, "resolvedOptions", 0, JSIntlObject::listFormatResolvedOptions);
         defineToStringTag(listFormatPrototype, "Intl.ListFormat");
-        JSNativeFunction listFormatConstructor = new JSNativeFunction(context, "ListFormat", 0,
-                (childContext, thisArg, args) -> JSIntlObject.createListFormat(childContext, listFormatPrototype, args),
-                true, true);
-        installIntlConstructor(intlObject, "ListFormat", listFormatConstructor, listFormatPrototype);
+        installIntlConstructor(intlObject, "ListFormat", 0, listFormatPrototype, true, (childContext, thisArg,
+                args) -> JSIntlObject.createListFormat(childContext, listFormatPrototype, args));
 
         JSObject localePrototype = context.createJSObject();
         defineMethod(localePrototype, "toString", 0, JSIntlObject::localeToString);
@@ -2431,7 +2415,9 @@ public final class JSGlobalObject {
         defineBuiltin(globalObject, JSWeakSet.NAME, weakSetConstructor);
     }
 
-    private void installIntlConstructor(JSObject intl, String name, JSObject constructor, JSObject prototype) {
+    private void installIntlConstructor(JSObject intl, String name, int length, JSObject prototype, boolean requiresNew,
+            JSNativeCallback callback) {
+        JSNativeFunction constructor = new JSNativeFunction(context, name, length, callback, true, requiresNew);
         constructor.defineProperty(PropertyKey.PROTOTYPE, prototype, PropertyDescriptor.DataState.None);
         defineMethod(constructor, "supportedLocalesOf", 1, JSIntlObject::supportedLocalesOf);
         prototype.defineProperty(PropertyKey.CONSTRUCTOR, constructor,

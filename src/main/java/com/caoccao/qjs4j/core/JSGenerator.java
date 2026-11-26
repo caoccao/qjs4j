@@ -139,37 +139,13 @@ public final class JSGenerator extends JSObject {
             if (generatorState.isCompleted()) {
                 state = State.COMPLETED;
                 return createIteratorResult(yieldValue, true);
-            } else {
-                state = State.SUSPENDED_YIELD;
-                // Check if this was a yield* - if so, return the raw iterator result without wrapping
-                // This matches QuickJS behavior where *pdone = 2 signals not to wrap the result
-                YieldResult lastYield = generatorState.getLastYieldResult();
-                if (lastYield != null && lastYield.isYieldStar() && yieldValue instanceof JSObject resultObj) {
-                    return resultObj;
-                }
-                return createIteratorResult(yieldValue, false);
             }
-        } catch (Exception e) {
+            return suspendedResult(yieldValue);
+        } catch (RuntimeException e) {
             state = State.COMPLETED;
             generatorState.setCompleted(true);
-            if (!context.hasPendingException()) {
-                if (e instanceof JSVirtualMachineException vmException) {
-                    if (vmException.getJsValue() != null) {
-                        context.setPendingException(vmException.getJsValue());
-                    } else if (vmException.getJsError() != null) {
-                        context.setPendingException(vmException.getJsError());
-                    } else {
-                        context.throwError(e.getMessage() == null ? "Generator execution failed" : e.getMessage());
-                    }
-                } else {
-                    context.throwError(e.getMessage() == null ? "Generator execution failed" : e.getMessage());
-                }
-            }
-            // Abrupt completion from generator.next() must throw to the caller.
-            if (e instanceof RuntimeException runtimeException) {
-                throw runtimeException;
-            }
-            throw new RuntimeException(e);
+            recordExecutionError(e);
+            throw e;
         }
     }
 
@@ -192,143 +168,80 @@ public final class JSGenerator extends JSObject {
         }
     }
 
-    /**
-     * Generator.prototype.return(value) Based on QuickJS js_generator_next with GEN_MAGIC_RETURN.
-     */
-    public JSObject returnMethod(JSValue value) {
-        JSValue returnVal = value != null ? value : JSUndefined.INSTANCE;
+    private void recordExecutionError(RuntimeException e) {
+        if (context.hasPendingException()) {
+            return;
+        }
+        if (e instanceof JSVirtualMachineException vm && vm.getJsValue() != null) {
+            context.setPendingException(vm.getJsValue());
+        } else {
+            context.throwError(e.getMessage() == null ? "Generator execution failed" : e.getMessage());
+        }
+    }
 
+    private JSObject resumeAbrupt(JSGeneratorState.ResumeKind kind, JSValue value) {
         if (state == State.EXECUTING) {
             context.throwTypeError("cannot invoke a running generator");
             return createIteratorResult(JSUndefined.INSTANCE, true);
         }
-
-        if (state == State.COMPLETED) {
-            return createIteratorResult(returnVal, true);
+        boolean throwing = kind == JSGeneratorState.ResumeKind.THROW;
+        if (state == State.COMPLETED || state == State.SUSPENDED_START || generatorState == null) {
+            if (throwing) {
+                context.setPendingException(value);
+            }
+            return completeReturnWithoutResume(throwing ? JSUndefined.INSTANCE : value);
         }
 
-        if (state == State.SUSPENDED_START) {
-            // Generator hasn't started yet - just complete it
+        // Resume through finally blocks and yield* delegates before completing.
+        state = State.EXECUTING;
+        if (!generatorState.hasSuspendedExecutionState()) {
+            generatorState.recordResume(kind, value);
+        } else if (!generatorState.hasPendingResumeRecord()) {
+            generatorState.setPendingResumeRecord(kind, value);
+        }
+        try {
+            JSValue result = context.getVirtualMachine().executeGenerator(generatorState, context);
+            if (generatorState.isCompleted()) {
+                return completeReturnWithoutResume(result);
+            }
+            return suspendedResult(result);
+        } catch (RuntimeException e) {
             state = State.COMPLETED;
             done = true;
-            if (generatorState != null) {
-                generatorState.setCompleted(true);
+            generatorState.setCompleted(true);
+            if (!throwing) {
+                throw e;
             }
-            return createIteratorResult(returnVal, true);
+            if (!context.hasPendingException() && !(e instanceof JSVirtualMachineException)) {
+                context.setPendingException(value);
+            } else {
+                recordExecutionError(e);
+            }
+            return createIteratorResult(JSUndefined.INSTANCE, true);
         }
+    }
 
-        // Generator is suspended at a yield point.
-        // For both `yield` and `yield*`, resume through the VM so normal control
-        // flow (including finally blocks) is preserved.
-        if (generatorState != null) {
-            state = State.EXECUTING;
-            if (generatorState.hasSuspendedExecutionState() && !generatorState.hasPendingResumeRecord()) {
-                generatorState.setPendingResumeRecord(JSGeneratorState.ResumeKind.RETURN, returnVal);
-            } else if (!generatorState.hasSuspendedExecutionState()) {
-                generatorState.recordResume(JSGeneratorState.ResumeKind.RETURN, returnVal);
-            }
+    /**
+     * Generator.prototype.return(value) Based on QuickJS js_generator_next with GEN_MAGIC_RETURN.
+     */
+    public JSObject returnMethod(JSValue value) {
+        return resumeAbrupt(JSGeneratorState.ResumeKind.RETURN, value == null ? JSUndefined.INSTANCE : value);
+    }
 
-            try {
-                JSValue result = context.getVirtualMachine().executeGenerator(generatorState, context);
-                if (generatorState.isCompleted()) {
-                    state = State.COMPLETED;
-                    done = true;
-                    return createIteratorResult(result, true);
-                } else {
-                    state = State.SUSPENDED_YIELD;
-                    YieldResult newYield = generatorState.getLastYieldResult();
-                    if (newYield != null && newYield.isYieldStar() && result instanceof JSObject resultObject) {
-                        return resultObject;
-                    }
-                    return createIteratorResult(result, false);
-                }
-            } catch (Exception e) {
-                state = State.COMPLETED;
-                done = true;
-                generatorState.setCompleted(true);
-                if (e instanceof RuntimeException runtimeException) {
-                    throw runtimeException;
-                }
-                throw new RuntimeException(e);
-            }
-        } else {
-            state = State.COMPLETED;
-            done = true;
+    private JSObject suspendedResult(JSValue value) {
+        state = State.SUSPENDED_YIELD;
+        YieldResult yield = generatorState.getLastYieldResult();
+        if (yield != null && yield.isYieldStar() && value instanceof JSObject iteratorResult) {
+            return iteratorResult;
         }
-        return createIteratorResult(returnVal, true);
+        return createIteratorResult(value, false);
     }
 
     /**
      * Generator.prototype.throw(exception) Based on QuickJS js_generator_next with GEN_MAGIC_THROW.
      */
     public JSObject throwMethod(JSValue exception) {
-        if (state == State.EXECUTING) {
-            context.throwTypeError("cannot invoke a running generator");
-            return createIteratorResult(JSUndefined.INSTANCE, true);
-        }
-
-        if (state == State.COMPLETED) {
-            context.setPendingException(exception);
-            return createIteratorResult(JSUndefined.INSTANCE, true);
-        }
-
-        if (state == State.SUSPENDED_START) {
-            // Generator hasn't started - complete and throw
-            state = State.COMPLETED;
-            done = true;
-            if (generatorState != null) {
-                generatorState.setCompleted(true);
-            }
-            context.setPendingException(exception);
-            return createIteratorResult(JSUndefined.INSTANCE, true);
-        }
-
-        if (generatorState != null) {
-            state = State.EXECUTING;
-            if (generatorState.hasSuspendedExecutionState() && !generatorState.hasPendingResumeRecord()) {
-                generatorState.setPendingResumeRecord(JSGeneratorState.ResumeKind.THROW, exception);
-            } else if (!generatorState.hasSuspendedExecutionState()) {
-                generatorState.recordResume(JSGeneratorState.ResumeKind.THROW, exception);
-            }
-            try {
-                JSValue yieldValue = context.getVirtualMachine().executeGenerator(generatorState, context);
-                if (generatorState.isCompleted()) {
-                    state = State.COMPLETED;
-                    done = true;
-                    return createIteratorResult(yieldValue, true);
-                }
-                state = State.SUSPENDED_YIELD;
-                YieldResult lastYield = generatorState.getLastYieldResult();
-                if (lastYield != null && lastYield.isYieldStar() && yieldValue instanceof JSObject resultObject) {
-                    return resultObject;
-                }
-                return createIteratorResult(yieldValue, false);
-            } catch (Exception e) {
-                state = State.COMPLETED;
-                done = true;
-                generatorState.setCompleted(true);
-                if (!context.hasPendingException()) {
-                    if (e instanceof JSVirtualMachineException virtualMachineException) {
-                        if (virtualMachineException.getJsValue() != null) {
-                            context.setPendingException(virtualMachineException.getJsValue());
-                        } else if (virtualMachineException.getJsError() != null) {
-                            context.setPendingException(virtualMachineException.getJsError());
-                        } else {
-                            context.throwError(e.getMessage() == null ? "Generator execution failed" : e.getMessage());
-                        }
-                    } else {
-                        context.setPendingException(exception);
-                    }
-                }
-                return createIteratorResult(JSUndefined.INSTANCE, true);
-            }
-        }
-
-        // Iterator-backed generator: close and throw into caller.
-        state = State.COMPLETED;
-        done = true;
-        context.setPendingException(exception);
-        return createIteratorResult(JSUndefined.INSTANCE, true);
+        return resumeAbrupt(JSGeneratorState.ResumeKind.THROW, exception);
     }
 
     @Override

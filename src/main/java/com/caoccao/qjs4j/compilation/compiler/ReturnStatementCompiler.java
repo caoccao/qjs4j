@@ -26,13 +26,11 @@ import java.util.List;
 /**
  * Compiles return-statement AST nodes into bytecode.
  */
-final class ReturnStatementCompiler extends AstNodeCompiler<ReturnStatement> {
-    ReturnStatementCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+final class ReturnStatementCompiler {
+    private ReturnStatementCompiler() {
     }
 
-    @Override
-    void compile(ReturnStatement retStmt) {
+    static void compile(CompilerContext compilerContext, ReturnStatement retStmt) {
         // Tail call optimization: when the return argument has a call in tail position
         // in strict mode, with no active finally blocks, iterators, or async context,
         // emit TAIL_CALL instead of CALL + RETURN (ES2015 14.6.1 HasCallInTailPosition).

@@ -1024,68 +1024,25 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        Integer dayField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "day");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        Integer hourField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "hour");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        Integer microsecondField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "microsecond");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        Integer millisecondField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "millisecond");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        Integer minuteField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "minute");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        Integer monthField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "month");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        String monthCodeField = TemporalUtils.getStringOption(context, fieldsObject, "monthCode", null);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        Integer nanosecondField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "nanosecond");
+        TemporalCalendarId calendarId = zonedDateTime.getCalendarId();
+        TemporalPropertyBag bag = new TemporalPropertyBag(context, fieldsObject);
+        Integer dayField = bag.integer("day");
+        Integer hourField = bag.integer("hour");
+        Integer microsecondField = bag.integer("microsecond");
+        Integer millisecondField = bag.integer("millisecond");
+        Integer minuteField = bag.integer("minute");
+        Integer monthField = bag.integer("month");
+        String monthCodeField = bag.string("monthCode");
+        Integer nanosecondField = bag.integer("nanosecond");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
         String offsetField = getOptionalOffsetStringWithField(context, fieldsObject);
+        Integer secondField = bag.integer("second");
+        TemporalPartialDate dateFields = bag.readYearAndEra(calendarId, dayField, monthField, monthCodeField);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        Integer secondField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "second");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        Integer yearField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "year");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        TemporalCalendarId calendarId = zonedDateTime.getCalendarId();
-        boolean calendarSupportsEraFields = calendarId.hasEra();
-        String eraField = null;
-        Integer eraYearField = null;
-        if (calendarSupportsEraFields) {
-            eraField = TemporalUtils.getStringOption(context, fieldsObject, "era", null);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            eraYearField = TemporalUtils.getOptionalIntegerField(context, fieldsObject, "eraYear");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-
-        TemporalPartialDate dateFields = new TemporalPartialDate(dayField, monthField, monthCodeField, yearField,
-                eraField, eraYearField);
         boolean hasAnyWithField = !dateFields.isEmpty() || hourField != null || microsecondField != null
                 || millisecondField != null || minuteField != null || nanosecondField != null || offsetField != null
                 || secondField != null;
@@ -1106,22 +1063,9 @@ public final class TemporalZonedDateTimePrototype {
         }
 
         IsoDateTime localDateTime = zonedDateTime.toLocalDateTime();
-        IsoDate mergedDate = localDateTime.date();
-        if (!dateFields.isEmpty()) {
-            JSTemporalPlainDate plainDate = JSTemporalPlainDate.create(context, localDateTime.date(), calendarId);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            JSValue mergedDateValue = dateFields.merge(context, plainDate,
-                    TemporalUtils.overflowOptions(context, withOptions.overflow()));
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (!(mergedDateValue instanceof JSTemporalPlainDate mergedPlainDate)) {
-                context.throwTypeError("Temporal error: Date argument must be object or string.");
-                return JSUndefined.INSTANCE;
-            }
-            mergedDate = mergedPlainDate.getIsoDate();
+        IsoDate mergedDate = dateFields.mergeDate(context, localDateTime.date(), calendarId, withOptions.overflow());
+        if (mergedDate == null) {
+            return JSUndefined.INSTANCE;
         }
 
         int mergedHour = hourField != null ? hourField : localDateTime.time().hour();
@@ -1130,17 +1074,10 @@ public final class TemporalZonedDateTimePrototype {
         int mergedMillisecond = millisecondField != null ? millisecondField : localDateTime.time().millisecond();
         int mergedMicrosecond = microsecondField != null ? microsecondField : localDateTime.time().microsecond();
         int mergedNanosecond = nanosecondField != null ? nanosecondField : localDateTime.time().nanosecond();
-        IsoTime mergedIsoTime;
-        if ("reject".equals(withOptions.overflow())) {
-            mergedIsoTime = new IsoTime(mergedHour, mergedMinute, mergedSecond, mergedMillisecond, mergedMicrosecond,
-                    mergedNanosecond);
-            if (!mergedIsoTime.isValid()) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
-        } else {
-            mergedIsoTime = IsoTime.createNormalized(mergedHour, mergedMinute, mergedSecond, mergedMillisecond,
-                    mergedMicrosecond, mergedNanosecond);
+        IsoTime mergedIsoTime = IsoTime.regulate(context, withOptions.overflow(), "Temporal error: Invalid ISO date.",
+                mergedHour, mergedMinute, mergedSecond, mergedMillisecond, mergedMicrosecond, mergedNanosecond);
+        if (mergedIsoTime == null) {
+            return JSUndefined.INSTANCE;
         }
 
         IsoCalendarDate calendarDateFields = mergedDate.toIsoCalendarDate(calendarId);

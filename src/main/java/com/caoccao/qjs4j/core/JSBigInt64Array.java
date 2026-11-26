@@ -40,11 +40,6 @@ public final class JSBigInt64Array extends JSBigIntTypedArray {
     }
 
     @Override
-    protected JSTypedArray createView(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return new JSBigInt64Array(context, buffer, byteOffset, length);
-    }
-
-    @Override
     TypedArrayKind elementKind() {
         return TypedArrayKind.BIGINT64;
     }
@@ -64,7 +59,6 @@ public final class JSBigInt64Array extends JSBigIntTypedArray {
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        return createFromArguments(context, BYTES_PER_ELEMENT, context::createJSBigInt64Array,
-                context::createJSBigInt64Array, args);
+        return TypedArrayKind.BIGINT64.create(context, args);
     }
 }

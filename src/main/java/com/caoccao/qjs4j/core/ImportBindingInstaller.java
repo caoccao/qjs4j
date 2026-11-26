@@ -125,29 +125,7 @@ final class ImportBindingInstaller {
     }
 
     void bindNamedImports(JSObject globalObject, JSObject namespaceObject, String namedClause) {
-        String clause = namedClause.trim();
-        if (!clause.startsWith("{") || !clause.endsWith("}")) {
-            return;
-        }
-        String specifiersText = clause.substring(1, clause.length() - 1).trim();
-        if (specifiersText.isEmpty()) {
-            return;
-        }
-        for (String rawSpecifier : transformer.splitOnTopLevelCommas(specifiersText)) {
-            String specifier = rawSpecifier.trim();
-            if (specifier.isEmpty()) {
-                continue;
-            }
-            String importedName;
-            String localName;
-            int asIndex = transformer.findTopLevelAs(specifier);
-            if (asIndex >= 0) {
-                importedName = transformer.parseModuleExportNameValue(specifier.substring(0, asIndex).trim());
-                localName = specifier.substring(asIndex + 2).trim();
-            } else {
-                importedName = transformer.parseModuleExportNameValue(specifier);
-                localName = importedName;
-            }
+        transformer.forEachNamedImport(namedClause, (importedName, localName) -> {
             // ES2024 16.2.1.6.3: If the imported binding doesn't exist in a
             // finalized module namespace, it is a SyntaxError (linking error).
             if (namespaceObject instanceof JSImportNamespaceObject nsObj && nsObj.isFinalized()) {
@@ -158,7 +136,7 @@ final class ImportBindingInstaller {
                 }
             }
             bindImportLiveBinding(globalObject, localName, namespaceObject, importedName);
-        }
+        });
     }
 
     void defineDynamicImportNamespaceForwardingBinding(JSDynamicImportModule moduleRecord, String exportName,

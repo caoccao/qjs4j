@@ -24,14 +24,12 @@ import com.caoccao.qjs4j.vm.Opcode;
 /**
  * Compiles ArrayPattern destructuring into bytecode.
  */
-final class ArrayPatternCompiler extends AstNodeCompiler<ArrayPattern> {
+final class ArrayPatternCompiler {
 
-    ArrayPatternCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+    private ArrayPatternCompiler() {
     }
 
-    @Override
-    void compile(ArrayPattern arrPattern) {
+    static void compile(CompilerContext compilerContext, ArrayPattern arrPattern) {
         var elements = arrPattern.getElements();
         int restIndex = 0;
         while (restIndex < elements.size() && !(elements.get(restIndex) instanceof RestElement)) {

@@ -25,13 +25,11 @@ import java.util.List;
  * A deferred module namespace proxy that lazily evaluates the module on first property access. Implements the [[Get]],
  * [[Has]], etc. internal methods per the import-defer specification.
  */
-final class JSDeferredModuleNamespace extends JSObject {
-    private final JSContext context;
+final class JSDeferredModuleNamespace extends JSModuleNamespace {
     private final JSDynamicImportModule moduleRecord;
 
     JSDeferredModuleNamespace(JSContext context, JSDynamicImportModule moduleRecord) {
         super(context);
-        this.context = context;
         this.moduleRecord = moduleRecord;
         setPrototype(null);
         definePropertyInternal(PropertyKey.SYMBOL_TO_STRING_TAG,
@@ -47,7 +45,7 @@ final class JSDeferredModuleNamespace extends JSObject {
         try {
             return ensureEvaluated().defineProperty(key, descriptor);
         } catch (JSException jsException) {
-            setEvaluationPendingException(context, jsException);
+            setEvaluationPendingException(jsException);
             return false;
         }
     }
@@ -60,7 +58,7 @@ final class JSDeferredModuleNamespace extends JSObject {
         try {
             return ensureEvaluated().delete(key, throwOnFailure);
         } catch (JSException jsException) {
-            setEvaluationPendingException(context, jsException);
+            setEvaluationPendingException(jsException);
             return false;
         }
     }
@@ -102,7 +100,7 @@ final class JSDeferredModuleNamespace extends JSObject {
         try {
             return ensureEvaluated().get(key);
         } catch (JSException jsException) {
-            setEvaluationPendingException(this.context, jsException);
+            setEvaluationPendingException(jsException);
             return JSUndefined.INSTANCE;
         }
     }
@@ -116,7 +114,7 @@ final class JSDeferredModuleNamespace extends JSObject {
         try {
             return ensureEvaluated().get(key, effectiveReceiver);
         } catch (JSException jsException) {
-            setEvaluationPendingException(this.context, jsException);
+            setEvaluationPendingException(jsException);
             return JSUndefined.INSTANCE;
         }
     }
@@ -129,7 +127,7 @@ final class JSDeferredModuleNamespace extends JSObject {
         try {
             return ensureEvaluated().getOwnPropertyDescriptor(key);
         } catch (JSException jsException) {
-            setEvaluationPendingException(null, jsException);
+            setEvaluationPendingException(jsException);
             return null;
         }
     }
@@ -139,7 +137,7 @@ final class JSDeferredModuleNamespace extends JSObject {
         try {
             return ensureEvaluated().getOwnPropertyKeys();
         } catch (JSException jsException) {
-            setEvaluationPendingException(null, jsException);
+            setEvaluationPendingException(jsException);
             return List.of();
         }
     }
@@ -157,7 +155,7 @@ final class JSDeferredModuleNamespace extends JSObject {
         try {
             return ensureEvaluated().get(key, receiver);
         } catch (JSException jsException) {
-            setEvaluationPendingException(this.context, jsException);
+            setEvaluationPendingException(jsException);
             return JSUndefined.INSTANCE;
         }
     }
@@ -170,7 +168,7 @@ final class JSDeferredModuleNamespace extends JSObject {
         try {
             return ensureEvaluated().has(key);
         } catch (JSException jsException) {
-            setEvaluationPendingException(null, jsException);
+            setEvaluationPendingException(jsException);
             return false;
         }
     }
@@ -183,7 +181,7 @@ final class JSDeferredModuleNamespace extends JSObject {
         try {
             return ensureEvaluated().hasOwnProperty(key);
         } catch (JSException jsException) {
-            setEvaluationPendingException(null, jsException);
+            setEvaluationPendingException(jsException);
             return false;
         }
     }
@@ -201,11 +199,6 @@ final class JSDeferredModuleNamespace extends JSObject {
         return !isSymbolLikeNamespaceKey(key);
     }
 
-    @Override
-    public boolean isExtensible() {
-        return false;
-    }
-
     private boolean isSymbolLikeNamespaceKey(PropertyKey key) {
         if (moduleRecord.status() == JSDynamicImportModule.Status.EVALUATED) {
             return false;
@@ -214,33 +207,16 @@ final class JSDeferredModuleNamespace extends JSObject {
     }
 
     @Override
-    public PropertyKey[] ownPropertyKeys() {
-        try {
-            return ensureEvaluated().ownPropertyKeys();
-        } catch (JSException jsException) {
-            setEvaluationPendingException(null, jsException);
-            return new PropertyKey[0];
-        }
-    }
-
-    @Override
     public void preventExtensions() {
         // Namespace objects are already non-extensible; no-op without evaluation
     }
 
-    @Override
-    public void set(PropertyKey key, JSValue value) {
-        setWithReceiverAndException(key, value, this);
-    }
-
-    private void setEvaluationPendingException(JSContext callerContext, JSException jsException) {
-        JSValue errorValue = jsException.getErrorValue();
-        if (errorValue != null) {
-            (callerContext != null ? callerContext : this.context).setPendingException(errorValue);
+    private void setEvaluationPendingException(JSException jsException) {
+        JSValue error = jsException.getErrorValue();
+        if (error != null) {
+            context.setPendingException(error);
         } else {
-            JSContext context = callerContext != null ? callerContext : this.context;
-            context.setPendingException(context.throwError(
-                    jsException.getMessage() != null ? jsException.getMessage() : "Module evaluation error"));
+            context.throwError(jsException.getMessage() != null ? jsException.getMessage() : "Module evaluation error");
         }
     }
 
@@ -252,22 +228,4 @@ final class JSDeferredModuleNamespace extends JSObject {
         // Setting non-null prototype on namespace is a no-op per spec
     }
 
-    @Override
-    public boolean setWithReceiverAndException(PropertyKey key, JSValue value, JSObject receiver) {
-        if (context.isStrictMode()) {
-            context.throwTypeError(
-                    "Cannot assign to read only property '" + key.toPropertyString() + "' of [object Module]");
-        }
-        return false;
-    }
-
-    @Override
-    public boolean setWithResult(PropertyKey key, JSValue value) {
-        return false;
-    }
-
-    @Override
-    public boolean setWithResult(PropertyKey key, JSValue value, JSObject receiver) {
-        return false;
-    }
 }

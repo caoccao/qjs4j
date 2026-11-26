@@ -36,9 +36,9 @@ final class PatternCompiler extends AstNodeCompiler<Pattern> {
         } else if (pattern instanceof ObjectPattern objPattern) {
             compilerContext.objectPatternCompiler.compile(objPattern);
         } else if (pattern instanceof ArrayPattern arrPattern) {
-            compilerContext.arrayPatternCompiler.compile(arrPattern);
+            ArrayPatternCompiler.compile(compilerContext, arrPattern);
         } else if (pattern instanceof AssignmentPattern assignPattern) {
-            compilerContext.assignmentPatternCompiler.compile(assignPattern);
+            AssignmentPatternCompiler.compile(compilerContext, assignPattern);
         } else if (pattern instanceof RestElement) {
             // RestElement should only appear inside ArrayPattern or ObjectPattern, shouldn't reach here
             throw new RuntimeException("RestElement can only appear inside ArrayPattern or ObjectPattern");

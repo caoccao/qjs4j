@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import java.util.List;
+
 /**
  * Represents a with statement.
  */
@@ -47,4 +49,8 @@ public final class WithStatement extends Statement {
         return object;
     }
 
+    @Override
+    public List<VariableDeclarator> getVarDeclarators() {
+        return body == null ? List.of() : body.getVarDeclarators();
+    }
 }

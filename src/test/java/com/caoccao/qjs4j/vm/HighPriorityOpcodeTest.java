@@ -131,6 +131,16 @@ public class HighPriorityOpcodeTest extends BaseTest {
     }
 
     @Test
+    public void testRemainderNumberOperands() {
+        assertThat(context.eval("""
+                [[2147483647, 3, 1], [2147483648, 3, 2], [5.5, 2, 1.5],
+                 [7, 2.5, 2], [-4, 2, -0], [-0, 3, -0], [4, -2, 0],
+                 [1, 0, NaN], [Infinity, 3, NaN], [3, Infinity, 3]]
+                  .every(([x, y, expected]) => Object.is(x % y, expected))
+                """)).isEqualTo(JSBoolean.TRUE);
+    }
+
+    @Test
     public void testSetProtoAndHomeObject() {
         JSObject prototype = context.createJSObject();
         prototype.set("marker", new JSString("ok"));

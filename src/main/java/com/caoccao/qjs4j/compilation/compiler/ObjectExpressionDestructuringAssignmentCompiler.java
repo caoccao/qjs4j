@@ -27,14 +27,12 @@ import java.util.List;
 /**
  * Compiles ObjectExpression destructuring assignment into bytecode.
  */
-final class ObjectExpressionDestructuringAssignmentCompiler extends AstNodeCompiler<ObjectExpression> {
+final class ObjectExpressionDestructuringAssignmentCompiler {
 
-    ObjectExpressionDestructuringAssignmentCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+    private ObjectExpressionDestructuringAssignmentCompiler() {
     }
 
-    @Override
-    void compile(ObjectExpression objExpr) {
+    static void compile(CompilerContext compilerContext, ObjectExpression objExpr) {
         // Stack: [source]
         // Separate regular properties from spread (rest) property.
         // In ObjectExpression, spread is represented as kind="spread".

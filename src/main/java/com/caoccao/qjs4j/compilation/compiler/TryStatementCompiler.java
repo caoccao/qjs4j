@@ -143,7 +143,7 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
         // Phase 2: hoist function declarations.
         for (Statement statement : body) {
             if (statement instanceof FunctionDeclaration functionDeclaration) {
-                compilerContext.functionDeclarationCompiler.compile(functionDeclaration);
+                FunctionDeclarationCompiler.compile(compilerContext, functionDeclaration);
             }
         }
 

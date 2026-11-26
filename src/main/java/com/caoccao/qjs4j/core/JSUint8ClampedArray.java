@@ -39,11 +39,6 @@ public final class JSUint8ClampedArray extends JSTypedArray {
     }
 
     @Override
-    protected JSTypedArray createView(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return new JSUint8ClampedArray(context, buffer, byteOffset, length);
-    }
-
-    @Override
     TypedArrayKind elementKind() {
         return TypedArrayKind.UINT8_CLAMPED;
     }
@@ -64,7 +59,6 @@ public final class JSUint8ClampedArray extends JSTypedArray {
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        return createFromArguments(context, BYTES_PER_ELEMENT, context::createJSUint8ClampedArray,
-                context::createJSUint8ClampedArray, args);
+        return TypedArrayKind.UINT8_CLAMPED.create(context, args);
     }
 }

@@ -156,15 +156,10 @@ public final class TemporalZonedDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        IsoTime isoTime;
-        if ("reject".equals(options.overflow())) {
-            isoTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
-            if (!isoTime.isValid()) {
-                context.throwRangeError("Temporal error: Invalid time");
-                return JSUndefined.INSTANCE;
-            }
-        } else {
-            isoTime = IsoTime.createNormalized(hour, minute, second, millisecond, microsecond, nanosecond);
+        IsoTime isoTime = IsoTime.regulate(context, options.overflow(), "Temporal error: Invalid time", hour, minute,
+                second, millisecond, microsecond, nanosecond);
+        if (isoTime == null) {
+            return JSUndefined.INSTANCE;
         }
 
         String timeZoneId = propertyBagData.timeZoneId();
@@ -528,46 +523,14 @@ public final class TemporalZonedDateTimeConstructor {
             return null;
         }
 
-        int hour = toOptionalIntegralInt(context, itemObject, "hour", 0);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        int microsecond = toOptionalIntegralInt(context, itemObject, "microsecond", 0);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        int millisecond = toOptionalIntegralInt(context, itemObject, "millisecond", 0);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        int minute = toOptionalIntegralInt(context, itemObject, "minute", 0);
-        if (context.hasPendingException()) {
-            return null;
-        }
-
-        JSValue monthValue = itemObject.get(PropertyKey.fromString("month"));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        Integer month = null;
-        if (!(monthValue instanceof JSUndefined) && monthValue != null) {
-            Long monthLong = toRequiredIntegralLong(context, monthValue);
-            if (context.hasPendingException() || monthLong == null) {
-                return null;
-            }
-            month = monthLong.intValue();
-        }
-
-        JSValue monthCodeValue = itemObject.get(PropertyKey.fromString("monthCode"));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        IsoMonth parsedMonthCode = IsoMonth.fromField(context, monthCodeValue);
-        if (context.hasPendingException()) {
-            return null;
-        }
-
-        int nanosecond = toOptionalIntegralInt(context, itemObject, "nanosecond", 0);
+        TemporalPropertyBag bag = new TemporalPropertyBag(context, itemObject);
+        int hour = bag.integralOrZero("hour");
+        int microsecond = bag.integralOrZero("microsecond");
+        int millisecond = bag.integralOrZero("millisecond");
+        int minute = bag.integralOrZero("minute");
+        Integer month = bag.integral("month");
+        IsoMonth parsedMonthCode = bag.monthCode();
+        int nanosecond = bag.integralOrZero("nanosecond");
         if (context.hasPendingException()) {
             return null;
         }
@@ -597,7 +560,7 @@ public final class TemporalZonedDateTimeConstructor {
             offsetSeconds = parseOffsetSeconds(offsetText);
         }
 
-        int second = toOptionalIntegralInt(context, itemObject, "second", 0);
+        int second = bag.integralOrZero("second");
         if (context.hasPendingException()) {
             return null;
         }
@@ -611,74 +574,19 @@ public final class TemporalZonedDateTimeConstructor {
             return null;
         }
 
-        JSValue yearValue = itemObject.get(PropertyKey.fromString("year"));
+        Integer year = bag.integral("year");
+        if (calendarId.hasEra()) {
+            String era = bag.string("era");
+            Integer eraYear = bag.integral("eraYear");
+            if (!context.hasPendingException()) {
+                year = TemporalUtils.resolveEraYear(context, calendarId, year, era, eraYear,
+                        "Temporal error: DateTime argument must be object or string.");
+            }
+        }
         if (context.hasPendingException()) {
             return null;
         }
-        boolean hasYear = !(yearValue instanceof JSUndefined) && yearValue != null;
-        Integer year = null;
-        if (hasYear) {
-            long yearLong = TemporalUtils.toLongIfIntegral(context, yearValue);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            year = (int) yearLong;
-        }
-
-        if (calendarId.hasEra()) {
-            JSValue eraValue = itemObject.get(PropertyKey.fromString("era"));
-            if (context.hasPendingException()) {
-                return null;
-            }
-            boolean hasEra = !(eraValue instanceof JSUndefined) && eraValue != null;
-            String era = null;
-            if (hasEra) {
-                era = JSTypeConversions.toString(context, eraValue).value();
-                if (context.hasPendingException()) {
-                    return null;
-                }
-            }
-
-            JSValue eraYearValue = itemObject.get(PropertyKey.fromString("eraYear"));
-            if (context.hasPendingException()) {
-                return null;
-            }
-            boolean hasEraYear = !(eraYearValue instanceof JSUndefined) && eraYearValue != null;
-            Integer eraYear = null;
-            if (hasEraYear) {
-                long eraYearLong = TemporalUtils.toLongIfIntegral(context, eraYearValue);
-                if (context.hasPendingException()) {
-                    return null;
-                }
-                eraYear = (int) eraYearLong;
-            }
-
-            if (hasEra != hasEraYear) {
-                context.throwTypeError("Temporal error: DateTime argument must be object or string.");
-                return null;
-            }
-
-            if (!hasYear && hasEra && hasEraYear) {
-                TemporalEra canonicalEra = TemporalEra.createByCalendarId(context, calendarId, era);
-                if (context.hasPendingException()) {
-                    return null;
-                }
-                year = calendarId.getEraYearFromEra(canonicalEra, eraYear);
-                hasYear = true;
-            } else if (hasYear && hasEra && hasEraYear) {
-                TemporalEra canonicalEra = TemporalEra.createByCalendarId(context, calendarId, era);
-                if (context.hasPendingException()) {
-                    return null;
-                }
-                int expectedYear = calendarId.getEraYearFromEra(canonicalEra, eraYear);
-                if (year != expectedYear) {
-                    context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return null;
-                }
-            }
-        }
-
-        if (!hasYear || (month == null && parsedMonthCode == null)) {
+        if (year == null || (month == null && parsedMonthCode == null)) {
             context.throwTypeError("Temporal error: DateTime argument must be object or string.");
             return null;
         }
@@ -730,21 +638,6 @@ public final class TemporalZonedDateTimeConstructor {
             }
         }
         return selectedEpochNanoseconds;
-    }
-
-    private static int toOptionalIntegralInt(JSContext context, JSObject sourceObject, String key, int defaultValue) {
-        JSValue fieldValue = sourceObject.get(PropertyKey.fromString(key));
-        if (context.hasPendingException()) {
-            return Integer.MIN_VALUE;
-        }
-        if (fieldValue instanceof JSUndefined || fieldValue == null) {
-            return defaultValue;
-        }
-        long longValue = TemporalUtils.toLongIfIntegral(context, fieldValue);
-        if (context.hasPendingException()) {
-            return Integer.MIN_VALUE;
-        }
-        return (int) longValue;
     }
 
     private static Long toRequiredIntegralLong(JSContext context, JSValue value) {

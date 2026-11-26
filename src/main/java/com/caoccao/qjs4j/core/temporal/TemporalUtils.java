@@ -378,6 +378,20 @@ public final class TemporalUtils {
         return TemporalMonths.get(calendarId, calendarDateFields.year()).size();
     }
 
+    public static BigInteger nanosecondsBetween(JSContext context, LocalDateTime startDateTime,
+            BigInteger knownStartEpochNanoseconds, LocalDateTime endDateTime, BigInteger knownEndEpochNanoseconds,
+            TemporalRelativeToOption relativeToOption) {
+        if (relativeToOption == null || !relativeToOption.zoned()) {
+            return nanosecondsBetween(startDateTime, endDateTime);
+        }
+        BigInteger start = relativeToOption.epochNanosecondsAt(context, startDateTime, knownStartEpochNanoseconds);
+        if (context.hasPendingException() || start == null) {
+            return BigInteger.ZERO;
+        }
+        BigInteger end = relativeToOption.epochNanosecondsAt(context, endDateTime, knownEndEpochNanoseconds);
+        return context.hasPendingException() || end == null ? BigInteger.ZERO : end.subtract(start);
+    }
+
     public static BigInteger nanosecondsBetween(LocalDateTime startDateTime, LocalDateTime endDateTime) {
         BigInteger startSeconds = BigInteger.valueOf(startDateTime.toEpochSecond(ZoneOffset.UTC));
         BigInteger endSeconds = BigInteger.valueOf(endDateTime.toEpochSecond(ZoneOffset.UTC));
@@ -500,6 +514,11 @@ public final class TemporalUtils {
         if (context.hasPendingException()) {
             return null;
         }
+        return resolveEraYear(context, calendar, year, era, eraYear, missingEraMessage);
+    }
+
+    public static Integer resolveEraYear(JSContext context, TemporalCalendarId calendar, Integer year, String era,
+            Integer eraYear, String missingEraMessage) {
         if ((era == null) != (eraYear == null)) {
             context.throwTypeError(missingEraMessage);
             return null;

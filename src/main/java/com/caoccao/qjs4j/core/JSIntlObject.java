@@ -1615,39 +1615,15 @@ public final class JSIntlObject {
 
             // 7-15. Component options
             String weekdayOption = readValidatedOption(context, optionsObject, "weekday", "long", "short", "narrow");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
             String eraOption = readValidatedOption(context, optionsObject, "era", "long", "short", "narrow");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
             String yearOption = readValidatedOption(context, optionsObject, "year", "numeric", "2-digit");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
             String monthOption = readValidatedOption(context, optionsObject, "month", "numeric", "2-digit", "long",
                     "short", "narrow");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
             String dayOption = readValidatedOption(context, optionsObject, "day", "numeric", "2-digit");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
             String dayPeriodOption = readValidatedOption(context, optionsObject, "dayPeriod", "long", "short",
                     "narrow");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
             String hourOption = readValidatedOption(context, optionsObject, "hour", "numeric", "2-digit");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
             String minuteOption = readValidatedOption(context, optionsObject, "minute", "numeric", "2-digit");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
             String secondOption = readValidatedOption(context, optionsObject, "second", "numeric", "2-digit");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -1687,9 +1663,6 @@ public final class JSIntlObject {
             // 19-20. dateStyle and timeStyle
             String dateStyleStr = readValidatedOption(context, optionsObject, "dateStyle", "full", "long", "medium",
                     "short");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
             String timeStyleStr = readValidatedOption(context, optionsObject, "timeStyle", "full", "long", "medium",
                     "short");
             if (context.hasPendingException()) {
@@ -2214,17 +2187,8 @@ public final class JSIntlObject {
 
             // Read options in spec order
             String languageOpt = getOptionString(context, optionsValue, "language");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
             String scriptOpt = getOptionString(context, optionsValue, "script");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
             String regionOpt = getOptionString(context, optionsValue, "region");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
             String variantsOpt = getOptionString(context, optionsValue, "variants");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -2245,17 +2209,8 @@ public final class JSIntlObject {
             }
 
             String calendarOpt = getOptionString(context, optionsValue, "calendar");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
             String collationOpt = getOptionString(context, optionsValue, "collation");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
             String hourCycleOpt = getOptionString(context, optionsValue, "hourCycle");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
             String caseFirstOpt = getOptionString(context, optionsValue, "caseFirst");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -2276,30 +2231,14 @@ public final class JSIntlObject {
             }
 
             String numberingSystemOpt = getOptionString(context, optionsValue, "numberingSystem");
+            String firstDay = getOptionString(context, optionsValue, "firstDayOfWeek");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-
-            // Read firstDayOfWeek option (as string, then apply WeekdayToString)
-            String firstDayOfWeekOpt = null;
-            if (optionsValue instanceof JSObject fdowOptsObj) {
-                JSValue fdowRaw = fdowOptsObj.get(PropertyKey.fromString("firstDayOfWeek"));
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                if (fdowRaw != null && !(fdowRaw instanceof JSUndefined)) {
-                    String fdowStr = JSTypeConversions.toString(context, fdowRaw).value();
-                    if (context.hasPendingException()) {
-                        return JSUndefined.INSTANCE;
-                    }
-                    // Apply WeekdayToString
-                    firstDayOfWeekOpt = weekdayToString(fdowStr);
-                    // Validate as unicode type (unless it will be bare "true")
-                    if (!"true".equals(firstDayOfWeekOpt) && (firstDayOfWeekOpt.isEmpty()
-                            || !UNICODE_TYPE_PATTERN.matcher(firstDayOfWeekOpt).matches())) {
-                        return context.throwRangeError("invalid firstDayOfWeek: " + fdowStr);
-                    }
-                }
+            String firstDayOfWeekOpt = firstDay == null ? null : weekdayToString(firstDay);
+            if (firstDayOfWeekOpt != null && !"true".equals(firstDayOfWeekOpt)
+                    && !UNICODE_TYPE_PATTERN.matcher(firstDayOfWeekOpt).matches()) {
+                return context.throwRangeError("invalid firstDayOfWeek: " + firstDay);
             }
 
             // Validate extension values
@@ -2362,27 +2301,15 @@ public final class JSIntlObject {
             TreeMap<String, String> extMap = new TreeMap<>(existingExtensions);
 
             // Apply option overrides
-            if (calendarOpt != null) {
-                extMap.put("ca", calendarOpt);
-            }
-            if (collationOpt != null) {
-                extMap.put("co", collationOpt);
-            }
-            if (firstDayOfWeekOpt != null) {
-                extMap.put("fw", firstDayOfWeekOpt);
-            }
-            if (hourCycleOpt != null) {
-                extMap.put("hc", hourCycleOpt);
-            }
-            if (caseFirstOpt != null) {
-                extMap.put("kf", caseFirstOpt);
-            }
+            putLocaleOption(extMap, "ca", calendarOpt);
+            putLocaleOption(extMap, "co", collationOpt);
+            putLocaleOption(extMap, "fw", firstDayOfWeekOpt);
+            putLocaleOption(extMap, "hc", hourCycleOpt);
+            putLocaleOption(extMap, "kf", caseFirstOpt);
             if (numericOptSet) {
                 extMap.put("kn", Boolean.toString(numericOpt));
             }
-            if (numberingSystemOpt != null) {
-                extMap.put("nu", numberingSystemOpt);
-            }
+            putLocaleOption(extMap, "nu", numberingSystemOpt);
 
             // Canonicalize calendar from tag extension if present
             String extCa = extMap.get("ca");
@@ -2418,44 +2345,12 @@ public final class JSIntlObject {
             String tag = canonicalizeLocaleTag(rawTag);
 
             // Compute final values for the JSIntlLocale fields from the extMap
-            String finalCa = extMap.get("ca");
-            String calendar = (finalCa != null && !finalCa.isEmpty() && !"true".equals(finalCa)) ? finalCa : null;
-
-            String finalKf = extMap.get("kf");
-            String caseFirst;
-            if (finalKf != null) {
-                if (finalKf.isEmpty() || "true".equals(finalKf)) {
-                    caseFirst = ""; // bare kf → empty string for getter
-                } else {
-                    caseFirst = finalKf;
-                }
-            } else {
-                caseFirst = null;
-            }
-
-            String finalCo = extMap.get("co");
-            String collation = (finalCo != null && !finalCo.isEmpty() && !"true".equals(finalCo)) ? finalCo : null;
-
-            String finalFw = extMap.get("fw");
-            String firstDayOfWeek;
-            if (finalFw != null) {
-                if (finalFw.isEmpty() || "true".equals(finalFw)) {
-                    firstDayOfWeek = ""; // bare fw
-                } else {
-                    firstDayOfWeek = finalFw;
-                }
-            } else {
-                firstDayOfWeek = null;
-            }
-
-            String finalHc = extMap.get("hc");
-            String hourCycle = (finalHc != null && !finalHc.isEmpty() && !"true".equals(finalHc)) ? finalHc : null;
-
-            String finalNu = extMap.get("nu");
-            String numberingSystem = (finalNu != null && !finalNu.isEmpty() && !"true".equals(finalNu))
-                    ? finalNu
-                    : null;
-
+            String calendar = localeOption(extMap, "ca", null);
+            String caseFirst = localeOption(extMap, "kf", "");
+            String collation = localeOption(extMap, "co", null);
+            String firstDayOfWeek = localeOption(extMap, "fw", "");
+            String hourCycle = localeOption(extMap, "hc", null);
+            String numberingSystem = localeOption(extMap, "nu", null);
             String finalKn = extMap.get("kn");
             boolean numericSet = finalKn != null;
             boolean numeric = "true".equals(finalKn) || (finalKn != null && finalKn.isEmpty());
@@ -2519,10 +2414,6 @@ public final class JSIntlObject {
             }
 
             String style = normalizedStringOption(context, optionsObject, "style", "decimal", NUMBER_STYLE_VALUES);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
             String currency = getOptionString(context, optionsObject, "currency");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -2536,21 +2427,9 @@ public final class JSIntlObject {
 
             String currencyDisplay = normalizedStringOption(context, optionsObject, "currencyDisplay", "symbol",
                     CURRENCY_DISPLAY_VALUES);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
             String currencySign = normalizedStringOption(context, optionsObject, "currencySign", "standard",
                     CURRENCY_SIGN_VALUES);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
             String unit = getOptionString(context, optionsObject, "unit");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
             String unitDisplay = normalizedStringOption(context, optionsObject, "unitDisplay", "short",
                     UNIT_DISPLAY_VALUES);
             if (context.hasPendingException()) {
@@ -2593,31 +2472,8 @@ public final class JSIntlObject {
                 return JSUndefined.INSTANCE;
             }
 
-            Integer roundingIncrementOption = getOptionIntegerOrUndefined(context, optionsObject, "roundingIncrement",
-                    1, 5000);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            int roundingIncrement = roundingIncrementOption != null ? roundingIncrementOption : 1;
-            if (!VALID_ROUNDING_INCREMENTS.contains(roundingIncrement)) {
-                return context.throwRangeError("Invalid roundingIncrement value: " + roundingIncrement);
-            }
-
-            String roundingMode = normalizedStringOption(context, optionsObject, "roundingMode", "halfExpand",
-                    ROUNDING_MODE_VALUES);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            String roundingPriority = normalizedStringOption(context, optionsObject, "roundingPriority", "auto",
-                    ROUNDING_PRIORITY_VALUES);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            String trailingZeroDisplay = normalizedStringOption(context, optionsObject, "trailingZeroDisplay", "auto",
-                    TRAILING_ZERO_DISPLAY_VALUES);
-            if (context.hasPendingException()) {
+            RoundingOptions rounding = readRoundingOptions(context, optionsObject, true);
+            if (rounding == null) {
                 return JSUndefined.INSTANCE;
             }
 
@@ -2632,10 +2488,6 @@ public final class JSIntlObject {
                 return JSUndefined.INSTANCE;
             }
             String useGroupingMode = parseUseGroupingOption(context, useGroupingValue, notation);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
             String signDisplay = normalizedStringOption(context, optionsObject, "signDisplay", "auto",
                     SIGN_DISPLAY_VALUES);
             if (context.hasPendingException()) {
@@ -2666,13 +2518,13 @@ public final class JSIntlObject {
             if (useSignificantDigits) {
                 significantDigits = significantDigits.resolveSignificant();
             }
-            fractionDigits = useSignificantDigits && "auto".equals(roundingPriority)
+            fractionDigits = useSignificantDigits && "auto".equals(rounding.roundingPriority())
                     ? new DigitRange(minimumFractionDefault, maximumFractionDefault)
                     : fractionDigits.resolveFraction(minimumFractionDefault, maximumFractionDefault);
 
-            if (roundingIncrement != 1) {
-                if (useSignificantDigits || "morePrecision".equals(roundingPriority)
-                        || "lessPrecision".equals(roundingPriority)) {
+            if (rounding.roundingIncrement() != 1) {
+                if (useSignificantDigits || "morePrecision".equals(rounding.roundingPriority())
+                        || "lessPrecision".equals(rounding.roundingPriority())) {
                     return context.throwTypeError("Invalid roundingIncrement for current rounding settings");
                 }
                 if (!fractionDigits.minimum().equals(fractionDigits.maximum())) {
@@ -2686,9 +2538,9 @@ public final class JSIntlObject {
                     useGroupingMode, minimumIntegerDigits, fractionDigits.minimum(), fractionDigits.maximum(),
                     useSignificantDigits, useSignificantDigits ? significantDigits.minimum() : 0,
                     useSignificantDigits ? significantDigits.maximum() : 0, unit, unitDisplay, signDisplay,
-                    roundingMode, numbering.numberingSystem(), notation,
+                    rounding.roundingMode(), numbering.numberingSystem(), notation,
                     "compact".equals(notation) ? compactDisplay : null, currencyDisplay, currencySign,
-                    roundingIncrement, roundingPriority, trailingZeroDisplay);
+                    rounding.roundingIncrement(), rounding.roundingPriority(), rounding.trailingZeroDisplay());
             if (resolvedPrototype != null) {
                 numberFormat.setPrototype(resolvedPrototype);
             }
@@ -2728,15 +2580,7 @@ public final class JSIntlObject {
 
             String localeMatcher = normalizedStringOption(context, optionsObject, "localeMatcher", "best fit", "lookup",
                     "best fit");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
             String type = normalizedStringOption(context, optionsObject, "type", "cardinal", "cardinal", "ordinal");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
             String notation = normalizedStringOption(context, optionsObject, "notation", "standard", NOTATION_VALUES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -2769,23 +2613,9 @@ public final class JSIntlObject {
                 significantDigits = new DigitRange(1, 2);
             }
 
-            getOptionIntegerOrUndefined(context, optionsObject, "roundingIncrement", 1, 5000);
-            if (context.hasPendingException()) {
+            if (readRoundingOptions(context, optionsObject, false) == null) {
                 return JSUndefined.INSTANCE;
             }
-            normalizedStringOption(context, optionsObject, "roundingMode", "halfExpand", ROUNDING_MODE_VALUES);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            normalizedStringOption(context, optionsObject, "roundingPriority", "auto", ROUNDING_PRIORITY_VALUES);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            normalizedStringOption(context, optionsObject, "trailingZeroDisplay", "auto", TRAILING_ZERO_DISPLAY_VALUES);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
             JSIntlPluralRules pluralRules = new JSIntlPluralRules(context, locale, type, notation, minimumIntegerDigits,
                     fractionDigits.minimum(), fractionDigits.maximum(), significantDigits.minimum(),
                     significantDigits.maximum());
@@ -2815,10 +2645,6 @@ public final class JSIntlObject {
 
             String localeMatcher = normalizedStringOption(context, optionsObject, "localeMatcher", "best fit", "lookup",
                     "best fit");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
             String numberingSystemOption = getOptionString(context, optionsObject, "numberingSystem");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -2831,10 +2657,6 @@ public final class JSIntlObject {
             }
 
             String style = normalizedStringOption(context, optionsObject, "style", "long", "long", "short", "narrow");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
             String numeric = normalizedStringOption(context, optionsObject, "numeric", "always", "always", "auto");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -2899,10 +2721,6 @@ public final class JSIntlObject {
 
             String localeMatcher = normalizedStringOption(context, optionsObject, "localeMatcher", "best fit", "lookup",
                     "best fit");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
             String granularity = normalizedStringOption(context, optionsObject, "granularity", "grapheme", "grapheme",
                     "word", "sentence");
             if (context.hasPendingException()) {
@@ -4327,6 +4145,11 @@ public final class JSIntlObject {
         return changeLikelySubtags(context, thisArg, false);
     }
 
+    private static String localeOption(Map<String, String> extensions, String key, String bareValue) {
+        String value = extensions.get(key);
+        return value != null && (value.isEmpty() || "true".equals(value)) ? bareValue : value;
+    }
+
     private static JSValue localeString(JSContext context, JSValue receiver, String name,
             java.util.function.Function<JSIntlLocale, String> getter) {
         if (!(receiver instanceof JSIntlLocale locale)) {
@@ -4480,11 +4303,11 @@ public final class JSIntlObject {
         return boundFormatFunction;
     }
 
+    // ---- Locale option validation helpers ----
+
     public static JSValue numberFormatFormatRange(JSContext context, JSValue thisArg, JSValue[] args) {
         return formatNumberRange(context, thisArg, args, false);
     }
-
-    // ---- Locale option validation helpers ----
 
     public static JSValue numberFormatFormatRangeToParts(JSContext context, JSValue thisArg, JSValue[] args) {
         return formatNumberRange(context, thisArg, args, true);
@@ -4759,6 +4582,8 @@ public final class JSIntlObject {
         return resolvedOptions;
     }
 
+    // ---- New Locale prototype methods ----
+
     public static JSValue pluralRulesSelect(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlPluralRules pluralRules)) {
             return context.throwTypeError("Intl.PluralRules.prototype.select called on incompatible receiver");
@@ -4766,8 +4591,6 @@ public final class JSIntlObject {
         double value = args.length > 0 ? JSTypeConversions.toNumber(context, args[0]).value() : Double.NaN;
         return new JSString(pluralRules.select(value));
     }
-
-    // ---- New Locale prototype methods ----
 
     public static JSValue pluralRulesSelectRange(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlPluralRules pluralRules)) {
@@ -4796,10 +4619,41 @@ public final class JSIntlObject {
         }
     }
 
+    private static void putLocaleOption(Map<String, String> extensions, String key, String value) {
+        if (value != null) {
+            extensions.put(key, value);
+        }
+    }
+
+    private static RoundingOptions readRoundingOptions(JSContext context, JSObject optionsObject,
+            boolean validateIncrement) {
+        Integer increment = getOptionIntegerOrUndefined(context, optionsObject, "roundingIncrement", 1, 5000);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        int roundingIncrement = increment == null ? 1 : increment;
+        if (validateIncrement && !VALID_ROUNDING_INCREMENTS.contains(roundingIncrement)) {
+            context.throwRangeError("Invalid roundingIncrement value: " + roundingIncrement);
+            return null;
+        }
+        String mode = normalizedStringOption(context, optionsObject, "roundingMode", "halfExpand",
+                ROUNDING_MODE_VALUES);
+        String priority = normalizedStringOption(context, optionsObject, "roundingPriority", "auto",
+                ROUNDING_PRIORITY_VALUES);
+        String trailingZero = normalizedStringOption(context, optionsObject, "trailingZeroDisplay", "auto",
+                TRAILING_ZERO_DISPLAY_VALUES);
+        return context.hasPendingException()
+                ? null
+                : new RoundingOptions(roundingIncrement, mode, priority, trailingZero);
+    }
+
     /**
      * Read a string option from options object. Returns null if option is undefined.
      */
     private static String readStringOption(JSContext context, JSObject optionsObject, String key) {
+        if (context.hasPendingException()) {
+            return null;
+        }
         JSValue rawValue = optionsObject.get(PropertyKey.fromString(key));
         if (context.hasPendingException()) {
             return null;
@@ -4816,14 +4670,10 @@ public final class JSIntlObject {
      */
     private static String readValidatedOption(JSContext context, JSObject optionsObject, String key,
             String... allowedValues) {
-        JSValue rawValue = optionsObject.get(PropertyKey.fromString(key));
-        if (context.hasPendingException()) {
+        String stringValue = readStringOption(context, optionsObject, key);
+        if (stringValue == null || context.hasPendingException()) {
             return null;
         }
-        if (rawValue == null || rawValue instanceof JSUndefined) {
-            return null;
-        }
-        String stringValue = JSTypeConversions.toString(context, rawValue).value();
         for (String allowed : allowedValues) {
             if (allowed.equals(stringValue)) {
                 return stringValue;
@@ -6016,5 +5866,9 @@ public final class JSIntlObject {
             }
             return new NumberingLocale(resolved, system);
         }
+    }
+
+    private record RoundingOptions(int roundingIncrement, String roundingMode, String roundingPriority,
+            String trailingZeroDisplay) {
     }
 }
