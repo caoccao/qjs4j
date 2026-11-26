@@ -30,16 +30,6 @@ public final class Identifier extends Expression {
     }
 
     @Override
-    public boolean containsAwait() {
-        return false;
-    }
-
-    @Override
-    public boolean containsYield() {
-        return false;
-    }
-
-    @Override
     public List<String> getBoundNames() {
         if (boundNames == null) {
             boundNames = List.of(name);

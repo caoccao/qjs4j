@@ -59,8 +59,7 @@ public final class TemporalPlainYearMonthConstructor {
      * Temporal.PlainYearMonth(isoYear, isoMonth, calendar?, referenceISODay?)
      */
     public static JSValue construct(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (context.getConstructorNewTarget() == null) {
-            context.throwTypeError("Method invoked on an object that is not Temporal.PlainYearMonth.");
+        if (!TemporalUtils.requireNewTarget(context, "PlainYearMonth")) {
             return JSUndefined.INSTANCE;
         }
 
@@ -73,12 +72,9 @@ public final class TemporalPlainYearMonthConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalCalendarId calendarId = TemporalCalendarId.ISO8601;
-        if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
-            calendarId = TemporalCalendarId.createFromCalendarString(context, args[2]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+        TemporalCalendarId calendarId = TemporalUtils.calendarArgument(context, args, 2);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
 
         int referenceDay = 1;

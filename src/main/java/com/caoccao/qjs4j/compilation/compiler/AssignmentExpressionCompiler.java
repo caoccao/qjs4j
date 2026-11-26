@@ -57,103 +57,37 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
             return;
         }
 
-        if (operator != AssignmentOperator.ASSIGN) {
-            if (left instanceof MemberExpression memberExpr) {
-                if (memberExpr.getObject().isSuperIdentifier()) {
-                    compilerContext.emitHelpers.emitSuperPropertyReference(memberExpr);
-                    compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
-                    compilerContext.emitter.emitOpcode(Opcode.DUP3);
-                    compilerContext.emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
-                } else {
-                    compilerContext.expressionCompiler.compile(memberExpr.getObject());
-                    if (memberExpr.isComputed()) {
-                        compilerContext.expressionCompiler.compile(memberExpr.getProperty());
-                        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL3);
-                    } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
-                        String fieldName = privateId.getName();
-                        JSSymbol symbol = compilerContext.privateSymbols != null
-                                ? compilerContext.privateSymbols.get(fieldName)
-                                : null;
-                        if (symbol != null) {
-                            compilerContext.emitter.emitOpcode(Opcode.DUP);
-                            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-                            compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
-                        } else {
-                            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                        }
-                    } else if (memberExpr.getProperty() instanceof Identifier propId) {
-                        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.getName());
-                    }
-                }
-            }
-
-            compilerContext.expressionCompiler.compile(assignExpr.getRight());
-
-            emitCompoundOperator(operator);
-        } else {
-            if (left instanceof MemberExpression memberExpr) {
-                if (memberExpr.getObject().isSuperIdentifier()) {
-                    compilerContext.emitHelpers.emitSuperPropertyReference(memberExpr);
-                    compilerContext.expressionCompiler.compile(assignExpr.getRight());
-                    compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
-                    return;
-                }
-                if (memberExpr.isComputed()) {
-                    compilerContext.expressionCompiler.compile(memberExpr.getObject());
-                    compilerContext.expressionCompiler.compile(memberExpr.getProperty());
-                    compilerContext.expressionCompiler.compile(assignExpr.getRight());
-                    compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
-                    return;
-                }
-            }
-            compilerContext.expressionCompiler.compile(assignExpr.getRight());
+        if (left instanceof MemberExpression member) {
+            compileMemberAssignment(member, operator, assignExpr.getRight());
+            return;
         }
-
-        if (left instanceof MemberExpression memberExpr) {
-            if (operator == AssignmentOperator.ASSIGN) {
-                compilerContext.expressionCompiler.compile(memberExpr.getObject());
-                if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
-                    String fieldName = privateId.getName();
-                    JSSymbol symbol = compilerContext.privateSymbols != null
-                            ? compilerContext.privateSymbols.get(fieldName)
-                            : null;
-                    if (symbol != null) {
-                        compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-                        compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
-                    } else {
-                        compilerContext.emitter.emitOpcode(Opcode.DROP);
-                    }
-                } else if (memberExpr.getProperty() instanceof Identifier propId) {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.getName());
-                }
-            } else {
-                if (memberExpr.getObject().isSuperIdentifier()) {
-                    compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
-                } else if (memberExpr.isComputed()) {
-                    compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
-                } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
-                    String fieldName = privateId.getName();
-                    JSSymbol symbol = compilerContext.privateSymbols != null
-                            ? compilerContext.privateSymbols.get(fieldName)
-                            : null;
-                    if (symbol != null) {
-                        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-                        compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
-                    } else {
-                        compilerContext.emitter.emitOpcode(Opcode.DROP);
-                    }
-                } else if (memberExpr.getProperty() instanceof Identifier propId) {
-                    compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.getName());
-                }
-            }
-        } else if (left instanceof ArrayExpression arrayExpr) {
+        compilerContext.expressionCompiler.compile(assignExpr.getRight());
+        if (operator != AssignmentOperator.ASSIGN) {
+            emitCompoundOperator(operator);
+        }
+        if (left instanceof ArrayExpression arrayExpr) {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
             compilerContext.arrayExpressionDestructuringAssignmentCompiler.compile(arrayExpr);
         } else if (left instanceof ObjectExpression objExpr) {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
             compilerContext.objectExpressionDestructuringAssignmentCompiler.compile(objExpr);
+        }
+    }
+
+    private void compileAssignmentValue(AssignmentExpression assignExpr, String name) {
+        AssignmentOperator operator = assignExpr.getOperator();
+        if (operator == AssignmentOperator.ASSIGN && assignExpr.isLhsIdentifierRef()
+                && assignExpr.getRight() instanceof ClassExpression classExpr && classExpr.getId() == null) {
+            compilerContext.inferredClassName = name;
+        }
+        compilerContext.expressionCompiler.compile(assignExpr.getRight());
+        compilerContext.inferredClassName = null;
+        if (operator == AssignmentOperator.ASSIGN && assignExpr.isLhsIdentifierRef()
+                && assignExpr.getRight().isAnonymousFunction()) {
+            compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, name);
+        }
+        if (operator != AssignmentOperator.ASSIGN) {
+            emitCompoundOperator(operator);
         }
     }
 
@@ -181,19 +115,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                 compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, capturedIndex);
             }
         }
-        if (operator == AssignmentOperator.ASSIGN && assignExpr.isLhsIdentifierRef()
-                && assignExpr.getRight() instanceof ClassExpression classExpr && classExpr.getId() == null) {
-            compilerContext.inferredClassName = name;
-        }
-        compilerContext.expressionCompiler.compile(assignExpr.getRight());
-        compilerContext.inferredClassName = null;
-        if (operator == AssignmentOperator.ASSIGN && assignExpr.isLhsIdentifierRef()
-                && assignExpr.getRight().isAnonymousFunction()) {
-            compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, name);
-        }
-        if (operator != AssignmentOperator.ASSIGN) {
-            emitCompoundOperator(operator);
-        }
+        compileAssignmentValue(assignExpr, name);
         if (localIndex != null) {
             compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_CHECK, localIndex);
         } else {
@@ -271,22 +193,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
             compilerContext.emitter.emitOpcode(Opcode.GET_REF_VALUE);
         }
 
-        if (operator == AssignmentOperator.ASSIGN && assignExpr.isLhsIdentifierRef()
-                && assignExpr.getRight() instanceof ClassExpression classExpr && classExpr.getId() == null) {
-            compilerContext.inferredClassName = name;
-        }
-        compilerContext.expressionCompiler.compile(assignExpr.getRight());
-        compilerContext.inferredClassName = null;
-
-        if (operator == AssignmentOperator.ASSIGN && assignExpr.isLhsIdentifierRef()
-                && assignExpr.getRight().isAnonymousFunction()) {
-            compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, name);
-        }
-
-        if (operator != AssignmentOperator.ASSIGN) {
-            emitCompoundOperator(operator);
-        }
-
+        compileAssignmentValue(assignExpr, name);
         compilerContext.emitter.emitOpcode(Opcode.INSERT3);
         compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
     }
@@ -297,24 +204,8 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         boolean privateMemberAssignment = false;
 
         int depthLvalue;
-        if (left instanceof Identifier) {
-            depthLvalue = 0;
-        } else if (left instanceof MemberExpression memberExpr) {
-            if (memberExpr.getObject().isSuperIdentifier()) {
-                depthLvalue = 3;
-            } else if (memberExpr.isComputed()) {
-                depthLvalue = 2;
-            } else if (memberExpr.getProperty() instanceof PrivateIdentifier) {
-                depthLvalue = 2;
-                privateMemberAssignment = true;
-            } else {
-                depthLvalue = 1;
-            }
-        } else {
-            throw new JSCompilerException("Invalid left-hand side in logical assignment", assignExpr);
-        }
-
         if (left instanceof Identifier id) {
+            depthLvalue = 0;
             String name = id.getName();
             Integer localIndex = compilerContext.scopeManager.findLocalInScopes(name);
             if (localIndex != null) {
@@ -331,35 +222,12 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                     compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
                 }
             }
-        } else if (left instanceof MemberExpression memberExpr) {
-            if (memberExpr.getObject().isSuperIdentifier()) {
-                compilerContext.emitHelpers.emitSuperPropertyReference(memberExpr);
-                compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
-                compilerContext.emitter.emitOpcode(Opcode.DUP3);
-                compilerContext.emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
-            } else {
-                compilerContext.expressionCompiler.compile(memberExpr.getObject());
-                if (memberExpr.isComputed()) {
-                    compilerContext.expressionCompiler.compile(memberExpr.getProperty());
-                    compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
-                    compilerContext.emitter.emitOpcode(Opcode.DUP2);
-                    compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-                } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateIdentifier) {
-                    String fieldName = privateIdentifier.getName();
-                    JSSymbol symbol = compilerContext.privateSymbols != null
-                            ? compilerContext.privateSymbols.get(fieldName)
-                            : null;
-                    if (symbol == null) {
-                        throw new JSCompilerException("undefined private field '#" + fieldName + "'",
-                                privateIdentifier);
-                    }
-                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-                    compilerContext.emitter.emitOpcode(Opcode.DUP2);
-                    compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
-                } else if (memberExpr.getProperty() instanceof Identifier propId) {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.getName());
-                }
-            }
+        } else if (left instanceof MemberExpression member) {
+            depthLvalue = emitMemberReadForAssignment(member, true);
+            privateMemberAssignment = !member.getObject().isSuperIdentifier() && !member.isComputed()
+                    && member.getProperty() instanceof PrivateIdentifier;
+        } else {
+            throw new JSCompilerException("Invalid left-hand side in logical assignment", assignExpr);
         }
 
         compilerContext.emitter.emitOpcode(Opcode.DUP);
@@ -381,15 +249,8 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
             compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
         }
 
-        switch (depthLvalue) {
-            case 0 -> {
-            }
-            case 1 -> compilerContext.emitter.emitOpcode(Opcode.SWAP);
-            case 2 -> {
-            }
-            case 3 -> {
-            }
-            default -> throw new JSCompilerException("Invalid depth for logical assignment", assignExpr);
+        if (depthLvalue == 1) {
+            compilerContext.emitter.emitOpcode(Opcode.SWAP);
         }
         if (privateMemberAssignment) {
             compilerContext.emitter.emitOpcode(Opcode.SWAP);
@@ -450,6 +311,46 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
     }
 
+    private void compileMemberAssignment(MemberExpression member, AssignmentOperator operator, Expression right) {
+        boolean compound = operator != AssignmentOperator.ASSIGN;
+        boolean superProperty = member.getObject().isSuperIdentifier();
+        if (compound) {
+            emitMemberReadForAssignment(member, false);
+        } else if (superProperty) {
+            compilerContext.emitHelpers.emitSuperPropertyReference(member);
+        } else if (member.isComputed()) {
+            compilerContext.expressionCompiler.compile(member.getObject());
+            compilerContext.expressionCompiler.compile(member.getProperty());
+        }
+        compilerContext.expressionCompiler.compile(right);
+        if (compound) {
+            emitCompoundOperator(operator);
+        } else if (!superProperty && !member.isComputed()) {
+            compilerContext.expressionCompiler.compile(member.getObject());
+        }
+        if (superProperty) {
+            compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
+        } else if (member.isComputed()) {
+            compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+        } else if (member.getProperty() instanceof PrivateIdentifier id) {
+            JSSymbol symbol = privateSymbol(id);
+            if (symbol == null) {
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
+            } else {
+                if (!compound) {
+                    compilerContext.emitter.emitOpcode(Opcode.SWAP);
+                }
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+                compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
+            }
+        } else if (member.getProperty() instanceof Identifier id) {
+            if (compound) {
+                compilerContext.emitter.emitOpcode(Opcode.SWAP);
+            }
+            compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, id.getName());
+        }
+    }
+
     /**
      * Apply a compound operator to the old value and the right operand. Logical assignments never get here: compile()
      * hands them to compileLogicalAssignment first.
@@ -481,6 +382,51 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         } else {
             emitDirectIdentifierReference(name);
         }
+    }
+
+    /** Leave the reference below its value and return the number of saved stack entries. */
+    private int emitMemberReadForAssignment(MemberExpression member, boolean logical) {
+        if (member.getObject().isSuperIdentifier()) {
+            compilerContext.emitHelpers.emitSuperPropertyReference(member);
+            compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
+            compilerContext.emitter.emitOpcode(Opcode.DUP3);
+            compilerContext.emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
+            return 3;
+        }
+        compilerContext.expressionCompiler.compile(member.getObject());
+        if (member.isComputed()) {
+            compilerContext.expressionCompiler.compile(member.getProperty());
+            if (logical) {
+                compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
+                compilerContext.emitter.emitOpcode(Opcode.DUP2);
+                compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+            } else {
+                compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL3);
+            }
+            return 2;
+        }
+        if (member.getProperty() instanceof PrivateIdentifier id) {
+            JSSymbol symbol = privateSymbol(id);
+            if (logical) {
+                if (symbol == null) {
+                    throw new JSCompilerException("undefined private field '#" + id.getName() + "'", id);
+                }
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+                compilerContext.emitter.emitOpcode(Opcode.DUP2);
+            } else if (symbol != null) {
+                compilerContext.emitter.emitOpcode(Opcode.DUP);
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+            } else {
+                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                return 1;
+            }
+            compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
+            return logical ? 2 : 1;
+        }
+        if (member.getProperty() instanceof Identifier id) {
+            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, id.getName());
+        }
+        return 1;
     }
 
     private void emitScopedReference(Opcode makeReferenceOpcode, String name, int referenceIndex) {
@@ -552,4 +498,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         compilerContext.emitter.emitOpcode(Opcode.DROP);
     }
 
+    private JSSymbol privateSymbol(PrivateIdentifier id) {
+        return compilerContext.privateSymbols == null ? null : compilerContext.privateSymbols.get(id.getName());
+    }
 }

@@ -36,18 +36,6 @@ public final class ArrowFunctionExpression extends Expression implements Functio
         this.isAsync = isAsync;
     }
 
-    @Override
-    public boolean containsAwait() {
-        // ES2024 8.1.4: Contains always returns false for function boundaries.
-        return false;
-    }
-
-    @Override
-    public boolean containsYield() {
-        // ES2024 8.1.4: Contains always returns false for function boundaries.
-        return false;
-    }
-
     public ASTNode getBody() {
         return body;
     }

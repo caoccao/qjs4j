@@ -22,6 +22,10 @@ import com.caoccao.qjs4j.core.JSString;
 public record IsoZonedDateTimeOffset(IsoDate date, IsoTime time, int offsetSeconds, String timeZoneId,
         TemporalCalendarId calendarId) {
     public static IsoZonedDateTimeOffset parseZonedDateTimeString(JSContext context, String input) {
+        return parseDateTime(context, input, true);
+    }
+
+    static IsoZonedDateTimeOffset parseDateTime(JSContext context, String input, boolean zoned) {
         if (input == null || input.isEmpty()) {
             context.throwRangeError("Temporal error: Invalid character while parsing year value.");
             return null;
@@ -50,7 +54,7 @@ public record IsoZonedDateTimeOffset(IsoDate date, IsoTime time, int offsetSecon
         if (parsingState.position() < parsingState.inputLength()) {
             char marker = parsingState.input().charAt(parsingState.position());
             if (marker == 'Z' || marker == 'z' || marker == '+' || marker == '-') {
-                if (!hasTimePart) {
+                if (!hasTimePart || (!zoned && (marker == 'Z' || marker == 'z'))) {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
                     return null;
                 }
@@ -72,7 +76,7 @@ public record IsoZonedDateTimeOffset(IsoDate date, IsoTime time, int offsetSecon
         }
 
         String timeZoneId = parsedAnnotations.timeZoneAnnotation();
-        if (timeZoneId == null) {
+        if (zoned && timeZoneId == null) {
             context.throwRangeError("Temporal error: Must specify time zone.");
             return null;
         }

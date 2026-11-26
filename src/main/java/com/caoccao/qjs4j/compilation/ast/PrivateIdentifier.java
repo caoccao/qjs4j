@@ -27,16 +27,6 @@ public final class PrivateIdentifier extends Expression {
         this.name = name;
     }
 
-    @Override
-    public boolean containsAwait() {
-        return false;
-    }
-
-    @Override
-    public boolean containsYield() {
-        return false;
-    }
-
     public String getName() {
         return name;
     }

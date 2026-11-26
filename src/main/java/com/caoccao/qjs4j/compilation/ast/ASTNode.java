@@ -34,7 +34,10 @@ public abstract sealed class ASTNode
         this.yieldInside = null;
     }
 
-    public abstract boolean containsAwait();
+    /** Leaves and function boundaries do not contain an enclosing await expression. */
+    public boolean containsAwait() {
+        return false;
+    }
 
     final boolean containsAwaitIn(ASTNode child) {
         if (awaitInside == null) {
@@ -47,6 +50,16 @@ public abstract sealed class ASTNode
         if (awaitInside == null) {
             awaitInside = childContainsAwait(first);
             if (!awaitInside && childContainsAwait(second)) {
+                awaitInside = true;
+            }
+        }
+        return awaitInside;
+    }
+
+    final boolean containsAwaitIn(ASTNode first, ASTNode second, ASTNode third) {
+        if (awaitInside == null) {
+            awaitInside = childContainsAwait(first);
+            if (!awaitInside && (childContainsAwait(second) || childContainsAwait(third))) {
                 awaitInside = true;
             }
         }
@@ -73,7 +86,10 @@ public abstract sealed class ASTNode
         return awaitInside;
     }
 
-    public abstract boolean containsYield();
+    /** Leaves and function boundaries do not contain an enclosing yield expression. */
+    public boolean containsYield() {
+        return false;
+    }
 
     final boolean containsYieldIn(ASTNode child) {
         if (yieldInside == null) {
@@ -86,6 +102,16 @@ public abstract sealed class ASTNode
         if (yieldInside == null) {
             yieldInside = childContainsYield(first);
             if (!yieldInside && childContainsYield(second)) {
+                yieldInside = true;
+            }
+        }
+        return yieldInside;
+    }
+
+    final boolean containsYieldIn(ASTNode first, ASTNode second, ASTNode third) {
+        if (yieldInside == null) {
+            yieldInside = childContainsYield(first);
+            if (!yieldInside && (childContainsYield(second) || childContainsYield(third))) {
                 yieldInside = true;
             }
         }

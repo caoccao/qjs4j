@@ -279,9 +279,8 @@ public final class StringPrototype {
      * String.prototype.charAt(index) ES2020 21.1.3.1
      */
     public static JSValue charAt(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = toStringCheckObject(context, thisArg);
-        String s = str.value();
-        long pos = args.length > 0 ? (long) JSTypeConversions.toInteger(context, args[0]) : 0;
+        String s = toStringCheckObject(context, thisArg).value();
+        long pos = integerArgument(context, args, 0, 0);
 
         if (pos < 0 || pos >= s.length()) {
             return new JSString("");
@@ -294,9 +293,8 @@ public final class StringPrototype {
      * String.prototype.charCodeAt(index) ES2020 21.1.3.2
      */
     public static JSValue charCodeAt(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = toStringCheckObject(context, thisArg);
-        String s = str.value();
-        long pos = args.length > 0 ? (long) JSTypeConversions.toInteger(context, args[0]) : 0;
+        String s = toStringCheckObject(context, thisArg).value();
+        long pos = integerArgument(context, args, 0, 0);
 
         if (pos < 0 || pos >= s.length()) {
             return JSNumber.of(Double.NaN);
@@ -309,9 +307,8 @@ public final class StringPrototype {
      * String.prototype.codePointAt(index) ES2020 21.1.3.3
      */
     public static JSValue codePointAt(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = toStringCheckObject(context, thisArg);
-        String s = str.value();
-        long pos = args.length > 0 ? (long) JSTypeConversions.toInteger(context, args[0]) : 0;
+        String s = toStringCheckObject(context, thisArg).value();
+        long pos = integerArgument(context, args, 0, 0);
 
         if (pos < 0 || pos >= s.length()) {
             return JSUndefined.INSTANCE;
@@ -554,8 +551,7 @@ public final class StringPrototype {
      * String.prototype.indexOf(searchString[, position]) ES2020 21.1.3.8
      */
     public static JSValue indexOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = toStringCheckObject(context, thisArg);
-        String s = str.value();
+        String s = toStringCheckObject(context, thisArg).value();
 
         // A missing search string is undefined, which converts to "undefined"; it used to answer -1.
         String searchStr = JSTypeConversions.toString(context, JSValue.argumentOrUndefined(args, 0)).value();
@@ -564,6 +560,12 @@ public final class StringPrototype {
 
         int index = s.indexOf(searchStr, (int) position);
         return JSNumber.of(index);
+    }
+
+    private static long integerArgument(JSContext context, JSValue[] args, int index, long fallback) {
+        return index >= args.length || args[index] instanceof JSUndefined
+                ? fallback
+                : (long) JSTypeConversions.toInteger(context, args[index]);
     }
 
     private static JSValue invokeRegExpMethod(JSContext context, JSValue thisArg, JSValue[] args,
@@ -738,8 +740,7 @@ public final class StringPrototype {
      * String.prototype.lastIndexOf(searchString[, position]) ES2020 21.1.3.9
      */
     public static JSValue lastIndexOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = toStringCheckObject(context, thisArg);
-        String s = str.value();
+        String s = toStringCheckObject(context, thisArg).value();
 
         // A missing search string is undefined, which converts to "undefined"; it used to answer -1.
         String searchStr = JSTypeConversions.toString(context, JSValue.argumentOrUndefined(args, 0)).value();
@@ -1060,60 +1061,10 @@ public final class StringPrototype {
      * the first argument.
      */
     public static JSValue replace(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg == null || thisArg.isNullOrUndefined()) {
-            return context.throwTypeError("cannot convert to object");
-        }
-
-        JSValue searchValue = JSValue.argumentOrUndefined(args, 0);
-        JSValue replaceValue = JSValue.argumentOrUndefined(args, 1);
-        if (searchValue instanceof JSObject searchValueObject) {
-            JSValue replacer = searchValueObject.get(PropertyKey.SYMBOL_REPLACE);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (!(replacer instanceof JSUndefined) && !(replacer instanceof JSNull)) {
-                if (!JSTypeChecking.isCallable(replacer)) {
-                    return context.throwTypeError("not a function");
-                }
-                return JSCall.call(context, replacer, searchValueObject, new JSValue[]{thisArg, replaceValue});
-            }
-        }
-
-        JSString str = toStringCheckObject(context, thisArg);
-        String s = str.value();
-        // A RegExp whose Symbol.replace is undefined or null is searched for as its string, like any other object.
-        String searchStr = JSTypeConversions.toString(context, searchValue).value();
-        boolean functionalReplace = JSTypeChecking.isCallable(replaceValue);
-        String replaceStr = functionalReplace ? null : JSTypeConversions.toString(context, replaceValue).value();
-
-        int index = s.indexOf(searchStr);
-        if (index < 0) {
-            return str;
-        }
-
-        JSString replacement;
-        if (functionalReplace) {
-            JSValue replResult = JSCall.call(context, replaceValue, JSUndefined.INSTANCE,
-                    new JSValue[]{new JSString(searchStr), JSNumber.of(index), new JSString(s)});
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            replacement = JSTypeConversions.toString(context, replResult);
-        } else {
-            replacement = getSubstitution(context, searchStr, s, index, replaceStr);
-            if (replacement == null) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        return concatenateReplacement(context, new JSString(s.substring(0, index)), replacement,
-                s.substring(index + searchStr.length()));
+        return replace(context, thisArg, args, false);
     }
 
-    /**
-     * String.prototype.replaceAll(searchValue, replaceValue) ES2020 21.1.3.15 Accepts a string or regular expression as
-     * the first argument. If a RegExp is provided, it must have the global (g) flag.
-     */
-    public static JSValue replaceAll(JSContext context, JSValue thisArg, JSValue[] args) {
+    private static JSValue replace(JSContext context, JSValue thisArg, JSValue[] args, boolean all) {
         if (thisArg == null || thisArg.isNullOrUndefined()) {
             return context.throwTypeError("cannot convert to object");
         }
@@ -1121,7 +1072,7 @@ public final class StringPrototype {
         JSValue searchValue = JSValue.argumentOrUndefined(args, 0);
         JSValue replaceValue = JSValue.argumentOrUndefined(args, 1);
         // Step 2: If searchValue is neither undefined nor null
-        if (!(searchValue instanceof JSUndefined) && !(searchValue instanceof JSNull)) {
+        if (all && !(searchValue instanceof JSUndefined) && !(searchValue instanceof JSNull)) {
             // Step 2a: isRegExp check
             if (JSTypeChecking.isRegExp(context, searchValue) == 1) {
                 if (context.hasPendingException()) {
@@ -1143,18 +1094,17 @@ public final class StringPrototype {
                     }
                 }
             }
-            // Step 2b: GetMethod(searchValue, @@replace)
-            if (searchValue instanceof JSObject searchValueObject) {
-                JSValue replacer = searchValueObject.get(PropertyKey.SYMBOL_REPLACE);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
+        }
+        if (searchValue instanceof JSObject searchValueObject) {
+            JSValue replacer = searchValueObject.get(PropertyKey.SYMBOL_REPLACE);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (!(replacer instanceof JSUndefined) && !(replacer instanceof JSNull)) {
+                if (!JSTypeChecking.isCallable(replacer)) {
+                    return context.throwTypeError("not a function");
                 }
-                if (!(replacer instanceof JSUndefined) && !(replacer instanceof JSNull)) {
-                    if (!JSTypeChecking.isCallable(replacer)) {
-                        return context.throwTypeError("not a function");
-                    }
-                    return JSCall.call(context, replacer, searchValueObject, new JSValue[]{thisArg, replaceValue});
-                }
+                return JSCall.call(context, replacer, searchValueObject, new JSValue[]{thisArg, replaceValue});
             }
         }
 
@@ -1173,6 +1123,33 @@ public final class StringPrototype {
             return JSUndefined.INSTANCE;
         }
 
+        if (all) {
+            return replaceAllMatches(context, str, searchStr, replaceValue, replaceStr);
+        }
+        int index = s.indexOf(searchStr);
+        if (index < 0) {
+            return str;
+        }
+
+        JSString replacement = replacementAt(context, searchStr, s, index, replaceValue, replaceStr);
+        if (replacement == null) {
+            return JSUndefined.INSTANCE;
+        }
+        return concatenateReplacement(context, new JSString(s.substring(0, index)), replacement,
+                s.substring(index + searchStr.length()));
+    }
+
+    /**
+     * String.prototype.replaceAll(searchValue, replaceValue) ES2020 21.1.3.15 Accepts a string or regular expression as
+     * the first argument. If a RegExp is provided, it must have the global (g) flag.
+     */
+    public static JSValue replaceAll(JSContext context, JSValue thisArg, JSValue[] args) {
+        return replace(context, thisArg, args, true);
+    }
+
+    private static JSValue replaceAllMatches(JSContext context, JSString str, String searchStr, JSValue replaceValue,
+            String replaceStr) {
+        String s = str.value();
         // Collect all match positions
         java.util.List<Integer> matchPositions = new java.util.ArrayList<>();
         int searchLen = searchStr.length();
@@ -1197,19 +1174,9 @@ public final class StringPrototype {
         for (int matchPosition : matchPositions) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
             result.append(s, endOfLastMatch, matchPosition);
-            JSString replacement;
-            if (functionalReplace) {
-                JSValue replResult = JSCall.call(context, replaceValue, JSUndefined.INSTANCE,
-                        new JSValue[]{new JSString(searchStr), JSNumber.of(matchPosition), new JSString(s)});
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                replacement = JSTypeConversions.toString(context, replResult);
-            } else {
-                replacement = getSubstitution(context, searchStr, s, matchPosition, replaceStr);
-                if (replacement == null) {
-                    return JSUndefined.INSTANCE;
-                }
+            JSString replacement = replacementAt(context, searchStr, s, matchPosition, replaceValue, replaceStr);
+            if (replacement == null) {
+                return JSUndefined.INSTANCE;
             }
             if (exceedsMaxLength(context, result, replacement.length())) {
                 return JSUndefined.INSTANCE;
@@ -1218,6 +1185,16 @@ public final class StringPrototype {
             endOfLastMatch = matchPosition + searchLen;
         }
         return concatenateReplacement(context, result.build(), new JSString(""), s.substring(endOfLastMatch));
+    }
+
+    private static JSString replacementAt(JSContext context, String search, String input, int index,
+            JSValue replaceValue, String substitute) {
+        if (substitute != null) {
+            return getSubstitution(context, search, input, index, substitute);
+        }
+        JSValue value = JSCall.call(context, replaceValue, JSUndefined.INSTANCE,
+                new JSValue[]{new JSString(search), JSNumber.of(index), new JSString(input)});
+        return context.hasPendingException() ? null : JSTypeConversions.toString(context, value);
     }
 
     /**
@@ -1255,33 +1232,15 @@ public final class StringPrototype {
      * String.prototype.slice(beginIndex[, endIndex]) ES2020 21.1.3.16
      */
     public static JSValue slice(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = toStringCheckObject(context, thisArg);
-        String s = str.value();
+        String s = toStringCheckObject(context, thisArg).value();
         int len = s.length();
 
-        long begin = args.length > 0 ? (long) JSTypeConversions.toInteger(context, args[0]) : 0;
-        long end = args.length > 1 && !args[1].isUndefined()
-                ? (long) JSTypeConversions.toInteger(context, args[1])
-                : len;
+        long begin = integerArgument(context, args, 0, 0);
+        long end = integerArgument(context, args, 1, len);
 
-        // Handle negative indices
-        if (begin < 0) {
-            begin = Math.max(len + begin, 0);
-        } else {
-            begin = Math.min(begin, len);
-        }
-
-        if (end < 0) {
-            end = Math.max(len + end, 0);
-        } else {
-            end = Math.min(end, len);
-        }
-
-        if (begin >= end) {
-            return new JSString("");
-        }
-
-        return new JSString(s.substring((int) begin, (int) end));
+        int startIndex = stringIndex(begin, len, true);
+        int endIndex = stringIndex(end, len, true);
+        return new JSString(s.substring(startIndex, Math.max(startIndex, endIndex)));
     }
 
     /**
@@ -1384,6 +1343,13 @@ public final class StringPrototype {
         return createHTML(context, thisArg, args, "strike", null);
     }
 
+    private static int stringIndex(long value, int length, boolean relative) {
+        if (relative && value < 0) {
+            value += length;
+        }
+        return (int) Math.max(0, Math.min(value, length));
+    }
+
     /**
      * String.prototype.sub() Wraps string in <sub> element.
      */
@@ -1395,28 +1361,19 @@ public final class StringPrototype {
      * String.prototype.substr(start[, length]) ES2020 B.2.3.1 (Deprecated, but still widely used)
      */
     public static JSValue substr(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = toStringCheckObject(context, thisArg);
-        String s = str.value();
+        String s = toStringCheckObject(context, thisArg).value();
         int len = s.length();
 
-        long start = args.length > 0 ? (long) JSTypeConversions.toInteger(context, args[0]) : 0;
+        long start = integerArgument(context, args, 0, 0);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        long length = args.length > 1 && !args[1].isUndefined()
-                ? (long) JSTypeConversions.toInteger(context, args[1])
-                : len;
+        long length = integerArgument(context, args, 1, len);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
 
-        // Handle negative start
-        if (start < 0) {
-            start = Math.max(len + start, 0);
-        } else {
-            start = Math.min(start, len);
-        }
-
+        start = stringIndex(start, len, true);
         length = Math.max(0, Math.min(length, len - start));
 
         return new JSString(s.substring((int) start, (int) (start + length)));
@@ -1426,27 +1383,15 @@ public final class StringPrototype {
      * String.prototype.substring(indexStart[, indexEnd]) ES2020 21.1.3.19
      */
     public static JSValue substring(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = toStringCheckObject(context, thisArg);
-        String s = str.value();
+        String s = toStringCheckObject(context, thisArg).value();
         int len = s.length();
 
-        long start = args.length > 0 ? (long) JSTypeConversions.toInteger(context, args[0]) : 0;
-        long end = args.length > 1 && !args[1].isUndefined()
-                ? (long) JSTypeConversions.toInteger(context, args[1])
-                : len;
+        long start = integerArgument(context, args, 0, 0);
+        long end = integerArgument(context, args, 1, len);
 
-        // Clamp to [0, len]
-        start = Math.max(0, Math.min(start, len));
-        end = Math.max(0, Math.min(end, len));
-
-        // Swap if start > end
-        if (start > end) {
-            long temp = start;
-            start = end;
-            end = temp;
-        }
-
-        return new JSString(s.substring((int) start, (int) end));
+        int first = stringIndex(start, len, false);
+        int last = stringIndex(end, len, false);
+        return new JSString(s.substring(Math.min(first, last), Math.max(first, last)));
     }
 
     /**

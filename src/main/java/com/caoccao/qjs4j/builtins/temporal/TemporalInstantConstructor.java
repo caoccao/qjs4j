@@ -57,8 +57,7 @@ public final class TemporalInstantConstructor {
      * Temporal.Instant(epochNanoseconds)
      */
     public static JSValue construct(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (context.getConstructorNewTarget() == null) {
-            context.throwTypeError("Method invoked on an object that is not Temporal.Instant.");
+        if (!TemporalUtils.requireNewTarget(context, "Instant")) {
             return JSUndefined.INSTANCE;
         }
         JSValue epochNanosecondsArgument = JSValue.argumentOrUndefined(args, 0);

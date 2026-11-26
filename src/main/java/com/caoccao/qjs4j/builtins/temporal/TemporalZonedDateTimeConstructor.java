@@ -70,8 +70,7 @@ public final class TemporalZonedDateTimeConstructor {
      * Temporal.ZonedDateTime(epochNanoseconds, timeZone, calendar?)
      */
     public static JSValue construct(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (context.getConstructorNewTarget() == null) {
-            context.throwTypeError("Method invoked on an object that is not Temporal.ZonedDateTime.");
+        if (!TemporalUtils.requireNewTarget(context, "ZonedDateTime")) {
             return JSUndefined.INSTANCE;
         }
 
@@ -116,12 +115,9 @@ public final class TemporalZonedDateTimeConstructor {
             }
         }
 
-        TemporalCalendarId calendarId = TemporalCalendarId.ISO8601;
-        if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
-            calendarId = TemporalCalendarId.createFromCalendarString(context, args[2]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+        TemporalCalendarId calendarId = TemporalUtils.calendarArgument(context, args, 2);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
 
         JSObject resolvedPrototype = TemporalUtils.resolveTemporalPrototype(context, "ZonedDateTime");

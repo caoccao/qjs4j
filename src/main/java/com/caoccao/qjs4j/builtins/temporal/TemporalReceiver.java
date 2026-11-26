@@ -34,4 +34,10 @@ record TemporalReceiver<T extends JSObject>(Class<T> type, String typeName) {
         T value = require(context, receiver, property);
         return value == null ? JSUndefined.INSTANCE : getter.apply(value);
     }
+
+    JSValue rejectValueOf(JSContext context) {
+        context.throwTypeError("Do not use " + typeName + ".prototype.valueOf; use " + typeName
+                + ".prototype.compare for comparison.");
+        return JSUndefined.INSTANCE;
+    }
 }

@@ -42,18 +42,6 @@ public final class FunctionExpression extends Expression implements FunctionNode
         this.needsArguments = needsArguments;
     }
 
-    @Override
-    public boolean containsAwait() {
-        // ES2024 8.1.4: Contains always returns false for function boundaries.
-        return false;
-    }
-
-    @Override
-    public boolean containsYield() {
-        // ES2024 8.1.4: Contains always returns false for function boundaries.
-        return false;
-    }
-
     public BlockStatement getBody() {
         return body;
     }

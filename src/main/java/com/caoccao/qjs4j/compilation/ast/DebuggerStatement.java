@@ -24,13 +24,4 @@ public final class DebuggerStatement extends Statement {
         super(location);
     }
 
-    @Override
-    public boolean containsAwait() {
-        return false;
-    }
-
-    @Override
-    public boolean containsYield() {
-        return false;
-    }
 }

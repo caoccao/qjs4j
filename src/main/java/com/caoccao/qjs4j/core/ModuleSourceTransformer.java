@@ -753,81 +753,8 @@ final class ModuleSourceTransformer {
             }
             return classBodyCloseBraceIndex + 1;
         }
-        int braceDepth = 0;
-        boolean foundOpen = false;
-        boolean inSingleQuote = false;
-        boolean inDoubleQuote = false;
-        boolean inTemplate = false;
-        boolean inLineComment = false;
-        boolean inBlockComment = false;
-        for (int i = 0; i < text.length(); i++) {
-            char ch = text.charAt(i);
-            if (inLineComment) {
-                if (ch == '\n') {
-                    inLineComment = false;
-                }
-                continue;
-            }
-            if (inBlockComment) {
-                if (ch == '*' && i + 1 < text.length() && text.charAt(i + 1) == '/') {
-                    inBlockComment = false;
-                    i++;
-                }
-                continue;
-            }
-            if (ch == '/' && i + 1 < text.length()) {
-                if (text.charAt(i + 1) == '/') {
-                    inLineComment = true;
-                    i++;
-                    continue;
-                }
-                if (text.charAt(i + 1) == '*') {
-                    inBlockComment = true;
-                    i++;
-                    continue;
-                }
-            }
-            if (inSingleQuote) {
-                if (ch == '\\') {
-                    i++;
-                } else if (ch == '\'') {
-                    inSingleQuote = false;
-                }
-                continue;
-            }
-            if (inDoubleQuote) {
-                if (ch == '\\') {
-                    i++;
-                } else if (ch == '"') {
-                    inDoubleQuote = false;
-                }
-                continue;
-            }
-            if (inTemplate) {
-                if (ch == '\\') {
-                    i++;
-                } else if (ch == '`') {
-                    inTemplate = false;
-                }
-                continue;
-            }
-            if (ch == '\'') {
-                inSingleQuote = true;
-            } else if (ch == '"') {
-                inDoubleQuote = true;
-            } else if (ch == '`') {
-                inTemplate = true;
-            } else if (ch == '{') {
-                foundOpen = true;
-                braceDepth++;
-            } else if (ch == '}') {
-                braceDepth--;
-                if (foundOpen && braceDepth == 0) {
-                    return i + 1;
-                }
-            }
-        }
-        return -1;
+        int close = findBodyClose(text, 0, 0);
+        return close < 0 ? -1 : close + 1;
     }
 
     int findLikelyClassBodyOpenBrace(String text) {
@@ -872,85 +799,7 @@ final class ModuleSourceTransformer {
         if (openBraceIndex < 0 || openBraceIndex >= text.length() || text.charAt(openBraceIndex) != '{') {
             return -1;
         }
-        int braceDepth = 1;
-        boolean inSingleQuote = false;
-        boolean inDoubleQuote = false;
-        boolean inTemplate = false;
-        boolean inLineComment = false;
-        boolean inBlockComment = false;
-        for (int index = openBraceIndex + 1; index < text.length(); index++) {
-            char ch = text.charAt(index);
-            if (inLineComment) {
-                if (ch == '\n') {
-                    inLineComment = false;
-                }
-                continue;
-            }
-            if (inBlockComment) {
-                if (ch == '*' && index + 1 < text.length() && text.charAt(index + 1) == '/') {
-                    inBlockComment = false;
-                    index++;
-                }
-                continue;
-            }
-            if (ch == '/' && index + 1 < text.length()) {
-                if (text.charAt(index + 1) == '/') {
-                    inLineComment = true;
-                    index++;
-                    continue;
-                }
-                if (text.charAt(index + 1) == '*') {
-                    inBlockComment = true;
-                    index++;
-                    continue;
-                }
-            }
-            if (inSingleQuote) {
-                if (ch == '\\') {
-                    index++;
-                } else if (ch == '\'') {
-                    inSingleQuote = false;
-                }
-                continue;
-            }
-            if (inDoubleQuote) {
-                if (ch == '\\') {
-                    index++;
-                } else if (ch == '"') {
-                    inDoubleQuote = false;
-                }
-                continue;
-            }
-            if (inTemplate) {
-                if (ch == '\\') {
-                    index++;
-                } else if (ch == '`') {
-                    inTemplate = false;
-                }
-                continue;
-            }
-            if (ch == '\'') {
-                inSingleQuote = true;
-                continue;
-            }
-            if (ch == '"') {
-                inDoubleQuote = true;
-                continue;
-            }
-            if (ch == '`') {
-                inTemplate = true;
-                continue;
-            }
-            if (ch == '{') {
-                braceDepth++;
-            } else if (ch == '}') {
-                braceDepth--;
-                if (braceDepth == 0) {
-                    return index;
-                }
-            }
-        }
-        return -1;
+        return findBodyClose(text, openBraceIndex + 1, 1);
     }
 
     /**
@@ -1201,95 +1050,45 @@ final class ModuleSourceTransformer {
         if (sourceCode == null || sourceCode.isEmpty()) {
             return "";
         }
-        StringBuilder maskedBuilder = new StringBuilder(sourceCode.length());
-        boolean inLineComment = false;
-        boolean inBlockComment = false;
-        boolean inSingleQuote = false;
-        boolean inDoubleQuote = false;
-        boolean inTemplateLiteral = false;
-        for (int index = 0; index < sourceCode.length(); index++) {
-            char currentChar = sourceCode.charAt(index);
-            char nextChar = index + 1 < sourceCode.length() ? sourceCode.charAt(index + 1) : '\0';
-
-            if (inLineComment) {
-                if (currentChar == '\n' || currentChar == '\r') {
-                    inLineComment = false;
-                    maskedBuilder.append(currentChar);
-                } else {
-                    maskedBuilder.append(' ');
+        char[] masked = null;
+        char quote = 0;
+        int length = sourceCode.length();
+        for (int i = 0; i < length; i++) {
+            char ch = sourceCode.charAt(i);
+            if (quote != 0) {
+                if (ch == '\\') {
+                    i++;
+                } else if (ch == quote) {
+                    quote = 0;
                 }
-                continue;
-            }
-            if (inBlockComment) {
-                if (currentChar == '*' && nextChar == '/') {
-                    maskedBuilder.append(' ');
-                    maskedBuilder.append(' ');
-                    index++;
-                    inBlockComment = false;
+            } else if (ch == '\'' || ch == '"' || ch == '`') {
+                quote = ch;
+            } else if (ch == '/' && i + 1 < length) {
+                char next = sourceCode.charAt(i + 1);
+                if (next != '/' && next != '*') {
                     continue;
                 }
-                if (currentChar == '\n' || currentChar == '\r') {
-                    maskedBuilder.append(currentChar);
+                if (masked == null) {
+                    masked = sourceCode.toCharArray();
+                }
+                int end = i + 2;
+                if (next == '/') {
+                    while (end < length && sourceCode.charAt(end) != '\n' && sourceCode.charAt(end) != '\r') {
+                        end++;
+                    }
                 } else {
-                    maskedBuilder.append(' ');
+                    int close = sourceCode.indexOf("*/", end);
+                    end = close < 0 ? length : close + 2;
                 }
-                continue;
-            }
-            if (inSingleQuote) {
-                maskedBuilder.append(currentChar);
-                if (currentChar == '\\' && index + 1 < sourceCode.length()) {
-                    index++;
-                    maskedBuilder.append(sourceCode.charAt(index));
-                } else if (currentChar == '\'') {
-                    inSingleQuote = false;
+                for (; i < end; i++) {
+                    if (masked[i] != '\n' && masked[i] != '\r') {
+                        masked[i] = ' ';
+                    }
                 }
-                continue;
+                i--;
             }
-            if (inDoubleQuote) {
-                maskedBuilder.append(currentChar);
-                if (currentChar == '\\' && index + 1 < sourceCode.length()) {
-                    index++;
-                    maskedBuilder.append(sourceCode.charAt(index));
-                } else if (currentChar == '"') {
-                    inDoubleQuote = false;
-                }
-                continue;
-            }
-            if (inTemplateLiteral) {
-                maskedBuilder.append(currentChar);
-                if (currentChar == '\\' && index + 1 < sourceCode.length()) {
-                    index++;
-                    maskedBuilder.append(sourceCode.charAt(index));
-                } else if (currentChar == '`') {
-                    inTemplateLiteral = false;
-                }
-                continue;
-            }
-
-            if (currentChar == '/' && nextChar == '/') {
-                maskedBuilder.append(' ');
-                maskedBuilder.append(' ');
-                index++;
-                inLineComment = true;
-                continue;
-            }
-            if (currentChar == '/' && nextChar == '*') {
-                maskedBuilder.append(' ');
-                maskedBuilder.append(' ');
-                index++;
-                inBlockComment = true;
-                continue;
-            }
-            if (currentChar == '\'') {
-                inSingleQuote = true;
-            } else if (currentChar == '"') {
-                inDoubleQuote = true;
-            } else if (currentChar == '`') {
-                inTemplateLiteral = true;
-            }
-            maskedBuilder.append(currentChar);
         }
-        return maskedBuilder.toString();
+        return masked == null ? sourceCode : new String(masked);
     }
 
     /**
@@ -2203,6 +2002,47 @@ final class ModuleSourceTransformer {
         }
         // Everything after the closing quote (e.g. `with { ... }`) is not part of the specifier.
         return decodeModuleStringLiteralValue(specifierText.substring(1, closeQuote));
+    }
+
+    private static int findBodyClose(String text, int start, int depth) {
+        char quote = 0;
+        boolean foundOpen = depth != 0;
+        for (int i = start; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            if (ch == '/' && i + 1 < text.length()) {
+                char next = text.charAt(i + 1);
+                if (next == '/') {
+                    i = text.indexOf('\n', i + 2);
+                    if (i < 0) {
+                        return -1;
+                    }
+                    continue;
+                }
+                if (next == '*') {
+                    int end = text.indexOf("*/", i + 2);
+                    if (end < 0) {
+                        return -1;
+                    }
+                    i = end + 1;
+                    continue;
+                }
+            }
+            if (quote != 0) {
+                if (ch == '\\') {
+                    i++;
+                } else if (ch == quote) {
+                    quote = 0;
+                }
+            } else if (ch == '\'' || ch == '"' || ch == '`') {
+                quote = ch;
+            } else if (ch == '{') {
+                foundOpen = true;
+                depth++;
+            } else if (ch == '}' && --depth == 0 && foundOpen) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /**

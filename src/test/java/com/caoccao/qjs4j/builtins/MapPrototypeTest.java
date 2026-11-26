@@ -29,60 +29,46 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class MapPrototypeTest extends BaseJavetTest {
 
-    @Test
-    void compareWithSet() {
-        // For reference: Set follows the same pattern
-        // Set.prototype[Symbol.iterator] === Set.prototype.values
-        assertBooleanWithJavet("Set.prototype[Symbol.iterator] === Set.prototype.values");
-
-        // And for Map:
-        // Map.prototype[Symbol.iterator] === Map.prototype.entries
-        assertBooleanWithJavet("Map.prototype[Symbol.iterator] === Map.prototype.entries");
+    private void assertNextEntry(JSIterator iterator, String key, String value) {
+        JSObject result = iterator.next();
+        assertThat((Boolean) result.get("done").toJavaObject()).isFalse();
+        JSArray entry = result.get("value").asArray().orElseThrow();
+        assertThat(entry.getLength()).isEqualTo(2);
+        assertStringValue(entry.get(0), key);
+        assertStringValue(entry.get(1), value);
     }
 
-    @Test
-    void demonstrateQuickJSAlignment() {
-        // QuickJS implementation (quickjs.c line 52182):
-        // JS_ALIAS_DEF("[Symbol.iterator]", "entries")
-        //
-        // This means [Symbol.iterator] is an ALIAS to entries,
-        // not a separate function with the same implementation.
-        //
-        // Our fix implements this by creating one JSNativeFunction
-        // and assigning it to both properties.
+    private void assertStringIterator(JSNativeCallback method, String first, String second) {
+        JSIterator iterator = method.call(context, newStringMap(), JSValue.NO_ARGS).asIterator().orElseThrow();
+        JSArray values = JSIteratorHelper.toArray(context, iterator);
+        assertThat(values.getLength()).isEqualTo(2);
+        assertStringValue(values.get(0), first);
+        assertStringValue(values.get(1), second);
 
-        assertBooleanWithJavet("""
-                // Verify the alias relationship
-                var entriesFunc = Map.prototype.entries;
-                var iteratorFunc = Map.prototype[Symbol.iterator];
+        JSIterator empty = method.call(context, new JSMap(context), JSValue.NO_ARGS).asIterator().orElseThrow();
+        assertThat(JSIteratorHelper.toArray(context, empty).getLength()).isZero();
+        assertPendingTypeError(context, method.call(context, new JSString("not map"), JSValue.NO_ARGS));
+    }
 
-                // They must be the exact same reference
-                entriesFunc === iteratorFunc""");
+    private JSMap newStringMap() {
+        JSMap map = new JSMap(context);
+        map.mapSet(new JSString("key1"), new JSString("value1"));
+        map.mapSet(new JSString("key2"), new JSString("value2"));
+        return map;
     }
 
     @Test
     void showTheyWorkIdentically() {
-        // Both produce the same iteration results
         assertBooleanWithJavet("""
-                var m = new Map([[1, 'a'], [2, 'b'], [3, 'c']]);
-
-                // Using entries()
-                var result1 = '';
-                var it1 = m.entries();
-                var entry;
-                while (!(entry = it1.next()).done) {
-                  result1 += entry.value[0] + entry.value[1];
+                const map = new Map([[1, 'a'], [2, 'b'], [3, 'c']]);
+                function collect(iterator) {
+                  let result = '';
+                  for (let next = iterator.next(); !next.done; next = iterator.next()) {
+                    result += next.value[0] + next.value[1];
+                  }
+                  return result;
                 }
-
-                // Using Symbol.iterator
-                var result2 = '';
-                var it2 = m[Symbol.iterator]();
-                while (!(entry = it2.next()).done) {
-                  result2 += entry.value[0] + entry.value[1];
-                }
-
-                // Results are identical
-                result1 === result2 && result1 === '1a2b3c'""");
+                collect(map.entries()) === '1a2b3c' && collect(map[Symbol.iterator]()) === '1a2b3c'""");
     }
 
     @Test
@@ -101,29 +87,8 @@ public class MapPrototypeTest extends BaseJavetTest {
     }
 
     @Test
-    void testBothIteratorsGiveSameResult() {
-        // Verify entries() and Symbol.iterator give identical results
-        assertBooleanWithJavet("""
-                var m = new Map([[1, 'a'], [2, 'b'], [3, 'c']]);
-                var it1 = m.entries();
-                var it2 = m[Symbol.iterator]();
-                var result1 = '';
-                var result2 = '';
-                var entry;
-                while (!(entry = it1.next()).done) {
-                  result1 += entry.value[0] + entry.value[1];
-                }
-                while (!(entry = it2.next()).done) {
-                  result2 += entry.value[0] + entry.value[1];
-                }
-                result1 === result2""");
-    }
-
-    @Test
     public void testClear() {
-        JSMap map = new JSMap(context);
-        map.mapSet(new JSString("key1"), new JSString("value1"));
-        map.mapSet(new JSString("key2"), new JSString("value2"));
+        JSMap map = newStringMap();
 
         // Normal case: clear map
         JSValue result = MapPrototype.clear(context, map, JSValue.NO_ARGS);
@@ -175,9 +140,7 @@ public class MapPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testDelete() {
-        JSMap map = new JSMap(context);
-        map.mapSet(new JSString("key1"), new JSString("value1"));
-        map.mapSet(new JSString("key2"), new JSString("value2"));
+        JSMap map = newStringMap();
 
         // Normal case: delete existing key
         JSValue result = MapPrototype.delete(context, map, stringArgs("key1"));
@@ -374,29 +337,14 @@ public class MapPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testEntries() {
-        JSMap map = new JSMap(context);
-        map.mapSet(new JSString("key1"), new JSString("value1"));
-        map.mapSet(new JSString("key2"), new JSString("value2"));
+        JSMap map = newStringMap();
 
         // Normal case: get entries (returns iterator)
         JSValue result = MapPrototype.entries(context, map, JSValue.NO_ARGS);
         JSIterator iterator = result.asIterator().orElseThrow();
 
-        // Check first entry
-        JSObject iterResult1 = iterator.next();
-        assertThat((Boolean) iterResult1.get("done").toJavaObject()).isFalse();
-        JSArray entry1 = iterResult1.get("value").asArray().orElseThrow();
-        assertThat(entry1.getLength()).isEqualTo(2);
-        assertStringValue(entry1.get(0), "key1");
-        assertStringValue(entry1.get(1), "value1");
-
-        // Check second entry
-        JSObject iterResult2 = iterator.next();
-        assertThat((Boolean) iterResult2.get("done").toJavaObject()).isFalse();
-        JSArray entry2 = iterResult2.get("value").asArray().orElseThrow();
-        assertThat(entry2.getLength()).isEqualTo(2);
-        assertStringValue(entry2.get(0), "key2");
-        assertStringValue(entry2.get(1), "value2");
+        assertNextEntry(iterator, "key1", "value1");
+        assertNextEntry(iterator, "key2", "value2");
 
         // Iterator should be exhausted
         JSObject iterResult3 = iterator.next();
@@ -499,9 +447,7 @@ public class MapPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testForEach() {
-        JSMap map = new JSMap(context);
-        map.mapSet(new JSString("key1"), new JSString("value1"));
-        map.mapSet(new JSString("key2"), new JSString("value2"));
+        JSMap map = newStringMap();
 
         // Normal case: forEach with callback
         final StringBuilder result = new StringBuilder();
@@ -670,16 +616,6 @@ public class MapPrototypeTest extends BaseJavetTest {
     }
 
     @Test
-    void testForEachWithThisArg() {
-        // Test that thisArg is properly passed
-        assertIntegerWithJavet("""
-                var obj = {count: 0};
-                var m = new Map([[1, 'a'], [2, 'b'], [3, 'c']]);
-                m.forEach(function() { this.count++; }, obj);
-                obj.count""");
-    }
-
-    @Test
     void testForOfMapCheckEntryType() {
         // Check what type each entry is
         assertBooleanWithJavet("""
@@ -693,15 +629,6 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testForOfMapWithDestructuring() {
         // for-of over Map with destructuring (the target test)
-        assertStringWithJavet("""
-                var result = '';
-                for (var [k, v] of new Map([[1, 'a'], [2, 'b']])) result += k + v;
-                result""");
-    }
-
-    @Test
-    void testForOfUsesSymbolIterator() {
-        // for-of uses Symbol.iterator (which is entries)
         assertStringWithJavet("""
                 var result = '';
                 for (var [k, v] of new Map([[1, 'a'], [2, 'b']])) result += k + v;
@@ -964,27 +891,7 @@ public class MapPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testKeys() {
-        JSMap map = new JSMap(context);
-        map.mapSet(new JSString("key1"), new JSString("value1"));
-        map.mapSet(new JSString("key2"), new JSString("value2"));
-
-        // Normal case: get keys
-        JSValue result = MapPrototype.keys(context, map, JSValue.NO_ARGS);
-        JSIterator keys = result.asIterator().orElseThrow();
-        JSArray jsArray = JSIteratorHelper.toArray(context, keys);
-        assertThat(jsArray.getLength()).isEqualTo(2);
-        assertThat(jsArray.get(0).asString().map(JSString::value).orElse(null)).isEqualTo("key1");
-        assertThat(jsArray.get(1).asString().map(JSString::value).orElse(null)).isEqualTo("key2");
-
-        // Normal case: empty map
-        JSMap emptyMap = new JSMap(context);
-        result = MapPrototype.keys(context, emptyMap, JSValue.NO_ARGS);
-        keys = result.asIterator().orElseThrow();
-        jsArray = JSIteratorHelper.toArray(context, keys);
-        assertThat(jsArray.getLength()).isEqualTo(0);
-
-        // Edge case: called on non-Map
-        assertPendingTypeError(context, MapPrototype.keys(context, new JSString("not map"), JSValue.NO_ARGS));
+        assertStringIterator(MapPrototype::keys, "key1", "key2");
     }
 
     @Test
@@ -1027,6 +934,21 @@ public class MapPrototypeTest extends BaseJavetTest {
                 "var m = new Map(); for(var i = 0; i < 1000; i++) m.set(i, 'val'); m.delete(500); m.size");
         assertBooleanWithJavet(
                 "var m = new Map(); for(var i = 0; i < 1000; i++) m.set(i, 'val'); m.delete(500); m.has(500)");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {".entries", "[Symbol.iterator]"})
+    void testManualEntryIteration(String accessor) {
+        assertStringWithJavet("""
+                var result = '';
+                var m = new Map([[1, 'a'], [2, 'b']]);
+                var it = m%s();
+                var entry;
+                while (!(entry = it.next()).done) {
+                  var arr = entry.value;
+                  result += arr[0] + arr[1];
+                }
+                result""".formatted(accessor));
     }
 
     @Test
@@ -1095,21 +1017,6 @@ public class MapPrototypeTest extends BaseJavetTest {
         // Later values should override earlier ones
         assertIntegerWithJavet("new Map([[1, 'a'], [1, 'b'], [1, 'c']]).size");
         assertStringWithJavet("new Map([[1, 'a'], [1, 'b'], [1, 'c']]).get(1)");
-    }
-
-    @Test
-    void testMapEntriesManual() {
-        // Manual iteration over Map.entries() to verify entries work
-        assertStringWithJavet("""
-                var result = '';
-                var m = new Map([[1, 'a'], [2, 'b']]);
-                var it = m.entries();
-                var entry;
-                while (!(entry = it.next()).done) {
-                  var arr = entry.value;
-                  result += arr[0] + arr[1];
-                }
-                result""");
     }
 
     @Test
@@ -1186,21 +1093,6 @@ public class MapPrototypeTest extends BaseJavetTest {
                     && d2.configurable === true
                     && d2.value.length === 2;
                 })()""").toJavaObject()).isEqualTo(true);
-    }
-
-    @Test
-    void testMapSymbolIteratorManual() {
-        // Manual iteration over Map[Symbol.iterator]() to verify it works
-        assertStringWithJavet("""
-                var result = '';
-                var m = new Map([[1, 'a'], [2, 'b']]);
-                var it = m[Symbol.iterator]();
-                var entry;
-                while (!(entry = it.next()).done) {
-                  var arr = entry.value;
-                  result += arr[0] + arr[1];
-                }
-                result""");
     }
 
     @Test
@@ -1508,27 +1400,7 @@ public class MapPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testValues() {
-        JSMap map = new JSMap(context);
-        map.mapSet(new JSString("key1"), new JSString("value1"));
-        map.mapSet(new JSString("key2"), new JSString("value2"));
-
-        // Normal case: get values
-        JSValue result = MapPrototype.values(context, map, JSValue.NO_ARGS);
-        JSIterator values = result.asIterator().orElseThrow();
-        JSArray jsArray = JSIteratorHelper.toArray(context, values);
-        assertThat(jsArray.getLength()).isEqualTo(2);
-        assertThat(jsArray.get(0).asString().map(JSString::value).orElse(null)).isEqualTo("value1");
-        assertThat(jsArray.get(1).asString().map(JSString::value).orElse(null)).isEqualTo("value2");
-
-        // Normal case: empty map
-        JSMap emptyMap = new JSMap(context);
-        result = MapPrototype.values(context, emptyMap, JSValue.NO_ARGS);
-        values = result.asIterator().orElseThrow();
-        jsArray = JSIteratorHelper.toArray(context, values);
-        assertThat(jsArray.getLength()).isEqualTo(0);
-
-        // Edge case: called on non-Map
-        assertPendingTypeError(context, MapPrototype.values(context, new JSString("not map"), JSValue.NO_ARGS));
+        assertStringIterator(MapPrototype::values, "value1", "value2");
     }
 
     @Test

@@ -117,80 +117,11 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
             IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols,
             IdentityHashMap<PropertyDefinition, JSSymbol> autoAccessorBackingSymbols) {
         for (PropertyDefinition field : fields) {
-            boolean isPrivate = field.isPrivate();
-
             compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
-
-            // Track class field initializer context for ContainsArguments check in eval
             compilerContext.pushState();
             compilerContext.inClassFieldInitializer = true;
-
-            if (isPrivate) {
-                if (!(field.getKey() instanceof PrivateIdentifier privateId)) {
-                    throw new JSCompilerException("Invalid private field key", field);
-                }
-                String fieldName = privateId.getName();
-
-                if (field.getValue() != null) {
-                    compilerContext.expressionCompiler.compile(field.getValue());
-                } else {
-                    compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                }
-
-                JSSymbol symbol = privateSymbols.get(fieldName);
-                if (symbol != null) {
-                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-                    compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                    if (field.getValue() != null && field.getValue().isAnonymousFunction()) {
-                        compilerContext.emitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
-                    }
-                    compilerContext.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
-                } else {
-                    compilerContext.emitter.emitOpcode(Opcode.DROP);
-                    compilerContext.emitter.emitOpcode(Opcode.DROP);
-                    continue;
-                }
-            } else if (field.isAutoAccessor()) {
-                JSSymbol backingSymbol = autoAccessorBackingSymbols.get(field);
-                if (backingSymbol == null) {
-                    throw new JSCompilerException("Auto-accessor backing symbol not found", field);
-                }
-
-                if (field.getValue() != null) {
-                    compilerContext.expressionCompiler.compile(field.getValue());
-                } else {
-                    compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                }
-
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, backingSymbol);
-                compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                if (field.getValue() != null && field.getValue().isAnonymousFunction()) {
-                    compilerContext.emitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
-                }
-                compilerContext.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
-            } else {
-                if (field.isComputed()) {
-                    JSSymbol computedFieldSymbol = computedFieldSymbols.get(field);
-                    if (computedFieldSymbol == null) {
-                        throw new JSCompilerException("Computed field key not found", field);
-                    }
-                    compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-                    compilerContext.emitter.emitU8(2);
-                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
-                    compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-                } else {
-                    compilerContext.emitHelpers.emitNonComputedPublicFieldKey(field.getKey());
-                }
-
-                if (field.getValue() != null) {
-                    compilerContext.expressionCompiler.compile(field.getValue());
-                } else {
-                    compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                }
-
-                compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
-            }
-
+            emitFieldDefinition(compilerContext, field, privateSymbols, computedFieldSymbols,
+                    autoAccessorBackingSymbols);
             compilerContext.popState();
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
@@ -317,27 +248,12 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
             if (symbol == null) {
                 throw new JSCompilerException("Private method symbol not found: #" + entry.name(), entry.ast());
             }
-            if (JSKeyword.GET.equals(entry.kind()) || JSKeyword.SET.equals(entry.kind())) {
-                // Private getter/setter: use DEFINE_METHOD_COMPUTED with accessor flags
-                // Stack: [this, symbol, func] → [this]
-                int methodKind = JSKeyword.GET.equals(entry.kind()) ? 1 : 2;
-                compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-                int capture = compilerContext.captureResolver.resolveCapturedBindingIndex(entry.bindingName());
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capture);
-                compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, methodKind);
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
-            } else {
-                // Regular private method: use DEFINE_METHOD_COMPUTED with non-writable flag (bit 3)
-                // so that PUT_PRIVATE_FIELD can detect methods and throw TypeError on [[Set]]
-                // Stack: [this, symbol, func] → [this]
-                compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-                int capture = compilerContext.captureResolver.resolveCapturedBindingIndex(entry.bindingName());
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capture);
-                compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 8);
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
-            }
+            compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
+            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+            int capture = compilerContext.captureResolver.resolveCapturedBindingIndex(entry.bindingName());
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capture);
+            compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, entry.definitionFlags());
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
     }
 
@@ -347,19 +263,8 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
      */
     JSBytecodeFunction compileStaticBlock(StaticBlock staticBlock, String className,
             Map<String, JSSymbol> privateSymbols) {
-        // Pass parent captureResolver so static blocks can capture outer scope variables
-        BytecodeCompiler blockCompiler = compilerContext.newNestedCompiler(true, privateSymbols);
+        BytecodeCompiler blockCompiler = newStaticInitializer(privateSymbols, className);
         CompilerContext blockCtx = blockCompiler.context();
-
-        blockCtx.scopeManager.enterScope();
-        blockCtx.inGlobalScope = false;
-
-        // Force-capture the class inner name binding so eval() inside the
-        // static block can resolve it at runtime.
-        if (className != null && !className.isEmpty()) {
-            blockCtx.captureResolver.resolveCapturedBindingIndex(className);
-            blockCtx.classInnerNameToCapture = className;
-        }
 
         // Compile all statements in the static block
         for (Statement stmt : staticBlock.getBody()) {
@@ -375,27 +280,7 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
         blockCtx.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
         blockCtx.emitter.emitOpcode(Opcode.RETURN);
 
-        int localCount = blockCtx.scopeManager.currentScope().getLocalCount();
-        blockCtx.scopeManager.exitScope();
-
-        Bytecode blockBytecode = blockCtx.emitter.build(localCount);
-
-        JSBytecodeFunction blockFunc = new JSBytecodeFunction(compilerContext.context, blockBytecode,
-                "<static initializer>", // Static blocks are anonymous
-                0, // no parameters
-                JSValue.NO_ARGS, // no closure vars
-                null, // no prototype
-                false, // not a constructor
-                false, // not async
-                false, // not generator
-                false, // isArrow - static initializers are not arrows
-                true, // strict mode
-                "static { [initializer] }");
-
-        // Set up capture source infos for outer variable closure capture
-        compilerContext.emitHelpers.emitCapturedValues(blockCompiler, blockFunc);
-
-        return blockFunc;
+        return finishStaticInitializer(blockCompiler, "<static initializer>", "static { [initializer] }");
     }
 
     /**
@@ -405,107 +290,21 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
     JSBytecodeFunction compileStaticFieldInitializer(PropertyDefinition field,
             IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols, Map<String, JSSymbol> privateSymbols,
             IdentityHashMap<PropertyDefinition, JSSymbol> autoAccessorBackingSymbols, String className) {
-        // Pass parent captureResolver so static field initializers can capture outer scope variables
-        BytecodeCompiler initializerCompiler = compilerContext.newNestedCompiler(true, privateSymbols);
+        BytecodeCompiler initializerCompiler = newStaticInitializer(privateSymbols, className);
         CompilerContext initCtx = initializerCompiler.context();
-
-        initCtx.scopeManager.enterScope();
-        initCtx.inGlobalScope = false;
-
-        // Force-capture the class inner name binding so eval() inside the
-        // initializer can resolve it at runtime (QuickJS: resolve_scope_var
-        // walks the parent scope chain for eval closures).
-        if (className != null && !className.isEmpty()) {
-            initCtx.captureResolver.resolveCapturedBindingIndex(className);
-            initCtx.classInnerNameToCapture = className;
-        }
 
         // Stack: this
         initCtx.emitter.emitOpcode(Opcode.PUSH_THIS);
 
-        if (field.isPrivate()) {
-            if (!(field.getKey() instanceof PrivateIdentifier privateId)) {
-                throw new JSCompilerException("Invalid static private field key", field);
-            }
-
-            JSSymbol symbol = privateSymbols.get(privateId.getName());
-            if (symbol == null) {
-                throw new JSCompilerException("Static private field symbol not found: #" + privateId.getName(),
-                        privateId);
-            }
-
-            if (field.getValue() != null) {
-                initCtx.expressionCompiler.compile(field.getValue());
-            } else {
-                initCtx.emitter.emitOpcode(Opcode.UNDEFINED);
-            }
-
-            // Stack: this value symbol -> this symbol value
-            initCtx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-            initCtx.emitter.emitOpcode(Opcode.SWAP);
-            // Set function name from private symbol (e.g., "#field") for anonymous functions
-            if (field.getValue() != null && field.getValue().isAnonymousFunction()) {
-                initCtx.emitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
-            }
-            initCtx.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
-        } else if (field.isAutoAccessor()) {
-            JSSymbol backingSymbol = autoAccessorBackingSymbols.get(field);
-            if (backingSymbol == null) {
-                throw new JSCompilerException("Auto-accessor static backing symbol not found", field);
-            }
-
-            if (field.getValue() != null) {
-                initCtx.expressionCompiler.compile(field.getValue());
-            } else {
-                initCtx.emitter.emitOpcode(Opcode.UNDEFINED);
-            }
-
-            initCtx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, backingSymbol);
-            initCtx.emitter.emitOpcode(Opcode.SWAP);
-            if (field.getValue() != null && field.getValue().isAnonymousFunction()) {
-                initCtx.emitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
-            }
-            initCtx.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
-        } else {
-            if (field.isComputed()) {
-                JSSymbol computedFieldSymbol = computedFieldSymbols.get(field);
-                if (computedFieldSymbol == null) {
-                    throw new JSCompilerException("Computed static field key not found", field);
-                }
-                // Load precomputed key from constructor hidden storage:
-                // this this hiddenSymbol -> this key
-                initCtx.emitter.emitOpcode(Opcode.PUSH_THIS);
-                initCtx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
-                initCtx.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-            } else {
-                initCtx.emitHelpers.emitNonComputedPublicFieldKey(field.getKey());
-            }
-
-            if (field.getValue() != null) {
-                initCtx.expressionCompiler.compile(field.getValue());
-            } else {
-                initCtx.emitter.emitOpcode(Opcode.UNDEFINED);
-            }
-
-            // Stack: this key value -> this
-            initCtx.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
+        emitFieldDefinition(initCtx, field, privateSymbols, computedFieldSymbols, autoAccessorBackingSymbols);
+        if (!field.isPrivate() && !field.isAutoAccessor()) {
             initCtx.emitter.emitOpcode(Opcode.DROP);
         }
         initCtx.emitter.emitOpcode(Opcode.UNDEFINED);
         initCtx.emitter.emitOpcode(Opcode.RETURN);
 
-        int localCount = initCtx.scopeManager.currentScope().getLocalCount();
-        initCtx.scopeManager.exitScope();
-        Bytecode initializerBytecode = initCtx.emitter.build(localCount);
-
-        JSBytecodeFunction initFunc = new JSBytecodeFunction(compilerContext.context, initializerBytecode,
-                "<static field initializer>", 0, JSValue.NO_ARGS, null, false, false, false, false, true,
+        return finishStaticInitializer(initializerCompiler, "<static field initializer>",
                 "static field initializer for " + className);
-
-        // Set up capture source infos for outer variable closure capture
-        compilerContext.emitHelpers.emitCapturedValues(initializerCompiler, initFunc);
-
-        return initFunc;
     }
 
     /**
@@ -577,6 +376,17 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
         return ctorFunc;
     }
 
+    private JSBytecodeFunction finishStaticInitializer(BytecodeCompiler compiler, String name, String source) {
+        CompilerContext ctx = compiler.context();
+        int localCount = ctx.scopeManager.currentScope().getLocalCount();
+        ctx.scopeManager.exitScope();
+        Bytecode bytecode = ctx.emitter.build(localCount);
+        JSBytecodeFunction initializer = new JSBytecodeFunction(compilerContext.context, bytecode, name, 0,
+                JSValue.NO_ARGS, null, false, false, false, false, true, source);
+        compilerContext.emitHelpers.emitCapturedValues(compiler, initializer);
+        return initializer;
+    }
+
     void installPrivateStaticMethods(List<PrivateMethodEntry> privateStaticMethodEntries,
             Map<String, JSSymbol> privateSymbols) {
         for (PrivateMethodEntry entry : privateStaticMethodEntries) {
@@ -585,36 +395,28 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
                 throw new JSCompilerException("Private static method symbol not found: #" + entry.name(), entry.ast());
             }
 
-            if (JSKeyword.GET.equals(entry.kind()) || JSKeyword.SET.equals(entry.kind())) {
-                // Private static getter/setter: use DEFINE_METHOD_COMPUTED with accessor flags
-                int methodKind = JSKeyword.GET.equals(entry.kind()) ? 1 : 2;
-                // Stack before: constructor proto
-                compilerContext.emitter.emitOpcode(Opcode.SWAP); // proto constructor
-                compilerContext.emitter.emitOpcode(Opcode.DUP); // proto constructor constructor
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // proto constructor constructor
-                                                                                       // symbol
-                compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, entry.function()); // proto constructor
-                                                                                               // constructor symbol
-                                                                                               // method
-                compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, methodKind); // proto constructor
-                                                                                                 // constructor
-                compilerContext.emitter.emitOpcode(Opcode.DROP); // proto constructor
-                compilerContext.emitter.emitOpcode(Opcode.SWAP); // constructor proto
-            } else {
-                // Regular private static method: use DEFINE_METHOD_COMPUTED with non-writable flag
-                // Stack before: constructor proto
-                compilerContext.emitter.emitOpcode(Opcode.SWAP); // proto constructor
-                compilerContext.emitter.emitOpcode(Opcode.DUP); // proto constructor constructor
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // proto constructor constructor
-                                                                                       // symbol
-                compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, entry.function()); // proto constructor
-                                                                                               // constructor symbol
-                                                                                               // method
-                compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 8); // proto constructor constructor
-                compilerContext.emitter.emitOpcode(Opcode.DROP); // proto constructor
-                compilerContext.emitter.emitOpcode(Opcode.SWAP); // constructor proto
-            }
+            // Keep the constructor and prototype on the stack after installing the method.
+            compilerContext.emitter.emitOpcode(Opcode.SWAP);
+            compilerContext.emitter.emitOpcode(Opcode.DUP);
+            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+            compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, entry.function());
+            compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, entry.definitionFlags());
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.SWAP);
         }
+    }
+
+    private BytecodeCompiler newStaticInitializer(Map<String, JSSymbol> privateSymbols, String className) {
+        BytecodeCompiler compiler = compilerContext.newNestedCompiler(true, privateSymbols);
+        CompilerContext ctx = compiler.context();
+        ctx.scopeManager.enterScope();
+        ctx.inGlobalScope = false;
+        // Direct eval in a static initializer can reference the class's inner binding.
+        if (className != null && !className.isEmpty()) {
+            ctx.captureResolver.resolveCapturedBindingIndex(className);
+            ctx.classInnerNameToCapture = className;
+        }
+        return compiler;
     }
 
     void registerPrivateName(Map<String, String> privateNameKinds, String privateName, String kind, ASTNode ast) {
@@ -632,7 +434,79 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
         throw new JSCompilerException("private class field is already defined", ast);
     }
 
+    private static void emitFieldDefinition(CompilerContext ctx, PropertyDefinition field,
+            Map<String, JSSymbol> privateSymbols, IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols,
+            IdentityHashMap<PropertyDefinition, JSSymbol> autoAccessorBackingSymbols) {
+        if (field.isPrivate() || field.isAutoAccessor()) {
+            JSSymbol symbol;
+            if (field.isPrivate()) {
+                if (!(field.getKey() instanceof PrivateIdentifier id)) {
+                    throw new JSCompilerException(
+                            field.isStatic() ? "Invalid static private field key" : "Invalid private field key", field);
+                }
+                symbol = privateSymbols.get(id.getName());
+                if (symbol == null && field.isStatic()) {
+                    throw new JSCompilerException("Static private field symbol not found: #" + id.getName(), id);
+                }
+            } else {
+                symbol = autoAccessorBackingSymbols.get(field);
+                if (symbol == null) {
+                    throw new JSCompilerException(field.isStatic()
+                            ? "Auto-accessor static backing symbol not found"
+                            : "Auto-accessor backing symbol not found", field);
+                }
+            }
+            emitFieldValue(ctx, field);
+            if (symbol == null) {
+                ctx.emitter.emitOpcode(Opcode.DROP);
+                return;
+            }
+            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+            ctx.emitter.emitOpcode(Opcode.SWAP);
+            if (field.getValue() != null && field.getValue().isAnonymousFunction()) {
+                ctx.emitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
+            }
+            ctx.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
+            return;
+        }
+        if (field.isComputed()) {
+            JSSymbol symbol = computedFieldSymbols.get(field);
+            if (symbol == null) {
+                throw new JSCompilerException(
+                        field.isStatic() ? "Computed static field key not found" : "Computed field key not found",
+                        field);
+            }
+            // Static initializers find the saved key on this, instance initializers on their constructor.
+            if (field.isStatic()) {
+                ctx.emitter.emitOpcode(Opcode.PUSH_THIS);
+            } else {
+                ctx.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+                ctx.emitter.emitU8(2);
+            }
+            ctx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+            ctx.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+        } else {
+            ctx.emitHelpers.emitNonComputedPublicFieldKey(field.getKey());
+        }
+        emitFieldValue(ctx, field);
+        ctx.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
+    }
+
+    private static void emitFieldValue(CompilerContext ctx, PropertyDefinition field) {
+        if (field.getValue() == null) {
+            ctx.emitter.emitOpcode(Opcode.UNDEFINED);
+        } else {
+            ctx.expressionCompiler.compile(field.getValue());
+        }
+    }
+
     record PrivateMethodEntry(String name, JSBytecodeFunction function, String kind, MethodDefinition ast,
             String bindingName) {
+        int definitionFlags() {
+            if (JSKeyword.GET.equals(kind)) {
+                return 1;
+            }
+            return JSKeyword.SET.equals(kind) ? 2 : 8; // A regular private method is non-writable.
+        }
     }
 }

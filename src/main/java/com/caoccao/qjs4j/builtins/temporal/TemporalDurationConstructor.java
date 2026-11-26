@@ -150,8 +150,7 @@ public final class TemporalDurationConstructor {
      * nanoseconds?)
      */
     public static JSValue construct(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (context.getConstructorNewTarget() == null) {
-            context.throwTypeError("Method invoked on an object that is not Temporal.Duration.");
+        if (!TemporalUtils.requireNewTarget(context, "Duration")) {
             return JSUndefined.INSTANCE;
         }
 
@@ -260,6 +259,15 @@ public final class TemporalDurationConstructor {
         }
         BigInteger numericValue = TemporalUtils.toBigIntegerFromIntegralDouble(numericValueAsDouble);
         return numericValue;
+    }
+
+    private static boolean hasOwnAccessor(JSObject object, String name) {
+        PropertyKey key = PropertyKey.fromString(name);
+        if (!object.hasOwnProperty(key)) {
+            return false;
+        }
+        PropertyDescriptor desc = object.getOwnPropertyDescriptor(key);
+        return desc != null && desc.isAccessorDescriptor();
     }
 
     private static boolean hasZuluDesignator(String text) {
@@ -377,21 +385,9 @@ public final class TemporalDurationConstructor {
                 context.throwTypeError("Temporal error: Invalid relativeTo option.");
                 return null;
             }
-            PropertyKey dayKey = PropertyKey.fromString("day");
-            if (relativeToObject.hasOwnProperty(dayKey)) {
-                PropertyDescriptor dayPropertyDescriptor = relativeToObject.getOwnPropertyDescriptor(dayKey);
-                if (dayPropertyDescriptor != null && dayPropertyDescriptor.isAccessorDescriptor()) {
-                    context.throwTypeError("Temporal error: Invalid relativeTo option.");
-                    return null;
-                }
-            }
-            PropertyKey yearKey = PropertyKey.fromString("year");
-            if (relativeToObject.hasOwnProperty(yearKey)) {
-                PropertyDescriptor yearPropertyDescriptor = relativeToObject.getOwnPropertyDescriptor(yearKey);
-                if (yearPropertyDescriptor != null && yearPropertyDescriptor.isAccessorDescriptor()) {
-                    context.throwTypeError("Temporal error: Invalid relativeTo option.");
-                    return null;
-                }
+            if (hasOwnAccessor(relativeToObject, "day") || hasOwnAccessor(relativeToObject, "year")) {
+                context.throwTypeError("Temporal error: Invalid relativeTo option.");
+                return null;
             }
         }
 
@@ -404,38 +400,22 @@ public final class TemporalDurationConstructor {
             return null;
         }
 
-        JSValue hourValue = relativeToObject.get(PropertyKey.fromString("hour"));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        Long hour = toOptionalIntegralLong(context, hourValue, 0L);
+        Long hour = readTimeField(context, relativeToObject, "hour");
         if (context.hasPendingException()) {
             return null;
         }
 
-        JSValue microsecondValue = relativeToObject.get(PropertyKey.fromString("microsecond"));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        Long microsecond = toOptionalIntegralLong(context, microsecondValue, 0L);
+        Long microsecond = readTimeField(context, relativeToObject, "microsecond");
         if (context.hasPendingException()) {
             return null;
         }
 
-        JSValue millisecondValue = relativeToObject.get(PropertyKey.fromString("millisecond"));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        Long millisecond = toOptionalIntegralLong(context, millisecondValue, 0L);
+        Long millisecond = readTimeField(context, relativeToObject, "millisecond");
         if (context.hasPendingException()) {
             return null;
         }
 
-        JSValue minuteValue = relativeToObject.get(PropertyKey.fromString("minute"));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        Long minute = toOptionalIntegralLong(context, minuteValue, 0L);
+        Long minute = readTimeField(context, relativeToObject, "minute");
         if (context.hasPendingException()) {
             return null;
         }
@@ -465,11 +445,7 @@ public final class TemporalDurationConstructor {
             }
         }
 
-        JSValue nanosecondValue = relativeToObject.get(PropertyKey.fromString("nanosecond"));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        Long nanosecond = toOptionalIntegralLong(context, nanosecondValue, 0L);
+        Long nanosecond = readTimeField(context, relativeToObject, "nanosecond");
         if (context.hasPendingException()) {
             return null;
         }
@@ -497,11 +473,7 @@ public final class TemporalDurationConstructor {
             }
         }
 
-        JSValue secondValue = relativeToObject.get(PropertyKey.fromString("second"));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        Long second = toOptionalIntegralLong(context, secondValue, 0L);
+        Long second = readTimeField(context, relativeToObject, "second");
         if (context.hasPendingException()) {
             return null;
         }
@@ -824,6 +796,11 @@ public final class TemporalDurationConstructor {
         }
         context.throwTypeError("Temporal error: Invalid relativeTo option.");
         return null;
+    }
+
+    private static Long readTimeField(JSContext context, JSObject object, String name) {
+        JSValue value = object.get(PropertyKey.fromString(name));
+        return context.hasPendingException() ? null : toOptionalIntegralLong(context, value, 0L);
     }
 
     private static long toLongDurationField(JSContext context, BigInteger value) {

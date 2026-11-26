@@ -18,11 +18,27 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Unit tests for Proxy.revocable with working revoke function.
  */
 public class ProxyConstructorTest extends BaseJavetTest {
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Object(BigInt(42))", "new Boolean(true)", "new Number(42)", "new String('hello')",
+            "Object(Symbol('foo'))"})
+    public void testBoxedPrimitiveAsProxyTarget(String target) {
+        assertStringWithJavet(interceptGet(target, "test", "'intercepted'", "proxy.test"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Object(BigInt(255))", "new Boolean(true)", "new Number(42)", "new String('hello')",
+            "Object(Symbol('test'))"})
+    public void testBoxedPrimitiveToStringThroughProxy(String target) {
+        assertErrorWithJavet(forwardingProxyScript(target, "proxy.toString()"));
+    }
 
     @Test
     public void testCallApplyOnFunctionArg() {
@@ -279,56 +295,46 @@ public class ProxyConstructorTest extends BaseJavetTest {
     @Test
     public void testProxyDefinePropertyInvariantNonConfigurableChange() {
         // Test invariant: can't change non-configurable property descriptor
-        assertErrorWithJavet("""
-                var target = {};
+        assertErrorWithJavet(proxyScript("{}", """
                 Object.defineProperty(target, 'x', {
                   value: 1,
                   writable: false,
                   configurable: false
-                });
-                var handler = {
+                });""", """
+                {
                   defineProperty: function(target, prop, descriptor) {
                     return true; // Claim success without matching descriptor
                   }
-                };
-                var proxy = new Proxy(target, handler);
-                Object.defineProperty(proxy, 'x', {value: 2})""");
+                }""", "Object.defineProperty(proxy, 'x', {value: 2})"));
     }
 
     @Test
     public void testProxyDefinePropertyInvariantNonExtensible() {
         // Test invariant: can't add property to non-extensible target
-        assertErrorWithJavet("""
-                var target = {};
-                Object.preventExtensions(target);
-                var handler = {
+        assertErrorWithJavet(proxyScript("{}", "Object.preventExtensions(target);", """
+                {
                   defineProperty: function(target, prop, descriptor) {
                     return true; // Claim success
                   }
-                };
-                var proxy = new Proxy(target, handler);
-                Object.defineProperty(proxy, 'x', {value: 42})""");
+                }""", "Object.defineProperty(proxy, 'x', {value: 42})"));
     }
 
     @Test
     public void testProxyDefinePropertyWithGetterSetter() {
         // Test defineProperty with getter/setter
-        assertIntegerWithJavet("""
-                var target = {};
-                var value = 0;
-                var handler = {
+        assertIntegerWithJavet(proxyScript("{}", "var value = 0;", """
+                {
                   defineProperty: function(target, prop, desc) {
                     Object.defineProperty(target, prop, desc);
                     return true;
                   }
-                };
-                var proxy = new Proxy(target, handler);
+                }""", """
                 Object.defineProperty(proxy, 'x', {
                   get: function() { return value; },
                   set: function(v) { value = v; }
                 });
                 proxy.x = 42;
-                proxy.x""");
+                proxy.x"""));
     }
 
     @Test
@@ -367,19 +373,16 @@ public class ProxyConstructorTest extends BaseJavetTest {
     @Test
     public void testProxyDeletePropertyNonConfigurable() {
         // Test invariant: can't delete non-configurable property
-        assertErrorWithJavet("""
-                var target = {};
+        assertErrorWithJavet(proxyScript("{}", """
                 Object.defineProperty(target, 'x', {
                   value: 1,
                   configurable: false
-                });
-                var handler = {
+                });""", """
+                {
                   deleteProperty: function(target, prop) {
                     return true; // Claim success
                   }
-                };
-                var proxy = new Proxy(target, handler);
-                delete proxy.x""");
+                }""", "delete proxy.x"));
     }
 
     @Test
@@ -410,38 +413,32 @@ public class ProxyConstructorTest extends BaseJavetTest {
     @Test
     public void testProxyGetInvariantNonConfigurableAccessor() {
         // Test invariant: get must return undefined for non-configurable accessor without getter
-        assertErrorWithJavet("""
-                var target = {};
+        assertErrorWithJavet(proxyScript("{}", """
                 Object.defineProperty(target, 'x', {
                   set: function(v) {},
                   configurable: false
-                });
-                var handler = {
+                });""", """
+                {
                   get: function(target, prop) {
                     return 42; // Return value for accessor without getter
                   }
-                };
-                var proxy = new Proxy(target, handler);
-                proxy.x""");
+                }""", "proxy.x"));
     }
 
     @Test
     public void testProxyGetInvariantNonWritableNonConfigurable() {
         // Test invariant: must return same value for non-writable, non-configurable property
-        assertErrorWithJavet("""
-                var target = {};
+        assertErrorWithJavet(proxyScript("{}", """
                 Object.defineProperty(target, 'x', {
                   value: 1,
                   writable: false,
                   configurable: false
-                });
-                var handler = {
+                });""", """
+                {
                   get: function(target, prop) {
                     return 2; // Return different value
                   }
-                };
-                var proxy = new Proxy(target, handler);
-                proxy.x""");
+                }""", "proxy.x"));
     }
 
     @Test
@@ -543,34 +540,27 @@ public class ProxyConstructorTest extends BaseJavetTest {
     @Test
     public void testProxyHasInvariantNonConfigurable() {
         // Test invariant: must report non-configurable property as present
-        assertErrorWithJavet("""
-                var target = {};
+        assertErrorWithJavet(proxyScript("{}", """
                 Object.defineProperty(target, 'x', {
                   value: 1,
                   configurable: false
-                });
-                var handler = {
+                });""", """
+                {
                   has: function(target, prop) {
                     return false; // Hide non-configurable property
                   }
-                };
-                var proxy = new Proxy(target, handler);
-                'x' in proxy""");
+                }""", "'x' in proxy"));
     }
 
     @Test
     public void testProxyHasInvariantNonExtensible() {
         // Test invariant: must report all properties on non-extensible target
-        assertErrorWithJavet("""
-                var target = {x: 1};
-                Object.preventExtensions(target);
-                var handler = {
+        assertErrorWithJavet(proxyScript("{x: 1}", "Object.preventExtensions(target);", """
+                {
                   has: function(target, prop) {
                     return false; // Hide existing property
                   }
-                };
-                var proxy = new Proxy(target, handler);
-                'x' in proxy""");
+                }""", "'x' in proxy"));
     }
 
     @Test
@@ -631,11 +621,10 @@ public class ProxyConstructorTest extends BaseJavetTest {
 
     @Test
     public void testProxyMultipleTraps() {
-        assertBooleanWithJavet("""
-                var target = {x: 1};
+        assertBooleanWithJavet(proxyScript("{x: 1}", """
                 var getCalled = false;
-                var setCalled = false;
-                var handler = {
+                var setCalled = false;""", """
+                {
                   get: function(target, prop) {
                     getCalled = true;
                     return target[prop];
@@ -645,11 +634,10 @@ public class ProxyConstructorTest extends BaseJavetTest {
                     target[prop] = value;
                     return true;
                   }
-                };
-                var proxy = new Proxy(target, handler);
+                }""", """
                 var val = proxy.x;
                 proxy.y = 2;
-                getCalled && setCalled""");
+                getCalled && setCalled"""));
     }
 
     @Test
@@ -703,19 +691,16 @@ public class ProxyConstructorTest extends BaseJavetTest {
     @Test
     public void testProxyOwnKeysInvariantNonExtensible() {
         // Test invariant: ownKeys must include all non-configurable properties
-        assertErrorWithJavet("""
-                var target = {};
+        assertErrorWithJavet(proxyScript("{}", """
                 Object.defineProperty(target, 'x', {
                   value: 1,
                   configurable: false
-                });
-                var handler = {
+                });""", """
+                {
                   ownKeys: function(target) {
                     return []; // Omit non-configurable property
                   }
-                };
-                var proxy = new Proxy(target, handler);
-                Object.keys(proxy)""");
+                }""", "Object.keys(proxy)"));
     }
 
     @Test
@@ -955,21 +940,19 @@ public class ProxyConstructorTest extends BaseJavetTest {
     @Test
     public void testProxySetInvariantNonWritable() {
         // Test invariant: can't change non-writable property
-        assertIntegerWithJavet("""
-                var target = {};
+        assertIntegerWithJavet(proxyScript("{}", """
                 Object.defineProperty(target, 'x', {
                   value: 1,
                   writable: false,
                   configurable: true
-                });
-                var handler = {
+                });""", """
+                {
                   set: function(target, prop, value) {
                     return true;
                   }
-                };
-                var proxy = new Proxy(target, handler);
+                }""", """
                 proxy.x = 2;
-                proxy.x""");
+                proxy.x"""));
     }
 
     @Test
@@ -1139,40 +1122,21 @@ public class ProxyConstructorTest extends BaseJavetTest {
     @Test
     public void testProxyWithBigIntObjectArithmetic() {
         // Test that proxied BigInt object valueOf works
-        assertErrorWithJavet(proxyScript("Object(BigInt(10))", "{}", "proxy.valueOf()"));
-    }
-
-    @Test
-    public void testProxyWithBigIntObjectAsTarget() {
-        // Test that BigInt object (Object(BigInt(42))) can be a proxy target
-        // BigInt objects are needed as proxy targets since primitive BigInts cannot be proxied
-        assertStringWithJavet(proxyScript("Object(BigInt(42))", """
-                {
-                  get: function(target, prop) {
-                    if (prop === 'test') {
-                      return 'intercepted';
-                    }
-                    return target[prop];
-                  }
-                }""", "proxy.test"));
+        assertErrorWithJavet(forwardingProxyScript("Object(BigInt(10))", "proxy.valueOf()"));
     }
 
     @Test
     public void testProxyWithBigIntObjectHasTrap() {
         // Test has trap on BigInt object proxy
-        assertBooleanWithJavet("""
-                var target = Object(BigInt(42));
-                target.customProp = 'exists';
-                var handler = {
+        assertBooleanWithJavet(proxyScript("Object(BigInt(42))", "target.customProp = 'exists';", """
+                {
                   has: function(target, prop) {
                     if (prop === 'fakeProperty') {
                       return true;
                     }
                     return prop in target;
                   }
-                };
-                var proxy = new Proxy(target, handler);
-                'fakeProperty' in proxy""");
+                }""", "'fakeProperty' in proxy"));
     }
 
     @Test
@@ -1190,12 +1154,6 @@ public class ProxyConstructorTest extends BaseJavetTest {
     }
 
     @Test
-    public void testProxyWithBigIntObjectToString() {
-        // Test that proxied BigInt object toString works correctly
-        assertErrorWithJavet(proxyScript("Object(BigInt(255))", "{}", "proxy.toString()"));
-    }
-
-    @Test
     public void testProxyWithBigIntObjectValueOf() {
         // Test that proxied BigInt object valueOf works correctly
         assertErrorWithJavet(proxyScript("Object(BigInt(100))", """
@@ -1207,117 +1165,54 @@ public class ProxyConstructorTest extends BaseJavetTest {
     }
 
     @Test
-    public void testProxyWithBooleanObjectAsTarget() {
-        // Test that Boolean object (new Boolean(true)) can be a proxy target
-        // Boolean objects are needed as proxy targets since primitive booleans cannot be proxied
-        assertStringWithJavet(proxyScript("new Boolean(true)", """
-                {
-                  get: function(target, prop) {
-                    if (prop === 'test') {
-                      return 'intercepted';
-                    }
-                    return target[prop];
-                  }
-                }""", "proxy.test"));
-    }
-
-    @Test
-    public void testProxyWithBooleanObjectToString() {
-        // Test that proxied Boolean object still works with toString
-        assertErrorWithJavet(proxyScript("new Boolean(true)", "{}", "proxy.toString()"));
-    }
-
-    @Test
     public void testProxyWithBooleanObjectTrapGet() {
         // Test that get trap intercepts valueOf on Boolean object
-        assertBooleanWithJavet(proxyScript("new Boolean(true)", """
-                {
-                  get: function(target, prop) {
-                    if (prop === 'valueOf') {
-                      return function() { return false; };
-                    }
-                    return target[prop];
-                  }
-                }""", "proxy.valueOf()"));
+        assertBooleanWithJavet(
+                interceptGet("new Boolean(true)", "valueOf", "function() { return false; }", "proxy.valueOf()"));
     }
 
     @Test
     public void testProxyWithBooleanObjectValueOf() {
         // Test that proxied Boolean object still works with valueOf
-        assertErrorWithJavet(proxyScript("new Boolean(true)", "{}", "proxy.valueOf()"));
+        assertErrorWithJavet(forwardingProxyScript("new Boolean(true)", "proxy.valueOf()"));
     }
 
     @Test
     public void testProxyWithNullPrototype() {
         // Test proxy with null prototype target
-        assertIntegerWithJavet("""
-                var target = Object.create(null);
-                target.x = 42;
-                var handler = {
-                  get: function(target, prop) {
-                    return target[prop];
-                  }
-                };
-                var proxy = new Proxy(target, handler);
-                proxy.x""");
-    }
-
-    @Test
-    public void testProxyWithNumberObjectAsTarget() {
-        // Test that Number object (new Number(42)) can be a proxy target
-        // Number objects are needed as proxy targets since primitive numbers cannot be proxied
-        assertStringWithJavet(proxyScript("new Number(42)", """
+        assertIntegerWithJavet(proxyScript("Object.create(null)", "target.x = 42;", """
                 {
                   get: function(target, prop) {
-                    if (prop === 'test') {
-                      return 'intercepted';
-                    }
                     return target[prop];
                   }
-                }""", "proxy.test"));
-    }
-
-    @Test
-    public void testProxyWithNumberObjectToString() {
-        // Test that proxied Number object still works with toString
-        assertErrorWithJavet(proxyScript("new Number(42)", "{}", "proxy.toString()"));
+                }""", "proxy.x"));
     }
 
     @Test
     public void testProxyWithNumberObjectTrapGet() {
         // Test that get trap intercepts valueOf on Number object
-        assertIntegerWithJavet(proxyScript("new Number(100)", """
-                {
-                  get: function(target, prop) {
-                    if (prop === 'valueOf') {
-                      return function() { return 999; };
-                    }
-                    return target[prop];
-                  }
-                }""", "proxy.valueOf()"));
+        assertIntegerWithJavet(
+                interceptGet("new Number(100)", "valueOf", "function() { return 999; }", "proxy.valueOf()"));
     }
 
     @Test
     public void testProxyWithNumberObjectValueOf() {
         // Test that proxied Number object still works with valueOf
-        assertErrorWithJavet(proxyScript("new Number(3.14)", "{}", "proxy.valueOf()"));
+        assertErrorWithJavet(forwardingProxyScript("new Number(3.14)", "proxy.valueOf()"));
     }
 
     @Test
     public void testProxyWithNumericProperties() {
         // Test that proxy works with object having numeric property names
-        assertIntegerWithJavet("""
-                var target = {};
+        assertIntegerWithJavet(proxyScript("{}", """
                 target['0'] = 1;
-                target['1'] = 2;
-                var handler = {
+                target['1'] = 2;""", """
+                {
                   get: function(target, prop, receiver) {
                     var val = target[prop];
                     return val !== undefined ? val * 2 : undefined;
                   }
-                };
-                var proxy = new Proxy(target, handler);
-                proxy['0']""");
+                }""", "proxy['0']"));
     }
 
     @Test
@@ -1333,64 +1228,28 @@ public class ProxyConstructorTest extends BaseJavetTest {
     }
 
     @Test
-    public void testProxyWithStringObjectAsTarget() {
-        // Test that String object (new String("hello")) can be a proxy target
-        // String objects are needed as proxy targets since primitive strings cannot be proxied
-        assertStringWithJavet(proxyScript("new String('hello')", """
-                {
-                  get: function(target, prop) {
-                    if (prop === 'test') {
-                      return 'intercepted';
-                    }
-                    return target[prop];
-                  }
-                }""", "proxy.test"));
-    }
-
-    @Test
     public void testProxyWithStringObjectCharAccess() {
         // Test that proxied String object supports character access
-        assertErrorWithJavet(proxyScript("new String('hello')", """
-                {
-                  get: function(target, prop) {
-                    if (prop === '1') {
-                      return 'X';
-                    }
-                    return target[prop];
-                  }
-                }""", "proxy[1]"));
+        assertErrorWithJavet(interceptGet("new String('hello')", "1", "'X'", "proxy[1]"));
     }
 
     @Test
     public void testProxyWithStringObjectLength() {
         // Test that proxied String object has length property
-        assertIntegerWithJavet(proxyScript("new String('hello')", "{}", "proxy.length"));
-    }
-
-    @Test
-    public void testProxyWithStringObjectToString() {
-        // Test that proxied String object still works with toString
-        assertErrorWithJavet(proxyScript("new String('hello')", "{}", "proxy.toString()"));
+        assertIntegerWithJavet(forwardingProxyScript("new String('hello')", "proxy.length"));
     }
 
     @Test
     public void testProxyWithStringObjectTrapGet() {
         // Test that get trap intercepts methods on String object
-        assertStringWithJavet(proxyScript("new String('hello')", """
-                {
-                  get: function(target, prop) {
-                    if (prop === 'toUpperCase') {
-                      return function() { return 'INTERCEPTED'; };
-                    }
-                    return target[prop];
-                  }
-                }""", "proxy.toUpperCase()"));
+        assertStringWithJavet(interceptGet("new String('hello')", "toUpperCase", "function() { return 'INTERCEPTED'; }",
+                "proxy.toUpperCase()"));
     }
 
     @Test
     public void testProxyWithStringObjectValueOf() {
         // Test that proxied String object still works with valueOf
-        assertErrorWithJavet(proxyScript("new String('world')", "{}", "proxy.valueOf()"));
+        assertErrorWithJavet(forwardingProxyScript("new String('world')", "proxy.valueOf()"));
     }
 
     @Test
@@ -1415,66 +1274,31 @@ public class ProxyConstructorTest extends BaseJavetTest {
     }
 
     @Test
-    public void testProxyWithSymbolObjectAsTarget() {
-        // Test that Symbol object (Object(Symbol('foo'))) can be a proxy target
-        // Symbol objects are needed as proxy targets since primitive symbols cannot be proxied
-        assertStringWithJavet(proxyScript("Object(Symbol('foo'))", """
-                {
-                  get: function(target, prop) {
-                    if (prop === 'test') {
-                      return 'intercepted';
-                    }
-                    return target[prop];
-                  }
-                }""", "proxy.test"));
-    }
-
-    @Test
     public void testProxyWithSymbolObjectDescription() {
         // Test accessing description through proxy
-        assertStringWithJavet(proxyScript("Object(Symbol('myDescription'))", """
-                {
-                  get: function(target, prop) {
-                    if (prop === 'description') {
-                      return 'modified';
-                    }
-                    return target[prop];
-                  }
-                }""", "proxy.description"));
+        assertStringWithJavet(
+                interceptGet("Object(Symbol('myDescription'))", "description", "'modified'", "proxy.description"));
     }
 
     @Test
     public void testProxyWithSymbolObjectGetPrimitiveValue() {
         // Test accessing [[PrimitiveValue]] through proxy
-        assertStringWithJavet(proxyScript("Object(Symbol('test'))", "{}", """
+        assertStringWithJavet(forwardingProxyScript("Object(Symbol('test'))", """
                 var primitiveValue = proxy['[[PrimitiveValue]]'];
                 typeof primitiveValue"""));
     }
 
     @Test
-    public void testProxyWithSymbolObjectToString() {
-        // Test that proxied Symbol object still works with toString
-        assertErrorWithJavet(proxyScript("Object(Symbol('test'))", "{}", "proxy.toString()"));
-    }
-
-    @Test
     public void testProxyWithSymbolObjectTrapGet() {
         // Test that get trap intercepts methods on Symbol object
-        assertStringWithJavet(proxyScript("Object(Symbol('test'))", """
-                {
-                  get: function(target, prop) {
-                    if (prop === 'toString') {
-                      return function() { return 'INTERCEPTED'; };
-                    }
-                    return target[prop];
-                  }
-                }""", "proxy.toString()"));
+        assertStringWithJavet(interceptGet("Object(Symbol('test'))", "toString", "function() { return 'INTERCEPTED'; }",
+                "proxy.toString()"));
     }
 
     @Test
     public void testProxyWithSymbolObjectValueOf() {
         // Test that proxied Symbol object still works with valueOf
-        assertErrorWithJavet(proxyScript("Object(Symbol('mySymbol'))", "{}", """
+        assertErrorWithJavet(forwardingProxyScript("Object(Symbol('mySymbol'))", """
                 var primitiveValue = proxy.valueOf();
                 typeof primitiveValue"""));
     }
@@ -1482,15 +1306,7 @@ public class ProxyConstructorTest extends BaseJavetTest {
     @Test
     public void testProxyWithSymbolObjectWellKnown() {
         // Test proxying an object wrapping a well-known symbol
-        assertStringWithJavet(proxyScript("Object(Symbol.iterator)", """
-                {
-                  get: function(target, prop) {
-                    if (prop === 'test') {
-                      return 'well-known';
-                    }
-                    return target[prop];
-                  }
-                }""", "proxy.test"));
+        assertStringWithJavet(interceptGet("Object(Symbol.iterator)", "test", "'well-known'", "proxy.test"));
     }
 
     @Test
@@ -1607,17 +1423,27 @@ public class ProxyConstructorTest extends BaseJavetTest {
     }
 
     private static String forwardingProxyScript(String target, String operation) {
-        return """
-                var target = %s;
-                var proxy = new Proxy(target, {});
-                %s""".formatted(target, operation);
+        return proxyScript(target, "{}", operation);
+    }
+
+    private static String interceptGet(String target, String key, String result, String operation) {
+        return proxyScript(target, """
+                { get(target, prop) {
+                    if (prop === '%s') return %s;
+                    return target[prop];
+                } }""".formatted(key, result), operation);
     }
 
     private static String proxyScript(String target, String handler, String operation) {
+        return proxyScript(target, "", handler, operation);
+    }
+
+    private static String proxyScript(String target, String prepare, String handler, String operation) {
         return """
                 var target = %s;
+                %s
                 var handler = %s;
                 var proxy = new Proxy(target, handler);
-                %s""".formatted(target, handler, operation);
+                %s""".formatted(target, prepare, handler, operation);
     }
 }

@@ -36,26 +36,12 @@ public final class IfStatement extends Statement {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = test != null && test.containsAwait();
-            if (!awaitInside && ((consequent != null && consequent.containsAwait())
-                    || (alternate != null && alternate.containsAwait()))) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        return containsAwaitIn(test, consequent, alternate);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = test != null && test.containsYield();
-            if (!yieldInside && ((consequent != null && consequent.containsYield())
-                    || (alternate != null && alternate.containsYield()))) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        return containsYieldIn(test, consequent, alternate);
     }
 
     public Statement getAlternate() {

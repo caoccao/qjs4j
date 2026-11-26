@@ -52,8 +52,7 @@ public final class TemporalPlainTimeConstructor {
      * Temporal.PlainTime(hour?, minute?, second?, millisecond?, microsecond?, nanosecond?)
      */
     public static JSValue construct(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (context.getConstructorNewTarget() == null) {
-            context.throwTypeError("Method invoked on an object that is not Temporal.PlainTime.");
+        if (!TemporalUtils.requireNewTarget(context, "PlainTime")) {
             return JSUndefined.INSTANCE;
         }
         IsoTime isoTime = readTimeArguments(context, args, 0);

@@ -174,9 +174,7 @@ public final class TemporalPlainMonthDayPrototype {
     }
 
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        context.throwTypeError(
-                "Do not use Temporal.PlainMonthDay.prototype.valueOf; use Temporal.PlainMonthDay.prototype.compare for comparison.");
-        return JSUndefined.INSTANCE;
+        return RECEIVER.rejectValueOf(context);
     }
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {

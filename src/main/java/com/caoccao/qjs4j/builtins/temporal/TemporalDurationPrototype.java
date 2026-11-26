@@ -54,14 +54,14 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = RECEIVER.require(context, thisArg, "add");
+        return addOrSubtract(context, thisArg, args, 1);
+    }
+
+    private static JSValue addOrSubtract(JSContext context, JSValue thisArg, JSValue[] args, int sign) {
+        JSTemporalDuration duration = RECEIVER.require(context, thisArg, sign > 0 ? "add" : "subtract");
         if (duration == null) {
             return JSUndefined.INSTANCE;
         }
-        return addOrSubtract(context, duration, args, 1);
-    }
-
-    private static JSValue addOrSubtract(JSContext context, JSTemporalDuration duration, JSValue[] args, int sign) {
         if (args.length == 0 || args[0] instanceof JSUndefined) {
             context.throwTypeError("Temporal error: Must provide a duration.");
             return JSUndefined.INSTANCE;
@@ -1172,11 +1172,7 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration duration = RECEIVER.require(context, thisArg, "subtract");
-        if (duration == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return addOrSubtract(context, duration, args, -1);
+        return addOrSubtract(context, thisArg, args, -1);
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1494,9 +1490,7 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        context.throwTypeError(
-                "Do not use Temporal.Duration.prototype.valueOf; use Temporal.Duration.prototype.compare for comparison.");
-        return JSUndefined.INSTANCE;
+        return RECEIVER.rejectValueOf(context);
     }
 
     public static JSValue weeks(JSContext context, JSValue thisArg, JSValue[] args) {

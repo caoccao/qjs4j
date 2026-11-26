@@ -42,44 +42,14 @@ public enum TemporalRoundingMode {
     }
 
     public BigInteger roundBigIntegerToIncrementAsIfPositive(BigInteger quantity, BigInteger increment) {
-        if (increment.signum() == 0) {
-            return quantity;
-        }
-        BigInteger[] quotientAndRemainder = quantity.divideAndRemainder(increment);
-        BigInteger floorQuotient = quotientAndRemainder[0];
-        BigInteger remainder = quotientAndRemainder[1];
-        if (remainder.signum() < 0) {
-            floorQuotient = floorQuotient.subtract(BigInteger.ONE);
-            remainder = remainder.add(increment);
-        }
-        BigInteger lower = floorQuotient.multiply(increment);
-        if (remainder.signum() == 0) {
-            return lower;
-        }
-        BigInteger upper = lower.add(increment);
-
-        return switch (this) {
-            case CEIL, EXPAND -> upper;
-            case FLOOR, TRUNC -> lower;
-            case HALF_EXPAND, HALF_CEIL -> remainder.shiftLeft(1).compareTo(increment) >= 0 ? upper : lower;
-            case HALF_TRUNC, HALF_FLOOR -> remainder.shiftLeft(1).compareTo(increment) > 0 ? upper : lower;
-            case HALF_EVEN -> {
-                BigInteger doubledRemainder = remainder.shiftLeft(1);
-                int halfComparison = doubledRemainder.compareTo(increment);
-                if (halfComparison < 0) {
-                    yield lower;
-                } else if (halfComparison > 0) {
-                    yield upper;
-                } else if (floorQuotient.testBit(0)) {
-                    yield upper;
-                } else {
-                    yield lower;
-                }
-            }
-        };
+        return roundInteger(quantity, increment, false);
     }
 
     public BigInteger roundBigIntegerToIncrementSigned(BigInteger value, BigInteger increment) {
+        return roundInteger(value, increment, value.signum() < 0);
+    }
+
+    private BigInteger roundInteger(BigInteger value, BigInteger increment, boolean negative) {
         if (increment.signum() == 0) {
             return value;
         }
@@ -95,13 +65,12 @@ public enum TemporalRoundingMode {
             return floorValue;
         }
         BigInteger ceilValue = floorValue.add(increment);
-        int sign = value.signum();
 
         return switch (this) {
             case FLOOR -> floorValue;
             case CEIL -> ceilValue;
-            case TRUNC -> sign < 0 ? ceilValue : floorValue;
-            case EXPAND -> sign < 0 ? floorValue : ceilValue;
+            case TRUNC -> negative ? ceilValue : floorValue;
+            case EXPAND -> negative ? floorValue : ceilValue;
             case HALF_EXPAND, HALF_TRUNC, HALF_EVEN, HALF_CEIL, HALF_FLOOR -> {
                 BigInteger doubledRemainder = remainder.shiftLeft(1);
                 int halfComparison = doubledRemainder.compareTo(increment);
@@ -111,8 +80,8 @@ public enum TemporalRoundingMode {
                     yield ceilValue;
                 } else {
                     yield switch (this) {
-                        case HALF_EXPAND -> sign < 0 ? floorValue : ceilValue;
-                        case HALF_TRUNC -> sign < 0 ? ceilValue : floorValue;
+                        case HALF_EXPAND -> negative ? floorValue : ceilValue;
+                        case HALF_TRUNC -> negative ? ceilValue : floorValue;
                         case HALF_EVEN -> floorQuotient.testBit(0) ? ceilValue : floorValue;
                         case HALF_CEIL -> ceilValue;
                         case HALF_FLOOR -> floorValue;

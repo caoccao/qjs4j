@@ -27,6 +27,108 @@ import java.util.List;
  */
 public final class ObjectConstructor {
 
+    private static boolean addEntry(JSContext context, JSObject result, JSValue iterator, JSValue nextItem) {
+        // Steps 4d-4k: errors from here on CLOSE the iterator
+        try {
+            // Step 4d: If nextItem is not an Object, close iterator and throw TypeError
+            if (!(nextItem instanceof JSObject entryObj)) {
+                closeIteratorAndThrow(context, iterator, "Iterator value "
+                        + JSTypeConversions.toString(context, nextItem).value() + " is not an entry object");
+                return false;
+            }
+
+            // Step 4e: Get(nextItem, "0") — key. Errors close the iterator.
+            JSValue keyValue = entryObj.get(PropertyKey.ZERO);
+            if (context.hasPendingException()) {
+                closeIteratorPreserveError(context, iterator);
+                return false;
+            }
+
+            // Step 4g: Get(nextItem, "1") — value. Errors close the iterator.
+            JSValue entryValue = entryObj.get(PropertyKey.ONE);
+            if (context.hasPendingException()) {
+                closeIteratorPreserveError(context, iterator);
+                return false;
+            }
+
+            // Step 4k: adder = CreateDataPropertyOnObject: ToPropertyKey + CreateDataProperty
+            // ToPropertyKey supports symbols. Errors close the iterator.
+            PropertyKey key = PropertyKey.fromValue(context, keyValue);
+            if (context.hasPendingException()) {
+                closeIteratorPreserveError(context, iterator);
+                return false;
+            }
+
+            // CreateDataProperty (defineProperty semantics, not Set)
+            result.defineProperty(key, PropertyDescriptor.defaultData(entryValue));
+        } catch (JSVirtualMachineException e) {
+            // A bytecode function called during key/value processing threw.
+            // Close the iterator, preserving the original error, then re-throw.
+            JSValue savedError = context.takePendingException();
+            try {
+                JSIteratorHelper.closeIterator(context, iterator);
+            } catch (JSVirtualMachineException ignored) {
+                // Ignore errors from closing
+            }
+            // Restore the original error
+            if (context.hasPendingException()) {
+                context.clearPendingException();
+            }
+            if (savedError != null) {
+                context.setPendingException(savedError);
+            }
+            throw e;
+        }
+        return true;
+    }
+
+    private static boolean addToGroup(JSContext context, JSObject result, JSValue iterator, JSValue callback,
+            JSValue element, long index) {
+        // Call callback - errors close iterator
+        JSValue keyValue;
+        try {
+            keyValue = JSCall.call(context, callback, JSUndefined.INSTANCE, new JSValue[]{element, JSNumber.of(index)});
+            if (context.hasPendingException()) {
+                closeIteratorPreserveError(context, iterator);
+                return false;
+            }
+        } catch (Exception e) {
+            JSValue savedError = context.takePendingException();
+            try {
+                JSIteratorHelper.closeIterator(context, iterator);
+            } catch (Exception ignored) {
+                // ignore close errors
+            }
+            if (context.hasPendingException()) {
+                context.clearPendingException();
+            }
+            if (savedError != null) {
+                context.setPendingException(savedError);
+            }
+            throw e;
+        }
+
+        // Convert key to property key
+        PropertyKey key = PropertyKey.fromValue(context, keyValue);
+        if (context.hasPendingException()) {
+            closeIteratorPreserveError(context, iterator);
+            return false;
+        }
+
+        // Get or create array for this key
+        JSValue existingGroup = result.get(key);
+        JSArray group;
+        if (existingGroup instanceof JSArray existingArray) {
+            group = existingArray;
+        } else {
+            group = context.createJSArray();
+            result.set(key, group);
+        }
+
+        group.push(element);
+        return true;
+    }
+
     /**
      * Object.assign(target, ...sources) ES2024 19.1.2.1 Copies all enumerable own properties from one or more source
      * objects to a target object.
@@ -186,6 +288,57 @@ public final class ObjectConstructor {
         }
         context.setPendingException(savedError);
         return JSUndefined.INSTANCE;
+    }
+
+    private static JSValue collectIterable(JSContext context, JSValue items, JSValue callback) {
+        // IteratorStep and IteratorValue propagate errors before the per-element close boundary.
+        JSValue iterator = JSIteratorHelper.getIterator(context, items);
+        if (iterator == null) {
+            if (!context.hasPendingException()) {
+                return context.throwTypeError("object is not iterable");
+            }
+            return JSUndefined.INSTANCE;
+        }
+
+        JSObject result;
+        if (callback == null) {
+            result = context.createJSObject();
+        } else {
+            result = new JSObject(context);
+            result.setPrototype(null);
+        }
+
+        long index = 0;
+        while (true) {
+            JSObject iterResult = JSIteratorHelper.iteratorNext(iterator, context);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (iterResult == null) {
+                return context.throwTypeError("Iterator result is not an object");
+            }
+
+            JSValue doneValue = iterResult.get(PropertyKey.DONE);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE) {
+                break;
+            }
+
+            JSValue element = iterResult.get(PropertyKey.VALUE);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+
+            boolean added = callback == null
+                    ? addEntry(context, result, iterator, element)
+                    : addToGroup(context, result, iterator, callback, element, index++);
+            if (!added) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+        return result;
     }
 
     /**
@@ -394,102 +547,7 @@ public final class ObjectConstructor {
             return context.throwTypeError("Object.fromEntries requires an iterable argument");
         }
 
-        // GetIterator(iterable, sync)
-        JSValue iterator = JSIteratorHelper.getIterator(context, iterable);
-        if (iterator == null) {
-            if (!context.hasPendingException()) {
-                return context.throwTypeError("object is not iterable");
-            }
-            return JSUndefined.INSTANCE;
-        }
-
-        JSObject result = context.createJSObject();
-
-        // AddEntriesFromIterable step 4: Repeat
-        while (true) {
-            // Step 4a: IteratorStep - errors here propagate WITHOUT IteratorClose
-            // IteratorNext step 3: if result is not an Object, throw TypeError (no IteratorClose)
-            JSObject iterResult;
-            try {
-                iterResult = JSIteratorHelper.iteratorNext(iterator, context);
-            } catch (JSVirtualMachineException e) {
-                // IteratorStep errors propagate without IteratorClose
-                throw e;
-            }
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (iterResult == null) {
-                // next() returned a non-object: IteratorNext step 3 throws TypeError
-                // Per spec, do NOT close the iterator for IteratorStep errors
-                return context.throwTypeError("Iterator result is not an object");
-            }
-
-            JSValue doneValue = iterResult.get(PropertyKey.DONE);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE) {
-                break;
-            }
-
-            // Step 4c: IteratorValue - errors propagate WITHOUT IteratorClose
-            JSValue nextItem = iterResult.get(PropertyKey.VALUE);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            // Steps 4d-4k: errors from here on CLOSE the iterator
-            try {
-                // Step 4d: If nextItem is not an Object, close iterator and throw TypeError
-                if (!(nextItem instanceof JSObject entryObj)) {
-                    closeIteratorAndThrow(context, iterator, "Iterator value "
-                            + JSTypeConversions.toString(context, nextItem).value() + " is not an entry object");
-                    return JSUndefined.INSTANCE;
-                }
-
-                // Step 4e: Get(nextItem, "0") — key. Errors close the iterator.
-                JSValue keyValue = entryObj.get(PropertyKey.ZERO);
-                if (context.hasPendingException()) {
-                    return closeIteratorPreserveError(context, iterator);
-                }
-
-                // Step 4g: Get(nextItem, "1") — value. Errors close the iterator.
-                JSValue entryValue = entryObj.get(PropertyKey.ONE);
-                if (context.hasPendingException()) {
-                    return closeIteratorPreserveError(context, iterator);
-                }
-
-                // Step 4k: adder = CreateDataPropertyOnObject: ToPropertyKey + CreateDataProperty
-                // ToPropertyKey supports symbols. Errors close the iterator.
-                PropertyKey key = PropertyKey.fromValue(context, keyValue);
-                if (context.hasPendingException()) {
-                    return closeIteratorPreserveError(context, iterator);
-                }
-
-                // CreateDataProperty (defineProperty semantics, not Set)
-                result.defineProperty(key, PropertyDescriptor.defaultData(entryValue));
-            } catch (JSVirtualMachineException e) {
-                // A bytecode function called during key/value processing threw.
-                // Close the iterator, preserving the original error, then re-throw.
-                JSValue savedError = context.takePendingException();
-                try {
-                    JSIteratorHelper.closeIterator(context, iterator);
-                } catch (JSVirtualMachineException ignored) {
-                    // Ignore errors from closing
-                }
-                // Restore the original error
-                if (context.hasPendingException()) {
-                    context.clearPendingException();
-                }
-                if (savedError != null) {
-                    context.setPendingException(savedError);
-                }
-                throw e;
-            }
-        }
-
-        return result;
+        return collectIterable(context, iterable, null);
     }
 
     /**
@@ -584,91 +642,7 @@ public final class ObjectConstructor {
         if (!JSTypeChecking.isCallable(args[1])) {
             return context.throwTypeError("Second argument must be a function");
         }
-        JSValue callback = args[1];
-
-        // Step 1: Get iterator from items (any iterable, not just arrays)
-        JSValue iterator = JSIteratorHelper.getIterator(context, items);
-        if (iterator == null) {
-            if (!context.hasPendingException()) {
-                return context.throwTypeError("object is not iterable");
-            }
-            return JSUndefined.INSTANCE;
-        }
-
-        // Result object has null prototype per spec
-        JSObject result = new JSObject(context);
-        result.setPrototype(null);
-
-        long index = 0;
-        while (true) {
-            JSObject iterResult = JSIteratorHelper.iteratorNext(iterator, context);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (iterResult == null) {
-                return context.throwTypeError("Iterator result is not an object");
-            }
-
-            JSValue doneValue = iterResult.get(PropertyKey.DONE);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE) {
-                break;
-            }
-
-            JSValue element = iterResult.get(PropertyKey.VALUE);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            // Call callback - errors close iterator
-            JSValue keyValue;
-            try {
-                keyValue = JSCall.call(context, callback, JSUndefined.INSTANCE,
-                        new JSValue[]{element, JSNumber.of(index)});
-                if (context.hasPendingException()) {
-                    closeIteratorPreserveError(context, iterator);
-                    return JSUndefined.INSTANCE;
-                }
-            } catch (Exception e) {
-                JSValue savedError = context.takePendingException();
-                try {
-                    JSIteratorHelper.closeIterator(context, iterator);
-                } catch (Exception ignored) {
-                    // ignore close errors
-                }
-                if (context.hasPendingException()) {
-                    context.clearPendingException();
-                }
-                if (savedError != null) {
-                    context.setPendingException(savedError);
-                }
-                throw e;
-            }
-
-            // Convert key to property key
-            PropertyKey key = PropertyKey.fromValue(context, keyValue);
-            if (context.hasPendingException()) {
-                closeIteratorPreserveError(context, iterator);
-                return JSUndefined.INSTANCE;
-            }
-
-            // Get or create array for this key
-            JSValue existingGroup = result.get(key);
-            JSArray group;
-            if (existingGroup instanceof JSArray existingArray) {
-                group = existingArray;
-            } else {
-                group = context.createJSArray();
-                result.set(key, group);
-            }
-
-            group.push(element);
-            index++;
-        }
-
-        return result;
+        return collectIterable(context, items, args[1]);
     }
 
     private static JSValue hasIntegrity(JSContext context, JSValue[] args, boolean frozen) {

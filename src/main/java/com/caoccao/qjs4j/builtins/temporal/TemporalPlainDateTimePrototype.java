@@ -35,11 +35,7 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDateTime plainDateTime = RECEIVER.require(context, thisArg, "add");
-        if (plainDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return addOrSubtract(context, plainDateTime, args, 1);
+        return addOrSubtract(context, thisArg, args, 1);
     }
 
     private static TemporalTimeAddResult addDurationToTime(JSContext context, IsoTime time,
@@ -51,8 +47,11 @@ public final class TemporalPlainDateTimePrototype {
         return result;
     }
 
-    private static JSValue addOrSubtract(JSContext context, JSTemporalPlainDateTime plainDateTime, JSValue[] args,
-            int sign) {
+    private static JSValue addOrSubtract(JSContext context, JSValue thisArg, JSValue[] args, int sign) {
+        JSTemporalPlainDateTime plainDateTime = RECEIVER.require(context, thisArg, sign > 0 ? "add" : "subtract");
+        if (plainDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
         if (args.length == 0 || args[0] instanceof JSUndefined) {
             context.throwTypeError("Temporal error: Must provide a duration.");
             return JSUndefined.INSTANCE;
@@ -238,33 +237,17 @@ public final class TemporalPlainDateTimePrototype {
         return receiver == null ? null : receiver.getIsoDateTime().time();
     }
 
-    private static String getToStringCalendarNameOption(JSContext context, JSObject optionsObject) {
-        String calendarNameOption = TemporalUtils.getStringOption(context, optionsObject, "calendarName", "auto");
-        if (context.hasPendingException() || calendarNameOption == null) {
-            return null;
-        }
-        if (TemporalDisplayCalendar.fromString(calendarNameOption) == null) {
-            context.throwRangeError("Temporal error: Invalid calendarName option: " + calendarNameOption);
-            return null;
-        }
-        return calendarNameOption;
-    }
-
     private static TemporalPlainDateTimeToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
-        JSObject optionsObject = null;
-        if (!(optionsValue instanceof JSUndefined) && optionsValue != null) {
-            if (optionsValue instanceof JSObject castedOptionsObject) {
-                optionsObject = castedOptionsObject;
-            } else {
-                context.throwTypeError("Temporal error: Option must be object: options.");
-                return null;
-            }
+        JSObject optionsObject = TemporalUtils.toOptionalOptionsObject(context, optionsValue,
+                "Temporal error: Option must be object: options.");
+        if (context.hasPendingException()) {
+            return null;
         }
         if (optionsObject == null) {
             return TemporalPlainDateTimeToStringSettings.DEFAULT;
         }
 
-        String calendarNameOption = getToStringCalendarNameOption(context, optionsObject);
+        String calendarNameOption = TemporalUtils.getCalendarNameOption(context, optionsObject);
         if (context.hasPendingException() || calendarNameOption == null) {
             return null;
         }
@@ -357,11 +340,7 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDateTime plainDateTime = RECEIVER.require(context, thisArg, "subtract");
-        if (plainDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return addOrSubtract(context, plainDateTime, args, -1);
+        return addOrSubtract(context, thisArg, args, -1);
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -509,9 +488,7 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        context.throwTypeError(
-                "Do not use Temporal.PlainDateTime.prototype.valueOf; use Temporal.PlainDateTime.prototype.compare for comparison.");
-        return JSUndefined.INSTANCE;
+        return RECEIVER.rejectValueOf(context);
     }
 
     public static JSValue weekOfYear(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -599,11 +576,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        if (args.length == 0 || args[0] instanceof JSUndefined || args[0] == null) {
-            context.throwTypeError("Temporal error: Calendar is required.");
-            return JSUndefined.INSTANCE;
-        }
-        TemporalCalendarId calendarId = TemporalCalendarId.createFromCalendarValue(context, args[0]);
+        TemporalCalendarId calendarId = TemporalUtils.requireCalendarArgument(context, args);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

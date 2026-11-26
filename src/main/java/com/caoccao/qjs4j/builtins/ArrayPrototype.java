@@ -82,6 +82,14 @@ public final class ArrayPrototype {
         return length;
     }
 
+    private static long checkedLength(JSContext context, JSObject receiver) {
+        if (receiver == null) {
+            return -1;
+        }
+        long length = lengthOfArrayLike(context, receiver);
+        return context.hasPendingException() ? -1 : length;
+    }
+
     /**
      * Array.prototype.concat(...items) Merges arrays and/or values.
      */
@@ -390,13 +398,8 @@ public final class ArrayPrototype {
     public static JSValue fill(JSContext context, JSValue thisArg, JSValue[] args) {
         // Step 1: Let O be ? ToObject(this value).
         JSObject obj = toObjectChecked(context, thisArg);
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        // Step 2: Let len be ? LengthOfArrayLike(O).
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
+        long length = checkedLength(context, obj);
+        if (length < 0) {
             return context.getPendingException();
         }
 
@@ -495,12 +498,8 @@ public final class ArrayPrototype {
      */
     public static JSValue flat(JSContext context, JSValue thisArg, JSValue[] args) {
         JSObject obj = requireArrayLike(context, thisArg, "flat");
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
+        long length = checkedLength(context, obj);
+        if (length < 0) {
             return context.getPendingException();
         }
 
@@ -536,12 +535,8 @@ public final class ArrayPrototype {
      */
     public static JSValue flatMap(JSContext context, JSValue thisArg, JSValue[] args) {
         JSObject obj = requireArrayLike(context, thisArg, "flatMap");
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
+        long length = checkedLength(context, obj);
+        if (length < 0) {
             return context.getPendingException();
         }
 
@@ -596,12 +591,8 @@ public final class ArrayPrototype {
      */
     public static JSValue includes(JSContext context, JSValue thisArg, JSValue[] args) {
         JSObject obj = requireArrayLike(context, thisArg, "includes");
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
+        long length = checkedLength(context, obj);
+        if (length < 0) {
             return context.getPendingException();
         }
 
@@ -938,35 +929,7 @@ public final class ArrayPrototype {
      * Array.prototype.pop() Removes and returns the last element of an array.
      */
     public static JSValue pop(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSObject obj = requireArrayLike(context, thisArg, "pop");
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        if (length == 0) {
-            if (!setOrThrow(context, obj, PropertyKey.LENGTH, JSNumber.of(0))) {
-                return context.getPendingException();
-            }
-            return JSUndefined.INSTANCE;
-        }
-        long newLen = length - 1;
-        PropertyKey key = PropertyKey.fromIndexString(newLen);
-        JSValue element = obj.get(key);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-        if (!deleteOrThrow(context, obj, key)) {
-            return context.getPendingException();
-        }
-        if (!setOrThrow(context, obj, PropertyKey.LENGTH, JSNumber.of(newLen))) {
-            return context.getPendingException();
-        }
-        return element;
+        return removeEndElement(context, thisArg, false);
     }
 
     /**
@@ -976,12 +939,8 @@ public final class ArrayPrototype {
      */
     public static JSValue push(JSContext context, JSValue thisArg, JSValue[] args) {
         JSObject obj = requireArrayLike(context, thisArg, "push");
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
+        long length = checkedLength(context, obj);
+        if (length < 0) {
             return context.getPendingException();
         }
 
@@ -1074,6 +1033,43 @@ public final class ArrayPrototype {
         return value < 0 ? Math.max(length + value, 0) : Math.min(value, length);
     }
 
+    private static JSValue removeEndElement(JSContext context, JSValue thisArg, boolean first) {
+        JSObject obj = requireArrayLike(context, thisArg, first ? "shift" : "pop");
+        long length = checkedLength(context, obj);
+        if (length < 0) {
+            return context.getPendingException();
+        }
+
+        if (length == 0) {
+            if (!setOrThrow(context, obj, PropertyKey.LENGTH, JSNumber.of(0))) {
+                return context.getPendingException();
+            }
+            return JSUndefined.INSTANCE;
+        }
+        JSValue removed = obj.get(first ? PropertyKey.ZERO : PropertyKey.fromIndexString(length - 1));
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        if (first) {
+            for (long k = 1; k < length; k++) {
+
+                context.getVirtualMachine().checkExecutionInterruptForNative();
+                PropertyKey from = PropertyKey.fromIndexString(k);
+                PropertyKey to = PropertyKey.fromIndexString(k - 1);
+                if (!copyOrDeleteElement(context, obj, from, to)) {
+                    return context.getPendingException();
+                }
+            }
+        }
+        if (!deleteOrThrow(context, obj, PropertyKey.fromIndexString(length - 1))) {
+            return context.getPendingException();
+        }
+        if (!setOrThrow(context, obj, PropertyKey.LENGTH, JSNumber.of(length - 1))) {
+            return context.getPendingException();
+        }
+        return removed;
+    }
+
     private static JSObject requireArrayLike(JSContext context, JSValue receiver, String method) {
         if (receiver instanceof JSNull || receiver instanceof JSUndefined) {
             context.throwTypeError("Array.prototype." + method + " called on null or undefined");
@@ -1087,12 +1083,8 @@ public final class ArrayPrototype {
      */
     public static JSValue reverse(JSContext context, JSValue thisArg, JSValue[] args) {
         JSObject obj = requireArrayLike(context, thisArg, "reverse");
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
+        long length = checkedLength(context, obj);
+        if (length < 0) {
             return context.getPendingException();
         }
 
@@ -1156,12 +1148,8 @@ public final class ArrayPrototype {
 
     private static JSValue searchIndex(JSContext context, JSValue thisArg, JSValue[] args, boolean fromEnd) {
         JSObject obj = requireArrayLike(context, thisArg, fromEnd ? "lastIndexOf" : "indexOf");
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
+        long length = checkedLength(context, obj);
+        if (length < 0) {
             return context.getPendingException();
         }
 
@@ -1234,44 +1222,7 @@ public final class ArrayPrototype {
      * Array.prototype.shift() Removes and returns the first element of an array.
      */
     public static JSValue shift(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSObject obj = requireArrayLike(context, thisArg, "shift");
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        if (length == 0) {
-            if (!setOrThrow(context, obj, PropertyKey.LENGTH, JSNumber.of(0))) {
-                return context.getPendingException();
-            }
-            return JSUndefined.INSTANCE;
-        }
-        PropertyKey firstKey = PropertyKey.ZERO;
-        JSValue first = obj.get(firstKey);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        for (long k = 1; k < length; k++) {
-
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey from = PropertyKey.fromIndexString(k);
-            PropertyKey to = PropertyKey.fromIndexString(k - 1);
-            if (!copyOrDeleteElement(context, obj, from, to)) {
-                return context.getPendingException();
-            }
-        }
-        if (!deleteOrThrow(context, obj, PropertyKey.fromIndexString(length - 1))) {
-            return context.getPendingException();
-        }
-        if (!setOrThrow(context, obj, PropertyKey.LENGTH, JSNumber.of(length - 1))) {
-            return context.getPendingException();
-        }
-        return first;
+        return removeEndElement(context, thisArg, true);
     }
 
     /**
@@ -1279,12 +1230,8 @@ public final class ArrayPrototype {
      */
     public static JSValue slice(JSContext context, JSValue thisArg, JSValue[] args) {
         JSObject obj = requireArrayLike(context, thisArg, "slice");
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
+        long length = checkedLength(context, obj);
+        if (length < 0) {
             return context.getPendingException();
         }
 
@@ -1358,12 +1305,8 @@ public final class ArrayPrototype {
         }
 
         JSObject obj = requireArrayLike(context, thisArg, copy ? "toSorted" : "sort");
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
+        long length = checkedLength(context, obj);
+        if (length < 0) {
             return context.getPendingException();
         }
 
@@ -1464,12 +1407,8 @@ public final class ArrayPrototype {
 
     private static JSValue spliceElements(JSContext context, JSValue thisArg, JSValue[] args, boolean copy) {
         JSObject obj = requireArrayLike(context, thisArg, copy ? "toSpliced" : "splice");
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
+        long length = checkedLength(context, obj);
+        if (length < 0) {
             return context.getPendingException();
         }
 
@@ -1587,12 +1526,8 @@ public final class ArrayPrototype {
      */
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
         JSObject obj = requireArrayLike(context, thisArg, "toLocaleString");
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
+        long length = checkedLength(context, obj);
+        if (length < 0) {
             return context.getPendingException();
         }
         // A cycle renders as "", as in join, and the array is registered once its length is read, as in join.
@@ -1669,12 +1604,8 @@ public final class ArrayPrototype {
      */
     public static JSValue toReversed(JSContext context, JSValue thisArg, JSValue[] args) {
         JSObject obj = requireArrayLike(context, thisArg, "toReversed");
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
+        long length = checkedLength(context, obj);
+        if (length < 0) {
             return context.getPendingException();
         }
 
@@ -1742,12 +1673,8 @@ public final class ArrayPrototype {
      */
     public static JSValue unshift(JSContext context, JSValue thisArg, JSValue[] args) {
         JSObject obj = requireArrayLike(context, thisArg, "unshift");
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
+        long length = checkedLength(context, obj);
+        if (length < 0) {
             return context.getPendingException();
         }
 
@@ -1790,12 +1717,8 @@ public final class ArrayPrototype {
      */
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
         JSObject obj = requireArrayLike(context, thisArg, "with");
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
+        long length = checkedLength(context, obj);
+        if (length < 0) {
             return context.getPendingException();
         }
 

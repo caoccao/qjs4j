@@ -50,21 +50,12 @@ public final class TemporalPlainDateTimeConstructor {
      * nanosecond?, calendar?)
      */
     public static JSValue construct(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (context.getConstructorNewTarget() == null) {
-            context.throwTypeError("Method invoked on an object that is not Temporal.PlainDateTime.");
+        if (!TemporalUtils.requireNewTarget(context, "PlainDateTime")) {
             return JSUndefined.INSTANCE;
         }
 
-        int isoYear = TemporalUtils.toIntegerThrowOnInfinity(context, JSValue.argumentOrUndefined(args, 0));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int isoMonth = TemporalUtils.toIntegerThrowOnInfinity(context, JSValue.argumentOrUndefined(args, 1));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int isoDay = TemporalUtils.toIntegerThrowOnInfinity(context, JSValue.argumentOrUndefined(args, 2));
-        if (context.hasPendingException()) {
+        IsoDate isoDate = TemporalPlainDateConstructor.readDateArguments(context, args);
+        if (isoDate == null) {
             return JSUndefined.INSTANCE;
         }
 
@@ -73,15 +64,11 @@ public final class TemporalPlainDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalCalendarId calendarId = TemporalCalendarId.ISO8601;
-        if (args.length > 9 && !(args[9] instanceof JSUndefined)) {
-            calendarId = TemporalCalendarId.createFromCalendarString(context, args[9]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+        TemporalCalendarId calendarId = TemporalUtils.calendarArgument(context, args, 9);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
 
-        IsoDate isoDate = new IsoDate(isoYear, isoMonth, isoDay);
         if (!isoDate.isValid()) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;

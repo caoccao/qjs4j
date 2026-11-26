@@ -163,6 +163,51 @@ public final class AtomicsObject implements AutoCloseable {
         return readModifyWrite(context, args, AtomicOperation.COMPARE_EXCHANGE);
     }
 
+    private JSValue enqueueWait(JSContext context, JSTypedArray typedArray, long index, long timeoutMillis) {
+        JSPromise promise = context.createJSPromise();
+        JSObject result = context.createJSObject();
+        result.set(PropertyKey.ASYNC, JSBoolean.TRUE);
+        result.set(PropertyKey.VALUE, promise);
+        WaitRegistration waitRegistration = registerWaiter(typedArray, index);
+        JSRuntime owningRuntime = context.getRuntime();
+        AsyncWaitRegistration registration = new AsyncWaitRegistration(waitRegistration.waitList(),
+                waitRegistration.waiter());
+        Set<AsyncWaitRegistration> registrations = asyncWaits.computeIfAbsent(owningRuntime,
+                key -> Collections.synchronizedSet(new LinkedHashSet<>()));
+        registrations.add(registration);
+        try {
+            waitAsyncExecutor.execute(() -> {
+                String waitResult;
+                try {
+                    waitResult = waitRegistration.waitList().await(waitRegistration.waiter(), timeoutMillis);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    waitResult = "timed-out";
+                } finally {
+                    registrations.remove(registration);
+                    releaseWaitList(waitRegistration);
+                }
+                // A wait cancelled because its runtime closed must not touch that runtime's
+                // promise: the context it belongs to is gone.
+                if (!registration.isCancelled()) {
+                    // EnqueueResolveInAgentJob: the promise is settled by a job on the context's own
+                    // thread, never here. Enqueueing is the one cross-thread operation the engine
+                    // supports, so the promise needs no lock of its own.
+                    // Closing the context clears its queue, so a job enqueued for a closing runtime
+                    // is dropped rather than run.
+                    String settledResult = waitResult;
+                    context.enqueueMicrotask(() -> promise.fulfill(new JSString(settledResult)));
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            registrations.remove(registration);
+            waitRegistration.waitList().cancel(waitRegistration.waiter());
+            releaseWaitList(waitRegistration);
+            promise.fulfill(new JSString("timed-out"));
+        }
+        return result;
+    }
+
     /**
      * Atomics.exchange(typedArray, index, value) ES2017 24.4.6 Atomically exchanges the value at index and returns the
      * old value.
@@ -454,67 +499,69 @@ public final class AtomicsObject implements AutoCloseable {
      * expired.
      */
     public JSValue wait(JSContext context, JSValue thisArg, JSValue[] args) {
+        return waitForValue(context, args, false);
+    }
+
+    /**
+     * Atomics.waitAsync(typedArray, index, value, timeout) ES2024 Proposal Async version of wait that returns a result
+     * object with async property. Returns {async: false, value: "not-equal"} if value doesn't match, or {async: true,
+     * value: Promise} if waiting.
+     */
+    public JSValue waitAsync(JSContext context, JSValue thisArg, JSValue[] args) {
+        return waitForValue(context, args, true);
+    }
+
+    private JSValue waitForValue(JSContext context, JSValue[] args, boolean async) {
+        String method = async ? "Atomics.waitAsync" : "Atomics.wait";
         if (args.length < 3) {
-            return context.throwTypeError("Atomics.wait requires typedArray, index, and value");
+            return context.throwTypeError(method + " requires typedArray, index, and value");
         }
 
         if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return context.throwTypeError("Atomics.wait requires a TypedArray");
+            return context.throwTypeError(method + " requires a TypedArray");
         }
 
         try {
             if (!(typedArray instanceof JSInt32Array) && !(typedArray instanceof JSBigInt64Array)) {
-                return context.throwTypeError("Atomics.wait only works on Int32Array or BigInt64Array");
+                return context.throwTypeError(method + " only works on Int32Array or BigInt64Array");
             }
             if (!typedArray.getBuffer().isShared()) {
-                return context.throwTypeError("Atomics.wait requires a SharedArrayBuffer");
+                return context.throwTypeError(method + " requires a SharedArrayBuffer");
             }
 
             long index = getAtomicIndex(context, typedArray, args[1]);
-            double timeoutDouble;
-
-            if (typedArray instanceof JSInt32Array) {
-                int expectedValue = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                int currentValue = ByteArrayAtomics.getVolatileInt(arr, byteOffset);
-                if (currentValue != expectedValue) {
-                    return new JSString("not-equal");
-                }
-            } else {
-                long expectedValue = JSTypeConversions.toBigInt64(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                long currentValue = ByteArrayAtomics.getVolatileLong(arr, byteOffset);
-                if (currentValue != expectedValue) {
-                    return new JSString("not-equal");
-                }
-            }
-
-            timeoutDouble = getAtomicsWaitTimeout(context, args, 3);
+            boolean int32 = typedArray instanceof JSInt32Array;
+            long expected = int32
+                    ? JSTypeConversions.toInt32(context, args[2])
+                    : JSTypeConversions.toBigInt64(context, args[2]);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            if (!context.isWaitable()) {
+            byte[] bytes = requireAtomicArray(typedArray, index);
+            int offset = getWaitOffset(typedArray, index);
+            long current = int32
+                    ? ByteArrayAtomics.getVolatileInt(bytes, offset)
+                    : ByteArrayAtomics.getVolatileLong(bytes, offset);
+            if (current != expected) {
+                return async ? createWaitAsyncSyncResult(context, "not-equal") : new JSString("not-equal");
+            }
+
+            double timeoutDouble = getAtomicsWaitTimeout(context, args, 3);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+
+            if (!async && !context.isWaitable()) {
                 return context.throwTypeError("Atomics.wait cannot be called in this context");
             }
             if (timeoutDouble <= 0.0) {
-                return new JSString("timed-out");
+                return async ? createWaitAsyncSyncResult(context, "timed-out") : new JSString("timed-out");
             }
 
-            long timeout = Double.isInfinite(timeoutDouble) ? -1L : Math.min((long) timeoutDouble, Long.MAX_VALUE);
+            long timeout = Double.isInfinite(timeoutDouble) ? -1L : (long) timeoutDouble;
+            if (async) {
+                return enqueueWait(context, typedArray, index, timeout);
+            }
             WaitRegistration registration = registerWaiter(typedArray, index);
             String result;
             try {
@@ -526,114 +573,6 @@ public final class AtomicsObject implements AutoCloseable {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return new JSString("timed-out");
-        } catch (JSErrorException e) {
-            return context.throwError(e);
-        }
-    }
-
-    /**
-     * Atomics.waitAsync(typedArray, index, value, timeout) ES2024 Proposal Async version of wait that returns a result
-     * object with async property. Returns {async: false, value: "not-equal"} if value doesn't match, or {async: true,
-     * value: Promise} if waiting.
-     */
-    public JSValue waitAsync(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length < 3) {
-            return context.throwTypeError("Atomics.waitAsync requires typedArray, index, and value");
-        }
-
-        if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return context.throwTypeError("Atomics.waitAsync requires a TypedArray");
-        }
-
-        try {
-            if (!(typedArray instanceof JSInt32Array) && !(typedArray instanceof JSBigInt64Array)) {
-                return context.throwTypeError("Atomics.waitAsync only works on Int32Array or BigInt64Array");
-            }
-            if (!typedArray.getBuffer().isShared()) {
-                return context.throwTypeError("Atomics.waitAsync requires a SharedArrayBuffer");
-            }
-
-            long index = getAtomicIndex(context, typedArray, args[1]);
-            double timeoutDouble;
-
-            if (typedArray instanceof JSInt32Array) {
-                int expectedValue = JSTypeConversions.toInt32(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                int currentValue = ByteArrayAtomics.getVolatileInt(arr, byteOffset);
-                if (currentValue != expectedValue) {
-                    return createWaitAsyncSyncResult(context, "not-equal");
-                }
-            } else {
-                long expectedValue = JSTypeConversions.toBigInt64(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                long currentValue = ByteArrayAtomics.getVolatileLong(arr, byteOffset);
-                if (currentValue != expectedValue) {
-                    return createWaitAsyncSyncResult(context, "not-equal");
-                }
-            }
-
-            timeoutDouble = getAtomicsWaitTimeout(context, args, 3);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            if (timeoutDouble <= 0.0) {
-                return createWaitAsyncSyncResult(context, "timed-out");
-            }
-
-            JSPromise promise = context.createJSPromise();
-            JSObject result = context.createJSObject();
-            result.set(PropertyKey.ASYNC, JSBoolean.TRUE);
-            result.set(PropertyKey.VALUE, promise);
-            long timeoutMillis = Double.isInfinite(timeoutDouble)
-                    ? -1L
-                    : Math.min((long) timeoutDouble, Long.MAX_VALUE);
-            WaitRegistration waitRegistration = registerWaiter(typedArray, index);
-            JSRuntime owningRuntime = context.getRuntime();
-            AsyncWaitRegistration registration = new AsyncWaitRegistration(waitRegistration.waitList(),
-                    waitRegistration.waiter());
-            Set<AsyncWaitRegistration> registrations = asyncWaits.computeIfAbsent(owningRuntime,
-                    key -> Collections.synchronizedSet(new LinkedHashSet<>()));
-            registrations.add(registration);
-            try {
-                waitAsyncExecutor.execute(() -> {
-                    String waitResult;
-                    try {
-                        waitResult = waitRegistration.waitList().await(waitRegistration.waiter(), timeoutMillis);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        waitResult = "timed-out";
-                    } finally {
-                        registrations.remove(registration);
-                        releaseWaitList(waitRegistration);
-                    }
-                    // A wait cancelled because its runtime closed must not touch that runtime's
-                    // promise: the context it belongs to is gone.
-                    if (!registration.isCancelled()) {
-                        // EnqueueResolveInAgentJob: the promise is settled by a job on the context's own
-                        // thread, never here. Enqueueing is the one cross-thread operation the engine
-                        // supports, so the promise needs no lock of its own.
-                        // Closing the context clears its queue, so a job enqueued for a closing runtime
-                        // is dropped rather than run.
-                        String settledResult = waitResult;
-                        context.enqueueMicrotask(() -> promise.fulfill(new JSString(settledResult)));
-                    }
-                });
-            } catch (RejectedExecutionException e) {
-                registrations.remove(registration);
-                waitRegistration.waitList().cancel(waitRegistration.waiter());
-                releaseWaitList(waitRegistration);
-                promise.fulfill(new JSString("timed-out"));
-            }
-            return result;
         } catch (JSErrorException e) {
             return context.throwError(e);
         }

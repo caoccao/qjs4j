@@ -2213,54 +2213,6 @@ public final class JSIntlObject {
         return durationFormat;
     }
 
-    private static JSIntlDateTimeFormat createInstantDateTimeFormat(JSContext context,
-            JSIntlDateTimeFormat baseDateTimeFormat) {
-        String effectiveHourCycle = resolveHourCycle(baseDateTimeFormat);
-        FormatStyle dateStyle = baseDateTimeFormat.getDateStyle();
-        FormatStyle timeStyle = baseDateTimeFormat.getTimeStyle();
-        String weekdayOption = baseDateTimeFormat.getWeekdayOption();
-        String eraOption = baseDateTimeFormat.getEraOption();
-        String yearOption = baseDateTimeFormat.getYearOption();
-        String monthOption = baseDateTimeFormat.getMonthOption();
-        String dayOption = baseDateTimeFormat.getDayOption();
-        String dayPeriodOption = baseDateTimeFormat.getDayPeriodOption();
-        String hourOption = baseDateTimeFormat.getHourOption();
-        String minuteOption = baseDateTimeFormat.getMinuteOption();
-        String secondOption = baseDateTimeFormat.getSecondOption();
-        Integer fractionalSecondDigits = baseDateTimeFormat.getFractionalSecondDigits();
-        String timeZoneNameOption = baseDateTimeFormat.getTimeZoneNameOption();
-
-        if (baseDateTimeFormat.hasDefaultDateComponents()) {
-            yearOption = null;
-            monthOption = null;
-            dayOption = null;
-        }
-        if (baseDateTimeFormat.hasDefaultTimeComponents()) {
-            hourOption = null;
-            minuteOption = null;
-            secondOption = null;
-        }
-
-        boolean hasDateComponent = dateStyle != null || weekdayOption != null || yearOption != null
-                || monthOption != null || dayOption != null;
-        boolean hasTimeComponent = timeStyle != null || dayPeriodOption != null || hourOption != null
-                || minuteOption != null || secondOption != null || fractionalSecondDigits != null;
-        if (!hasDateComponent && !hasTimeComponent) {
-            yearOption = "numeric";
-            monthOption = "numeric";
-            dayOption = "numeric";
-            hourOption = "numeric";
-            minuteOption = "numeric";
-            secondOption = "numeric";
-        }
-
-        return new JSIntlDateTimeFormat(context, baseDateTimeFormat.getLocale(), dateStyle, timeStyle,
-                baseDateTimeFormat.getCalendar(), baseDateTimeFormat.getNumberingSystem(),
-                baseDateTimeFormat.getTimeZone(), effectiveHourCycle, effectiveHourCycle, weekdayOption, eraOption,
-                yearOption, monthOption, dayOption, dayPeriodOption, hourOption, minuteOption, secondOption,
-                fractionalSecondDigits, timeZoneNameOption, false, false);
-    }
-
     public static JSValue createListFormat(JSContext context, JSObject prototype, JSValue[] args) {
         try {
             Locale locale = resolveLocale(context, args, 0);
@@ -3053,12 +3005,13 @@ public final class JSIntlObject {
 
     private static JSIntlDateTimeFormat createTemporalDateTimeFormat(JSContext context,
             JSIntlDateTimeFormat baseDateTimeFormat, DateTimeFormattableKind formattableKind) {
-        boolean fullDate = formattableKind == DateTimeFormattableKind.PLAIN_DATE
+        boolean instant = formattableKind == DateTimeFormattableKind.INSTANT;
+        boolean fullDate = instant || formattableKind == DateTimeFormattableKind.PLAIN_DATE
                 || formattableKind == DateTimeFormattableKind.PLAIN_DATE_TIME;
         boolean supportsYear = fullDate || formattableKind == DateTimeFormattableKind.PLAIN_YEAR_MONTH;
         boolean supportsDay = fullDate || formattableKind == DateTimeFormattableKind.PLAIN_MONTH_DAY;
         boolean supportsMonth = supportsYear || supportsDay;
-        boolean supportsTime = formattableKind == DateTimeFormattableKind.PLAIN_DATE_TIME
+        boolean supportsTime = instant || formattableKind == DateTimeFormattableKind.PLAIN_DATE_TIME
                 || formattableKind == DateTimeFormattableKind.PLAIN_TIME;
 
         FormatStyle dateStyle = baseDateTimeFormat.getDateStyle();
@@ -3156,13 +3109,16 @@ public final class JSIntlObject {
                 hasTime = true;
             }
         }
-        String effectiveHourCycle = hasTime ? resolveHourCycle(baseDateTimeFormat) : baseDateTimeFormat.getHourCycle();
+        String effectiveHourCycle = instant || hasTime
+                ? resolveHourCycle(baseDateTimeFormat)
+                : baseDateTimeFormat.getHourCycle();
 
         return new JSIntlDateTimeFormat(context, baseDateTimeFormat.getLocale(), dateStyle, timeStyle,
-                baseDateTimeFormat.getCalendar(), baseDateTimeFormat.getNumberingSystem(), "UTC", effectiveHourCycle,
-                baseDateTimeFormat.getHourCycleForInstant(), weekdayOption, eraOption, yearOption, monthOption,
-                dayOption, dayPeriodOption, hourOption, minuteOption, secondOption, fractionalSecondDigits, null, false,
-                false);
+                baseDateTimeFormat.getCalendar(), baseDateTimeFormat.getNumberingSystem(),
+                instant ? baseDateTimeFormat.getTimeZone() : "UTC", effectiveHourCycle,
+                instant ? effectiveHourCycle : baseDateTimeFormat.getHourCycleForInstant(), weekdayOption, eraOption,
+                yearOption, monthOption, dayOption, dayPeriodOption, hourOption, minuteOption, secondOption,
+                fractionalSecondDigits, instant ? baseDateTimeFormat.getTimeZoneNameOption() : null, false, false);
     }
 
     private static JSValue datePartsToJSArray(JSContext context, List<JSIntlDateTimeFormat.DatePart> parts) {
@@ -3667,7 +3623,6 @@ public final class JSIntlObject {
             JSIntlDateTimeFormat baseDateTimeFormat, DateTimeFormattableKind formattableKind) {
         return switch (formattableKind) {
             case NUMBER -> baseDateTimeFormat;
-            case INSTANT -> createInstantDateTimeFormat(context, baseDateTimeFormat);
             case ZONED_DATE_TIME -> {
                 context.throwTypeError("Invalid date/time value");
                 yield null;

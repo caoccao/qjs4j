@@ -50,32 +50,19 @@ public final class TemporalPlainDateConstructor {
      * Temporal.PlainDate(isoYear, isoMonth, isoDay, calendar?)
      */
     public static JSValue construct(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (context.getConstructorNewTarget() == null) {
-            context.throwTypeError("Method invoked on an object that is not Temporal.PlainDate.");
+        if (!TemporalUtils.requireNewTarget(context, "PlainDate")) {
             return JSUndefined.INSTANCE;
         }
-        int isoYear = TemporalUtils.toIntegerThrowOnInfinity(context, JSValue.argumentOrUndefined(args, 0));
-        if (context.hasPendingException()) {
+        IsoDate isoDate = readDateArguments(context, args);
+        if (isoDate == null) {
             return JSUndefined.INSTANCE;
         }
-        int isoMonth = TemporalUtils.toIntegerThrowOnInfinity(context, JSValue.argumentOrUndefined(args, 1));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int isoDay = TemporalUtils.toIntegerThrowOnInfinity(context, JSValue.argumentOrUndefined(args, 2));
+
+        TemporalCalendarId calendarId = TemporalUtils.calendarArgument(context, args, 3);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalCalendarId calendarId = TemporalCalendarId.ISO8601;
-        if (args.length > 3 && !(args[3] instanceof JSUndefined)) {
-            calendarId = TemporalCalendarId.createFromCalendarString(context, args[3]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-
-        IsoDate isoDate = new IsoDate(isoYear, isoMonth, isoDay);
         if (!isoDate.isValid()) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
@@ -153,6 +140,22 @@ public final class TemporalPlainDateConstructor {
         return toTemporalDate(context, item, options);
     }
 
+    static IsoDate readDateArguments(JSContext context, JSValue[] args) {
+        int isoYear = TemporalUtils.toIntegerThrowOnInfinity(context, JSValue.argumentOrUndefined(args, 0));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        int isoMonth = TemporalUtils.toIntegerThrowOnInfinity(context, JSValue.argumentOrUndefined(args, 1));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        int isoDay = TemporalUtils.toIntegerThrowOnInfinity(context, JSValue.argumentOrUndefined(args, 2));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        return new IsoDate(isoYear, isoMonth, isoDay);
+    }
+
     /**
      * ToTemporalDate abstract operation — converts item to JSTemporalPlainDate.
      */
@@ -205,5 +208,4 @@ public final class TemporalPlainDateConstructor {
         }
         return (JSTemporalPlainDate) result;
     }
-
 }

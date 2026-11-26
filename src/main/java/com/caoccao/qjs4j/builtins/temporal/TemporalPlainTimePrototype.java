@@ -33,14 +33,14 @@ public final class TemporalPlainTimePrototype {
     }
 
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainTime plainTime = RECEIVER.require(context, thisArg, "add");
+        return addOrSubtract(context, thisArg, args, 1);
+    }
+
+    private static JSValue addOrSubtract(JSContext context, JSValue thisArg, JSValue[] args, int sign) {
+        JSTemporalPlainTime plainTime = RECEIVER.require(context, thisArg, sign > 0 ? "add" : "subtract");
         if (plainTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return addOrSubtract(context, plainTime, args, 1);
-    }
-
-    private static JSValue addOrSubtract(JSContext context, JSTemporalPlainTime plainTime, JSValue[] args, int sign) {
         if (args.length == 0 || args[0] instanceof JSUndefined) {
             context.throwTypeError("Temporal error: Must provide a duration.");
             return JSUndefined.INSTANCE;
@@ -194,11 +194,7 @@ public final class TemporalPlainTimePrototype {
     }
 
     public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainTime plainTime = RECEIVER.require(context, thisArg, "subtract");
-        if (plainTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return addOrSubtract(context, plainTime, args, -1);
+        return addOrSubtract(context, thisArg, args, -1);
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -246,9 +242,7 @@ public final class TemporalPlainTimePrototype {
     }
 
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        context.throwTypeError(
-                "Do not use Temporal.PlainTime.prototype.valueOf; use Temporal.PlainTime.prototype.compare for comparison.");
-        return JSUndefined.INSTANCE;
+        return RECEIVER.rejectValueOf(context);
     }
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {

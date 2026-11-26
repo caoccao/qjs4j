@@ -55,6 +55,13 @@ public final class TemporalUtils {
         return 365L * (yearValue - 1L) + Math.floorDiv(yearValue, 4L) + 30L * (monthValue - 1L) + (dayValue - 1L);
     }
 
+    public static TemporalCalendarId calendarArgument(JSContext context, JSValue[] args, int index) {
+        JSValue value = JSValue.argumentOrUndefined(args, index);
+        return value instanceof JSUndefined
+                ? TemporalCalendarId.ISO8601
+                : TemporalCalendarId.createFromCalendarString(context, value);
+    }
+
     /**
      * Generic receiver type check for Temporal prototype methods. Returns the cast value, or null after throwing
      * TypeError.
@@ -432,6 +439,23 @@ public final class TemporalUtils {
             }
             cache.remove(oldestValue);
         }
+    }
+
+    public static TemporalCalendarId requireCalendarArgument(JSContext context, JSValue[] args) {
+        JSValue calendar = JSValue.argumentOrUndefined(args, 0);
+        if (calendar == null || calendar instanceof JSUndefined) {
+            context.throwTypeError("Temporal error: Calendar is required.");
+            return null;
+        }
+        return TemporalCalendarId.createFromCalendarValue(context, calendar);
+    }
+
+    public static boolean requireNewTarget(JSContext context, String type) {
+        if (context.getConstructorNewTarget() != null) {
+            return true;
+        }
+        context.throwTypeError("Method invoked on an object that is not Temporal." + type + ".");
+        return false;
     }
 
     /** Validate the partial object for a plain date or time's with() method, in observable property-read order. */

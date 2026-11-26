@@ -1320,99 +1320,49 @@ public final class OpcodeHandler {
                 }
             }
 
-            boolean defineSucceeded;
+            JSProxy privateProxy = isProxyPrivateTarget ? (JSProxy) object : null;
+            PropertyDescriptor descriptor;
             if (methodKind == 0) {
-                if (isPrivateSymbolKey && isProxyPrivateTarget && ((JSProxy) object).hasOwnPrivatePropertyDirect(key)) {
+                if (isPrivateSymbolKey && (privateProxy == null
+                        ? object.hasOwnProperty(key)
+                        : privateProxy.hasOwnPrivatePropertyDirect(key))) {
                     raiseTypeError(executionContext, "Cannot initialize the same private elements twice on an object");
                     return;
                 }
-                if (isPrivateSymbolKey && !isProxyPrivateTarget && object.hasOwnProperty(key)) {
-                    raiseTypeError(executionContext, "Cannot initialize the same private elements twice on an object");
-                    return;
-                }
-                PropertyDescriptor.DataState dataState;
+                PropertyDescriptor.DataState state;
                 if (nonWritable) {
-                    dataState = enumerable
+                    state = enumerable
                             ? PropertyDescriptor.DataState.EnumerableConfigurable
                             : PropertyDescriptor.DataState.Configurable;
                 } else {
-                    dataState = enumerable
+                    state = enumerable
                             ? PropertyDescriptor.DataState.All
                             : PropertyDescriptor.DataState.ConfigurableWritable;
                 }
-                if (isProxyPrivateTarget) {
-                    ((JSProxy) object).definePrivatePropertyDirect(key,
-                            PropertyDescriptor.dataDescriptor(methodValue, dataState));
-                    defineSucceeded = true;
-                } else {
-                    defineSucceeded = object.defineProperty(key,
-                            PropertyDescriptor.dataDescriptor(methodValue, dataState));
+                descriptor = PropertyDescriptor.dataDescriptor(methodValue, state);
+            } else if (methodKind == 1 || methodKind == 2) {
+                boolean isGetter = methodKind == 1;
+                PropertyDescriptor previous = privateProxy == null
+                        ? object.getOwnPropertyDescriptor(key)
+                        : privateProxy.getOwnPrivatePropertyDescriptorDirect(key);
+                if (isPrivateSymbolKey && previous != null && (previous.isDataDescriptor()
+                        || (isGetter ? previous.getGetter() : previous.getSetter()) != null)) {
+                    raiseTypeError(executionContext, "Cannot initialize the same private elements twice on an object");
+                    return;
                 }
-            } else if (methodKind == 1) {
-                JSFunction getter = methodValue instanceof JSFunction function ? function : null;
-                JSFunction setter = null;
-                PropertyDescriptor descriptor = isProxyPrivateTarget
-                        ? ((JSProxy) object).getOwnPrivatePropertyDescriptorDirect(key)
-                        : object.getOwnPropertyDescriptor(key);
-                if (isPrivateSymbolKey && descriptor != null) {
-                    if (descriptor.isDataDescriptor() || descriptor.getGetter() != null) {
-                        raiseTypeError(executionContext,
-                                "Cannot initialize the same private elements twice on an object");
-                        return;
-                    }
-                }
-                if (descriptor != null && descriptor.hasSetter()) {
-                    setter = descriptor.getSetter();
-                }
-                if (isProxyPrivateTarget) {
-                    ((JSProxy) object).definePrivatePropertyDirect(key,
-                            PropertyDescriptor.accessorDescriptor(getter, setter,
-                                    enumerable
-                                            ? PropertyDescriptor.AccessorState.All
-                                            : PropertyDescriptor.AccessorState.Configurable));
-                    defineSucceeded = true;
-                } else {
-                    defineSucceeded = object.defineProperty(key,
-                            PropertyDescriptor.accessorDescriptor(getter, setter,
-                                    enumerable
-                                            ? PropertyDescriptor.AccessorState.All
-                                            : PropertyDescriptor.AccessorState.Configurable));
-                }
-            } else if (methodKind == 2) {
-                JSFunction setter = methodValue instanceof JSFunction function ? function : null;
-                JSFunction getter = null;
-                PropertyDescriptor descriptor = isProxyPrivateTarget
-                        ? ((JSProxy) object).getOwnPrivatePropertyDescriptorDirect(key)
-                        : object.getOwnPropertyDescriptor(key);
-                if (isPrivateSymbolKey && descriptor != null) {
-                    if (descriptor.isDataDescriptor() || descriptor.getSetter() != null) {
-                        raiseTypeError(executionContext,
-                                "Cannot initialize the same private elements twice on an object");
-                        return;
-                    }
-                }
-                if (descriptor != null && descriptor.hasGetter()) {
-                    getter = descriptor.getGetter();
-                }
-                if (isProxyPrivateTarget) {
-                    ((JSProxy) object).definePrivatePropertyDirect(key,
-                            PropertyDescriptor.accessorDescriptor(getter, setter,
-                                    enumerable
-                                            ? PropertyDescriptor.AccessorState.All
-                                            : PropertyDescriptor.AccessorState.Configurable));
-                    defineSucceeded = true;
-                } else {
-                    defineSucceeded = object.defineProperty(key,
-                            PropertyDescriptor.accessorDescriptor(getter, setter,
-                                    enumerable
-                                            ? PropertyDescriptor.AccessorState.All
-                                            : PropertyDescriptor.AccessorState.Configurable));
-                }
+                JSFunction method = methodValue instanceof JSFunction function ? function : null;
+                JSFunction getter = isGetter ? method : previous != null ? previous.getGetter() : null;
+                JSFunction setter = !isGetter ? method : previous != null ? previous.getSetter() : null;
+                descriptor = PropertyDescriptor.accessorDescriptor(getter, setter,
+                        enumerable
+                                ? PropertyDescriptor.AccessorState.All
+                                : PropertyDescriptor.AccessorState.Configurable);
             } else {
                 throw new JSVirtualMachineException("DEFINE_METHOD_COMPUTED: unsupported method flags " + methodFlags);
             }
-
-            if (!defineSucceeded) {
+            if (privateProxy != null) {
+                privateProxy.definePrivatePropertyDirect(key, descriptor);
+            } else if (!object.defineProperty(key, descriptor)) {
                 String keyName = key != null ? key.toPropertyString() : "property";
                 raiseTypeError(executionContext, "Cannot redefine property: " + keyName);
                 return;
@@ -2193,98 +2143,13 @@ public final class OpcodeHandler {
     }
 
     static void handleGetRefValue(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
         int sp = executionContext.sp;
         JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
-        JSValue propertyValue = (JSValue) stack[sp - 1];
-        JSValue objectValue = (JSValue) stack[sp - 2];
-        JSContext context = executionContext.virtualMachine.context;
-        PropertyKey key = PropertyKey.fromValue(context, propertyValue);
-        String variableName = key != null && key.isString() ? key.asString() : null;
-
-        if (variableName != null && objectValue.isUndefined()) {
-            StackFrame bindingFrame = findDynamicVarBindingFrame(executionContext, variableName);
-            if (bindingFrame != null) {
-                JSValue variableValue = bindingFrame.getDynamicVarBinding(variableName);
-                stack[sp++] = variableValue != null ? variableValue : JSUndefined.INSTANCE;
-                executionContext.finishOpcode(pc + op.getSize(), sp);
-                return;
-            }
-            EvalScopedLocalBinding localBinding = findEvalScopedLocalBinding(executionContext, variableName);
-            if (localBinding != null) {
-                if (localBinding.value() == VirtualMachine.UNINITIALIZED_MARKER) {
-                    executionContext.virtualMachine.pendingException = context
-                            .throwReferenceError("Cannot access '" + variableName + "' before initialization");
-                    stack[sp++] = JSUndefined.INSTANCE;
-                } else {
-                    stack[sp++] = localBinding.value() != null ? localBinding.value() : JSUndefined.INSTANCE;
-                }
-                executionContext.finishOpcode(pc + op.getSize(), sp);
-                return;
-            }
-        }
-
-        if (objectValue.isUndefined()) {
-            String name = key != null ? key.toPropertyString() : "variable";
-            executionContext.virtualMachine.pendingException = context.throwReferenceError(name + " is not defined");
-            stack[sp++] = JSUndefined.INSTANCE;
-            executionContext.finishOpcode(pc + op.getSize(), sp);
-            return;
-        }
-
-        JSObject targetObject = executionContext.virtualMachine.toObject(objectValue);
-        if (targetObject == null) {
-            executionContext.virtualMachine.pendingException = context.throwTypeError("value has no property");
-            stack[sp++] = JSUndefined.INSTANCE;
-            executionContext.finishOpcode(pc + op.getSize(), sp);
-            return;
-        }
-
-        if (targetObject == context.getGlobalObject() && variableName != null) {
-            StackFrame bindingFrame = findDynamicVarBindingFrame(executionContext, variableName);
-            if (bindingFrame != null) {
-                JSValue variableValue = bindingFrame.getDynamicVarBinding(variableName);
-                stack[sp++] = variableValue != null ? variableValue : JSUndefined.INSTANCE;
-                executionContext.finishOpcode(pc + op.getSize(), sp);
-                return;
-            }
-            EvalScopedLocalBinding localBinding = findEvalScopedLocalBinding(executionContext, variableName);
-            if (localBinding != null) {
-                if (localBinding.value() == VirtualMachine.UNINITIALIZED_MARKER) {
-                    executionContext.virtualMachine.pendingException = context
-                            .throwReferenceError("Cannot access '" + variableName + "' before initialization");
-                    stack[sp++] = JSUndefined.INSTANCE;
-                } else {
-                    stack[sp++] = localBinding.value() != null ? localBinding.value() : JSUndefined.INSTANCE;
-                }
-                executionContext.finishOpcode(pc + op.getSize(), sp);
-                return;
-            }
-            if (variableName != null && context.hasGlobalLexicalBinding(variableName)) {
-                if (!context.isGlobalLexicalBindingInitialized(variableName)) {
-                    executionContext.virtualMachine.pendingException = context
-                            .throwReferenceError("Cannot access '" + variableName + "' before initialization");
-                    stack[sp++] = JSUndefined.INSTANCE;
-                } else {
-                    stack[sp++] = context.readGlobalLexicalBinding(variableName);
-                }
-                executionContext.finishOpcode(pc + op.getSize(), sp);
-                return;
-            }
-        }
-
-        JSValue value;
-        if (!targetObject.has(key)) {
-            String name = key != null ? key.toPropertyString() : "variable";
-            executionContext.virtualMachine.pendingException = context.throwReferenceError(name + " is not defined");
-            stack[sp++] = JSUndefined.INSTANCE;
-            executionContext.finishOpcode(pc + op.getSize(), sp);
-            return;
-        } else {
-            value = targetObject.get(key);
-        }
-        stack[sp++] = value;
-        executionContext.finishOpcode(pc + op.getSize(), sp);
+        JSValue property = (JSValue) stack[sp - 1];
+        JSValue receiver = (JSValue) stack[sp - 2];
+        int nextPc = executionContext.pc + op.getSize();
+        stack[sp] = readReference(executionContext, receiver, property);
+        executionContext.finishOpcode(nextPc, sp + 1);
     }
 
     static void handleGetSuper(Opcode op, ExecutionContext executionContext) {
@@ -3779,14 +3644,7 @@ public final class OpcodeHandler {
         String variableName = key != null && key.isString() ? key.asString() : null;
 
         if (variableName != null && objectValue.isUndefined()) {
-            StackFrame bindingFrame = findDynamicVarBindingFrame(executionContext, variableName);
-            if (bindingFrame != null) {
-                bindingFrame.setDynamicVarBinding(variableName, setValue);
-                if (context.hasEvalOverlayFrames() && context.hasEvalOverlayBinding(variableName)) {
-                    JSObject globalObject = context.getGlobalObject();
-                    globalObject.set(key, setValue);
-                    capturePendingException(executionContext);
-                }
+            if (writeDynamicReference(executionContext, variableName, key, setValue)) {
                 executionContext.finishOpcode(pc + op.getSize(), sp);
                 return;
             }
@@ -3794,9 +3652,7 @@ public final class OpcodeHandler {
 
         if (objectValue.isUndefined()) {
             if (executionContext.virtualMachine.context.isStrictMode()) {
-                String name = key != null ? key.toPropertyString() : "variable";
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                        .throwReferenceError(name + " is not defined");
+                undefinedReference(executionContext.virtualMachine, key);
                 executionContext.finishOpcode(pc + op.getSize(), sp);
                 return;
             }
@@ -3812,13 +3668,7 @@ public final class OpcodeHandler {
         }
 
         if (targetObject == context.getGlobalObject() && variableName != null) {
-            StackFrame bindingFrame = findDynamicVarBindingFrame(executionContext, variableName);
-            if (bindingFrame != null) {
-                bindingFrame.setDynamicVarBinding(variableName, setValue);
-                if (context.hasEvalOverlayFrames() && context.hasEvalOverlayBinding(variableName)) {
-                    targetObject.set(key, setValue);
-                    capturePendingException(executionContext);
-                }
+            if (writeDynamicReference(executionContext, variableName, key, setValue)) {
                 executionContext.finishOpcode(pc + op.getSize(), sp);
                 return;
             }
@@ -3842,9 +3692,7 @@ public final class OpcodeHandler {
         }
 
         if (!targetObject.has(key) && executionContext.virtualMachine.context.isStrictMode()) {
-            String name = key != null ? key.toPropertyString() : "variable";
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                    .throwReferenceError(name + " is not defined");
+            undefinedReference(executionContext.virtualMachine, key);
             executionContext.finishOpcode(pc + op.getSize(), sp);
             return;
         }
@@ -5280,6 +5128,43 @@ public final class OpcodeHandler {
         return value;
     }
 
+    private static JSValue readReference(ExecutionContext executionContext, JSValue receiver, JSValue property) {
+        VirtualMachine vm = executionContext.virtualMachine;
+        JSContext context = vm.context;
+        PropertyKey key = PropertyKey.fromValue(context, property);
+        String name = key != null && key.isString() ? key.asString() : null;
+        boolean unresolved = receiver.isUndefined();
+        JSObject object = unresolved ? null : vm.toObject(receiver);
+        if (!unresolved && object == null) {
+            vm.pendingException = context.throwTypeError("value has no property");
+            return JSUndefined.INSTANCE;
+        }
+        if (name != null && (unresolved || object == context.getGlobalObject())) {
+            StackFrame frame = findDynamicVarBindingFrame(executionContext, name);
+            if (frame != null) {
+                JSValue value = frame.getDynamicVarBinding(name);
+                return value != null ? value : JSUndefined.INSTANCE;
+            }
+            EvalScopedLocalBinding local = findEvalScopedLocalBinding(executionContext, name);
+            if (local != null) {
+                if (local.value() == VirtualMachine.UNINITIALIZED_MARKER) {
+                    return uninitializedReference(vm, name);
+                }
+                return local.value() != null ? local.value() : JSUndefined.INSTANCE;
+            }
+            if (!unresolved && context.hasGlobalLexicalBinding(name)) {
+                return context.isGlobalLexicalBindingInitialized(name)
+                        ? context.readGlobalLexicalBinding(name)
+                        : uninitializedReference(vm, name);
+            }
+        }
+        if (unresolved || !object.has(key)) {
+            undefinedReference(vm, key);
+            return JSUndefined.INSTANCE;
+        }
+        return object.get(key);
+    }
+
     private static JSValue readVarRefValue(ExecutionContext executionContext, int varRefIndex) {
         String capturedVarName = null;
         if (executionContext.frame.getFunction() instanceof JSBytecodeFunction bytecodeFunction) {
@@ -5489,6 +5374,31 @@ public final class OpcodeHandler {
         vm.saveActiveGeneratorSuspendedExecutionState(executionContext.frame, executionContext.pc, vm.valueStack.stack,
                 executionContext.sp, executionContext.frameStackBase);
         vm.requestOpcodeReturnFromExecute(executionContext, value);
+    }
+
+    private static void undefinedReference(VirtualMachine vm, PropertyKey key) {
+        String name = key != null ? key.toPropertyString() : "variable";
+        vm.pendingException = vm.context.throwReferenceError(name + " is not defined");
+    }
+
+    private static JSValue uninitializedReference(VirtualMachine vm, String name) {
+        vm.pendingException = vm.context.throwReferenceError("Cannot access '" + name + "' before initialization");
+        return JSUndefined.INSTANCE;
+    }
+
+    private static boolean writeDynamicReference(ExecutionContext executionContext, String name, PropertyKey key,
+            JSValue value) {
+        StackFrame frame = findDynamicVarBindingFrame(executionContext, name);
+        if (frame == null) {
+            return false;
+        }
+        frame.setDynamicVarBinding(name, value);
+        JSContext context = executionContext.virtualMachine.context;
+        if (context.hasEvalOverlayFrames() && context.hasEvalOverlayBinding(name)) {
+            context.getGlobalObject().set(key, value);
+            capturePendingException(executionContext);
+        }
+        return true;
     }
 
     private static void writeVarRefValue(ExecutionContext executionContext, int varRefIndex, JSValue value) {

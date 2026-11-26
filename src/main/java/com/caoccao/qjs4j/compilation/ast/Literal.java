@@ -27,16 +27,6 @@ public final class Literal extends Expression {
         this.value = value;
     }
 
-    @Override
-    public boolean containsAwait() {
-        return false;
-    }
-
-    @Override
-    public boolean containsYield() {
-        return false;
-    }
-
     public Object getValue() {
         return value;
     }

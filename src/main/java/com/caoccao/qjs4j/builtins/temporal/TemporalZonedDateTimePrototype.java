@@ -38,15 +38,14 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "add");
+        return addOrSubtract(context, thisArg, args, 1);
+    }
+
+    private static JSValue addOrSubtract(JSContext context, JSValue thisArg, JSValue[] args, int sign) {
+        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, sign > 0 ? "add" : "subtract");
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return addOrSubtract(context, zonedDateTime, args, 1);
-    }
-
-    private static JSValue addOrSubtract(JSContext context, JSTemporalZonedDateTime zonedDateTime, JSValue[] args,
-            int sign) {
         if (args.length == 0 || args[0] instanceof JSUndefined) {
             context.throwTypeError("Temporal error: Must provide a duration.");
             return JSUndefined.INSTANCE;
@@ -495,18 +494,6 @@ public final class TemporalZonedDateTimePrototype {
                 zonedDateTime.getCalendarId());
     }
 
-    private static String getToStringCalendarNameOption(JSContext context, JSObject optionsObject) {
-        String calendarNameOption = TemporalUtils.getStringOption(context, optionsObject, "calendarName", "auto");
-        if (context.hasPendingException() || calendarNameOption == null) {
-            return null;
-        }
-        if (TemporalDisplayCalendar.fromString(calendarNameOption) == null) {
-            context.throwRangeError("Temporal error: Invalid calendarName option: " + calendarNameOption);
-            return null;
-        }
-        return calendarNameOption;
-    }
-
     private static String getToStringOffsetOption(JSContext context, JSObject optionsObject) {
         String offsetOption = TemporalUtils.getStringOption(context, optionsObject, "offset", "auto");
         if (context.hasPendingException() || offsetOption == null) {
@@ -529,7 +516,7 @@ public final class TemporalZonedDateTimePrototype {
             return TemporalZonedDateTimeToStringSettings.DEFAULT;
         }
 
-        String calendarNameOption = getToStringCalendarNameOption(context, optionsObject);
+        String calendarNameOption = TemporalUtils.getCalendarNameOption(context, optionsObject);
         if (context.hasPendingException() || calendarNameOption == null) {
             return null;
         }
@@ -852,11 +839,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "subtract");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return addOrSubtract(context, zonedDateTime, args, -1);
+        return addOrSubtract(context, thisArg, args, -1);
     }
 
     public static JSValue timeZoneId(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -992,9 +975,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        context.throwTypeError(
-                "Do not use Temporal.ZonedDateTime.prototype.valueOf; use Temporal.ZonedDateTime.prototype.compare for comparison.");
-        return JSUndefined.INSTANCE;
+        return RECEIVER.rejectValueOf(context);
     }
 
     public static JSValue weekOfYear(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1203,11 +1184,7 @@ public final class TemporalZonedDateTimePrototype {
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        if (args.length == 0 || args[0] instanceof JSUndefined || args[0] == null) {
-            context.throwTypeError("Temporal error: Calendar is required.");
-            return JSUndefined.INSTANCE;
-        }
-        TemporalCalendarId calendarId = TemporalCalendarId.createFromCalendarValue(context, args[0]);
+        TemporalCalendarId calendarId = TemporalUtils.requireCalendarArgument(context, args);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

@@ -47,6 +47,53 @@ public final class JSReflectObject {
         return ((JSFunction) args[0]).call(context, funcThisArg, funcArgs);
     }
 
+    private static void applyConstructorPrototype(JSContext context, JSObject object, JSFunction constructor,
+            JSObject prototype) {
+        if (prototype != null) {
+            object.setPrototype(prototype);
+        } else {
+            context.transferPrototype(object, constructor);
+        }
+    }
+
+    private static JSValue callConstructor(JSContext context, JSContext constructorContext, JSFunction function,
+            JSValue constructThis, JSValue[] args, JSValue newTarget) {
+        JSValue savedNewTarget = context.getConstructorNewTarget();
+        JSValue savedConstructorContextNewTarget = null;
+        JSValue savedNativeConstructorContextNewTarget = null;
+        context.setConstructorNewTarget(newTarget);
+        if (constructorContext != context) {
+            savedConstructorContextNewTarget = constructorContext.getConstructorNewTarget();
+            constructorContext.setConstructorNewTarget(newTarget);
+        }
+        JSValue result;
+        try {
+            if (function instanceof JSNativeFunction nativeFunc) {
+                savedNativeConstructorContextNewTarget = constructorContext.getNativeConstructorNewTarget();
+                constructorContext.setNativeConstructorNewTarget(newTarget);
+                result = nativeFunc.call(context, constructThis, args);
+            } else if (function instanceof JSBytecodeFunction bytecodeFunction) {
+                result = constructorContext.getVirtualMachine().execute(bytecodeFunction, constructThis, args,
+                        newTarget);
+            } else {
+                result = function.call(constructorContext, constructThis, args);
+            }
+            if (constructorContext != context && constructorContext.hasPendingException()) {
+                context.setPendingException(constructorContext.getPendingException());
+                constructorContext.clearPendingException();
+            }
+        } finally {
+            context.setConstructorNewTarget(savedNewTarget);
+            if (function instanceof JSNativeFunction) {
+                constructorContext.setNativeConstructorNewTarget(savedNativeConstructorContextNewTarget);
+            }
+            if (constructorContext != context) {
+                constructorContext.setConstructorNewTarget(savedConstructorContextNewTarget);
+            }
+        }
+        return result;
+    }
+
     /**
      * Reflect.construct(target, argumentsList, newTarget) ES2020 26.1.2 Acts like the 'new' operator, but as a
      * function.
@@ -70,40 +117,17 @@ public final class JSReflectObject {
         return constructFunction(context, args[0], constructorArgs, newTarget);
     }
 
-    private static JSValue constructDynamicFunction(JSContext context, JSFunction function,
-            JSNativeFunction nativeFunction, JSValue[] args, JSValue newTarget) {
-        JSContext constructorContext = function.getRealmContext() != null ? function.getRealmContext() : context;
-        JSValue savedNewTarget = context.getConstructorNewTarget();
-        JSValue savedConstructorContextNewTarget = null;
-        JSValue savedNativeConstructorNewTarget = constructorContext.getNativeConstructorNewTarget();
-
-        context.setConstructorNewTarget(newTarget);
-        if (constructorContext != context) {
-            savedConstructorContextNewTarget = constructorContext.getConstructorNewTarget();
-            constructorContext.setConstructorNewTarget(newTarget);
+    private static JSValue constructDynamicFunction(JSContext context, JSNativeFunction nativeFunction, JSValue[] args,
+            JSValue newTarget) {
+        JSContext realm = nativeFunction.getRealmContext() != null ? nativeFunction.getRealmContext() : context;
+        JSValue result = callConstructor(context, realm, nativeFunction, JSUndefined.INSTANCE, args, newTarget);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
-        constructorContext.setNativeConstructorNewTarget(newTarget);
-
-        try {
-            JSValue result = nativeFunction.call(context, JSUndefined.INSTANCE, args);
-            if (constructorContext != context && constructorContext.hasPendingException()) {
-                context.setPendingException(constructorContext.getPendingException());
-                constructorContext.clearPendingException();
-            }
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (result instanceof JSObject) {
-                return result;
-            }
-            return context.throwTypeError(function.getName() + " constructor must return an object");
-        } finally {
-            context.setConstructorNewTarget(savedNewTarget);
-            constructorContext.setNativeConstructorNewTarget(savedNativeConstructorNewTarget);
-            if (constructorContext != context) {
-                constructorContext.setConstructorNewTarget(savedConstructorContextNewTarget);
-            }
+        if (result instanceof JSObject) {
+            return result;
         }
+        return context.throwTypeError(nativeFunction.getName() + " constructor must return an object");
     }
 
     private static JSValue constructFunction(JSContext context, JSValue target, JSValue[] args, JSValue newTarget) {
@@ -130,29 +154,18 @@ public final class JSReflectObject {
         JSConstructorType constructorType = function.getConstructorType();
         if (constructorType == null) {
             if (function instanceof JSNativeFunction nativeFunction && isDynamicFunctionConstructor(nativeFunction)) {
-                return constructDynamicFunction(context, function, nativeFunction, args, newTarget);
+                return constructDynamicFunction(context, nativeFunction, args, newTarget);
             }
 
             JSObject thisObject = new JSObject(context);
-            String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
-            if (newTarget instanceof JSObject newTargetObject) {
-                JSObject resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject,
-                        intrinsicDefaultPrototypeName);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                if (resolvedPrototype != null) {
-                    thisObject.setPrototype(resolvedPrototype);
-                }
-            } else {
-                JSObject resolvedPrototype = context.getPrototypeFromConstructor(function,
-                        intrinsicDefaultPrototypeName);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                if (resolvedPrototype != null) {
-                    thisObject.setPrototype(resolvedPrototype);
-                }
+            JSObject prototypeSource = newTarget instanceof JSObject targetObject ? targetObject : function;
+            JSObject prototype = context.getPrototypeFromConstructor(prototypeSource,
+                    context.getIntrinsicDefaultPrototypeName(function));
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (prototype != null) {
+                thisObject.setPrototype(prototype);
             }
 
             // Check if this is a derived constructor
@@ -161,40 +174,8 @@ public final class JSReflectObject {
             // (this must be initialized by super() call)
             JSValue constructThis = isDerived ? JSUndefined.INSTANCE : thisObject;
 
-            JSValue savedNewTarget = context.getConstructorNewTarget();
             JSContext constructorContext = function.getRealmContext() != null ? function.getRealmContext() : context;
-            JSValue savedConstructorContextNewTarget = null;
-            JSValue savedNativeConstructorContextNewTarget = null;
-            context.setConstructorNewTarget(newTarget);
-            if (constructorContext != context) {
-                savedConstructorContextNewTarget = constructorContext.getConstructorNewTarget();
-                constructorContext.setConstructorNewTarget(newTarget);
-            }
-            JSValue result;
-            try {
-                if (function instanceof JSNativeFunction nativeFunc) {
-                    savedNativeConstructorContextNewTarget = constructorContext.getNativeConstructorNewTarget();
-                    constructorContext.setNativeConstructorNewTarget(newTarget);
-                    result = nativeFunc.call(context, constructThis, args);
-                } else if (function instanceof JSBytecodeFunction bytecodeFunction) {
-                    result = constructorContext.getVirtualMachine().execute(bytecodeFunction, constructThis, args,
-                            newTarget);
-                } else {
-                    result = function.call(constructorContext, constructThis, args);
-                }
-                if (constructorContext != context && constructorContext.hasPendingException()) {
-                    context.setPendingException(constructorContext.getPendingException());
-                    constructorContext.clearPendingException();
-                }
-            } finally {
-                context.setConstructorNewTarget(savedNewTarget);
-                if (function instanceof JSNativeFunction) {
-                    constructorContext.setNativeConstructorNewTarget(savedNativeConstructorContextNewTarget);
-                }
-                if (constructorContext != context) {
-                    constructorContext.setConstructorNewTarget(savedConstructorContextNewTarget);
-                }
-            }
+            JSValue result = callConstructor(context, constructorContext, function, constructThis, args, newTarget);
 
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -208,10 +189,6 @@ public final class JSReflectObject {
                 }
                 // Use lastConstructorThisArg saved by RETURN/RETURN_UNDEF before frame was popped
                 JSValue finalThis = constructorContext.getVirtualMachine().getLastConstructorThisArg();
-                if (finalThis == null || finalThis instanceof JSUndefined) {
-                    return context.throwReferenceError(
-                            "Must call super constructor in derived class before accessing 'this' or returning from derived constructor");
-                }
                 if (finalThis instanceof JSObject) {
                     return finalThis;
                 }
@@ -233,13 +210,9 @@ public final class JSReflectObject {
             }
 
             // Step 6: Resolve prototype from newTarget
-            JSObject resolvedPrototype = null;
-            if (newTarget instanceof JSObject newTargetObject) {
-                String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
-                resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject, intrinsicDefaultPrototypeName);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
+            JSObject resolvedPrototype = newTargetPrototype(context, function, newTarget);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
             }
 
             // Step 7-9: ToString and compile
@@ -248,11 +221,7 @@ public final class JSReflectObject {
                 return context.getPendingException();
             }
             if (result instanceof JSObject jsObject) {
-                if (resolvedPrototype != null) {
-                    jsObject.setPrototype(resolvedPrototype);
-                } else {
-                    context.transferPrototype(jsObject, function);
-                }
+                applyConstructorPrototype(context, jsObject, function, resolvedPrototype);
             }
             return result;
         }
@@ -285,12 +254,9 @@ public final class JSReflectObject {
         boolean isTypedArrayConstructor = constructorType.name().startsWith("TYPED_ARRAY_");
         JSObject resolvedPrototype = null;
         if (isTypedArrayConstructor && args.length > 0 && args[0] instanceof IJSArrayBuffer) {
-            if (newTarget instanceof JSObject newTargetObject) {
-                String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
-                resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject, intrinsicDefaultPrototypeName);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
+            resolvedPrototype = newTargetPrototype(context, function, newTarget);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
             }
         }
 
@@ -314,33 +280,13 @@ public final class JSReflectObject {
         }
 
         if (result instanceof JSObject jsObject && !jsObject.isProxy()) {
-            if (resolvedPrototype == null && !isTypedArrayConstructor) {
-                // For non-TypedArray constructors (and TypedArray with non-buffer arg),
-                // resolve prototype after argument processing.
-                if (newTarget instanceof JSObject newTargetObject) {
-                    String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
-                    resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject,
-                            intrinsicDefaultPrototypeName);
-                    if (context.hasPendingException()) {
-                        return context.getPendingException();
-                    }
-                }
-            } else if (resolvedPrototype == null && isTypedArrayConstructor) {
-                // TypedArray with non-buffer arg: resolve prototype after argument processing
-                if (newTarget instanceof JSObject newTargetObject) {
-                    String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
-                    resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject,
-                            intrinsicDefaultPrototypeName);
-                    if (context.hasPendingException()) {
-                        return context.getPendingException();
-                    }
+            if (resolvedPrototype == null) {
+                resolvedPrototype = newTargetPrototype(context, function, newTarget);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
                 }
             }
-            if (resolvedPrototype != null) {
-                jsObject.setPrototype(resolvedPrototype);
-            } else {
-                context.transferPrototype(jsObject, function);
-            }
+            applyConstructorPrototype(context, jsObject, function, resolvedPrototype);
             if (jsObject instanceof JSDataView dataView && !dataView.validateConstructorState(context)) {
                 return context.getPendingException();
             }
@@ -499,6 +445,12 @@ public final class JSReflectObject {
         }
 
         return JSBoolean.valueOf(target.isExtensible());
+    }
+
+    private static JSObject newTargetPrototype(JSContext context, JSFunction function, JSValue newTarget) {
+        return newTarget instanceof JSObject object
+                ? context.getPrototypeFromConstructor(object, context.getIntrinsicDefaultPrototypeName(function))
+                : null;
     }
 
     /**

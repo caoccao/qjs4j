@@ -25,13 +25,4 @@ public abstract sealed class ModuleItem extends ASTNode permits ImportDeclaratio
         super(location);
     }
 
-    @Override
-    public boolean containsAwait() {
-        return false;
-    }
-
-    @Override
-    public boolean containsYield() {
-        return false;
-    }
 }

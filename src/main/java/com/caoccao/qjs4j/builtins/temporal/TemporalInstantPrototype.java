@@ -38,14 +38,14 @@ public final class TemporalInstantPrototype {
     }
 
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalInstant instant = RECEIVER.require(context, thisArg, "add");
+        return addOrSubtract(context, thisArg, args, 1);
+    }
+
+    private static JSValue addOrSubtract(JSContext context, JSValue thisArg, JSValue[] args, int sign) {
+        JSTemporalInstant instant = RECEIVER.require(context, thisArg, sign > 0 ? "add" : "subtract");
         if (instant == null) {
             return JSUndefined.INSTANCE;
         }
-        return addOrSubtract(context, instant, args, 1);
-    }
-
-    private static JSValue addOrSubtract(JSContext context, JSTemporalInstant instant, JSValue[] args, int sign) {
         if (args.length == 0 || args[0] instanceof JSUndefined) {
             context.throwTypeError("Temporal error: Must provide a duration.");
             return JSUndefined.INSTANCE;
@@ -160,8 +160,8 @@ public final class TemporalInstantPrototype {
             incrementNanoseconds = BigInteger.valueOf(fractionalSecondDigitsOption.roundingIncrementNanoseconds());
         }
 
-        BigInteger roundedEpochNanoseconds = roundBigIntegerToIncrement(instant.getEpochNanoseconds(),
-                incrementNanoseconds, instantToStringOptions.roundingMode());
+        BigInteger roundedEpochNanoseconds = instantToStringOptions.roundingMode()
+                .roundBigIntegerToIncrementAsIfPositive(instant.getEpochNanoseconds(), incrementNanoseconds);
         if (!TemporalUtils.isValidEpochNanoseconds(roundedEpochNanoseconds)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
             return null;
@@ -427,7 +427,7 @@ public final class TemporalInstantPrototype {
         BigInteger incrementNs = unitNs.multiply(BigInteger.valueOf(roundingIncrement));
 
         BigInteger epochNs = instant.getEpochNanoseconds();
-        BigInteger rounded = roundBigIntegerToIncrement(epochNs, incrementNs, roundingMode);
+        BigInteger rounded = roundingMode.roundBigIntegerToIncrementAsIfPositive(epochNs, incrementNs);
         if (!TemporalUtils.isValidEpochNanoseconds(rounded)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
             return JSUndefined.INSTANCE;
@@ -435,80 +435,12 @@ public final class TemporalInstantPrototype {
         return JSTemporalInstant.create(context, rounded);
     }
 
-    private static BigInteger roundBigIntegerToIncrement(BigInteger value, BigInteger increment,
-            TemporalRoundingMode roundingMode) {
-        if (increment.signum() == 0) {
-            return value;
-        }
-
-        BigInteger[] quotientAndRemainder = value.divideAndRemainder(increment);
-        BigInteger floorQuotient = quotientAndRemainder[0];
-        BigInteger remainder = quotientAndRemainder[1];
-        if (remainder.signum() < 0) {
-            floorQuotient = floorQuotient.subtract(BigInteger.ONE);
-            remainder = remainder.add(increment);
-        }
-        BigInteger floorValue = floorQuotient.multiply(increment);
-        if (remainder.signum() == 0) {
-            return floorValue;
-        }
-        BigInteger ceilValue = floorValue.add(increment);
-
-        switch (roundingMode) {
-            case FLOOR :
-                return floorValue;
-            case CEIL :
-                return ceilValue;
-            case TRUNC :
-                return floorValue;
-            case EXPAND :
-                return ceilValue;
-            case HALF_EXPAND :
-            case HALF_TRUNC :
-            case HALF_EVEN :
-            case HALF_CEIL :
-            case HALF_FLOOR :
-                BigInteger twoRemainder = remainder.shiftLeft(1);
-                int halfComparison = twoRemainder.compareTo(increment);
-                if (halfComparison < 0) {
-                    return floorValue;
-                }
-                if (halfComparison > 0) {
-                    return ceilValue;
-                }
-                return switch (roundingMode) {
-                    case HALF_EXPAND -> {
-                        yield ceilValue;
-                    }
-                    case HALF_TRUNC -> {
-                        yield floorValue;
-                    }
-                    case HALF_EVEN -> {
-                        if (floorQuotient.testBit(0)) {
-                            yield ceilValue;
-                        } else {
-                            yield floorValue;
-                        }
-                    }
-                    case HALF_CEIL -> ceilValue;
-                    case HALF_FLOOR -> floorValue;
-                    default -> ceilValue;
-                };
-            default :
-                return ceilValue;
-        }
-    }
-
     public static JSValue since(JSContext context, JSValue thisArg, JSValue[] args) {
         return difference(context, thisArg, args, true);
     }
 
     public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalInstant instant = RECEIVER.require(context, thisArg, "subtract");
-        if (instant == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return addOrSubtract(context, instant, args, -1);
+        return addOrSubtract(context, thisArg, args, -1);
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -579,8 +511,6 @@ public final class TemporalInstantPrototype {
     }
 
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        context.throwTypeError(
-                "Do not use Temporal.Instant.prototype.valueOf; use Temporal.Instant.prototype.compare for comparison.");
-        return JSUndefined.INSTANCE;
+        return RECEIVER.rejectValueOf(context);
     }
 }

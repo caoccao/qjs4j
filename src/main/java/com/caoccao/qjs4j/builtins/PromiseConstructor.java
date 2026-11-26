@@ -31,35 +31,35 @@ public final class PromiseConstructor {
      * Promise.all(iterable)
      */
     public static JSValue all(JSContext context, JSValue thisArg, JSValue[] args) {
-        return performPromiseCombinator(context, thisArg, args, PromiseCombinatorMode.ALL);
+        return performPromiseCombinator(context, thisArg, args, PromiseCombinatorMode.ALL, false);
     }
 
     /**
      * Promise.allKeyed(dictionary)
      */
     public static JSValue allKeyed(JSContext context, JSValue thisArg, JSValue[] args) {
-        return performPromiseKeyedCombinator(context, thisArg, args, PromiseCombinatorMode.ALL);
+        return performPromiseCombinator(context, thisArg, args, PromiseCombinatorMode.ALL, true);
     }
 
     /**
      * Promise.allSettled(iterable)
      */
     public static JSValue allSettled(JSContext context, JSValue thisArg, JSValue[] args) {
-        return performPromiseCombinator(context, thisArg, args, PromiseCombinatorMode.ALL_SETTLED);
+        return performPromiseCombinator(context, thisArg, args, PromiseCombinatorMode.ALL_SETTLED, false);
     }
 
     /**
      * Promise.allSettledKeyed(dictionary)
      */
     public static JSValue allSettledKeyed(JSContext context, JSValue thisArg, JSValue[] args) {
-        return performPromiseKeyedCombinator(context, thisArg, args, PromiseCombinatorMode.ALL_SETTLED);
+        return performPromiseCombinator(context, thisArg, args, PromiseCombinatorMode.ALL_SETTLED, true);
     }
 
     /**
      * Promise.any(iterable)
      */
     public static JSValue any(JSContext context, JSValue thisArg, JSValue[] args) {
-        return performPromiseCombinator(context, thisArg, args, PromiseCombinatorMode.ANY);
+        return performPromiseCombinator(context, thisArg, args, PromiseCombinatorMode.ANY, false);
     }
 
     /**
@@ -128,6 +128,125 @@ public final class PromiseConstructor {
         }
         context.setPendingException(pendingError);
         return rejectAbruptPromise(context, promiseCapability);
+    }
+
+    private static JSValue combineIterable(JSContext context, JSValue thisArg, JSValue iterable,
+            PromiseCombinatorMode mode, String methodName, PromiseCapability promiseCapability,
+            JSValue promiseResolve) {
+        JSValue iterator = JSIteratorHelper.getIterator(context, iterable);
+        if (context.hasPendingException()) {
+            return rejectAbruptPromise(context, promiseCapability);
+        }
+        if (!(iterator instanceof JSObject iteratorObject)) {
+            context.throwTypeError("Value is not iterable");
+            return rejectAbruptPromise(context, promiseCapability);
+        }
+
+        // Race passes the capability functions through and never collects element values.
+        CombinatorResults results = mode == PromiseCombinatorMode.RACE
+                ? null
+                : new CombinatorResults(context, mode, promiseCapability);
+        int index = 0;
+        while (true) {
+            JSObject nextResult = nextPromiseIteratorResult(context, iteratorObject);
+            if (context.hasPendingException()) {
+                return rejectAbruptPromise(context, promiseCapability);
+            }
+            if (nextResult == null) {
+                if (results != null && --results.remaining == 0) {
+                    return results.finish(context, false);
+                }
+                return promiseCapability.promise();
+            }
+
+            JSValue nextValue = callGet(context, nextResult, PropertyKey.VALUE);
+            if (context.hasPendingException()) {
+                return rejectAbruptPromise(context, promiseCapability);
+            }
+
+            if (results != null) {
+                results.values.set(index, JSUndefined.INSTANCE);
+                if (context.hasPendingException()) {
+                    return closeIteratorAndRejectAbruptPromise(context, iteratorObject, promiseCapability);
+                }
+            }
+
+            JSValue nextPromise = callCallable(context, promiseResolve, thisArg, new JSValue[]{nextValue});
+            if (context.hasPendingException()) {
+                return closeIteratorAndRejectAbruptPromise(context, iteratorObject, promiseCapability);
+            }
+
+            JSValue thenMethod = getCallableProperty(context, nextPromise, PropertyKey.THEN, methodName,
+                    " resolve result then is not callable");
+            if (thenMethod == null) {
+                return closeIteratorAndRejectAbruptPromise(context, iteratorObject, promiseCapability);
+            }
+
+            JSValue[] handlers = results == null
+                    ? new JSValue[]{promiseCapability.resolve(), promiseCapability.reject()}
+                    : results.handlers(context, index++);
+            callCallable(context, thenMethod, nextPromise, handlers);
+            if (context.hasPendingException()) {
+                return closeIteratorAndRejectAbruptPromise(context, iteratorObject, promiseCapability);
+            }
+        }
+    }
+
+    private static JSValue combineKeyed(JSContext context, JSValue thisArg, JSValue dictionary,
+            PromiseCombinatorMode mode, String methodName, PromiseCapability promiseCapability,
+            JSValue promiseResolve) {
+        if (dictionary.isNullOrUndefined()) {
+            context.throwTypeError("Cannot convert undefined or null to object");
+            return rejectAbruptPromise(context, promiseCapability);
+        }
+
+        JSObject dictionaryObject;
+        if (dictionary instanceof JSObject obj) {
+            dictionaryObject = obj;
+        } else {
+            context.throwTypeError(methodName + " requires an object argument");
+            return rejectAbruptPromise(context, promiseCapability);
+        }
+
+        JSObject resultObject = context.createJSObject();
+        PropertyKey[] propertyKeys = dictionaryObject.enumerableKeys();
+        String[] keys = new String[propertyKeys.length];
+        for (int i = 0; i < propertyKeys.length; i++) {
+            keys[i] = propertyKeys[i].toString();
+        }
+        int[] remainingCount = {keys.length};
+
+        if (keys.length == 0) {
+            callCallable(context, promiseCapability.resolve(), JSUndefined.INSTANCE, new JSValue[]{resultObject});
+            return promiseCapability.promise();
+        }
+
+        for (String key : keys) {
+            JSValue value = dictionaryObject.get(PropertyKey.fromString(key));
+            JSValue nextPromise = callCallable(context, promiseResolve, thisArg, new JSValue[]{value});
+            if (context.hasPendingException()) {
+                return rejectAbruptPromise(context, promiseCapability);
+            }
+
+            PropertyKey resultKey = PropertyKey.fromString(key);
+            JSNativeFunction onFulfilled = keyedElementHandler(context, promiseCapability, resultObject, resultKey,
+                    remainingCount, mode, true);
+            JSNativeFunction onRejected = keyedElementHandler(context, promiseCapability, resultObject, resultKey,
+                    remainingCount, mode, false);
+
+            context.transferPrototype(onFulfilled, JSFunction.NAME);
+            context.transferPrototype(onRejected, JSFunction.NAME);
+            JSValue thenFn = callGet(context, nextPromise, PropertyKey.THEN);
+            if (context.hasPendingException()) {
+                return rejectAbruptPromise(context, promiseCapability);
+            }
+            callCallable(context, thenFn, nextPromise, new JSValue[]{onFulfilled, onRejected});
+            if (context.hasPendingException()) {
+                return rejectAbruptPromise(context, promiseCapability);
+            }
+        }
+
+        return promiseCapability.promise();
     }
 
     static JSNativeFunction createBuiltinFunction(JSContext context, String functionName, int length,
@@ -236,8 +355,8 @@ public final class PromiseConstructor {
     }
 
     private static JSValue performPromiseCombinator(JSContext context, JSValue thisArg, JSValue[] args,
-            PromiseCombinatorMode mode) {
-        String methodName = getPromiseCombinatorName(mode);
+            PromiseCombinatorMode mode, boolean keyed) {
+        String methodName = getPromiseCombinatorName(mode) + (keyed ? "Keyed" : "");
         if (!JSTypeChecking.isConstructor(thisArg)) {
             return context.throwTypeError(methodName + " called on non-constructor");
         }
@@ -253,144 +372,18 @@ public final class PromiseConstructor {
             return rejectAbruptPromise(context, promiseCapability);
         }
 
-        JSValue iterable = JSValue.argumentOrUndefined(args, 0);
-        JSValue iterator = JSIteratorHelper.getIterator(context, iterable);
-        if (context.hasPendingException()) {
-            return rejectAbruptPromise(context, promiseCapability);
+        JSValue input = JSValue.argumentOrUndefined(args, 0);
+        if (keyed) {
+            return combineKeyed(context, thisArg, input, mode, methodName, promiseCapability, promiseResolve);
         }
-        if (!(iterator instanceof JSObject iteratorObject)) {
-            context.throwTypeError("Value is not iterable");
-            return rejectAbruptPromise(context, promiseCapability);
-        }
-
-        // Race passes the capability functions through and never collects element values.
-        CombinatorResults results = mode == PromiseCombinatorMode.RACE
-                ? null
-                : new CombinatorResults(context, mode, promiseCapability);
-        int index = 0;
-        while (true) {
-            JSObject nextResult = nextPromiseIteratorResult(context, iteratorObject);
-            if (context.hasPendingException()) {
-                return rejectAbruptPromise(context, promiseCapability);
-            }
-            if (nextResult == null) {
-                if (results != null && --results.remaining == 0) {
-                    return results.finish(context, false);
-                }
-                return promiseCapability.promise();
-            }
-
-            JSValue nextValue = callGet(context, nextResult, PropertyKey.VALUE);
-            if (context.hasPendingException()) {
-                return rejectAbruptPromise(context, promiseCapability);
-            }
-
-            if (results != null) {
-                results.values.set(index, JSUndefined.INSTANCE);
-                if (context.hasPendingException()) {
-                    return closeIteratorAndRejectAbruptPromise(context, iteratorObject, promiseCapability);
-                }
-            }
-
-            JSValue nextPromise = callCallable(context, promiseResolve, thisArg, new JSValue[]{nextValue});
-            if (context.hasPendingException()) {
-                return closeIteratorAndRejectAbruptPromise(context, iteratorObject, promiseCapability);
-            }
-
-            JSValue thenMethod = getCallableProperty(context, nextPromise, PropertyKey.THEN, methodName,
-                    " resolve result then is not callable");
-            if (thenMethod == null) {
-                return closeIteratorAndRejectAbruptPromise(context, iteratorObject, promiseCapability);
-            }
-
-            JSValue[] handlers = results == null
-                    ? new JSValue[]{promiseCapability.resolve(), promiseCapability.reject()}
-                    : results.handlers(context, index++);
-            callCallable(context, thenMethod, nextPromise, handlers);
-            if (context.hasPendingException()) {
-                return closeIteratorAndRejectAbruptPromise(context, iteratorObject, promiseCapability);
-            }
-        }
-    }
-
-    private static JSValue performPromiseKeyedCombinator(JSContext context, JSValue thisArg, JSValue[] args,
-            PromiseCombinatorMode mode) {
-        String methodName = mode == PromiseCombinatorMode.ALL ? "Promise.allKeyed" : "Promise.allSettledKeyed";
-        if (!JSTypeChecking.isConstructor(thisArg)) {
-            return context.throwTypeError(methodName + " called on non-constructor");
-        }
-
-        PromiseCapability promiseCapability = newPromiseCapability(context, thisArg);
-        if (promiseCapability == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue promiseResolve = getCallableProperty(context, thisArg, PropertyKey.RESOLVE, methodName,
-                " resolve is not callable");
-        if (promiseResolve == null) {
-            return rejectAbruptPromise(context, promiseCapability);
-        }
-
-        JSValue dictionary = JSValue.argumentOrUndefined(args, 0);
-        if (dictionary.isNullOrUndefined()) {
-            context.throwTypeError("Cannot convert undefined or null to object");
-            return rejectAbruptPromise(context, promiseCapability);
-        }
-
-        JSObject dictionaryObject;
-        if (dictionary instanceof JSObject obj) {
-            dictionaryObject = obj;
-        } else {
-            context.throwTypeError(methodName + " requires an object argument");
-            return rejectAbruptPromise(context, promiseCapability);
-        }
-
-        JSObject resultObject = context.createJSObject();
-        PropertyKey[] propertyKeys = dictionaryObject.enumerableKeys();
-        String[] keys = new String[propertyKeys.length];
-        for (int i = 0; i < propertyKeys.length; i++) {
-            keys[i] = propertyKeys[i].toString();
-        }
-        int[] remainingCount = {keys.length};
-
-        if (keys.length == 0) {
-            callCallable(context, promiseCapability.resolve(), JSUndefined.INSTANCE, new JSValue[]{resultObject});
-            return promiseCapability.promise();
-        }
-
-        for (String key : keys) {
-            JSValue value = dictionaryObject.get(PropertyKey.fromString(key));
-            JSValue nextPromise = callCallable(context, promiseResolve, thisArg, new JSValue[]{value});
-            if (context.hasPendingException()) {
-                return rejectAbruptPromise(context, promiseCapability);
-            }
-
-            PropertyKey resultKey = PropertyKey.fromString(key);
-            JSNativeFunction onFulfilled = keyedElementHandler(context, promiseCapability, resultObject, resultKey,
-                    remainingCount, mode, true);
-            JSNativeFunction onRejected = keyedElementHandler(context, promiseCapability, resultObject, resultKey,
-                    remainingCount, mode, false);
-
-            context.transferPrototype(onFulfilled, JSFunction.NAME);
-            context.transferPrototype(onRejected, JSFunction.NAME);
-            JSValue thenFn = callGet(context, nextPromise, PropertyKey.THEN);
-            if (context.hasPendingException()) {
-                return rejectAbruptPromise(context, promiseCapability);
-            }
-            callCallable(context, thenFn, nextPromise, new JSValue[]{onFulfilled, onRejected});
-            if (context.hasPendingException()) {
-                return rejectAbruptPromise(context, promiseCapability);
-            }
-        }
-
-        return promiseCapability.promise();
+        return combineIterable(context, thisArg, input, mode, methodName, promiseCapability, promiseResolve);
     }
 
     /**
      * Promise.race(iterable)
      */
     public static JSValue race(JSContext context, JSValue thisArg, JSValue[] args) {
-        return performPromiseCombinator(context, thisArg, args, PromiseCombinatorMode.RACE);
+        return performPromiseCombinator(context, thisArg, args, PromiseCombinatorMode.RACE, false);
     }
 
     /**
@@ -458,7 +451,6 @@ public final class PromiseConstructor {
         result.set(fulfilled ? PropertyKey.VALUE : PropertyKey.REASON, value);
         return result;
     }
-
     private static JSArray toArray(JSContext context, JSValue[] args, String methodName) {
         if (args.length == 0) {
             context.throwTypeError(methodName + " requires an iterable");
@@ -504,6 +496,7 @@ public final class PromiseConstructor {
         }
         return promiseCapability.promise();
     }
+
     /**
      * Promise.withResolvers()
      */

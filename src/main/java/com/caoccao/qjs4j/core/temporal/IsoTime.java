@@ -180,28 +180,17 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
      */
     public String formatTimeString(TemporalUnit smallestUnit, boolean autoFractionalSecondDigits,
             int fractionalSecondDigits) {
-        String hourMinute = String.format(Locale.ROOT, "%02d:%02d", hour, minute);
-        if (smallestUnit == TemporalUnit.MINUTE) {
-            return hourMinute;
+        StringBuilder result = new StringBuilder(18);
+        appendTwoDigits(result, hour);
+        result.append(':');
+        appendTwoDigits(result, minute);
+        if (smallestUnit != TemporalUnit.MINUTE) {
+            result.append(':');
+            appendTwoDigits(result, second);
+            appendFraction(result, millisecond * 1_000_000 + microsecond * 1_000 + nanosecond,
+                    autoFractionalSecondDigits ? -1 : fractionalSecondDigits);
         }
-
-        String hourMinuteSecond = String.format(Locale.ROOT, "%s:%02d", hourMinute, second);
-        if (autoFractionalSecondDigits) {
-            String fullFraction = String.format(Locale.ROOT, "%03d%03d%03d", millisecond, microsecond, nanosecond);
-            int fractionEndIndex = fullFraction.length();
-            while (fractionEndIndex > 0 && fullFraction.charAt(fractionEndIndex - 1) == '0') {
-                fractionEndIndex--;
-            }
-            if (fractionEndIndex == 0) {
-                return hourMinuteSecond;
-            }
-            return hourMinuteSecond + "." + fullFraction.substring(0, fractionEndIndex);
-        }
-
-        if (fractionalSecondDigits == 0) {
-            return hourMinuteSecond;
-        }
-        return hourMinuteSecond + "." + formatFractionalPart(fractionalSecondDigits);
+        return result.toString();
     }
 
     public boolean isValid() {
@@ -224,23 +213,8 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
     }
 
     public String toString(Integer fractionalSecondDigits) {
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append(String.format(Locale.ROOT, "%02d:%02d:%02d", hour(), minute(), second()));
-        int totalFractionalNanoseconds = millisecond() * 1_000_000 + microsecond() * 1_000 + nanosecond();
-        if (fractionalSecondDigits == null) {
-            if (totalFractionalNanoseconds != 0) {
-                String fraction = String.format(Locale.ROOT, "%09d", totalFractionalNanoseconds);
-                int fractionEndIndex = fraction.length();
-                while (fractionEndIndex > 0 && fraction.charAt(fractionEndIndex - 1) == '0') {
-                    fractionEndIndex--;
-                }
-                stringBuilder.append('.').append(fraction, 0, fractionEndIndex);
-            }
-        } else if (fractionalSecondDigits > 0) {
-            String fraction = String.format(Locale.ROOT, "%09d", totalFractionalNanoseconds);
-            stringBuilder.append('.').append(fraction, 0, fractionalSecondDigits);
-        }
-        return stringBuilder.toString();
+        return formatTimeString(TemporalUnit.SECOND, fractionalSecondDigits == null,
+                fractionalSecondDigits == null ? 0 : Math.max(0, fractionalSecondDigits));
     }
 
     @Override
@@ -261,5 +235,28 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
 
     public int totalNanosecondsWithinSecond() {
         return millisecond * 1_000_000 + microsecond * 1_000 + nanosecond;
+    }
+
+    private static void appendTwoDigits(StringBuilder result, int value) {
+        if (value >= 0 && value < 10) {
+            result.append('0');
+        }
+        result.append(value);
+    }
+
+    /** Append ISO fractional seconds at fixed precision, or trim trailing zeros for automatic precision. */
+    static void appendFraction(StringBuilder result, int nanos, int digits) {
+        if (digits == 0 || (digits < 0 && nanos == 0)) {
+            return;
+        }
+        // A leading 1 preserves all nine fractional positions, including leading zeros.
+        String padded = Integer.toString(1_000_000_000 + nanos);
+        int end = digits < 0 ? padded.length() : 1 + digits;
+        if (digits < 0) {
+            while (padded.charAt(end - 1) == '0') {
+                end--;
+            }
+        }
+        result.append('.').append(padded, 1, end);
     }
 }
