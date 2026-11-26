@@ -32,24 +32,12 @@ public final class ArrayPattern extends Pattern {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = false;
-            if (anyContainsAwait(elements)) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        return containsAwaitIn(elements);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = false;
-            if (anyContainsYield(elements)) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        return containsYieldIn(elements);
     }
 
     @Override

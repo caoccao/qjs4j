@@ -33,24 +33,12 @@ public final class AssignmentPattern extends Pattern {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = left != null && left.containsAwait();
-            if (!awaitInside && right != null && right.containsAwait()) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        return containsAwaitIn(left, right);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = left != null && left.containsYield();
-            if (!yieldInside && right != null && right.containsYield()) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        return containsYieldIn(left, right);
     }
 
     @Override

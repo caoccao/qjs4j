@@ -33,24 +33,12 @@ public final class WhileStatement extends Statement {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = test != null && test.containsAwait();
-            if (!awaitInside && body != null && body.containsAwait()) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        return containsAwaitIn(test, body);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = test != null && test.containsYield();
-            if (!yieldInside && body != null && body.containsYield()) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        return containsYieldIn(test, body);
     }
 
     public Statement getBody() {

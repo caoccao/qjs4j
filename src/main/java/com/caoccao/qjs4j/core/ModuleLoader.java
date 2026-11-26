@@ -56,6 +56,18 @@ final class ModuleLoader {
         this.asyncEvaluationOrderCounter = 0;
     }
 
+    private JSDynamicImportModule cachedDependency(JSDynamicImportModule module, Matcher matcher) {
+        String specifier = transformer.decodeModuleStringLiteralValue(matcher.group(1));
+        try {
+            String resolved = resolveDynamicImportSpecifier(specifier, module.resolvedSpecifier(), specifier);
+            return dynamicImportModuleCache.get(resolved);
+        } catch (JSException ignored) {
+            // Resolution also sets a pending exception. This scan skips unresolvable requests.
+            context.clearPendingException();
+            return null;
+        }
+    }
+
     /**
      * The module record the dynamic-import cache holds for a key, or null.
      * <p>
@@ -244,58 +256,33 @@ final class ModuleLoader {
     }
 
     List<JSPromise> getEvaluatingAsyncDependencyPromises(JSDynamicImportModule moduleRecord) {
-        String scanSource = transformer.maskModuleComments(moduleRecord.rawSource());
-        Matcher matcher = ModuleSourceTransformer.MODULE_STATIC_IMPORT_PATTERN.matcher(scanSource);
+        Matcher matcher = staticImports(moduleRecord);
         List<JSPromise> dependencyPromises = new ArrayList<>();
         Set<String> seenSpecifiers = new HashSet<>();
         JSDynamicImportModule moduleCycleRoot = moduleRecord.cycleRoot() != null
                 ? moduleRecord.cycleRoot()
                 : moduleRecord;
         while (matcher.find()) {
-            String specifier = transformer.decodeModuleStringLiteralValue(matcher.group(1));
-            try {
-                String resolved = resolveDynamicImportSpecifier(specifier, moduleRecord.resolvedSpecifier(), specifier);
-                JSDynamicImportModule depRecord = dynamicImportModuleCache.get(resolved);
-                if (depRecord == null) {
-                    continue;
-                }
-                JSDynamicImportModule effectiveDep = depRecord;
-                if (depRecord.cycleRoot() != null) {
-                    JSDynamicImportModule depCycleRoot = depRecord.cycleRoot();
-                    if (depCycleRoot != moduleCycleRoot) {
-                        effectiveDep = depCycleRoot;
-                    }
-                }
-                if (effectiveDep.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC
-                        && effectiveDep.asyncEvaluationPromise() != null
-                        && seenSpecifiers.add(effectiveDep.resolvedSpecifier())) {
-                    dependencyPromises.add(effectiveDep.asyncEvaluationPromise());
-                }
-            } catch (JSException ignored) {
-                // Skip unresolvable specifiers. Discarding the Java exception is not enough: the
-                // matching throwTypeError also left a pending exception on the context, and a
-                // later activation would otherwise pick up that stale error.
-                context.clearPendingException();
+            JSDynamicImportModule depRecord = cachedDependency(moduleRecord, matcher);
+            if (depRecord == null) {
+                continue;
+            }
+            JSDynamicImportModule effectiveDep = effectiveDependency(depRecord, moduleCycleRoot);
+            if (effectiveDep.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC
+                    && effectiveDep.asyncEvaluationPromise() != null
+                    && seenSpecifiers.add(effectiveDep.resolvedSpecifier())) {
+                dependencyPromises.add(effectiveDep.asyncEvaluationPromise());
             }
         }
         return dependencyPromises;
     }
 
     boolean hasEvaluatingAsyncDependency(JSDynamicImportModule moduleRecord) {
-        String scanSource = transformer.maskModuleComments(moduleRecord.rawSource());
-        Matcher matcher = ModuleSourceTransformer.MODULE_STATIC_IMPORT_PATTERN.matcher(scanSource);
+        Matcher matcher = staticImports(moduleRecord);
         while (matcher.find()) {
-            String specifier = transformer.decodeModuleStringLiteralValue(matcher.group(1));
-            try {
-                String resolved = resolveDynamicImportSpecifier(specifier, moduleRecord.resolvedSpecifier(), specifier);
-                JSDynamicImportModule depRecord = dynamicImportModuleCache.get(resolved);
-                if (depRecord != null && depRecord.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC) {
-                    return true;
-                }
-            } catch (JSException ignored) {
-                // Skip unresolvable specifiers. Clear the pending exception the matching
-                // throwTypeError left behind, so the context does not stay in an exception state.
-                context.clearPendingException();
+            JSDynamicImportModule depRecord = cachedDependency(moduleRecord, matcher);
+            if (depRecord != null && depRecord.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC) {
+                return true;
             }
         }
         return false;
@@ -919,8 +906,7 @@ final class ModuleLoader {
     }
 
     void registerPendingDependent(JSDynamicImportModule moduleRecord) {
-        String scanSource = transformer.maskModuleComments(moduleRecord.rawSource());
-        Matcher matcher = ModuleSourceTransformer.MODULE_STATIC_IMPORT_PATTERN.matcher(scanSource);
+        Matcher matcher = staticImports(moduleRecord);
         int asyncDepCount = 0;
         Set<String> registeredOnSpecifiers = new HashSet<>();
         // Determine this module's effective cycle root for same-cycle detection.
@@ -928,33 +914,18 @@ final class ModuleLoader {
                 ? moduleRecord.cycleRoot()
                 : moduleRecord;
         while (matcher.find()) {
-            String specifier = transformer.decodeModuleStringLiteralValue(matcher.group(1));
-            try {
-                String resolved = resolveDynamicImportSpecifier(specifier, moduleRecord.resolvedSpecifier(), specifier);
-                JSDynamicImportModule depRecord = dynamicImportModuleCache.get(resolved);
-                if (depRecord == null) {
-                    continue;
-                }
-                // ES2024 16.2.1.5.2.1 step 11.c.iv.1: Follow CycleRoot pointer only
-                // for dependencies NOT in the same cycle. Modules in the same cycle
-                // (sharing a cycle root) register directly on each other.
-                JSDynamicImportModule effectiveDep = depRecord;
-                if (depRecord.cycleRoot() != null) {
-                    JSDynamicImportModule depCycleRoot = depRecord.cycleRoot();
-                    // Only follow CycleRoot if the dependency is in a DIFFERENT cycle.
-                    if (depCycleRoot != moduleCycleRoot) {
-                        effectiveDep = depCycleRoot;
-                    }
-                }
-                if (effectiveDep.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC
-                        && registeredOnSpecifiers.add(effectiveDep.resolvedSpecifier())) {
-                    effectiveDep.pendingDependents().add(moduleRecord);
-                    asyncDepCount++;
-                }
-            } catch (JSException ignored) {
-                // Skip unresolvable specifiers. Clear the pending exception the matching
-                // throwTypeError left behind, so the context does not stay in an exception state.
-                context.clearPendingException();
+            JSDynamicImportModule depRecord = cachedDependency(moduleRecord, matcher);
+            if (depRecord == null) {
+                continue;
+            }
+            // ES2024 16.2.1.5.2.1 step 11.c.iv.1: Follow CycleRoot pointer only
+            // for dependencies NOT in the same cycle. Modules in the same cycle
+            // (sharing a cycle root) register directly on each other.
+            JSDynamicImportModule effectiveDep = effectiveDependency(depRecord, moduleCycleRoot);
+            if (effectiveDep.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC
+                    && registeredOnSpecifiers.add(effectiveDep.resolvedSpecifier())) {
+                effectiveDep.pendingDependents().add(moduleRecord);
+                asyncDepCount++;
             }
         }
         moduleRecord.setPendingAsyncDependencyCount(asyncDepCount);
@@ -1007,6 +978,11 @@ final class ModuleLoader {
         return resolvedSpecifier;
     }
 
+    private Matcher staticImports(JSDynamicImportModule module) {
+        return ModuleSourceTransformer.MODULE_STATIC_IMPORT_PATTERN
+                .matcher(transformer.maskModuleComments(module.rawSource()));
+    }
+
     void triggerPendingDependents(JSDynamicImportModule moduleRecord) {
         // ES2024 16.2.1.5.2.4 AsyncModuleExecutionFulfilled / 16.2.1.5.2.5 AsyncModuleExecutionRejected
         // Step 1: Gather all ancestors that are now ready (all async deps resolved)
@@ -1045,5 +1021,11 @@ final class ModuleLoader {
                 triggerPendingDependents(ready);
             }
         }
+    }
+
+    private static JSDynamicImportModule effectiveDependency(JSDynamicImportModule dependency,
+            JSDynamicImportModule moduleCycleRoot) {
+        JSDynamicImportModule root = dependency.cycleRoot();
+        return root != null && root != moduleCycleRoot ? root : dependency;
     }
 }

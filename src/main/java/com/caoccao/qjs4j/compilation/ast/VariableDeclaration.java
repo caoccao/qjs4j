@@ -33,24 +33,12 @@ public final class VariableDeclaration extends Statement {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = false;
-            if (anyContainsAwait(declarations)) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        return containsAwaitIn(declarations);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = false;
-            if (anyContainsYield(declarations)) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        return containsYieldIn(declarations);
     }
 
     public List<VariableDeclarator> getDeclarations() {

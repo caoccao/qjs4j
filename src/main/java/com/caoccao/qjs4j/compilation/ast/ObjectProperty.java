@@ -34,24 +34,12 @@ public abstract sealed class ObjectProperty<V extends Pattern> extends ASTNode
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = key != null && key.containsAwait();
-            if (!awaitInside && value != null && value.containsAwait()) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        return containsAwaitIn(key, value);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = key != null && key.containsYield();
-            if (!yieldInside && value != null && value.containsYield()) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        return containsYieldIn(key, value);
     }
 
     public Expression getKey() {

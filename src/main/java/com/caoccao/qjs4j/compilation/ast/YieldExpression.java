@@ -33,10 +33,7 @@ public final class YieldExpression extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = argument != null && argument.containsAwait();
-        }
-        return awaitInside;
+        return containsAwaitIn(argument);
     }
 
     @Override

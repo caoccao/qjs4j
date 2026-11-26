@@ -34,24 +34,12 @@ public final class SwitchStatement extends Statement {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = discriminant != null && discriminant.containsAwait();
-            if (!awaitInside && anyContainsAwait(cases)) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        return containsAwaitIn(discriminant, cases);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = discriminant != null && discriminant.containsYield();
-            if (!yieldInside && anyContainsYield(cases)) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        return containsYieldIn(discriminant, cases);
     }
 
     public List<SwitchCase> getCases() {

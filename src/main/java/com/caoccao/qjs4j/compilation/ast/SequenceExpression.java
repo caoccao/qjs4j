@@ -34,13 +34,7 @@ public final class SequenceExpression extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = false;
-            if (anyContainsAwait(expressions)) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        return containsAwaitIn(expressions);
     }
 
     @Override
@@ -61,13 +55,7 @@ public final class SequenceExpression extends Expression {
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = false;
-            if (anyContainsYield(expressions)) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        return containsYieldIn(expressions);
     }
 
     public List<Expression> getExpressions() {

@@ -35,10 +35,7 @@ public final class UnaryExpression extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = operand != null && operand.containsAwait();
-        }
-        return awaitInside;
+        return containsAwaitIn(operand);
     }
 
     @Override
@@ -51,10 +48,7 @@ public final class UnaryExpression extends Expression {
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = operand != null && operand.containsYield();
-        }
-        return yieldInside;
+        return containsYieldIn(operand);
     }
 
     public Expression getOperand() {

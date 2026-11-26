@@ -31,24 +31,12 @@ public final class WithStatement extends Statement {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = object != null && object.containsAwait();
-            if (!awaitInside && body != null && body.containsAwait()) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        return containsAwaitIn(object, body);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = object != null && object.containsYield();
-            if (!yieldInside && body != null && body.containsYield()) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        return containsYieldIn(object, body);
     }
 
     public Statement getBody() {

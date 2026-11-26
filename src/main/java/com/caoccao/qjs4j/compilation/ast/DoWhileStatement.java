@@ -33,24 +33,12 @@ public final class DoWhileStatement extends Statement {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = body != null && body.containsAwait();
-            if (!awaitInside && test != null && test.containsAwait()) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        return containsAwaitIn(body, test);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = body != null && body.containsYield();
-            if (!yieldInside && test != null && test.containsYield()) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        return containsYieldIn(body, test);
     }
 
     public Statement getBody() {

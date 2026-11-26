@@ -144,33 +144,14 @@ public final class RegExpEngine {
                 RegExpOpcode op = RegExpOpcode.fromCode(bc[pc] & 0xFF);
 
                 switch (op) {
-                    case CHAR -> {
-                        int ch = readU16(bc, pc + 1);
-                        if (!executionContext.matchChar(ch)) {
+                    case CHAR, CHAR_I -> {
+                        if (!executionContext.matchChar(readU16(bc, pc + 1), op == RegExpOpcode.CHAR_I)) {
                             break match;
                         }
                         pc += 3;
                     }
-
-                    case CHAR_I -> {
-                        int ch = readU16(bc, pc + 1);
-                        if (!executionContext.matchCharIgnoreCase(ch)) {
-                            break match;
-                        }
-                        pc += 3;
-                    }
-
-                    case CHAR32 -> {
-                        int ch = readU32(bc, pc + 1);
-                        if (!executionContext.matchChar(ch)) {
-                            break match;
-                        }
-                        pc += 5;
-                    }
-
-                    case CHAR32_I -> {
-                        int ch = readU32(bc, pc + 1);
-                        if (!executionContext.matchCharIgnoreCase(ch)) {
+                    case CHAR32, CHAR32_I -> {
+                        if (!executionContext.matchChar(readU32(bc, pc + 1), op == RegExpOpcode.CHAR32_I)) {
                             break match;
                         }
                         pc += 5;
@@ -270,87 +251,32 @@ public final class RegExpEngine {
                         pc += 3;
                     }
 
-                    case RANGE -> {
-                        // 32-bit payload length: a class with more than 8,191 ranges overflows a
-                        // 16-bit one, and the matcher then resumes decoding inside the range data.
-                        int len = readU32(bc, pc + 1);
-                        if (!executionContext.matchRange(bc, pc + 5, len, false)) {
+                    case RANGE, RANGE_I, NOT_RANGE, NOT_RANGE_I -> {
+                        // The size of a large Unicode class can exceed 16 bits.
+                        int length = readU32(bc, pc + 1);
+                        boolean ignoreCase = op == RegExpOpcode.RANGE_I || op == RegExpOpcode.NOT_RANGE_I;
+                        boolean negated = op == RegExpOpcode.NOT_RANGE || op == RegExpOpcode.NOT_RANGE_I;
+                        if (!executionContext.matchRange(bc, pc + 5, ignoreCase, negated)) {
                             break match;
                         }
-                        pc += 5 + len;
+                        pc += 5 + length;
                     }
-
-                    case RANGE_I -> {
-                        // 32-bit payload length: a class with more than 8,191 ranges overflows a
-                        // 16-bit one, and the matcher then resumes decoding inside the range data.
-                        int len = readU32(bc, pc + 1);
-                        if (!executionContext.matchRange(bc, pc + 5, len, true)) {
+                    case SPACE, NOT_SPACE -> {
+                        if (!executionContext.matchSpace(op == RegExpOpcode.NOT_SPACE)) {
                             break match;
                         }
-                        pc += 5 + len;
+                        pc++;
                     }
-
-                    case SPACE -> {
-                        if (!executionContext.matchSpace()) {
-                            break match;
-                        }
-                        pc += 1;
-                    }
-
-                    case NOT_SPACE -> {
-                        if (!executionContext.matchNotSpace()) {
-                            break match;
-                        }
-                        pc += 1;
-                    }
-
-                    case NOT_RANGE -> {
-                        // 32-bit payload length: a class with more than 8,191 ranges overflows a
-                        // 16-bit one, and the matcher then resumes decoding inside the range data.
-                        int len = readU32(bc, pc + 1);
-                        if (!executionContext.matchNotRange(bc, pc + 5, len, false)) {
-                            break match;
-                        }
-                        pc += 5 + len;
-                    }
-
-                    case NOT_RANGE_I -> {
-                        // 32-bit payload length: a class with more than 8,191 ranges overflows a
-                        // 16-bit one, and the matcher then resumes decoding inside the range data.
-                        int len = readU32(bc, pc + 1);
-                        if (!executionContext.matchNotRange(bc, pc + 5, len, true)) {
-                            break match;
-                        }
-                        pc += 5 + len;
-                    }
-
-                    case BACK_REFERENCE -> {
-                        int groupNum = readU16(bc, pc + 1);
-                        if (!executionContext.matchBackReference(groupNum, false)) {
+                    case BACK_REFERENCE, BACK_REFERENCE_I -> {
+                        if (!executionContext.matchBackReference(readU16(bc, pc + 1),
+                                op == RegExpOpcode.BACK_REFERENCE_I, false)) {
                             break match;
                         }
                         pc += 3;
                     }
-
-                    case BACK_REFERENCE_I -> {
-                        int groupNum = readU16(bc, pc + 1);
-                        if (!executionContext.matchBackReference(groupNum, true)) {
-                            break match;
-                        }
-                        pc += 3;
-                    }
-
-                    case BACKWARD_BACK_REFERENCE -> {
-                        int groupNum = readU16(bc, pc + 1);
-                        if (!executionContext.matchBackwardBackReference(groupNum, false)) {
-                            break match;
-                        }
-                        pc += 3;
-                    }
-
-                    case BACKWARD_BACK_REFERENCE_I -> {
-                        int groupNum = readU16(bc, pc + 1);
-                        if (!executionContext.matchBackwardBackReference(groupNum, true)) {
+                    case BACKWARD_BACK_REFERENCE, BACKWARD_BACK_REFERENCE_I -> {
+                        if (!executionContext.matchBackReference(readU16(bc, pc + 1),
+                                op == RegExpOpcode.BACKWARD_BACK_REFERENCE_I, true)) {
                             break match;
                         }
                         pc += 3;
@@ -480,25 +406,25 @@ public final class RegExpEngine {
     }
 
     /**
+     * Test if the regex matches the input.
+     */
+    public boolean test(String input) {
+        return exec(input, 0) != null;
+    }
+
+    /**
      * Read a 16-bit unsigned value from bytecode (little-endian).
      */
-    private int readU16(byte[] bc, int offset) {
+    private static int readU16(byte[] bc, int offset) {
         return (bc[offset] & 0xFF) | ((bc[offset + 1] & 0xFF) << 8);
     }
 
     /**
      * Read a 32-bit unsigned value from bytecode (little-endian).
      */
-    private int readU32(byte[] bc, int offset) {
+    private static int readU32(byte[] bc, int offset) {
         return (bc[offset] & 0xFF) | ((bc[offset + 1] & 0xFF) << 8) | ((bc[offset + 2] & 0xFF) << 16)
                 | ((bc[offset + 3] & 0xFF) << 24);
-    }
-
-    /**
-     * Test if the regex matches the input.
-     */
-    public boolean test(String input) {
-        return exec(input, 0) != null;
     }
 
     /**
@@ -732,6 +658,23 @@ public final class RegExpEngine {
             return unicode ? codePoints[index] : input.charAt(index);
         }
 
+        private boolean isInFoldedRanges(byte[] bc, int offset, int numRanges, int ch) {
+            int canonCh = canonicalize(ch);
+            for (int i = 0; i < numRanges; i++) {
+                int start = readU32(bc, offset);
+                int end = readU32(bc, offset + 4);
+                offset += 8;
+
+                int canonStart = canonicalize(start);
+                int canonEnd = canonicalize(end);
+                if ((canonCh >= canonStart && canonCh <= canonEnd)
+                        || (unicode && start == end && codePointEqualsIgnoreCaseUnicode(ch, start))) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         /**
          * Test a code point against sorted, disjoint inclusive ranges encoded in bytecode.
          */
@@ -775,118 +718,49 @@ public final class RegExpEngine {
             return true;
         }
 
-        boolean matchBackReference(int groupNum, boolean ignoreCase) {
-            groupNum = resolveNamedBackReferenceGroup(groupNum);
-            // Check if the capture group has been captured
-            if (groupNum >= captureCount || captureStarts[groupNum] == -1 || captureEnds[groupNum] == -1) {
-                // Group not captured yet - match empty string (succeeds)
-                return true;
-            }
-
-            int refStart = captureStarts[groupNum];
-            int refEnd = captureEnds[groupNum];
-
-            // Check if we have enough characters left to match
-            int refLen = refEnd - refStart;
-            if (pos + refLen > inputLength) {
-                return false;
-            }
-
-            // Match the captured text
-            for (int i = 0; i < refLen; i++) {
-                int refCh = inputAt(refStart + i);
-                int currCh = inputAt(pos + i);
-
-                if (ignoreCase) {
-                    if (canonicalize(refCh) != canonicalize(currCh)) {
-                        return false;
-                    }
-                } else {
-                    if (refCh != currCh) {
-                        return false;
-                    }
-                }
-            }
-
-            // Advance position by the matched length
-            pos += refLen;
-            return true;
-        }
-
-        boolean matchBackwardBackReference(int groupNum, boolean ignoreCase) {
+        boolean matchBackReference(int groupNum, boolean ignoreCase, boolean backward) {
             groupNum = resolveNamedBackReferenceGroup(groupNum);
             if (groupNum >= captureCount || captureStarts[groupNum] == -1 || captureEnds[groupNum] == -1) {
                 return true;
             }
-
-            int referenceStart = captureStarts[groupNum];
-            int referenceEnd = captureEnds[groupNum];
-            int referenceLength = referenceEnd - referenceStart;
-            if (referenceLength <= 0) {
+            int start = captureStarts[groupNum];
+            int length = captureEnds[groupNum] - start;
+            if (backward && length <= 0) {
                 return true;
             }
-            if (pos < referenceLength) {
+            if (backward ? length > pos : length > inputLength - pos) {
                 return false;
             }
-
-            for (int referenceIndex = referenceEnd - 1; referenceIndex >= referenceStart; referenceIndex--) {
-                int referenceChar = inputAt(referenceIndex);
-                int currentChar = inputAt(pos - 1);
-                if (ignoreCase) {
-                    if (canonicalize(referenceChar) != canonicalize(currentChar)) {
-                        return false;
-                    }
-                } else if (referenceChar != currentChar) {
+            int inputStart = backward ? pos - length : pos;
+            for (int i = 0; i < length; i++) {
+                int captured = inputAt(start + i);
+                int current = inputAt(inputStart + i);
+                if (captured != current && (!ignoreCase || canonicalize(captured) != canonicalize(current))) {
                     return false;
                 }
-                pos--;
             }
+            pos = backward ? inputStart : pos + length;
             return true;
         }
 
-        boolean matchChar(int ch) {
+        boolean matchChar(int ch, boolean ignoreCase) {
             if (pos >= inputLength) {
                 return false;
             }
             if (!unicode && ch > 0xFFFF) {
-                if (pos + 1 >= inputLength) {
+                if (pos + 1 >= inputLength || inputAt(pos) != Character.highSurrogate(ch)
+                        || inputAt(pos + 1) != Character.lowSurrogate(ch)) {
                     return false;
                 }
-                char[] surrogatePair = Character.toChars(ch);
-                if (inputAt(pos) == surrogatePair[0] && inputAt(pos + 1) == surrogatePair[1]) {
-                    pos += 2;
-                    return true;
-                }
-                return false;
-            }
-            if (inputAt(pos) == ch) {
-                pos++;
+                pos += 2;
                 return true;
-            }
-            return false;
-        }
-
-        boolean matchCharIgnoreCase(int ch) {
-            if (pos >= inputLength) {
-                return false;
-            }
-            if (!unicode && ch > 0xFFFF) {
-                if (pos + 1 >= inputLength) {
-                    return false;
-                }
-                char[] surrogatePair = Character.toChars(ch);
-                if (inputAt(pos) == surrogatePair[0] && inputAt(pos + 1) == surrogatePair[1]) {
-                    pos += 2;
-                    return true;
-                }
-                return false;
             }
             int current = inputAt(pos);
-            if (current == ch || canonicalize(current) == canonicalize(ch)) {
-                pos++;
-                return true;
+            if (current != ch && (!ignoreCase || canonicalize(current) != canonicalize(ch))) {
+                return false;
             }
-            return false;
+            pos++;
+            return true;
         }
 
         boolean matchDot() {
@@ -924,108 +798,36 @@ public final class RegExpEngine {
             return false;
         }
 
-        boolean matchNotRange(byte[] bc, int offset, int len, boolean ignoreCase) {
-            if (pos >= inputLength) {
-                return false;
-            }
-            int ch = inputAt(pos);
-
-            // Read number of ranges
-            int numRanges = readU32(bc, offset);
-            offset += 4;
-
-            if (!ignoreCase) {
-                if (isInSortedRanges(bc, offset, numRanges, ch)) {
-                    return false;
-                }
-                pos++;
-                return true;
-            }
-
-            // Check if character is NOT in any of the ranges
-            int canonCh = canonicalize(ch);
-            for (int i = 0; i < numRanges; i++) {
-                int start = readU32(bc, offset);
-                int end = readU32(bc, offset + 4);
-                offset += 8;
-
-                int canonStart = canonicalize(start);
-                int canonEnd = canonicalize(end);
-                if ((canonCh >= canonStart && canonCh <= canonEnd)
-                        || (unicode && start == end && codePointEqualsIgnoreCaseUnicode(ch, start))) {
-                    // Character is in range, so inverted match fails
-                    return false;
-                }
-            }
-            // Character is not in any range, so inverted match succeeds
-            pos++;
-            return true;
-        }
-
-        boolean matchNotSpace() {
-            if (pos >= inputLength) {
-                return false;
-            }
-            int ch = inputAt(pos);
-            // JavaScript whitespace: space, tab, line terminators, Unicode Zs category
-            if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == 0x0B || ch == 0x00A0
-                    || ch == 0xFEFF || ch == 0x2028 || ch == 0x2029
-                    || Character.getType(ch) == Character.SPACE_SEPARATOR) {
-                return false;
-            }
-            pos++;
-            return true;
-        }
-
         boolean matchNotWordBoundary(boolean ignoreCase) {
             return !matchWordBoundary(ignoreCase);
         }
 
-        boolean matchRange(byte[] bc, int offset, int len, boolean ignoreCase) {
+        boolean matchRange(byte[] bc, int offset, boolean ignoreCase, boolean negated) {
             if (pos >= inputLength) {
                 return false;
             }
             int ch = inputAt(pos);
-
-            // Read number of ranges
-            int numRanges = readU32(bc, offset);
-            offset += 4;
-
-            if (!ignoreCase) {
-                if (isInSortedRanges(bc, offset, numRanges, ch)) {
-                    pos++;
-                    return true;
-                }
+            int count = readU32(bc, offset);
+            boolean contains = ignoreCase
+                    ? isInFoldedRanges(bc, offset + 4, count, ch)
+                    : isInSortedRanges(bc, offset + 4, count, ch);
+            if (contains == negated) {
                 return false;
             }
-
-            // Check if character is in any of the ranges
-            int canonCh = canonicalize(ch);
-            for (int i = 0; i < numRanges; i++) {
-                int start = readU32(bc, offset);
-                int end = readU32(bc, offset + 4);
-                offset += 8;
-
-                int canonStart = canonicalize(start);
-                int canonEnd = canonicalize(end);
-                if ((canonCh >= canonStart && canonCh <= canonEnd)
-                        || (unicode && start == end && codePointEqualsIgnoreCaseUnicode(ch, start))) {
-                    pos++;
-                    return true;
-                }
-            }
-            return false;
+            pos++;
+            return true;
         }
 
-        boolean matchSpace() {
+        boolean matchSpace(boolean negated) {
             if (pos >= inputLength) {
                 return false;
             }
             int ch = inputAt(pos);
             // JavaScript whitespace: space, tab, line terminators, Unicode Zs category
-            if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == 0x0B || ch == 0x00A0
-                    || ch == 0xFEFF || ch == 0x2028 || ch == 0x2029
-                    || Character.getType(ch) == Character.SPACE_SEPARATOR) {
+            boolean space = ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == 0x0B
+                    || ch == 0x00A0 || ch == 0xFEFF || ch == 0x2028 || ch == 0x2029
+                    || Character.getType(ch) == Character.SPACE_SEPARATOR;
+            if (space != negated) {
                 pos++;
                 return true;
             }
@@ -1123,15 +925,6 @@ public final class RegExpEngine {
             backtrackData[base + 1] = pos;
             backtrackData[base + 2] = lastStateOffset;
             backtrackTop += BACKTRACK_ENTRY_SIZE;
-        }
-
-        private int readU16(byte[] bc, int offset) {
-            return (bc[offset] & 0xFF) | ((bc[offset + 1] & 0xFF) << 8);
-        }
-
-        private int readU32(byte[] bc, int offset) {
-            return (bc[offset] & 0xFF) | ((bc[offset + 1] & 0xFF) << 8) | ((bc[offset + 2] & 0xFF) << 16)
-                    | ((bc[offset + 3] & 0xFF) << 24);
         }
 
         /**

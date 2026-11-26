@@ -33,18 +33,12 @@ public final class LabeledStatement extends Statement {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = body != null && body.containsAwait();
-        }
-        return awaitInside;
+        return containsAwaitIn(body);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = body != null && body.containsYield();
-        }
-        return yieldInside;
+        return containsYieldIn(body);
     }
 
     public Statement getBody() {

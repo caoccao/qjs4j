@@ -28,6 +28,7 @@ import java.util.*;
  */
 public final class RegExpCompiler {
 
+    private static final int[] ASCII_WORD = {'0', '9', 'A', 'Z', '_', '_', 'a', 'z'};
     /**
      * Maximum number of capture groups in one pattern, counting group 0: V8's limit, 32,767 explicit groups. Capture
      * indices are encoded in two bytes.
@@ -37,6 +38,9 @@ public final class RegExpCompiler {
      * ints per capture, and the backtrack store is capped at 64 MB, past which a match is a {@code RangeError}.
      */
     private static final int CAPTURE_COUNT_MAX = 32_768;
+    private static final int[] DIGITS = {'0', '9'};
+    // Long s and Kelvin sign fold to ASCII word characters only in Unicode ignore-case mode.
+    private static final int[] FOLDED_WORD = {'0', '9', 'A', 'Z', '_', '_', 'a', 'z', 0x017F, 0x017F, 0x212A, 0x212A};
     private static final byte[] HEX_VALUES = hexValues();
     /**
      * JavaScript whitespace ranges for \s (differs from Unicode White_Space: includes U+FEFF which is not in the
@@ -56,6 +60,10 @@ public final class RegExpCompiler {
     private static final long MAX_QUANTIFIER_BOUND = Integer.MAX_VALUE;
     private static final int MAX_UNICODE_CODE_POINT = 0x10FFFF;
     private static final int MAX_UNROLLED_QUANTIFIER_REPETITIONS = 4096;
+    private static final int[] NON_DIGITS = invertRanges(DIGITS);
+    private static final int[] NON_FOLDED_WORD = invertRanges(FOLDED_WORD);
+    private static final int[] NON_WHITESPACE = invertRanges(JS_WHITESPACE_RANGES);
+    private static final int[] NON_WORD = invertRanges(ASCII_WORD);
     private int captureCount;
     private List<String> groupNames;
     private Map<String, Integer> namedCaptureIndices;
@@ -105,7 +113,7 @@ public final class RegExpCompiler {
         }
         // Per QuickJS: only combine with 4-digit \\uHHHH trailing escapes,
         // NOT braced \\u{XXXX} escapes.
-        UnicodeEscapeParseResult unicodeEscapeParseResult = tryParseFourDigitUnicodeEscapeAt(context, context.pos);
+        UnicodeEscapeParseResult unicodeEscapeParseResult = tryParseUnicodeEscapeAt(context, context.pos, false);
         if (unicodeEscapeParseResult == null) {
             return codePoint;
         }
@@ -460,70 +468,17 @@ public final class RegExpCompiler {
             case 't' -> compileLiteralChar(context, '\t', isBackwardDirection);
             case 'f' -> compileLiteralChar(context, '\f', isBackwardDirection);
             case 'v' -> compileLiteralChar(context, '\u000B', isBackwardDirection);
-            case 'd' -> {
-                // \d - match digits [0-9]
-                // Emit a simple character range check for now
-                // This is a simplified implementation - proper implementation would use RANGE opcode
+            case 'd', 'D', 'w', 'W', 's', 'S' -> {
                 if (isBackwardDirection) {
                     context.buffer.appendU8(RegExpOpcode.PREV.getCode());
                 }
-                context.buffer.appendU8(RegExpOpcode.RANGE.getCode());
-                emitRangePayload(context, new int[]{'0', '9'});
-                if (isBackwardDirection) {
-                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
+                if (ch == 's' || ch == 'S') {
+                    context.buffer.appendU8((ch == 's' ? RegExpOpcode.SPACE : RegExpOpcode.NOT_SPACE).getCode());
+                } else {
+                    boolean inverted = ch == 'D' || ch == 'W';
+                    context.buffer.appendU8((inverted ? RegExpOpcode.NOT_RANGE : RegExpOpcode.RANGE).getCode());
+                    emitRangePayload(context, characterClassRanges(context, Character.toLowerCase(ch)));
                 }
-            }
-            case 'D' -> {
-                // \D - match non-digits (not [0-9])
-                if (isBackwardDirection) {
-                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
-                }
-                context.buffer.appendU8(RegExpOpcode.NOT_RANGE.getCode());
-                emitRangePayload(context, new int[]{'0', '9'});
-                if (isBackwardDirection) {
-                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
-                }
-            }
-            case 'w' -> {
-                // \w - match word characters [a-zA-Z0-9_]
-                // Emit RANGE opcode with ranges for word characters
-                if (isBackwardDirection) {
-                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
-                }
-                context.buffer.appendU8(RegExpOpcode.RANGE.getCode());
-                emitRangePayload(context, wordCharacterRanges(context));
-                if (isBackwardDirection) {
-                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
-                }
-            }
-            case 'W' -> {
-                // \W - match non-word characters (not [a-zA-Z0-9_])
-                // Emit NOT_RANGE opcode with same ranges as \w
-                if (isBackwardDirection) {
-                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
-                }
-                context.buffer.appendU8(RegExpOpcode.NOT_RANGE.getCode());
-                emitRangePayload(context, wordCharacterRanges(context));
-                if (isBackwardDirection) {
-                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
-                }
-            }
-            case 's' -> {
-                // \s - match whitespace
-                if (isBackwardDirection) {
-                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
-                }
-                context.buffer.appendU8(RegExpOpcode.SPACE.getCode());
-                if (isBackwardDirection) {
-                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
-                }
-            }
-            case 'S' -> {
-                // \S - match non-whitespace
-                if (isBackwardDirection) {
-                    context.buffer.appendU8(RegExpOpcode.PREV.getCode());
-                }
-                context.buffer.appendU8(RegExpOpcode.NOT_SPACE.getCode());
                 if (isBackwardDirection) {
                     context.buffer.appendU8(RegExpOpcode.PREV.getCode());
                 }
@@ -1087,28 +1042,12 @@ public final class RegExpCompiler {
             // If we're in unicode sets mode and not inverted, try sequence properties
             if (context.isUnicodeSetsMode() && !isInverted) {
                 context.pos = savedPos;
-                // Re-parse just the property name without resolving
-                if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != '{') {
+                UnicodePropertyResolver.SequencePropertyResult seqResult;
+                try {
+                    seqResult = parseUnicodeSetsSequenceProperty(context);
+                } catch (RegExpSyntaxException ignored) {
                     throw e;
                 }
-                context.pos++;
-                int nameStart = context.pos;
-                while (context.pos < context.codePoints.length
-                        && isUnicodePropertyChar(context.codePoints[context.pos])) {
-                    context.pos++;
-                }
-                String propertyName = new String(context.codePoints, nameStart, context.pos - nameStart);
-                if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != '}') {
-                    throw e;
-                }
-                context.pos++;
-
-                UnicodePropertyResolver.SequencePropertyResult seqResult = UnicodePropertyResolver
-                        .resolveSequenceProperty(propertyName);
-                if (seqResult == null) {
-                    throw e;
-                }
-
                 emitStringList(context, seqResult);
                 return;
             }
@@ -1286,6 +1225,20 @@ public final class RegExpCompiler {
         }
     }
 
+    private List<int[]> filterSequences(List<int[]> left, List<int[]> right, boolean keepMatches) {
+        Set<String> rightKeys = new HashSet<>();
+        for (int[] sequence : right) {
+            rightKeys.add(sequenceKey(sequence));
+        }
+        List<int[]> result = new ArrayList<>();
+        for (int[] sequence : left) {
+            if (rightKeys.contains(sequenceKey(sequence)) == keepMatches) {
+                result.add(sequence);
+            }
+        }
+        return result;
+    }
+
     private int fixedHexValue(int[] codePoints, int start, int digits) {
         if (start > codePoints.length - digits) {
             return -1;
@@ -1303,48 +1256,8 @@ public final class RegExpCompiler {
 
     private ExtendedClassSet intersectExtendedClassSets(ExtendedClassSet left, ExtendedClassSet right) {
         int[] ranges = UnicodePropertyResolver.intersectRanges(left.ranges(), right.ranges());
-        List<int[]> sequences = intersectSequenceLists(left.sequences(), right.sequences());
+        List<int[]> sequences = filterSequences(left.sequences(), right.sequences(), true);
         return normalizeExtendedClassSet(new ExtendedClassSet(ranges, sequences, null));
-    }
-
-    private List<int[]> intersectSequenceLists(List<int[]> left, List<int[]> right) {
-        Set<String> rightKeys = new HashSet<>();
-        for (int[] sequence : right) {
-            rightKeys.add(sequenceKey(sequence));
-        }
-        List<int[]> result = new ArrayList<>();
-        for (int[] sequence : left) {
-            if (rightKeys.contains(sequenceKey(sequence))) {
-                result.add(sequence);
-            }
-        }
-        return result;
-    }
-
-    private int[] invertRanges(int[] ranges) {
-        if (ranges.length == 0) {
-            return new int[]{0, MAX_UNICODE_CODE_POINT};
-        }
-        List<Integer> inverted = new ArrayList<>();
-        int start = 0;
-        for (int i = 0; i < ranges.length; i += 2) {
-            int rangeStart = ranges[i];
-            int rangeEnd = ranges[i + 1];
-            if (start < rangeStart) {
-                inverted.add(start);
-                inverted.add(rangeStart - 1);
-            }
-            if (rangeEnd == MAX_UNICODE_CODE_POINT) {
-                start = MAX_UNICODE_CODE_POINT + 1;
-                break;
-            }
-            start = rangeEnd + 1;
-        }
-        if (start <= MAX_UNICODE_CODE_POINT) {
-            inverted.add(start);
-            inverted.add(MAX_UNICODE_CODE_POINT);
-        }
-        return toIntArray(inverted);
     }
 
     private boolean isInlineModifierFlag(int ch) {
@@ -1561,78 +1474,8 @@ public final class RegExpCompiler {
             case 't' -> '\t';
             case 'f' -> '\f';
             case 'v' -> '\u000B';
-            case 'd' -> {
-                // \d - digits [0-9]
-                ranges.add((int) '0');
-                ranges.add((int) '9');
-                yield -1;
-            }
-            case 'D' -> {
-                // \D - non-digits
-                ranges.add(0);
-                ranges.add((int) '0' - 1);
-                ranges.add((int) '9' + 1);
-                ranges.add(MAX_UNICODE_CODE_POINT);
-                yield -1;
-            }
-            case 'w' -> {
-                // \w - word characters [a-zA-Z0-9_]
-                ranges.add((int) '0');
-                ranges.add((int) '9');
-                ranges.add((int) 'A');
-                ranges.add((int) 'Z');
-                ranges.add((int) '_');
-                ranges.add((int) '_');
-                ranges.add((int) 'a');
-                ranges.add((int) 'z');
-                if (context.isUnicodeMode() && context.isIgnoreCase()) {
-                    ranges.add(0x017F);
-                    ranges.add(0x017F);
-                    ranges.add(0x212A);
-                    ranges.add(0x212A);
-                }
-                yield -1;
-            }
-            case 'W' -> {
-                // \W - non-word characters (not [a-zA-Z0-9_])
-                if (context.isUnicodeMode() && context.isIgnoreCase()) {
-                    ranges.add(0);
-                    ranges.add((int) '0' - 1);
-                    ranges.add((int) '9' + 1);
-                    ranges.add((int) 'A' - 1);
-                    ranges.add((int) 'Z' + 1);
-                    ranges.add((int) '_' - 1);
-                    ranges.add((int) '_' + 1);
-                    ranges.add((int) 'a' - 1);
-                    ranges.add((int) 'z' + 1);
-                    ranges.add(0x017E);
-                    ranges.add(0x0180);
-                    ranges.add(0x2129);
-                    ranges.add(0x212B);
-                    ranges.add(MAX_UNICODE_CODE_POINT);
-                } else {
-                    ranges.add(0);
-                    ranges.add((int) '0' - 1); // 0 .. '/'
-                    ranges.add((int) '9' + 1);
-                    ranges.add((int) 'A' - 1); // ':' .. '@'
-                    ranges.add((int) 'Z' + 1);
-                    ranges.add((int) '_' - 1); // '[' .. '^'
-                    ranges.add((int) '_' + 1);
-                    ranges.add((int) 'a' - 1); // '`'
-                    ranges.add((int) 'z' + 1);
-                    ranges.add(MAX_UNICODE_CODE_POINT);
-                }
-                yield -1;
-            }
-            case 's' -> {
-                // \s - JavaScript whitespace (not the same as Unicode White_Space;
-                // includes U+FEFF which is not in Unicode White_Space)
-                appendRanges(ranges, JS_WHITESPACE_RANGES);
-                yield -1;
-            }
-            case 'S' -> {
-                // \S - non-whitespace characters
-                appendRanges(ranges, invertRanges(JS_WHITESPACE_RANGES));
+            case 'd', 'D', 'w', 'W', 's', 'S' -> {
+                appendRanges(ranges, characterClassRanges(context, ch));
                 yield -1;
             }
             case 'p', 'P' -> {
@@ -2114,7 +1957,7 @@ public final class RegExpCompiler {
                         throw new RegExpSyntaxException("Invalid UnicodeSets string literal");
                     }
                     UnicodeEscapeParseResult unicodeEscapeParseResult = tryParseUnicodeEscapeAt(context,
-                            context.pos - 1);
+                            context.pos - 1, true);
                     if (unicodeEscapeParseResult != null) {
                         sequenceCodePoints.add(unicodeEscapeParseResult.codePoint());
                         context.pos = unicodeEscapeParseResult.nextPos();
@@ -2348,22 +2191,8 @@ public final class RegExpCompiler {
 
     private ExtendedClassSet subtractExtendedClassSets(ExtendedClassSet left, ExtendedClassSet right) {
         int[] ranges = UnicodePropertyResolver.intersectRanges(left.ranges(), invertRanges(right.ranges()));
-        List<int[]> sequences = subtractSequenceLists(left.sequences(), right.sequences());
+        List<int[]> sequences = filterSequences(left.sequences(), right.sequences(), false);
         return normalizeExtendedClassSet(new ExtendedClassSet(ranges, sequences, null));
-    }
-
-    private List<int[]> subtractSequenceLists(List<int[]> left, List<int[]> right) {
-        Set<String> rightKeys = new HashSet<>();
-        for (int[] sequence : right) {
-            rightKeys.add(sequenceKey(sequence));
-        }
-        List<int[]> result = new ArrayList<>();
-        for (int[] sequence : left) {
-            if (!rightKeys.contains(sequenceKey(sequence))) {
-                result.add(sequence);
-            }
-        }
-        return result;
     }
 
     private int toInlineModifierFlagBit(int ch) {
@@ -2375,34 +2204,10 @@ public final class RegExpCompiler {
         };
     }
 
-    private int[] toIntArray(List<Integer> values) {
-        int[] result = new int[values.size()];
-        for (int i = 0; i < values.size(); i++) {
-            result[i] = values.get(i);
-        }
-        return result;
-    }
-
     /**
      * Parse only a 4-digit \\uHHHH escape at the given position. Per QuickJS, surrogate pair combining only applies to
      * 4-digit escapes.
      */
-    private UnicodeEscapeParseResult tryParseFourDigitUnicodeEscapeAt(CompileContext context, int startPos) {
-        if (startPos + 1 >= context.codePoints.length || context.codePoints[startPos] != '\\'
-                || context.codePoints[startPos + 1] != 'u') {
-            return null;
-        }
-        int currentPos = startPos + 2;
-        // Skip braced escapes — only 4-digit allowed
-        if (currentPos < context.codePoints.length && context.codePoints[currentPos] == '{') {
-            return null;
-        }
-        int value = fixedHexValue(context.codePoints, currentPos, 4);
-        if (value < 0) {
-            return null;
-        }
-        return new UnicodeEscapeParseResult(value, currentPos + 4);
-    }
 
     private InlineModifierGroupParseResult tryParseInlineModifierGroup(CompileContext context) {
         if (context.pos >= context.codePoints.length) {
@@ -2460,13 +2265,17 @@ public final class RegExpCompiler {
         throw new RegExpSyntaxException("Invalid group");
     }
 
-    private UnicodeEscapeParseResult tryParseUnicodeEscapeAt(CompileContext context, int startPos) {
+    private UnicodeEscapeParseResult tryParseUnicodeEscapeAt(CompileContext context, int startPos,
+            boolean allowBraced) {
         if (startPos + 1 >= context.codePoints.length || context.codePoints[startPos] != '\\'
                 || context.codePoints[startPos + 1] != 'u') {
             return null;
         }
         int currentPos = startPos + 2;
         if (currentPos < context.codePoints.length && context.codePoints[currentPos] == '{') {
+            if (!allowBraced) {
+                return null;
+            }
             currentPos++;
             int value = 0;
             int digitCount = 0;
@@ -2514,6 +2323,19 @@ public final class RegExpCompiler {
             }
         }
         return result;
+    }
+
+    private static int[] characterClassRanges(CompileContext context, int escape) {
+        boolean folded = context.isUnicodeMode() && context.isIgnoreCase();
+        return switch (escape) {
+            case 'd' -> DIGITS;
+            case 'D' -> NON_DIGITS;
+            case 'w' -> folded ? FOLDED_WORD : ASCII_WORD;
+            case 'W' -> folded ? NON_FOLDED_WORD : NON_WORD;
+            case 's' -> JS_WHITESPACE_RANGES;
+            case 'S' -> NON_WHITESPACE;
+            default -> throw new IllegalArgumentException("Invalid character class escape");
+        };
     }
 
     /**
@@ -2585,6 +2407,32 @@ public final class RegExpCompiler {
         return values;
     }
 
+    private static int[] invertRanges(int[] ranges) {
+        if (ranges.length == 0) {
+            return new int[]{0, MAX_UNICODE_CODE_POINT};
+        }
+        List<Integer> inverted = new ArrayList<>();
+        int start = 0;
+        for (int i = 0; i < ranges.length; i += 2) {
+            int rangeStart = ranges[i];
+            int rangeEnd = ranges[i + 1];
+            if (start < rangeStart) {
+                inverted.add(start);
+                inverted.add(rangeStart - 1);
+            }
+            if (rangeEnd == MAX_UNICODE_CODE_POINT) {
+                start = MAX_UNICODE_CODE_POINT + 1;
+                break;
+            }
+            start = rangeEnd + 1;
+        }
+        if (start <= MAX_UNICODE_CODE_POINT) {
+            inverted.add(start);
+            inverted.add(MAX_UNICODE_CODE_POINT);
+        }
+        return toIntArray(inverted);
+    }
+
     private static boolean isUnicodeSetsClassEnd(CompileContext context) {
         return context.pos >= context.codePoints.length || context.codePoints[context.pos] == ']';
     }
@@ -2609,20 +2457,12 @@ public final class RegExpCompiler {
                 | ((code[offset + 4] & 0xFF) << 24);
     }
 
-    /**
-     * The inclusive ranges {@code \w} matches.
-     *
-     * @param context
-     *            the compile context
-     * @return code point pairs
-     */
-    private static int[] wordCharacterRanges(CompileContext context) {
-        if (context.isUnicodeMode() && context.isIgnoreCase()) {
-            // Unicode ignoreCase adds the two code points that canonicalize into [a-zA-Z]:
-            // U+017F LATIN SMALL LETTER LONG S and U+212A KELVIN SIGN.
-            return new int[]{'0', '9', 'A', 'Z', '_', '_', 'a', 'z', 0x017F, 0x017F, 0x212A, 0x212A};
+    private static int[] toIntArray(List<Integer> values) {
+        int[] result = new int[values.size()];
+        for (int i = 0; i < values.size(); i++) {
+            result[i] = values.get(i);
         }
-        return new int[]{'0', '9', 'A', 'Z', '_', '_', 'a', 'z'};
+        return result;
     }
 
     private static class CompileContext {

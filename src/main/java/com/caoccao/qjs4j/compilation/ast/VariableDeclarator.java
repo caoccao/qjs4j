@@ -28,24 +28,12 @@ public final class VariableDeclarator extends ASTNode {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = id != null && id.containsAwait();
-            if (!awaitInside && init != null && init.containsAwait()) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        return containsAwaitIn(id, init);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = id != null && id.containsYield();
-            if (!yieldInside && init != null && init.containsYield()) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        return containsYieldIn(id, init);
     }
 
     public Pattern getId() {

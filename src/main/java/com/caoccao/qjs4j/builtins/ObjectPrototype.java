@@ -391,6 +391,10 @@ public final class ObjectPrototype {
      * Object.entries(obj)
      */
     public static JSValue entries(JSContext context, JSValue thisArg, JSValue[] args) {
+        return enumerableProperties(context, args, Enumeration.ENTRIES);
+    }
+
+    private static JSValue enumerableProperties(JSContext context, JSValue[] args, Enumeration kind) {
         JSValue arg = JSValue.argumentOrUndefined(args, 0);
 
         if (arg instanceof JSNull || arg instanceof JSUndefined) {
@@ -401,17 +405,22 @@ public final class ObjectPrototype {
             return context.createJSArray();
         }
 
-        PropertyKey[] enumerableKeys = obj.enumerableKeys();
-        JSValue[] entries = new JSValue[enumerableKeys.length];
-
-        for (int i = 0; i < enumerableKeys.length; i++) {
-            JSArray entry = context.createJSArray(2);
-            entry.set(0, new JSString(enumerableKeys[i].toPropertyString()));
-            entry.set(1, obj.get(enumerableKeys[i]));
-            entries[i] = entry;
+        PropertyKey[] keys = obj.enumerableKeys();
+        JSValue[] elements = new JSValue[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            PropertyKey key = keys[i];
+            switch (kind) {
+                case KEYS -> elements[i] = new JSString(key.toPropertyString());
+                case VALUES -> elements[i] = obj.get(key);
+                case ENTRIES -> {
+                    JSArray entry = context.createJSArray(2);
+                    entry.set(0, new JSString(key.toPropertyString()));
+                    entry.set(1, obj.get(key));
+                    elements[i] = entry;
+                }
+            }
         }
-
-        return context.createJSArray(entries);
+        return context.createJSArray(elements, true);
     }
 
     /**
@@ -486,24 +495,7 @@ public final class ObjectPrototype {
      * Object.keys(obj)
      */
     public static JSValue keys(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue arg = JSValue.argumentOrUndefined(args, 0);
-
-        if (arg instanceof JSNull || arg instanceof JSUndefined) {
-            return context.throwTypeError("Cannot convert undefined or null to object");
-        }
-
-        if (!(arg instanceof JSObject obj)) {
-            return context.createJSArray();
-        }
-
-        PropertyKey[] enumerableKeys = obj.enumerableKeys();
-        JSValue[] keyStrings = new JSValue[enumerableKeys.length];
-
-        for (int i = 0; i < enumerableKeys.length; i++) {
-            keyStrings[i] = new JSString(enumerableKeys[i].toPropertyString());
-        }
-
-        return context.createJSArray(keyStrings, true);
+        return enumerableProperties(context, args, Enumeration.KEYS);
     }
 
     private static JSValue lookupAccessor(JSContext context, JSValue thisArg, JSValue[] args, boolean getter) {
@@ -712,23 +704,10 @@ public final class ObjectPrototype {
      * Object.values(obj)
      */
     public static JSValue values(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue arg = JSValue.argumentOrUndefined(args, 0);
+        return enumerableProperties(context, args, Enumeration.VALUES);
+    }
 
-        if (arg instanceof JSNull || arg instanceof JSUndefined) {
-            return context.throwTypeError("Cannot convert undefined or null to object");
-        }
-
-        if (!(arg instanceof JSObject obj)) {
-            return context.createJSArray();
-        }
-
-        PropertyKey[] enumerableKeys = obj.enumerableKeys();
-        JSValue[] values = new JSValue[enumerableKeys.length];
-
-        for (int i = 0; i < enumerableKeys.length; i++) {
-            values[i] = obj.get(enumerableKeys[i]);
-        }
-
-        return context.createJSArray(values, true);
+    private enum Enumeration {
+        ENTRIES, KEYS, VALUES
     }
 }

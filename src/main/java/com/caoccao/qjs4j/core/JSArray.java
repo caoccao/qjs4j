@@ -445,32 +445,8 @@ public final class JSArray extends JSObject {
             return JSUndefined.INSTANCE;
         }
 
-        // Own indexed elements cannot exist at or above length, but inherited
-        // numeric properties must still be observable through prototype lookup.
-        if (index < length && index <= Integer.MAX_VALUE) {
-            int intIndex = (int) index;
-
-            // Try dense array first
-            JSValue denseValue = denseValue(intIndex);
-            if (denseValue != null) {
-                return denseValue;
-            }
-
-            // Check sparse storage
-            if (sparseProperties != null) {
-                JSValue value = sparseProperties.get(intIndex);
-                if (value != null) {
-                    return value;
-                }
-            }
-        }
-
-        JSValue value = super.get(PropertyKey.fromIndexString(index));
-        if (!(value instanceof JSUndefined)) {
-            return value;
-        }
-
-        return JSUndefined.INSTANCE;
+        JSValue value = storedElement(index);
+        return value != null ? value : super.get(PropertyKey.fromIndexString(index));
     }
 
     /**
@@ -485,26 +461,11 @@ public final class JSArray extends JSObject {
             if (desc != null && desc.hasGetter()) {
                 return super.get(key);
             }
-            // Try own dense/sparse storage
-            if (index < length && index <= Integer.MAX_VALUE) {
-                int intIndex = (int) index;
-                JSValue denseValue = denseValue(intIndex);
-                if (denseValue != null) {
-                    return denseValue;
-                }
-                if (sparseProperties != null) {
-                    JSValue value = sparseProperties.get(intIndex);
-                    if (value != null) {
-                        return value;
-                    }
-                }
+            JSValue value = storedElement(index);
+            if (value != null) {
+                return value;
             }
-            // Not found in own storage — delegate to JSObject.get with context
-            // so prototype chain getters are properly invoked
-            return super.get(key);
         }
-
-        // Otherwise, use the shape-based storage from JSObject
         return super.get(key);
     }
 
@@ -794,24 +755,8 @@ public final class JSArray extends JSObject {
      */
     @Override
     protected JSValue lookupOwnForGet(PropertyKey key, JSValue receiver) {
-        long index = key.toArrayIndex();
-        if (index >= 0 && index < length && index <= Integer.MAX_VALUE) {
-            int intIndex = (int) index;
-            // Check dense array
-            JSValue denseValue = denseValue(intIndex);
-            if (denseValue != null) {
-                return denseValue;
-            }
-            // Check sparse storage
-            if (sparseProperties != null) {
-                JSValue value = sparseProperties.get(intIndex);
-                if (value != null) {
-                    return value;
-                }
-            }
-        }
-        // Delegate to JSObject for shape properties and getters
-        return super.lookupOwnForGet(key, receiver);
+        JSValue value = storedElement(key.toArrayIndex());
+        return value != null ? value : super.lookupOwnForGet(key, receiver);
     }
 
     @Override
@@ -1118,6 +1063,15 @@ public final class JSArray extends JSObject {
             }
             sparseProperties = newSparse.isEmpty() ? null : newSparse;
         }
+    }
+
+    private JSValue storedElement(long index) {
+        if (index < 0 || index >= length || index > Integer.MAX_VALUE) {
+            return null;
+        }
+        int intIndex = (int) index;
+        JSValue value = denseValue(intIndex);
+        return value != null || sparseProperties == null ? value : sparseProperties.get(intIndex);
     }
 
     /**

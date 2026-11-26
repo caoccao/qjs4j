@@ -27,14 +27,31 @@ final class LexerTemplateScanner {
 
     Token scanTemplate(int startPos, int startLine, int startColumn) {
         StringBuilder value = new StringBuilder();
-        boolean terminated = false;
+        if (!scanTemplateContents(value)) {
+            throw new JSSyntaxErrorException("Invalid or unexpected token");
+        }
+        return new Token(TokenType.TEMPLATE, value.toString(), startLine, startColumn, startPos);
+    }
 
+    private void scanTemplateBlockComment(StringBuilder value) {
+        value.append(lexer.advance());
+        value.append(lexer.advance());
+        while (!lexer.isAtEnd()) {
+            char c = lexer.advance();
+            value.append(c);
+            if (c == '*' && !lexer.isAtEnd() && lexer.peek() == '/') {
+                value.append(lexer.advance());
+                return;
+            }
+        }
+    }
+
+    private boolean scanTemplateContents(StringBuilder value) {
         while (!lexer.isAtEnd()) {
             char c = lexer.peek();
             if (c == '`') {
                 lexer.advance();
-                terminated = true;
-                break;
+                return true;
             }
             if (c == '\\') {
                 value.append(lexer.advance());
@@ -52,25 +69,7 @@ final class LexerTemplateScanner {
             }
             value.append(lexer.advance());
         }
-
-        if (!terminated) {
-            throw new JSSyntaxErrorException("Invalid or unexpected token");
-        }
-
-        return new Token(TokenType.TEMPLATE, value.toString(), startLine, startColumn, startPos);
-    }
-
-    private void scanTemplateBlockComment(StringBuilder value) {
-        value.append(lexer.advance());
-        value.append(lexer.advance());
-        while (!lexer.isAtEnd()) {
-            char c = lexer.advance();
-            value.append(c);
-            if (c == '*' && !lexer.isAtEnd() && lexer.peek() == '/') {
-                value.append(lexer.advance());
-                return;
-            }
-        }
+        return false;
     }
 
     private void scanTemplateExpression(StringBuilder value) {
@@ -229,27 +228,8 @@ final class LexerTemplateScanner {
 
     private void scanTemplateNestedTemplate(StringBuilder value) {
         value.append(lexer.advance());
-        while (!lexer.isAtEnd()) {
-            char c = lexer.peek();
-            if (c == '`') {
-                value.append(lexer.advance());
-                return;
-            }
-            if (c == '\\') {
-                value.append(lexer.advance());
-                if (!lexer.isAtEnd()) {
-                    value.append(lexer.advance());
-                }
-                continue;
-            }
-            if (c == '$' && lexer.position + 1 < lexer.source.length()
-                    && lexer.source.charAt(lexer.position + 1) == '{') {
-                value.append(lexer.advance());
-                value.append(lexer.advance());
-                scanTemplateExpression(value);
-                continue;
-            }
-            value.append(lexer.advance());
+        if (scanTemplateContents(value)) {
+            value.append('`');
         }
     }
 

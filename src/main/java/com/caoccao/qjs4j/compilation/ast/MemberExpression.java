@@ -48,13 +48,7 @@ public final class MemberExpression extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = object != null && object.containsAwait();
-            if (!awaitInside && property != null && property.containsAwait()) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        return containsAwaitIn(object, property);
     }
 
     @Override
@@ -64,13 +58,7 @@ public final class MemberExpression extends Expression {
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = object != null && object.containsYield();
-            if (!yieldInside && property != null && property.containsYield()) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        return containsYieldIn(object, property);
     }
 
     public Expression getObject() {

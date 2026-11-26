@@ -27,171 +27,64 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class ArrayConstructorTest extends BaseJavetTest {
 
+    private void assertElements(JSValue result, JSValue... expected) {
+        JSArray array = result.asArray().orElseThrow();
+        assertThat(array.getLength()).isEqualTo(expected.length);
+        for (int i = 0; i < expected.length; i++) {
+            assertThat(array.get(i)).as("element %d", i).isEqualTo(expected[i]);
+        }
+    }
+
+    private JSPromise awaitFromAsync(JSValue... args) {
+        JSPromise promise = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, args).asPromise().orElseThrow();
+        awaitPromise(promise);
+        return promise;
+    }
+
+    private JSFunction doubleNumbers() {
+        return new JSNativeFunction(context, "double", 1,
+                (ctx, receiver, args) -> args[0] instanceof JSNumber num ? JSNumber.of(num.value() * 2) : args[0]);
+    }
+
+    private JSValue from(JSValue... args) {
+        return ArrayConstructor.from(context, JSUndefined.INSTANCE, args);
+    }
+
+    private JSValue fulfilledFromAsync(JSValue... args) {
+        JSPromise promise = awaitFromAsync(args);
+        assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.FULFILLED);
+        return promise.getResult();
+    }
+
     @Test
     public void testFrom() {
-        // Normal case: from array
-        JSArray sourceArr = new JSArray(context, numberArgs(1, 2, 3));
+        JSArray source = new JSArray(context, numberArgs(1, 2, 3));
+        assertElements(from(source), numberArgs(1, 2, 3));
+        assertElements(from(new JSString("abc")), stringArgs("a", "b", "c"));
+        assertElements(from(new JSArray(context, numberArgs(1, 2)), doubleNumbers()), numberArgs(2, 4));
 
-        JSValue result = ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{sourceArr});
-        JSArray arr = result.asArray().orElseThrow();
-        assertThat(arr).isNotNull();
-        assertThat(arr.getLength()).isEqualTo(3);
-        assertNumberValue(arr.get(0), 1.0);
-        assertNumberValue(arr.get(1), 2.0);
-        assertNumberValue(arr.get(2), 3.0);
-
-        // Normal case: from string
-        result = ArrayConstructor.from(context, JSUndefined.INSTANCE, stringArgs("abc"));
-        arr = result.asArray().orElseThrow();
-        assertThat(arr.getLength()).isEqualTo(3);
-        assertStringValue(arr.get(0), "a");
-        assertStringValue(arr.get(1), "b");
-        assertStringValue(arr.get(2), "c");
-
-        // Normal case: with mapping function
-        JSFunction mapFn = new JSNativeFunction(context, "double", 1, (context, thisArg, args) -> {
-            if (args.length > 0 && args[0] instanceof JSNumber num) {
-                return new JSNumber(num.value() * 2);
-            }
-            return args[0];
-        });
-
-        JSArray sourceArr2 = new JSArray(context, numberArgs(1, 2));
-
-        result = ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{sourceArr2, mapFn});
-        arr = result.asArray().orElseThrow();
-        assertThat(arr.getLength()).isEqualTo(2);
-        assertNumberValue(arr.get(0), 2.0);
-        assertNumberValue(arr.get(1), 4.0);
-
-        // Normal case: from string with mapping function
-        JSFunction upperFn = new JSNativeFunction(context, "upper", 1, (context, thisArg, args) -> {
-            if (args.length > 0 && args[0] instanceof JSString str) {
-                return new JSString(str.value().toUpperCase());
-            }
-            return args[0];
-        });
-
-        result = ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("hello"), upperFn});
-        arr = result.asArray().orElseThrow();
-        assertThat(arr.getLength()).isEqualTo(5);
-        assertStringValue(arr.get(0), "H");
-        assertStringValue(arr.get(1), "E");
-
-        // Edge case: empty array
-        JSArray emptyArr = new JSArray(context);
-        result = ArrayConstructor.from(context, JSUndefined.INSTANCE, new JSValue[]{emptyArr});
-        arr = result.asArray().orElseThrow();
-        assertThat(arr.getLength()).isEqualTo(0);
-
-        // Edge case: empty string
-        result = ArrayConstructor.from(context, JSUndefined.INSTANCE, stringArgs(""));
-        arr = result.asArray().orElseThrow();
-        assertThat(arr.getLength()).isEqualTo(0);
-
-        // Edge case: no arguments
-        assertPendingTypeError(context, ArrayConstructor.from(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-
-        // Edge case: non-iterable number → empty array (per spec, ToObject(123) has no length)
-        result = ArrayConstructor.from(context, JSUndefined.INSTANCE, numberArgs(123));
-        arr = result.asArray().orElseThrow();
-        assertThat(arr.getLength()).isEqualTo(0);
-
-        // Edge case: invalid mapFn
-        assertPendingTypeError(context, ArrayConstructor.from(context, JSUndefined.INSTANCE,
-                new JSValue[]{sourceArr, new JSString("not a function")}));
+        JSFunction upper = new JSNativeFunction(context, "upper", 1, (ctx, receiver,
+                args) -> args[0] instanceof JSString str ? new JSString(str.value().toUpperCase()) : args[0]);
+        assertElements(from(new JSString("hello"), upper), stringArgs("H", "E", "L", "L", "O"));
+        assertElements(from(new JSArray(context)));
+        assertElements(from(new JSString("")));
+        assertPendingTypeError(context, from());
+        assertElements(from(JSNumber.of(123)));
+        assertPendingTypeError(context, from(source, new JSString("not a function")));
     }
 
     @Test
     public void testFromAsync() {
-        // Normal case: from async iterator (array)
-        JSArray sourceArr = new JSArray(context, numberArgs(1, 2, 3));
-
-        JSAsyncIterator asyncIterator = JSAsyncIterator.fromArray(sourceArr, context);
-        JSValue result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{asyncIterator});
-        JSPromise promise = result.asPromise().orElseThrow();
-        awaitPromise(promise);
-
-        assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.FULFILLED);
-        JSArray arr = promise.getResult().asArray().orElseThrow();
-        assertThat(arr.getLength()).isEqualTo(3);
-        assertNumberValue(arr.get(0), 1.0);
-        assertNumberValue(arr.get(1), 2.0);
-        assertNumberValue(arr.get(2), 3.0);
-
-        // Normal case: from regular array (sync fallback)
-        JSArray sourceArr2 = new JSArray(context, numberArgs(10, 20));
-
-        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{sourceArr2});
-        promise = result.asPromise().orElseThrow();
-        awaitPromise(promise);
-
-        assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.FULFILLED);
-        arr = promise.getResult().asArray().orElseThrow();
-        assertThat(arr.getLength()).isEqualTo(2);
-        assertNumberValue(arr.get(0), 10.0);
-        assertNumberValue(arr.get(1), 20.0);
-
-        // Normal case: with mapping function
-        JSFunction mapFn = new JSNativeFunction(context, "double", 1, (context, thisArg, args) -> {
-            if (args.length > 0 && args[0] instanceof JSNumber num) {
-                return new JSNumber(num.value() * 2);
-            }
-            return args[0];
-        });
-
-        JSArray sourceArr3 = new JSArray(context, numberArgs(1, 2));
-
-        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{sourceArr3, mapFn});
-        promise = result.asPromise().orElseThrow();
-        awaitPromise(promise);
-
-        assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.FULFILLED);
-        arr = promise.getResult().asArray().orElseThrow();
-        assertThat(arr.getLength()).isEqualTo(2);
-        assertNumberValue(arr.get(0), 2.0);
-        assertNumberValue(arr.get(1), 4.0);
-
-        // Normal case: from string
-        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, stringArgs("abc"));
-        promise = result.asPromise().orElseThrow();
-        awaitPromise(promise);
-
-        assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.FULFILLED);
-        arr = promise.getResult().asArray().orElseThrow();
-        assertThat(arr.getLength()).isEqualTo(3);
-        assertStringValue(arr.get(0), "a");
-        assertStringValue(arr.get(1), "b");
-        assertStringValue(arr.get(2), "c");
-
-        // Edge case: empty array
-        JSArray emptyArr = new JSArray(context);
-        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, new JSValue[]{emptyArr});
-        promise = result.asPromise().orElseThrow();
-        awaitPromise(promise);
-
-        assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.FULFILLED);
-        arr = promise.getResult().asArray().orElseThrow();
-        assertThat(arr.getLength()).isEqualTo(0);
-
-        // Edge case: no arguments
-        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        promise = result.asPromise().orElseThrow();
-        awaitPromise(promise);
-        assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
-
-        // Edge case: number input treated as array-like with length 0 (per ES2024 spec)
-        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE, numberArgs(123));
-        promise = result.asPromise().orElseThrow();
-        awaitPromise(promise);
-        assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.FULFILLED);
-
-        // Edge case: invalid mapFn
-        result = ArrayConstructor.fromAsync(context, JSUndefined.INSTANCE,
-                new JSValue[]{sourceArr, new JSString("not a function")});
-        promise = result.asPromise().orElseThrow();
-        awaitPromise(promise);
-        assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
+        JSArray source = new JSArray(context, numberArgs(1, 2, 3));
+        assertElements(fulfilledFromAsync(JSAsyncIterator.fromArray(source, context)), numberArgs(1, 2, 3));
+        assertElements(fulfilledFromAsync(new JSArray(context, numberArgs(10, 20))), numberArgs(10, 20));
+        assertElements(fulfilledFromAsync(new JSArray(context, numberArgs(1, 2)), doubleNumbers()), numberArgs(2, 4));
+        assertElements(fulfilledFromAsync(new JSString("abc")), stringArgs("a", "b", "c"));
+        assertElements(fulfilledFromAsync(new JSArray(context)));
+        assertThat(awaitFromAsync().getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
+        assertElements(fulfilledFromAsync(JSNumber.of(123)));
+        assertThat(awaitFromAsync(source, new JSString("not a function")).getState())
+                .isEqualTo(JSPromise.PromiseState.REJECTED);
     }
 
     @Test
@@ -289,31 +182,12 @@ public class ArrayConstructorTest extends BaseJavetTest {
 
     @Test
     public void testOf() {
-        // Normal case: create array with elements
-        JSValue result = ArrayConstructor.of(context, JSUndefined.INSTANCE, numberArgs(1, 2, 3));
-        JSArray arr = result.asArray().orElseThrow();
-        assertThat(arr.getLength()).isEqualTo(3);
-        assertNumberValue(arr.get(0), 1.0);
-        assertNumberValue(arr.get(1), 2.0);
-        assertNumberValue(arr.get(2), 3.0);
+        assertElements(ArrayConstructor.of(context, JSUndefined.INSTANCE, numberArgs(1, 2, 3)), numberArgs(1, 2, 3));
+        assertElements(ArrayConstructor.of(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
+        assertElements(ArrayConstructor.of(context, JSUndefined.INSTANCE, stringArgs("hello")), new JSString("hello"));
 
-        // Edge case: no arguments
-        result = ArrayConstructor.of(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        arr = result.asArray().orElseThrow();
-        assertThat(arr.getLength()).isEqualTo(0);
-
-        // Edge case: single element
-        result = ArrayConstructor.of(context, JSUndefined.INSTANCE, stringArgs("hello"));
-        arr = result.asArray().orElseThrow();
-        assertThat(arr.getLength()).isEqualTo(1);
-        assertStringValue(arr.get(0), "hello");
-
-        // Edge case: mixed types
-        result = ArrayConstructor.of(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSNumber(1), new JSString("two"), JSBoolean.TRUE});
-        arr = result.asArray().orElseThrow();
-        assertThat(arr.getLength()).isEqualTo(3);
-
+        JSValue[] mixed = {JSNumber.of(1), new JSString("two"), JSBoolean.TRUE};
+        assertElements(ArrayConstructor.of(context, JSUndefined.INSTANCE, mixed), mixed);
         assertStringWithJavet("JSON.stringify(Array.of(...[1,2,3]))");
     }
 

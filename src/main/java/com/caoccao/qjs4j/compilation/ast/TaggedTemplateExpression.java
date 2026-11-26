@@ -31,24 +31,12 @@ public final class TaggedTemplateExpression extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = tag != null && tag.containsAwait();
-            if (!awaitInside && quasi != null && quasi.containsAwait()) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        return containsAwaitIn(tag, quasi);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = tag != null && tag.containsYield();
-            if (!yieldInside && quasi != null && quasi.containsYield()) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        return containsYieldIn(tag, quasi);
     }
 
     public TemplateLiteral getQuasi() {

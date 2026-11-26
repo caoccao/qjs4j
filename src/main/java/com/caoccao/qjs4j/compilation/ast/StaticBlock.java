@@ -34,24 +34,12 @@ public final class StaticBlock extends ClassElement {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = false;
-            if (anyContainsAwait(body)) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        return containsAwaitIn(body);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = false;
-            if (anyContainsYield(body)) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        return containsYieldIn(body);
     }
 
     public List<Statement> getBody() {

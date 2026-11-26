@@ -626,7 +626,7 @@ public final class IteratorPrototype {
      * Iterator.prototype.every(predicate) Tests whether all elements satisfy the predicate.
      */
     public static JSValue every(JSContext context, JSValue thisArg, JSValue[] args) {
-        return testPredicate(context, thisArg, args, PredicateOperation.EVERY);
+        return iterateWithCallback(context, thisArg, args, PredicateOperation.EVERY);
     }
 
     /**
@@ -640,7 +640,7 @@ public final class IteratorPrototype {
      * Iterator.prototype.find(predicate) Returns the first element that satisfies the predicate.
      */
     public static JSValue find(JSContext context, JSValue thisArg, JSValue[] args) {
-        return testPredicate(context, thisArg, args, PredicateOperation.FIND);
+        return iterateWithCallback(context, thisArg, args, PredicateOperation.FIND);
     }
 
     /**
@@ -802,35 +802,7 @@ public final class IteratorPrototype {
      * Iterator.prototype.forEach(fn) Calls fn for each element.
      */
     public static JSValue forEach(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSObject iteratorObject = requireObject(context, thisArg);
-        if (iteratorObject == null) {
-            return context.getPendingException();
-        }
-        JSFunction callback = requireFunction(context, JSValue.argumentOrUndefined(args, 0));
-        if (callback == null) {
-            closeIteratorIgnoringResult(context, iteratorObject);
-            return context.getPendingException();
-        }
-        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        long index = 0;
-        while (true) {
-            IteratorStep step = iteratorStep(context, iteratorObject, nextMethod);
-            if (step == null) {
-                return context.getPendingException();
-            }
-            if (step.done()) {
-                return JSUndefined.INSTANCE;
-            }
-            callSafe(context, callback, JSUndefined.INSTANCE, new JSValue[]{step.value(), JSNumber.of(index++)});
-            if (context.hasPendingException()) {
-                closeIteratorIgnoringResult(context, iteratorObject);
-                return context.getPendingException();
-            }
-        }
+        return iterateWithCallback(context, thisArg, args, PredicateOperation.FOR_EACH);
     }
 
     /**
@@ -1031,6 +1003,50 @@ public final class IteratorPrototype {
             current = current.getPrototype();
         }
         return false;
+    }
+
+    private static JSValue iterateWithCallback(JSContext context, JSValue thisArg, JSValue[] args,
+            PredicateOperation operation) {
+        JSObject iteratorObject = requireObject(context, thisArg);
+        if (iteratorObject == null) {
+            return context.getPendingException();
+        }
+        JSFunction predicate = requireFunction(context, JSValue.argumentOrUndefined(args, 0));
+        if (predicate == null) {
+            closeIteratorIgnoringResult(context, iteratorObject);
+            return context.getPendingException();
+        }
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        JSBoolean stopResult = operation == PredicateOperation.EVERY ? JSBoolean.FALSE : JSBoolean.TRUE;
+        long index = 0;
+        while (true) {
+            IteratorStep step = iteratorStep(context, iteratorObject, nextMethod);
+            if (step == null) {
+                return context.getPendingException();
+            }
+            if (step.done()) {
+                return operation == PredicateOperation.FIND || operation == PredicateOperation.FOR_EACH
+                        ? JSUndefined.INSTANCE
+                        : JSBoolean.valueOf(operation == PredicateOperation.EVERY);
+            }
+            JSValue result = callSafe(context, predicate, JSUndefined.INSTANCE,
+                    new JSValue[]{step.value(), JSNumber.of(index++)});
+            if (context.hasPendingException()) {
+                // A callback error takes precedence over any error from return().
+                closeIteratorIgnoringResult(context, iteratorObject);
+                return context.getPendingException();
+            }
+            if (operation != PredicateOperation.FOR_EACH && JSTypeConversions.toBoolean(result) == stopResult) {
+                closeIterator(context, iteratorObject);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                return operation == PredicateOperation.FIND ? step.value() : stopResult;
+            }
+        }
     }
 
     /**
@@ -1298,7 +1314,7 @@ public final class IteratorPrototype {
      * Iterator.prototype.some(predicate) Tests whether any element satisfies the predicate.
      */
     public static JSValue some(JSContext context, JSValue thisArg, JSValue[] args) {
-        return testPredicate(context, thisArg, args, PredicateOperation.SOME);
+        return iterateWithCallback(context, thisArg, args, PredicateOperation.SOME);
     }
 
     /**
@@ -1336,50 +1352,6 @@ public final class IteratorPrototype {
      */
     public static JSValue take(JSContext context, JSValue thisArg, JSValue[] args) {
         return createHelper(context, thisArg, args, HelperOperation.TAKE);
-    }
-
-    private static JSValue testPredicate(JSContext context, JSValue thisArg, JSValue[] args,
-            PredicateOperation operation) {
-        JSObject iteratorObject = requireObject(context, thisArg);
-        if (iteratorObject == null) {
-            return context.getPendingException();
-        }
-        JSFunction predicate = requireFunction(context, JSValue.argumentOrUndefined(args, 0));
-        if (predicate == null) {
-            closeIteratorIgnoringResult(context, iteratorObject);
-            return context.getPendingException();
-        }
-        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-        JSBoolean stopResult = operation == PredicateOperation.EVERY ? JSBoolean.FALSE : JSBoolean.TRUE;
-        long index = 0;
-        while (true) {
-            IteratorStep step = iteratorStep(context, iteratorObject, nextMethod);
-            if (step == null) {
-                return context.getPendingException();
-            }
-            if (step.done()) {
-                return operation == PredicateOperation.FIND
-                        ? JSUndefined.INSTANCE
-                        : JSBoolean.valueOf(operation == PredicateOperation.EVERY);
-            }
-            JSValue result = callSafe(context, predicate, JSUndefined.INSTANCE,
-                    new JSValue[]{step.value(), JSNumber.of(index++)});
-            if (context.hasPendingException()) {
-                // A callback error takes precedence over any error from return().
-                closeIteratorIgnoringResult(context, iteratorObject);
-                return context.getPendingException();
-            }
-            if (JSTypeConversions.toBoolean(result) == stopResult) {
-                closeIterator(context, iteratorObject);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                return operation == PredicateOperation.FIND ? step.value() : stopResult;
-            }
-        }
     }
 
     /**
@@ -2063,6 +2035,6 @@ public final class IteratorPrototype {
     }
 
     private enum PredicateOperation {
-        EVERY, FIND, SOME
+        EVERY, FIND, FOR_EACH, SOME
     }
 }

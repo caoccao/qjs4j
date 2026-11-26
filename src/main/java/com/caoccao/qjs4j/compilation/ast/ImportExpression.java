@@ -39,24 +39,12 @@ public final class ImportExpression extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = source != null && source.containsAwait();
-            if (!awaitInside && options != null && options.containsAwait()) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        return containsAwaitIn(source, options);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = source != null && source.containsYield();
-            if (!yieldInside && options != null && options.containsYield()) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        return containsYieldIn(source, options);
     }
 
     public Expression getOptions() {

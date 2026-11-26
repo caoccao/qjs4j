@@ -17,8 +17,6 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.FunctionDeclaration;
-import com.caoccao.qjs4j.compilation.ast.ReturnStatement;
-import com.caoccao.qjs4j.compilation.ast.Statement;
 import com.caoccao.qjs4j.core.JSArguments;
 import com.caoccao.qjs4j.core.JSBytecodeFunction;
 import com.caoccao.qjs4j.core.JSKeyword;
@@ -55,22 +53,11 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
 
         // Create a new compiler for the function body
         // Nested functions inherit strict mode from parent (QuickJS behavior)
-        BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode,
-                compilerContext.captureResolver, compilerContext.context);
+        BytecodeCompiler functionCompiler = compilerContext.newFunctionCompiler(funcDecl.getLocation());
         CompilerContext functionContext = functionCompiler.context();
 
-        functionContext.sourceCode = compilerContext.sourceCode;
-        functionContext.mayContainDirectEval = compilerContext.mayContainDirectEval && CompilerContext
-                .sourceMayContainDirectEval(compilerContext.extractSourceCode(funcDecl.getLocation()));
-        functionContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
-        functionContext.privateSymbols = compilerContext.privateSymbols;
-        compilerContext.functionExpressionCompiler.inheritVisibleWithObjectBindings(functionContext);
-
         // Enter function scope and add parameters as locals
-        functionContext.scopeManager.enterScope();
-        functionContext.inGlobalScope = false;
-        functionContext.isInAsyncFunction = funcDecl.isAsync(); // Track if this is an async function
-        functionContext.isInGeneratorFunction = funcDecl.isGenerator();
+        functionContext.enterFunctionScope(funcDecl.isAsync(), funcDecl.isGenerator());
         // Inherit class inner name so eval() inside nested functions can resolve it.
         compilerContext.functionExpressionCompiler.inheritClassInnerNameCapture(functionContext);
         Set<String> enclosingParameterScopeFunctionNames = compilerContext.functionExpressionCompiler
@@ -91,104 +78,12 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
             compilerContext.functionExpressionCompiler.declareAndInitializeImplicitArgumentsBinding(functionContext);
         }
 
-        // Emit default parameter initialization following QuickJS pattern
-        if (funcDecl.getDefaults() != null) {
-            compilerContext.emitHelpers.emitDefaultParameterInit(functionCompiler, funcDecl.getFunctionParams(),
-                    parameterSlotIndexes, funcDecl);
-        }
+        compilerContext.functionExpressionCompiler.initializeParameters(functionCompiler, funcDecl,
+                parameterSlotIndexes, destructuringParams, funcDecl.isGenerator());
 
-        // Handle rest parameter if present
-        // The REST opcode must be emitted early in the function to initialize the rest array
-        if (funcDecl.getRestParameter() != null) {
-            // Calculate the index where rest arguments start
-            int firstRestIndex = funcDecl.getParams().size();
+        FunctionBodyCompiler.ORDINARY.compile(functionContext, funcDecl, funcDecl.getBody(), funcDecl.isAsync());
 
-            // Emit REST opcode with the starting index
-            functionContext.emitter.emitOpcode(Opcode.REST);
-            functionContext.emitter.emitU16(firstRestIndex);
-
-            compilerContext.functionExpressionCompiler.emitRestParameterBinding(funcDecl.getRestParameter(),
-                    functionContext);
-        }
-
-        // Emit destructuring for pattern parameters after defaults and rest
-        compilerContext.functionExpressionCompiler.emitParameterDestructuring(funcDecl.getParams(), destructuringParams,
-                functionContext);
-
-        // If this is a generator function, emit INITIAL_YIELD at the start
-        if (funcDecl.isGenerator()) {
-            functionContext.emitter.emitOpcode(Opcode.INITIAL_YIELD);
-        }
-
-        // Phase 0: Pre-declare all var bindings as locals before function hoisting.
-        // var declarations are function-scoped and must be visible to nested function
-        // declarations that may capture them. Without this, Phase 1 function hoisting
-        // would fail to resolve captured var references (e.g., inner functions referencing
-        // outer var variables would emit GET_VAR instead of GET_VAR_REF).
-        functionContext.compilerAnalysis.hoistAllDeclarationsAsLocals(funcDecl.getBody().getBody());
-
-        // Phase 1: Hoist top-level function declarations (ES spec requires function
-        // declarations to be initialized before any code executes).
-        for (Statement stmt : funcDecl.getBody().getBody()) {
-            if (stmt instanceof FunctionDeclaration innerFuncDecl) {
-                functionContext.functionDeclarationCompiler.compile(innerFuncDecl);
-            }
-        }
-
-        // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
-        // to the function scope as var bindings (initialized to undefined).
-        Set<String> declParamNames = funcDecl.getParameterNames();
-        functionContext.compilerAnalysis.hoistFunctionBodyAnnexBDeclarations(funcDecl.getBody().getBody(),
-                declParamNames);
-
-        // Set up CATCH for exception-safe using disposal in function body
-        boolean bodyHasUsing = EmitHelpers.hasUsingDeclarations(funcDecl.getBody().getBody());
-        int functionUsingCatchJump = -1;
-        if (bodyHasUsing) {
-            functionUsingCatchJump = functionContext.emitter.emitJump(Opcode.CATCH);
-            functionContext.scopeManager.currentScope().setUsingCatchJumpPosition(functionUsingCatchJump);
-        }
-
-        // Phase 2: Compile non-FunctionDeclaration statements in source order
-        for (Statement stmt : funcDecl.getBody().getBody()) {
-            if (stmt instanceof FunctionDeclaration) {
-                continue; // Already hoisted in Phase 1
-            }
-            functionContext.statementCompiler.compile(stmt);
-        }
-
-        // If body doesn't end with return, add implicit return undefined
-        List<Statement> bodyStatements = funcDecl.getBody().getBody();
-        if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
-            if (bodyHasUsing) {
-                functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                functionContext.emitter.emitOpcode(Opcode.NIP_CATCH);
-                functionContext.emitter.emitOpcode(Opcode.DROP);
-            }
-            functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            int returnValueIndex = functionContext.scopeManager.currentScope()
-                    .declareLocal("#function_return_" + functionContext.emitter.currentOffset());
-            functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
-            functionContext.emitHelpers.emitCurrentScopeUsingDisposal();
-            functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
-            functionContext.emitter.emitOpcode(funcDecl.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
-        }
-
-        // Emit exception handler for function body using disposal
-        if (bodyHasUsing) {
-            int jumpOverCatch = functionContext.emitter.emitJump(Opcode.GOTO);
-            functionContext.emitter.patchJump(functionUsingCatchJump, functionContext.emitter.currentOffset());
-            functionContext.emitHelpers
-                    .emitScopeUsingDisposalWithException(functionContext.scopeManager.currentScope());
-            functionContext.emitter.patchJump(jumpOverCatch, functionContext.emitter.currentOffset());
-        }
-
-        int localCount = functionContext.scopeManager.currentScope().getLocalCount();
-        String[] localVarNames = functionContext.scopeManager.getLocalVarNames();
-        functionContext.scopeManager.exitScope();
-
-        // Build the function bytecode
-        Bytecode functionBytecode = functionContext.emitter.build(localCount, localVarNames);
+        Bytecode functionBytecode = functionContext.finishFunctionScope();
 
         // Function name (already extracted at start of method)
 

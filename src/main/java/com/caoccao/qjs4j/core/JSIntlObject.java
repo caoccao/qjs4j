@@ -1473,11 +1473,10 @@ public final class JSIntlObject {
             // Read options in ECMA-402 spec order
 
             // 1. usage
-            String usage = getOptionString(context, optionsValue, "usage");
+            String usage = normalizedStringOption(context, optionsValue, "usage", "sort", "sort", "search");
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
-            usage = normalizeOption(usage, "sort", "sort", "search");
 
             // 2. localeMatcher
             String localeMatcher = getOptionString(context, optionsValue, "localeMatcher");
@@ -2656,11 +2655,10 @@ public final class JSIntlObject {
                 numberingSystemOption = numberingSystemOption.toLowerCase(Locale.ROOT);
             }
 
-            String style = getOptionString(context, optionsObject, "style");
+            String style = normalizedStringOption(context, optionsObject, "style", "decimal", NUMBER_STYLE_VALUES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            style = normalizeOption(style, "decimal", NUMBER_STYLE_VALUES);
 
             String currency = getOptionString(context, optionsObject, "currency");
             if (context.hasPendingException()) {
@@ -2673,28 +2671,28 @@ public final class JSIntlObject {
                 currency = currency.toUpperCase(Locale.ROOT);
             }
 
-            String currencyDisplay = getOptionString(context, optionsObject, "currencyDisplay");
+            String currencyDisplay = normalizedStringOption(context, optionsObject, "currencyDisplay", "symbol",
+                    CURRENCY_DISPLAY_VALUES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            currencyDisplay = normalizeOption(currencyDisplay, "symbol", CURRENCY_DISPLAY_VALUES);
 
-            String currencySign = getOptionString(context, optionsObject, "currencySign");
+            String currencySign = normalizedStringOption(context, optionsObject, "currencySign", "standard",
+                    CURRENCY_SIGN_VALUES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            currencySign = normalizeOption(currencySign, "standard", CURRENCY_SIGN_VALUES);
 
             String unit = getOptionString(context, optionsObject, "unit");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
 
-            String unitDisplay = getOptionString(context, optionsObject, "unitDisplay");
+            String unitDisplay = normalizedStringOption(context, optionsObject, "unitDisplay", "short",
+                    UNIT_DISPLAY_VALUES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            unitDisplay = normalizeOption(unitDisplay, "short", UNIT_DISPLAY_VALUES);
 
             if ("currency".equals(style) && currency == null) {
                 return context.throwTypeError("Currency code is required with currency style");
@@ -2708,11 +2706,10 @@ public final class JSIntlObject {
                 }
             }
 
-            String notation = getOptionString(context, optionsObject, "notation");
+            String notation = normalizedStringOption(context, optionsObject, "notation", "standard", NOTATION_VALUES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            notation = normalizeOption(notation, "standard", NOTATION_VALUES);
 
             Integer minimumIntegerDigitsOption = getOptionIntegerOrUndefined(context, optionsObject,
                     "minimumIntegerDigits", 1, 21);
@@ -2721,27 +2718,15 @@ public final class JSIntlObject {
             }
             int minimumIntegerDigits = minimumIntegerDigitsOption != null ? minimumIntegerDigitsOption : 1;
 
-            Integer minimumFractionDigitsOption = getOptionIntegerOrUndefined(context, optionsObject,
-                    "minimumFractionDigits", 0, 100);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            Integer maximumFractionDigitsOption = getOptionIntegerOrUndefined(context, optionsObject,
+            DigitRange fractionDigits = DigitRange.read(context, optionsObject, "minimumFractionDigits",
                     "maximumFractionDigits", 0, 100);
-            if (context.hasPendingException()) {
+            if (fractionDigits == null) {
                 return JSUndefined.INSTANCE;
             }
 
-            Integer minimumSignificantDigitsOption = getOptionIntegerOrUndefined(context, optionsObject,
-                    "minimumSignificantDigits", 1, 21);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            Integer maximumSignificantDigitsOption = getOptionIntegerOrUndefined(context, optionsObject,
+            DigitRange significantDigits = DigitRange.read(context, optionsObject, "minimumSignificantDigits",
                     "maximumSignificantDigits", 1, 21);
-            if (context.hasPendingException()) {
+            if (significantDigits == null) {
                 return JSUndefined.INSTANCE;
             }
 
@@ -2755,29 +2740,29 @@ public final class JSIntlObject {
                 return context.throwRangeError("Invalid roundingIncrement value: " + roundingIncrement);
             }
 
-            String roundingMode = getOptionString(context, optionsObject, "roundingMode");
+            String roundingMode = normalizedStringOption(context, optionsObject, "roundingMode", "halfExpand",
+                    ROUNDING_MODE_VALUES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            roundingMode = normalizeOption(roundingMode, "halfExpand", ROUNDING_MODE_VALUES);
 
-            String roundingPriority = getOptionString(context, optionsObject, "roundingPriority");
+            String roundingPriority = normalizedStringOption(context, optionsObject, "roundingPriority", "auto",
+                    ROUNDING_PRIORITY_VALUES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            roundingPriority = normalizeOption(roundingPriority, "auto", ROUNDING_PRIORITY_VALUES);
 
-            String trailingZeroDisplay = getOptionString(context, optionsObject, "trailingZeroDisplay");
+            String trailingZeroDisplay = normalizedStringOption(context, optionsObject, "trailingZeroDisplay", "auto",
+                    TRAILING_ZERO_DISPLAY_VALUES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            trailingZeroDisplay = normalizeOption(trailingZeroDisplay, "auto", TRAILING_ZERO_DISPLAY_VALUES);
 
-            String compactDisplay = getOptionString(context, optionsObject, "compactDisplay");
+            String compactDisplay = normalizedStringOption(context, optionsObject, "compactDisplay", "short",
+                    COMPACT_DISPLAY_VALUES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            compactDisplay = normalizeOption(compactDisplay, "short", COMPACT_DISPLAY_VALUES);
 
             JSValue useGroupingValue = optionsObject.get(PropertyKey.fromString("useGrouping"));
             if (context.hasPendingException()) {
@@ -2788,11 +2773,11 @@ public final class JSIntlObject {
                 return JSUndefined.INSTANCE;
             }
 
-            String signDisplay = getOptionString(context, optionsObject, "signDisplay");
+            String signDisplay = normalizedStringOption(context, optionsObject, "signDisplay", "auto",
+                    SIGN_DISPLAY_VALUES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            signDisplay = normalizeOption(signDisplay, "auto", SIGN_DISPLAY_VALUES);
 
             int currencyDigits = 2;
             if ("currency".equals(style) && currency != null) {
@@ -2814,91 +2799,31 @@ public final class JSIntlObject {
                 maximumFractionDefault = 3;
             }
 
-            boolean useSignificantDigits = minimumSignificantDigitsOption != null
-                    || maximumSignificantDigitsOption != null;
-            int minimumSignificantDigits = 0;
-            int maximumSignificantDigits = 0;
-            int minimumFractionDigits;
-            int maximumFractionDigits;
+            boolean useSignificantDigits = significantDigits.specified();
             if (useSignificantDigits) {
-                minimumSignificantDigits = minimumSignificantDigitsOption != null ? minimumSignificantDigitsOption : 1;
-                maximumSignificantDigits = maximumSignificantDigitsOption != null ? maximumSignificantDigitsOption : 21;
-                if (minimumSignificantDigits > maximumSignificantDigits) {
-                    return context.throwRangeError("minimumSignificantDigits value is out of range");
-                }
-                if ("auto".equals(roundingPriority)) {
-                    minimumFractionDigits = minimumFractionDefault;
-                    maximumFractionDigits = maximumFractionDefault;
-                } else {
-                    minimumFractionDigits = minimumFractionDigitsOption != null
-                            ? minimumFractionDigitsOption
-                            : minimumFractionDefault;
-                    maximumFractionDigits = maximumFractionDigitsOption != null
-                            ? maximumFractionDigitsOption
-                            : Math.max(minimumFractionDigits, maximumFractionDefault);
-                    if (minimumFractionDigitsOption == null && maximumFractionDigitsOption != null) {
-                        minimumFractionDigits = Math.min(minimumFractionDefault, maximumFractionDigits);
-                    }
-                    if (minimumFractionDigits > maximumFractionDigits) {
-                        return context.throwRangeError("minimumFractionDigits value is out of range");
-                    }
-                }
-            } else {
-                minimumFractionDigits = minimumFractionDigitsOption != null
-                        ? minimumFractionDigitsOption
-                        : minimumFractionDefault;
-                maximumFractionDigits = maximumFractionDigitsOption != null
-                        ? maximumFractionDigitsOption
-                        : Math.max(minimumFractionDigits, maximumFractionDefault);
-                if (minimumFractionDigitsOption == null && maximumFractionDigitsOption != null) {
-                    minimumFractionDigits = Math.min(minimumFractionDefault, maximumFractionDigits);
-                }
-                if (minimumFractionDigits > maximumFractionDigits) {
-                    return context.throwRangeError("minimumFractionDigits value is out of range");
-                }
+                significantDigits = significantDigits.resolveSignificant();
             }
+            fractionDigits = useSignificantDigits && "auto".equals(roundingPriority)
+                    ? new DigitRange(minimumFractionDefault, maximumFractionDefault)
+                    : fractionDigits.resolveFraction(minimumFractionDefault, maximumFractionDefault);
 
             if (roundingIncrement != 1) {
                 if (useSignificantDigits || "morePrecision".equals(roundingPriority)
                         || "lessPrecision".equals(roundingPriority)) {
                     return context.throwTypeError("Invalid roundingIncrement for current rounding settings");
                 }
-                if (minimumFractionDigits != maximumFractionDigits) {
+                if (!fractionDigits.minimum().equals(fractionDigits.maximum())) {
                     return context.throwRangeError(
                             "maximumFractionDigits and minimumFractionDigits must be equal when roundingIncrement is used");
                 }
             }
 
-            Map<String, String> unicodeExtensions = parseUnicodeExtensions(locale.toLanguageTag());
-            String extensionNu = unicodeExtensions.get("nu");
-            String numberingSystem = "latn";
-            boolean includeNumberingExtension = false;
-            boolean numberingOptionSupported = numberingSystemOption != null
-                    && SUPPORTED_NUMBERING_SYSTEMS.contains(numberingSystemOption);
-            if (numberingOptionSupported) {
-                numberingSystem = numberingSystemOption;
-                if (extensionNu != null) {
-                    String extensionNuLower = extensionNu.toLowerCase(Locale.ROOT);
-                    includeNumberingExtension = numberingSystem.equals(extensionNuLower);
-                }
-            } else if (extensionNu != null) {
-                String extensionNuLower = extensionNu.toLowerCase(Locale.ROOT);
-                if (SUPPORTED_NUMBERING_SYSTEMS.contains(extensionNuLower)) {
-                    numberingSystem = extensionNuLower;
-                    includeNumberingExtension = true;
-                }
-            }
-            Locale strippedLocale = stripUnicodeExtensions(locale);
-            Locale resolvedLocale = strippedLocale;
-            if (includeNumberingExtension) {
-                resolvedLocale = new Locale.Builder().setLocale(strippedLocale)
-                        .setUnicodeLocaleKeyword("nu", numberingSystem).build();
-            }
-
-            JSIntlNumberFormat numberFormat = new JSIntlNumberFormat(context, resolvedLocale, style, currency,
-                    useGroupingMode, minimumIntegerDigits, minimumFractionDigits, maximumFractionDigits,
-                    useSignificantDigits, minimumSignificantDigits, maximumSignificantDigits, unit, unitDisplay,
-                    signDisplay, roundingMode, numberingSystem, notation,
+            NumberingLocale numbering = NumberingLocale.resolve(locale, numberingSystemOption);
+            JSIntlNumberFormat numberFormat = new JSIntlNumberFormat(context, numbering.locale(), style, currency,
+                    useGroupingMode, minimumIntegerDigits, fractionDigits.minimum(), fractionDigits.maximum(),
+                    useSignificantDigits, useSignificantDigits ? significantDigits.minimum() : 0,
+                    useSignificantDigits ? significantDigits.maximum() : 0, unit, unitDisplay, signDisplay,
+                    roundingMode, numbering.numberingSystem(), notation,
                     "compact".equals(notation) ? compactDisplay : null, currencyDisplay, currencySign,
                     roundingIncrement, roundingPriority, trailingZeroDisplay);
             if (resolvedPrototype != null) {
@@ -2933,23 +2858,21 @@ public final class JSIntlObject {
                 return options;
             }
 
-            String localeMatcher = getOptionString(context, optionsObject, "localeMatcher");
+            String localeMatcher = normalizedStringOption(context, optionsObject, "localeMatcher", "best fit", "lookup",
+                    "best fit");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            localeMatcher = normalizeOption(localeMatcher, "best fit", "lookup", "best fit");
 
-            String type = getOptionString(context, optionsObject, "type");
+            String type = normalizedStringOption(context, optionsObject, "type", "cardinal", "cardinal", "ordinal");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            type = normalizeOption(type, "cardinal", "cardinal", "ordinal");
 
-            String notation = getOptionString(context, optionsObject, "notation");
+            String notation = normalizedStringOption(context, optionsObject, "notation", "standard", NOTATION_VALUES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            notation = normalizeOption(notation, "standard", NOTATION_VALUES);
 
             Integer minimumIntegerDigitsOption = getOptionIntegerOrUndefined(context, optionsObject,
                     "minimumIntegerDigits", 1, 21);
@@ -2958,80 +2881,46 @@ public final class JSIntlObject {
             }
             int minimumIntegerDigits = minimumIntegerDigitsOption != null ? minimumIntegerDigitsOption : 1;
 
-            Integer minimumFractionDigitsOption = getOptionIntegerOrUndefined(context, optionsObject,
-                    "minimumFractionDigits", 0, 20);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            Integer maximumFractionDigitsOption = getOptionIntegerOrUndefined(context, optionsObject,
-                    "maximumFractionDigits", 0, 20);
-            if (context.hasPendingException()) {
+            DigitRange fractionDigits = DigitRange.read(context, optionsObject, "minimumFractionDigits",
+                    "maximumFractionDigits", 0, 100);
+            if (fractionDigits == null) {
                 return JSUndefined.INSTANCE;
             }
 
-            int minimumFractionDigits;
-            int maximumFractionDigits;
-            if (minimumFractionDigitsOption == null && maximumFractionDigitsOption == null) {
-                minimumFractionDigits = 0;
-                maximumFractionDigits = 3;
-            } else {
-                minimumFractionDigits = minimumFractionDigitsOption != null ? minimumFractionDigitsOption : 0;
-                maximumFractionDigits = maximumFractionDigitsOption != null
-                        ? maximumFractionDigitsOption
-                        : Math.max(minimumFractionDigits, 3);
-                if (minimumFractionDigits > maximumFractionDigits) {
-                    return context.throwRangeError("minimumFractionDigits value is out of range");
-                }
-            }
+            boolean hasFractionDigits = fractionDigits.specified();
+            fractionDigits = fractionDigits.resolveFraction(0, 3);
 
-            Integer minimumSignificantDigitsOption = getOptionIntegerOrUndefined(context, optionsObject,
-                    "minimumSignificantDigits", 1, 21);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            Integer maximumSignificantDigitsOption = getOptionIntegerOrUndefined(context, optionsObject,
+            DigitRange significantDigits = DigitRange.read(context, optionsObject, "minimumSignificantDigits",
                     "maximumSignificantDigits", 1, 21);
-            if (context.hasPendingException()) {
+            if (significantDigits == null) {
                 return JSUndefined.INSTANCE;
             }
-            Integer minimumSignificantDigits = null;
-            Integer maximumSignificantDigits = null;
-            if (minimumSignificantDigitsOption != null || maximumSignificantDigitsOption != null) {
-                minimumSignificantDigits = minimumSignificantDigitsOption != null ? minimumSignificantDigitsOption : 1;
-                maximumSignificantDigits = maximumSignificantDigitsOption != null ? maximumSignificantDigitsOption : 21;
-                if (minimumSignificantDigits > maximumSignificantDigits) {
-                    return context.throwRangeError("minimumSignificantDigits value is out of range");
-                }
-            }
-
-            if ("compact".equals(notation) && minimumFractionDigitsOption == null && maximumFractionDigitsOption == null
-                    && minimumSignificantDigitsOption == null && maximumSignificantDigitsOption == null) {
-                minimumSignificantDigits = 1;
-                maximumSignificantDigits = 2;
+            if (significantDigits.specified()) {
+                significantDigits = significantDigits.resolveSignificant();
+            } else if ("compact".equals(notation) && !hasFractionDigits) {
+                significantDigits = new DigitRange(1, 2);
             }
 
             getOptionIntegerOrUndefined(context, optionsObject, "roundingIncrement", 1, 5000);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            String roundingMode = getOptionString(context, optionsObject, "roundingMode");
+            normalizedStringOption(context, optionsObject, "roundingMode", "halfExpand", ROUNDING_MODE_VALUES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            normalizeOption(roundingMode, "halfExpand", ROUNDING_MODE_VALUES);
-            String roundingPriority = getOptionString(context, optionsObject, "roundingPriority");
+            normalizedStringOption(context, optionsObject, "roundingPriority", "auto", ROUNDING_PRIORITY_VALUES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            normalizeOption(roundingPriority, "auto", ROUNDING_PRIORITY_VALUES);
-            String trailingZeroDisplay = getOptionString(context, optionsObject, "trailingZeroDisplay");
+            normalizedStringOption(context, optionsObject, "trailingZeroDisplay", "auto", TRAILING_ZERO_DISPLAY_VALUES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            normalizeOption(trailingZeroDisplay, "auto", TRAILING_ZERO_DISPLAY_VALUES);
 
             JSIntlPluralRules pluralRules = new JSIntlPluralRules(context, locale, type, notation, minimumIntegerDigits,
-                    minimumFractionDigits, maximumFractionDigits, minimumSignificantDigits, maximumSignificantDigits);
+                    fractionDigits.minimum(), fractionDigits.maximum(), significantDigits.minimum(),
+                    significantDigits.maximum());
             if (resolvedPrototype != null) {
                 pluralRules.setPrototype(resolvedPrototype);
             }
@@ -3056,11 +2945,11 @@ public final class JSIntlObject {
                 return options;
             }
 
-            String localeMatcher = getOptionString(context, optionsObject, "localeMatcher");
+            String localeMatcher = normalizedStringOption(context, optionsObject, "localeMatcher", "best fit", "lookup",
+                    "best fit");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            localeMatcher = normalizeOption(localeMatcher, "best fit", "lookup", "best fit");
 
             String numberingSystemOption = getOptionString(context, optionsObject, "numberingSystem");
             if (context.hasPendingException()) {
@@ -3073,43 +2962,19 @@ public final class JSIntlObject {
                 }
             }
 
-            String style = getOptionString(context, optionsObject, "style");
+            String style = normalizedStringOption(context, optionsObject, "style", "long", "long", "short", "narrow");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            style = normalizeOption(style, "long", "long", "short", "narrow");
 
-            String numeric = getOptionString(context, optionsObject, "numeric");
+            String numeric = normalizedStringOption(context, optionsObject, "numeric", "always", "always", "auto");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            numeric = normalizeOption(numeric, "always", "always", "auto");
 
-            Map<String, String> unicodeExtensions = parseUnicodeExtensions(locale.toLanguageTag());
-            String extensionNu = unicodeExtensions.get("nu");
-            String numberingSystem = "latn";
-            Locale strippedLocale = stripUnicodeExtensions(locale);
-            Locale resolvedLocale = strippedLocale;
-            if (numberingSystemOption != null && SUPPORTED_NUMBERING_SYSTEMS.contains(numberingSystemOption)) {
-                numberingSystem = numberingSystemOption;
-                if (extensionNu != null) {
-                    String extensionNuLower = extensionNu.toLowerCase(Locale.ROOT);
-                    if (numberingSystem.equals(extensionNuLower)) {
-                        resolvedLocale = new Locale.Builder().setLocale(strippedLocale)
-                                .setUnicodeLocaleKeyword("nu", numberingSystem).build();
-                    }
-                }
-            } else if (extensionNu != null) {
-                String extensionNuLower = extensionNu.toLowerCase(Locale.ROOT);
-                if (SUPPORTED_NUMBERING_SYSTEMS.contains(extensionNuLower)) {
-                    numberingSystem = extensionNuLower;
-                    resolvedLocale = new Locale.Builder().setLocale(strippedLocale)
-                            .setUnicodeLocaleKeyword("nu", numberingSystem).build();
-                }
-            }
-
-            JSIntlRelativeTimeFormat relativeTimeFormat = new JSIntlRelativeTimeFormat(context, resolvedLocale, style,
-                    numeric, numberingSystem);
+            NumberingLocale numbering = NumberingLocale.resolve(locale, numberingSystemOption);
+            JSIntlRelativeTimeFormat relativeTimeFormat = new JSIntlRelativeTimeFormat(context, numbering.locale(),
+                    style, numeric, numbering.numberingSystem());
             if (resolvedPrototype != null) {
                 relativeTimeFormat.setPrototype(resolvedPrototype);
             }
@@ -3164,17 +3029,17 @@ public final class JSIntlObject {
                 return options;
             }
 
-            String localeMatcher = getOptionString(context, optionsObject, "localeMatcher");
+            String localeMatcher = normalizedStringOption(context, optionsObject, "localeMatcher", "best fit", "lookup",
+                    "best fit");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            localeMatcher = normalizeOption(localeMatcher, "best fit", "lookup", "best fit");
 
-            String granularity = getOptionString(context, optionsObject, "granularity");
+            String granularity = normalizedStringOption(context, optionsObject, "granularity", "grapheme", "grapheme",
+                    "word", "sentence");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            granularity = normalizeOption(granularity, "grapheme", "grapheme", "word", "sentence");
 
             JSIntlSegmenter segmenter = new JSIntlSegmenter(context, locale, granularity, segmentsPrototype);
             if (resolvedPrototype != null) {
@@ -3365,9 +3230,7 @@ public final class JSIntlObject {
         // hourCycle, hour12, weekday, era, year, month, day, dayPeriod,
         // hour, minute, second, fractionalSecondDigits, timeZoneName, dateStyle, timeStyle
         createDataProperty(resolvedOptions, "locale", new JSString(dateTimeFormat.getLocale().toLanguageTag()));
-        if (dateTimeFormat.getCalendar() != null) {
-            createDataProperty(resolvedOptions, "calendar", new JSString(dateTimeFormat.getCalendar()));
-        }
+        defineStringOption(resolvedOptions, "calendar", dateTimeFormat.getCalendar());
         if (dateTimeFormat.getNumberingSystem() != null) {
             createDataProperty(resolvedOptions, "numberingSystem", new JSString(dateTimeFormat.getNumberingSystem()));
         } else {
@@ -3390,41 +3253,20 @@ public final class JSIntlObject {
 
         if (!hasDateStyle && !hasTimeStyle) {
             // Component options only when not using styles
-            if (dateTimeFormat.getWeekdayOption() != null) {
-                createDataProperty(resolvedOptions, "weekday", new JSString(dateTimeFormat.getWeekdayOption()));
-            }
-            if (dateTimeFormat.getEraOption() != null) {
-                createDataProperty(resolvedOptions, "era", new JSString(dateTimeFormat.getEraOption()));
-            }
-            if (dateTimeFormat.getYearOption() != null) {
-                createDataProperty(resolvedOptions, "year", new JSString(dateTimeFormat.getYearOption()));
-            }
-            if (dateTimeFormat.getMonthOption() != null) {
-                createDataProperty(resolvedOptions, "month", new JSString(dateTimeFormat.getMonthOption()));
-            }
-            if (dateTimeFormat.getDayOption() != null) {
-                createDataProperty(resolvedOptions, "day", new JSString(dateTimeFormat.getDayOption()));
-            }
-            if (dateTimeFormat.getDayPeriodOption() != null) {
-                createDataProperty(resolvedOptions, "dayPeriod", new JSString(dateTimeFormat.getDayPeriodOption()));
-            }
-            if (dateTimeFormat.getHourOption() != null) {
-                createDataProperty(resolvedOptions, "hour", new JSString(dateTimeFormat.getHourOption()));
-            }
-            if (dateTimeFormat.getMinuteOption() != null) {
-                createDataProperty(resolvedOptions, "minute", new JSString(dateTimeFormat.getMinuteOption()));
-            }
-            if (dateTimeFormat.getSecondOption() != null) {
-                createDataProperty(resolvedOptions, "second", new JSString(dateTimeFormat.getSecondOption()));
-            }
+            defineStringOption(resolvedOptions, "weekday", dateTimeFormat.getWeekdayOption());
+            defineStringOption(resolvedOptions, "era", dateTimeFormat.getEraOption());
+            defineStringOption(resolvedOptions, "year", dateTimeFormat.getYearOption());
+            defineStringOption(resolvedOptions, "month", dateTimeFormat.getMonthOption());
+            defineStringOption(resolvedOptions, "day", dateTimeFormat.getDayOption());
+            defineStringOption(resolvedOptions, "dayPeriod", dateTimeFormat.getDayPeriodOption());
+            defineStringOption(resolvedOptions, "hour", dateTimeFormat.getHourOption());
+            defineStringOption(resolvedOptions, "minute", dateTimeFormat.getMinuteOption());
+            defineStringOption(resolvedOptions, "second", dateTimeFormat.getSecondOption());
             if (dateTimeFormat.getFractionalSecondDigits() != null) {
                 createDataProperty(resolvedOptions, "fractionalSecondDigits",
                         JSNumber.of(dateTimeFormat.getFractionalSecondDigits()));
             }
-            if (dateTimeFormat.getTimeZoneNameOption() != null) {
-                createDataProperty(resolvedOptions, "timeZoneName",
-                        new JSString(dateTimeFormat.getTimeZoneNameOption()));
-            }
+            defineStringOption(resolvedOptions, "timeZoneName", dateTimeFormat.getTimeZoneNameOption());
         }
         if (hasDateStyle) {
             createDataProperty(resolvedOptions, "dateStyle",
@@ -3435,6 +3277,12 @@ public final class JSIntlObject {
                     new JSString(dateTimeFormat.getTimeStyle().name().toLowerCase(Locale.ROOT)));
         }
         return resolvedOptions;
+    }
+
+    private static void defineStringOption(JSObject options, String key, String value) {
+        if (value != null) {
+            createDataProperty(options, key, new JSString(value));
+        }
     }
 
     private static boolean differsOnlyInTimeParts(List<JSIntlDateTimeFormat.DatePart> startParts,
@@ -4625,6 +4473,12 @@ public final class JSIntlObject {
         return localeString(context, thisArg, "toString", JSIntlLocale::getTag);
     }
 
+    private static String normalizedStringOption(JSContext context, JSValue options, String key, String fallback,
+            String... allowed) {
+        String value = getOptionString(context, options, key);
+        return context.hasPendingException() ? null : normalizeOption(value, fallback, allowed);
+    }
+
     /**
      * Normalize an offset timezone string to the canonical form: +HH:MM or -HH:MM. -00 and -00:00 normalize to +00:00.
      */
@@ -4865,6 +4719,8 @@ public final class JSIntlObject {
         return result;
     }
 
+    // ---- Locale option validation helpers ----
+
     private static FormatStyle parseFormatStyle(String rawStyle) {
         if (rawStyle == null) {
             return null;
@@ -4895,8 +4751,6 @@ public final class JSIntlObject {
             throw new IllegalArgumentException("Invalid language tag: " + localeTag, e);
         }
     }
-
-    // ---- Locale option validation helpers ----
 
     /**
      * Parse Unicode extension keys and attributes from a BCP 47 locale tag. Attributes (3-8 alphanum subtags before any
@@ -5140,6 +4994,8 @@ public final class JSIntlObject {
         }
     }
 
+    // ---- New Locale prototype methods ----
+
     public static JSValue relativeTimeFormatFormatToParts(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlRelativeTimeFormat relativeTimeFormat)) {
             return context
@@ -5213,8 +5069,6 @@ public final class JSIntlObject {
         createDataProperty(resolvedOptions, "numberingSystem", new JSString(relativeTimeFormat.getNumberingSystem()));
         return resolvedOptions;
     }
-
-    // ---- New Locale prototype methods ----
 
     /**
      * Remove likely subtags from a locale (CLDR "minimize"). Algorithm: maximize first, then try removing subtags.
@@ -6249,5 +6103,59 @@ public final class JSIntlObject {
 
     private enum DateTimeFormattableKind {
         INSTANT, NUMBER, PLAIN_DATE, PLAIN_DATE_TIME, PLAIN_MONTH_DAY, PLAIN_TIME, PLAIN_YEAR_MONTH, ZONED_DATE_TIME
+    }
+
+    private record DigitRange(Integer minimum, Integer maximum) {
+        static DigitRange read(JSContext context, JSObject options, String minKey, String maxKey, int low, int high) {
+            Integer min = getOptionIntegerOrUndefined(context, options, minKey, low, high);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            Integer max = getOptionIntegerOrUndefined(context, options, maxKey, low, high);
+            return context.hasPendingException() ? null : new DigitRange(min, max);
+        }
+
+        boolean specified() {
+            return minimum != null || maximum != null;
+        }
+
+        DigitRange resolveFraction(int defaultMin, int defaultMax) {
+            int min = minimum != null ? minimum : maximum == null ? defaultMin : Math.min(defaultMin, maximum);
+            int max = maximum != null ? maximum : Math.max(min, defaultMax);
+            if (min > max) {
+                throw new IllegalArgumentException("minimumFractionDigits value is out of range");
+            }
+            return new DigitRange(min, max);
+        }
+
+        DigitRange resolveSignificant() {
+            int min = minimum == null ? 1 : minimum;
+            int max = maximum == null ? 21 : maximum;
+            if (min > max) {
+                throw new IllegalArgumentException("minimumSignificantDigits value is out of range");
+            }
+            return new DigitRange(min, max);
+        }
+    }
+
+    private record NumberingLocale(Locale locale, String numberingSystem) {
+        static NumberingLocale resolve(Locale locale, String option) {
+            boolean hasExtensions = locale.hasExtensions();
+            String extension = hasExtensions ? parseUnicodeExtensions(locale.toLanguageTag()).get("nu") : null;
+            if (extension != null) {
+                extension = extension.toLowerCase(Locale.ROOT);
+            }
+            String system = "latn";
+            if (option != null && SUPPORTED_NUMBERING_SYSTEMS.contains(option)) {
+                system = option;
+            } else if (extension != null && SUPPORTED_NUMBERING_SYSTEMS.contains(extension)) {
+                system = extension;
+            }
+            Locale resolved = hasExtensions ? stripUnicodeExtensions(locale) : locale;
+            if (system.equals(extension)) {
+                resolved = new Locale.Builder().setLocale(resolved).setUnicodeLocaleKeyword("nu", system).build();
+            }
+            return new NumberingLocale(resolved, system);
+        }
     }
 }

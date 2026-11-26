@@ -36,18 +36,12 @@ public final class ExportDeclaration extends ModuleItem {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = declaration != null && declaration.containsAwait();
-        }
-        return awaitInside;
+        return containsAwaitIn(declaration);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = declaration != null && declaration.containsYield();
-        }
-        return yieldInside;
+        return containsYieldIn(declaration);
     }
 
     public Declaration getDeclaration() {

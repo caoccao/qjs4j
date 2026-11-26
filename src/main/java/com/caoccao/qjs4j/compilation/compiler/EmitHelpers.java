@@ -348,8 +348,11 @@ final class EmitHelpers {
             throw new JSCompilerException("Parameter slot indexes are not aligned with default parameters", ast);
         }
 
-        boolean hasNonSimpleParameters = functionParams.hasNonSimpleParameters();
-        Set<String> originalTdzLocals = new HashSet<>(functionCompiler.context().tdzLocals);
+        if (!functionParams.hasNonSimpleParameters()) {
+            return;
+        }
+        CompilerContext functionContext = functionCompiler.context();
+        Set<String> originalTdzLocals = new HashSet<>(functionContext.tdzLocals);
         List<Set<String>> parameterBoundNames = new ArrayList<>(params.size());
         Set<String> pendingParameterTdzNames = new HashSet<>();
         for (Pattern pattern : params) {
@@ -358,60 +361,48 @@ final class EmitHelpers {
             pendingParameterTdzNames.addAll(parameterNames);
         }
 
-        if (hasNonSimpleParameters) {
-            for (int i = 0; i < defaults.size(); i++) {
-                int parameterSlotIndex = parameterSlotIndexes.get(i);
-                functionCompiler.context().emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, parameterSlotIndex);
-            }
+        for (int i = 0; i < defaults.size(); i++) {
+            int parameterSlotIndex = parameterSlotIndexes.get(i);
+            functionContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, parameterSlotIndex);
         }
 
         for (int i = 0; i < defaults.size(); i++) {
             Expression defaultExpr = defaults.get(i);
-            if (hasNonSimpleParameters) {
-                functionCompiler.context().tdzLocals.clear();
-                functionCompiler.context().tdzLocals.addAll(originalTdzLocals);
-                functionCompiler.context().tdzLocals.addAll(pendingParameterTdzNames);
-            }
-            if (!hasNonSimpleParameters && defaultExpr == null) {
-                continue;
-            }
+            functionContext.tdzLocals.clear();
+            functionContext.tdzLocals.addAll(originalTdzLocals);
+            functionContext.tdzLocals.addAll(pendingParameterTdzNames);
             // GET_ARG idx - push the argument value onto the stack
-            functionCompiler.context().emitter.emitOpcodeU16(Opcode.GET_ARG, i);
+            functionContext.emitter.emitOpcodeU16(Opcode.GET_ARG, i);
             if (defaultExpr != null) {
                 // DUP - duplicate for the comparison
-                functionCompiler.context().emitter.emitOpcode(Opcode.DUP);
+                functionContext.emitter.emitOpcode(Opcode.DUP);
                 // UNDEFINED - push undefined for comparison
-                functionCompiler.context().emitter.emitOpcode(Opcode.UNDEFINED);
+                functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
                 // STRICT_EQ - check if arg === undefined
-                functionCompiler.context().emitter.emitOpcode(Opcode.STRICT_EQ);
+                functionContext.emitter.emitOpcode(Opcode.STRICT_EQ);
                 // IF_FALSE label - if arg !== undefined, skip default
-                int skipLabel = functionCompiler.context().emitter.emitJump(Opcode.IF_FALSE);
+                int skipLabel = functionContext.emitter.emitJump(Opcode.IF_FALSE);
                 // DROP - drop the duplicated arg value (it was undefined)
-                functionCompiler.context().emitter.emitOpcode(Opcode.DROP);
+                functionContext.emitter.emitOpcode(Opcode.DROP);
                 // Compile the default expression
-                functionCompiler.context().expressionCompiler.compile(defaultExpr);
+                functionContext.expressionCompiler.compile(defaultExpr);
                 if (params.get(i) instanceof Identifier parameterIdentifier && defaultExpr.isAnonymousFunction()) {
-                    functionCompiler.context().emitter.emitOpcodeAtom(Opcode.SET_NAME, parameterIdentifier.getName());
+                    functionContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, parameterIdentifier.getName());
                 }
                 // DUP - duplicate for PUT_ARG
-                functionCompiler.context().emitter.emitOpcode(Opcode.DUP);
+                functionContext.emitter.emitOpcode(Opcode.DUP);
                 // PUT_ARG idx - store back into the argument slot
-                functionCompiler.context().emitter.emitOpcodeU16(Opcode.PUT_ARG, i);
+                functionContext.emitter.emitOpcodeU16(Opcode.PUT_ARG, i);
                 // label: - skip target (value is on stack, either original arg or default)
-                functionCompiler.context().emitter.patchJump(skipLabel,
-                        functionCompiler.context().emitter.currentOffset());
+                functionContext.emitter.patchJump(skipLabel, functionContext.emitter.currentOffset());
             }
             // PUT_LOCAL idx - store into the local variable slot
             int parameterSlotIndex = parameterSlotIndexes.get(i);
-            functionCompiler.context().emitter.emitOpcodeU16(Opcode.PUT_LOC, parameterSlotIndex);
-            if (hasNonSimpleParameters) {
-                pendingParameterTdzNames.removeAll(parameterBoundNames.get(i));
-            }
+            functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, parameterSlotIndex);
+            pendingParameterTdzNames.removeAll(parameterBoundNames.get(i));
         }
-        if (hasNonSimpleParameters) {
-            functionCompiler.context().tdzLocals.clear();
-            functionCompiler.context().tdzLocals.addAll(originalTdzLocals);
-        }
+        functionContext.tdzLocals.clear();
+        functionContext.tdzLocals.addAll(originalTdzLocals);
     }
 
     /**

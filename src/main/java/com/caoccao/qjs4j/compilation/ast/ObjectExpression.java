@@ -31,24 +31,12 @@ public final class ObjectExpression extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = false;
-            if (anyContainsAwait(properties)) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        return containsAwaitIn(properties);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = false;
-            if (anyContainsYield(properties)) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        return containsYieldIn(properties);
     }
 
     public List<ObjectExpressionProperty> getProperties() {

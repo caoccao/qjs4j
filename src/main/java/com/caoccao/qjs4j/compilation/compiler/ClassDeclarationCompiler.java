@@ -206,23 +206,14 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
             IdentityHashMap<PropertyDefinition, JSSymbol> autoAccessorBackingSymbols,
             List<PrivateMethodEntry> privateInstanceMethodFunctions, boolean isConstructor) {
         // Pass parent captureResolver so class methods can capture outer scope variables (closures)
-        BytecodeCompiler methodCompiler = new BytecodeCompiler(true, compilerContext.captureResolver,
-                compilerContext.context);
+        BytecodeCompiler methodCompiler = compilerContext.newNestedCompiler(true, privateSymbols);
         CompilerContext functionContext = methodCompiler.context();
-
-        functionContext.sourceCode = compilerContext.sourceCode;
-        functionContext.mayContainDirectEval = compilerContext.mayContainDirectEval;
-        functionContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
-        functionContext.privateSymbols = privateSymbols; // Make private symbols available in method
         compilerContext.functionExpressionCompiler.inheritVisibleWithObjectBindings(functionContext);
 
         FunctionExpression functionExpression = method.getValue();
 
         // Enter function scope and add parameters as locals
-        functionContext.scopeManager.enterScope();
-        functionContext.inGlobalScope = false;
-        functionContext.isInAsyncFunction = functionExpression.isAsync();
-        functionContext.isInGeneratorFunction = functionExpression.isGenerator();
+        functionContext.enterFunctionScope(functionExpression.isAsync(), functionExpression.isGenerator());
 
         // Force-capture the class inner name binding so eval() inside
         // constructor/method body can resolve it at runtime.
@@ -252,31 +243,9 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
             }
         }
 
-        // Emit default parameter initialization following QuickJS pattern
-        if (functionExpression.getDefaults() != null) {
-            compilerContext.emitHelpers.emitDefaultParameterInit(methodCompiler, functionExpression.getFunctionParams(),
-                    parameterSlotIndexes, functionExpression);
-        }
+        compilerContext.functionExpressionCompiler.initializeParameters(methodCompiler, functionExpression,
+                parameterSlotIndexes, methodDestructuringParams, functionExpression.isGenerator());
 
-        // Handle rest parameter if present
-        if (functionExpression.getRestParameter() != null) {
-            int firstRestIndex = functionExpression.getParams().size();
-            functionContext.emitter.emitOpcode(Opcode.REST);
-            functionContext.emitter.emitU16(firstRestIndex);
-            compilerContext.functionExpressionCompiler.emitRestParameterBinding(functionExpression.getRestParameter(),
-                    functionContext);
-        }
-
-        // Emit destructuring for pattern parameters after defaults and rest
-        compilerContext.functionExpressionCompiler.emitParameterDestructuring(functionExpression.getParams(),
-                methodDestructuringParams, functionContext);
-
-        // If this is a generator method, emit INITIAL_YIELD at the start
-        if (functionExpression.isGenerator()) {
-            functionContext.emitter.emitOpcode(Opcode.INITIAL_YIELD);
-        }
-
-        // For constructors, initialize private methods then fields.
         // For derived constructors, defer until after super() (INIT_CTOR) per ES spec 14.6.13 step 11.
         if (isConstructor) {
             if (isDerivedConstructor) {
@@ -293,39 +262,10 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
             }
         }
 
-        functionContext.compilerAnalysis.hoistAllDeclarationsAsLocals(functionExpression.getBody().getBody());
+        FunctionBodyCompiler.METHOD.compile(functionContext, functionExpression, functionExpression.getBody(),
+                functionExpression.isAsync());
 
-        for (Statement stmt : functionExpression.getBody().getBody()) {
-            if (stmt instanceof FunctionDeclaration functionDeclaration) {
-                functionContext.functionDeclarationCompiler.compile(functionDeclaration);
-            }
-        }
-
-        for (Statement stmt : functionExpression.getBody().getBody()) {
-            if (stmt instanceof FunctionDeclaration) {
-                continue;
-            }
-            functionContext.statementCompiler.compile(stmt);
-        }
-
-        // If body doesn't end with return, add implicit return undefined
-        List<Statement> bodyStatements = functionExpression.getBody().getBody();
-        if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
-            functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            int returnValueIndex = functionContext.scopeManager.currentScope()
-                    .declareLocal("#method_return_" + functionContext.emitter.currentOffset());
-            functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
-            functionContext.emitHelpers.emitCurrentScopeUsingDisposal();
-            functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
-            functionContext.emitter.emitOpcode(functionExpression.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
-        }
-
-        int localCount = functionContext.scopeManager.currentScope().getLocalCount();
-        String[] localVarNames = functionContext.scopeManager.getLocalVarNames();
-        functionContext.scopeManager.exitScope();
-
-        // Build the method bytecode
-        Bytecode methodBytecode = functionContext.emitter.build(localCount, localVarNames);
+        Bytecode methodBytecode = functionContext.finishFunctionScope();
 
         // Create JSBytecodeFunction for the method
         // Private symbols are accessed via PUSH_CONST (bytecode constants), not closureVars
@@ -408,14 +348,8 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
     JSBytecodeFunction compileStaticBlock(StaticBlock staticBlock, String className,
             Map<String, JSSymbol> privateSymbols) {
         // Pass parent captureResolver so static blocks can capture outer scope variables
-        BytecodeCompiler blockCompiler = new BytecodeCompiler(true, compilerContext.captureResolver,
-                compilerContext.context);
+        BytecodeCompiler blockCompiler = compilerContext.newNestedCompiler(true, privateSymbols);
         CompilerContext blockCtx = blockCompiler.context();
-
-        blockCtx.sourceCode = compilerContext.sourceCode;
-        blockCtx.mayContainDirectEval = compilerContext.mayContainDirectEval;
-        blockCtx.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
-        blockCtx.privateSymbols = privateSymbols;
 
         blockCtx.scopeManager.enterScope();
         blockCtx.inGlobalScope = false;
@@ -472,14 +406,8 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
             IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols, Map<String, JSSymbol> privateSymbols,
             IdentityHashMap<PropertyDefinition, JSSymbol> autoAccessorBackingSymbols, String className) {
         // Pass parent captureResolver so static field initializers can capture outer scope variables
-        BytecodeCompiler initializerCompiler = new BytecodeCompiler(true, compilerContext.captureResolver,
-                compilerContext.context);
+        BytecodeCompiler initializerCompiler = compilerContext.newNestedCompiler(true, privateSymbols);
         CompilerContext initCtx = initializerCompiler.context();
-
-        initCtx.sourceCode = compilerContext.sourceCode;
-        initCtx.mayContainDirectEval = compilerContext.mayContainDirectEval;
-        initCtx.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
-        initCtx.privateSymbols = privateSymbols;
 
         initCtx.scopeManager.enterScope();
         initCtx.inGlobalScope = false;
@@ -589,14 +517,8 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
             IdentityHashMap<PropertyDefinition, JSSymbol> autoAccessorBackingSymbols,
             List<PrivateMethodEntry> privateInstanceMethodFunctions, SourceLocation classLocation) {
         // Pass parent captureResolver so default constructors can capture outer scope variables
-        BytecodeCompiler constructorCompiler = new BytecodeCompiler(true, compilerContext.captureResolver,
-                compilerContext.context);
+        BytecodeCompiler constructorCompiler = compilerContext.newNestedCompiler(true, privateSymbols);
         CompilerContext ctorCtx = constructorCompiler.context();
-
-        ctorCtx.sourceCode = compilerContext.sourceCode;
-        ctorCtx.mayContainDirectEval = compilerContext.mayContainDirectEval;
-        ctorCtx.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
-        ctorCtx.privateSymbols = privateSymbols; // Make private symbols available
 
         ctorCtx.scopeManager.enterScope();
         ctorCtx.inGlobalScope = false;

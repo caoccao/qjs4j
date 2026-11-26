@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.compilation.ast.Expression;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSSymbol;
+import com.caoccao.qjs4j.vm.Bytecode;
 
 import java.util.*;
 
@@ -207,6 +208,13 @@ final class CompilerContext {
         initializeDelegates();
     }
 
+    void enterFunctionScope(boolean async, boolean generator) {
+        scopeManager.enterScope();
+        inGlobalScope = false;
+        isInAsyncFunction = async;
+        isInGeneratorFunction = generator;
+    }
+
     String extractSourceCode(SourceLocation location) {
         if (sourceCode == null || location == null) {
             return null;
@@ -220,6 +228,13 @@ final class CompilerContext {
         }
 
         return sourceCode.substring(startOffset, endOffset);
+    }
+
+    Bytecode finishFunctionScope() {
+        int localCount = scopeManager.currentScope().getLocalCount();
+        String[] localNames = scopeManager.getLocalVarNames();
+        scopeManager.exitScope();
+        return emitter.build(localCount, localNames);
     }
 
     private void initializeDelegates() {
@@ -278,6 +293,24 @@ final class CompilerContext {
         this.whileStatementCompiler = new WhileStatementCompiler(this);
         this.withStatementCompiler = new WithStatementCompiler(this);
         this.yieldExpressionCompiler = new YieldExpressionCompiler(this);
+    }
+
+    BytecodeCompiler newFunctionCompiler(SourceLocation location) {
+        BytecodeCompiler nested = newNestedCompiler(strictMode, privateSymbols);
+        CompilerContext child = nested.context();
+        child.mayContainDirectEval = mayContainDirectEval && sourceMayContainDirectEval(extractSourceCode(location));
+        functionExpressionCompiler.inheritVisibleWithObjectBindings(child);
+        return nested;
+    }
+
+    BytecodeCompiler newNestedCompiler(boolean strict, Map<String, JSSymbol> symbols) {
+        BytecodeCompiler nested = new BytecodeCompiler(strict, captureResolver, context);
+        CompilerContext child = nested.context();
+        child.sourceCode = sourceCode;
+        child.mayContainDirectEval = mayContainDirectEval;
+        child.nonDeletableGlobalBindings.addAll(nonDeletableGlobalBindings);
+        child.privateSymbols = symbols;
+        return nested;
     }
 
     void popState() {

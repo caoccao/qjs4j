@@ -621,14 +621,11 @@ public final class JSONObject {
         throw new JSONParseException("Invalid literal " + parseContext.getPositionInfo(start));
     }
 
-    private int parseHex4(String hex) {
-        if (hex == null || hex.length() != 4) {
-            return -1;
-        }
+    private int parseHex4(String text, int offset) {
         int value = 0;
         for (int i = 0; i < 4; i++) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
-            int digit = Character.digit(hex.charAt(i), 16);
+            int digit = Character.digit(text.charAt(offset + i), 16);
             if (digit < 0) {
                 return -1;
             }
@@ -674,13 +671,7 @@ public final class JSONObject {
         // Optional fraction
         if (i < parseContext.text.length() && parseContext.text.charAt(i) == '.') {
             i++;
-            if (i >= parseContext.text.length() || !Character.isDigit(parseContext.text.charAt(i))) {
-                throw new JSONParseException("Invalid number in JSON " + parseContext.getPositionInfo(i));
-            }
-            while (i < parseContext.text.length() && Character.isDigit(parseContext.text.charAt(i))) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
-                i++;
-            }
+            i = readNumberDigits(parseContext, i);
         }
 
         // Optional exponent
@@ -691,13 +682,7 @@ public final class JSONObject {
                     && (parseContext.text.charAt(i) == '+' || parseContext.text.charAt(i) == '-')) {
                 i++;
             }
-            if (i >= parseContext.text.length() || !Character.isDigit(parseContext.text.charAt(i))) {
-                throw new JSONParseException("Invalid number in JSON " + parseContext.getPositionInfo(i));
-            }
-            while (i < parseContext.text.length() && Character.isDigit(parseContext.text.charAt(i))) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
-                i++;
-            }
+            i = readNumberDigits(parseContext, i);
         }
 
         String numStr = parseContext.text.substring(start, i);
@@ -731,7 +716,12 @@ public final class JSONObject {
             }
         }
 
-        StringBuilder sb = new StringBuilder();
+        return parseQuotedString(parseContext, start, true);
+    }
+
+    private ParseResult parseQuotedString(ParseContext parseContext, int start, boolean propertyName) {
+        StringBuilder sb = null;
+        int segmentStart = start + 1;
         int i = start + 1;
 
         while (i < parseContext.text.length()) {
@@ -740,13 +730,23 @@ public final class JSONObject {
             char ch = parseContext.text.charAt(i);
 
             if (ch == '"') {
-                return new ParseResult(new JSString(sb.toString()), i + 1);
+                String text = sb == null
+                        ? parseContext.text.substring(segmentStart, i)
+                        : sb.append(parseContext.text, segmentStart, i).toString();
+                JSString value = new JSString(text);
+                return propertyName ? new ParseResult(value, i + 1) : new ParseResult(value, i + 1, start, i + 1);
             }
 
             if (ch == '\\') {
+                if (sb == null) {
+                    sb = new StringBuilder();
+                }
+                sb.append(parseContext.text, segmentStart, i);
                 i++;
                 if (i >= parseContext.text.length()) {
-                    throw new JSONParseException("Unexpected end in property name " + parseContext.getPositionInfo(i));
+                    throw new JSONParseException(
+                            (propertyName ? "Unexpected end in property name " : "Unexpected end in string ")
+                                    + parseContext.getPositionInfo(i));
                 }
                 char escaped = parseContext.text.charAt(i);
                 switch (escaped) {
@@ -761,32 +761,34 @@ public final class JSONObject {
                     case 'u' -> {
                         // Unicode escape
                         if (i + 4 >= parseContext.text.length()) {
-                            throw new JSONParseException(
-                                    "Invalid unicode escape in property name " + parseContext.getPositionInfo(i));
+                            throw new JSONParseException((propertyName
+                                    ? "Invalid unicode escape in property name "
+                                    : "Invalid unicode escape ") + parseContext.getPositionInfo(i));
                         }
-                        String hex = parseContext.text.substring(i + 1, i + 5);
-                        int codePoint = parseHex4(hex);
+                        int codePoint = parseHex4(parseContext.text, i + 1);
                         if (codePoint < 0) {
-                            throw new JSONParseException(
-                                    "Invalid unicode escape in property name " + parseContext.getPositionInfo(i));
+                            throw new JSONParseException((propertyName
+                                    ? "Invalid unicode escape in property name "
+                                    : "Invalid unicode escape ") + parseContext.getPositionInfo(i));
                         }
                         sb.append((char) codePoint);
                         i += 4;
                     }
                     default -> throw new JSONParseException(
-                            "Invalid escape in property name: \\" + escaped + parseContext.getPositionInfo(i));
+                            (propertyName ? "Invalid escape in property name: " : "Invalid escape: ") + "\\" + escaped
+                                    + parseContext.getPositionInfo(i));
                 }
-            } else {
-                if (isJSONStringControlCharacter(ch)) {
-                    throw new JSONParseException(
-                            "Bad control character in string literal in JSON " + parseContext.getPositionInfo(i));
-                }
-                sb.append(ch);
+                segmentStart = i + 1;
+            } else if (isJSONStringControlCharacter(ch)) {
+                throw new JSONParseException(
+                        "Bad control character in string literal in JSON " + parseContext.getPositionInfo(i));
             }
             i++;
         }
 
-        throw new JSONParseException("Unterminated property name in JSON " + parseContext.getPositionInfo(i));
+        throw new JSONParseException(
+                (propertyName ? "Unterminated property name in JSON " : "Unterminated string in JSON ")
+                        + parseContext.getPositionInfo(i));
     }
 
     private ParseResult parseString(ParseContext parseContext, int start) {
@@ -794,60 +796,7 @@ public final class JSONObject {
             throw new JSONParseException("Expected '\"' " + parseContext.getPositionInfo(start));
         }
 
-        StringBuilder sb = new StringBuilder();
-        int i = start + 1;
-
-        while (i < parseContext.text.length()) {
-
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            char ch = parseContext.text.charAt(i);
-
-            if (ch == '"') {
-                return new ParseResult(new JSString(sb.toString()), i + 1, start, i + 1);
-            }
-
-            if (ch == '\\') {
-                i++;
-                if (i >= parseContext.text.length()) {
-                    throw new JSONParseException("Unexpected end in string " + parseContext.getPositionInfo(i));
-                }
-                char escaped = parseContext.text.charAt(i);
-                switch (escaped) {
-                    case '"' -> sb.append('"');
-                    case '\\' -> sb.append('\\');
-                    case '/' -> sb.append('/');
-                    case 'b' -> sb.append('\b');
-                    case 'f' -> sb.append('\f');
-                    case 'n' -> sb.append('\n');
-                    case 'r' -> sb.append('\r');
-                    case 't' -> sb.append('\t');
-                    case 'u' -> {
-                        // Unicode escape
-                        if (i + 4 >= parseContext.text.length()) {
-                            throw new JSONParseException("Invalid unicode escape " + parseContext.getPositionInfo(i));
-                        }
-                        String hex = parseContext.text.substring(i + 1, i + 5);
-                        int codePoint = parseHex4(hex);
-                        if (codePoint < 0) {
-                            throw new JSONParseException("Invalid unicode escape " + parseContext.getPositionInfo(i));
-                        }
-                        sb.append((char) codePoint);
-                        i += 4;
-                    }
-                    default ->
-                        throw new JSONParseException("Invalid escape: \\" + escaped + parseContext.getPositionInfo(i));
-                }
-            } else {
-                if (isJSONStringControlCharacter(ch)) {
-                    throw new JSONParseException(
-                            "Bad control character in string literal in JSON " + parseContext.getPositionInfo(i));
-                }
-                sb.append(ch);
-            }
-            i++;
-        }
-
-        throw new JSONParseException("Unterminated string in JSON " + parseContext.getPositionInfo(i));
+        return parseQuotedString(parseContext, start, false);
     }
 
     private ParseResult parseTrue(ParseContext parseContext, int start) {
@@ -1028,6 +977,17 @@ public final class JSONObject {
 
         // Step 8: Return obj
         return obj;
+    }
+
+    private int readNumberDigits(ParseContext parseContext, int i) {
+        if (i >= parseContext.text.length() || !Character.isDigit(parseContext.text.charAt(i))) {
+            throw new JSONParseException("Invalid number in JSON " + parseContext.getPositionInfo(i));
+        }
+        while (i < parseContext.text.length() && Character.isDigit(parseContext.text.charAt(i))) {
+            context.getVirtualMachine().checkExecutionInterruptForNative();
+            i++;
+        }
+        return i;
     }
 
     private int skipWhitespace(String text, int start) {

@@ -40,22 +40,11 @@ final class ArrowFunctionExpressionCompiler extends AstNodeCompiler<ArrowFunctio
     void compile(ArrowFunctionExpression arrowExpr) {
         // Create a new compiler for the function body
         // Arrow functions inherit strict mode from parent (QuickJS behavior)
-        BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode,
-                compilerContext.captureResolver, compilerContext.context);
+        BytecodeCompiler functionCompiler = compilerContext.newFunctionCompiler(arrowExpr.getLocation());
         CompilerContext functionContext = functionCompiler.context();
 
-        functionContext.sourceCode = compilerContext.sourceCode;
-        functionContext.mayContainDirectEval = compilerContext.mayContainDirectEval && CompilerContext
-                .sourceMayContainDirectEval(compilerContext.extractSourceCode(arrowExpr.getLocation()));
-        functionContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
-        functionContext.privateSymbols = compilerContext.privateSymbols;
-        compilerContext.functionExpressionCompiler.inheritVisibleWithObjectBindings(functionContext);
-
         // Enter function scope and add parameters as locals
-        functionContext.scopeManager.enterScope();
-        functionContext.inGlobalScope = false;
-        functionContext.isInAsyncFunction = arrowExpr.isAsync(); // Track if this is an async function
-        functionContext.isInGeneratorFunction = false; // Arrow functions cannot be generators
+        functionContext.enterFunctionScope(arrowExpr.isAsync(), false);
         functionContext.isInArrowFunction = true; // Arrow functions don't have their own arguments
         // Arrow functions inherit class field eval context (new.target resolves to undefined,
         // eval('arguments') should throw SyntaxError)
@@ -111,30 +100,8 @@ final class ArrowFunctionExpressionCompiler extends AstNodeCompiler<ArrowFunctio
             functionContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, argumentsLocalIndex);
         }
 
-        // Emit default parameter initialization following QuickJS pattern:
-        // GET_ARG idx, DUP, UNDEFINED, STRICT_EQ, IF_FALSE label, DROP, <default>, DUP, PUT_ARG idx, label:
-        if (arrowExpr.getDefaults() != null) {
-            compilerContext.emitHelpers.emitDefaultParameterInit(functionCompiler, arrowExpr.getFunctionParams(),
-                    parameterSlotIndexes, arrowExpr);
-        }
-
-        // Handle rest parameter if present
-        // The REST opcode must be emitted early in the function to initialize the rest array
-        if (arrowExpr.getRestParameter() != null) {
-            // Calculate the index where rest arguments start
-            int firstRestIndex = arrowExpr.getParams().size();
-
-            // Emit REST opcode with the starting index
-            functionContext.emitter.emitOpcode(Opcode.REST);
-            functionContext.emitter.emitU16(firstRestIndex);
-
-            compilerContext.functionExpressionCompiler.emitRestParameterBinding(arrowExpr.getRestParameter(),
-                    functionContext);
-        }
-
-        // Emit destructuring for pattern parameters after defaults and rest
-        compilerContext.functionExpressionCompiler.emitParameterDestructuring(arrowExpr.getParams(),
-                destructuringParams, functionContext);
+        compilerContext.functionExpressionCompiler.initializeParameters(functionCompiler, arrowExpr,
+                parameterSlotIndexes, destructuringParams, false);
 
         boolean enteredBodyScope = false;
         CompilerScope savedVarDeclarationScopeOverride = functionContext.varDeclarationScopeOverride;
@@ -151,44 +118,7 @@ final class ArrowFunctionExpressionCompiler extends AstNodeCompiler<ArrowFunctio
                 }
 
                 try {
-                    // Phase 0: Pre-declare var and top-level function names as locals so nested
-                    // closures resolve captures to VarRef slots consistently with function bodies.
-                    functionContext.compilerAnalysis.hoistAllDeclarationsAsLocals(block.getBody());
-
-                    // Phase 1: Hoist top-level function declarations before executing body statements.
-                    for (Statement statement : block.getBody()) {
-                        if (statement instanceof FunctionDeclaration functionDeclaration) {
-                            functionContext.functionDeclarationCompiler.compile(functionDeclaration);
-                        }
-                    }
-
-                    // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
-                    // into function var bindings when allowed.
-                    Set<String> declarationParameterNames = arrowExpr.getParameterNames();
-                    functionContext.compilerAnalysis.hoistFunctionBodyAnnexBDeclarations(block.getBody(),
-                            declarationParameterNames);
-
-                    // Compile block body statements.
-                    for (Statement stmt : block.getBody()) {
-                        if (stmt instanceof FunctionDeclaration) {
-                            continue;
-                        }
-                        functionContext.statementCompiler.compile(stmt);
-                    }
-
-                    // If body doesn't end with return, add implicit return undefined
-                    List<Statement> bodyStatements = block.getBody();
-                    if (bodyStatements.isEmpty()
-                            || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
-                        functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                        int returnValueIndex = functionContext.scopeManager.currentScope()
-                                .declareLocal("#arrow_return_" + functionContext.emitter.currentOffset());
-                        functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
-                        functionContext.emitHelpers.emitCurrentScopeUsingDisposal();
-                        functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
-                        // Emit RETURN_ASYNC for async functions, RETURN for sync functions
-                        functionContext.emitter.emitOpcode(arrowExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
-                    }
+                    FunctionBodyCompiler.ARROW.compile(functionContext, arrowExpr, block, arrowExpr.isAsync());
                 } finally {
                     if (enteredBodyScope) {
                         functionContext.varDeclarationScopeOverride = savedVarDeclarationScopeOverride;
@@ -197,13 +127,7 @@ final class ArrowFunctionExpressionCompiler extends AstNodeCompiler<ArrowFunctio
             } else if (arrowExpr.getBody() instanceof Expression expr) {
                 // Expression body - implicitly returns the expression value
                 functionContext.expressionCompiler.compile(expr);
-                int returnValueIndex = functionContext.scopeManager.currentScope()
-                        .declareLocal("#arrow_return_" + functionContext.emitter.currentOffset());
-                functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
-                functionContext.emitHelpers.emitCurrentScopeUsingDisposal();
-                functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
-                // Emit RETURN_ASYNC for async functions, RETURN for sync functions
-                functionContext.emitter.emitOpcode(arrowExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
+                FunctionBodyCompiler.ARROW.emitReturn(functionContext, arrowExpr.isAsync());
             }
 
             localCount = functionContext.scopeManager.currentScope().getLocalCount();

@@ -30,24 +30,12 @@ public final class ExportSpecifier extends ASTNode {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = local != null && local.containsAwait();
-            if (!awaitInside && exported != null && exported.containsAwait()) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        return containsAwaitIn(local, exported);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = local != null && local.containsYield();
-            if (!yieldInside && exported != null && exported.containsYield()) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        return containsYieldIn(local, exported);
     }
 
     public Identifier getExported() {

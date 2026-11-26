@@ -29,18 +29,12 @@ public final class ContinueStatement extends Statement {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = label != null && label.containsAwait();
-        }
-        return awaitInside;
+        return containsAwaitIn(label);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = label != null && label.containsYield();
-        }
-        return yieldInside;
+        return containsYieldIn(label);
     }
 
     public Identifier getLabel() {

@@ -19,7 +19,6 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
@@ -65,6 +64,22 @@ public final class ArrayPrototype {
 
         // Step 7: Return ? Get(O, ! ToString(k)).
         return obj.get(PropertyKey.fromIndexString(index));
+    }
+
+    private static long callbackIterationLength(JSContext context, JSObject obj, JSValue[] args) {
+        if (obj == null) {
+            return -1;
+        }
+        // Even an empty array must read length before validating the callback.
+        long length = lengthOfArrayLike(context, obj);
+        if (context.hasPendingException()) {
+            return -1;
+        }
+        if (args.length == 0 || !JSTypeChecking.isCallable(args[0])) {
+            context.throwTypeError("Callback must be a function");
+            return -1;
+        }
+        return length;
     }
 
     /**
@@ -365,7 +380,7 @@ public final class ArrayPrototype {
      * Array.prototype.every(callbackFn[, thisArg]) Tests whether all elements pass the test.
      */
     public static JSValue every(JSContext context, JSValue thisArg, JSValue[] args) {
-        return testPredicate(context, thisArg, args, true);
+        return iterate(context, thisArg, args, ArrayIteration.EVERY);
     }
 
     /**
@@ -448,19 +463,10 @@ public final class ArrayPrototype {
 
     private static JSValue findMatchingElement(JSContext context, JSValue thisArg, JSValue[] args, String methodName,
             boolean fromEnd, boolean returnIndex) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype." + methodName + " called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) {
+        JSObject obj = requireArrayLike(context, thisArg, methodName);
+        long length = callbackIterationLength(context, obj, args);
+        if (length < 0) {
             return context.getPendingException();
-        }
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-        if (args.length == 0 || !JSTypeChecking.isCallable(args[0])) {
-            return context.throwTypeError("Callback must be a function");
         }
         JSValue callback = args[0];
         JSValue callbackThis = JSValue.argumentOrUndefined(args, 1);
@@ -561,45 +567,7 @@ public final class ArrayPrototype {
      * Array.prototype.forEach(callbackFn[, thisArg]) Executes a function for each array element.
      */
     public static JSValue forEach(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSObject obj = requireArrayLike(context, thisArg, "forEach");
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        if (args.length == 0 || !JSTypeChecking.isCallable(args[0])) {
-            return context.throwTypeError("Callback must be a function");
-        }
-        JSValue callback = args[0];
-
-        JSValue callbackThis = JSValue.argumentOrUndefined(args, 1);
-
-        for (long i = 0; i < length; i++) {
-
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromIndexString(i);
-            if (!obj.has(key)) {
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                continue;
-            }
-            JSValue element = obj.get(key);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            JSValue[] callbackArgs = {element, JSNumber.of(i), obj};
-            JSCall.call(context, callback, callbackThis, callbackArgs);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-        }
-
-        return JSUndefined.INSTANCE;
+        return iterate(context, thisArg, args, ArrayIteration.FOR_EACH);
     }
 
     /**
@@ -778,6 +746,39 @@ public final class ArrayPrototype {
         return res > 0;
     }
 
+    private static JSValue iterate(JSContext context, JSValue thisArg, JSValue[] args, ArrayIteration iteration) {
+        JSObject obj = requireArrayLike(context, thisArg, iteration.methodName);
+        long length = callbackIterationLength(context, obj, args);
+        if (length < 0) {
+            return context.getPendingException();
+        }
+        JSValue callback = args[0];
+        JSValue callbackThis = JSValue.argumentOrUndefined(args, 1);
+        for (long i = 0; i < length; i++) {
+            context.getVirtualMachine().checkExecutionInterruptForNative();
+            PropertyKey key = PropertyKey.fromIndexString(i);
+            boolean present = obj.has(key);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (!present) {
+                continue;
+            }
+            JSValue element = obj.get(key);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            JSValue result = JSCall.call(context, callback, callbackThis, new JSValue[]{element, JSNumber.of(i), obj});
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (iteration.stopsAt(result)) {
+                return iteration.stopResult;
+            }
+        }
+        return iteration.completion;
+    }
+
     /**
      * Array.prototype.join([separator]) Joins all elements of an array into a string.
      */
@@ -874,23 +875,10 @@ public final class ArrayPrototype {
     }
 
     private static JSValue mapOrFilter(JSContext context, JSValue thisArg, JSValue[] args, boolean filter) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError(filter
-                    ? "Array.prototype.filter called on null or undefined"
-                    : "Array.prototype.map called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) {
+        JSObject obj = requireArrayLike(context, thisArg, filter ? "filter" : "map");
+        long length = callbackIterationLength(context, obj, args);
+        if (length < 0) {
             return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        if (args.length == 0 || !JSTypeChecking.isCallable(args[0])) {
-            return context.throwTypeError("Callback must be a function");
         }
         JSValue callback = args[0];
 
@@ -1029,19 +1017,10 @@ public final class ArrayPrototype {
 
     private static JSValue reduceElements(JSContext context, JSValue thisArg, JSValue[] args, boolean fromEnd) {
         String methodName = fromEnd ? "reduceRight" : "reduce";
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype." + methodName + " called on null or undefined");
-        }
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) {
+        JSObject obj = requireArrayLike(context, thisArg, methodName);
+        long length = callbackIterationLength(context, obj, args);
+        if (length < 0) {
             return context.getPendingException();
-        }
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-        if (args.length == 0 || !JSTypeChecking.isCallable(args[0])) {
-            return context.throwTypeError("Callback must be a function");
         }
         JSValue callback = args[0];
         // An explicit undefined initial value is different from omitting the argument.
@@ -1360,13 +1339,17 @@ public final class ArrayPrototype {
      * Array.prototype.some(callbackFn[, thisArg]) Tests whether at least one element passes the test.
      */
     public static JSValue some(JSContext context, JSValue thisArg, JSValue[] args) {
-        return testPredicate(context, thisArg, args, false);
+        return iterate(context, thisArg, args, ArrayIteration.SOME);
     }
 
     /**
      * Array.prototype.sort([compareFn]) Sorts the elements of an array in place.
      */
     public static JSValue sort(JSContext context, JSValue thisArg, JSValue[] args) {
+        return sortArray(context, thisArg, args, false);
+    }
+
+    private static JSValue sortArray(JSContext context, JSValue thisArg, JSValue[] args, boolean copy) {
         // ES2024 23.1.3.30 step 1: validate comparefn before anything else
         JSValue compareFunction = JSValue.argumentOrUndefined(args, 0);
         if (!(compareFunction instanceof JSUndefined) && !JSTypeChecking.isCallable(compareFunction)) {
@@ -1374,7 +1357,7 @@ public final class ArrayPrototype {
                     + (compareFunction instanceof JSObject ? "#<Object>" : compareFunction.toString()));
         }
 
-        JSObject obj = requireArrayLike(context, thisArg, "sort");
+        JSObject obj = requireArrayLike(context, thisArg, copy ? "toSorted" : "sort");
         if (obj == null) {
             return context.getPendingException();
         }
@@ -1384,25 +1367,29 @@ public final class ArrayPrototype {
             return context.getPendingException();
         }
 
-        // Following QuickJS js_array_sort: separate holes/undefined from sortable elements.
-        // Phase 1: Collect only present, non-undefined elements; count undefined values; skip holes.
+        if (copy && length > 0xFFFF_FFFFL) {
+            return context.throwRangeError("Invalid array length");
+        }
+        // sort skips holes. toSorted reads through them, materializing undefined.
         List<JSValue> sortableElements = new ArrayList<>();
         int undefinedCount = 0;
         for (long i = 0; i < length; i++) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
             PropertyKey key = PropertyKey.fromIndexString(i);
-            boolean present = obj.has(key);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (!present) {
-                continue;
+            if (!copy) {
+                boolean present = obj.has(key);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                if (!present) {
+                    continue;
+                }
             }
             JSValue value = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
-            if (value instanceof JSUndefined) {
+            if (!copy && value instanceof JSUndefined) {
                 undefinedCount++;
                 continue;
             }
@@ -1415,16 +1402,23 @@ public final class ArrayPrototype {
                 (a, b) -> SortOperations.compareArrayElements(context, compareFunction, a, b))) {
             return context.getPendingException();
         }
-        sortableElements = Arrays.asList(sorted);
+        if (copy) {
+            JSArray result = context.createJSArray(0, sorted.length);
+            for (JSValue value : sorted) {
+                context.getVirtualMachine().checkExecutionInterruptForNative();
+                result.push(value);
+            }
+            return result;
+        }
 
         // Phase 3: Write back sorted elements, then undefined values, then delete holes.
         long writeIndex = 0;
 
         // Write sorted elements
-        for (int i = 0; i < sortableElements.size(); i++) {
+        for (JSValue value : sorted) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
             PropertyKey key = PropertyKey.fromIndexString(writeIndex);
-            if (!setOrThrow(context, obj, key, sortableElements.get(i))) {
+            if (!setOrThrow(context, obj, key, value)) {
                 return context.getPendingException();
             }
             writeIndex++;
@@ -1578,51 +1572,6 @@ public final class ArrayPrototype {
         return deletedObj;
     }
 
-    private static JSValue testPredicate(JSContext context, JSValue thisArg, JSValue[] args, boolean every) {
-        String methodName = every ? "every" : "some";
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype." + methodName + " called on null or undefined");
-        }
-        JSObject obj = toObjectChecked(context, thisArg);
-        if (obj == null) {
-            return context.getPendingException();
-        }
-        // Read length before validating the callback, including when the length is zero.
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-        if (args.length == 0 || !JSTypeChecking.isCallable(args[0])) {
-            return context.throwTypeError("Callback must be a function");
-        }
-        JSValue callback = args[0];
-        JSValue callbackThis = JSValue.argumentOrUndefined(args, 1);
-        JSBoolean stopResult = every ? JSBoolean.FALSE : JSBoolean.TRUE;
-        for (long i = 0; i < length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromIndexString(i);
-            boolean present = obj.has(key);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (!present) {
-                continue;
-            }
-            JSValue element = obj.get(key);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            JSValue result = JSCall.call(context, callback, callbackThis, new JSValue[]{element, JSNumber.of(i), obj});
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (JSTypeConversions.toBoolean(result) == stopResult) {
-                return stopResult;
-            }
-        }
-        return JSBoolean.valueOf(every);
-    }
-
     private static long toIntegerIndex(JSContext context, JSValue value) {
         // Java's narrowing conversion truncates towards zero, maps NaN to zero and saturates
         // infinities at the long bounds, which the caller then clamps to the array length.
@@ -1754,56 +1703,7 @@ public final class ArrayPrototype {
      * Array.prototype.toSorted([compareFn]) ES2023 23.1.3.32 Returns a new sorted array (immutable version of sort).
      */
     public static JSValue toSorted(JSContext context, JSValue thisArg, JSValue[] args) {
-        // Step 1: If comparefn is not undefined and IsCallable(comparefn) is false, throw a TypeError.
-        // This must happen before ToObject and LengthOfArrayLike per spec.
-        JSValue compareFunction = JSValue.argumentOrUndefined(args, 0);
-        if (!(compareFunction instanceof JSUndefined) && !JSTypeChecking.isCallable(compareFunction)) {
-            return context.throwTypeError("The comparison function must be either a function or undefined: "
-                    + (compareFunction instanceof JSObject ? "#<Object>" : compareFunction.toString()));
-        }
-
-        JSObject obj = requireArrayLike(context, thisArg, "toSorted");
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        // ArrayCreate step 1: If length > 2^32 - 1, throw a RangeError exception.
-        if (length > 0xFFFF_FFFFL) {
-            return context.throwRangeError("Invalid array length");
-        }
-
-        // Create a copy of the elements
-        List<JSValue> elements = new ArrayList<>();
-        for (long i = 0; i < length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            PropertyKey key = PropertyKey.fromIndexString(i);
-            elements.add(obj.get(key));
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-        }
-
-        // Sort the copy
-        JSValue[] sorted = elements.toArray(JSValue[]::new);
-        if (!SortOperations.stableSort(context, sorted,
-                (a, b) -> SortOperations.compareArrayElements(context, compareFunction, a, b))) {
-            return context.getPendingException();
-        }
-        elements = Arrays.asList(sorted);
-
-        // Create new array with sorted elements
-        JSArray result = context.createJSArray(0, elements.size());
-        for (JSValue element : elements) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            result.push(element);
-        }
-
-        return result;
+        return sortArray(context, thisArg, args, true);
     }
 
     /**

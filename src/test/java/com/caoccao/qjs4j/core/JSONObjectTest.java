@@ -28,8 +28,27 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class JSONObjectTest extends BaseJavetTest {
 
-    private JSONObject jsonObject() {
-        return context.getJSGlobalObject().getJSONObject();
+    private void assertIndentation(JSObject obj, JSValue space, String indent) {
+        String expected = indent.isEmpty()
+                ? "{\"name\":\"test\",\"value\":123}"
+                : "{\n" + indent + "\"name\": \"test\",\n" + indent + "\"value\": 123\n}";
+        assertThat(stringifyIndented(obj, space)).as("indent %s", space).isEqualTo(expected);
+    }
+
+    private JSValue parse(JSValue... args) {
+        return context.getJSGlobalObject().getJSONObject().parse(JSUndefined.INSTANCE, args);
+    }
+
+    private JSValue parse(String source) {
+        return parse(new JSString(source));
+    }
+
+    private JSValue stringify(JSValue... args) {
+        return context.getJSGlobalObject().getJSONObject().stringify(JSUndefined.INSTANCE, args);
+    }
+
+    private String stringifyIndented(JSValue value, JSValue space) {
+        return stringify(value, JSUndefined.INSTANCE, space).asString().orElseThrow().value();
     }
 
     @Test
@@ -58,7 +77,7 @@ public class JSONObjectTest extends BaseJavetTest {
                 }
                 """;
 
-        JSValue result = jsonObject().parse(JSUndefined.INSTANCE, new JSValue[]{new JSString(complexJson)});
+        JSValue result = parse(new JSString(complexJson));
         JSObject root = result.asObject().orElseThrow();
 
         // Check users array
@@ -82,97 +101,50 @@ public class JSONObjectTest extends BaseJavetTest {
         assertThat(metadata.get("count").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
 
         // Test stringify back
-        JSValue stringified = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{result});
+        JSValue stringified = stringify(result);
         assertThat(stringified.isString()).isTrue();
 
         // Parse again to ensure round-trip works
-        JSValue reparsed = jsonObject().parse(JSUndefined.INSTANCE, new JSValue[]{stringified});
+        JSValue reparsed = parse(stringified);
         JSObject reparsedObj = reparsed.asObject().orElseThrow();
     }
 
     @Test
     public void testParse() {
-        // Normal case: parse null
-        JSValue result = jsonObject().parse(JSUndefined.INSTANCE, stringArgs("null"));
-        assertThat(result).isEqualTo(JSNull.INSTANCE);
+        assertThat(parse("null")).isEqualTo(JSNull.INSTANCE);
+        assertThat(parse("true").isBooleanTrue()).isTrue();
+        assertThat(parse("false").isBooleanFalse()).isTrue();
+        assertNumberValue(parse("42"), 42.0);
+        assertNumberValue(parse("-123.45"), -123.45);
+        assertStringValue(parse("\"hello world\""), "hello world");
+        assertStringValue(parse("\"hello\\nworld\""), "hello\nworld");
 
-        // Normal case: parse boolean true
-        result = jsonObject().parse(JSUndefined.INSTANCE, stringArgs("true"));
-        assertThat(result.isBooleanTrue()).isTrue();
-
-        // Normal case: parse boolean false
-        result = jsonObject().parse(JSUndefined.INSTANCE, stringArgs("false"));
-        assertThat(result.isBooleanFalse()).isTrue();
-
-        // Normal case: parse number
-        result = jsonObject().parse(JSUndefined.INSTANCE, stringArgs("42"));
-        assertNumberValue(result, 42.0);
-
-        // Normal case: parse negative number
-        result = jsonObject().parse(JSUndefined.INSTANCE, stringArgs("-123.45"));
-        assertNumberValue(result, -123.45);
-
-        // Normal case: parse string
-        result = jsonObject().parse(JSUndefined.INSTANCE, stringArgs("\"hello world\""));
-        assertStringValue(result, "hello world");
-
-        // Normal case: parse string with escapes
-        result = jsonObject().parse(JSUndefined.INSTANCE, stringArgs("\"hello\\nworld\""));
-        assertStringValue(result, "hello\nworld");
-
-        // Normal case: parse empty array
-        result = jsonObject().parse(JSUndefined.INSTANCE, stringArgs("[]"));
-        JSArray emptyArr = result.asArray().orElseThrow();
+        JSArray emptyArr = parse("[]").asArray().orElseThrow();
         assertThat(emptyArr.getLength()).isEqualTo(0);
 
-        // Normal case: parse array with values
-        result = jsonObject().parse(JSUndefined.INSTANCE, stringArgs("[1, \"two\", true]"));
-        JSArray arr = result.asArray().orElseThrow();
+        JSArray arr = parse("[1, \"two\", true]").asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(3);
         assertNumberValue(arr.get(0), 1.0);
         assertStringValue(arr.get(1), "two");
         assertThat(arr.get(2)).isEqualTo(JSBoolean.TRUE);
 
-        // Normal case: parse empty object
-        result = jsonObject().parse(JSUndefined.INSTANCE, stringArgs("{}"));
-        result.asObject().orElseThrow();
+        parse("{}").asObject().orElseThrow();
 
-        // Normal case: parse object with properties
-        result = jsonObject().parse(JSUndefined.INSTANCE, stringArgs("{\"name\": \"test\", \"value\": 123}"));
-        JSObject obj = result.asObject().orElseThrow();
+        JSObject obj = parse("{\"name\": \"test\", \"value\": 123}").asObject().orElseThrow();
         assertThat(obj.get("name").asString().map(JSString::value).orElseThrow()).isEqualTo("test");
         assertThat(obj.get("value").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(123.0);
 
-        // Normal case: parse nested object
-        result = jsonObject().parse(JSUndefined.INSTANCE, stringArgs("{\"data\": {\"nested\": true}}"));
-        obj = result.asObject().orElseThrow();
+        obj = parse("{\"data\": {\"nested\": true}}").asObject().orElseThrow();
         JSObject data = obj.get("data").asObject().orElseThrow();
         assertThat(data.get("nested")).isEqualTo(JSBoolean.TRUE);
 
-        // Normal case: parse with whitespace
-        result = jsonObject().parse(JSUndefined.INSTANCE, stringArgs("  {  \"key\"  :  \"value\"  }  "));
-        obj = result.asObject().orElseThrow();
+        obj = parse("  {  \"key\"  :  \"value\"  }  ").asObject().orElseThrow();
         assertThat(obj.get("key").asString().map(JSString::value).orElseThrow()).isEqualTo("value");
-
-        // Edge case: empty string
-        result = jsonObject().parse(JSUndefined.INSTANCE, stringArgs(""));
-        assertPendingSyntaxError(context, result);
-
-        // Edge case: invalid JSON
-        result = jsonObject().parse(JSUndefined.INSTANCE, stringArgs("{invalid}"));
-        assertPendingSyntaxError(context, result);
-
-        // Edge case: unterminated string
-        result = jsonObject().parse(JSUndefined.INSTANCE, stringArgs("\"unterminated"));
-        assertPendingSyntaxError(context, result);
-
-        // Edge case: no arguments
-        result = jsonObject().parse(JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertPendingSyntaxError(context, result);
-
-        // Edge case: non-string argument (should be converted to string)
-        result = jsonObject().parse(JSUndefined.INSTANCE, numberArgs(123));
-        assertNumberValue(result, 123.0);
+        assertPendingSyntaxError(context, parse(""));
+        assertPendingSyntaxError(context, parse("{invalid}"));
+        assertPendingSyntaxError(context, parse("\"unterminated"));
+        assertPendingSyntaxError(context, parse());
+        assertNumberValue(parse(numberArgs(123)), 123.0);
     }
 
     @Test
@@ -276,7 +248,7 @@ public class JSONObjectTest extends BaseJavetTest {
             return value;
         });
 
-        JSValue result = jsonObject().parse(JSUndefined.INSTANCE, new JSValue[]{new JSString(json), reviver});
+        JSValue result = parse(new JSString(json), reviver);
         JSObject obj = result.asObject().orElseThrow();
 
         assertThat(obj.get("a").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
@@ -313,7 +285,7 @@ public class JSONObjectTest extends BaseJavetTest {
             return value;
         });
 
-        JSValue result = jsonObject().parse(JSUndefined.INSTANCE, new JSValue[]{new JSString(json), reviver});
+        JSValue result = parse(new JSString(json), reviver);
         JSArray arr = result.asArray().orElseThrow();
 
         assertNumberValue(arr.get(0), 2.0);
@@ -347,7 +319,7 @@ public class JSONObjectTest extends BaseJavetTest {
             return value;
         });
 
-        JSValue result = jsonObject().parse(JSUndefined.INSTANCE, new JSValue[]{new JSString(json), reviver});
+        JSValue result = parse(new JSString(json), reviver);
         JSObject obj = result.asObject().orElseThrow();
 
         assertThat(obj.get("name").asString().map(JSString::value).orElseThrow()).isEqualTo("Alice");
@@ -383,7 +355,7 @@ public class JSONObjectTest extends BaseJavetTest {
             return value;
         });
 
-        JSValue result = jsonObject().parse(JSUndefined.INSTANCE, new JSValue[]{new JSString(json), reviver});
+        JSValue result = parse(new JSString(json), reviver);
         JSObject obj = result.asObject().orElseThrow();
         JSObject user = obj.get("user").asObject().orElseThrow();
 
@@ -511,12 +483,12 @@ public class JSONObjectTest extends BaseJavetTest {
         original.set("array", arr);
 
         // Stringify
-        JSValue jsonString = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{original});
+        JSValue jsonString = stringify(original);
         // Should be a string containing the JSON
         assertThat(jsonString.asString().isPresent()).isTrue();
 
         // Parse back
-        JSValue parsed = jsonObject().parse(JSUndefined.INSTANCE, new JSValue[]{jsonString});
+        JSValue parsed = parse(jsonString);
         JSObject parsedObj = parsed.asObject().orElseThrow();
         assertThat(parsedObj.get("string").asString().map(JSString::value).orElseThrow()).isEqualTo("hello");
         assertThat(parsedObj.get("number").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(42.0);
@@ -679,160 +651,66 @@ public class JSONObjectTest extends BaseJavetTest {
         obj.set("name", new JSString("test"));
         obj.set("value", new JSNumber(123));
 
-        // Normal case: stringify with space parameter (number)
-        JSValue result = jsonObject().stringify(JSUndefined.INSTANCE,
-                new JSValue[]{obj, JSUndefined.INSTANCE, new JSNumber(2)});
-        String jsonStr = result.asString().map(JSString::value).orElseThrow();
-        assertThat(jsonStr.contains("\n  ")).isTrue(); // Should have indentation
+        for (int width : new int[]{0, 1, 2, 4, 10, 20}) {
+            assertIndentation(obj, JSNumber.of(width), " ".repeat(Math.min(width, 10)));
+        }
+        for (String space : new String[]{"", " ", "  ", "\t", "abcdefghijk"}) {
+            assertIndentation(obj, new JSString(space), space.substring(0, Math.min(space.length(), 10)));
+        }
 
-        // Normal case: stringify with space parameter (string)
-        result = jsonObject().stringify(JSUndefined.INSTANCE,
-                new JSValue[]{obj, JSUndefined.INSTANCE, new JSString("  ")});
-        jsonStr = result.asString().map(JSString::value).orElseThrow();
-        assertThat(jsonStr.contains("\n  ")).isTrue(); // Should have indentation
-
-        // Normal case: stringify with large space (should be limited)
-        result = jsonObject().stringify(JSUndefined.INSTANCE,
-                new JSValue[]{obj, JSUndefined.INSTANCE, new JSNumber(20)});
-        jsonStr = result.asString().map(JSString::value).orElseThrow();
-        // Should not have more than 10 spaces of indentation
-        assertThat(jsonStr).isEqualTo("{\n" + "          \"name\": \"test\",\n" + "          \"value\": 123\n" + "}");
-
-        // Test indentation with different number values
-        // Indent 0 (no indentation)
-        result = jsonObject().stringify(JSUndefined.INSTANCE,
-                new JSValue[]{obj, JSUndefined.INSTANCE, new JSNumber(0)});
-        jsonStr = result.asString().map(JSString::value).orElseThrow();
-        assertThat(jsonStr.contains("\n")).isFalse(); // Should be compact
-
-        // Indent 1
-        result = jsonObject().stringify(JSUndefined.INSTANCE,
-                new JSValue[]{obj, JSUndefined.INSTANCE, new JSNumber(1)});
-        jsonStr = result.asString().map(JSString::value).orElseThrow();
-        assertThat(jsonStr.contains("\n ")).isTrue(); // Should have 1 space indent
-
-        // Indent 4
-        result = jsonObject().stringify(JSUndefined.INSTANCE,
-                new JSValue[]{obj, JSUndefined.INSTANCE, new JSNumber(4)});
-        jsonStr = result.asString().map(JSString::value).orElseThrow();
-        assertThat(jsonStr.contains("\n    ")).isTrue(); // Should have 4 spaces indent
-
-        // Indent 10 (maximum)
-        result = jsonObject().stringify(JSUndefined.INSTANCE,
-                new JSValue[]{obj, JSUndefined.INSTANCE, new JSNumber(10)});
-        jsonStr = result.asString().map(JSString::value).orElseThrow();
-        assertThat(jsonStr.contains("\n          ")).isTrue(); // Should have 10 spaces indent
-
-        // Test indentation with different string values
-        // Empty string indent
-        result = jsonObject().stringify(JSUndefined.INSTANCE,
-                new JSValue[]{obj, JSUndefined.INSTANCE, new JSString("")});
-        jsonStr = result.asString().map(JSString::value).orElseThrow();
-        assertThat(jsonStr.contains("\n")).isFalse(); // Should be compact
-
-        // Single space string
-        result = jsonObject().stringify(JSUndefined.INSTANCE,
-                new JSValue[]{obj, JSUndefined.INSTANCE, new JSString(" ")});
-        jsonStr = result.asString().map(JSString::value).orElseThrow();
-        assertThat(jsonStr.contains("\n ")).isTrue(); // Should have space indent
-
-        // Tab character
-        result = jsonObject().stringify(JSUndefined.INSTANCE,
-                new JSValue[]{obj, JSUndefined.INSTANCE, new JSString("\t")});
-        jsonStr = result.asString().map(JSString::value).orElseThrow();
-        assertThat(jsonStr.contains("\n\t")).isTrue(); // Should have tab indent
-
-        // Multiple character string
-        result = jsonObject().stringify(JSUndefined.INSTANCE,
-                new JSValue[]{obj, JSUndefined.INSTANCE, new JSString("  ")});
-        jsonStr = result.asString().map(JSString::value).orElseThrow();
-        assertThat(jsonStr.contains("\n  ")).isTrue(); // Should have two spaces
-
-        // String longer than 10 characters (should be truncated)
-        result = jsonObject().stringify(JSUndefined.INSTANCE,
-                new JSValue[]{obj, JSUndefined.INSTANCE, new JSString("abcdefghijk")});
-        jsonStr = result.asString().map(JSString::value).orElseThrow();
-        assertThat(jsonStr.contains("\nabcdefghij")).isTrue(); // Should have first 10 chars
-
-        // Test indentation with arrays
         JSArray testArr = new JSArray(context, new JSNumber(1), new JSString("test"), JSBoolean.TRUE);
 
-        result = jsonObject().stringify(JSUndefined.INSTANCE,
-                new JSValue[]{testArr, JSUndefined.INSTANCE, new JSNumber(2)});
-        jsonStr = result.asString().map(JSString::value).orElseThrow();
-        assertThat(jsonStr.contains("[\n  1,\n  \"test\",\n  true\n]")).isTrue(); // Should have proper array
-                                                                                  // indentation
+        assertThat(stringifyIndented(testArr, JSNumber.of(2))).isEqualTo("[\n  1,\n  \"test\",\n  true\n]");
 
-        // Test indentation with nested structures
         JSObject nested = new JSObject(context);
         nested.set("inner", new JSString("value"));
         JSObject outer = new JSObject(context);
         outer.set("nested", nested);
         outer.set("array", testArr);
 
-        result = jsonObject().stringify(JSUndefined.INSTANCE,
-                new JSValue[]{outer, JSUndefined.INSTANCE, new JSNumber(4)});
-        jsonStr = result.asString().map(JSString::value).orElseThrow();
-        assertThat(jsonStr.contains("{\n    \"nested\": {\n        \"inner\": \"value\"\n    }")).isTrue(); // Should
-                                                                                                            // have
-                                                                                                            // nested
-                                                                                                            // indentation
+        assertThat(stringifyIndented(outer, JSNumber.of(4)))
+                .contains("{\n    \"nested\": {\n        \"inner\": \"value\"\n    }");
     }
 
     @Test
     public void testStringifyForObjects() {
-        // Normal case: stringify empty array
         JSArray emptyArr = new JSArray(context);
-        JSValue result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{emptyArr});
-        assertStringValue(result, "[]");
+        assertStringValue(stringify(emptyArr), "[]");
 
-        // Normal case: stringify array with values
         JSArray arr = new JSArray(context, new JSNumber(1), new JSString("two"), JSBoolean.TRUE);
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{arr});
-        assertStringValue(result, "[1,\"two\",true]");
+        assertStringValue(stringify(arr), "[1,\"two\",true]");
 
-        // Normal case: stringify empty object
         JSObject emptyObj = new JSObject(context);
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{emptyObj});
-        assertStringValue(result, "{}");
+        assertStringValue(stringify(emptyObj), "{}");
 
-        // Normal case: stringify object with properties
         JSObject obj = new JSObject(context);
         obj.set("name", new JSString("test"));
         obj.set("value", new JSNumber(123));
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj});
+        JSValue result = stringify(obj);
         // Note: property order may vary
         String jsonStr = result.asString().map(JSString::value).orElseThrow();
         assertThat(jsonStr.contains("\"name\":\"test\"")).isTrue();
         assertThat(jsonStr.contains("\"value\":123")).isTrue();
 
-        // Normal case: stringify nested object
         JSObject nestedObj = new JSObject(context);
         nestedObj.set("nested", JSBoolean.TRUE);
         JSObject parentObj = new JSObject(context);
         parentObj.set("data", nestedObj);
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{parentObj});
+        result = stringify(parentObj);
         jsonStr = result.asString().map(JSString::value).orElseThrow();
         assertThat(jsonStr.contains("\"data\":{\"nested\":true}")).isTrue();
 
-        // Edge case: stringify undefined (should return undefined)
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{JSUndefined.INSTANCE});
-        assertThat(result.isUndefined()).isTrue();
+        assertThat(stringify(JSUndefined.INSTANCE).isUndefined()).isTrue();
 
-        // Edge case: stringify function (should be undefined in simplified implementation)
         JSFunction func = new JSNativeFunction(context, "test", 0, (context, thisArg, args) -> JSUndefined.INSTANCE);
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{func});
-        assertThat(result.isUndefined()).isTrue();
+        assertThat(stringify(func).isUndefined()).isTrue();
 
-        // Edge case: no arguments
-        result = jsonObject().stringify(JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(result.isUndefined()).isTrue();
+        assertThat(stringify().isUndefined()).isTrue();
 
-        // Edge case: stringify object with undefined values (should be omitted in simplified implementation)
         JSObject objWithUndefined = new JSObject(context);
         objWithUndefined.set("defined", new JSString("value"));
         objWithUndefined.set("undefined", JSUndefined.INSTANCE);
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{objWithUndefined});
+        result = stringify(objWithUndefined);
         jsonStr = result.asString().map(JSString::value).orElseThrow();
         assertThat(jsonStr.contains("\"defined\":\"value\"")).isTrue();
         // Note: simplified implementation may or may not include undefined values
@@ -840,33 +718,13 @@ public class JSONObjectTest extends BaseJavetTest {
 
     @Test
     public void testStringifyForPrimitives() {
-        // Normal case: stringify null
-        JSValue result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE});
-        assertStringValue(result, "null");
-
-        // Normal case: stringify boolean true
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{JSBoolean.TRUE});
-        assertStringValue(result, "true");
-
-        // Normal case: stringify boolean false
-        result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{JSBoolean.FALSE});
-        assertStringValue(result, "false");
-
-        // Normal case: stringify number
-        result = jsonObject().stringify(JSUndefined.INSTANCE, numberArgs(42));
-        assertStringValue(result, "42");
-
-        // Normal case: stringify negative number
-        result = jsonObject().stringify(JSUndefined.INSTANCE, numberArgs(-123.45));
-        assertStringValue(result, "-123.45");
-
-        // Normal case: stringify string
-        result = jsonObject().stringify(JSUndefined.INSTANCE, stringArgs("hello world"));
-        assertStringValue(result, "\"hello world\"");
-
-        // Normal case: stringify string with special characters
-        result = jsonObject().stringify(JSUndefined.INSTANCE, stringArgs("hello\nworld"));
-        assertStringValue(result, "\"hello\\nworld\"");
+        assertStringValue(stringify(JSNull.INSTANCE), "null");
+        assertStringValue(stringify(JSBoolean.TRUE), "true");
+        assertStringValue(stringify(JSBoolean.FALSE), "false");
+        assertStringValue(stringify(numberArgs(42)), "42");
+        assertStringValue(stringify(numberArgs(-123.45)), "-123.45");
+        assertStringValue(stringify(stringArgs("hello world")), "\"hello world\"");
+        assertStringValue(stringify(stringArgs("hello\nworld")), "\"hello\\nworld\"");
     }
 
     @Test
@@ -885,7 +743,7 @@ public class JSONObjectTest extends BaseJavetTest {
             return value;
         });
 
-        JSValue result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{objWithBigInt, replacer});
+        JSValue result = stringify(objWithBigInt, replacer);
         String jsonStr = result.asString().map(JSString::value).orElseThrow();
         assertThat(jsonStr).contains("\"num\":246");
         assertThat(jsonStr).contains("\"str\":\"test\"");
@@ -984,7 +842,7 @@ public class JSONObjectTest extends BaseJavetTest {
             return value;
         });
 
-        JSValue result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj, replacer});
+        JSValue result = stringify(obj, replacer);
         String jsonStr = result.asString().map(JSString::value).orElseThrow();
 
         // toJSON returns 20, then replacer doubles it to 40
@@ -1003,7 +861,7 @@ public class JSONObjectTest extends BaseJavetTest {
         // Create a replacer array with only allowed properties
         JSArray replacer = new JSArray(context, new JSString("name"), new JSString("age"));
 
-        JSValue result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj, replacer});
+        JSValue result = stringify(obj, replacer);
         String jsonStr = result.asString().map(JSString::value).orElseThrow();
 
         assertThat(jsonStr).contains("\"name\":\"Alice\"");
@@ -1027,7 +885,7 @@ public class JSONObjectTest extends BaseJavetTest {
         // Only allow "data" and "x", "y" properties
         JSArray replacer = new JSArray(context, new JSString("data"), new JSString("x"), new JSString("y"));
 
-        JSValue result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{outer, replacer});
+        JSValue result = stringify(outer, replacer);
         String jsonStr = result.asString().map(JSString::value).orElseThrow();
 
         assertThat(jsonStr).contains("\"data\":");
@@ -1060,7 +918,7 @@ public class JSONObjectTest extends BaseJavetTest {
         // Replacer array with numbers
         JSArray replacer = new JSArray(context, numberArgs(0, 2));
 
-        JSValue result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj, replacer});
+        JSValue result = stringify(obj, replacer);
         String jsonStr = result.asString().map(JSString::value).orElseThrow();
 
         assertThat(jsonStr).contains("\"0\":\"zero\"");
@@ -1098,7 +956,7 @@ public class JSONObjectTest extends BaseJavetTest {
             return value;
         });
 
-        JSValue result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj, replacer});
+        JSValue result = stringify(obj, replacer);
         String jsonStr = result.asString().map(JSString::value).orElseThrow();
 
         assertThat(jsonStr).contains("\"name\":\"test\"");
@@ -1135,7 +993,7 @@ public class JSONObjectTest extends BaseJavetTest {
         });
         obj.set("toJSON", toJSON);
 
-        JSValue result = jsonObject().stringify(JSUndefined.INSTANCE, new JSValue[]{obj});
+        JSValue result = stringify(obj);
         String jsonStr = result.asString().map(JSString::value).orElseThrow();
 
         assertThat(jsonStr).isEqualTo("\"custom\"");

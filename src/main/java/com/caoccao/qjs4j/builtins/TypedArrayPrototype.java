@@ -92,6 +92,17 @@ public final class TypedArrayPrototype {
         return 0;
     }
 
+    private static JSValue constructTypedArray(JSContext context, JSValue constructor, JSValue[] args) {
+        JSValue result = JSReflectObject.constructSimple(context, constructor, args);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        if (!(result instanceof JSTypedArray)) {
+            return context.throwTypeError("TypedArray species constructor did not return a TypedArray");
+        }
+        return result;
+    }
+
     public static JSValue copyWithin(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTypedArray typedArray = validateTypedArray(context, thisArg, "TypedArray.prototype.copyWithin");
         if (typedArray == null) {
@@ -100,32 +111,17 @@ public final class TypedArrayPrototype {
         // Step 3: Capture length before coercion
         long length = typedArray.getLength();
 
-        // Steps 4-7: Coerce target (may resize buffer)
-        double relativeTarget = args.length > 0 ? JSTypeConversions.toInteger(context, args[0]) : 0;
+        long target = relativeIndex(context, args, 0, 0, length);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        long target = (long) (relativeTarget < 0
-                ? Math.max(length + relativeTarget, 0)
-                : Math.min(relativeTarget, length));
-
-        // Steps 8-10: Coerce start (may resize buffer)
-        double relativeStart = args.length > 1 ? JSTypeConversions.toInteger(context, args[1]) : 0;
+        long start = relativeIndex(context, args, 1, 0, length);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        long start = (long) (relativeStart < 0 ? Math.max(length + relativeStart, 0) : Math.min(relativeStart, length));
-
-        // Steps 11-13: Coerce end (may resize buffer)
-        long end;
-        if (args.length > 2 && !args[2].isUndefined()) {
-            double relativeEnd = JSTypeConversions.toInteger(context, args[2]);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            end = (long) (relativeEnd < 0 ? Math.max(length + relativeEnd, 0) : Math.min(relativeEnd, length));
-        } else {
-            end = length;
+        long end = relativeIndex(context, args, 2, length, length);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
 
         // Step 14: Compute count from original length values
@@ -243,7 +239,7 @@ public final class TypedArrayPrototype {
     }
 
     public static JSValue every(JSContext context, JSValue thisArg, JSValue[] args) {
-        return testPredicate(context, thisArg, args, true);
+        return iterate(context, thisArg, args, ArrayIteration.EVERY);
     }
 
     public static JSValue fill(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -270,32 +266,13 @@ public final class TypedArrayPrototype {
             }
         }
 
-        // Steps 6-9: Compute startIndex from original length
-        long start = 0;
-        if (args.length > 1) {
-            double relativeStart = JSTypeConversions.toInteger(context, args[1]);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (relativeStart < 0) {
-                start = Math.max((long) (length + relativeStart), 0);
-            } else {
-                start = Math.min((long) relativeStart, length);
-            }
+        long start = relativeIndex(context, args, 1, 0, length);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
-
-        // Steps 10-13: Compute endIndex from original length
-        long end = length;
-        if (args.length > 2 && !args[2].isUndefined()) {
-            double relativeEnd = JSTypeConversions.toInteger(context, args[2]);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (relativeEnd < 0) {
-                end = Math.max((long) (length + relativeEnd), 0);
-            } else {
-                end = Math.min((long) relativeEnd, length);
-            }
+        long end = relativeIndex(context, args, 2, length, length);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
 
         // Step 14: Check if buffer is now detached (after value/start/end coercion)
@@ -410,22 +387,7 @@ public final class TypedArrayPrototype {
     }
 
     public static JSValue forEach(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTypedArray typedArray = toTypedArrayForCallback(context, thisArg, args, "TypedArray.prototype.forEach");
-        if (typedArray == null) {
-            return context.getPendingException();
-        }
-        JSValue callbackFn = args[0];
-        JSValue callbackThisArg = JSValue.argumentOrUndefined(args, 1);
-        long length = typedArray.getLength();
-        for (long k = 0; k < length; k++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            JSValue kValue = safeGetElement(typedArray, k);
-            JSCall.call(context, callbackFn, callbackThisArg, new JSValue[]{kValue, JSNumber.of(k), typedArray});
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-        }
-        return JSUndefined.INSTANCE;
+        return iterate(context, thisArg, args, ArrayIteration.FOR_EACH);
     }
 
     public static JSValue getBuffer(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -520,6 +482,29 @@ public final class TypedArrayPrototype {
 
     private static boolean isBigIntTypedArray(JSTypedArray typedArray) {
         return typedArray instanceof JSBigInt64Array || typedArray instanceof JSBigUint64Array;
+    }
+
+    private static JSValue iterate(JSContext context, JSValue thisArg, JSValue[] args, ArrayIteration iteration) {
+        JSTypedArray typedArray = toTypedArrayForCallback(context, thisArg, args, iteration.typedArrayMethod);
+        if (typedArray == null) {
+            return context.getPendingException();
+        }
+        JSValue callbackFn = args[0];
+        JSValue callbackThisArg = JSValue.argumentOrUndefined(args, 1);
+        long length = typedArray.getLength();
+        for (long k = 0; k < length; k++) {
+            context.getVirtualMachine().checkExecutionInterruptForNative();
+            JSValue kValue = safeGetElement(typedArray, k);
+            JSValue testResult = JSCall.call(context, callbackFn, callbackThisArg,
+                    new JSValue[]{kValue, JSNumber.of(k), typedArray});
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (iteration.stopsAt(testResult)) {
+                return iteration.stopResult;
+            }
+        }
+        return iteration.completion;
     }
 
     public static JSValue join(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -636,6 +621,14 @@ public final class TypedArrayPrototype {
 
     public static JSValue reduceRight(JSContext context, JSValue thisArg, JSValue[] args) {
         return reduce(context, thisArg, args, "TypedArray.prototype.reduceRight", true);
+    }
+
+    private static long relativeIndex(JSContext context, JSValue[] args, int index, long defaultValue, long length) {
+        if (index >= args.length || args[index] instanceof JSUndefined) {
+            return defaultValue;
+        }
+        double relative = JSTypeConversions.toInteger(context, args[index]);
+        return (long) (relative < 0 ? Math.max(length + relative, 0) : Math.min(relative, length));
     }
 
     private static int requireWorkspaceLength(JSContext context, long length) {
@@ -876,30 +869,13 @@ public final class TypedArrayPrototype {
         }
         long length = typedArray.getLength();
 
-        double relativeStart = args.length > 0 ? JSTypeConversions.toInteger(context, args[0]) : 0;
+        long start = relativeIndex(context, args, 0, 0, length);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        long start;
-        if (relativeStart < 0) {
-            start = Math.max(0, (long) (length + relativeStart));
-        } else {
-            start = (long) Math.min(relativeStart, length);
-        }
-
-        long end;
-        if (args.length > 1 && !args[1].isUndefined()) {
-            double relativeEnd = JSTypeConversions.toInteger(context, args[1]);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (relativeEnd < 0) {
-                end = Math.max(0, (long) (length + relativeEnd));
-            } else {
-                end = (long) Math.min(relativeEnd, length);
-            }
-        } else {
-            end = length;
+        long end = relativeIndex(context, args, 1, length, length);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
 
         long count = Math.max(0, end - start);
@@ -963,7 +939,7 @@ public final class TypedArrayPrototype {
     }
 
     public static JSValue some(JSContext context, JSValue thisArg, JSValue[] args) {
-        return testPredicate(context, thisArg, args, false);
+        return iterate(context, thisArg, args, ArrayIteration.SOME);
     }
 
     public static JSValue sort(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1033,6 +1009,31 @@ public final class TypedArrayPrototype {
         return target;
     }
 
+    private static JSValue speciesConstructor(JSContext context, JSTypedArray exemplar, boolean requireFunction) {
+        JSValue fallback = context.getGlobalObject().get(PropertyKey.fromString(exemplar.getTypedArrayName()));
+        JSValue constructor = exemplar.get(PropertyKey.CONSTRUCTOR);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        if (constructor instanceof JSUndefined) {
+            return fallback;
+        }
+        if (!(constructor instanceof JSObject object)) {
+            return context.throwTypeError("constructor is not an object");
+        }
+        JSValue species = object.get(PropertyKey.SYMBOL_SPECIES);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        if (species instanceof JSNull || species instanceof JSUndefined) {
+            return fallback;
+        }
+        if (requireFunction && !(species instanceof JSFunction)) {
+            return context.throwTypeError("Species is not a constructor");
+        }
+        return species;
+    }
+
     public static JSValue subarray(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.subarray");
         if (typedArray == null) {
@@ -1042,36 +1043,15 @@ public final class TypedArrayPrototype {
         // Step 5-7: Get srcLength (0 if OOB)
         long srcLength = typedArray.getLength();
 
-        // Step 8-10: Compute startIndex using toInteger (handles Infinity)
-        double relativeStart = args.length > 0 ? JSTypeConversions.toInteger(context, args[0]) : 0;
+        long startIndex = relativeIndex(context, args, 0, 0, srcLength);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        long startIndex;
-        if (relativeStart < 0) {
-            startIndex = Math.max(0, (long) (srcLength + relativeStart));
-        } else {
-            startIndex = (long) Math.min(relativeStart, srcLength);
+        long endIndex = relativeIndex(context, args, 1, srcLength, srcLength);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
-
-        // Determine if end is undefined (for length-tracking detection)
         boolean endIsUndefined = args.length <= 1 || args[1].isUndefined();
-
-        // Steps 11-12: Compute endIndex
-        long endIndex;
-        if (!endIsUndefined) {
-            double relativeEnd = JSTypeConversions.toInteger(context, args[1]);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (relativeEnd < 0) {
-                endIndex = Math.max(0, (long) (srcLength + relativeEnd));
-            } else {
-                endIndex = (long) Math.min(relativeEnd, srcLength);
-            }
-        } else {
-            endIndex = srcLength;
-        }
 
         // Step 13-14: Compute beginByteOffset using stored byteOffset (preserved even when OOB)
         int elementSize = typedArray.getBytesPerElement();
@@ -1080,27 +1060,9 @@ public final class TypedArrayPrototype {
 
         // SpeciesConstructor(O, defaultConstructor)
         IJSArrayBuffer buffer = typedArray.getBuffer();
-        JSValue defaultConstructor = context.getGlobalObject()
-                .get(PropertyKey.fromString(typedArray.getTypedArrayName()));
-        JSValue constructorValue = typedArray.get(PropertyKey.CONSTRUCTOR);
+        JSValue chosenConstructor = speciesConstructor(context, typedArray, false);
         if (context.hasPendingException()) {
             return context.getPendingException();
-        }
-        JSValue chosenConstructor;
-        if (constructorValue instanceof JSUndefined) {
-            chosenConstructor = defaultConstructor;
-        } else if (!(constructorValue instanceof JSObject constructorObj)) {
-            return context.throwTypeError("constructor is not an object");
-        } else {
-            JSValue species = constructorObj.get(PropertyKey.SYMBOL_SPECIES);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (species instanceof JSUndefined || species instanceof JSNull) {
-                chosenConstructor = defaultConstructor;
-            } else {
-                chosenConstructor = species;
-            }
         }
 
         // Step 15-16: Build argument list
@@ -1116,42 +1078,7 @@ public final class TypedArrayPrototype {
             constructArgs = new JSValue[]{bufferArg, JSNumber.of(beginByteOffset), JSNumber.of(newLength)};
         }
 
-        // Step 17: TypedArraySpeciesCreate
-        JSValue result = JSReflectObject.constructSimple(context, chosenConstructor, constructArgs);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        // Validate result is a TypedArray (TypedArrayCreate step 2: ValidateTypedArray)
-        if (!(result instanceof JSTypedArray)) {
-            return context.throwTypeError("TypedArray species constructor did not return a TypedArray");
-        }
-
-        return result;
-    }
-
-    private static JSValue testPredicate(JSContext context, JSValue thisArg, JSValue[] args, boolean every) {
-        JSTypedArray typedArray = toTypedArrayForCallback(context, thisArg, args,
-                every ? "TypedArray.prototype.every" : "TypedArray.prototype.some");
-        if (typedArray == null) {
-            return context.getPendingException();
-        }
-        JSValue callbackFn = args[0];
-        JSValue callbackThisArg = JSValue.argumentOrUndefined(args, 1);
-        long length = typedArray.getLength();
-        for (long k = 0; k < length; k++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            JSValue kValue = safeGetElement(typedArray, k);
-            JSValue testResult = JSCall.call(context, callbackFn, callbackThisArg,
-                    new JSValue[]{kValue, JSNumber.of(k), typedArray});
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (JSTypeConversions.toBoolean(testResult).isBooleanTrue() != every) {
-                return JSBoolean.valueOf(!every);
-            }
-        }
-        return JSBoolean.valueOf(every);
+        return constructTypedArray(context, chosenConstructor, constructArgs);
     }
 
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1300,44 +1227,13 @@ public final class TypedArrayPrototype {
      * Includes TypedArrayCreate length validation (step 3a).
      */
     private static JSValue typedArraySpeciesCreate(JSContext context, JSTypedArray exemplar, JSValue[] args) {
-        // Get the default constructor for this typed array type
-        JSValue defaultConstructor = context.getGlobalObject()
-                .get(PropertyKey.fromString(exemplar.getTypedArrayName()));
-
-        // SpeciesConstructor(exemplar, defaultConstructor)
-        JSValue constructorValue = exemplar.get(PropertyKey.CONSTRUCTOR);
+        JSValue constructor = speciesConstructor(context, exemplar, true);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-
-        JSValue chosenConstructor;
-        if (constructorValue instanceof JSUndefined) {
-            chosenConstructor = defaultConstructor;
-        } else if (!(constructorValue instanceof JSObject constructorObj)) {
-            return context.throwTypeError("constructor is not an object");
-        } else {
-            JSValue species = constructorObj.get(PropertyKey.SYMBOL_SPECIES);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (species instanceof JSUndefined || species instanceof JSNull) {
-                chosenConstructor = defaultConstructor;
-            } else if (species instanceof JSFunction) {
-                chosenConstructor = species;
-            } else {
-                return context.throwTypeError("Species is not a constructor");
-            }
-        }
-
-        // TypedArrayCreate(constructor, argumentList)
-        JSValue result = JSReflectObject.constructSimple(context, chosenConstructor, args);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        // Validate the result is a typed array
-        if (!(result instanceof JSTypedArray resultArray)) {
-            return context.throwTypeError("TypedArray species constructor did not return a TypedArray");
+        JSValue result = constructTypedArray(context, constructor, args);
+        if (!(result instanceof JSTypedArray resultArray) || context.hasPendingException()) {
+            return result;
         }
 
         // TypedArrayCreate step 3: If argumentList is a single Number,

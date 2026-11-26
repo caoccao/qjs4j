@@ -738,6 +738,12 @@ public final class VirtualMachine {
         }
     }
 
+    JSGeneratorState.ResumeRecord currentGeneratorResumeRecord() {
+        return generatorResumeIndex < generatorResumeRecords.size()
+                ? generatorResumeRecords.get(generatorResumeIndex)
+                : null;
+    }
+
     Opcode decodeOpcodeForExecute(ExecutionContext executionContext) {
         int pc = executionContext.pc;
         Opcode opcode = executionContext.decodedOpcodes[pc];

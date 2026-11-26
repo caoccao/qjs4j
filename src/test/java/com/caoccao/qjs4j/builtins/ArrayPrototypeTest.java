@@ -28,9 +28,25 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Unit tests for ArrayPrototype methods.
  */
 public class ArrayPrototypeTest extends BaseJavetTest {
+    private void assertFind(JSNativeCallback method, int expected, JSValue missing) {
+        JSArray array = new JSArray(context, numberArgs(1, 2, 3, 4));
+        JSValue[] even = {evenPredicate()};
+        JSFunction negative = createTestFunction(
+                args -> JSBoolean.valueOf(args[0].asNumber().orElseThrow().value() < 0));
+        assertNumberValue(method.call(context, array, even), expected);
+        assertThat(method.call(context, array, new JSValue[]{negative})).isEqualTo(missing);
+        assertThat(method.call(context, new JSArray(context), even)).isEqualTo(missing);
+        assertPendingTypeError(context, method.call(context, array, JSValue.NO_ARGS));
+        assertPendingTypeError(context, method.call(context, JSNull.INSTANCE, even));
+    }
+
     // Helper method to create a simple test function
     private JSFunction createTestFunction(Function<JSValue[], JSValue> impl) {
         return new JSNativeFunction(context, "test", 1, (context, thisArg, args) -> impl.apply(args));
+    }
+
+    private JSFunction evenPredicate() {
+        return createTestFunction(args -> JSBoolean.valueOf(args[0].asNumber().orElseThrow().value() % 2 == 0));
     }
 
     @Test
@@ -161,10 +177,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         JSArray arr = new JSArray(context, numberArgs(2, 4, 6));
 
         // Normal case: all even
-        JSFunction isEvenFn = createTestFunction(args -> {
-            double val = args[0].asNumber().map(JSNumber::value).orElseThrow();
-            return (val % 2 == 0) ? JSBoolean.TRUE : JSBoolean.FALSE;
-        });
+        JSFunction isEvenFn = evenPredicate();
 
         JSValue result = ArrayPrototype.every(context, arr, new JSValue[]{isEvenFn});
         assertThat(result.isBooleanTrue()).isTrue();
@@ -296,10 +309,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         JSArray arr = new JSArray(context, numberArgs(1, 2, 3, 4));
 
         // Normal case: filter even numbers
-        JSFunction evenFn = createTestFunction(args -> {
-            double val = args[0].asNumber().map(JSNumber::value).orElseThrow();
-            return (val % 2 == 0) ? JSBoolean.TRUE : JSBoolean.FALSE;
-        });
+        JSFunction evenFn = evenPredicate();
 
         JSValue result = ArrayPrototype.filter(context, arr, new JSValue[]{evenFn});
         JSArray filtered = result.asArray().orElseThrow();
@@ -342,139 +352,22 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testFind() {
-        JSArray arr = new JSArray(context, numberArgs(1, 2, 3));
-
-        // Normal case: find even number
-        JSFunction findEvenFn = createTestFunction(args -> {
-            double val = args[0].asNumber().map(JSNumber::value).orElseThrow();
-            return (val % 2 == 0) ? JSBoolean.TRUE : JSBoolean.FALSE;
-        });
-
-        JSValue result = ArrayPrototype.find(context, arr, new JSValue[]{findEvenFn});
-        assertNumberValue(result, 2.0);
-
-        // No match
-        JSFunction findNegativeFn = createTestFunction(args -> {
-            double val = args[0].asNumber().map(JSNumber::value).orElseThrow();
-            return (val < 0) ? JSBoolean.TRUE : JSBoolean.FALSE;
-        });
-
-        result = ArrayPrototype.find(context, arr, new JSValue[]{findNegativeFn});
-        assertThat(result.isUndefined()).isTrue();
-
-        // Edge case: empty array
-        JSArray emptyArr = new JSArray(context);
-        result = ArrayPrototype.find(context, emptyArr, new JSValue[]{findEvenFn});
-        assertThat(result.isUndefined()).isTrue();
-
-        // Edge case: no callback
-        assertPendingTypeError(context, ArrayPrototype.find(context, arr, JSValue.NO_ARGS));
-
-        // Edge case: find on null/undefined
-        assertPendingTypeError(context, ArrayPrototype.find(context, JSNull.INSTANCE, new JSValue[]{findEvenFn}));
+        assertFind(ArrayPrototype::find, 2, JSUndefined.INSTANCE);
     }
 
     @Test
     public void testFindIndex() {
-        JSArray arr = new JSArray(context, numberArgs(1, 2, 3));
-
-        // Normal case: find index of even number
-        JSFunction findEvenFn = createTestFunction(args -> {
-            double val = args[0].asNumber().map(JSNumber::value).orElseThrow();
-            return (val % 2 == 0) ? JSBoolean.TRUE : JSBoolean.FALSE;
-        });
-
-        JSValue result = ArrayPrototype.findIndex(context, arr, new JSValue[]{findEvenFn});
-        assertNumberValue(result, 1.0);
-
-        // No match
-        JSFunction findNegativeFn = createTestFunction(args -> {
-            double val = args[0].asNumber().map(JSNumber::value).orElseThrow();
-            return (val < 0) ? JSBoolean.TRUE : JSBoolean.FALSE;
-        });
-
-        result = ArrayPrototype.findIndex(context, arr, new JSValue[]{findNegativeFn});
-        assertNumberValue(result, -1.0);
-
-        // Edge case: empty array
-        JSArray emptyArr = new JSArray(context);
-        result = ArrayPrototype.findIndex(context, emptyArr, new JSValue[]{findEvenFn});
-        assertNumberValue(result, -1.0);
-
-        // Edge case: no callback
-        assertPendingTypeError(context, ArrayPrototype.findIndex(context, arr, JSValue.NO_ARGS));
-
-        // Edge case: findIndex on null/undefined
-        assertPendingTypeError(context, ArrayPrototype.findIndex(context, JSNull.INSTANCE, new JSValue[]{findEvenFn}));
+        assertFind(ArrayPrototype::findIndex, 1, JSNumber.of(-1));
     }
 
     @Test
     public void testFindLast() {
-        JSArray arr = new JSArray(context, numberArgs(1, 2, 3, 2));
-
-        // Normal case: find last even number
-        JSFunction findEvenFn = createTestFunction(args -> {
-            double val = args[0].asNumber().map(JSNumber::value).orElseThrow();
-            return (val % 2 == 0) ? JSBoolean.TRUE : JSBoolean.FALSE;
-        });
-
-        JSValue result = ArrayPrototype.findLast(context, arr, new JSValue[]{findEvenFn});
-        assertNumberValue(result, 2.0);
-
-        // No match
-        JSFunction findNegativeFn = createTestFunction(args -> {
-            double val = args[0].asNumber().map(JSNumber::value).orElseThrow();
-            return (val < 0) ? JSBoolean.TRUE : JSBoolean.FALSE;
-        });
-
-        result = ArrayPrototype.findLast(context, arr, new JSValue[]{findNegativeFn});
-        assertThat(result).isEqualTo(JSUndefined.INSTANCE);
-
-        // Edge case: empty array
-        JSArray emptyArr = new JSArray(context);
-        result = ArrayPrototype.findLast(context, emptyArr, new JSValue[]{findEvenFn});
-        assertThat(result).isEqualTo(JSUndefined.INSTANCE);
-
-        // Edge case: no callback
-        assertPendingTypeError(context, ArrayPrototype.findLast(context, arr, JSValue.NO_ARGS));
-
-        // Edge case: findLast on null/undefined
-        assertPendingTypeError(context, ArrayPrototype.findLast(context, JSNull.INSTANCE, new JSValue[]{findEvenFn}));
+        assertFind(ArrayPrototype::findLast, 4, JSUndefined.INSTANCE);
     }
 
     @Test
     public void testFindLastIndex() {
-        JSArray arr = new JSArray(context, numberArgs(1, 2, 3, 2));
-
-        // Normal case: find last index of even number
-        JSFunction findEvenFn = createTestFunction(args -> {
-            double val = args[0].asNumber().map(JSNumber::value).orElseThrow();
-            return (val % 2 == 0) ? JSBoolean.TRUE : JSBoolean.FALSE;
-        });
-
-        JSValue result = ArrayPrototype.findLastIndex(context, arr, new JSValue[]{findEvenFn});
-        assertNumberValue(result, 3.0);
-
-        // No match
-        JSFunction findNegativeFn = createTestFunction(args -> {
-            double val = args[0].asNumber().map(JSNumber::value).orElseThrow();
-            return (val < 0) ? JSBoolean.TRUE : JSBoolean.FALSE;
-        });
-
-        result = ArrayPrototype.findLastIndex(context, arr, new JSValue[]{findNegativeFn});
-        assertNumberValue(result, -1.0);
-
-        // Edge case: empty array
-        JSArray emptyArr = new JSArray(context);
-        result = ArrayPrototype.findLastIndex(context, emptyArr, new JSValue[]{findEvenFn});
-        assertNumberValue(result, -1.0);
-
-        // Edge case: no callback
-        assertPendingTypeError(context, ArrayPrototype.findLastIndex(context, arr, JSValue.NO_ARGS));
-
-        // Edge case: findLastIndex on null/undefined
-        assertPendingTypeError(context,
-                ArrayPrototype.findLastIndex(context, JSNull.INSTANCE, new JSValue[]{findEvenFn}));
+        assertFind(ArrayPrototype::findLastIndex, 3, JSNumber.of(-1));
     }
 
     @Test

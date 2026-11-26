@@ -36,24 +36,12 @@ public final class ClassExpression extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = superClass != null && superClass.containsAwait();
-            if (!awaitInside && anyContainsAwait(body)) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        return containsAwaitIn(superClass, body);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = superClass != null && superClass.containsYield();
-            if (!yieldInside && anyContainsYield(body)) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        return containsYieldIn(superClass, body);
     }
 
     public List<ClassElement> getBody() {

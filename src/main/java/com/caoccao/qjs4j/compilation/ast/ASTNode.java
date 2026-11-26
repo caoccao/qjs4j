@@ -36,7 +36,81 @@ public abstract sealed class ASTNode
 
     public abstract boolean containsAwait();
 
+    final boolean containsAwaitIn(ASTNode child) {
+        if (awaitInside == null) {
+            awaitInside = childContainsAwait(child);
+        }
+        return awaitInside;
+    }
+
+    final boolean containsAwaitIn(ASTNode first, ASTNode second) {
+        if (awaitInside == null) {
+            awaitInside = childContainsAwait(first);
+            if (!awaitInside && childContainsAwait(second)) {
+                awaitInside = true;
+            }
+        }
+        return awaitInside;
+    }
+
+    final boolean containsAwaitIn(ASTNode first, List<? extends ASTNode> children) {
+        if (awaitInside == null) {
+            awaitInside = childContainsAwait(first);
+            if (!awaitInside && anyContainsAwait(children)) {
+                awaitInside = true;
+            }
+        }
+        return awaitInside;
+    }
+
+    final boolean containsAwaitIn(List<? extends ASTNode> children) {
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (anyContainsAwait(children)) {
+                awaitInside = true;
+            }
+        }
+        return awaitInside;
+    }
+
     public abstract boolean containsYield();
+
+    final boolean containsYieldIn(ASTNode child) {
+        if (yieldInside == null) {
+            yieldInside = childContainsYield(child);
+        }
+        return yieldInside;
+    }
+
+    final boolean containsYieldIn(ASTNode first, ASTNode second) {
+        if (yieldInside == null) {
+            yieldInside = childContainsYield(first);
+            if (!yieldInside && childContainsYield(second)) {
+                yieldInside = true;
+            }
+        }
+        return yieldInside;
+    }
+
+    final boolean containsYieldIn(ASTNode first, List<? extends ASTNode> children) {
+        if (yieldInside == null) {
+            yieldInside = childContainsYield(first);
+            if (!yieldInside && anyContainsYield(children)) {
+                yieldInside = true;
+            }
+        }
+        return yieldInside;
+    }
+
+    final boolean containsYieldIn(List<? extends ASTNode> children) {
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (anyContainsYield(children)) {
+                yieldInside = true;
+            }
+        }
+        return yieldInside;
+    }
 
     public final SourceLocation getLocation() {
         return location;
@@ -62,6 +136,10 @@ public abstract sealed class ASTNode
             }
         }
         return false;
+    }
+
+    static boolean childContainsAwait(ASTNode node) {
+        return node != null && node.containsAwait();
     }
 
     static boolean childContainsYield(ASTNode node) {

@@ -29,18 +29,12 @@ public final class ExpressionStatement extends Statement {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = (expression != null && expression.containsAwait());
-        }
-        return awaitInside;
+        return containsAwaitIn(expression);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = (expression != null && expression.containsYield());
-        }
-        return yieldInside;
+        return containsYieldIn(expression);
     }
 
     public Expression getExpression() {

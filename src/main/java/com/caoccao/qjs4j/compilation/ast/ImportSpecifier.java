@@ -30,24 +30,12 @@ public final class ImportSpecifier extends ASTNode {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = imported != null && imported.containsAwait();
-            if (!awaitInside && local != null && local.containsAwait()) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        return containsAwaitIn(imported, local);
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = imported != null && imported.containsYield();
-            if (!yieldInside && local != null && local.containsYield()) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        return containsYieldIn(imported, local);
     }
 
     public Identifier getImported() {
