@@ -115,6 +115,40 @@ public class JSAsyncIterator extends JSObject {
         return "[object AsyncIterator]";
     }
 
+    private static JSPromise asyncFromSyncNext(JSContext context, JSObject iterator, JSValue next) {
+        JSValue result;
+        try {
+            result = JSCall.call(context, next, iterator, JSValue.NO_ARGS);
+        } catch (JSException e) {
+            if (context.hasPendingException()) {
+                context.clearAllPendingExceptions();
+            }
+            return createRejectedPromise(context, e.getErrorValue());
+        } catch (Exception e) {
+            JSValue reason = context.hasPendingException()
+                    ? context.takeExecutionException()
+                    : new JSString(e.getMessage() != null ? e.getMessage() : e.toString());
+            return createRejectedPromise(context, reason);
+        }
+        if (context.hasPendingException()) {
+            return createRejectedPromise(context, context.takeExecutionException());
+        }
+        if (!(result instanceof JSObject object)) {
+            JSValue error = context.throwTypeError("iterator result must be an object");
+            context.clearPendingException();
+            return createRejectedPromise(context, error);
+        }
+        JSValue value = object.get(PropertyKey.VALUE);
+        if (context.hasPendingException()) {
+            return createRejectedPromise(context, context.takeExecutionException());
+        }
+        JSValue done = object.get(PropertyKey.DONE);
+        if (context.hasPendingException()) {
+            return createRejectedPromise(context, context.takeExecutionException());
+        }
+        return createAsyncFromSyncResultPromise(context, value, JSTypeConversions.toBoolean(done).value(), iterator);
+    }
+
     /**
      * %AsyncFromSyncIteratorPrototype%.return ( [ value ] ) ES2024 27.1.6.2.2, as AsyncIteratorClose calls it: with no
      * value. Every abrupt step rejects the returned promise rather than throwing.
@@ -201,6 +235,12 @@ public class JSAsyncIterator extends JSObject {
         wrapper.set(PropertyKey.RETURN, new JSNativeFunction(context, "return", 1,
                 (childContext, thisArg, args) -> asyncFromSyncReturn(childContext, syncIterator)));
         return wrapper;
+    }
+
+    /** The cached next method used by a for-await loop over a synchronous iterator. */
+    public static JSNativeFunction createAsyncFromSyncNextMethod(JSContext context, JSObject iterator, JSValue next) {
+        return new JSNativeFunction(context, "next", 0,
+                (child, receiver, args) -> asyncFromSyncNext(child, iterator, next));
     }
 
     /**

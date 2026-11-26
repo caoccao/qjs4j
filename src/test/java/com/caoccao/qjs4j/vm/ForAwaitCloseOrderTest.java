@@ -199,4 +199,29 @@ public class ForAwaitCloseOrderTest extends BaseJavetTest {
                   }
                 })()""");
     }
+
+    @Test
+    public void testIteratorAcquisitionStopsAtThrowingGetter() {
+        assertStringWithJavet("""
+                (async () => {
+                  const trace = [];
+                  const marker = {};
+                  for (const failAt of ['async', 'sync', 'next']) {
+                    const iterable = {
+                      get [Symbol.asyncIterator]() {
+                        trace.push('async');
+                        if (failAt === 'async') throw marker;
+                      },
+                      get [Symbol.iterator]() {
+                        trace.push('sync');
+                        if (failAt === 'sync') throw marker;
+                        return () => ({ get next() { trace.push('next'); throw marker; } });
+                      }
+                    };
+                    try { for await (const x of iterable) trace.push('body'); }
+                    catch (e) { trace.push(e === marker); }
+                  }
+                  return trace.join(',');
+                })()""");
+    }
 }

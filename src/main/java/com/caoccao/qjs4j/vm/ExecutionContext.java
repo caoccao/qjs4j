@@ -1,5 +1,6 @@
 package com.caoccao.qjs4j.vm;
 
+import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSStackValue;
 import com.caoccao.qjs4j.core.JSValue;
 
@@ -38,6 +39,15 @@ final class ExecutionContext {
         this.opcodeRequestedReturn = false;
         this.returnValue = null;
         this.sp = 0;
+    }
+
+    boolean capturePendingException() {
+        JSContext context = virtualMachine.context;
+        if (context.hasPendingException()) {
+            virtualMachine.pendingException = context.takePendingException();
+            return true;
+        }
+        return false;
     }
 
     /** Publish the next instruction and the operand stack depth after a handler completes. */
@@ -85,7 +95,20 @@ final class ExecutionContext {
         }
     }
 
+    void raiseReferenceError(String message) {
+        setErrorAsPending(virtualMachine.context.throwReferenceError(message));
+    }
+
+    void raiseTypeError(String message) {
+        setErrorAsPending(virtualMachine.context.throwTypeError(message));
+    }
+
     void set(int offset, JSValue value) {
         virtualMachine.valueStack.stack[sp - 1 - offset] = value;
+    }
+
+    void setErrorAsPending(JSValue errorValue) {
+        virtualMachine.pendingException = errorValue;
+        virtualMachine.context.clearPendingException();
     }
 }

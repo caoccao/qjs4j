@@ -32,6 +32,7 @@ public final class VirtualMachine {
     static final BigInteger BIGINT_NEGATIVE_ONE = BigInteger.valueOf(-1);
     static final BigInteger BIGINT_ONE = BigInteger.ONE;
     static final BigInteger BIGINT_ZERO = BigInteger.ZERO;
+    private static final JSStackValue[] EMPTY_SUSPENDED_STACK = new JSStackValue[0];
     /**
      * The exception value a generator's return completion travels through its {@code finally} blocks as.
      * <p>
@@ -1425,8 +1426,9 @@ public final class VirtualMachine {
             return;
         }
         int stackLength = Math.max(0, stackTop - stackBase);
-        JSStackValue[] suspendedStackValues = new JSStackValue[stackLength];
+        JSStackValue[] suspendedStackValues = EMPTY_SUSPENDED_STACK;
         if (stackLength > 0) {
+            suspendedStackValues = new JSStackValue[stackLength];
             System.arraycopy(stack, stackBase, suspendedStackValues, 0, stackLength);
         }
         activeGeneratorState.saveSuspendedExecutionState(frame, programCounter, suspendedStackValues);
