@@ -98,26 +98,11 @@ public final class TemporalPlainDateConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        Integer dayOfMonth = TemporalUtils.getOptionalIntegerField(context, fields, "day");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        Integer month = TemporalUtils.getOptionalIntegerField(context, fields, "month");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue monthCodeValue = fields.get(PropertyKey.fromString("monthCode"));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        IsoMonth parsedMonthCode = IsoMonth.fromField(context, monthCodeValue);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        Integer year = TemporalUtils.getOptionalIntegerField(context, fields, "year");
+        TemporalPropertyBag bag = new TemporalPropertyBag(context, fields);
+        Integer dayOfMonth = bag.integer("day");
+        Integer month = bag.integer("month");
+        IsoMonth parsedMonthCode = bag.monthCode();
+        Integer year = bag.integer("year");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

@@ -504,11 +504,8 @@ public final class ArrayConstructor {
                                 mapFn, mapThisArg);
                     }
                     return JSUndefined.INSTANCE;
-                }), null, context), new JSPromise.ReactionRecord(new JSNativeFunction(context, "onValueReject", 1,
-                        (callbackContext, callbackThisArg, callbackArgs) -> {
-                            resultPromise.reject(JSValue.argumentOrUndefined(callbackArgs, 0));
-                            return JSUndefined.INSTANCE;
-                        }), null, context));
+                }), null, context),
+                new JSPromise.ReactionRecord(resultPromise.rejectHandler(context, "onValueReject"), null, context));
     }
 
     private static JSPromise fromAsyncIterablePath(JSContext context, JSPromise resultPromise,
@@ -626,11 +623,8 @@ public final class ArrayConstructor {
                     }
                     resultPromise.fulfill(target);
                     return JSUndefined.INSTANCE;
-                }), null, context), new JSPromise.ReactionRecord(new JSNativeFunction(context, "onError", 1,
-                        (callbackContext, callbackThisArg, callbackArgs) -> {
-                            resultPromise.reject(JSValue.argumentOrUndefined(callbackArgs, 0));
-                            return JSUndefined.INSTANCE;
-                        }), null, context));
+                }), null, context),
+                new JSPromise.ReactionRecord(resultPromise.rejectHandler(context, "onError"), null, context));
 
         return resultPromise;
     }
@@ -745,15 +739,8 @@ public final class ArrayConstructor {
             JSValue thenMethod = obj.get(PropertyKey.THEN);
             if (thenMethod instanceof JSFunction thenFunc) {
                 JSPromise promise = context.createJSPromise();
-                thenFunc.call(context, value, new JSValue[]{new JSNativeFunction(context, "resolve", 1,
-                        (callbackContext, callbackThisArg, callbackArgs) -> {
-                            promise.fulfill(JSValue.argumentOrUndefined(callbackArgs, 0));
-                            return JSUndefined.INSTANCE;
-                        }),
-                        new JSNativeFunction(context, "reject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
-                            promise.reject(JSValue.argumentOrUndefined(callbackArgs, 0));
-                            return JSUndefined.INSTANCE;
-                        })});
+                thenFunc.call(context, value, new JSValue[]{promise.fulfillHandler(context, "resolve"),
+                        promise.rejectHandler(context, "reject")});
                 return promise;
             }
         }

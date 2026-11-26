@@ -566,6 +566,47 @@ public final class StringPrototype {
         return JSNumber.of(index);
     }
 
+    private static JSValue invokeRegExpMethod(JSContext context, JSValue thisArg, JSValue[] args,
+            PropertyKey methodKey) {
+        if (thisArg == null || thisArg.isNullOrUndefined()) {
+            return context.throwTypeError("cannot convert to object");
+        }
+
+        JSValue regexpArg = JSValue.argumentOrUndefined(args, 0);
+        if (regexpArg instanceof JSObject regexpObj) {
+            JSValue matcher = regexpObj.get(methodKey);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (!(matcher instanceof JSUndefined) && !(matcher instanceof JSNull)) {
+                if (!(matcher instanceof JSFunction matcherFunction)) {
+                    return context.throwTypeError("not a function");
+                }
+                return matcherFunction.call(context, regexpObj, new JSValue[]{thisArg});
+            }
+        }
+
+        JSString str = toStringCheckObject(context, thisArg);
+
+        // Step 6: Let rx be RegExpCreate(regexp, undefined).
+        String pattern;
+        if (regexpArg instanceof JSUndefined) {
+            pattern = "";
+        } else {
+            pattern = JSTypeConversions.toString(context, regexpArg).value();
+        }
+        JSRegExp rx = context.createJSRegExp(pattern, "");
+        // Invoke the method on the newly created RegExp with the coerced string.
+        JSValue method = rx.get(methodKey);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (method instanceof JSFunction function) {
+            return function.call(context, rx, new JSValue[]{str});
+        }
+        return context.throwTypeError("not a function");
+    }
+
     /**
      * Check if a code point is "Cased" per Unicode property. Uses the full Unicode Cased property table.
      */
@@ -757,43 +798,7 @@ public final class StringPrototype {
      * regular expression.
      */
     public static JSValue match(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg == null || thisArg.isNullOrUndefined()) {
-            return context.throwTypeError("cannot convert to object");
-        }
-
-        JSValue regexpArg = JSValue.argumentOrUndefined(args, 0);
-        if (regexpArg instanceof JSObject regexpObj) {
-            JSValue matcher = regexpObj.get(PropertyKey.SYMBOL_MATCH);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (!(matcher instanceof JSUndefined) && !(matcher instanceof JSNull)) {
-                if (!(matcher instanceof JSFunction matcherFunction)) {
-                    return context.throwTypeError("not a function");
-                }
-                return matcherFunction.call(context, regexpObj, new JSValue[]{thisArg});
-            }
-        }
-
-        JSString str = toStringCheckObject(context, thisArg);
-
-        // Step 6: Let rx be RegExpCreate(regexp, undefined).
-        String pattern;
-        if (regexpArg instanceof JSUndefined) {
-            pattern = "";
-        } else {
-            pattern = JSTypeConversions.toString(context, regexpArg).value();
-        }
-        JSRegExp rx = context.createJSRegExp(pattern, "");
-        // Step 7: Return Invoke(rx, @@match, «S»).
-        JSValue matchFn = rx.get(PropertyKey.SYMBOL_MATCH);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (matchFn instanceof JSFunction matchFunction) {
-            return matchFunction.call(context, rx, new JSValue[]{str});
-        }
-        return context.throwTypeError("not a function");
+        return invokeRegExpMethod(context, thisArg, args, PropertyKey.SYMBOL_MATCH);
     }
 
     /**
@@ -921,10 +926,7 @@ public final class StringPrototype {
         return new JSString(normalized);
     }
 
-    /**
-     * String.prototype.padEnd(targetLength[, padString]) ES2020 21.1.3.11
-     */
-    public static JSValue padEnd(JSContext context, JSValue thisArg, JSValue[] args) {
+    private static JSValue pad(JSContext context, JSValue thisArg, JSValue[] args, boolean atStart) {
         JSString str = toStringCheckObject(context, thisArg);
         String s = str.value();
 
@@ -939,60 +941,42 @@ public final class StringPrototype {
         if (fillStr.isEmpty()) {
             return str;
         }
+
         if (maxLength > JSString.MAX_LENGTH) {
             return context.throwRangeError("Invalid string length");
         }
 
-        StringBuilder result = new StringBuilder(s);
-
-        while (result.length() < maxLength) {
-
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            for (int i = 0; i < fillStr.length() && result.length() < maxLength; i++) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
-                result.append(fillStr.charAt(i));
-            }
+        int fillLength = (int) maxLength - s.length();
+        StringBuilder result = new StringBuilder();
+        if (!atStart) {
+            result.append(s);
         }
-
+        // Limit uninterrupted copying even when the fill string is very large.
+        for (int copied = 0; copied < fillLength;) {
+            context.getVirtualMachine().checkExecutionInterruptForNative();
+            int offset = copied % fillStr.length();
+            int count = Math.min(1024, Math.min(fillStr.length() - offset, fillLength - copied));
+            result.append(fillStr, offset, offset + count);
+            copied += count;
+        }
+        if (atStart) {
+            result.append(s);
+        }
         return new JSString(result.toString());
+    }
+
+    /**
+     * String.prototype.padEnd(targetLength[, padString]) ES2020 21.1.3.11
+     */
+    public static JSValue padEnd(JSContext context, JSValue thisArg, JSValue[] args) {
+        return pad(context, thisArg, args, false);
     }
 
     /**
      * String.prototype.padStart(targetLength[, padString]) ES2020 21.1.3.12
      */
     public static JSValue padStart(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = toStringCheckObject(context, thisArg);
-        String s = str.value();
-
-        long maxLength = args.length > 0 ? (long) JSTypeConversions.toInteger(context, args[0]) : 0;
-        if (maxLength <= s.length()) {
-            return str;
-        }
-
-        String fillStr = args.length > 1 && !args[1].isUndefined()
-                ? JSTypeConversions.toString(context, args[1]).value()
-                : " ";
-        if (fillStr.isEmpty()) {
-            return str;
-        }
-
-        if (maxLength > JSString.MAX_LENGTH) {
-            return context.throwRangeError("Invalid string length");
-        }
-
-        int fillLen = (int) (maxLength - s.length());
-        StringBuilder padding = new StringBuilder();
-
-        while (padding.length() < fillLen) {
-
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            for (int i = 0; i < fillStr.length() && padding.length() < fillLen; i++) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
-                padding.append(fillStr.charAt(i));
-            }
-        }
-
-        return new JSString(padding + s);
+        return pad(context, thisArg, args, true);
     }
 
     /**
@@ -1241,43 +1225,7 @@ public final class StringPrototype {
      * first match, or -1.
      */
     public static JSValue search(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg == null || thisArg.isNullOrUndefined()) {
-            return context.throwTypeError("cannot convert to object");
-        }
-
-        JSValue regexpArg = JSValue.argumentOrUndefined(args, 0);
-        if (regexpArg instanceof JSObject regexpObj) {
-            JSValue searcher = regexpObj.get(PropertyKey.SYMBOL_SEARCH);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (!(searcher instanceof JSUndefined) && !(searcher instanceof JSNull)) {
-                if (!(searcher instanceof JSFunction searchFunction)) {
-                    return context.throwTypeError("not a function");
-                }
-                return searchFunction.call(context, regexpObj, new JSValue[]{thisArg});
-            }
-        }
-
-        JSString str = toStringCheckObject(context, thisArg);
-
-        // Step 6: Let rx be RegExpCreate(regexp, undefined).
-        String pattern;
-        if (regexpArg instanceof JSUndefined) {
-            pattern = "";
-        } else {
-            pattern = JSTypeConversions.toString(context, regexpArg).value();
-        }
-        JSRegExp rx = context.createJSRegExp(pattern, "");
-        // Step 7: Return Invoke(rx, @@search, «S»).
-        JSValue searchFn = rx.get(PropertyKey.SYMBOL_SEARCH);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (searchFn instanceof JSFunction searchFunction) {
-            return searchFunction.call(context, rx, new JSValue[]{str});
-        }
-        return context.throwTypeError("not a function");
+        return invokeRegExpMethod(context, thisArg, args, PropertyKey.SYMBOL_SEARCH);
     }
 
     private static JSValue searchString(JSContext context, JSValue thisArg, JSValue[] args, SearchMode mode) {

@@ -318,83 +318,21 @@ public final class ObjectConstructor {
      * enumerable string-keyed [key, value] pairs.
      */
     public static JSValue entries(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return context.throwTypeError("Cannot convert undefined or null to object");
-        }
-        JSValue arg = args[0];
-        if (arg.isNullOrUndefined()) {
-            return context.throwTypeError("Cannot convert undefined or null to object");
-        }
-
-        // Step 1: Let obj be ? ToObject(O)
-        JSObject obj;
-        if (arg instanceof JSObject jsObj) {
-            obj = jsObj;
-        } else {
-            obj = JSTypeConversions.toObject(context, arg);
-            if (obj == null || context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-
-        // Step 2: Let ownKeys be ? obj.[[OwnPropertyKeys]]()
-        List<PropertyKey> ownKeys = obj.getOwnPropertyKeys();
-
-        // Step 3: For each key, check enumerability and collect [key, value] pairs
-        JSArray result = context.createJSArray();
-        for (PropertyKey key : ownKeys) {
-            // Only string keys (not symbols). Index keys are also "string" keys per spec.
-            if (key.isSymbol()) {
-                continue;
-            }
-            // Step 3a/3b: enumerable own property? Only that bit is needed, so ask for it
-            // directly rather than taking a descriptor copy per key.
-            boolean enumerable = obj.isOwnPropertyEnumerable(key);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (enumerable) {
-                JSValue value = obj.get(key);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                JSArray entry = context.createJSArray(2);
-                entry.set(0, new JSString(key.toPropertyString()));
-                entry.set(1, value);
-                result.push(entry);
-            }
-        }
-        return result;
+        return enumerableOwnProperties(context, args, EnumerableKind.ENTRY);
     }
 
-    private static JSValue enumerableOwnProperties(JSContext context, JSValue[] args, boolean keys) {
-        if (args.length == 0) {
-            return context.throwTypeError("Cannot convert undefined or null to object");
-        }
-
-        JSValue arg = args[0];
-
-        // Null and undefined throw TypeError
-        if (arg.isNullOrUndefined()) {
-            return context.throwTypeError("Cannot convert undefined or null to object");
-        }
-
-        // Step 1: Let obj be ? ToObject(O)
-        JSObject obj;
-        if (arg instanceof JSObject jsObj) {
-            obj = jsObj;
-        } else {
-            obj = JSTypeConversions.toObject(context, arg);
-            if (obj == null || context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+    private static JSValue enumerableOwnProperties(JSContext context, JSValue[] args, EnumerableKind kind) {
+        JSValue target = JSValue.argumentOrUndefined(args, 0);
+        JSObject obj = objectArgument(context, target);
+        if (obj == null) {
+            return objectArgumentError(context, target);
         }
 
         boolean ordinaryObject = obj.getClass() == JSObject.class;
         JSValue[] fastResult = null;
-        if (!keys) {
+        if (kind == EnumerableKind.VALUE) {
             fastResult = obj.enumerableStringPropertyValuesFastPath();
-        } else if (ordinaryObject) {
+        } else if (kind == EnumerableKind.KEY && ordinaryObject) {
             fastResult = obj.enumerableStringKeyValuesFastPath();
         }
         if (fastResult != null) {
@@ -402,10 +340,12 @@ public final class ObjectConstructor {
         }
 
         List<PropertyKey> propertyKeys = obj.getOwnPropertyKeys();
-        if (context.hasPendingException()) {
+        boolean pairs = kind == EnumerableKind.ENTRY;
+        if (!pairs && context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        List<JSValue> result = new ArrayList<>();
+        JSArray entries = pairs ? context.createJSArray() : null;
+        List<JSValue> values = pairs ? null : new ArrayList<>();
         for (PropertyKey key : propertyKeys) {
             if (key.isSymbol()) {
                 continue;
@@ -415,14 +355,21 @@ public final class ObjectConstructor {
                 return JSUndefined.INSTANCE;
             }
             if (enumerable) {
-                JSValue value = keys ? new JSString(key.toPropertyString()) : obj.get(key);
+                JSValue value = kind == EnumerableKind.KEY ? new JSString(key.toPropertyString()) : obj.get(key);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
-                result.add(value);
+                if (entries != null) {
+                    JSArray entry = context.createJSArray(2);
+                    entry.set(0, new JSString(key.toPropertyString()));
+                    entry.set(1, value);
+                    entries.push(entry);
+                } else {
+                    values.add(value);
+                }
             }
         }
-        return context.createJSArray(result.toArray(JSValue.NO_ARGS), true);
+        return entries != null ? entries : context.createJSArray(values.toArray(JSValue.NO_ARGS), true);
     }
 
     /**
@@ -550,19 +497,10 @@ public final class ObjectConstructor {
      * an object.
      */
     public static JSValue getOwnPropertyDescriptor(JSContext context, JSValue thisArg, JSValue[] args) {
-        // ES2015 19.1.2.6 step 1: Let obj be ? ToObject(O)
-        JSValue objArg = JSValue.argumentOrUndefined(args, 0);
-        if (objArg.isNullOrUndefined()) {
-            return context.throwTypeError("Cannot convert undefined or null to object");
-        }
-        JSObject obj;
-        if (objArg instanceof JSObject jsObj) {
-            obj = jsObj;
-        } else {
-            obj = JSTypeConversions.toObject(context, objArg);
-            if (obj == null || context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+        JSValue target = JSValue.argumentOrUndefined(args, 0);
+        JSObject obj = objectArgument(context, target);
+        if (obj == null) {
+            return objectArgumentError(context, target);
         }
 
         JSValue propertyArg = JSValue.argumentOrUndefined(args, 1);
@@ -580,23 +518,10 @@ public final class ObjectConstructor {
      * Object.getOwnPropertyDescriptors(obj) ES2017 19.1.2.7 Returns all own property descriptors of an object.
      */
     public static JSValue getOwnPropertyDescriptors(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return context.throwTypeError("Cannot convert undefined or null to object");
-        }
-
-        // ES2017 19.1.2.7 step 1: Let obj be ? ToObject(O)
-        JSValue objArg = args[0];
-        if (objArg.isNullOrUndefined()) {
-            return context.throwTypeError("Cannot convert undefined or null to object");
-        }
-        JSObject obj;
-        if (objArg instanceof JSObject jsObj) {
-            obj = jsObj;
-        } else {
-            obj = JSTypeConversions.toObject(context, objArg);
-            if (obj == null || context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+        JSValue target = JSValue.argumentOrUndefined(args, 0);
+        JSObject obj = objectArgument(context, target);
+        if (obj == null) {
+            return objectArgumentError(context, target);
         }
 
         JSObject result = context.createJSObject();
@@ -631,23 +556,10 @@ public final class ObjectConstructor {
      * Object.getPrototypeOf(obj) ES2020 19.1.2.9 Returns the prototype of the specified object.
      */
     public static JSValue getPrototypeOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return context.throwTypeError("Cannot convert undefined or null to object");
-        }
-
-        // ES2015 19.1.2.9 step 1: Let obj be ? ToObject(O)
-        JSValue arg = args[0];
-        if (arg.isNullOrUndefined()) {
-            return context.throwTypeError("Cannot convert undefined or null to object");
-        }
-        JSObject obj;
-        if (arg instanceof JSObject jsObj) {
-            obj = jsObj;
-        } else {
-            obj = JSTypeConversions.toObject(context, arg);
-            if (obj == null || context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+        JSValue target = JSValue.argumentOrUndefined(args, 0);
+        JSObject obj = objectArgument(context, target);
+        if (obj == null) {
+            return objectArgumentError(context, target);
         }
 
         JSObject prototype = obj.getPrototype();
@@ -775,23 +687,10 @@ public final class ObjectConstructor {
      * Object.hasOwn(obj, prop) ES2022 20.1.2.10 Static method to check if an object has a property as its own property.
      */
     public static JSValue hasOwn(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return context.throwTypeError("Cannot convert undefined or null to object");
-        }
-
-        // ES2022 step 1: Let obj be ? ToObject(O)
-        JSValue objValue = args[0];
-        if (objValue.isNullOrUndefined()) {
-            return context.throwTypeError("Cannot convert undefined or null to object");
-        }
-        JSObject obj;
-        if (objValue instanceof JSObject jsObj) {
-            obj = jsObj;
-        } else {
-            obj = JSTypeConversions.toObject(context, objValue);
-            if (obj == null || context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+        JSValue target = JSValue.argumentOrUndefined(args, 0);
+        JSObject obj = objectArgument(context, target);
+        if (obj == null) {
+            return objectArgumentError(context, target);
         }
 
         if (args.length < 2) {
@@ -830,55 +729,8 @@ public final class ObjectConstructor {
      * algorithm. Unlike ===, Object.is treats NaN as equal to NaN and +0 as different from -0.
      */
     public static JSValue is(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue x = JSValue.argumentOrUndefined(args, 0);
-        JSValue y = JSValue.argumentOrUndefined(args, 1);
-
-        // SameValue algorithm (ES2020 7.2.11)
-
-        // 1. If Type(x) is different from Type(y), return false
-        if (x.getClass() != y.getClass()) {
-            return JSBoolean.FALSE;
-        }
-
-        // 2. If Type(x) is Number, then
-        if (x instanceof JSNumber xNum && y instanceof JSNumber yNum) {
-            double xVal = xNum.value();
-            double yVal = yNum.value();
-
-            // a. If x is NaN and y is NaN, return true
-            if (Double.isNaN(xVal) && Double.isNaN(yVal)) {
-                return JSBoolean.TRUE;
-            }
-
-            // b. If x is +0 and y is -0, return false
-            if (xVal == 0.0 && yVal == 0.0) {
-                // Check for +0 vs -0
-                if (Double.doubleToRawLongBits(xVal) != Double.doubleToRawLongBits(yVal)) {
-                    return JSBoolean.FALSE;
-                }
-            }
-
-            // c. If x is -0 and y is +0, return false (covered above)
-            // d. If x is the same Number value as y, return true
-            // e. Return false
-            return JSBoolean.valueOf(xVal == yVal);
-        }
-
-        // 3. Return SameValueNonNumber(x, y)
-        if (x instanceof JSString xString && y instanceof JSString yString) {
-            return JSBoolean.valueOf(xString.value().equals(yString.value()));
-        }
-        if (x instanceof JSBoolean xBoolean && y instanceof JSBoolean yBoolean) {
-            return JSBoolean.valueOf(xBoolean.value() == yBoolean.value());
-        }
-        if (x instanceof JSBigInt xBigInt && y instanceof JSBigInt yBigInt) {
-            return JSBoolean.valueOf(xBigInt.value().equals(yBigInt.value()));
-        }
-        if (x instanceof JSUndefined || x instanceof JSNull) {
-            return JSBoolean.TRUE;
-        }
-        // Symbols and Objects use identity equality.
-        return JSBoolean.valueOf(x == y);
+        return JSBoolean.valueOf(
+                JSObject.sameValue(JSValue.argumentOrUndefined(args, 0), JSValue.argumentOrUndefined(args, 1)));
     }
 
     /**
@@ -914,27 +766,28 @@ public final class ObjectConstructor {
      * Object.keys(obj) ES2020 19.1.2.16 Returns an array of a given object's own enumerable property names.
      */
     public static JSValue keys(JSContext context, JSValue thisArg, JSValue[] args) {
-        return enumerableOwnProperties(context, args, true);
+        return enumerableOwnProperties(context, args, EnumerableKind.KEY);
+    }
+
+    private static JSObject objectArgument(JSContext context, JSValue target) {
+        if (target instanceof JSObject object) {
+            return object;
+        }
+        JSObject boxed = JSTypeConversions.toObject(context, target);
+        return context.hasPendingException() ? null : boxed;
+    }
+
+    private static JSValue objectArgumentError(JSContext context, JSValue target) {
+        return target.isNullOrUndefined()
+                ? context.throwTypeError("Cannot convert undefined or null to object")
+                : JSUndefined.INSTANCE;
     }
 
     private static JSValue ownPropertyKeys(JSContext context, JSValue[] args, boolean symbols) {
-        if (args.length == 0) {
-            return context.throwTypeError("Cannot convert undefined or null to object");
-        }
-
-        // ES2015 19.1.2.8 step 1: Let obj be ? ToObject(O)
-        JSValue objArg = args[0];
-        if (objArg.isNullOrUndefined()) {
-            return context.throwTypeError("Cannot convert undefined or null to object");
-        }
-        JSObject obj;
-        if (objArg instanceof JSObject jsObj) {
-            obj = jsObj;
-        } else {
-            obj = JSTypeConversions.toObject(context, objArg);
-            if (obj == null || context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+        JSValue target = JSValue.argumentOrUndefined(args, 0);
+        JSObject obj = objectArgument(context, target);
+        if (obj == null) {
+            return objectArgumentError(context, target);
         }
 
         JSArray result = context.createJSArray();
@@ -1092,6 +945,10 @@ public final class ObjectConstructor {
      * Object.values(obj) ES2020 19.1.2.21 Returns an array of a given object's own enumerable property values.
      */
     public static JSValue values(JSContext context, JSValue thisArg, JSValue[] args) {
-        return enumerableOwnProperties(context, args, false);
+        return enumerableOwnProperties(context, args, EnumerableKind.VALUE);
+    }
+
+    private enum EnumerableKind {
+        ENTRY, KEY, VALUE
     }
 }

@@ -33,29 +33,58 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class AtomicsObjectTest extends BaseJavetTest {
 
+    private void assertAtomicUpdate(JSNativeCallback operation, JSInt32Array array, int index, int expectedResult,
+            int expectedStored, int... operands) {
+        JSValue[] args = new JSValue[2 + operands.length];
+        args[0] = array;
+        args[1] = JSNumber.of(index);
+        for (int i = 0; i < operands.length; i++) {
+            args[i + 2] = JSNumber.of(operands[i]);
+        }
+        assertNumberValue(operation.call(context, null, args), expectedResult);
+        assertThat(array.getBuffer().getBuffer().getInt(index * Integer.BYTES)).isEqualTo(expectedStored);
+    }
+
+    private void assertWaitArgumentErrors(JSNativeCallback waitOperation, JSInt32Array arr) {
+        // Test 3: Invalid arguments
+        JSValue error = waitOperation.call(context, null, new JSValue[]{arr, new JSNumber(0)});
+        assertTypeError(error);
+        context.clearPendingException();
+
+        // Test 4: Non-TypedArray argument
+        error = waitOperation.call(context, null, numberArgs(1, 0, 0));
+        assertTypeError(error);
+        context.clearPendingException();
+
+        // Test 5: Out of bounds index
+        error = waitOperation.call(context, null, new JSValue[]{arr, new JSNumber(10), new JSNumber(0)});
+        assertRangeError(error);
+        context.clearPendingException();
+    }
+
     private AtomicsObject atomics() {
         return context.getRuntime().getAtomicsObject();
     }
 
+    private JSInt32Array sharedInts(int length, int... initialValues) {
+        JSSharedArrayBuffer buffer = new JSSharedArrayBuffer(context, length * Integer.BYTES);
+        JSInt32Array array = new JSInt32Array(context, buffer, 0, length);
+        assertThat(array.getBuffer().getBuffer()).isNotNull();
+        for (int index = 0; index < initialValues.length; index++) {
+            array.getBuffer().getBuffer().putInt(index * Integer.BYTES, initialValues[index]);
+        }
+        return array;
+    }
+
     @Test
     public void testAdd() {
-        // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 16); // 4 int32 values
-        JSInt32Array arr = new JSInt32Array(context, ab, 0, 4);
-
-        // Initialize values
-        arr.getBuffer().getBuffer().putInt(0, 10);
-        arr.getBuffer().getBuffer().putInt(4, 20);
+        JSInt32Array arr = sharedInts(4, 10, 20);
 
         // Test normal case: add to index 0
-        JSValue result = atomics().add(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(5)});
-        assertNumberValue(result, 10.0); // returns old value
-        assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(15); // new value is 10 + 5
+        assertAtomicUpdate(atomics()::add, arr, 0, 10, 15, 5);
 
         // Test add to index 1
-        result = atomics().add(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(-3)});
-        assertNumberValue(result, 20.0);
-        assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(17);
+        assertAtomicUpdate(atomics()::add, arr, 1, 20, 17, -3);
 
         // Test edge cases
         JSValue error = atomics().add(context, null, new JSValue[]{arr}); // too few args
@@ -75,64 +104,34 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
     @Test
     public void testAnd() {
-        // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 8);
-        JSInt32Array arr = new JSInt32Array(context, ab, 0, 2);
-
-        // Initialize values: 0b1111 (15) and 0b1010 (10)
-        arr.getBuffer().getBuffer().putInt(0, 15);
-        arr.getBuffer().getBuffer().putInt(4, 10);
+        JSInt32Array arr = sharedInts(2, 15, 10);
 
         // Test AND operation: 15 & 10 = 10
-        JSValue result = atomics().and(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(10)});
-        assertNumberValue(result, 15.0); // returns old value
-        assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(10); // new value
+        assertAtomicUpdate(atomics()::and, arr, 0, 15, 10, 10);
 
         // Test AND with 0: 10 & 0 = 0
-        result = atomics().and(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(0)});
-        assertNumberValue(result, 10.0);
-        assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(0);
+        assertAtomicUpdate(atomics()::and, arr, 1, 10, 0, 0);
     }
 
     @Test
     public void testCompareExchange() {
-        // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 8);
-        JSInt32Array arr = new JSInt32Array(context, ab, 0, 2);
-
-        arr.getBuffer().getBuffer().putInt(0, 42);
-        arr.getBuffer().getBuffer().putInt(4, 100);
+        JSInt32Array arr = sharedInts(2, 42, 100);
 
         // Test successful exchange: expected == current
-        JSValue result = atomics().compareExchange(context, null,
-                new JSValue[]{arr, new JSNumber(0), new JSNumber(42), new JSNumber(99)});
-        assertNumberValue(result, 42.0); // returns old value
-        assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(99); // new value
+        assertAtomicUpdate(atomics()::compareExchange, arr, 0, 42, 99, 42, 99);
 
         // Test failed exchange: expected != current
-        result = atomics().compareExchange(context, null,
-                new JSValue[]{arr, new JSNumber(1), new JSNumber(50), new JSNumber(200)});
-        assertNumberValue(result, 100.0); // returns current value
-        assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(100); // unchanged
+        assertAtomicUpdate(atomics()::compareExchange, arr, 1, 100, 100, 50, 200);
     }
 
     @Test
     public void testExchange() {
-        // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 8);
-        JSInt32Array arr = new JSInt32Array(context, ab, 0, 2);
-
-        arr.getBuffer().getBuffer().putInt(0, 123);
-        arr.getBuffer().getBuffer().putInt(4, 456);
+        JSInt32Array arr = sharedInts(2, 123, 456);
 
         // Test exchange
-        JSValue result = atomics().exchange(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(789)});
-        assertNumberValue(result, 123.0); // returns old value
-        assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(789); // new value
+        assertAtomicUpdate(atomics()::exchange, arr, 0, 123, 789, 789);
 
-        result = atomics().exchange(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(0)});
-        assertNumberValue(result, 456.0);
-        assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(0);
+        assertAtomicUpdate(atomics()::exchange, arr, 1, 456, 0, 0);
     }
 
     @Test
@@ -206,12 +205,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
     @Test
     public void testLoad() {
-        // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 8);
-        JSInt32Array arr = new JSInt32Array(context, ab, 0, 2);
-
-        arr.getBuffer().getBuffer().putInt(0, 111);
-        arr.getBuffer().getBuffer().putInt(4, 222);
+        JSInt32Array arr = sharedInts(2, 111, 222);
 
         // Test load
         JSValue result = atomics().load(context, null, new JSValue[]{arr, new JSNumber(0)});
@@ -223,13 +217,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
     @Test
     public void testNotify() {
-        // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 4);
-        JSInt32Array arr = new JSInt32Array(context, ab, 0, 1);
-
-        // Store initial value
-        assertThat(arr.getBuffer().getBuffer()).isNotNull();
-        arr.getBuffer().getBuffer().putInt(0, 0);
+        JSInt32Array arr = sharedInts(1, 0);
 
         // Test 1: Notify with non-shared buffer - should still return 0
         JSValue result = atomics().notify(context, null, new JSValue[]{arr, new JSNumber(0)});
@@ -260,13 +248,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
     @Test
     public void testNotifyMultipleWaiters() throws InterruptedException {
-        // Create ArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 4);
-        JSInt32Array arr = new JSInt32Array(context, ab, 0, 1);
-
-        // Store initial value
-        assertThat(arr.getBuffer().getBuffer()).isNotNull();
-        arr.getBuffer().getBuffer().putInt(0, 200);
+        JSInt32Array arr = sharedInts(1, 200);
 
         int waiterCount = 3;
         CountDownLatch allWaitersStarted = new CountDownLatch(waiterCount);
@@ -311,12 +293,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
     @Test
     public void testNotifyWithInfinity() throws InterruptedException {
-        // Create ArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 4);
-        JSInt32Array arr = new JSInt32Array(context, ab, 0, 1);
-
-        assertThat(arr.getBuffer().getBuffer()).isNotNull();
-        arr.getBuffer().getBuffer().putInt(0, 300);
+        JSInt32Array arr = sharedInts(1, 300);
 
         CountDownLatch waiterStarted = new CountDownLatch(1);
         CountDownLatch waiterFinished = new CountDownLatch(1);
@@ -358,23 +335,13 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
     @Test
     public void testOr() {
-        // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 8);
-        JSInt32Array arr = new JSInt32Array(context, ab, 0, 2);
-
-        // Initialize values: 0b1010 (10) and 0b1100 (12)
-        arr.getBuffer().getBuffer().putInt(0, 10);
-        arr.getBuffer().getBuffer().putInt(4, 12);
+        JSInt32Array arr = sharedInts(2, 10, 12);
 
         // Test OR operation: 10 | 5 = 15 (0b1010 | 0b0101 = 0b1111)
-        JSValue result = atomics().or(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(5)});
-        assertNumberValue(result, 10.0); // returns old value
-        assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(15); // new value
+        assertAtomicUpdate(atomics()::or, arr, 0, 10, 15, 5);
 
         // Test OR with all bits set: 12 | 3 = 15
-        result = atomics().or(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(3)});
-        assertNumberValue(result, 12.0);
-        assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(15);
+        assertAtomicUpdate(atomics()::or, arr, 1, 12, 15, 3);
     }
 
     @Test
@@ -386,53 +353,28 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
     @Test
     public void testStore() {
-        // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 8);
-        JSInt32Array arr = new JSInt32Array(context, ab, 0, 2);
-
-        arr.getBuffer().getBuffer().putInt(0, 0);
-        arr.getBuffer().getBuffer().putInt(4, 0);
+        JSInt32Array arr = sharedInts(2, 0, 0);
 
         // Test store
-        JSValue result = atomics().store(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(999)});
-        assertNumberValue(result, 999.0); // returns stored value
-        assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(999);
+        assertAtomicUpdate(atomics()::store, arr, 0, 999, 999, 999);
 
-        result = atomics().store(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(-123)});
-        assertNumberValue(result, -123.0);
-        assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(-123);
+        assertAtomicUpdate(atomics()::store, arr, 1, -123, -123, -123);
     }
 
     @Test
     public void testSub() {
-        // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 16);
-        JSInt32Array arr = new JSInt32Array(context, ab, 0, 4);
-
-        // Initialize values
-        arr.getBuffer().getBuffer().putInt(0, 50);
-        arr.getBuffer().getBuffer().putInt(4, 25);
+        JSInt32Array arr = sharedInts(4, 50, 25);
 
         // Test normal case: subtract from index 0
-        JSValue result = atomics().sub(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(15)});
-        assertNumberValue(result, 50.0); // returns old value
-        assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(35); // new value is 50 - 15
+        assertAtomicUpdate(atomics()::sub, arr, 0, 50, 35, 15);
 
         // Test subtract to index 1
-        result = atomics().sub(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(10)});
-        assertNumberValue(result, 25.0);
-        assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(15);
+        assertAtomicUpdate(atomics()::sub, arr, 1, 25, 15, 10);
     }
 
     @Test
     public void testWait() {
-        // Create ArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 4);
-        JSInt32Array arr = new JSInt32Array(context, ab, 0, 1);
-
-        // Store initial value
-        assertThat(arr.getBuffer().getBuffer()).isNotNull();
-        arr.getBuffer().getBuffer().putInt(0, 42);
+        JSInt32Array arr = sharedInts(1, 42);
 
         // Test 1: Wait with non-matching value - should return "not-equal"
         JSValue result = atomics().wait(context, null,
@@ -445,31 +387,12 @@ public class AtomicsObjectTest extends BaseJavetTest {
         assertThat(result.isString()).isTrue();
         assertStringValue(result, "timed-out");
 
-        // Test 3: Invalid arguments
-        JSValue error = atomics().wait(context, null, new JSValue[]{arr, new JSNumber(0)});
-        assertTypeError(error);
-        context.clearPendingException();
-
-        // Test 4: Non-TypedArray argument
-        error = atomics().wait(context, null, numberArgs(1, 0, 0));
-        assertTypeError(error);
-        context.clearPendingException();
-
-        // Test 5: Out of bounds index
-        error = atomics().wait(context, null, new JSValue[]{arr, new JSNumber(10), new JSNumber(0)});
-        assertRangeError(error);
-        context.clearPendingException();
+        assertWaitArgumentErrors(atomics()::wait, arr);
     }
 
     @Test
     public void testWaitAndNotifyMultithreaded() throws InterruptedException {
-        // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 4);
-        JSInt32Array arr = new JSInt32Array(context, ab, 0, 1);
-
-        // Store initial value
-        assertThat(arr.getBuffer().getBuffer()).isNotNull();
-        arr.getBuffer().getBuffer().putInt(0, 100);
+        JSInt32Array arr = sharedInts(1, 100);
 
         CountDownLatch waitStarted = new CountDownLatch(1);
         CountDownLatch waitFinished = new CountDownLatch(1);
@@ -513,13 +436,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
     @Test
     public void testWaitAsync() {
-        // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 4);
-        JSInt32Array arr = new JSInt32Array(context, ab, 0, 1);
-
-        // Store initial value
-        assertThat(arr.getBuffer().getBuffer()).isNotNull();
-        arr.getBuffer().getBuffer().putInt(0, 42);
+        JSInt32Array arr = sharedInts(1, 42);
 
         // Test 1: waitAsync with non-matching value - should return {async: false, value: "not-equal"}
         JSValue result = atomics().waitAsync(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(0)});
@@ -545,40 +462,17 @@ public class AtomicsObjectTest extends BaseJavetTest {
         assertThat(waitPromise.getState()).isEqualTo(JSPromise.PromiseState.FULFILLED);
         assertStringValue(waitPromise.getResult(), "timed-out");
 
-        // Test 3: Invalid arguments
-        JSValue error = atomics().waitAsync(context, null, new JSValue[]{arr, new JSNumber(0)});
-        assertTypeError(error);
-        context.clearPendingException();
-
-        // Test 4: Non-TypedArray argument
-        error = atomics().waitAsync(context, null, numberArgs(1, 0, 0));
-        assertTypeError(error);
-        context.clearPendingException();
-
-        // Test 5: Out of bounds index
-        error = atomics().waitAsync(context, null, new JSValue[]{arr, new JSNumber(10), new JSNumber(0)});
-        assertRangeError(error);
-        context.clearPendingException();
+        assertWaitArgumentErrors(atomics()::waitAsync, arr);
     }
 
     @Test
     public void testXor() {
-        // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 8);
-        JSInt32Array arr = new JSInt32Array(context, ab, 0, 2);
-
-        // Initialize values: 0b1111 (15) and 0b1010 (10)
-        arr.getBuffer().getBuffer().putInt(0, 15);
-        arr.getBuffer().getBuffer().putInt(4, 10);
+        JSInt32Array arr = sharedInts(2, 15, 10);
 
         // Test XOR operation: 15 ^ 10 = 5 (0b1111 ^ 0b1010 = 0b0101)
-        JSValue result = atomics().xor(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(10)});
-        assertNumberValue(result, 15.0); // returns old value
-        assertThat(arr.getBuffer().getBuffer().getInt(0)).isEqualTo(5); // new value
+        assertAtomicUpdate(atomics()::xor, arr, 0, 15, 5, 10);
 
         // Test XOR with same value: 10 ^ 10 = 0
-        result = atomics().xor(context, null, new JSValue[]{arr, new JSNumber(1), new JSNumber(10)});
-        assertNumberValue(result, 10.0);
-        assertThat(arr.getBuffer().getBuffer().getInt(4)).isEqualTo(0);
+        assertAtomicUpdate(atomics()::xor, arr, 1, 10, 0, 10);
     }
 }

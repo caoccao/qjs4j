@@ -24,6 +24,7 @@ import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.function.Consumer;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -599,6 +600,32 @@ final class ModuleLinker {
         }
     }
 
+    private void validateImportClause(String importClause, Consumer<String> checkName) {
+        String clause = importClause.trim();
+        if (clause.isEmpty() || clause.startsWith("*") || clause.startsWith("defer *")) {
+            return;
+        }
+        if (clause.startsWith("{")) {
+            validateNamedImportSpecifiers(clause, checkName);
+            return;
+        }
+        int commaIdx = clause.indexOf(',');
+        if (commaIdx < 0) {
+            checkName.accept("default");
+            return;
+        }
+
+        String defaultBinding = clause.substring(0, commaIdx).trim();
+        if (!defaultBinding.isEmpty()) {
+            checkName.accept("default");
+        }
+
+        String remainder = clause.substring(commaIdx + 1).trim();
+        if (remainder.startsWith("{")) {
+            validateNamedImportSpecifiers(remainder, checkName);
+        }
+    }
+
     void validateImportNameAgainstModuleRecord(JSDynamicImportModule moduleRecord, String importedName) {
         DynamicImportExportResolution resolution = resolveDynamicImportExport(moduleRecord, importedName,
                 new HashSet<>(), new HashSet<>());
@@ -634,64 +661,19 @@ final class ModuleLinker {
      * binding is missing (ES2024 linking error).
      */
     void validateNamedImportBindings(JSImportNamespaceObject namespace, String importClause) {
-        String clause = importClause.trim();
-        if (clause.isEmpty() || clause.startsWith("*") || clause.startsWith("defer *")) {
-            return;
-        }
-        if (clause.startsWith("{")) {
-            validateNamedImportSpecifiers(namespace, clause);
-            return;
-        }
-        int commaIdx = clause.indexOf(',');
-        if (commaIdx < 0) {
-            PropertyKey defaultKey = PropertyKey.fromString("default");
-            if (!namespace.has(defaultKey)) {
-                throw new JSSyntaxErrorException("The requested module does not provide an export named 'default'");
+        validateImportClause(importClause, name -> {
+            if (!namespace.has(PropertyKey.fromString(name))) {
+                throw new JSSyntaxErrorException(
+                        "The requested module does not provide an export named '" + name + "'");
             }
-            return;
-        }
-
-        String defaultBinding = clause.substring(0, commaIdx).trim();
-        if (!defaultBinding.isEmpty()) {
-            PropertyKey defaultKey = PropertyKey.fromString("default");
-            if (!namespace.has(defaultKey)) {
-                throw new JSSyntaxErrorException("The requested module does not provide an export named 'default'");
-            }
-        }
-
-        String remainder = clause.substring(commaIdx + 1).trim();
-        if (remainder.startsWith("{")) {
-            validateNamedImportSpecifiers(namespace, remainder);
-        }
+        });
     }
 
     void validateNamedImportBindingsAgainstExplicitExports(JSDynamicImportModule moduleRecord, String importClause) {
-        String clause = importClause.trim();
-        if (clause.isEmpty() || clause.startsWith("*") || clause.startsWith("defer *")) {
-            return;
-        }
-        if (clause.startsWith("{")) {
-            validateNamedImportSpecifiersAgainstModuleRecord(moduleRecord, clause);
-            return;
-        }
-        int commaIdx = clause.indexOf(',');
-        if (commaIdx < 0) {
-            validateImportNameAgainstModuleRecord(moduleRecord, "default");
-            return;
-        }
-
-        String defaultBinding = clause.substring(0, commaIdx).trim();
-        if (!defaultBinding.isEmpty()) {
-            validateImportNameAgainstModuleRecord(moduleRecord, "default");
-        }
-
-        String remainder = clause.substring(commaIdx + 1).trim();
-        if (remainder.startsWith("{")) {
-            validateNamedImportSpecifiersAgainstModuleRecord(moduleRecord, remainder);
-        }
+        validateImportClause(importClause, name -> validateImportNameAgainstModuleRecord(moduleRecord, name));
     }
 
-    void validateNamedImportSpecifiers(JSImportNamespaceObject namespace, String namedClause) {
+    private void validateNamedImportSpecifiers(String namedClause, Consumer<String> checkName) {
         if (!namedClause.startsWith("{") || !namedClause.endsWith("}")) {
             return;
         }
@@ -711,35 +693,7 @@ final class ModuleLinker {
             } else {
                 importedName = transformer.parseModuleExportNameValue(specifier);
             }
-            PropertyKey importKey = PropertyKey.fromString(importedName);
-            if (!namespace.has(importKey)) {
-                throw new JSSyntaxErrorException(
-                        "The requested module does not provide an export named '" + importedName + "'");
-            }
-        }
-    }
-
-    void validateNamedImportSpecifiersAgainstModuleRecord(JSDynamicImportModule moduleRecord, String namedClause) {
-        if (!namedClause.startsWith("{") || !namedClause.endsWith("}")) {
-            return;
-        }
-        String specifiersText = namedClause.substring(1, namedClause.length() - 1).trim();
-        if (specifiersText.isEmpty()) {
-            return;
-        }
-        for (String rawSpecifier : transformer.splitOnTopLevelCommas(specifiersText)) {
-            String specifier = rawSpecifier.trim();
-            if (specifier.isEmpty()) {
-                continue;
-            }
-            String importedName;
-            int asIndex = transformer.findTopLevelAs(specifier);
-            if (asIndex >= 0) {
-                importedName = transformer.parseModuleExportNameValue(specifier.substring(0, asIndex).trim());
-            } else {
-                importedName = transformer.parseModuleExportNameValue(specifier);
-            }
-            validateImportNameAgainstModuleRecord(moduleRecord, importedName);
+            checkName.accept(importedName);
         }
     }
 

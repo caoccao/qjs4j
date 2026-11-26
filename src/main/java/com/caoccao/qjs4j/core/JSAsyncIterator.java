@@ -639,6 +639,16 @@ public class JSAsyncIterator extends JSObject {
                         }), null, context));
     }
 
+    static JSPromise rejectPendingException(JSContext context) {
+        return createRejectedPromise(context, consumePendingException(context));
+    }
+
+    static JSPromise rejectTypeError(JSContext context, String message) {
+        JSValue error = context.throwTypeError(message);
+        context.clearAllPendingExceptions();
+        return createRejectedPromise(context, error);
+    }
+
     /**
      * Convert an async iterable to an array. Waits for all values to be produced asynchronously.
      *
@@ -663,12 +673,8 @@ public class JSAsyncIterator extends JSObject {
                 new JSNativeFunction(context, "onComplete", 1, (childContext, thisArg, args) -> {
                     resultPromise.fulfill(array);
                     return JSUndefined.INSTANCE;
-                }), resultPromise, context), new JSPromise.ReactionRecord(
-                        new JSNativeFunction(context, "onError", 1, (childContext, thisArg, args) -> {
-                            JSValue error = JSValue.argumentOrUndefined(args, 0);
-                            resultPromise.reject(error);
-                            return JSUndefined.INSTANCE;
-                        }), resultPromise, context));
+                }), resultPromise, context),
+                new JSPromise.ReactionRecord(resultPromise.rejectHandler(context, "onError"), resultPromise, context));
 
         return resultPromise;
     }

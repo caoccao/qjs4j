@@ -318,8 +318,7 @@ final class ExpressionAssignmentParser {
                         validateFormalsBodyDuplicate(List.of(param), null, blockBody.getBody());
                     }
 
-                    SourceLocation fullLocation = new SourceLocation(asyncLocation.line(), asyncLocation.column(),
-                            asyncLocation.offset(), parserContext.previousTokenEndOffset);
+                    SourceLocation fullLocation = asyncLocation.withEndOffset(parserContext.previousTokenEndOffset);
                     return new ArrowFunctionExpression(new FunctionParams(List.of(param), null, null), body, true,
                             fullLocation);
                 }
@@ -347,8 +346,7 @@ final class ExpressionAssignmentParser {
                                     blockBody.getBody());
                         }
 
-                        SourceLocation fullLocation = new SourceLocation(location.line(), location.column(),
-                                location.offset(), parserContext.previousTokenEndOffset);
+                        SourceLocation fullLocation = location.withEndOffset(parserContext.previousTokenEndOffset);
                         return new ArrowFunctionExpression(funcParams, body, true, fullLocation);
                     } finally {
                         parserContext.inClassStaticInit = savedInClassStaticInit;
@@ -474,8 +472,7 @@ final class ExpressionAssignmentParser {
                 validateFormalsBodyDuplicate(params, restParameter, blockBody.getBody());
             }
 
-            SourceLocation fullLocation = new SourceLocation(location.line(), location.column(), location.offset(),
-                    parserContext.previousTokenEndOffset);
+            SourceLocation fullLocation = location.withEndOffset(parserContext.previousTokenEndOffset);
 
             return new ArrowFunctionExpression(new FunctionParams(params, defaults, restParameter), body, false,
                     fullLocation);
@@ -557,8 +554,7 @@ final class ExpressionAssignmentParser {
 
         expressionsList.add(parseAssignmentExpression());
 
-        while (parserContext.match(TokenType.COMMA)) {
-            parserContext.advance();
+        while (parserContext.consumeIf(TokenType.COMMA)) {
             expressionsList.add(parseAssignmentExpression());
         }
 

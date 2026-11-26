@@ -48,7 +48,7 @@ public final class ArrayPrototype {
         }
 
         // Step 3: Let relativeIndex be ? ToIntegerOrInfinity(index).
-        long index = (long) JSTypeConversions.toInteger(context, JSValue.argumentOrUndefined(args, 0));
+        long index = toIntegerIndex(context, JSValue.argumentOrUndefined(args, 0));
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -176,6 +176,79 @@ public final class ArrayPrototype {
         }
         JSValue value = object.get(from);
         return !context.hasPendingException() && setOrThrow(context, object, to, value);
+    }
+
+    private static JSValue copySpliced(JSContext context, JSObject obj, JSValue[] args, long length, long start,
+            long deleteCount) {
+        // Step 11: newLen = len + insertCount - actualDeleteCount
+        long insertCount = Math.max(0, args.length - 2);
+        long newLen = length - deleteCount + insertCount;
+
+        // Step 12: If newLen > 2^53 - 1, throw a TypeError exception.
+        if (newLen > NumberPrototype.MAX_SAFE_INTEGER) {
+            return context.throwTypeError("Array length out of range");
+        }
+
+        // ArrayCreate step 1: If newLen > 2^32 - 1, throw a RangeError exception.
+        if (newLen > 0xFFFF_FFFFL) {
+            return context.throwRangeError("Invalid array length");
+        }
+
+        // Small results fit entirely in JSArray's dense storage. Build that storage directly so
+        // every copied value is still an own data property, including undefined values copied
+        // from source holes, without repeatedly growing the array or walking its prototype.
+        if (newLen <= JSArray.MAX_DENSE_SIZE) {
+            JSValue[] elements = new JSValue[(int) newLen];
+            int resultIndex = 0;
+            for (long i = 0; i < start; i++) {
+                context.getVirtualMachine().checkExecutionInterruptForNative();
+                elements[resultIndex++] = getElement(context, obj, i);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+            }
+            for (int i = 2; i < args.length; i++) {
+                context.getVirtualMachine().checkExecutionInterruptForNative();
+                elements[resultIndex++] = args[i];
+            }
+            for (long i = start + deleteCount; i < length; i++) {
+                context.getVirtualMachine().checkExecutionInterruptForNative();
+                elements[resultIndex++] = getElement(context, obj, i);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+            }
+            return context.createJSArray(elements, true);
+        }
+
+        // Create a sparse-capable result for lengths beyond dense storage.
+        JSArray result = context.createJSArray(0, (int) newLen);
+
+        // Copy elements before start
+        for (long i = 0; i < start; i++) {
+            context.getVirtualMachine().checkExecutionInterruptForNative();
+            result.push(getElement(context, obj, i));
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+        }
+
+        // Insert new elements
+        for (int i = 2; i < args.length; i++) {
+            context.getVirtualMachine().checkExecutionInterruptForNative();
+            result.push(args[i]);
+        }
+
+        // Copy elements after deleted portion
+        for (long i = start + deleteCount; i < length; i++) {
+            context.getVirtualMachine().checkExecutionInterruptForNative();
+            result.push(getElement(context, obj, i));
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -1018,7 +1091,7 @@ public final class ArrayPrototype {
         if (args.length <= index || args[index] instanceof JSUndefined) {
             return defaultValue;
         }
-        long value = (long) JSTypeConversions.toInteger(context, args[index]);
+        long value = toIntegerIndex(context, args[index]);
         return value < 0 ? Math.max(length + value, 0) : Math.min(value, length);
     }
 
@@ -1384,7 +1457,19 @@ public final class ArrayPrototype {
      * replacing elements.
      */
     public static JSValue splice(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSObject obj = requireArrayLike(context, thisArg, "splice");
+        return spliceElements(context, thisArg, args, false);
+    }
+
+    private static long spliceDeleteCount(JSContext context, JSValue[] args, long remaining) {
+        if (args.length < 2) {
+            return args.length == 0 ? 0 : remaining;
+        }
+        long count = toIntegerIndex(context, args[1]);
+        return Math.max(0, Math.min(count, remaining));
+    }
+
+    private static JSValue spliceElements(JSContext context, JSValue thisArg, JSValue[] args, boolean copy) {
+        JSObject obj = requireArrayLike(context, thisArg, copy ? "toSpliced" : "splice");
         if (obj == null) {
             return context.getPendingException();
         }
@@ -1403,6 +1488,13 @@ public final class ArrayPrototype {
             return context.getPendingException();
         }
 
+        return copy
+                ? copySpliced(context, obj, args, length, start, deleteCount)
+                : spliceInPlace(context, obj, args, length, start, deleteCount);
+    }
+
+    private static JSValue spliceInPlace(JSContext context, JSObject obj, JSValue[] args, long length, long start,
+            long deleteCount) {
         // Step 12: Let A be ? ArraySpeciesCreate(O, actualDeleteCount).
         JSObject deletedObj = createSpeciesObject(context, obj, deleteCount);
         if (deletedObj == null) {
@@ -1486,14 +1578,6 @@ public final class ArrayPrototype {
         return deletedObj;
     }
 
-    private static long spliceDeleteCount(JSContext context, JSValue[] args, long remaining) {
-        if (args.length < 2) {
-            return args.length == 0 ? 0 : remaining;
-        }
-        long count = (long) JSTypeConversions.toInteger(context, args[1]);
-        return Math.max(0, Math.min(count, remaining));
-    }
-
     private static JSValue testPredicate(JSContext context, JSValue thisArg, JSValue[] args, boolean every) {
         String methodName = every ? "every" : "some";
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
@@ -1537,6 +1621,15 @@ public final class ArrayPrototype {
             }
         }
         return JSBoolean.valueOf(every);
+    }
+
+    private static long toIntegerIndex(JSContext context, JSValue value) {
+        // Java's narrowing conversion truncates towards zero, maps NaN to zero and saturates
+        // infinities at the long bounds, which the caller then clamps to the array length.
+        double number = value instanceof JSNumber index
+                ? index.value()
+                : JSTypeConversions.toNumber(context, value).value();
+        return (long) number;
     }
 
     /**
@@ -1718,94 +1811,7 @@ public final class ArrayPrototype {
      * removed and/or added (immutable version of splice).
      */
     public static JSValue toSpliced(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSObject obj = requireArrayLike(context, thisArg, "toSpliced");
-        if (obj == null) {
-            return context.getPendingException();
-        }
-
-        long length = lengthOfArrayLike(context, obj);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        long start = relativeIndex(context, args, 0, length, 0);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-        long deleteCount = spliceDeleteCount(context, args, length - start);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        // Step 11: newLen = len + insertCount - actualDeleteCount
-        long insertCount = Math.max(0, args.length - 2);
-        long newLen = length - deleteCount + insertCount;
-
-        // Step 12: If newLen > 2^53 - 1, throw a TypeError exception.
-        if (newLen > NumberPrototype.MAX_SAFE_INTEGER) {
-            return context.throwTypeError("Array length out of range");
-        }
-
-        // ArrayCreate step 1: If newLen > 2^32 - 1, throw a RangeError exception.
-        if (newLen > 0xFFFF_FFFFL) {
-            return context.throwRangeError("Invalid array length");
-        }
-
-        // Small results fit entirely in JSArray's dense storage. Build that storage directly so
-        // every copied value is still an own data property, including undefined values copied
-        // from source holes, without repeatedly growing the array or walking its prototype.
-        if (newLen <= JSArray.MAX_DENSE_SIZE) {
-            JSValue[] elements = new JSValue[(int) newLen];
-            int resultIndex = 0;
-            for (long i = 0; i < start; i++) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
-                elements[resultIndex++] = getElement(context, obj, i);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-            }
-            for (int i = 2; i < args.length; i++) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
-                elements[resultIndex++] = args[i];
-            }
-            for (long i = start + deleteCount; i < length; i++) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
-                elements[resultIndex++] = getElement(context, obj, i);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-            }
-            return context.createJSArray(elements, true);
-        }
-
-        // Create a sparse-capable result for lengths beyond dense storage.
-        JSArray result = context.createJSArray(0, (int) newLen);
-
-        // Copy elements before start
-        for (long i = 0; i < start; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            result.push(getElement(context, obj, i));
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-        }
-
-        // Insert new elements
-        for (int i = 2; i < args.length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            result.push(args[i]);
-        }
-
-        // Copy elements after deleted portion
-        for (long i = start + deleteCount; i < length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            result.push(getElement(context, obj, i));
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-        }
-
-        return result;
+        return spliceElements(context, thisArg, args, true);
     }
 
     /**

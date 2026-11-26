@@ -36,6 +36,90 @@ public final class OpcodeHandler {
     private OpcodeHandler() {
     }
 
+    private static JSValue accessPrivateField(VirtualMachine vm, JSValue receiver, JSValue privateName, JSValue value,
+            boolean write) {
+        if (!(privateName instanceof JSSymbol symbol)) {
+            return value;
+        }
+        JSObject object = receiver instanceof JSObject obj ? obj : vm.toObject(receiver);
+        if (object == null) {
+            vm.pendingException = vm.context.throwTypeError(write
+                    ? "Cannot write private member to a non-object"
+                    : "Cannot read private member from a non-object");
+            return value;
+        }
+        PropertyKey key = PropertyKey.fromSymbol(symbol);
+        PropertyDescriptor descriptor = object instanceof JSProxy proxy
+                ? proxy.getOwnPrivatePropertyDescriptorDirect(key)
+                : object.getOwnPropertyDescriptor(key);
+        if (descriptor != null) {
+            if (descriptor.isAccessorDescriptor()) {
+                JSFunction accessor = write ? descriptor.getSetter() : descriptor.getGetter();
+                if (accessor != null) {
+                    if (!write) {
+                        return accessor.call(vm.context, object, JSValue.NO_ARGS);
+                    }
+                    accessor.call(vm.context, object, vm.singleArg(value));
+                    return value;
+                }
+            } else if (!write) {
+                return descriptor.getValue();
+            } else if (descriptor.isWritable()) {
+                object.setPrivatePropertyDirect(key, value);
+                return value;
+            }
+        }
+        vm.pendingException = vm.context.throwTypeError(
+                (write ? "Cannot write private member " : "Cannot read private member ") + symbol.getDescription()
+                        + (write ? " to" : " from") + " an object whose class did not declare it");
+        return value;
+    }
+
+    private static JSNumber appendIterable(ExecutionContext executionContext, JSArray array, int position,
+            JSValue enumerableObject) {
+        try {
+            JSContext context = executionContext.virtualMachine.context;
+            JSValue iterator = JSIteratorHelper.getIterator(context, enumerableObject);
+            if (capturePendingException(executionContext)) {
+                return null;
+            }
+            if (iterator == null) {
+                executionContext.virtualMachine.pendingException = context.throwTypeError("Value is not iterable");
+                context.clearPendingException();
+                return null;
+            }
+
+            while (true) {
+                JSObject resultObject = JSIteratorHelper.iteratorNext(iterator, context);
+                if (capturePendingException(executionContext)) {
+                    return null;
+                }
+                if (resultObject == null) {
+                    break;
+                }
+                JSValue doneValue = resultObject.get(PropertyKey.DONE);
+                if (capturePendingException(executionContext)) {
+                    return null;
+                }
+                if (JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE) {
+                    break;
+                }
+                JSValue value = resultObject.get(PropertyKey.VALUE);
+                if (capturePendingException(executionContext)) {
+                    return null;
+                }
+                array.set(position++, value);
+                if (capturePendingException(executionContext)) {
+                    return null;
+                }
+            }
+        } catch (JSVirtualMachineException e) {
+            executionContext.virtualMachine.captureVMException(e);
+            return null;
+        }
+        return JSNumber.of(position);
+    }
+
     private static void bitwise(Opcode op, ExecutionContext executionContext) {
         JSValue left = executionContext.peek(1);
         JSValue right = executionContext.peek(0);
@@ -118,6 +202,18 @@ public final class OpcodeHandler {
         }
         raiseTypeError(executionContext, "iterator must return an object");
         return null;
+    }
+
+    private static boolean captureForOfStepException(ExecutionContext executionContext, JSStackValue[] preservedMarkers,
+            int preservedMarkerCount, int depth, int nextPc) {
+        VirtualMachine vm = executionContext.virtualMachine;
+        if (!vm.context.hasPendingException()) {
+            return false;
+        }
+        restoreForOfStateWithoutIteratorCloseMarker(executionContext, preservedMarkers, preservedMarkerCount, depth);
+        vm.pendingException = vm.context.takePendingException();
+        executionContext.finishStackOpcode(nextPc);
+        return true;
     }
 
     private static boolean capturePendingException(ExecutionContext executionContext) {
@@ -516,72 +612,9 @@ public final class OpcodeHandler {
             throw new JSVirtualMachineException("APPEND: second argument must be a number");
         }
 
-        int position = (int) positionNumber.value();
-
-        try {
-            JSContext context = executionContext.virtualMachine.context;
-            JSValue iterator = JSIteratorHelper.getIterator(context, enumerableObject);
-            if (capturePendingException(executionContext)) {
-                stack[sp++] = JSUndefined.INSTANCE;
-                stack[sp++] = JSUndefined.INSTANCE;
-                executionContext.finishOpcode(pc + op.getSize(), sp);
-                return;
-            }
-            if (iterator == null) {
-                executionContext.virtualMachine.pendingException = context.throwTypeError("Value is not iterable");
-                context.clearPendingException();
-                stack[sp++] = JSUndefined.INSTANCE;
-                stack[sp++] = JSUndefined.INSTANCE;
-                executionContext.finishOpcode(pc + op.getSize(), sp);
-                return;
-            }
-
-            while (true) {
-                JSObject resultObject = JSIteratorHelper.iteratorNext(iterator, context);
-                if (capturePendingException(executionContext)) {
-                    stack[sp++] = JSUndefined.INSTANCE;
-                    stack[sp++] = JSUndefined.INSTANCE;
-                    executionContext.finishOpcode(pc + op.getSize(), sp);
-                    return;
-                }
-                if (resultObject == null) {
-                    break;
-                }
-                JSValue doneValue = resultObject.get(PropertyKey.DONE);
-                if (capturePendingException(executionContext)) {
-                    stack[sp++] = JSUndefined.INSTANCE;
-                    stack[sp++] = JSUndefined.INSTANCE;
-                    executionContext.finishOpcode(pc + op.getSize(), sp);
-                    return;
-                }
-                if (JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE) {
-                    break;
-                }
-                JSValue value = resultObject.get(PropertyKey.VALUE);
-                if (capturePendingException(executionContext)) {
-                    stack[sp++] = JSUndefined.INSTANCE;
-                    stack[sp++] = JSUndefined.INSTANCE;
-                    executionContext.finishOpcode(pc + op.getSize(), sp);
-                    return;
-                }
-                array.set(position++, value);
-                if (capturePendingException(executionContext)) {
-                    stack[sp++] = JSUndefined.INSTANCE;
-                    stack[sp++] = JSUndefined.INSTANCE;
-                    executionContext.finishOpcode(pc + op.getSize(), sp);
-                    return;
-                }
-            }
-        } catch (JSVirtualMachineException e) {
-            executionContext.virtualMachine.captureVMException(e);
-            stack[sp++] = JSUndefined.INSTANCE;
-            stack[sp++] = JSUndefined.INSTANCE;
-            executionContext.finishOpcode(pc + op.getSize(), sp);
-            return;
-        }
-
-        stack[sp++] = array;
-        stack[sp++] = JSNumber.of(position);
+        JSNumber nextPosition = appendIterable(executionContext, array, (int) positionNumber.value(), enumerableObject);
+        stack[sp++] = nextPosition == null ? JSUndefined.INSTANCE : array;
+        stack[sp++] = nextPosition == null ? JSUndefined.INSTANCE : nextPosition;
         executionContext.finishOpcode(pc + op.getSize(), sp);
     }
 
@@ -1952,58 +1985,56 @@ public final class OpcodeHandler {
 
     static void handleForOfNext(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
+        int nextPc = pc + op.getSize();
+        VirtualMachine vm = executionContext.virtualMachine;
         int depth = executionContext.bytecode.readU8(pc + 1);
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
+        vm.valueStack.stackTop = executionContext.sp;
         // Stack layout: ... iter next catch_offset [depth values] (bottom to top)
         // The depth parameter tells us how many values are between catch_offset and top
         // Following QuickJS: offset = -3 - depth
 
         // Pop depth values temporarily
-        if (executionContext.virtualMachine.forOfTempValues.length < depth) {
-            executionContext.virtualMachine.forOfTempValues = new JSValue[Math.max(depth,
-                    executionContext.virtualMachine.forOfTempValues.length * 2)];
+        if (vm.forOfTempValues.length < depth) {
+            vm.forOfTempValues = new JSValue[Math.max(depth, vm.forOfTempValues.length * 2)];
         }
         for (int i = 0; i < depth; i++) {
-            executionContext.virtualMachine.forOfTempValues[i] = executionContext.virtualMachine.valueStack.pop();
+            vm.forOfTempValues[i] = vm.valueStack.pop();
         }
         int markerIndex = -1;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
-        for (int index = executionContext.virtualMachine.valueStack.stackTop
-                - 1; index >= executionContext.frameStackBase; index--) {
+        JSStackValue[] stack = vm.valueStack.stack;
+        for (int index = vm.valueStack.stackTop - 1; index >= executionContext.frameStackBase; index--) {
             if (stack[index] instanceof JSCatchOffset catchOffset && catchOffset.isIteratorCloseMarker()) {
                 markerIndex = index;
                 break;
             }
         }
         if (markerIndex < 2) {
-            setErrorAsPending(executionContext,
-                    executionContext.virtualMachine.context.throwError("Invalid iterator state in FOR_OF_NEXT"));
+            setErrorAsPending(executionContext, vm.context.throwError("Invalid iterator state in FOR_OF_NEXT"));
             return;
         }
 
-        int preservedMarkerCount = executionContext.virtualMachine.valueStack.stackTop - markerIndex - 1;
+        int preservedMarkerCount = vm.valueStack.stackTop - markerIndex - 1;
         JSStackValue[] preservedMarkers = preservedMarkerCount > 0 ? new JSStackValue[preservedMarkerCount] : null;
         for (int markerOffset = 0; markerOffset < preservedMarkerCount; markerOffset++) {
-            preservedMarkers[markerOffset] = executionContext.virtualMachine.valueStack.popStackValue();
+            preservedMarkers[markerOffset] = vm.valueStack.popStackValue();
         }
 
-        JSStackValue catchOffset = executionContext.virtualMachine.valueStack.popStackValue();
+        JSStackValue catchOffset = vm.valueStack.popStackValue();
 
-        int stackTop = executionContext.virtualMachine.valueStack.stackTop;
+        int stackTop = vm.valueStack.stackTop;
         if (stackTop < 2) {
-            setErrorAsPending(executionContext,
-                    executionContext.virtualMachine.context.throwError("Invalid iterator stack depth in FOR_OF_NEXT"));
+            setErrorAsPending(executionContext, vm.context.throwError("Invalid iterator stack depth in FOR_OF_NEXT"));
             return;
         }
-        JSStackValue nextMethodStackValue = executionContext.virtualMachine.valueStack.stack[stackTop - 1];
-        JSStackValue iteratorStackValue = executionContext.virtualMachine.valueStack.stack[stackTop - 2];
+        JSStackValue nextMethodStackValue = vm.valueStack.stack[stackTop - 1];
+        JSStackValue iteratorStackValue = vm.valueStack.stack[stackTop - 2];
         JSValue nextMethod = nextMethodStackValue instanceof JSValue jsValue ? jsValue : null;
         JSValue iterator = iteratorStackValue instanceof JSValue jsValue ? jsValue : null;
 
         boolean done = false;
         JSValue value = JSUndefined.INSTANCE;
         boolean iteratorAlreadyDone = iterator instanceof JSObject iteratorObject
-                && executionContext.virtualMachine.isForOfIteratorExhausted(iteratorObject);
+                && vm.isForOfIteratorExhausted(iteratorObject);
 
         if (!iteratorAlreadyDone) {
             // Call iterator.next()
@@ -2014,77 +2045,61 @@ public final class OpcodeHandler {
                 String iterType = iteratorStackValue == null ? "null" : iteratorStackValue.getClass().getSimpleName();
                 restoreForOfStateWithoutIteratorCloseMarker(executionContext, preservedMarkers, preservedMarkerCount,
                         depth);
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
+                vm.pendingException = vm.context
                         .throwTypeError("Next method must be a function in FOR_OF_NEXT (nextMethod=" + actualType
                                 + ", iterator=" + iterType + ")");
-                executionContext.finishStackOpcode(pc + op.getSize());
+                executionContext.finishStackOpcode(nextPc);
                 return;
             }
 
             JSValue result;
             try {
-                result = callCallableValue(executionContext.virtualMachine.context, nextMethod, iterator,
-                        JSValue.NO_ARGS);
+                result = callCallableValue(vm.context, nextMethod, iterator, JSValue.NO_ARGS);
             } catch (JSException e) {
                 restoreForOfStateWithoutIteratorCloseMarker(executionContext, preservedMarkers, preservedMarkerCount,
                         depth);
-                executionContext.virtualMachine.pendingException = e.getErrorValue();
-                executionContext.virtualMachine.context.clearPendingException();
-                executionContext.finishStackOpcode(pc + op.getSize());
+                vm.pendingException = e.getErrorValue();
+                vm.context.clearPendingException();
+                executionContext.finishStackOpcode(nextPc);
                 return;
             } catch (JSVirtualMachineException e) {
                 restoreForOfStateWithoutIteratorCloseMarker(executionContext, preservedMarkers, preservedMarkerCount,
                         depth);
-                executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
-                executionContext.finishStackOpcode(pc + op.getSize());
+                vm.capturePendingExceptionFromVmOrContext(e);
+                executionContext.finishStackOpcode(nextPc);
                 return;
             }
 
             // Check for pending exception (e.g., TypedArray detachment during iteration)
-            if (executionContext.virtualMachine.context.hasPendingException()) {
-                restoreForOfStateWithoutIteratorCloseMarker(executionContext, preservedMarkers, preservedMarkerCount,
-                        depth);
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                        .takePendingException();
-                executionContext.finishStackOpcode(pc + op.getSize());
+            if (captureForOfStepException(executionContext, preservedMarkers, preservedMarkerCount, depth, nextPc)) {
                 return;
             }
 
             if (!(result instanceof JSObject resultObj)) {
                 restoreForOfStateWithoutIteratorCloseMarker(executionContext, preservedMarkers, preservedMarkerCount,
                         depth);
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                        .throwTypeError("Iterator result must be an object");
-                executionContext.finishStackOpcode(pc + op.getSize());
+                vm.pendingException = vm.context.throwTypeError("Iterator result must be an object");
+                executionContext.finishStackOpcode(nextPc);
                 return;
             }
 
             // Get the done property
             JSValue doneValue = resultObj.get(PropertyKey.DONE);
-            if (executionContext.virtualMachine.context.hasPendingException()) {
-                restoreForOfStateWithoutIteratorCloseMarker(executionContext, preservedMarkers, preservedMarkerCount,
-                        depth);
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                        .takePendingException();
-                executionContext.finishStackOpcode(pc + op.getSize());
+            if (captureForOfStepException(executionContext, preservedMarkers, preservedMarkerCount, depth, nextPc)) {
                 return;
             }
             done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
             if (done) {
                 if (iterator instanceof JSObject iteratorObject) {
-                    executionContext.virtualMachine.markForOfIteratorExhausted(iteratorObject);
+                    vm.markForOfIteratorExhausted(iteratorObject);
                 }
             } else {
                 if (iterator instanceof JSObject iteratorObject) {
-                    executionContext.virtualMachine.clearForOfIteratorExhausted(iteratorObject);
+                    vm.clearForOfIteratorExhausted(iteratorObject);
                 }
                 value = resultObj.get(PropertyKey.VALUE);
-                if (executionContext.virtualMachine.context.hasPendingException()) {
-                    restoreForOfStateWithoutIteratorCloseMarker(executionContext, preservedMarkers,
-                            preservedMarkerCount, depth);
-                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                            .takePendingException();
-                    executionContext.finishStackOpcode(pc + op.getSize());
+                if (captureForOfStepException(executionContext, preservedMarkers, preservedMarkerCount, depth,
+                        nextPc)) {
                     return;
                 }
                 if (value == null) {
@@ -2096,17 +2111,17 @@ public final class OpcodeHandler {
         }
 
         // Push catch_offset back, then restore temp values, then push value and done
-        executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
+        vm.valueStack.pushStackValue(catchOffset);
         for (int markerOffset = preservedMarkerCount - 1; markerOffset >= 0; markerOffset--) {
-            executionContext.virtualMachine.valueStack.pushStackValue(preservedMarkers[markerOffset]);
+            vm.valueStack.pushStackValue(preservedMarkers[markerOffset]);
         }
         for (int i = depth - 1; i >= 0; i--) {
-            executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
-            executionContext.virtualMachine.forOfTempValues[i] = null;
+            vm.valueStack.push(vm.forOfTempValues[i]);
+            vm.forOfTempValues[i] = null;
         }
-        executionContext.virtualMachine.valueStack.push(value);
-        executionContext.virtualMachine.valueStack.push(done ? JSBoolean.TRUE : JSBoolean.FALSE);
-        executionContext.finishStackOpcode(pc + op.getSize());
+        vm.valueStack.push(value);
+        vm.valueStack.push(done ? JSBoolean.TRUE : JSBoolean.FALSE);
+        executionContext.finishStackOpcode(nextPc);
     }
 
     static void handleForOfStart(Opcode op, ExecutionContext executionContext) {
@@ -2464,51 +2479,8 @@ public final class OpcodeHandler {
         int sp = executionContext.sp;
         JSValue privateSymbolValue = (JSValue) stack[--sp];
         JSValue objectValue = (JSValue) stack[--sp];
-
-        JSValue value = JSUndefined.INSTANCE;
-        if (privateSymbolValue instanceof JSSymbol symbol) {
-            JSObject object;
-            if (objectValue instanceof JSObject objectValueAsObject) {
-                object = objectValueAsObject;
-            } else {
-                object = executionContext.virtualMachine.toObject(objectValue);
-            }
-            if (object == null) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                        .throwTypeError("Cannot read private member from a non-object");
-                stack[sp++] = value;
-                executionContext.finishOpcode(pc + op.getSize(), sp);
-                return;
-            }
-            PropertyKey key = PropertyKey.fromSymbol(symbol);
-            PropertyDescriptor descriptor = object instanceof JSProxy proxy
-                    ? proxy.getOwnPrivatePropertyDescriptorDirect(key)
-                    : object.getOwnPropertyDescriptor(key);
-            if (descriptor == null) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                        .throwTypeError("Cannot read private member " + symbol.getDescription()
-                                + " from an object whose class did not declare it");
-                stack[sp++] = value;
-                executionContext.finishOpcode(pc + op.getSize(), sp);
-                return;
-            }
-            if (descriptor.isAccessorDescriptor()) {
-                JSFunction getterFunction = descriptor.getGetter();
-                if (getterFunction == null) {
-                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                            .throwTypeError("Cannot read private member " + symbol.getDescription()
-                                    + " from an object whose class did not declare it");
-                    stack[sp++] = value;
-                    executionContext.finishOpcode(pc + op.getSize(), sp);
-                    return;
-                }
-                value = getterFunction.call(executionContext.virtualMachine.context, object, JSValue.NO_ARGS);
-            } else {
-                value = descriptor.getValue();
-            }
-        }
-
-        stack[sp++] = value;
+        stack[sp++] = accessPrivateField(executionContext.virtualMachine, objectValue, privateSymbolValue,
+                JSUndefined.INSTANCE, false);
         executionContext.finishOpcode(pc + op.getSize(), sp);
     }
 
@@ -4075,63 +4047,7 @@ public final class OpcodeHandler {
         JSValue privateSymbolValue = (JSValue) stack[--sp];
         JSValue value = (JSValue) stack[--sp];
         JSValue objectValue = (JSValue) stack[--sp];
-
-        if (privateSymbolValue instanceof JSSymbol symbol) {
-            JSObject object;
-            if (objectValue instanceof JSObject objectValueAsObject) {
-                object = objectValueAsObject;
-            } else {
-                object = executionContext.virtualMachine.toObject(objectValue);
-            }
-            if (object == null) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                        .throwTypeError("Cannot write private member to a non-object");
-                stack[sp++] = value;
-                executionContext.finishOpcode(pc + op.getSize(), sp);
-                return;
-            }
-            PropertyKey key = PropertyKey.fromSymbol(symbol);
-            PropertyDescriptor descriptor = object instanceof JSProxy proxy
-                    ? proxy.getOwnPrivatePropertyDescriptorDirect(key)
-                    : object.getOwnPropertyDescriptor(key);
-            if (descriptor == null) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                        .throwTypeError("Cannot write private member " + symbol.getDescription()
-                                + " to an object whose class did not declare it");
-                stack[sp++] = value;
-                executionContext.finishOpcode(pc + op.getSize(), sp);
-                return;
-            }
-            if (descriptor.isAccessorDescriptor()) {
-                JSFunction setterFunction = descriptor.getSetter();
-                if (setterFunction == null) {
-                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                            .throwTypeError("Cannot write private member " + symbol.getDescription()
-                                    + " to an object whose class did not declare it");
-                    stack[sp++] = value;
-                    executionContext.finishOpcode(pc + op.getSize(), sp);
-                    return;
-                }
-                setterFunction.call(executionContext.virtualMachine.context, object,
-                        executionContext.virtualMachine.singleArg(value));
-            } else {
-                if (!descriptor.isWritable()) {
-                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
-                            .throwTypeError("Cannot write private member " + symbol.getDescription()
-                                    + " to an object whose class did not declare it");
-                    stack[sp++] = value;
-                    executionContext.finishOpcode(pc + op.getSize(), sp);
-                    return;
-                }
-                if (object instanceof JSProxy proxy) {
-                    proxy.setPrivatePropertyDirect(key, value);
-                } else {
-                    object.setPrivatePropertyDirect(key, value);
-                }
-            }
-        }
-
-        stack[sp++] = value;
+        stack[sp++] = accessPrivateField(executionContext.virtualMachine, objectValue, privateSymbolValue, value, true);
         executionContext.finishOpcode(pc + op.getSize(), sp);
     }
 

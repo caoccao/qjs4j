@@ -2032,7 +2032,8 @@ public non-sealed class JSObject implements JSValue {
         return weakEntryTable;
     }
 
-    static boolean sameValue(JSValue x, JSValue y) {
+    /** ECMAScript SameValue, including NaN equality and distinct signed zeroes. */
+    public static boolean sameValue(JSValue x, JSValue y) {
         if (x == y) {
             return true;
         }

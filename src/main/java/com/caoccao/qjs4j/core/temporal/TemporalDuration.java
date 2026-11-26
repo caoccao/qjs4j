@@ -33,129 +33,38 @@ public record TemporalDuration(long years, long months, long weeks, long days, l
     private static final BigInteger NS_MIN_INSTANT = new BigInteger("-8640000000000000000000");
 
     public static TemporalDuration createBalance(BigInteger totalNanoseconds, TemporalUnit largestUnit) {
-        boolean negative = totalNanoseconds.signum() < 0;
-        if (negative) {
-            totalNanoseconds = totalNanoseconds.negate();
+        long factor = largestUnit.getNanosecondFactor();
+        if (factor <= 1) {
+            return new TemporalDuration(0, 0, 0, 0, 0, 0, 0, 0, 0, totalNanoseconds.longValue());
+        }
+        long whole;
+        long remainder;
+        if (totalNanoseconds.bitLength() <= 63) {
+            long total = totalNanoseconds.longValue();
+            whole = total / factor;
+            remainder = total % factor;
+        } else {
+            BigInteger[] parts = totalNanoseconds.divideAndRemainder(BigInteger.valueOf(factor));
+            whole = parts[0].longValue();
+            remainder = parts[1].longValue();
         }
 
-        long days = 0L;
-        long hours = 0L;
-        long minutes = 0L;
-        long seconds = 0L;
-        long milliseconds = 0L;
-        long microseconds = 0L;
-        long nanoseconds = 0L;
-
-        switch (largestUnit) {
-            case DAY -> {
-                BigInteger[] dayDivision = totalNanoseconds.divideAndRemainder(TemporalConstants.BI_DAY_NANOSECONDS);
-                days = dayDivision[0].longValue();
-                BigInteger remainingNanoseconds = dayDivision[1];
-                BigInteger[] hourDivision = remainingNanoseconds
-                        .divideAndRemainder(TemporalConstants.BI_HOUR_NANOSECONDS);
-                hours = hourDivision[0].longValue();
-                remainingNanoseconds = hourDivision[1];
-                BigInteger[] minuteDivision = remainingNanoseconds
-                        .divideAndRemainder(TemporalConstants.BI_MINUTE_NANOSECONDS);
-                minutes = minuteDivision[0].longValue();
-                remainingNanoseconds = minuteDivision[1];
-                BigInteger[] secondDivision = remainingNanoseconds
-                        .divideAndRemainder(TemporalConstants.BI_SECOND_NANOSECONDS);
-                seconds = secondDivision[0].longValue();
-                remainingNanoseconds = secondDivision[1];
-                BigInteger[] millisecondDivision = remainingNanoseconds
-                        .divideAndRemainder(TemporalConstants.BI_MILLISECOND_NANOSECONDS);
-                milliseconds = millisecondDivision[0].longValue();
-                remainingNanoseconds = millisecondDivision[1];
-                BigInteger[] microsecondDivision = remainingNanoseconds
-                        .divideAndRemainder(TemporalConstants.BI_MICROSECOND_NANOSECONDS);
-                microseconds = microsecondDivision[0].longValue();
-                nanoseconds = microsecondDivision[1].longValue();
-            }
-            case HOUR -> {
-                BigInteger[] hourDivision = totalNanoseconds.divideAndRemainder(TemporalConstants.BI_HOUR_NANOSECONDS);
-                hours = hourDivision[0].longValue();
-                BigInteger remainingNanoseconds = hourDivision[1];
-                BigInteger[] minuteDivision = remainingNanoseconds
-                        .divideAndRemainder(TemporalConstants.BI_MINUTE_NANOSECONDS);
-                minutes = minuteDivision[0].longValue();
-                remainingNanoseconds = minuteDivision[1];
-                BigInteger[] secondDivision = remainingNanoseconds
-                        .divideAndRemainder(TemporalConstants.BI_SECOND_NANOSECONDS);
-                seconds = secondDivision[0].longValue();
-                remainingNanoseconds = secondDivision[1];
-                BigInteger[] millisecondDivision = remainingNanoseconds
-                        .divideAndRemainder(TemporalConstants.BI_MILLISECOND_NANOSECONDS);
-                milliseconds = millisecondDivision[0].longValue();
-                remainingNanoseconds = millisecondDivision[1];
-                BigInteger[] microsecondDivision = remainingNanoseconds
-                        .divideAndRemainder(TemporalConstants.BI_MICROSECOND_NANOSECONDS);
-                microseconds = microsecondDivision[0].longValue();
-                nanoseconds = microsecondDivision[1].longValue();
-            }
-            case MINUTE -> {
-                BigInteger[] minuteDivision = totalNanoseconds
-                        .divideAndRemainder(TemporalConstants.BI_MINUTE_NANOSECONDS);
-                minutes = minuteDivision[0].longValue();
-                BigInteger remainingNanoseconds = minuteDivision[1];
-                BigInteger[] secondDivision = remainingNanoseconds
-                        .divideAndRemainder(TemporalConstants.BI_SECOND_NANOSECONDS);
-                seconds = secondDivision[0].longValue();
-                remainingNanoseconds = secondDivision[1];
-                BigInteger[] millisecondDivision = remainingNanoseconds
-                        .divideAndRemainder(TemporalConstants.BI_MILLISECOND_NANOSECONDS);
-                milliseconds = millisecondDivision[0].longValue();
-                remainingNanoseconds = millisecondDivision[1];
-                BigInteger[] microsecondDivision = remainingNanoseconds
-                        .divideAndRemainder(TemporalConstants.BI_MICROSECOND_NANOSECONDS);
-                microseconds = microsecondDivision[0].longValue();
-                nanoseconds = microsecondDivision[1].longValue();
-            }
-            case SECOND -> {
-                BigInteger[] secondDivision = totalNanoseconds
-                        .divideAndRemainder(TemporalConstants.BI_SECOND_NANOSECONDS);
-                seconds = secondDivision[0].longValue();
-                BigInteger remainingNanoseconds = secondDivision[1];
-                BigInteger[] millisecondDivision = remainingNanoseconds
-                        .divideAndRemainder(TemporalConstants.BI_MILLISECOND_NANOSECONDS);
-                milliseconds = millisecondDivision[0].longValue();
-                remainingNanoseconds = millisecondDivision[1];
-                BigInteger[] microsecondDivision = remainingNanoseconds
-                        .divideAndRemainder(TemporalConstants.BI_MICROSECOND_NANOSECONDS);
-                microseconds = microsecondDivision[0].longValue();
-                nanoseconds = microsecondDivision[1].longValue();
-            }
-            case MILLISECOND -> {
-                BigInteger[] millisecondDivision = totalNanoseconds
-                        .divideAndRemainder(TemporalConstants.BI_MILLISECOND_NANOSECONDS);
-                milliseconds = millisecondDivision[0].longValue();
-                BigInteger remainingNanoseconds = millisecondDivision[1];
-                BigInteger[] microsecondDivision = remainingNanoseconds
-                        .divideAndRemainder(TemporalConstants.BI_MICROSECOND_NANOSECONDS);
-                microseconds = microsecondDivision[0].longValue();
-                nanoseconds = microsecondDivision[1].longValue();
-            }
-            case MICROSECOND -> {
-                BigInteger[] microsecondDivision = totalNanoseconds
-                        .divideAndRemainder(TemporalConstants.BI_MICROSECOND_NANOSECONDS);
-                microseconds = microsecondDivision[0].longValue();
-                nanoseconds = microsecondDivision[1].longValue();
-            }
-            default -> {
-                nanoseconds = totalNanoseconds.longValue();
-            }
-        }
-
-        if (negative) {
-            days = -days;
-            hours = -hours;
-            minutes = -minutes;
-            seconds = -seconds;
-            milliseconds = -milliseconds;
-            microseconds = -microseconds;
-            nanoseconds = -nanoseconds;
-        }
-
+        // The signed remainder is smaller than a day, even when the largest component exceeds a long.
+        long days = largestUnit == TemporalUnit.DAY ? whole : 0;
+        long hours = largestUnit == TemporalUnit.HOUR ? whole : remainder / TemporalConstants.HOUR_NANOSECONDS;
+        long minutes = largestUnit == TemporalUnit.MINUTE
+                ? whole
+                : remainder / TemporalConstants.MINUTE_NANOSECONDS % 60;
+        long seconds = largestUnit == TemporalUnit.SECOND
+                ? whole
+                : remainder / TemporalConstants.SECOND_NANOSECONDS % 60;
+        long milliseconds = largestUnit == TemporalUnit.MILLISECOND
+                ? whole
+                : remainder / TemporalConstants.MILLISECOND_NANOSECONDS % 1000;
+        long microseconds = largestUnit == TemporalUnit.MICROSECOND
+                ? whole
+                : remainder / TemporalConstants.MICROSECOND_NANOSECONDS % 1000;
+        long nanoseconds = remainder % 1000;
         return new TemporalDuration(0, 0, 0, days, hours, minutes, seconds, milliseconds, microseconds, nanoseconds);
     }
 

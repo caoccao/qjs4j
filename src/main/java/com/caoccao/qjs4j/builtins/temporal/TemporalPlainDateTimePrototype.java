@@ -269,22 +269,7 @@ public final class TemporalPlainDateTimePrototype {
             return null;
         }
 
-        TemporalFractionalSecondDigitsOption digits = TemporalFractionalSecondDigitsOption.read(context, optionsObject);
-        if (digits == null) {
-            return null;
-        }
-
-        String roundingModeText = TemporalUtils.getStringOption(context, optionsObject, "roundingMode", "trunc");
-        if (context.hasPendingException() || roundingModeText == null) {
-            return null;
-        }
-
-        String smallestUnitText = TemporalUtils.getStringOption(context, optionsObject, "smallestUnit", null);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        TemporalPlainTimeToStringSettings time = TemporalPlainTimeToStringSettings.resolve(context, roundingModeText,
-                smallestUnitText, digits);
+        TemporalPlainTimeToStringSettings time = TemporalPlainTimeToStringSettings.read(context, optionsObject);
         if (time == null) {
             return null;
         }
@@ -348,41 +333,18 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        if (args.length == 0 || args[0] instanceof JSUndefined) {
-            context.throwTypeError("Temporal error: Must specify a roundTo parameter.");
-            return JSUndefined.INSTANCE;
-        }
-
-        TemporalRoundSettings roundSettings = TemporalRoundSettings.parse(context, args[0], TemporalUnit.DAY,
-                TemporalUnit.NANOSECOND);
+        TemporalRoundSettings roundSettings = TemporalRoundSettings.parseRoundTo(context, args, TemporalUnit.DAY);
         if (context.hasPendingException() || roundSettings == null) {
             return JSUndefined.INSTANCE;
         }
 
-        long totalNanoseconds = plainDateTime.getIsoDateTime().time().totalNanoseconds();
-        long unitNanoseconds = roundSettings.smallestUnit().getNanosecondFactor();
-        long incrementNanoseconds = unitNanoseconds * roundSettings.roundingIncrement();
-        long roundedNanoseconds = roundSettings.roundingMode().roundLongToIncrementAsIfPositive(totalNanoseconds,
-                incrementNanoseconds);
-
-        int dayAdjust = 0;
-        if (roundedNanoseconds == DAY_NANOSECONDS.longValue()) {
-            dayAdjust = 1;
-            roundedNanoseconds = 0L;
-        }
-
-        IsoDate adjustedDate = plainDateTime.getIsoDateTime().date();
-        if (dayAdjust != 0) {
-            adjustedDate = adjustedDate.addDays(dayAdjust);
-        }
-        IsoTime adjustedTime = IsoTime.createFromNanoseconds(roundedNanoseconds);
-        if (!adjustedDate.isWithinPlainDateTimeRange(adjustedTime)) {
+        IsoDateTime rounded = roundSettings.roundDateTime(plainDateTime.getIsoDateTime());
+        if (!rounded.date().isWithinPlainDateTimeRange(rounded.time())) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
 
-        return JSTemporalPlainDateTime.create(context, adjustedDate.atTime(adjustedTime),
-                plainDateTime.getCalendarId());
+        return JSTemporalPlainDateTime.create(context, rounded, plainDateTime.getCalendarId());
     }
 
     public static JSValue second(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -569,93 +531,21 @@ public final class TemporalPlainDateTimePrototype {
 
         IsoTime originalTime = plainDateTime.getIsoDateTime().time();
         TemporalCalendarId calendarId = plainDateTime.getCalendarId();
-        boolean calendarSupportsEraFields = calendarId.hasEra();
-
-        Integer day = TemporalUtils.getOptionalIntegerField(context, fields, "day");
+        TemporalPropertyBag bag = new TemporalPropertyBag(context, fields);
+        Integer day = bag.positiveDateField("day");
+        int hour = bag.time("hour", originalTime.hour());
+        int microsecond = bag.time("microsecond", originalTime.microsecond());
+        int millisecond = bag.time("millisecond", originalTime.millisecond());
+        int minute = bag.time("minute", originalTime.minute());
+        Integer month = bag.positiveDateField("month");
+        String monthCode = bag.string("monthCode");
+        int nanosecond = bag.time("nanosecond", originalTime.nanosecond());
+        int second = bag.time("second", originalTime.second());
+        TemporalPartialDate dateFields = bag.readYearAndEra(calendarId, day, month, monthCode);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-
-        if (day != null && day < 1) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
-        }
-
-        Integer hourField = TemporalUtils.getOptionalIntegerField(context, fields, "hour");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int hour = hourField != null ? hourField : originalTime.hour();
-
-        Integer microsecondField = TemporalUtils.getOptionalIntegerField(context, fields, "microsecond");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int microsecond = microsecondField != null ? microsecondField : originalTime.microsecond();
-
-        Integer millisecondField = TemporalUtils.getOptionalIntegerField(context, fields, "millisecond");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int millisecond = millisecondField != null ? millisecondField : originalTime.millisecond();
-
-        Integer minuteField = TemporalUtils.getOptionalIntegerField(context, fields, "minute");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int minute = minuteField != null ? minuteField : originalTime.minute();
-
-        Integer month = TemporalUtils.getOptionalIntegerField(context, fields, "month");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        if (month != null && month < 1) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
-        }
-
-        String monthCode = TemporalUtils.getStringOption(context, fields, "monthCode", null);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        Integer nanosecondField = TemporalUtils.getOptionalIntegerField(context, fields, "nanosecond");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int nanosecond = nanosecondField != null ? nanosecondField : originalTime.nanosecond();
-
-        Integer secondField = TemporalUtils.getOptionalIntegerField(context, fields, "second");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int second = secondField != null ? secondField : originalTime.second();
-
-        Integer year = TemporalUtils.getOptionalIntegerField(context, fields, "year");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        String era = null;
-        Integer eraYear = null;
-        if (calendarSupportsEraFields) {
-            era = TemporalUtils.getStringOption(context, fields, "era", null);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            eraYear = TemporalUtils.getOptionalIntegerField(context, fields, "eraYear");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-        }
-
-        TemporalPartialDate dateFields = new TemporalPartialDate(day, month, monthCode, year, era, eraYear);
-        boolean hasTimeField = hourField != null || minuteField != null || secondField != null
-                || millisecondField != null || microsecondField != null || nanosecondField != null;
-        if (dateFields.isEmpty() && !hasTimeField) {
+        if (dateFields.isEmpty() && !bag.hasTimeField()) {
             context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
             return JSUndefined.INSTANCE;
         }

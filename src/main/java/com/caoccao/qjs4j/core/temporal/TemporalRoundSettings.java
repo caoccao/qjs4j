@@ -120,4 +120,23 @@ public record TemporalRoundSettings(TemporalUnit smallestUnit, long roundingIncr
 
         return new TemporalRoundSettings(smallestUnit, roundingIncrement, roundingMode);
     }
+
+    public long roundedNanoseconds(IsoTime time) {
+        return roundingMode.roundLongToIncrementAsIfPositive(time.totalNanoseconds(),
+                smallestUnit.getNanosecondFactor() * roundingIncrement);
+    }
+
+    public IsoDateTime roundDateTime(IsoDateTime value) {
+        long nanos = roundedNanoseconds(value.time());
+        IsoDate date = nanos == TemporalConstants.DAY_NANOSECONDS ? value.date().addDays(1) : value.date();
+        return date.atTime(IsoTime.createFromNanoseconds(nanos));
+    }
+
+    public static TemporalRoundSettings parseRoundTo(JSContext context, JSValue[] args, TemporalUnit largestUnit) {
+        if (args.length == 0 || args[0] instanceof JSUndefined) {
+            context.throwTypeError("Temporal error: Must specify a roundTo parameter.");
+            return null;
+        }
+        return parse(context, args[0], largestUnit, TemporalUnit.NANOSECOND);
+    }
 }

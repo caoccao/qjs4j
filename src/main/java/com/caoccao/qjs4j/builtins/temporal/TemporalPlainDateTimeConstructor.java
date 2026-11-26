@@ -111,48 +111,17 @@ public final class TemporalPlainDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        Integer dayOfMonth = TemporalUtils.getOptionalIntegerField(context, fields, "day");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        int hour = TemporalUtils.getIntegerField(context, fields, "hour", 0);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int microsecond = TemporalUtils.getIntegerField(context, fields, "microsecond", 0);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int millisecond = TemporalUtils.getIntegerField(context, fields, "millisecond", 0);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int minute = TemporalUtils.getIntegerField(context, fields, "minute", 0);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        Integer month = TemporalUtils.getOptionalIntegerField(context, fields, "month");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue monthCodeValue = fields.get(PropertyKey.fromString("monthCode"));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        IsoMonth parsedMonthCode = IsoMonth.fromField(context, monthCodeValue);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int nanosecond = TemporalUtils.getIntegerField(context, fields, "nanosecond", 0);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        int second = TemporalUtils.getIntegerField(context, fields, "second", 0);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        Integer year = TemporalUtils.getOptionalIntegerField(context, fields, "year");
+        TemporalPropertyBag bag = new TemporalPropertyBag(context, fields);
+        Integer dayOfMonth = bag.integer("day");
+        int hour = bag.time("hour", 0);
+        int microsecond = bag.time("microsecond", 0);
+        int millisecond = bag.time("millisecond", 0);
+        int minute = bag.time("minute", 0);
+        Integer month = bag.integer("month");
+        IsoMonth parsedMonthCode = bag.monthCode();
+        int nanosecond = bag.time("nanosecond", 0);
+        int second = bag.time("second", 0);
+        Integer year = bag.integer("year");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

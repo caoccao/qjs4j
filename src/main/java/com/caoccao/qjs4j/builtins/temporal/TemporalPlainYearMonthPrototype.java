@@ -468,43 +468,13 @@ public final class TemporalPlainYearMonthPrototype {
         if (plainYearMonth == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue locales = JSValue.argumentOrUndefined(args, 0);
-        JSValue options = JSValue.argumentOrUndefined(args, 1);
-        if (options instanceof JSObject optionsObject) {
-            JSValue timeStyleValue = optionsObject.get(PropertyKey.fromString("timeStyle"));
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (!(timeStyleValue instanceof JSUndefined) && timeStyleValue != null) {
-                context.throwTypeError("Invalid date/time formatting options");
-                return JSUndefined.INSTANCE;
-            }
-        }
-        JSValue dateTimeFormat = JSIntlObject.createDateTimeFormat(context, null, new JSValue[]{locales, options});
-        if (context.hasPendingException()) {
+        JSValue dateTimeFormat = TemporalLocaleFormat.create(context, args, "timeStyle");
+        if (dateTimeFormat == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue resolvedOptionsValue = JSIntlObject.dateTimeFormatResolvedOptions(context, dateTimeFormat,
-                JSValue.NO_ARGS);
-        if (context.hasPendingException()) {
+        if (!TemporalLocaleFormat.matchesCalendar(context, dateTimeFormat, plainYearMonth.getCalendarId())) {
             return JSUndefined.INSTANCE;
         }
-        if (resolvedOptionsValue instanceof JSObject resolvedOptionsObject) {
-            JSValue formatterCalendarValue = resolvedOptionsObject.get(PropertyKey.fromString("calendar"));
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            TemporalCalendarId formatterCalendarId = TemporalCalendarId.createFromCalendarString(context,
-                    formatterCalendarValue);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (!plainYearMonth.getCalendarId().equals(formatterCalendarId)) {
-                context.throwRangeError("Invalid date/time value");
-                return JSUndefined.INSTANCE;
-            }
-        }
-
         JSTemporalPlainYearMonth plainYearMonthForFormatting = plainYearMonth;
         if (plainYearMonth.getCalendarId() != TemporalCalendarId.ISO8601) {
             IsoCalendarDate calendarDateFields = plainYearMonth.getIsoDate()
@@ -596,9 +566,6 @@ public final class TemporalPlainYearMonthPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        PropertyKey monthKey = PropertyKey.fromString("month");
-        PropertyKey monthCodeKey = PropertyKey.fromString("monthCode");
-        PropertyKey yearKey = PropertyKey.fromString("year");
         PropertyKey eraKey = PropertyKey.fromString("era");
         PropertyKey eraYearKey = PropertyKey.fromString("eraYear");
 
@@ -702,53 +669,10 @@ public final class TemporalPlainYearMonthPrototype {
         String calendarMonthCode = resolveCalendarMonthCode(plainYearMonth);
         TemporalEraYear eraFields = resolveEraFields(plainYearMonth);
 
-        JSObject mergedFieldsObject = new JSObject(context);
-        mergedFieldsObject.set(PropertyKey.fromString("calendar"), new JSString(calendarId.identifier()));
-        if (calendarId == TemporalCalendarId.ISO8601) {
-            mergedFieldsObject.set(monthKey, JSNumber.of(calendarDate.month()));
-        }
-        mergedFieldsObject.set(monthCodeKey, new JSString(calendarMonthCode));
-        mergedFieldsObject.set(yearKey, JSNumber.of(calendarDate.year()));
-        if (eraFields != null) {
-            mergedFieldsObject.set(eraKey, new JSString(eraFields.era().identifier()));
-            if (eraFields.eraYear() != null) {
-                mergedFieldsObject.set(eraYearKey, JSNumber.of(eraFields.eraYear()));
-            }
-        }
-
-        if (hasYear) {
-            mergedFieldsObject.delete(eraKey);
-            mergedFieldsObject.delete(eraYearKey);
-        }
-        if (hasEra || hasEraYear) {
-            mergedFieldsObject.delete(yearKey);
-            mergedFieldsObject.delete(eraKey);
-            mergedFieldsObject.delete(eraYearKey);
-        }
-        if (hasMonth) {
-            mergedFieldsObject.delete(monthCodeKey);
-        }
-        if (hasMonthCode) {
-            mergedFieldsObject.delete(monthKey);
-        }
-
-        if (hasMonth) {
-            mergedFieldsObject.set(monthKey, JSNumber.of(month));
-        }
-        if (hasMonthCode) {
-            if (monthCodeInfo != null) {
-                mergedFieldsObject.set(monthCodeKey, new JSString(monthCodeInfo.monthCode()));
-            }
-        }
-        if (hasYear) {
-            mergedFieldsObject.set(yearKey, JSNumber.of(year));
-        }
-        if (hasEra) {
-            mergedFieldsObject.set(eraKey, new JSString(era));
-        }
-        if (hasEraYear) {
-            mergedFieldsObject.set(eraYearKey, JSNumber.of(eraYear));
-        }
+        TemporalPartialDate partialDate = new TemporalPartialDate(null, month,
+                monthCodeInfo == null ? null : monthCodeInfo.monthCode(), year, era, eraYear);
+        JSObject mergedFieldsObject = partialDate.mergeFields(context, calendarId, calendarDate, calendarMonthCode,
+                eraFields, false);
         JSObject normalizedOptionsObject = TemporalUtils.overflowOptions(context, overflow);
         JSValue mergedYearMonthValue = TemporalPlainYearMonthConstructor.yearMonthFromFields(context,
                 mergedFieldsObject, normalizedOptionsObject);

@@ -40,7 +40,7 @@ final class IdentifierDestructuringAssignmentCompiler extends AstNodeCompiler<Id
         }
         if (localIndex != null) {
             if (compilerContext.scopeManager.isLocalBindingConst(name)) {
-                emitConstAssignmentErrorForLocal(name, localIndex);
+                compilerContext.emitHelpers.emitConstAssignmentErrorForLocal(name, localIndex);
                 return;
             }
             if (compilerContext.tdzLocals.contains(name)) {
@@ -52,7 +52,7 @@ final class IdentifierDestructuringAssignmentCompiler extends AstNodeCompiler<Id
             Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
             if (capturedIndex != null) {
                 if (compilerContext.captureResolver.isCapturedBindingImmutable(name)) {
-                    emitConstAssignmentErrorForCaptured(name, capturedIndex);
+                    compilerContext.emitHelpers.emitConstAssignmentErrorForCaptured(name, capturedIndex);
                     return;
                 }
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_VAR_REF_CHECK, capturedIndex);
@@ -62,24 +62,6 @@ final class IdentifierDestructuringAssignmentCompiler extends AstNodeCompiler<Id
                 compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
             }
         }
-    }
-
-    private void emitConstAssignmentError(String name) {
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
-        compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, name);
-        compilerContext.emitter.emitU8(0);
-    }
-
-    private void emitConstAssignmentErrorForCaptured(String name, int capturedIndex) {
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, capturedIndex);
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
-        emitConstAssignmentError(name);
-    }
-
-    private void emitConstAssignmentErrorForLocal(String name, int localIndex) {
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
-        emitConstAssignmentError(name);
     }
 
     private Integer ensureImplicitArgumentsLocalBinding() {

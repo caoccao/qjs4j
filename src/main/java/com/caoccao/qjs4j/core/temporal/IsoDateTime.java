@@ -101,27 +101,7 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
     public LocalDateTime addDurationToLocalDateTime(JSContext context, TemporalDuration durationRecord) {
         LocalDateTime dateBalancedDateTime = toLocalDateTime().plusYears(durationRecord.years())
                 .plusMonths(durationRecord.months()).plusWeeks(durationRecord.weeks()).plusDays(durationRecord.days());
-        BigInteger timeNanoseconds = durationRecord.timeNanoseconds();
-        BigInteger[] dayQuotientAndRemainder = timeNanoseconds.divideAndRemainder(TemporalConstants.BI_DAY_NANOSECONDS);
-        long dayAdjustment;
-        try {
-            dayAdjustment = dayQuotientAndRemainder[0].longValueExact();
-        } catch (ArithmeticException arithmeticException) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
-        }
-        BigInteger nanosecondRemainder = dayQuotientAndRemainder[1];
-        if (nanosecondRemainder.signum() < 0) {
-            dayAdjustment--;
-            nanosecondRemainder = nanosecondRemainder.add(TemporalConstants.BI_DAY_NANOSECONDS);
-        }
-        long nanosecondAdjustment = nanosecondRemainder.longValueExact();
-        try {
-            return dateBalancedDateTime.plusDays(dayAdjustment).plusNanos(nanosecondAdjustment);
-        } catch (DateTimeException dateTimeException) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
-        }
+        return addTimeNanoseconds(context, dateBalancedDateTime, durationRecord.timeNanoseconds());
     }
 
     public LocalDateTime addFixedUnitsToLocalDateTime(TemporalUnit unit, long amount) {
@@ -139,23 +119,9 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
     }
 
     public LocalDateTime addNanosecondsToDateTime(JSContext context, BigInteger nanoseconds) {
-        BigInteger[] dayQuotientAndRemainder = nanoseconds.divideAndRemainder(TemporalConstants.BI_DAY_NANOSECONDS);
-        long dayAdjustment;
         try {
-            dayAdjustment = dayQuotientAndRemainder[0].longValueExact();
-        } catch (ArithmeticException arithmeticException) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
-        }
-        BigInteger nanosecondRemainder = dayQuotientAndRemainder[1];
-        if (nanosecondRemainder.signum() < 0) {
-            dayAdjustment--;
-            nanosecondRemainder = nanosecondRemainder.add(TemporalConstants.BI_DAY_NANOSECONDS);
-        }
-        long nanosecondAdjustment = nanosecondRemainder.longValueExact();
-        try {
-            return toLocalDateTime().plusDays(dayAdjustment).plusNanos(nanosecondAdjustment);
-        } catch (DateTimeException dateTimeException) {
+            return addTimeNanoseconds(context, toLocalDateTime(), nanoseconds);
+        } catch (DateTimeException exception) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return null;
         }
@@ -312,5 +278,21 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
 
     public IsoDateTime withTime(IsoTime isoTime) {
         return new IsoDateTime(date, isoTime);
+    }
+
+    private static LocalDateTime addTimeNanoseconds(JSContext context, LocalDateTime dateTime, BigInteger nanoseconds) {
+        BigInteger[] parts = nanoseconds.divideAndRemainder(TemporalConstants.BI_DAY_NANOSECONDS);
+        try {
+            long days = parts[0].longValueExact();
+            long remainder = parts[1].longValueExact();
+            if (remainder < 0) {
+                days--;
+                remainder += TemporalConstants.DAY_NANOSECONDS;
+            }
+            return dateTime.plusDays(days).plusNanos(remainder);
+        } catch (ArithmeticException | DateTimeException exception) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return null;
+        }
     }
 }

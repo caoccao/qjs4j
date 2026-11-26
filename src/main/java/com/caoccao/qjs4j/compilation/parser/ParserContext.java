@@ -100,9 +100,15 @@ final class ParserContext {
         nextToken = lexer.nextToken();
     }
 
+    boolean consumeIf(TokenType type) {
+        if (!match(type)) {
+            return false;
+        }
+        advance();
+        return true;
+    }
     void consumeSemicolon() {
-        if (match(TokenType.SEMICOLON)) {
-            advance();
+        if (consumeIf(TokenType.SEMICOLON)) {
             return;
         }
         if (hasNewlineBefore() || match(TokenType.RBRACE) || match(TokenType.EOF)) {
@@ -110,6 +116,7 @@ final class ParserContext {
         }
         throw new JSSyntaxErrorException(describeUnexpectedToken());
     }
+
     /**
      * Name the current token the way a diagnostic should, when it is the token that cannot follow.
      * <p>
@@ -436,8 +443,7 @@ final class ParserContext {
 
             prologueTokens.add(directiveToken);
             advance();
-            if (match(TokenType.SEMICOLON)) {
-                advance();
+            if (consumeIf(TokenType.SEMICOLON)) {
             }
 
             // Directive strings are also expression statements per ES spec.
@@ -611,5 +617,4 @@ final class ParserContext {
         String name = identifier.getName();
         return !"import.meta".equals(name) && !"new.target".equals(name) && !JSKeyword.THIS.equals(name);
     }
-
 }

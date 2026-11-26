@@ -94,11 +94,7 @@ public final class AsyncGeneratorPrototype {
                         resultPromise.fulfill(result);
                         return JSUndefined.INSTANCE;
                     }), resultPromise, context), new JSPromise.ReactionRecord(
-                            new JSNativeFunction(context, "onRejected", 1, (childContext, thisArg, args) -> {
-                                JSValue error = JSValue.argumentOrUndefined(args, 0);
-                                resultPromise.reject(error);
-                                return JSUndefined.INSTANCE;
-                            }), resultPromise, context));
+                            resultPromise.rejectHandler(context, "onRejected"), resultPromise, context));
 
             return resultPromise;
         }, context);

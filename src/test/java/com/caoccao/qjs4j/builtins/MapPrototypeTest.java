@@ -19,6 +19,8 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -431,57 +433,57 @@ public class MapPrototypeTest extends BaseJavetTest {
                 "typeof new Map([[1, 'a']]).entries().next === 'function'");
     }
 
-    @Test
-    void testEntriesPreservesInsertionOrder() {
-        // entries() should preserve insertion order
+    @ParameterizedTest
+    @ValueSource(strings = {".entries", "[Symbol.iterator]"})
+    void testEntryIteratorPreservesInsertionOrder(String accessor) {
         assertStringWithJavet("""
                 var m = new Map();
                 m.set(3, 'c');
                 m.set(1, 'a');
                 m.set(2, 'b');
-                var it = m.entries();
+                var it = m%s();
                 var result = '';
                 var entry;
                 while (!(entry = it.next()).done) {
                   result += entry.value[0];
                 }
-                result""");
+                result""".formatted(accessor));
     }
 
-    @Test
-    void testEntriesProducesKeyValuePairs() {
-        // entries() should produce [key, value] pairs
+    @ParameterizedTest
+    @ValueSource(strings = {".entries", "[Symbol.iterator]"})
+    void testEntryIteratorProducesKeyValuePairs(String accessor) {
         assertStringWithJavet("""
                 var m = new Map([[1, 'a'], [2, 'b'], [3, 'c']]);
-                var it = m.entries();
+                var it = m%s();
                 var result = '';
                 var entry;
                 while (!(entry = it.next()).done) {
                   result += entry.value[0] + entry.value[1];
                 }
-                result""");
+                result""".formatted(accessor));
     }
 
-    @Test
-    void testEntriesReturnsIterator() {
-        // entries() should return an iterator
-        assertBooleanWithJavet("typeof new Map([[1, 'a']]).entries() === 'object'",
-                "typeof new Map([[1, 'a']]).entries().next === 'function'");
+    @ParameterizedTest
+    @ValueSource(strings = {".entries", "[Symbol.iterator]"})
+    void testEntryIteratorReturnsIterator(String accessor) {
+        assertBooleanWithJavet("typeof new Map([[1, 'a']])%s() === 'object'".formatted(accessor),
+                "typeof new Map([[1, 'a']])%s().next === 'function'".formatted(accessor));
     }
 
-    @Test
-    void testEntriesWithEmptyMap() {
-        // entries() should work with empty map
+    @ParameterizedTest
+    @ValueSource(strings = {".entries", "[Symbol.iterator]"})
+    void testEntryIteratorWithEmptyMap(String accessor) {
         assertBooleanWithJavet("""
                 var m = new Map();
-                var it = m.entries();
+                var it = m%s();
                 var entry = it.next();
-                entry.done""");
+                entry.done""".formatted(accessor));
     }
 
-    @Test
-    void testEntriesWithMixedTypes() {
-        // entries() should handle mixed key types
+    @ParameterizedTest
+    @ValueSource(strings = {".entries", "[Symbol.iterator]"})
+    void testEntryIteratorWithMixedTypes(String accessor) {
         assertIntegerWithJavet("""
                 var m = new Map();
                 m.set(1, 'num');
@@ -489,10 +491,10 @@ public class MapPrototypeTest extends BaseJavetTest {
                 m.set(true, 'bool');
                 m.set(null, 'null');
                 m.set(undefined, 'undef');
-                var it = m.entries();
+                var it = m%s();
                 var count = 0;
                 while (!it.next().done) count++;
-                count""");
+                count""".formatted(accessor));
     }
 
     @Test
@@ -1492,70 +1494,6 @@ public class MapPrototypeTest extends BaseJavetTest {
     void testSymbolIteratorIsNotValues() {
         // Symbol.iterator should NOT be the same as values (unlike Set)
         assertBooleanWithJavet("Map.prototype[Symbol.iterator] !== Map.prototype.values");
-    }
-
-    @Test
-    void testSymbolIteratorPreservesInsertionOrder() {
-        // Symbol.iterator should preserve insertion order (like entries)
-        assertStringWithJavet("""
-                var m = new Map();
-                m.set(3, 'c');
-                m.set(1, 'a');
-                m.set(2, 'b');
-                var it = m[Symbol.iterator]();
-                var result = '';
-                var entry;
-                while (!(entry = it.next()).done) {
-                  result += entry.value[0];
-                }
-                result""");
-    }
-
-    @Test
-    void testSymbolIteratorProducesSameAsEntries() {
-        // Symbol.iterator should produce the same results as entries
-        assertStringWithJavet("""
-                var m = new Map([[1, 'a'], [2, 'b'], [3, 'c']]);
-                var it = m[Symbol.iterator]();
-                var result = '';
-                var entry;
-                while (!(entry = it.next()).done) {
-                  result += entry.value[0] + entry.value[1];
-                }
-                result""");
-    }
-
-    @Test
-    void testSymbolIteratorReturnsIterator() {
-        // Symbol.iterator should return an iterator (because it's the same as entries)
-        assertBooleanWithJavet("typeof new Map([[1, 'a']])[Symbol.iterator]() === 'object'",
-                "typeof new Map([[1, 'a']])[Symbol.iterator]().next === 'function'");
-    }
-
-    @Test
-    void testSymbolIteratorWithEmptyMap() {
-        // Symbol.iterator should work with empty map
-        assertBooleanWithJavet("""
-                var m = new Map();
-                var it = m[Symbol.iterator]();
-                var entry = it.next();
-                entry.done""");
-    }
-
-    @Test
-    void testSymbolIteratorWithMixedTypes() {
-        // Symbol.iterator should handle mixed key types
-        assertIntegerWithJavet("""
-                var m = new Map();
-                m.set(1, 'num');
-                m.set('str', 'string');
-                m.set(true, 'bool');
-                m.set(null, 'null');
-                m.set(undefined, 'undef');
-                var it = m[Symbol.iterator]();
-                var count = 0;
-                while (!it.next().done) count++;
-                count""");
     }
 
     @Test

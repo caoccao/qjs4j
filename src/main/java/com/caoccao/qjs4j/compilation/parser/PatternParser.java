@@ -95,8 +95,7 @@ record PatternParser(ParserContext parserContext, ParserDelegates delegates) {
             Expression key = delegates.expressions.parsePropertyName();
             Pattern value;
             boolean shorthand = false;
-            if (parserContext.match(TokenType.COLON)) {
-                parserContext.advance();
+            if (parserContext.consumeIf(TokenType.COLON)) {
                 value = parsePattern();
                 if (parserContext.match(TokenType.ASSIGN)) {
                     SourceLocation assignLoc = parserContext.getLocation();

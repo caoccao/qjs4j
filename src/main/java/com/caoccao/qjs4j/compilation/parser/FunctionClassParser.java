@@ -312,8 +312,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         }
 
         // Check for computed property name [expr]
-        if (parserContext.match(TokenType.LBRACKET)) {
-            parserContext.advance();
+        if (parserContext.consumeIf(TokenType.LBRACKET)) {
             // Allow 'in' operator inside computed property names
             boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
             parserContext.inOperatorAllowed = true;
@@ -347,8 +346,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                     key = new PrivateIdentifier(keyName, parserContext.getLocation());
                     isPrivate = true;
                     parserContext.advance();
-                } else if (parserContext.match(TokenType.LBRACKET)) {
-                    parserContext.advance();
+                } else if (parserContext.consumeIf(TokenType.LBRACKET)) {
                     // Allow 'in' operator inside computed property names
                     boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
                     parserContext.inOperatorAllowed = true;
@@ -382,8 +380,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
     private Expression parseClassFieldInitializer() {
         Expression value = null;
-        if (parserContext.match(TokenType.ASSIGN)) {
-            parserContext.advance();
+        if (parserContext.consumeIf(TokenType.ASSIGN)) {
             boolean savedInClassFieldInitializer = parserContext.inClassFieldInitializer;
             boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
             parserContext.inClassFieldInitializer = true;
@@ -429,10 +426,8 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
     }
 
     private void parseDecoratorList() {
-        while (parserContext.match(TokenType.AT)) {
-            parserContext.advance();
-            if (parserContext.match(TokenType.LPAREN)) {
-                parserContext.advance();
+        while (parserContext.consumeIf(TokenType.AT)) {
+            if (parserContext.consumeIf(TokenType.LPAREN)) {
                 boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
                 parserContext.inOperatorAllowed = true;
                 try {
@@ -444,20 +439,16 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 continue;
             }
             parserContext.parseIdentifier();
-            while (parserContext.match(TokenType.DOT)) {
-                parserContext.advance();
-                if (parserContext.match(TokenType.PRIVATE_NAME)) {
-                    parserContext.advance();
+            while (parserContext.consumeIf(TokenType.DOT)) {
+                if (parserContext.consumeIf(TokenType.PRIVATE_NAME)) {
                 } else {
                     delegates.expressions.parsePropertyName();
                 }
             }
-            if (parserContext.match(TokenType.LPAREN)) {
-                parserContext.advance();
+            if (parserContext.consumeIf(TokenType.LPAREN)) {
                 if (!parserContext.match(TokenType.RPAREN)) {
                     delegates.expressions.parseAssignmentExpression();
-                    while (parserContext.match(TokenType.COMMA)) {
-                        parserContext.advance();
+                    while (parserContext.consumeIf(TokenType.COMMA)) {
                         delegates.expressions.parseAssignmentExpression();
                     }
                 }
@@ -483,16 +474,11 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.FUNCTION);
 
-        boolean isGenerator = false;
-        if (parserContext.match(TokenType.MUL)) {
-            parserContext.advance();
-            isGenerator = true;
-        }
+        boolean isGenerator = parserContext.consumeIf(TokenType.MUL);
 
-        // If there's a name, parse as regular function declaration
-        if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
-                || parserContext.match(TokenType.YIELD) || parserContext.match(TokenType.LET)) {
-            Identifier id = parserContext.parseIdentifier();
+        Identifier id;
+        if (hasFunctionNameToken()) {
+            id = parserContext.parseIdentifier();
             // Named function in export default creates a lexical binding for the name
             if (parserContext.moduleMode && parserContext.functionNesting == 0) {
                 String name = id.getName();
@@ -500,54 +486,10 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                     throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
                 }
             }
-            enterFunctionContext(isAsync, isGenerator);
-            boolean savedInClassStaticInit = parserContext.inClassStaticInit;
-            parserContext.inClassStaticInit = false;
-            boolean savedInFunctionBody = parserContext.inFunctionBody;
-            try {
-                if (isAsync || isGenerator) {
-                    parserContext.inFunctionBody = false;
-                }
-                parserContext.expect(TokenType.LPAREN);
-                FunctionParams funcParams = parseFunctionParameters();
-                parserContext.inFunctionBody = true;
-                BlockStatement body = parseFunctionBody(funcParams, id);
-                boolean needsArguments = parserContext.needsArguments;
-                SourceLocation fullLocation = new SourceLocation(location.line(), location.column(), location.offset(),
-                        parserContext.previousTokenEndOffset);
-                return new FunctionDeclaration(id, funcParams, body, isAsync, isGenerator, needsArguments,
-                        fullLocation);
-            } finally {
-                parserContext.inFunctionBody = savedInFunctionBody;
-                parserContext.inClassStaticInit = savedInClassStaticInit;
-                exitFunctionContext(isAsync, isGenerator);
-            }
+        } else {
+            id = new Identifier(JSKeyword.DEFAULT, location);
         }
-
-        // Anonymous: parse as function expression with inferred name "default"
-        Identifier defaultId = new Identifier(JSKeyword.DEFAULT, location);
-        enterFunctionContext(isAsync, isGenerator);
-        boolean savedInClassStaticInit = parserContext.inClassStaticInit;
-        parserContext.inClassStaticInit = false;
-        boolean savedInFunctionBody = parserContext.inFunctionBody;
-        try {
-            if (isAsync || isGenerator) {
-                parserContext.inFunctionBody = false;
-            }
-            parserContext.expect(TokenType.LPAREN);
-            FunctionParams funcParams = parseFunctionParameters();
-            parserContext.inFunctionBody = true;
-            BlockStatement body = parseFunctionBody(funcParams, defaultId);
-            boolean needsArguments = parserContext.needsArguments;
-            SourceLocation fullLocation = new SourceLocation(location.line(), location.column(), location.offset(),
-                    parserContext.previousTokenEndOffset);
-            return new FunctionDeclaration(defaultId, funcParams, body, isAsync, isGenerator, needsArguments,
-                    fullLocation);
-        } finally {
-            parserContext.inFunctionBody = savedInFunctionBody;
-            parserContext.inClassStaticInit = savedInClassStaticInit;
-            exitFunctionContext(isAsync, isGenerator);
-        }
+        return parseFunctionDefinition(id, location, isAsync, isGenerator, FunctionDeclaration::new);
     }
 
     /**
@@ -637,8 +579,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
         // Check for generator function: function* or async function*
         // Following QuickJS implementation: check for '*' after 'function' keyword
-        if (parserContext.match(TokenType.MUL)) {
-            parserContext.advance();
+        if (parserContext.consumeIf(TokenType.MUL)) {
             isGenerator = true;
         }
 
@@ -649,37 +590,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         // at global scope while rejecting `function await() {}` inside async functions.
         Identifier id = parserContext.parseIdentifier();
 
-        enterFunctionContext(isAsync, isGenerator);
-        boolean savedInClassStaticInit = parserContext.inClassStaticInit;
-        parserContext.inClassStaticInit = false;
-        boolean savedInFunctionBody = parserContext.inFunctionBody;
-        try {
-            // Per QuickJS: in_function_body == FALSE prevents yield/await during
-            // the parsing of the arguments in generator/async functions.
-            if (isAsync || isGenerator) {
-                parserContext.inFunctionBody = false;
-            }
-
-            parserContext.expect(TokenType.LPAREN);
-            FunctionParams funcParams = parseFunctionParameters();
-
-            parserContext.inFunctionBody = true;
-
-            // Parse body with "use strict" detection and parameter validation
-            BlockStatement body = parseFunctionBody(funcParams, id);
-            boolean needsArguments = parserContext.needsArguments;
-
-            // Use previousTokenEndOffset (position after closing '}') instead of
-            // currentToken.offset() (position of NEXT token, which may include trailing comments)
-            SourceLocation fullLocation = new SourceLocation(location.line(), location.column(), location.offset(),
-                    parserContext.previousTokenEndOffset);
-
-            return new FunctionDeclaration(id, funcParams, body, isAsync, isGenerator, needsArguments, fullLocation);
-        } finally {
-            parserContext.inFunctionBody = savedInFunctionBody;
-            parserContext.inClassStaticInit = savedInClassStaticInit;
-            exitFunctionContext(isAsync, isGenerator);
-        }
+        return parseFunctionDefinition(id, location, isAsync, isGenerator, FunctionDeclaration::new);
     }
 
     Expression parseFunctionExpression() {
@@ -692,49 +603,9 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
         // Check for generator function expression: function* () {}
         // Following QuickJS implementation: check for '*' after 'function' keyword
-        boolean isGenerator = false;
-        if (parserContext.match(TokenType.MUL)) {
-            parserContext.advance();
-            isGenerator = true;
-        }
+        boolean isGenerator = parserContext.consumeIf(TokenType.MUL);
 
-        enterFunctionContext(isAsync, isGenerator);
-        boolean savedInClassStaticInit = parserContext.inClassStaticInit;
-        parserContext.inClassStaticInit = false;
-        boolean savedInFunctionBody = parserContext.inFunctionBody;
-        try {
-            Identifier id = null;
-            if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
-                    || parserContext.match(TokenType.YIELD) || parserContext.match(TokenType.LET)) {
-                id = parserContext.parseIdentifier();
-            }
-
-            // Per QuickJS: in_function_body == FALSE prevents yield/await during
-            // the parsing of the arguments in generator/async functions.
-            if (isAsync || isGenerator) {
-                parserContext.inFunctionBody = false;
-            }
-
-            parserContext.expect(TokenType.LPAREN);
-            FunctionParams funcParams = parseFunctionParameters();
-
-            parserContext.inFunctionBody = true;
-
-            // Parse body with "use strict" detection and parameter validation
-            BlockStatement body = parseFunctionBody(funcParams, id);
-            boolean needsArguments = parserContext.needsArguments;
-
-            // Use previousTokenEndOffset (position after closing '}') instead of
-            // currentToken.offset() (which may include trailing comments)
-            SourceLocation fullLocation = new SourceLocation(location.line(), location.column(), location.offset(),
-                    parserContext.previousTokenEndOffset);
-
-            return new FunctionExpression(id, funcParams, body, isAsync, isGenerator, needsArguments, fullLocation);
-        } finally {
-            parserContext.inFunctionBody = savedInFunctionBody;
-            parserContext.inClassStaticInit = savedInClassStaticInit;
-            exitFunctionContext(isAsync, isGenerator);
-        }
+        return parseFunctionDefinition(null, location, isAsync, isGenerator, FunctionExpression::new);
     }
 
     /**
@@ -870,8 +741,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                     "Illegal 'use strict' directive in function with non-simple parameter list");
         }
 
-        SourceLocation fullLocation = new SourceLocation(methodStartLocation.line(), methodStartLocation.column(),
-                methodStartLocation.offset(), parserContext.previousTokenEndOffset);
+        SourceLocation fullLocation = methodStartLocation.withEndOffset(parserContext.previousTokenEndOffset);
 
         return new FunctionExpression(null, funcParams, body, isAsync, isGenerator, needsArguments, fullLocation);
     }
@@ -1013,8 +883,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             // Parse optional extends clause
             // ES2024 ClassHeritage: extends LeftHandSideExpression[?Yield, ?Await]
             Expression superClass = null;
-            if (parserContext.match(TokenType.EXTENDS)) {
-                parserContext.advance();
+            if (parserContext.consumeIf(TokenType.EXTENDS)) {
                 superClass = delegates.expressions.parseCallExpression();
             }
 
@@ -1027,8 +896,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             try {
                 while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
                     // Skip empty semicolons
-                    if (parserContext.match(TokenType.SEMICOLON)) {
-                        parserContext.advance();
+                    if (parserContext.consumeIf(TokenType.SEMICOLON)) {
                         continue;
                     }
 
@@ -1069,5 +937,54 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         if (parserContext.isStrictReservedIdentifier(name)) {
             throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
         }
+    }
+
+    private <T extends ASTNode> T parseFunctionDefinition(Identifier id, SourceLocation location, boolean isAsync,
+            boolean isGenerator, FunctionFactory<T> factory) {
+        enterFunctionContext(isAsync, isGenerator);
+        boolean savedInClassStaticInit = parserContext.inClassStaticInit;
+        parserContext.inClassStaticInit = false;
+        boolean savedInFunctionBody = parserContext.inFunctionBody;
+        try {
+            // A declaration's name was read in its enclosing scope. An expression binds its name here.
+            if (id == null && hasFunctionNameToken()) {
+                id = parserContext.parseIdentifier();
+            }
+            // Per QuickJS: in_function_body == FALSE prevents yield/await during
+            // the parsing of the arguments in generator/async functions.
+            if (isAsync || isGenerator) {
+                parserContext.inFunctionBody = false;
+            }
+
+            parserContext.expect(TokenType.LPAREN);
+            FunctionParams funcParams = parseFunctionParameters();
+
+            parserContext.inFunctionBody = true;
+
+            // Parse body with "use strict" detection and parameter validation
+            BlockStatement body = parseFunctionBody(funcParams, id);
+            boolean needsArguments = parserContext.needsArguments;
+
+            // Use previousTokenEndOffset (position after closing '}') instead of
+            // currentToken.offset() (position of NEXT token, which may include trailing comments)
+            SourceLocation fullLocation = location.withEndOffset(parserContext.previousTokenEndOffset);
+
+            return factory.create(id, funcParams, body, isAsync, isGenerator, needsArguments, fullLocation);
+        } finally {
+            parserContext.inFunctionBody = savedInFunctionBody;
+            parserContext.inClassStaticInit = savedInClassStaticInit;
+            exitFunctionContext(isAsync, isGenerator);
+        }
+    }
+
+    @FunctionalInterface
+    private interface FunctionFactory<T extends ASTNode> {
+        T create(Identifier id, FunctionParams params, BlockStatement body, boolean isAsync, boolean isGenerator,
+                boolean needsArguments, SourceLocation location);
+    }
+
+    private boolean hasFunctionNameToken() {
+        return parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
+                || parserContext.match(TokenType.YIELD) || parserContext.match(TokenType.LET);
     }
 }

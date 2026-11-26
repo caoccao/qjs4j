@@ -1459,6 +1459,10 @@ public final class IteratorPrototype {
      * Iterator.zip(iterables [, options]) Creates an iterator that zips multiple iterables together.
      */
     public static JSValue zip(JSContext context, JSValue thisArg, JSValue[] args) {
+        return zipIterables(context, args, false);
+    }
+
+    private static JSValue zipIterables(JSContext context, JSValue[] args, boolean keyed) {
         JSValue iterablesArg = JSValue.argumentOrUndefined(args, 0);
         JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
 
@@ -1491,6 +1495,94 @@ public final class IteratorPrototype {
             }
         }
 
+        if (keyed) {
+            return zipProperties(context, iterablesObject, mode,
+                    paddingOption instanceof JSObject object ? object : null);
+        }
+        return zipSequence(context, iterablesObject, mode, paddingOption);
+    }
+
+    /**
+     * Iterator.zipKeyed(iterables [, options]) Creates an iterator that zips named iterables together, producing
+     * objects.
+     */
+    public static JSValue zipKeyed(JSContext context, JSValue thisArg, JSValue[] args) {
+        return zipIterables(context, args, true);
+    }
+
+    private static JSValue zipProperties(JSContext context, JSObject iterablesObject, String mode,
+            JSObject paddingObject) {
+        // Step 10-12: Get own property keys and iterate
+        List<PropertyKey> allKeys = iterablesObject.getOwnPropertyKeys();
+        List<PropertyKey> keys = new ArrayList<>();
+        List<IteratorRecord> iters = new ArrayList<>();
+
+        for (PropertyKey key : allKeys) {
+            PropertyDescriptor desc;
+            try {
+                desc = iterablesObject.getOwnPropertyDescriptor(key);
+            } catch (JSVirtualMachineException e) {
+                convertVMException(context, e);
+                iteratorCloseAll(iters, context.getPendingException(), context);
+                return context.getPendingException();
+            }
+            if (context.hasPendingException()) {
+                iteratorCloseAll(iters, context.getPendingException(), context);
+                return context.getPendingException();
+            }
+            if (desc == null || !desc.isEnumerable()) {
+                continue;
+            }
+            JSValue value;
+            try {
+                value = iterablesObject.get(key);
+            } catch (JSVirtualMachineException e) {
+                convertVMException(context, e);
+                iteratorCloseAll(iters, context.getPendingException(), context);
+                return context.getPendingException();
+            }
+            if (context.hasPendingException()) {
+                iteratorCloseAll(iters, context.getPendingException(), context);
+                return context.getPendingException();
+            }
+            if (value instanceof JSUndefined) {
+                continue;
+            }
+            IteratorRecord iterRecord = getIteratorFlattenable(context, value);
+            if (iterRecord == null) {
+                iteratorCloseAll(iters, context.getPendingException(), context);
+                return context.getPendingException();
+            }
+            keys.add(key);
+            iters.add(iterRecord);
+        }
+
+        // Step 14: Handle padding for "longest" mode
+        List<JSValue> paddingValues = null;
+        if ("longest".equals(mode)) {
+            paddingValues = new ArrayList<>(keys.size());
+            if (paddingObject == null) {
+                for (int i = 0; i < keys.size(); i++) {
+                    paddingValues.add(JSUndefined.INSTANCE);
+                }
+            } else {
+                for (PropertyKey key : keys) {
+                    JSValue padValue = paddingObject.get(key);
+                    if (context.hasPendingException()) {
+                        iteratorCloseAll(iters, context.getPendingException(), context);
+                        return context.getPendingException();
+                    }
+                    paddingValues.add(padValue != null ? padValue : JSUndefined.INSTANCE);
+                }
+            }
+        }
+
+        // Create the zip iterator
+        return createZipIterator(context, iters, mode, paddingValues, keys.toArray(new PropertyKey[0]));
+    }
+
+    private static JSValue zipSequence(JSContext context, JSObject iterablesObject, String mode,
+            JSValue paddingOption) {
         // Step 10: GetIterator(iterables, sync)
         JSValue iteratorMethod = iterablesObject.get(PropertyKey.SYMBOL_ITERATOR);
         if (context.hasPendingException()) {
@@ -1610,115 +1702,6 @@ public final class IteratorPrototype {
 
         // Create the zip iterator
         return createZipIterator(context, iters, mode, paddingValues, null);
-    }
-
-    /**
-     * Iterator.zipKeyed(iterables [, options]) Creates an iterator that zips named iterables together, producing
-     * objects.
-     */
-    public static JSValue zipKeyed(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue iterablesArg = JSValue.argumentOrUndefined(args, 0);
-        JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
-
-        // Step 1: If iterables is not an Object, throw a TypeError exception.
-        if (!(iterablesArg instanceof JSObject iterablesObject)) {
-            return context.throwTypeError("iterables is not an object");
-        }
-
-        // Step 2: GetOptionsObject
-        JSObject options = getOptionsObject(context, optionsArg);
-        if (options == null) {
-            return context.getPendingException();
-        }
-
-        // Step 3-5: Get and validate mode
-        String mode = getAndValidateMode(context, options);
-        if (mode == null) {
-            return context.getPendingException();
-        }
-
-        // Step 6-8: Handle padding for "longest" mode
-        JSObject paddingObject = null;
-        if ("longest".equals(mode)) {
-            JSValue paddingOption = options.get(PropertyKey.fromString("padding"));
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (!(paddingOption instanceof JSUndefined) && !(paddingOption instanceof JSObject)) {
-                return context.throwTypeError("padding must be an object or undefined");
-            }
-            if (paddingOption instanceof JSObject padObj) {
-                paddingObject = padObj;
-            }
-        }
-
-        // Step 10-12: Get own property keys and iterate
-        List<PropertyKey> allKeys = iterablesObject.getOwnPropertyKeys();
-        List<PropertyKey> keys = new ArrayList<>();
-        List<IteratorRecord> iters = new ArrayList<>();
-
-        for (PropertyKey key : allKeys) {
-            PropertyDescriptor desc;
-            try {
-                desc = iterablesObject.getOwnPropertyDescriptor(key);
-            } catch (JSVirtualMachineException e) {
-                convertVMException(context, e);
-                iteratorCloseAll(iters, context.getPendingException(), context);
-                return context.getPendingException();
-            }
-            if (context.hasPendingException()) {
-                iteratorCloseAll(iters, context.getPendingException(), context);
-                return context.getPendingException();
-            }
-            if (desc == null || !desc.isEnumerable()) {
-                continue;
-            }
-            JSValue value;
-            try {
-                value = iterablesObject.get(key);
-            } catch (JSVirtualMachineException e) {
-                convertVMException(context, e);
-                iteratorCloseAll(iters, context.getPendingException(), context);
-                return context.getPendingException();
-            }
-            if (context.hasPendingException()) {
-                iteratorCloseAll(iters, context.getPendingException(), context);
-                return context.getPendingException();
-            }
-            if (value instanceof JSUndefined) {
-                continue;
-            }
-            IteratorRecord iterRecord = getIteratorFlattenable(context, value);
-            if (iterRecord == null) {
-                iteratorCloseAll(iters, context.getPendingException(), context);
-                return context.getPendingException();
-            }
-            keys.add(key);
-            iters.add(iterRecord);
-        }
-
-        // Step 14: Handle padding for "longest" mode
-        List<JSValue> paddingValues = null;
-        if ("longest".equals(mode)) {
-            paddingValues = new ArrayList<>(keys.size());
-            if (paddingObject == null) {
-                for (int i = 0; i < keys.size(); i++) {
-                    paddingValues.add(JSUndefined.INSTANCE);
-                }
-            } else {
-                for (PropertyKey key : keys) {
-                    JSValue padValue = paddingObject.get(key);
-                    if (context.hasPendingException()) {
-                        iteratorCloseAll(iters, context.getPendingException(), context);
-                        return context.getPendingException();
-                    }
-                    paddingValues.add(padValue != null ? padValue : JSUndefined.INSTANCE);
-                }
-            }
-        }
-
-        // Create the zip iterator
-        return createZipIterator(context, iters, mode, paddingValues, keys.toArray(new PropertyKey[0]));
     }
 
     private enum ArrayIteration {

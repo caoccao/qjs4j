@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core.temporal;
 
 import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.JSObject;
 
 public record TemporalPlainTimeToStringSettings(TemporalUnit smallestUnit, TemporalRoundingMode roundingMode,
         boolean autoFractionalSecondDigits, int fractionalSecondDigits, long roundingIncrementNanoseconds) {
@@ -41,5 +42,24 @@ public record TemporalPlainTimeToStringSettings(TemporalUnit smallestUnit, Tempo
         }
         return new TemporalPlainTimeToStringSettings(null, roundingMode, digits.auto(),
                 digits.auto() ? -1 : digits.digits(), digits.roundingIncrementNanoseconds());
+    }
+
+    public static TemporalPlainTimeToStringSettings read(JSContext context, JSObject optionsObject) {
+        TemporalFractionalSecondDigitsOption digits = TemporalFractionalSecondDigitsOption.read(context, optionsObject);
+        if (digits == null) {
+            return null;
+        }
+
+        String roundingModeText = TemporalUtils.getStringOption(context, optionsObject, "roundingMode", "trunc");
+        if (context.hasPendingException() || roundingModeText == null) {
+            return null;
+        }
+
+        String smallestUnitText = TemporalUtils.getStringOption(context, optionsObject, "smallestUnit", null);
+        if (context.hasPendingException()) {
+            return null;
+        }
+
+        return TemporalPlainTimeToStringSettings.resolve(context, roundingModeText, smallestUnitText, digits);
     }
 }

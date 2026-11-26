@@ -713,13 +713,7 @@ public final class TemporalZonedDateTimePrototype {
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        if (args.length == 0 || args[0] instanceof JSUndefined) {
-            context.throwTypeError("Temporal error: Must specify a roundTo parameter.");
-            return JSUndefined.INSTANCE;
-        }
-
-        TemporalRoundSettings roundSettings = TemporalRoundSettings.parse(context, args[0], TemporalUnit.DAY,
-                TemporalUnit.NANOSECOND);
+        TemporalRoundSettings roundSettings = TemporalRoundSettings.parseRoundTo(context, args, TemporalUnit.DAY);
         if (context.hasPendingException() || roundSettings == null) {
             return JSUndefined.INSTANCE;
         }
@@ -731,38 +725,9 @@ public final class TemporalZonedDateTimePrototype {
                 return JSUndefined.INSTANCE;
             }
         } else {
-            IsoDateTime localDateTime;
             try {
-                localDateTime = zonedDateTime.toLocalDateTime();
-            } catch (DateTimeException dateTimeException) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
-            long totalNanoseconds = localDateTime.time().totalNanoseconds();
-            long unitNanoseconds = roundSettings.smallestUnit().getNanosecondFactor();
-            long incrementNanoseconds = unitNanoseconds * roundSettings.roundingIncrement();
-            long roundedNanoseconds = roundSettings.roundingMode().roundLongToIncrementAsIfPositive(totalNanoseconds,
-                    incrementNanoseconds);
-
-            int dayAdjust = 0;
-            if (roundedNanoseconds == DAY_NANOSECONDS) {
-                dayAdjust = 1;
-                roundedNanoseconds = 0L;
-            }
-
-            IsoDate roundedDate = localDateTime.date();
-            if (dayAdjust != 0) {
-                try {
-                    roundedDate = roundedDate.addDays(dayAdjust);
-                } catch (DateTimeException dateTimeException) {
-                    context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return JSUndefined.INSTANCE;
-                }
-            }
-            IsoTime roundedTime = IsoTime.createFromNanoseconds(roundedNanoseconds);
-            IsoDateTime roundedLocalDateTime = roundedDate.atTime(roundedTime);
-            try {
-                roundedEpochNanoseconds = roundedLocalDateTime.toEpochNs(zonedDateTime.getTimeZoneId());
+                IsoDateTime rounded = roundSettings.roundDateTime(zonedDateTime.toLocalDateTime());
+                roundedEpochNanoseconds = rounded.toEpochNs(zonedDateTime.getTimeZoneId());
             } catch (DateTimeException dateTimeException) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
@@ -929,27 +894,9 @@ public final class TemporalZonedDateTimePrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        if (zonedDateTime.getCalendarId() != TemporalCalendarId.ISO8601) {
-            JSValue resolvedOptionsValue = JSIntlObject.dateTimeFormatResolvedOptions(context, dateTimeFormat,
-                    JSValue.NO_ARGS);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (resolvedOptionsValue instanceof JSObject resolvedOptionsObject) {
-                JSValue formatterCalendarValue = resolvedOptionsObject.get(PropertyKey.fromString("calendar"));
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                TemporalCalendarId formatterCalendarId = TemporalCalendarId.createFromCalendarString(context,
-                        formatterCalendarValue);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                if (!zonedDateTime.getCalendarId().equals(formatterCalendarId)) {
-                    context.throwRangeError("Invalid date/time value");
-                    return JSUndefined.INSTANCE;
-                }
-            }
+        if (zonedDateTime.getCalendarId() != TemporalCalendarId.ISO8601
+                && !TemporalLocaleFormat.matchesCalendar(context, dateTimeFormat, zonedDateTime.getCalendarId())) {
+            return JSUndefined.INSTANCE;
         }
         JSValue instant = JSTemporalInstant.create(context, zonedDateTime.getEpochNanoseconds());
         if (context.hasPendingException()) {

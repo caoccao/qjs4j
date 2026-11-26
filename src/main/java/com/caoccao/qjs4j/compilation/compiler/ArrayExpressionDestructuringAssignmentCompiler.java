@@ -28,121 +28,37 @@ final class ArrayExpressionDestructuringAssignmentCompiler extends AstNodeCompil
 
     @Override
     void compile(ArrayExpression arrayExpr) {
-        // Stack: [iterable]
-        // Use iterator protocol (FOR_OF_START/FOR_OF_NEXT/ITERATOR_CLOSE) per ES spec.
-        // Following QuickJS: pre-evaluate LHS references before calling next(),
-        // and the VM auto-closes iterators on exception via the JSCatchOffset(0) marker.
-
         var elements = arrayExpr.getElements();
-        boolean hasRest = false;
-        int restIndex = -1;
-        for (int i = 0; i < elements.size(); i++) {
-            if (elements.get(i) instanceof SpreadElement) {
-                hasRest = true;
-                restIndex = i;
-                break;
+        int restIndex = 0;
+        while (restIndex < elements.size() && !(elements.get(restIndex) instanceof SpreadElement)) {
+            restIndex++;
+        }
+        boolean hasRest = restIndex < elements.size();
+        int doneLocal = compilerContext.emitHelpers.startArrayDestructuring("#arrayAssignIterDone", hasRest);
+        for (int i = 0; i < restIndex; i++) {
+            Expression element = elements.get(i);
+            // Evaluate the assignment reference before advancing the iterator.
+            int depth = compilerContext.expressionCompiler.preEvaluateAssignmentTarget(element);
+            compilerContext.emitHelpers.emitNextDestructuringValue(depth, doneLocal);
+            if (element == null) {
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
+            } else {
+                compilerContext.expressionDestructuringAssignmentCompiler.compileFromPreEvaluated(element, depth);
             }
         }
-
-        // Start iteration: iterable -> iter next catch_offset
-        compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
-
-        if (hasRest) {
-            // Process elements before rest
-            for (int i = 0; i < restIndex; i++) {
-                Expression element = elements.get(i);
-                // Pre-evaluate LHS, then call FOR_OF_NEXT with the appropriate depth
-                int depth = compilerContext.expressionCompiler.preEvaluateAssignmentTarget(element);
-                compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, depth);
-                // Stack: iter next catch_offset [pre-eval...] value done
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
-                // Stack: iter next catch_offset [pre-eval...] value
-                if (element != null) {
-                    compilerContext.expressionDestructuringAssignmentCompiler.compileFromPreEvaluated(element, depth);
-                } else {
-                    compilerContext.emitter.emitOpcode(Opcode.DROP);
-                }
-            }
-
-            SpreadElement spreadElem = (SpreadElement) elements.get(restIndex);
-            Expression restTarget = spreadElem.getArgument();
-            int restTargetDepth = compilerContext.expressionCompiler.preEvaluateAssignmentTarget(restTarget);
-
-            // Collect remaining elements into array for rest
-            compilerContext.emitter.emitOpcodeU16(Opcode.ARRAY_FROM, 0);
-            compilerContext.emitter.emitOpcode(Opcode.PUSH_I32);
-            compilerContext.emitter.emitI32(0);
-
-            int labelRestNext = compilerContext.emitter.currentOffset();
-            compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 2 + restTargetDepth);
-            int jumpRestDone = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
-            compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
-            compilerContext.emitter.emitOpcode(Opcode.INC);
-            compilerContext.emitter.emitOpcode(Opcode.GOTO);
-            int backJumpPos = compilerContext.emitter.currentOffset();
-            compilerContext.emitter.emitU32(labelRestNext - (backJumpPos + 4));
-
-            compilerContext.emitter.patchJump(jumpRestDone, compilerContext.emitter.currentOffset());
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-
-            // Iterator is fully exhausted after rest collection. Remove iterator state
-            // before assigning the rest target so abrupt completions in nested patterns
-            // do not attempt an extra IteratorClose.
-            emitDropIteratorStatePreservingTopValues(restTargetDepth + 1);
-
-            // Assign collected array to rest target.
-            compilerContext.expressionDestructuringAssignmentCompiler.compileFromPreEvaluated(restTarget,
-                    restTargetDepth);
-        } else {
-            // No rest element - use iterator with done tracking and IteratorClose
-            int iteratorDoneLocalIndex = compilerContext.scopeManager.currentScope()
-                    .declareLocal("#arrayAssignIterDone" + compilerContext.emitter.currentOffset());
-            compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, iteratorDoneLocalIndex);
-
-            for (Expression element : elements) {
-                // Pre-evaluate LHS, then call FOR_OF_NEXT with the appropriate depth
-                int depth = compilerContext.expressionCompiler.preEvaluateAssignmentTarget(element);
-                compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, depth);
-                // Stack: iter next catch_offset [pre-eval...] value done
-                compilerContext.emitter.emitOpcode(Opcode.DUP);
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, iteratorDoneLocalIndex);
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
-                // Stack: iter next catch_offset [pre-eval...] value
-                if (element != null) {
-                    compilerContext.expressionDestructuringAssignmentCompiler.compileFromPreEvaluated(element, depth);
-                } else {
-                    compilerContext.emitter.emitOpcode(Opcode.DROP);
-                }
-            }
-
-            // Check if iterator was exhausted
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, iteratorDoneLocalIndex);
-            int skipIteratorCloseJump = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
-            // Not exhausted - call IteratorClose
-            compilerContext.emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
-            int iteratorCloseDoneJump = compilerContext.emitter.emitJump(Opcode.GOTO);
-            // Exhausted - just drop iter state
-            compilerContext.emitter.patchJump(skipIteratorCloseJump, compilerContext.emitter.currentOffset());
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.patchJump(iteratorCloseDoneJump, compilerContext.emitter.currentOffset());
+        if (!hasRest) {
+            compilerContext.emitHelpers.emitIteratorCloseUnlessDone(doneLocal);
+            return;
         }
+        Expression restTarget = ((SpreadElement) elements.get(restIndex)).getArgument();
+        int depth = compilerContext.expressionCompiler.preEvaluateAssignmentTarget(restTarget);
+        compilerContext.emitHelpers.emitIteratorRestArray(depth);
+        // A nested assignment can throw. Remove the exhausted iterator before assigning.
+        emitDropIteratorStatePreservingTopValues(depth + 1);
+        compilerContext.expressionDestructuringAssignmentCompiler.compileFromPreEvaluated(restTarget, depth);
     }
 
     private void emitDropIteratorStatePreservingTopValues(int preservedValueCount) {
-        if (preservedValueCount < 0) {
-            throw new IllegalArgumentException("preservedValueCount must not be negative");
-        }
-        if (preservedValueCount == 0) {
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            return;
-        }
-
         int[] preservedLocalIndexes = new int[preservedValueCount];
         for (int valueIndex = preservedValueCount - 1; valueIndex >= 0; valueIndex--) {
             int localIndex = compilerContext.scopeManager.currentScope()
@@ -151,9 +67,7 @@ final class ArrayExpressionDestructuringAssignmentCompiler extends AstNodeCompil
             preservedLocalIndexes[valueIndex] = localIndex;
         }
 
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitHelpers.emitDropIteratorState();
 
         for (int valueIndex = 0; valueIndex < preservedValueCount; valueIndex++) {
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, preservedLocalIndexes[valueIndex]);

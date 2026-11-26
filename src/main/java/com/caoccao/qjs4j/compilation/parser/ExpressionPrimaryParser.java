@@ -59,8 +59,7 @@ final class ExpressionPrimaryParser {
 
         if (!parserContext.match(TokenType.RPAREN)) {
             do {
-                if (parserContext.match(TokenType.COMMA)) {
-                    parserContext.advance();
+                if (parserContext.consumeIf(TokenType.COMMA)) {
                     if (parserContext.match(TokenType.RPAREN)) {
                         break;
                     }
@@ -178,8 +177,7 @@ final class ExpressionPrimaryParser {
             }
 
             while (true) {
-                if (parserContext.match(TokenType.DOT)) {
-                    parserContext.advance();
+                if (parserContext.consumeIf(TokenType.DOT)) {
                     SourceLocation memberLocation = parserContext.getLocation();
                     Expression property = parseMemberPropertyName();
                     callee = createMemberExpression(callee, property, false, false, memberLocation);
@@ -312,8 +310,7 @@ final class ExpressionPrimaryParser {
                 if (parserContext.match(TokenType.LPAREN)) {
                     List<Expression> args = parseCallArguments();
                     expr = createCallExpression(expr, args, true, loc);
-                } else if (parserContext.match(TokenType.LBRACKET)) {
-                    parserContext.advance();
+                } else if (parserContext.consumeIf(TokenType.LBRACKET)) {
                     Expression property = expressions.parseExpression();
                     parserContext.expect(TokenType.RBRACKET);
                     expr = createMemberExpression(expr, property, true, true, loc);
@@ -431,8 +428,7 @@ final class ExpressionPrimaryParser {
             case LPAREN -> {
                 parserContext.advance();
 
-                if (parserContext.match(TokenType.RPAREN)) {
-                    parserContext.advance();
+                if (parserContext.consumeIf(TokenType.RPAREN)) {
                     // `()` is only an arrow function's empty parameter list; as an expression it is an error. It
                     // used to evaluate to an empty array.
                     requireArrowAfterCoverParameters("Unexpected token ')'");
@@ -476,8 +472,7 @@ final class ExpressionPrimaryParser {
                         elements.add(firstExpr);
                         boolean trailingComma = false;
 
-                        while (parserContext.match(TokenType.COMMA)) {
-                            parserContext.advance();
+                        while (parserContext.consumeIf(TokenType.COMMA)) {
 
                             if (parserContext.match(TokenType.RPAREN)) {
                                 // Trailing comma
@@ -574,8 +569,7 @@ final class ExpressionPrimaryParser {
                         parserContext.parseIdentifier();
                         while (parserContext.match(TokenType.DOT)) {
                             parserContext.advance(); // consume .
-                            if (parserContext.match(TokenType.PRIVATE_NAME)) {
-                                parserContext.advance();
+                            if (parserContext.consumeIf(TokenType.PRIVATE_NAME)) {
                             } else {
                                 expressions.parsePropertyName();
                             }
@@ -585,8 +579,7 @@ final class ExpressionPrimaryParser {
                             parserContext.advance(); // consume (
                             if (!parserContext.match(TokenType.RPAREN)) {
                                 expressions.parseAssignmentExpression();
-                                while (parserContext.match(TokenType.COMMA)) {
-                                    parserContext.advance();
+                                while (parserContext.consumeIf(TokenType.COMMA)) {
                                     expressions.parseAssignmentExpression();
                                 }
                             }

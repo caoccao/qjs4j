@@ -27,4 +27,8 @@ public record SourceLocation(int line, int column, int offset, int endOffset) {
     public SourceLocation(int line, int column, int offset) {
         this(line, column, offset, offset);
     }
+
+    public SourceLocation withEndOffset(int end) {
+        return new SourceLocation(line, column, offset, end);
+    }
 }

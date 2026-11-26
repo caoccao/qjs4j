@@ -443,8 +443,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         parserContext.expect(TokenType.LPAREN);
         Expression test = delegates.expressions.parseExpression();
         parserContext.expect(TokenType.RPAREN);
-        if (parserContext.match(TokenType.SEMICOLON)) {
-            parserContext.advance();
+        if (parserContext.consumeIf(TokenType.SEMICOLON)) {
         }
         return new DoWhileStatement(body, test, location);
     }
@@ -498,8 +497,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         // export * from 'module';
         // export * as name from 'module';
         // export * as "string" from 'module';
-        if (parserContext.match(TokenType.MUL)) {
-            parserContext.advance();
+        if (parserContext.consumeIf(TokenType.MUL)) {
             if (parserContext.match(TokenType.AS)) {
                 if (parserContext.currentToken.escaped()) {
                     throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
@@ -560,8 +558,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         boolean hasStringLocalName = false;
         List<String[]> specifiers = new ArrayList<>(); // [localName, exportedName]
         while (!parserContext.match(TokenType.RBRACE)) {
-            if (parserContext.match(TokenType.COMMA)) {
-                parserContext.advance();
+            if (parserContext.consumeIf(TokenType.COMMA)) {
                 continue;
             }
             // The local name in export { local as exported }
@@ -583,8 +580,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 exportedName = parseModuleExportNameAndReturn();
             }
             specifiers.add(new String[]{localName, exportedName});
-            if (parserContext.match(TokenType.COMMA)) {
-                parserContext.advance();
+            if (parserContext.consumeIf(TokenType.COMMA)) {
             }
         }
         parserContext.expect(TokenType.RBRACE);
@@ -853,8 +849,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     throw new JSSyntaxErrorException("'for await' loop should be used with 'of'");
                 }
                 // Traditional for loop init -- handle comma expressions
-                while (parserContext.match(TokenType.COMMA)) {
-                    parserContext.advance();
+                while (parserContext.consumeIf(TokenType.COMMA)) {
                     Expression right = delegates.expressions.parseAssignmentExpression();
                     expr = new SequenceExpression(List.of(expr, right), expr.getLocation());
                 }
@@ -910,8 +905,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         validateNoFunctionDeclarationInIfStatementPosition(consequent);
         Statement alternate = null;
 
-        if (parserContext.match(TokenType.ELSE)) {
-            parserContext.advance();
+        if (parserContext.consumeIf(TokenType.ELSE)) {
             alternate = parseStatement();
             validateNoLexicalDeclarationInStatementPosition(alternate);
             validateNoUsingDeclarationWithInitializerInStatementPosition(alternate);
@@ -954,8 +948,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
 
         // Namespace import: import * as ns from 'module';
-        if (parserContext.match(TokenType.MUL)) {
-            parserContext.advance();
+        if (parserContext.consumeIf(TokenType.MUL)) {
             expectContextualKeyword(TokenType.AS, "as");
             Identifier nsBinding = parserContext.parseIdentifier();
             addModuleLexicalName(nsBinding.getName());
@@ -982,10 +975,8 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             addModuleLexicalName(defaultBinding.getName());
             Set<String> boundNames = new HashSet<>();
             boundNames.add(defaultBinding.getName());
-            if (parserContext.match(TokenType.COMMA)) {
-                parserContext.advance();
-                if (parserContext.match(TokenType.MUL)) {
-                    parserContext.advance();
+            if (parserContext.consumeIf(TokenType.COMMA)) {
+                if (parserContext.consumeIf(TokenType.MUL)) {
                     expectContextualKeyword(TokenType.AS, "as");
                     Identifier nsBinding = parserContext.parseIdentifier();
                     addModuleLexicalName(nsBinding.getName());
@@ -1250,8 +1241,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         boolean defaultClauseFound = false;
 
         while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
-            if (parserContext.match(TokenType.CASE)) {
-                parserContext.advance();
+            if (parserContext.consumeIf(TokenType.CASE)) {
                 Expression test = delegates.expressions.parseExpression();
                 parserContext.expect(TokenType.COLON);
 
@@ -1310,11 +1300,9 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         BlockStatement block = parseBlockStatement();
 
         TryStatement.CatchClause handler = null;
-        if (parserContext.match(TokenType.CATCH)) {
-            parserContext.advance();
+        if (parserContext.consumeIf(TokenType.CATCH)) {
             Pattern param = null;
-            if (parserContext.match(TokenType.LPAREN)) {
-                parserContext.advance();
+            if (parserContext.consumeIf(TokenType.LPAREN)) {
                 param = delegates.patterns.parsePattern();
                 Set<String> boundNames = new HashSet<>();
                 collectPatternBoundNamesAndCheckDuplicates(param, boundNames);
@@ -1333,8 +1321,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
 
         BlockStatement finalizer = null;
-        if (parserContext.match(TokenType.FINALLY)) {
-            parserContext.advance();
+        if (parserContext.consumeIf(TokenType.FINALLY)) {
             finalizer = parseBlockStatement();
         }
 
@@ -1384,8 +1371,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         List<VariableDeclarator> declarations = new ArrayList<>();
 
         do {
-            if (parserContext.match(TokenType.COMMA)) {
-                parserContext.advance();
+            if (parserContext.consumeIf(TokenType.COMMA)) {
             }
 
             Pattern id = delegates.patterns.parsePattern();
@@ -1410,8 +1396,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             }
             Expression init = null;
 
-            if (parserContext.match(TokenType.ASSIGN)) {
-                parserContext.advance();
+            if (parserContext.consumeIf(TokenType.ASSIGN)) {
                 init = delegates.expressions.parseAssignmentExpression();
             } else if (kind == VariableKind.CONST && consumeSemi) {
                 throw new JSSyntaxErrorException("Missing initializer in const declaration");

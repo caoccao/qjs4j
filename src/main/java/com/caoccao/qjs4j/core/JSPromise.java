@@ -96,6 +96,13 @@ public final class JSPromise extends JSObject {
         }
     }
 
+    public JSNativeFunction fulfillHandler(JSContext context, String name) {
+        return new JSNativeFunction(context, name, 1, (childContext, thisArg, args) -> {
+            fulfill(JSValue.argumentOrUndefined(args, 0));
+            return JSUndefined.INSTANCE;
+        });
+    }
+
     /**
      * Get the result value (only meaningful when fulfilled or rejected).
      */
@@ -159,6 +166,13 @@ public final class JSPromise extends JSObject {
         for (ReactionRecord reaction : reactionsToTrigger) {
             triggerReaction(reaction, reason);
         }
+    }
+
+    public JSNativeFunction rejectHandler(JSContext context, String name) {
+        return new JSNativeFunction(context, name, 1, (childContext, thisArg, args) -> {
+            reject(JSValue.argumentOrUndefined(args, 0));
+            return JSUndefined.INSTANCE;
+        });
     }
 
     /**

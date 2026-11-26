@@ -142,22 +142,7 @@ public final class TemporalPlainTimePrototype {
             return TemporalPlainTimeToStringSettings.DEFAULT;
         }
 
-        TemporalFractionalSecondDigitsOption digits = TemporalFractionalSecondDigitsOption.read(context, optionsObject);
-        if (digits == null) {
-            return null;
-        }
-
-        String roundingModeText = TemporalUtils.getStringOption(context, optionsObject, "roundingMode", "trunc");
-        if (context.hasPendingException() || roundingModeText == null) {
-            return null;
-        }
-
-        String smallestUnitText = TemporalUtils.getStringOption(context, optionsObject, "smallestUnit", null);
-        if (context.hasPendingException()) {
-            return null;
-        }
-
-        return TemporalPlainTimeToStringSettings.resolve(context, roundingModeText, smallestUnitText, digits);
+        return TemporalPlainTimeToStringSettings.read(context, optionsObject);
     }
 
     public static JSValue hour(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -190,26 +175,13 @@ public final class TemporalPlainTimePrototype {
         if (plainTime == null) {
             return JSUndefined.INSTANCE;
         }
-        if (args.length == 0 || args[0] instanceof JSUndefined) {
-            context.throwTypeError("Temporal error: Must specify a roundTo parameter.");
-            return JSUndefined.INSTANCE;
-        }
-
-        TemporalRoundSettings roundSettings = TemporalRoundSettings.parse(context, args[0], TemporalUnit.HOUR,
-                TemporalUnit.NANOSECOND);
+        TemporalRoundSettings roundSettings = TemporalRoundSettings.parseRoundTo(context, args, TemporalUnit.HOUR);
         if (context.hasPendingException() || roundSettings == null) {
             return JSUndefined.INSTANCE;
         }
 
-        long totalNs = plainTime.getIsoTime().totalNanoseconds();
-        long unitNs = roundSettings.smallestUnit().getNanosecondFactor();
-        long incrementNs = unitNs * roundSettings.roundingIncrement();
-        long roundedNs = roundSettings.roundingMode().roundLongToIncrementAsIfPositive(totalNs, incrementNs);
-        if (roundedNs == DAY_NANOSECONDS.longValue()) {
-            roundedNs = 0L;
-        }
-
-        return JSTemporalPlainTime.create(context, IsoTime.createFromNanoseconds(roundedNs));
+        long nanos = roundSettings.roundedNanoseconds(plainTime.getIsoTime());
+        return JSTemporalPlainTime.create(context, IsoTime.createFromNanoseconds(nanos));
     }
 
     public static JSValue second(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -238,20 +210,8 @@ public final class TemporalPlainTimePrototype {
         if (plainTime == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue locales = JSValue.argumentOrUndefined(args, 0);
-        JSValue options = JSValue.argumentOrUndefined(args, 1);
-        if (options instanceof JSObject optionsObject) {
-            JSValue dateStyleValue = optionsObject.get(PropertyKey.fromString("dateStyle"));
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (!(dateStyleValue instanceof JSUndefined) && dateStyleValue != null) {
-                context.throwTypeError("Invalid date/time formatting options");
-                return JSUndefined.INSTANCE;
-            }
-        }
-        JSValue dateTimeFormat = JSIntlObject.createDateTimeFormat(context, null, new JSValue[]{locales, options});
-        if (context.hasPendingException()) {
+        JSValue dateTimeFormat = TemporalLocaleFormat.create(context, args, "dateStyle");
+        if (dateTimeFormat == null) {
             return JSUndefined.INSTANCE;
         }
         return JSIntlObject.dateTimeFormatFormat(context, dateTimeFormat, new JSValue[]{plainTime});

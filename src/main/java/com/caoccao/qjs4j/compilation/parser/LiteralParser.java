@@ -206,8 +206,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
 
         if (!parserContext.match(TokenType.RBRACKET)) {
             do {
-                if (parserContext.match(TokenType.COMMA)) {
-                    parserContext.advance();
+                if (parserContext.consumeIf(TokenType.COMMA)) {
                     elements.add(null); // hole in array
                 } else if (parserContext.match(TokenType.ELLIPSIS)) {
                     // Spread element: ...expr
@@ -215,16 +214,14 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                     parserContext.advance(); // consume ELLIPSIS
                     Expression argument = delegates.expressions.parseAssignmentExpression();
                     elements.add(new SpreadElement(argument, spreadLocation));
-                    if (parserContext.match(TokenType.COMMA)) {
-                        parserContext.advance();
+                    if (parserContext.consumeIf(TokenType.COMMA)) {
                     } else if (!parserContext.match(TokenType.RBRACKET)) {
                         // After a spread element, expect comma or closing bracket
                         parserContext.expect(TokenType.RBRACKET);
                     }
                 } else {
                     elements.add(delegates.expressions.parseAssignmentExpression());
-                    if (parserContext.match(TokenType.COMMA)) {
-                        parserContext.advance();
+                    if (parserContext.consumeIf(TokenType.COMMA)) {
                     } else if (!parserContext.match(TokenType.RBRACKET)) {
                         // After an element, expect comma or closing bracket
                         // This catches cases like [a b] which should be a SyntaxError
@@ -251,8 +248,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                 parserContext.advance(); // consume ELLIPSIS
                 Expression argument = delegates.expressions.parseAssignmentExpression();
                 properties.add(new ObjectExpressionProperty(null, argument, "spread", false, false, false));
-                if (parserContext.match(TokenType.COMMA)) {
-                    parserContext.advance();
+                if (parserContext.consumeIf(TokenType.COMMA)) {
                 } else {
                     break;
                 }
@@ -322,8 +318,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                     }
                     properties.add(new ObjectExpressionProperty(key, value, kind, computed, false, false));
 
-                    if (parserContext.match(TokenType.COMMA)) {
-                        parserContext.advance();
+                    if (parserContext.consumeIf(TokenType.COMMA)) {
                     } else {
                         break;
                     }
@@ -386,8 +381,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                     parserContext.needsArguments = true;
                 }
                 Expression value;
-                if (parserContext.match(TokenType.ASSIGN)) {
-                    parserContext.advance();
+                if (parserContext.consumeIf(TokenType.ASSIGN)) {
                     Expression defaultValue = delegates.expressions.parseAssignmentExpression();
                     value = new AssignmentExpression(keyId, AssignmentOperator.ASSIGN, defaultValue,
                             keyId.getLocation());
@@ -402,8 +396,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                 properties.add(new ObjectExpressionProperty(key, value, "init", computed, false, false));
             }
 
-            if (parserContext.match(TokenType.COMMA)) {
-                parserContext.advance();
+            if (parserContext.consumeIf(TokenType.COMMA)) {
             } else {
                 break;
             }

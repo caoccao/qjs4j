@@ -37,9 +37,45 @@ record TemporalPartialDate(Integer day, Integer month, String monthCode, Integer
         }
         TemporalEraYear eraFields = plainDate.toTemporalEraYear();
 
+        JSObject mergedFieldsObject = mergeFields(context, calendarId, calendarDate, calendarMonthCode, eraFields,
+                true);
+
+        String overflow = TemporalUtils.getOverflowOption(context, optionsValue);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!"reject".equals(overflow) && year != null && month == null && monthCode == null) {
+            JSValue mergedMonthCodeValue = mergedFieldsObject.get(PropertyKey.fromString("monthCode"));
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (mergedMonthCodeValue instanceof JSString mergedMonthCodeString) {
+                String constrainedMonthCode = calendarId.constrainMonthCode(year, mergedMonthCodeString.value());
+                if (constrainedMonthCode != null && !constrainedMonthCode.equals(mergedMonthCodeString.value())) {
+                    mergedFieldsObject.set(PropertyKey.fromString("monthCode"), new JSString(constrainedMonthCode));
+                }
+            }
+        }
+        JSObject normalizedOptionsObject = TemporalUtils.overflowOptions(context, overflow);
+        JSValue mergedDateValue = TemporalPlainDateConstructor.dateFromFields(context, mergedFieldsObject,
+                normalizedOptionsObject);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!(mergedDateValue instanceof JSTemporalPlainDate mergedDate)) {
+            context.throwTypeError("Temporal error: Date argument must be object or string.");
+            return JSUndefined.INSTANCE;
+        }
+        return JSTemporalPlainDate.create(context, mergedDate.getIsoDate(), calendarId);
+    }
+
+    JSObject mergeFields(JSContext context, TemporalCalendarId calendarId, IsoDate calendarDate,
+            String calendarMonthCode, TemporalEraYear eraFields, boolean includeDay) {
         JSObject mergedFieldsObject = new JSObject(context);
         mergedFieldsObject.set(PropertyKey.fromString("calendar"), new JSString(calendarId.identifier()));
-        mergedFieldsObject.set(PropertyKey.fromString("day"), JSNumber.of(calendarDate.day()));
+        if (includeDay) {
+            mergedFieldsObject.set(PropertyKey.fromString("day"), JSNumber.of(calendarDate.day()));
+        }
         if (calendarId == TemporalCalendarId.ISO8601) {
             mergedFieldsObject.set(PropertyKey.fromString("month"), JSNumber.of(calendarDate.month()));
         }
@@ -87,32 +123,6 @@ record TemporalPartialDate(Integer day, Integer month, String monthCode, Integer
             mergedFieldsObject.set(PropertyKey.fromString("eraYear"), JSNumber.of(eraYear));
         }
 
-        String overflow = TemporalUtils.getOverflowOption(context, optionsValue);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!"reject".equals(overflow) && year != null && month == null && monthCode == null) {
-            JSValue mergedMonthCodeValue = mergedFieldsObject.get(PropertyKey.fromString("monthCode"));
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (mergedMonthCodeValue instanceof JSString mergedMonthCodeString) {
-                String constrainedMonthCode = calendarId.constrainMonthCode(year, mergedMonthCodeString.value());
-                if (constrainedMonthCode != null && !constrainedMonthCode.equals(mergedMonthCodeString.value())) {
-                    mergedFieldsObject.set(PropertyKey.fromString("monthCode"), new JSString(constrainedMonthCode));
-                }
-            }
-        }
-        JSObject normalizedOptionsObject = TemporalUtils.overflowOptions(context, overflow);
-        JSValue mergedDateValue = TemporalPlainDateConstructor.dateFromFields(context, mergedFieldsObject,
-                normalizedOptionsObject);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(mergedDateValue instanceof JSTemporalPlainDate mergedDate)) {
-            context.throwTypeError("Temporal error: Date argument must be object or string.");
-            return JSUndefined.INSTANCE;
-        }
-        return JSTemporalPlainDate.create(context, mergedDate.getIsoDate(), calendarId);
+        return mergedFieldsObject;
     }
 }

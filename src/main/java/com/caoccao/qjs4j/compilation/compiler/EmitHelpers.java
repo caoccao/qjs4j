@@ -315,6 +315,24 @@ final class EmitHelpers {
         compilerContext.emitter.patchJump(skipJump, compilerContext.emitter.currentOffset());
     }
 
+    void emitConstAssignmentError(String name) {
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, name);
+        compilerContext.emitter.emitU8(0);
+    }
+
+    void emitConstAssignmentErrorForCaptured(String name, int capturedIndex) {
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, capturedIndex);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitHelpers.emitConstAssignmentError(name);
+    }
+
+    void emitConstAssignmentErrorForLocal(String name, int localIndex) {
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitHelpers.emitConstAssignmentError(name);
+    }
+
     void emitCurrentScopeUsingDisposal() {
         emitScopeUsingDisposal(compilerContext.scopeManager.currentScope());
     }
@@ -420,6 +438,12 @@ final class EmitHelpers {
         }
     }
 
+    void emitDropIteratorState() {
+        compilerContext.emitter.emitOpcode(Opcode.DROP); // catch offset
+        compilerContext.emitter.emitOpcode(Opcode.DROP); // next method
+        compilerContext.emitter.emitOpcode(Opcode.DROP); // iterator
+    }
+
     void emitGetSuperValue(MemberExpression memberExpr, boolean keepReceiverForCall) {
         // Stack start: []
         // Push current this as receiver for super property resolution.
@@ -465,6 +489,34 @@ final class EmitHelpers {
         }
     }
 
+    void emitIteratorCloseUnlessDone(int doneLocal) {
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, doneLocal);
+        int exhausted = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+        compilerContext.emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
+        int end = compilerContext.emitter.emitJump(Opcode.GOTO);
+        compilerContext.emitter.patchJump(exhausted, compilerContext.emitter.currentOffset());
+        emitDropIteratorState();
+        compilerContext.emitter.patchJump(end, compilerContext.emitter.currentOffset());
+    }
+
+    void emitIteratorRestArray(int targetDepth) {
+        compilerContext.emitter.emitOpcodeU16(Opcode.ARRAY_FROM, 0);
+        compilerContext.emitter.emitOpcode(Opcode.PUSH_I32);
+        compilerContext.emitter.emitI32(0);
+
+        // Stack above the iterator: pre-evaluated target, result array, next index.
+        int loopStart = compilerContext.emitter.currentOffset();
+        compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 2 + targetDepth);
+        int doneJump = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+        compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
+        compilerContext.emitter.emitOpcode(Opcode.INC);
+        compilerContext.emitter.emitOpcode(Opcode.GOTO);
+        compilerContext.emitter.emitU32(loopStart - (compilerContext.emitter.currentOffset() + 4));
+        compilerContext.emitter.patchJump(doneJump, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcode(Opcode.DROP); // final value
+        compilerContext.emitter.emitOpcode(Opcode.DROP); // next index
+    }
+
     /**
      * Close a loop's iterator: {@code ITERATOR_CLOSE}, followed for a {@code for await} loop by the awaited
      * {@code return()}.
@@ -505,6 +557,15 @@ final class EmitHelpers {
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, argLocalIndex);
         compilerContext.emitter.emitOpcodeU16(Opcode.CALL, 1);
+    }
+
+    void emitNextDestructuringValue(int depth, int doneLocal) {
+        compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, depth);
+        if (doneLocal >= 0) {
+            compilerContext.emitter.emitOpcode(Opcode.DUP);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, doneLocal);
+        }
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
     }
 
     void emitNonComputedPublicFieldKey(Expression key) {
@@ -710,6 +771,18 @@ final class EmitHelpers {
 
         scope.setUsingStackLocal(stackLocalIndex, useAsyncStack);
         return stackLocalIndex;
+    }
+
+    int startArrayDestructuring(String doneLocalPrefix, boolean hasRest) {
+        compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
+        if (hasRest) {
+            return -1;
+        }
+        int doneLocal = compilerContext.scopeManager.currentScope()
+                .declareLocal(doneLocalPrefix + compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, doneLocal);
+        return doneLocal;
     }
 
     static boolean hasUsingDeclarations(java.util.List<Statement> statements) {

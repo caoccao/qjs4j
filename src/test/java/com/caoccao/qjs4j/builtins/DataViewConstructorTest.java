@@ -271,16 +271,14 @@ public class DataViewConstructorTest extends BaseJavetTest {
                     ['getInt16', 1], ['getUint16', 1],
                     ['getInt32', 1], ['getUint32', 1],
                     ['getBigInt64', 1], ['getBigUint64', 1],
-                    ['getFloat32', 1], ['getFloat64', 1],
+                    ['getFloat16', 1], ['getFloat32', 1], ['getFloat64', 1],
                     ['setInt8', 2], ['setUint8', 2],
                     ['setInt16', 2], ['setUint16', 2],
                     ['setInt32', 2], ['setUint32', 2],
                     ['setBigInt64', 2], ['setBigUint64', 2],
-                    ['setFloat32', 2], ['setFloat64', 2],
+                    ['setFloat16', 2], ['setFloat32', 2], ['setFloat64', 2],
                   ];
-                  for (const method of methods) {
-                    const name = method[0];
-                    const len = method[1];
+                  for (const [name, len] of methods) {
                     const desc = Object.getOwnPropertyDescriptor(proto, name);
                     if (!(typeof proto[name] === 'function'
                       && proto[name].length === len
@@ -296,26 +294,6 @@ public class DataViewConstructorTest extends BaseJavetTest {
         assertStringWithJavet("""
                 Object.getOwnPropertyDescriptor(DataView.prototype, Symbol.toStringTag).value;
                 """);
-
-        assertThat(context.eval("""
-                (() => {
-                  const proto = DataView.prototype;
-                  const methods = [['getFloat16', 1], ['setFloat16', 2]];
-                  for (const method of methods) {
-                    const name = method[0];
-                    const len = method[1];
-                    const desc = Object.getOwnPropertyDescriptor(proto, name);
-                    if (!(typeof proto[name] === 'function'
-                      && proto[name].length === len
-                      && desc.writable === true
-                      && desc.enumerable === false
-                      && desc.configurable === true)) {
-                      return false;
-                    }
-                  }
-                  return true;
-                })();
-                """).toJavaObject()).isEqualTo(true);
     }
 
     @Test

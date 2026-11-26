@@ -215,21 +215,11 @@ public final class TemporalPlainYearMonthConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        Integer monthFromProperty = TemporalUtils.getOptionalIntegerField(context, fields, "month");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue monthCodeValue = fields.get(PropertyKey.fromString("monthCode"));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        IsoMonth parsedMonthCode = IsoMonth.fromField(context, monthCodeValue);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
+        TemporalPropertyBag bag = new TemporalPropertyBag(context, fields);
+        Integer monthFromProperty = bag.integer("month");
+        IsoMonth parsedMonthCode = bag.monthCode();
         String monthCodeFromProperty = parsedMonthCode == null ? null : parsedMonthCode.monthCode();
-
-        Integer year = TemporalUtils.getOptionalIntegerField(context, fields, "year");
+        Integer year = bag.integer("year");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

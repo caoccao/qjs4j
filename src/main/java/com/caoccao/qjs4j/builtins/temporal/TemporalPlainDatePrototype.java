@@ -435,20 +435,8 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue locales = JSValue.argumentOrUndefined(args, 0);
-        JSValue options = JSValue.argumentOrUndefined(args, 1);
-        if (options instanceof JSObject optionsObject) {
-            JSValue timeStyleValue = optionsObject.get(PropertyKey.fromString("timeStyle"));
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (!(timeStyleValue instanceof JSUndefined) && timeStyleValue != null) {
-                context.throwTypeError("Invalid date/time formatting options");
-                return JSUndefined.INSTANCE;
-            }
-        }
-        JSValue dateTimeFormat = JSIntlObject.createDateTimeFormat(context, null, new JSValue[]{locales, options});
-        if (context.hasPendingException()) {
+        JSValue dateTimeFormat = TemporalLocaleFormat.create(context, args, "timeStyle");
+        if (dateTimeFormat == null) {
             return JSUndefined.INSTANCE;
         }
         return JSIntlObject.dateTimeFormatFormat(context, dateTimeFormat, new JSValue[]{plainDate});
@@ -624,54 +612,14 @@ public final class TemporalPlainDatePrototype {
         }
 
         TemporalCalendarId calendarId = plainDate.getCalendarId();
-        boolean calendarSupportsEraFields = calendarId.hasEra();
-
-        Integer dayOfMonth = TemporalUtils.getOptionalIntegerField(context, fields, "day");
+        TemporalPropertyBag bag = new TemporalPropertyBag(context, fields);
+        Integer day = bag.positiveDateField("day");
+        Integer month = bag.positiveDateField("month");
+        String monthCode = bag.string("monthCode");
+        TemporalPartialDate dateFields = bag.readYearAndEra(calendarId, day, month, monthCode);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-
-        if (dayOfMonth != null && dayOfMonth < 1) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
-        }
-
-        Integer month = TemporalUtils.getOptionalIntegerField(context, fields, "month");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        if (month != null && month < 1) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
-        }
-
-        String monthCode = TemporalUtils.getStringOption(context, fields, "monthCode", null);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        Integer year = TemporalUtils.getOptionalIntegerField(context, fields, "year");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        String era = null;
-        Integer eraYear = null;
-        if (calendarSupportsEraFields) {
-            era = TemporalUtils.getStringOption(context, fields, "era", null);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            eraYear = TemporalUtils.getOptionalIntegerField(context, fields, "eraYear");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-        }
-
-        TemporalPartialDate dateFields = new TemporalPartialDate(dayOfMonth, month, monthCode, year, era, eraYear);
         if (dateFields.isEmpty()) {
             context.throwTypeError("Temporal error: Must specify at least one calendar field.");
             return JSUndefined.INSTANCE;
