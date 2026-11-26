@@ -58,7 +58,7 @@ public final class RegExpConstructor {
             return;
         }
 
-        if (isEcmaWhitespaceOrLineTerminator(codeUnit)) {
+        if (JSTypeConversions.isEcmaWhitespace(codeUnit)) {
             if (codeUnit <= 0xFF) {
                 appendHexEscape(escapedBuilder, codeUnit);
             } else {
@@ -186,17 +186,6 @@ public final class RegExpConstructor {
             return true;
         }
         return value >= 'a' && value <= 'z';
-    }
-
-    private static boolean isEcmaWhitespaceOrLineTerminator(char value) {
-        if (value == '\n' || value == '\r' || value == '\t' || value == '\f' || value == 0x0B || value == ' ') {
-            return true;
-        }
-        if (value == 0x00A0 || value == 0x1680 || value == 0x2028 || value == 0x2029 || value == 0x202F
-                || value == 0x205F || value == 0x3000 || value == 0xFEFF) {
-            return true;
-        }
-        return value >= 0x2000 && value <= 0x200A;
     }
 
 }

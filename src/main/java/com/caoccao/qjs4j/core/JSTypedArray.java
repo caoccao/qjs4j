@@ -72,8 +72,7 @@ public sealed abstract class JSTypedArray extends JSObject
         // Calculate length if not specified
         if (length < 0) {
             // Track resizable array buffer length when no explicit length given
-            boolean resizable = (buffer instanceof JSArrayBuffer jsArrayBuffer && jsArrayBuffer.isResizable())
-                    || (buffer instanceof JSSharedArrayBuffer jsSharedArrayBuffer && jsSharedArrayBuffer.isGrowable());
+            boolean resizable = buffer.supportsLengthTracking();
             this.trackRab = resizable;
             long remainingBytes = buffer.getByteLength() - byteOffset;
             if (!resizable && remainingBytes % bytesPerElement != 0) {
@@ -227,10 +226,7 @@ public sealed abstract class JSTypedArray extends JSObject
         return true;
     }
 
-    abstract TypedArrayKind elementKind();
-
-    @Override
-    public PropertyKey[] enumerableKeys() {
+    private List<PropertyKey> elementKeys() {
         List<PropertyKey> result = new ArrayList<>();
         if (!buffer.isDetached() && !isOutOfBounds()) {
             long len = getLength();
@@ -238,6 +234,14 @@ public sealed abstract class JSTypedArray extends JSObject
                 result.add(PropertyKey.fromIndexString(i));
             }
         }
+        return result;
+    }
+
+    abstract TypedArrayKind elementKind();
+
+    @Override
+    public PropertyKey[] enumerableKeys() {
+        List<PropertyKey> result = elementKeys();
         Collections.addAll(result, super.enumerableKeys());
         return result.toArray(new PropertyKey[0]);
     }
@@ -370,14 +374,7 @@ public sealed abstract class JSTypedArray extends JSObject
      */
     @Override
     public List<PropertyKey> getOwnPropertyKeys() {
-        List<PropertyKey> result = new ArrayList<>();
-        // Add integer indices for buffer elements (only if not detached and not OOB)
-        if (!buffer.isDetached() && !isOutOfBounds()) {
-            long len = getLength();
-            for (long i = 0; i < len; i++) {
-                result.add(PropertyKey.fromIndexString(i));
-            }
-        }
+        List<PropertyKey> result = elementKeys();
         // Add non-index own properties from the shape (string keys, then symbols)
         result.addAll(super.getOwnPropertyKeys());
         return result;
@@ -471,18 +468,7 @@ public sealed abstract class JSTypedArray extends JSObject
      * semantics.
      */
     public boolean isOutOfBounds() {
-        if (buffer.isDetached()) {
-            return true;
-        }
-        long currentByteLength = buffer.getByteLength();
-        if (byteOffset > currentByteLength) {
-            return true;
-        }
-        if (trackRab) {
-            return false;
-        }
-        // Fixed length: check if the view exceeds the current buffer size
-        return byteLength > currentByteLength - byteOffset;
+        return buffer.isViewOutOfBounds(byteOffset, byteLength, trackRab);
     }
 
     @Override
@@ -535,59 +521,49 @@ public sealed abstract class JSTypedArray extends JSObject
             throw new JSRangeErrorException("TypedArray offset out of range");
         }
 
-        if (source instanceof JSArray srcArray) {
-            long srcLength = toArrayLikeLength(context, JSNumber.of(srcArray.getLength()));
-            if (offset + srcLength > currentLength) {
-                throw new JSRangeErrorException("Source array too large");
+        if (source instanceof JSIterator iterator) {
+            JSArray array = JSIteratorHelper.toArray(context, iterator);
+            if (!context.hasPendingException()) {
+                setArray(array, offset);
             }
-            for (long i = 0; i < srcLength; i++) {
-                JSValue value = srcArray.get(i);
-                if (context.hasPendingException()) {
-                    return;
-                }
-                setJSElement(offset + i, value);
-                if (context.hasPendingException()) {
-                    return;
-                }
-            }
-        } else if (source instanceof JSTypedArray srcTyped) {
-            long srcLength = srcTyped.getLength();
-            if (offset + srcLength > currentLength) {
-                throw new JSRangeErrorException("Source array too large");
-            }
-            for (long i = 0; i < srcLength; i++) {
-                setJSElement(offset + i, srcTyped.getJSElement(i));
-                if (context.hasPendingException()) {
-                    return;
-                }
-            }
-        } else if (source instanceof JSIterator jsIterator) {
-            JSArray jsArray = JSIteratorHelper.toArray(context, jsIterator);
+            return;
+        }
+        if (!(source instanceof JSObject object)) {
+            return;
+        }
+        long count;
+        if (object instanceof JSTypedArray array) {
+            count = array.getLength();
+        } else if (object instanceof JSArray array) {
+            count = toArrayLikeLength(context, JSNumber.of(array.getLength()));
+        } else {
+            JSValue lengthValue = object.get(PropertyKey.LENGTH);
             if (context.hasPendingException()) {
                 return;
             }
-            setArray(jsArray, offset);
-        } else if (source instanceof JSObject srcObject) {
-            JSValue lengthValue = srcObject.get(PropertyKey.LENGTH);
+            count = toArrayLikeLength(context, lengthValue);
             if (context.hasPendingException()) {
                 return;
             }
-            long srcLength = toArrayLikeLength(context, lengthValue);
+        }
+        if (count > currentLength - offset) {
+            throw new JSRangeErrorException("Source array too large");
+        }
+        for (long i = 0; i < count; i++) {
+            JSValue value;
+            if (object instanceof JSTypedArray array) {
+                value = array.getJSElement(i);
+            } else if (object instanceof JSArray array) {
+                value = array.get(i);
+            } else {
+                value = object.get(PropertyKey.fromIndex(i));
+            }
             if (context.hasPendingException()) {
                 return;
             }
-            if (offset + srcLength > currentLength) {
-                throw new JSRangeErrorException("Source array too large");
-            }
-            for (long i = 0; i < srcLength; i++) {
-                JSValue value = srcObject.get(PropertyKey.fromIndex(i));
-                if (context.hasPendingException()) {
-                    return;
-                }
-                setJSElement(offset + i, value);
-                if (context.hasPendingException()) {
-                    return;
-                }
+            setJSElement(offset + i, value);
+            if (context.hasPendingException()) {
+                return;
             }
         }
     }
@@ -595,7 +571,10 @@ public sealed abstract class JSTypedArray extends JSObject
     /**
      * Set an element from a number.
      */
-    public abstract void setElement(long index, double value);
+    public final void setElement(long index, double value) {
+        checkIndex(index);
+        elementKind().writeNumber(getByteBuffer(), index, value);
+    }
 
     /**
      * Set an element from a JSValue, performing the appropriate type conversion. Regular typed arrays convert to
@@ -691,66 +670,6 @@ public sealed abstract class JSTypedArray extends JSObject
             sb.append(formatElement(getElement(i)));
         }
         return sb.toString();
-    }
-
-    /**
-     * Shared constructor dispatch for every element type. Factories retain the concrete type and its realm prototype
-     * while conversions run in source order.
-     */
-    static JSTypedArray createFromArguments(JSContext context, TypedArrayKind kind, JSValue[] args) {
-        int bytesPerElement = kind.bytesPerElement;
-        long length = 0;
-        if (args.length >= 1) {
-            JSValue firstArg = normalizeConstructorSource(context, args[0]);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            if (firstArg instanceof JSNumber lengthNum) {
-                length = toTypedArrayIndex(context, lengthNum, bytesPerElement);
-            } else if (firstArg instanceof IJSArrayBuffer jsArrayBuffer) {
-                long byteOffset = 0;
-                if (args.length >= 2) {
-                    byteOffset = resolveAndValidateByteOffset(context, args[1], bytesPerElement);
-                    if (context.hasPendingException()) {
-                        return null;
-                    }
-                }
-                length = -1;
-                if (args.length >= 3 && !(args[2] instanceof JSUndefined)) {
-                    length = toTypedArrayBufferLength(context, args[2], bytesPerElement);
-                    if (context.hasPendingException()) {
-                        return null;
-                    }
-                }
-                return kind.view(context, jsArrayBuffer, byteOffset, length);
-            } else if (firstArg instanceof JSTypedArray jsTypedArray) {
-                if (jsTypedArray.isOutOfBounds()) {
-                    context.throwTypeError("source TypedArray is out of bounds");
-                    return null;
-                }
-                length = jsTypedArray.getLength();
-                JSTypedArray newTypedArray = kind.allocate(context, length);
-                newTypedArray.setArray(jsTypedArray, 0);
-                return newTypedArray;
-            } else if (firstArg instanceof JSArray || firstArg instanceof JSIterator) {
-                JSArray array = firstArg instanceof JSArray input
-                        ? input
-                        : JSIteratorHelper.toArray(context, (JSIterator) firstArg);
-                length = toTypedArrayLength(array.getLength(), bytesPerElement);
-                JSTypedArray result = kind.allocate(context, length);
-                result.setArray(array, 0);
-                return result;
-            } else if (firstArg instanceof JSObject jsObject) {
-                JSValue lengthValue = jsObject.get(PropertyKey.LENGTH);
-                length = toTypedArrayLength(context, lengthValue, bytesPerElement);
-                JSTypedArray jsTypedArray = kind.allocate(context, length);
-                jsTypedArray.setArray(jsObject, 0);
-                return jsTypedArray;
-            } else {
-                length = toTypedArrayLength(context, firstArg, bytesPerElement);
-            }
-        }
-        return kind.allocate(context, length);
     }
 
     private static boolean isValidDoubleString(String str) {
@@ -878,10 +797,6 @@ public sealed abstract class JSTypedArray extends JSObject
         return length;
     }
 
-    protected static long toTypedArrayBufferLength(JSContext context, JSValue value, int bytesPerElement) {
-        return toTypedArrayLength(JSTypeConversions.toIndex(context, value), bytesPerElement);
-    }
-
     protected static long toTypedArrayByteOffset(JSContext context, JSValue value) {
         long offset = JSTypeConversions.toIndex(context, value);
         if (offset > JSArrayBuffer.MAX_DATA_BLOCK_BYTE_LENGTH) {
@@ -958,5 +873,4 @@ public sealed abstract class JSTypedArray extends JSObject
             throw new JSTypeErrorException("ArrayBuffer is detached");
         }
     }
-
 }

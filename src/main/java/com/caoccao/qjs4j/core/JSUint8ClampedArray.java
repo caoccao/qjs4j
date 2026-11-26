@@ -48,14 +48,6 @@ public final class JSUint8ClampedArray extends JSTypedArray {
         return buf.get(index) & 0xFF; // Convert to unsigned
     }
 
-    @Override
-    public void setElement(long index, double value) {
-        checkIndex(index);
-        JSByteBuffer buf = getByteBuffer();
-        int clampedValue = JSTypeConversions.toUint8Clamp(value);
-        buf.put(index, (byte) clampedValue);
-    }
-
     public static JSObject create(JSContext context, JSValue... args) {
         return TypedArrayKind.UINT8_CLAMPED.create(context, args);
     }

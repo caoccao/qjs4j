@@ -231,20 +231,10 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
         return "[object SharedArrayBuffer]";
     }
 
-    private static JSSharedArrayBuffer allocateBuffer(JSContext context, long length, long maxLength,
-            boolean growable) {
-        if (length > JSArrayBuffer.MAX_DATA_BLOCK_BYTE_LENGTH || maxLength > JSArrayBuffer.MAX_DATA_BLOCK_BYTE_LENGTH) {
-            throw new JSException(context.throwRangeError("Invalid array buffer length"));
-        }
-        return growable
-                ? new JSSharedArrayBuffer(context, length, maxLength)
-                : new JSSharedArrayBuffer(context, length);
-    }
-
     public static JSObject create(JSContext context, JSValue... args) {
         try {
-            long[] validated = validateArgs(context, args);
-            JSSharedArrayBuffer buffer = allocateBuffer(context, validated[0], validated[1], validated[2] != 0);
+            ArrayBufferLengths lengths = ArrayBufferLengths.forSharedArrayBuffer(context, args);
+            JSSharedArrayBuffer buffer = lengths.allocateShared(context);
             context.transferPrototype(buffer, NAME);
             return buffer;
         } catch (JSException e) {
@@ -257,45 +247,11 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
 
     public static JSSharedArrayBuffer createForConstruct(JSContext context, JSFunction constructor, JSValue newTarget,
             JSValue... args) {
-        long[] validated = validateArgs(context, args);
+        ArrayBufferLengths lengths = ArrayBufferLengths.forSharedArrayBuffer(context, args);
         JSObject prototype = JSArrayBuffer.bufferPrototype(context, newTarget, NAME);
-        JSSharedArrayBuffer buffer = allocateBuffer(context, validated[0], validated[1], validated[2] != 0);
+        JSSharedArrayBuffer buffer = lengths.allocateShared(context);
         JSArrayBuffer.setBufferPrototype(context, buffer, prototype, constructor, NAME);
         return buffer;
     }
 
-    private static long[] validateArgs(JSContext context, JSValue[] args) {
-        long length = 0;
-        try {
-            if (args.length > 0) {
-                length = JSTypeConversions.toIndex(context, args[0]);
-            }
-        } catch (IllegalArgumentException | JSRangeErrorException e) {
-            throw new JSException(context.throwRangeError("Invalid array buffer length"));
-        }
-        long maxLength = length;
-        boolean growable = false;
-        // GetArrayBufferMaxByteLengthOption: if Type(options) is not Object, return empty
-        if (args.length > 1 && args[1] instanceof JSObject optionsObject) {
-            boolean hadException = context.hasPendingException();
-            JSValue maxByteLengthValue = optionsObject.get(PropertyKey.fromString("maxByteLength"));
-            if (!hadException && context.hasPendingException()) {
-                throw new JSException(context.getPendingException());
-            }
-            if (!(maxByteLengthValue instanceof JSUndefined)) {
-                long maxLen;
-                try {
-                    maxLen = JSTypeConversions.toIndex(context, maxByteLengthValue);
-                } catch (IllegalArgumentException | JSRangeErrorException e) {
-                    throw new JSException(context.throwRangeError("Invalid array buffer max length"));
-                }
-                if (maxLen < length) {
-                    throw new JSException(context.throwRangeError("Invalid array buffer max length"));
-                }
-                maxLength = maxLen;
-                growable = true;
-            }
-        }
-        return new long[]{length, maxLength, growable ? 1 : 0};
-    }
 }

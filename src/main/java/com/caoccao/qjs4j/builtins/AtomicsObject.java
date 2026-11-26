@@ -587,7 +587,7 @@ public final class AtomicsObject implements AutoCloseable {
 
     private static JSValue atomicResult(JSTypedArray typedArray, long value) {
         if (typedArray instanceof JSBigUint64Array) {
-            return createBigUint64(value);
+            return JSBigInt.fromUnsignedLong(value);
         }
         if (typedArray instanceof JSBigInt64Array) {
             return new JSBigInt(BigInteger.valueOf(value));
@@ -602,13 +602,6 @@ public final class AtomicsObject implements AutoCloseable {
             return JSNumber.of(Byte.toUnsignedInt((byte) value));
         }
         return JSNumber.of((int) value);
-    }
-
-    private static JSValue createBigUint64(long value) {
-        BigInteger unsigned = value >= 0
-                ? BigInteger.valueOf(value)
-                : BigInteger.valueOf(value).add(BigInteger.ONE.shiftLeft(64));
-        return new JSBigInt(unsigned);
     }
 
     private static JSObject createWaitAsyncSyncResult(JSContext context, String value) {

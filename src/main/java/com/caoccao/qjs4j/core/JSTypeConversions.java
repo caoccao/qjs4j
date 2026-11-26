@@ -175,7 +175,7 @@ public final class JSTypeConversions {
      * Check if a character is ECMAScript whitespace (StrWhiteSpaceChar). Includes all characters from the ES spec's
      * WhiteSpace and LineTerminator productions.
      */
-    private static boolean isEcmaWhitespace(char c) {
+    public static boolean isEcmaWhitespace(char c) {
         if (c <= 0x20) {
             return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\u000B';
         }
@@ -447,6 +447,14 @@ public final class JSTypeConversions {
         context.throwError("Error", throwable.getMessage() == null ? "Unhandled exception" : throwable.getMessage());
     }
 
+    static int skipLeadingWhitespace(String str) {
+        int index = 0;
+        while (index < str.length() && isEcmaWhitespace(str.charAt(index))) {
+            index++;
+        }
+        return index;
+    }
+
     /**
      * Strict Equality Comparison (===). ES2020 7.2.15
      */
@@ -564,11 +572,8 @@ public final class JSTypeConversions {
      * Strip leading and trailing ECMAScript whitespace from a string.
      */
     private static String stripEcmaWhitespace(String str) {
-        int start = 0;
+        int start = skipLeadingWhitespace(str);
         int end = str.length();
-        while (start < end && isEcmaWhitespace(str.charAt(start))) {
-            start++;
-        }
         while (end > start && isEcmaWhitespace(str.charAt(end - 1))) {
             end--;
         }

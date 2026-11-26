@@ -346,11 +346,6 @@ public final class StringPrototype {
      * ES2024 WhiteSpace + LineTerminator predicate. Matches: TAB, VT, FF, SP, NBSP, BOM/ZWNBSP, USP (Unicode
      * Space_Separator), LF, CR, LS, PS.
      */
-    private static boolean isEcmaWhitespace(char ch) {
-        return ch == '\t' || ch == '\n' || ch == '\u000B' || ch == '\f' || ch == '\r' || ch == ' ' || ch == '\u00A0'
-                || ch == '\uFEFF' || ch == '\u1680' || (ch >= '\u2000' && ch <= '\u200A') || ch == '\u2028'
-                || ch == '\u2029' || ch == '\u202F' || ch == '\u205F' || ch == '\u3000';
-    }
 
     /**
      * String.prototype.isWellFormed() Returns true if the string contains no unpaired surrogates.
@@ -1042,11 +1037,11 @@ public final class StringPrototype {
         String s = str.value();
         int start = 0;
         int end = s.length();
-        while (leading && start < end && isEcmaWhitespace(s.charAt(start))) {
+        while (leading && start < end && JSTypeConversions.isEcmaWhitespace(s.charAt(start))) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
             start++;
         }
-        while (trailing && end > start && isEcmaWhitespace(s.charAt(end - 1))) {
+        while (trailing && end > start && JSTypeConversions.isEcmaWhitespace(s.charAt(end - 1))) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
             end--;
         }

@@ -97,4 +97,9 @@ public record JSBigInt(BigInteger value) implements JSValue {
     public JSBigInt xor(JSBigInt other) {
         return new JSBigInt(value.xor(other.value));
     }
+
+    /** Interpret all 64 bits as the magnitude of an unsigned integer. */
+    public static JSBigInt fromUnsignedLong(long value) {
+        return value >= 0 ? new JSBigInt(value) : new JSBigInt(BigInteger.valueOf(value & Long.MAX_VALUE).setBit(63));
+    }
 }

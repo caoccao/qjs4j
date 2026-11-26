@@ -50,14 +50,6 @@ public final class JSFloat16Array extends JSTypedArray {
         return Float16.toFloat(halfFloat);
     }
 
-    @Override
-    public void setElement(long index, double value) {
-        checkIndex(index);
-        JSByteBuffer buf = getByteBuffer();
-        short halfFloat = Float16.toHalf(value);
-        buf.putShort(index * BYTES_PER_ELEMENT, halfFloat);
-    }
-
     public static JSObject create(JSContext context, JSValue... args) {
         return TypedArrayKind.FLOAT16.create(context, args);
     }

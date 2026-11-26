@@ -3,6 +3,12 @@ package com.caoccao.qjs4j.core;
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
 class DirectEvalScopeTest extends BaseJavetTest {
     @Test
     void displacedBindingsKeepTheirWriteRestrictions() {
@@ -55,6 +61,45 @@ class DirectEvalScopeTest extends BaseJavetTest {
                         })();
                         JSON.stringify([during, write(), typeof named]);
                     `);
+                })()
+                """);
+    }
+
+    @Test
+    void evalResolvesRemappedAndTemplatePrivateSymbols() {
+        JSBytecodeFunction caller = (JSBytecodeFunction) context.eval("(function caller() {})");
+        EvalRunner runner = new EvalRunner(context, new ModuleSourceTransformer(context));
+        JSSymbol template = new JSSymbol("#field");
+        JSSymbol active = new JSSymbol("#field");
+        JSSymbol inherited = new JSSymbol("#outer");
+        caller.setClassPrivateSymbols(List.of(template, inherited, new JSSymbol("ordinary"), new JSSymbol("#")));
+        assertThat(runner.collectEvalPrivateSymbols(caller)).isEqualTo(Map.of("field", template, "outer", inherited));
+
+        IdentityHashMap<JSSymbol, JSSymbol> remap = new IdentityHashMap<>();
+        remap.put(template, active);
+        remap.put(inherited, null);
+        caller.setClassPrivateSymbolRemap(remap);
+        assertThat(runner.collectEvalPrivateSymbols(caller)).isEqualTo(Map.of("field", active, "outer", inherited));
+
+        remap.clear();
+        remap.put(new JSSymbol("ordinary"), active);
+        assertThat(runner.collectEvalPrivateSymbols(caller)).isEqualTo(Map.of("field", template, "outer", inherited));
+    }
+
+    @Test
+    void evalUsesThePrivateNamesOfItsClassEvaluation() {
+        assertStringWithJavet("""
+                (() => {
+                  function make(value) {
+                    return new class {
+                      #value = value;
+                      read(other) { return eval('other.#value'); }
+                    };
+                  }
+                  const first = make(1), second = make(2);
+                  try { first.read(second); }
+                  catch (error) { return [first.read(first), second.read(second), error.name].join('|'); }
+                  return 'accepted a different class';
                 })()
                 """);
     }

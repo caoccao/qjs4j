@@ -47,13 +47,6 @@ public final class JSInt32Array extends JSTypedArray {
         return buf.getInt(index * BYTES_PER_ELEMENT);
     }
 
-    @Override
-    public void setElement(long index, double value) {
-        checkIndex(index);
-        JSByteBuffer buf = getByteBuffer();
-        buf.putInt(index * BYTES_PER_ELEMENT, JSTypeConversions.toInt32(value));
-    }
-
     public static JSObject create(JSContext context, JSValue... args) {
         return TypedArrayKind.INT32.create(context, args);
     }

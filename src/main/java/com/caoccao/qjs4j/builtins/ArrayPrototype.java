@@ -18,10 +18,6 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-
 /**
  * Array prototype methods. Implements ECMAScript Array.prototype methods.
  *
@@ -34,31 +30,8 @@ public final class ArrayPrototype {
      * indices. Generic: works on any object with a length property (per spec uses ToObject + LengthOfArrayLike).
      */
     public static JSValue at(JSContext context, JSValue thisArg, JSValue[] args) {
-        // Step 1: Let O be ? ToObject(this value).
-        JSObject obj = JSTypeConversions.toObject(context, thisArg);
-        if (obj == null) {
-            return context.throwTypeError("Cannot convert undefined or null to object");
-        }
-
-        // Step 2: Let len be ? LengthOfArrayLike(O).
-        long length = lengthOfArrayLike(context, obj);
-        if (length < 0) {
-            return context.getPendingException();
-        }
-
-        // Step 3: Let relativeIndex be ? ToIntegerOrInfinity(index).
-        long index = ArrayIndexRange.elementIndex(context, args, length);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        // Step 6: Check bounds
-        if (index < 0 || index >= length) {
-            return JSUndefined.INSTANCE;
-        }
-
-        // Step 7: Return ? Get(O, ! ToString(k)).
-        return obj.get(PropertyKey.fromIndexString(index));
+        ArrayLikeElements elements = ArrayLikeElements.capture(context, toObjectChecked(context, thisArg));
+        return elements == null ? context.getPendingException() : elements.at(args);
     }
 
     static long checkedLength(JSContext context, JSObject receiver) {
@@ -171,9 +144,7 @@ public final class ArrayPrototype {
     private static JSValue findMatchingElement(JSContext context, JSValue thisArg, JSValue[] args, String methodName,
             boolean fromEnd, boolean returnIndex) {
         ArrayLikeElements elements = ArrayLikeElements.arrayCallback(context, thisArg, args, methodName);
-        return elements == null
-                ? context.getPendingException()
-                : ArrayLikeElements.find(context, elements.object, false, elements.length, args, fromEnd, returnIndex);
+        return elements == null ? context.getPendingException() : elements.find(args, fromEnd, returnIndex);
     }
 
     /**
@@ -202,8 +173,8 @@ public final class ArrayPrototype {
      * Get element at index from an array-like object. Uses JSArray fast path for actual arrays.
      */
     static JSValue getElement(JSContext context, JSObject obj, long index) {
-        if (obj instanceof JSArray arr && index <= Integer.MAX_VALUE) {
-            return arr.get((int) index);
+        if (obj instanceof JSArray arr) {
+            return arr.get(index);
         }
         return obj.get(PropertyKey.fromIndexString(index));
     }
@@ -244,60 +215,8 @@ public final class ArrayPrototype {
      * Array.prototype.join([separator]) Joins all elements of an array into a string.
      */
     public static JSValue join(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
-            return context.throwTypeError("Array.prototype.join called on null or undefined");
-        }
-        // Step 1: Let O be ? ToObject(this value), which cannot fail past the check above. A primitive receiver used to
-        // join to "".
-        JSObject jsObject = JSTypeConversions.toObject(context, thisArg);
-        // Following QuickJS js_array_join: read length first, then coerce separator
-        long length = jsObject instanceof JSArray jsArray
-                ? jsArray.getLength()
-                : JSTypeConversions.toLength(context, jsObject.get(PropertyKey.LENGTH));
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-        JSString separator = args.length > 0 && !(args[0] instanceof JSUndefined)
-                ? JSTypeConversions.toString(context, args[0])
-                : new JSString(",");
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-        // An array already being joined further up — a cycle — renders as "", as in V8. The recursion used to
-        // continue until the stack overflowed. As in V8's CycleProtectedArrayJoin, the array is registered only once
-        // its length and separator are read, so a separator whose toString joins the same array still joins it.
-        Set<JSObject> joinStack = context.getArrayJoinStack();
-        if (!joinStack.add(jsObject)) {
-            return new JSString("");
-        }
-        try {
-            StringResultBuilder result = new StringResultBuilder(context);
-            for (long i = 0; i < length; i++) {
-                context.getVirtualMachine().checkExecutionInterruptForNative();
-                if (i > 0) {
-                    result.append(separator);
-                }
-                JSValue element = jsObject instanceof JSArray jsArray
-                        ? jsArray.get(i)
-                        : jsObject.get(PropertyKey.fromIndexString(i));
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                if (!(element instanceof JSNull) && !(element instanceof JSUndefined)) {
-                    JSString elementString = JSTypeConversions.toString(context, element);
-                    if (context.hasPendingException()) {
-                        return context.getPendingException();
-                    }
-                    result.append(elementString);
-                }
-                if (result.length() > JSString.MAX_LENGTH) {
-                    return context.throwRangeError("Invalid string length");
-                }
-            }
-            return result.build();
-        } finally {
-            joinStack.remove(jsObject);
-        }
+        ArrayLikeElements elements = ArrayLikeElements.ordinary(context, thisArg, "join");
+        return elements == null ? context.getPendingException() : ArrayJoin.join(context, elements, args, false);
     }
 
     /**
@@ -362,9 +281,7 @@ public final class ArrayPrototype {
     private static JSValue reduceElements(JSContext context, JSValue thisArg, JSValue[] args, boolean fromEnd) {
         ArrayLikeElements elements = ArrayLikeElements.arrayCallback(context, thisArg, args,
                 fromEnd ? "reduceRight" : "reduce");
-        return elements == null
-                ? context.getPendingException()
-                : ArrayLikeElements.reduce(context, elements.object, false, elements.length, args, fromEnd);
+        return elements == null ? context.getPendingException() : elements.reduce(args, fromEnd);
     }
 
     /**
@@ -435,65 +352,8 @@ public final class ArrayPrototype {
      * its elements.
      */
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSObject obj = requireArrayLike(context, thisArg, "toLocaleString");
-        long length = checkedLength(context, obj);
-        if (length < 0) {
-            return context.getPendingException();
-        }
-        // A cycle renders as "", as in join, and the array is registered once its length is read, as in join.
-        Set<JSObject> joinStack = context.getArrayJoinStack();
-        if (!joinStack.add(obj)) {
-            return new JSString("");
-        }
-        try {
-            return toLocaleStringOfElements(context, obj, length, args);
-        } finally {
-            joinStack.remove(obj);
-        }
-    }
-
-    private static JSValue toLocaleStringOfElements(JSContext context, JSObject obj, long length, JSValue[] args) {
-        StringBuilder sb = new StringBuilder();
-
-        for (long i = 0; i < length; i++) {
-
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            if (i > 0) {
-                sb.append(",");
-            }
-            PropertyKey key = PropertyKey.fromIndexString(i);
-            JSValue element = obj.get(key);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (!(element instanceof JSUndefined || element instanceof JSNull)) {
-                JSObject elementObject = JSTypeConversions.toObject(context, element);
-                if (elementObject == null || context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                JSValue toLocaleStringValue = elementObject.get(PropertyKey.fromString("toLocaleString"), element);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                if (!JSTypeChecking.isCallable(toLocaleStringValue)) {
-                    return context.throwTypeError("toLocaleString is not a function");
-                }
-                // Per ECMA-402, invoke toLocaleString with exactly 2 args: locales and options
-                JSValue localesArg = JSValue.argumentOrUndefined(args, 0);
-                JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
-                JSValue localeStringValue = PromiseConstructor.callCallable(context, toLocaleStringValue, element,
-                        new JSValue[]{localesArg, optionsArg});
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                sb.append(JSTypeConversions.toString(context, localeStringValue).value());
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-            }
-        }
-
-        return new JSString(sb.toString());
+        ArrayLikeElements elements = ArrayLikeElements.ordinary(context, thisArg, "toLocaleString");
+        return elements == null ? context.getPendingException() : ArrayJoin.join(context, elements, args, true);
     }
 
     /**

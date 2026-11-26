@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import java.util.List;
+import com.caoccao.qjs4j.utils.Float16;
 
 /** Intrinsic metadata for the concrete typed arrays. */
 enum TypedArrayKind {
@@ -91,11 +92,70 @@ enum TypedArrayKind {
     }
 
     JSTypedArray create(JSContext context, JSValue[] args) {
-        return JSTypedArray.createFromArguments(context, this, args);
+        if (args.length == 0) {
+            return allocate(context, 0);
+        }
+        JSValue source = JSTypedArray.normalizeConstructorSource(context, args[0]);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (source instanceof IJSArrayBuffer buffer) {
+            long offset = args.length < 2
+                    ? 0
+                    : JSTypedArray.resolveAndValidateByteOffset(context, args[1], bytesPerElement);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            long count = args.length < 3 || args[2] instanceof JSUndefined
+                    ? -1
+                    : JSTypedArray.toTypedArrayIndex(context, args[2], bytesPerElement);
+            return context.hasPendingException() ? null : view(context, buffer, offset, count);
+        }
+        if (source instanceof JSNumber) {
+            return allocate(context, JSTypedArray.toTypedArrayIndex(context, source, bytesPerElement));
+        }
+        if (source instanceof JSIterator iterator) {
+            source = JSIteratorHelper.toArray(context, iterator);
+            if (context.hasPendingException()) {
+                return null;
+            }
+        }
+        long count;
+        if (source instanceof JSTypedArray array) {
+            if (array.isOutOfBounds()) {
+                context.throwTypeError("source TypedArray is out of bounds");
+                return null;
+            }
+            count = array.getLength();
+        } else if (source instanceof JSArray array) {
+            count = JSTypedArray.toTypedArrayLength(array.getLength(), bytesPerElement);
+        } else if (source instanceof JSObject object) {
+            count = JSTypedArray.toTypedArrayLength(context, object.get(PropertyKey.LENGTH), bytesPerElement);
+        } else {
+            return allocate(context, JSTypedArray.toTypedArrayLength(context, source, bytesPerElement));
+        }
+        JSTypedArray result = allocate(context, count);
+        result.setArray(source, 0);
+        return result;
     }
 
     JSTypedArray view(JSContext context, IJSArrayBuffer buffer, long byteOffset, long length) {
         return bufferViews.create(context, buffer, byteOffset, length);
+    }
+
+    /** Store the low bits for integer elements, or the rounded value for floating-point elements. */
+    void writeNumber(JSByteBuffer buffer, long index, double value) {
+        long offset = index * bytesPerElement;
+        switch (this) {
+            case INT8, UINT8 -> buffer.put(offset, (byte) JSTypeConversions.toInt32(value));
+            case INT16, UINT16 -> buffer.putShort(offset, (short) JSTypeConversions.toInt32(value));
+            case INT32, UINT32 -> buffer.putInt(offset, JSTypeConversions.toInt32(value));
+            case UINT8_CLAMPED -> buffer.put(offset, (byte) JSTypeConversions.toUint8Clamp(value));
+            case FLOAT16 -> buffer.putShort(offset, Float16.toHalf(value));
+            case FLOAT32 -> buffer.putFloat(offset, (float) value);
+            case FLOAT64 -> buffer.putDouble(offset, value);
+            case BIGINT64, BIGUINT64 -> buffer.putLong(offset, (long) value);
+        }
     }
 
     @FunctionalInterface

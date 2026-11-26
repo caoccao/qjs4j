@@ -47,13 +47,6 @@ abstract sealed class JSBigIntTypedArray extends JSTypedArray permits JSBigInt64
     }
 
     @Override
-    public void setElement(long index, double value) {
-        checkIndex(index);
-        JSByteBuffer buf = getByteBuffer();
-        buf.putLong(index * Long.BYTES, (long) value);
-    }
-
-    @Override
     protected void setJSElement(long index, JSValue value) {
         long longVal = JSTypeConversions.toBigInt64(context, value);
         checkIndex(index);

@@ -19,7 +19,6 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public final class TypedArrayPrototype {
@@ -27,24 +26,8 @@ public final class TypedArrayPrototype {
     }
 
     public static JSValue at(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTypedArray typedArray = validateTypedArray(context, thisArg, "TypedArray.prototype.at");
-        if (typedArray == null) {
-            return context.getPendingException();
-        }
-        // Step 3: Capture length before coercion
-        long length = typedArray.getLength();
-        // Step 4: Coerce index (may resize buffer)
-        long index = ArrayIndexRange.elementIndex(context, args, length);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        // Step 9: Check against original length
-        if (index < 0 || index >= length) {
-            return JSUndefined.INSTANCE;
-        }
-        // Step 10: Get element (safe for detached/resized buffers)
-        return typedArray.getElementOrUndefined(index);
+        ArrayLikeElements elements = ArrayLikeElements.typed(context, thisArg, "TypedArray.prototype.at");
+        return elements == null ? context.getPendingException() : elements.at(args);
     }
 
     static JSValue constructTypedArray(JSContext context, JSValue constructor, JSValue[] args) {
@@ -173,10 +156,8 @@ public final class TypedArrayPrototype {
 
     private static JSValue findViaPredicate(JSContext context, JSValue thisArg, JSValue[] args, String methodName,
             boolean reverse, boolean returnIndex) {
-        JSTypedArray array = toTypedArrayForCallback(context, thisArg, args, methodName);
-        return array == null
-                ? context.getPendingException()
-                : ArrayLikeElements.find(context, array, true, array.getLength(), args, reverse, returnIndex);
+        ArrayLikeElements elements = ArrayLikeElements.typedCallback(context, thisArg, args, methodName);
+        return elements == null ? context.getPendingException() : elements.find(args, reverse, returnIndex);
     }
 
     public static JSValue forEach(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -254,37 +235,8 @@ public final class TypedArrayPrototype {
     }
 
     public static JSValue join(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTypedArray typedArray = validateTypedArray(context, thisArg, "TypedArray.prototype.join");
-        if (typedArray == null) {
-            return context.getPendingException();
-        }
-        // Step 3: Capture length BEFORE separator coercion
-        long length = typedArray.getLength();
-
-        // Step 4: Convert separator ONCE (may cause side effects like resizing/detaching buffer)
-        String separator;
-        if (args.length > 0 && !args[0].isUndefined()) {
-            separator = JSTypeConversions.toString(context, args[0]).value();
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-        } else {
-            separator = ",";
-        }
-
-        // Use original length for iteration; elements that are now OOB become empty string
-        StringBuilder sb = new StringBuilder();
-        for (long i = 0; i < length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            if (i > 0) {
-                sb.append(separator);
-            }
-            JSValue element = typedArray.getElementOrUndefined(i);
-            if (!(element instanceof JSUndefined)) {
-                sb.append(JSTypeConversions.toString(context, element).value());
-            }
-        }
-        return new JSString(sb.toString());
+        ArrayLikeElements elements = ArrayLikeElements.typed(context, thisArg, "TypedArray.prototype.join");
+        return elements == null ? context.getPendingException() : ArrayJoin.join(context, elements, args, false);
     }
 
     public static JSValue keys(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -333,10 +285,8 @@ public final class TypedArrayPrototype {
 
     private static JSValue reduce(JSContext context, JSValue thisArg, JSValue[] args, String methodName,
             boolean reverse) {
-        JSTypedArray array = toTypedArrayForCallback(context, thisArg, args, methodName);
-        return array == null
-                ? context.getPendingException()
-                : ArrayLikeElements.reduce(context, array, true, array.getLength(), args, reverse);
+        ArrayLikeElements elements = ArrayLikeElements.typedCallback(context, thisArg, args, methodName);
+        return elements == null ? context.getPendingException() : elements.reduce(args, reverse);
     }
 
     public static JSValue reduceRight(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -420,49 +370,8 @@ public final class TypedArrayPrototype {
     }
 
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTypedArray typedArray = validateTypedArray(context, thisArg, "TypedArray.prototype.toLocaleString");
-        if (typedArray == null) {
-            return context.getPendingException();
-        }
-        long length = typedArray.getLength();
-
-        String separator = ",";
-
-        StringBuilder sb = new StringBuilder();
-        for (long i = 0; i < length; i++) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            if (i > 0) {
-                sb.append(separator);
-            }
-            // Use safeGetElement to handle OOB (buffer may have been resized during callback)
-            JSValue element = typedArray.getElementOrUndefined(i);
-            if (!(element instanceof JSUndefined) && !(element instanceof JSNull)) {
-                // Invoke element.toLocaleString()
-                JSValue toLocaleStringFn = null;
-                if (element instanceof JSObject elementObj) {
-                    toLocaleStringFn = elementObj.get(PropertyKey.fromString("toLocaleString"));
-                } else {
-                    // Auto-box primitive to get toLocaleString from prototype
-                    JSObject boxed = JSTypeConversions.toObject(context, element);
-                    if (boxed != null) {
-                        toLocaleStringFn = boxed.get(PropertyKey.fromString("toLocaleString"));
-                    }
-                }
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                if (toLocaleStringFn instanceof JSFunction fn) {
-                    JSValue result = fn.call(context, element, args);
-                    if (context.hasPendingException()) {
-                        return context.getPendingException();
-                    }
-                    sb.append(JSTypeConversions.toString(context, result).value());
-                } else {
-                    sb.append(JSTypeConversions.toString(context, element).value());
-                }
-            }
-        }
-        return new JSString(sb.toString());
+        ArrayLikeElements elements = ArrayLikeElements.typed(context, thisArg, "TypedArray.prototype.toLocaleString");
+        return elements == null ? context.getPendingException() : ArrayJoin.join(context, elements, args, true);
     }
 
     public static JSValue toReversed(JSContext context, JSValue thisArg, JSValue[] args) {

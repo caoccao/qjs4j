@@ -54,4 +54,20 @@ public sealed interface IJSArrayBuffer permits JSArrayBuffer, JSSharedArrayBuffe
      * @return true if shared, false otherwise
      */
     boolean isShared();
+
+    /** Test a view against one observation of the backing length. */
+    default boolean isViewOutOfBounds(long offset, long length, boolean lengthTracking) {
+        if (isDetached()) {
+            return true;
+        }
+        long available = getByteLength() - offset;
+        return available < 0 || !lengthTracking && length > available;
+    }
+
+    /** Whether a view with an omitted length follows changes to this buffer's length. */
+    default boolean supportsLengthTracking() {
+        return this instanceof JSArrayBuffer ordinary
+                ? ordinary.isResizable()
+                : ((JSSharedArrayBuffer) this).isGrowable();
+    }
 }

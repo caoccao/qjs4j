@@ -47,13 +47,6 @@ public final class JSUint16Array extends JSTypedArray {
         return buf.getShort(index * BYTES_PER_ELEMENT) & 0xFFFF; // Convert to unsigned
     }
 
-    @Override
-    public void setElement(long index, double value) {
-        checkIndex(index);
-        JSByteBuffer buf = getByteBuffer();
-        buf.putShort(index * BYTES_PER_ELEMENT, (short) JSTypeConversions.toInt32(value));
-    }
-
     public static JSObject create(JSContext context, JSValue... args) {
         return TypedArrayKind.UINT16.create(context, args);
     }

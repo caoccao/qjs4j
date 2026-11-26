@@ -61,4 +61,20 @@ record ArrayIndexRange(long start, long end) {
         }
         return fromEnd ? Math.max(-1L, Math.min(index, length - 1)) : Math.max(0L, Math.min(index, length));
     }
+
+    /** Indices and count after coercing copyWithin's three arguments from left to right. */
+    record Copy(long start, long target, long count) {
+        static Copy read(JSContext context, JSValue[] args, long length) {
+            long target = relativeIndex(context, args, 0, length, 0);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            ArrayIndexRange source = ArrayIndexRange.read(context, args, 1, length);
+            return source == null ? null : new Copy(source.start(), target, Math.min(source.count(), length - target));
+        }
+
+        boolean overlapsForward() {
+            return start < target && target - start < count;
+        }
+    }
 }

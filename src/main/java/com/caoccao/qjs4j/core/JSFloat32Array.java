@@ -47,13 +47,6 @@ public final class JSFloat32Array extends JSTypedArray {
         return buf.getFloat(index * BYTES_PER_ELEMENT);
     }
 
-    @Override
-    public void setElement(long index, double value) {
-        checkIndex(index);
-        JSByteBuffer buf = getByteBuffer();
-        buf.putFloat(index * BYTES_PER_ELEMENT, (float) value);
-    }
-
     public static JSObject create(JSContext context, JSValue... args) {
         return TypedArrayKind.FLOAT32.create(context, args);
     }

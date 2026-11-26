@@ -47,13 +47,6 @@ public final class JSUint8Array extends JSTypedArray {
         return buf.get(index) & 0xFF; // Convert to unsigned
     }
 
-    @Override
-    public void setElement(long index, double value) {
-        checkIndex(index);
-        JSByteBuffer buf = getByteBuffer();
-        buf.put(index, (byte) JSTypeConversions.toInt32(value));
-    }
-
     public static JSObject create(JSContext context, JSValue... args) {
         return TypedArrayKind.UINT8.create(context, args);
     }

@@ -53,6 +53,18 @@ public class ArrayCallbackTraversalTest extends BaseJavetTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"Array", "Float64Array"})
+    public void testJoinNumberFormatting(String constructor) {
+        assertStringWithJavet("""
+                (() => {
+                  const values = %s.from([-0, NaN, Infinity, -Infinity, -2147483648, 2147483647,
+                      -2147483649, 2147483648, 0.125, 1e-8, 1e21]);
+                  return values.join('|');
+                })()
+                """.formatted(constructor));
+    }
+
+    @ParameterizedTest
     @MethodSource("callbackMethods")
     public void testLengthAndCallbackValidationOrder(String method) {
         assertStringWithJavet("""
@@ -82,6 +94,38 @@ public class ArrayCallbackTraversalTest extends BaseJavetTest {
                   } catch (e) { return e.name; }
                 }).join(';'))()
                 """.formatted(method));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"[1, 2]", "new Uint8Array([1, 2])"})
+    public void testLocalizedElementCalls(String expression) {
+        assertStringWithJavet("""
+                (() => {
+                  const array = %s, options = {}, log = [];
+                  const original = Object.getOwnPropertyDescriptor(Number.prototype, 'toLocaleString');
+                  try {
+                    Object.defineProperty(Number.prototype, 'toLocaleString', {
+                      configurable: true,
+                      get: function () {
+                        'use strict';
+                        log.push(typeof this);
+                        return new Proxy(function (locales, actualOptions) {
+                          'use strict';
+                          log.push(typeof this, arguments.length, locales, actualOptions === options);
+                          return String(this);
+                        }, {});
+                      }
+                    });
+                    const text = array.toLocaleString('de', options, 'extra');
+                    Object.defineProperty(Number.prototype, 'toLocaleString', {value: 42});
+                    try { array.toLocaleString(); } catch (error) { log.push(error.name); }
+                    Object.defineProperty(Number.prototype, 'toLocaleString', original);
+                    return [text, array.join(), ...log].join('|');
+                  } finally {
+                    Object.defineProperty(Number.prototype, 'toLocaleString', original);
+                  }
+                })()
+                """.formatted(expression));
     }
 
     @ParameterizedTest

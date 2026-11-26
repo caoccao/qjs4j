@@ -101,24 +101,13 @@ final class ArrayCopy {
             return context.getPendingException();
         }
 
-        long target = ArrayIndexRange.relativeIndex(context, args, 0, length, 0);
-        if (context.hasPendingException()) {
+        ArrayIndexRange.Copy copy = ArrayIndexRange.Copy.read(context, args, length);
+        if (copy == null) {
             return context.getPendingException();
         }
-        ArrayIndexRange range = ArrayIndexRange.read(context, args, 1, length);
-        if (range == null) {
-            return context.getPendingException();
-        }
-
-        // Calculate count
-        long count = Math.min(range.end() - range.start(), length - target);
-        if (count <= 0) {
-            return obj;
-        }
-
-        // Copy direction depends on overlap (per spec step 12)
-        return moveElements(context, obj, range.start(), target, count,
-                range.start() < target && target < range.start() + count) ? obj : context.getPendingException();
+        return moveElements(context, obj, copy.start(), copy.target(), copy.count(), copy.overlapsForward())
+                ? obj
+                : context.getPendingException();
     }
 
     /**

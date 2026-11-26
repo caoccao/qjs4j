@@ -47,13 +47,6 @@ public final class JSFloat64Array extends JSTypedArray {
         return buf.getDouble(index * BYTES_PER_ELEMENT);
     }
 
-    @Override
-    public void setElement(long index, double value) {
-        checkIndex(index);
-        JSByteBuffer buf = getByteBuffer();
-        buf.putDouble(index * BYTES_PER_ELEMENT, value);
-    }
-
     public static JSObject create(JSContext context, JSValue... args) {
         return TypedArrayKind.FLOAT64.create(context, args);
     }

@@ -47,13 +47,6 @@ public final class JSInt8Array extends JSTypedArray {
         return buf.get(index);
     }
 
-    @Override
-    public void setElement(long index, double value) {
-        checkIndex(index);
-        JSByteBuffer buf = getByteBuffer();
-        buf.put(index, (byte) JSTypeConversions.toInt32(value));
-    }
-
     public static JSObject create(JSContext context, JSValue... args) {
         return TypedArrayKind.INT8.create(context, args);
     }

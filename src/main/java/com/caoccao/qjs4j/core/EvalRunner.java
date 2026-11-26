@@ -23,7 +23,6 @@ import com.caoccao.qjs4j.vm.StackFrame;
 import com.caoccao.qjs4j.vm.VarRef;
 
 import java.util.*;
-import java.util.regex.Matcher;
 
 /**
  * Runs source: QuickJS's {@code JS_EvalInternal}, as a class.
@@ -61,17 +60,7 @@ final class EvalRunner {
         IdentityHashMap<JSSymbol, JSSymbol> symbolRemap = callerFunction.getClassPrivateSymbolRemap();
         if (symbolRemap != null && !symbolRemap.isEmpty()) {
             for (Map.Entry<JSSymbol, JSSymbol> entry : symbolRemap.entrySet()) {
-                JSSymbol templateSymbol = entry.getKey();
-                if (templateSymbol == null) {
-                    continue;
-                }
-                String description = templateSymbol.getDescription();
-                if (description == null || description.length() < 2 || description.charAt(0) != '#') {
-                    continue;
-                }
-                String privateName = description.substring(1);
-                JSSymbol activeSymbol = entry.getValue() != null ? entry.getValue() : templateSymbol;
-                privateSymbolsByName.putIfAbsent(privateName, activeSymbol);
+                addPrivateSymbol(privateSymbolsByName, entry.getKey(), entry.getValue());
             }
         }
         if (!privateSymbolsByName.isEmpty()) {
@@ -82,14 +71,7 @@ final class EvalRunner {
             return Map.of();
         }
         for (JSSymbol symbol : classPrivateSymbols) {
-            if (symbol == null) {
-                continue;
-            }
-            String description = symbol.getDescription();
-            if (description == null || description.length() < 2 || description.charAt(0) != '#') {
-                continue;
-            }
-            privateSymbolsByName.putIfAbsent(description.substring(1), symbol);
+            addPrivateSymbol(privateSymbolsByName, symbol, symbol);
         }
         return privateSymbolsByName;
     }
@@ -183,207 +165,28 @@ final class EvalRunner {
      * ensures deferred modules' async dependencies are pre-evaluated in the correct position relative to other imports.
      */
     JSModuleEnvironment evaluateModuleImportsInOrder(String code, String filename) {
-        String scanCode = transformer.maskModuleComments(code);
+        List<ModuleImportDeclaration> imports = ModuleImportDeclaration.scan(transformer, code);
         JSModuleEnvironment environment = new JSModuleEnvironment(context);
-        JSObject globalObject = environment.imports();
-
-        // Collect all import matches with their positions for ordered processing
-        List<int[]> importPositions = new ArrayList<>();
-        // type 0=side-effect, 1=namespace, 2=binding
-        Matcher sideEffectMatcher = ModuleSourceTransformer.MODULE_SIDE_EFFECT_IMPORT_PATTERN.matcher(scanCode);
-        while (sideEffectMatcher.find()) {
-            importPositions.add(new int[]{sideEffectMatcher.start(), 0, importPositions.size()});
-        }
-        Matcher namespaceMatcher = ModuleSourceTransformer.MODULE_NAMESPACE_IMPORT_PATTERN.matcher(scanCode);
-        while (namespaceMatcher.find()) {
-            importPositions.add(new int[]{namespaceMatcher.start(), 1, importPositions.size()});
-        }
-        Matcher bindingMatcher = ModuleSourceTransformer.MODULE_BINDING_IMPORT_PATTERN.matcher(scanCode);
-        while (bindingMatcher.find()) {
-            importPositions.add(new int[]{bindingMatcher.start(), 2, importPositions.size()});
-        }
-        importPositions.sort((a, b) -> Integer.compare(a[0], b[0]));
-
-        // Suppress microtask processing during import evaluation to prevent
-        // nested eval() calls from prematurely draining the microtask queue.
-        // This ensures async TLA module completions happen after ALL imports
-        // are processed, producing correct evaluation order.
-        boolean prevSuppress = context.isSuppressingEvalMicrotasks();
+        boolean previouslySuppressed = context.isSuppressingEvalMicrotasks();
         context.setSuppressingEvalMicrotasks(true);
         try {
-            // Re-match each import in source order
-            for (int[] pos : importPositions) {
-                int type = pos[1];
-                int start = pos[0];
-
-                if (type == 0) {
-                    // Side-effect import
-                    sideEffectMatcher.reset(scanCode);
-                    if (sideEffectMatcher.find(start) && sideEffectMatcher.start() == start) {
-                        String specifier = transformer.decodeModuleStringLiteralValue(sideEffectMatcher.group(2));
-                        Map<String, String> importAttributes = transformer
-                                .extractImportAttributes(sideEffectMatcher.group(0));
-                        context.moduleLoader().loadDynamicImportModule(specifier, filename, importAttributes);
-                        // If this side-effect import was generated for an export-from,
-                        // resolve the corresponding re-export binding immediately so
-                        // self-imports see the re-exported names in the namespace.
-                        context.moduleLinker().resolveIncrementalReExport(specifier, filename);
-                    }
-                } else if (type == 1) {
-                    // Namespace import
-                    namespaceMatcher.reset(scanCode);
-                    if (namespaceMatcher.find(start) && namespaceMatcher.start() == start) {
-                        String deferKeyword = namespaceMatcher.group(1);
-                        String localName = namespaceMatcher.group(2);
-                        String specifier = transformer.decodeModuleStringLiteralValue(namespaceMatcher.group(4));
-                        Map<String, String> importAttributes = transformer
-                                .extractImportAttributes(namespaceMatcher.group(0));
-                        JSObject namespaceObject;
-                        if ("defer".equals(deferKeyword)) {
-                            namespaceObject = context.moduleLoader().loadDynamicImportModuleDeferred(specifier,
-                                    filename, importAttributes);
-                        } else {
-                            namespaceObject = context.moduleLoader().loadDynamicImportModule(specifier, filename,
-                                    importAttributes);
-                        }
-                        context.importBindingInstaller().bindImportValue(globalObject, localName, namespaceObject);
-                    }
-                } else {
-                    // Binding import
-                    bindingMatcher.reset(scanCode);
-                    if (bindingMatcher.find(start) && bindingMatcher.start() == start) {
-                        String importClause = bindingMatcher.group(1).trim();
-                        if (importClause.startsWith("*") || importClause.startsWith("defer *")) {
-                            continue;
-                        }
-                        String specifier = transformer.decodeModuleStringLiteralValue(bindingMatcher.group(3));
-                        Map<String, String> importAttributes = transformer
-                                .extractImportAttributes(bindingMatcher.group(0));
-                        if (specifier.endsWith(".json") && importAttributes != null
-                                && "json".equals(importAttributes.get("type"))) {
-                            if (transformer.hasNonDefaultNamedBindings(importClause)) {
-                                throw new JSSyntaxErrorException("JSON modules do not support named exports");
-                            }
-                        }
-                        if (importAttributes != null) {
-                            String attrType = importAttributes.get("type");
-                            if ("text".equals(attrType) || "bytes".equals(attrType)) {
-                                if (transformer.hasNonDefaultNamedBindings(importClause)) {
-                                    throw new JSSyntaxErrorException((("text".equals(attrType)) ? "Text" : "Bytes")
-                                            + " modules do not support named exports");
-                                }
-                            }
-                        }
-                        JSObject namespaceObject = context.moduleLoader().loadDynamicImportModule(specifier, filename,
-                                importAttributes);
-                        context.importBindingInstaller().applyImportClauseBindings(globalObject, namespaceObject,
-                                importClause);
-                    }
-                }
+            for (ModuleImportDeclaration declaration : imports) {
+                declaration.load(context, transformer, environment.imports(), filename);
             }
         } finally {
-            context.setSuppressingEvalMicrotasks(prevSuppress);
+            context.setSuppressingEvalMicrotasks(previouslySuppressed);
         }
-
-        // Post-import linking validation: verify that all named import bindings
-        // actually exist in their (now finalized) module namespaces.
-        // ES2024 16.2.1.6.3: Missing bindings are SyntaxError at link time.
-        for (int[] pos : importPositions) {
-            if (pos[1] != 2) {
-                continue; // only check binding imports
-            }
-            bindingMatcher.reset(scanCode);
-            if (bindingMatcher.find(pos[0]) && bindingMatcher.start() == pos[0]) {
-                String importClause = bindingMatcher.group(1).trim();
-                if (importClause.startsWith("*") || importClause.startsWith("defer *")) {
-                    continue;
-                }
-                Map<String, String> importAttributes = transformer.extractImportAttributes(bindingMatcher.group(0));
-                if (importAttributes != null) {
-                    String importType = importAttributes.get("type");
-                    if ("text".equals(importType) || "bytes".equals(importType)) {
-                        continue;
-                    }
-                }
-                String specifier = transformer.decodeModuleStringLiteralValue(bindingMatcher.group(3));
-                String resolvedSpec;
-                try {
-                    resolvedSpec = context.moduleLoader().resolveDynamicImportSpecifier(specifier, filename, specifier);
-                } catch (Exception e) {
-                    continue;
-                }
-                JSDynamicImportModule moduleRecord = context.moduleLoader().cachedModule(resolvedSpec);
-                if (moduleRecord != null && moduleRecord.status() == JSDynamicImportModule.Status.EVALUATED
-                        && moduleRecord.namespace().isFinalized()) {
-                    context.moduleLinker().validateNamedImportBindings(moduleRecord.namespace(), importClause);
-                } else if (moduleRecord != null && (moduleRecord.status() == JSDynamicImportModule.Status.LOADING
-                        || moduleRecord.status() == JSDynamicImportModule.Status.EVALUATING)) {
-                    // For self-referencing or circular imports, the namespace may not be finalized.
-                    // Validate through recursive ResolveExport instead of namespace properties.
-                    context.moduleLinker().validateNamedImportBindingsAgainstExplicitExports(moduleRecord,
-                            importClause);
-                }
-            }
+        for (ModuleImportDeclaration declaration : imports) {
+            declaration.validateBindings(context, filename);
         }
-
-        // Drain microtasks to settle any EVALUATING_ASYNC modules before
-        // the module body runs. This ensures TLA deps complete in the right order.
+        // Settle top-level await before inspecting the loaded modules' evaluation errors.
         if (evaluationDepth == 1 && context.getVirtualMachine().getCurrentFrame() == null
                 && !context.isSuppressingEvalMicrotasks()) {
             context.processMicrotasks();
         }
-
-        // ES2024: If any imported module's evaluation failed (e.g., TLA rejection),
-        // propagate the error to the importing module before its body runs.
-        // Skip deferred imports — their errors are deferred until namespace access.
-        for (int[] pos : importPositions) {
-            int type = pos[1];
-            int start = pos[0];
-            String specifier = null;
-            if (type == 0) {
-                sideEffectMatcher.reset(scanCode);
-                if (sideEffectMatcher.find(start) && sideEffectMatcher.start() == start) {
-                    specifier = transformer.decodeModuleStringLiteralValue(sideEffectMatcher.group(2));
-                }
-            } else if (type == 1) {
-                namespaceMatcher.reset(scanCode);
-                if (namespaceMatcher.find(start) && namespaceMatcher.start() == start) {
-                    // Skip deferred namespace imports — evaluation errors are deferred
-                    // until the namespace is accessed (EnsureDeferredNamespaceEvaluation).
-                    String deferKeyword = namespaceMatcher.group(1);
-                    if ("defer".equals(deferKeyword)) {
-                        continue;
-                    }
-                    specifier = transformer.decodeModuleStringLiteralValue(namespaceMatcher.group(4));
-                }
-            } else {
-                bindingMatcher.reset(scanCode);
-                if (bindingMatcher.find(start) && bindingMatcher.start() == start) {
-                    // Skip deferred namespace imports that also match the binding pattern.
-                    // These are handled by the namespace (type==1) branch above.
-                    String importClause = bindingMatcher.group(1).trim();
-                    if (importClause.startsWith("*") || importClause.startsWith("defer *")) {
-                        continue;
-                    }
-                    specifier = transformer.decodeModuleStringLiteralValue(bindingMatcher.group(3));
-                }
-            }
-            if (specifier != null) {
-                try {
-                    String resolvedSpec = context.moduleLoader().resolveDynamicImportSpecifier(specifier, filename,
-                            specifier);
-                    JSDynamicImportModule moduleRecord = context.moduleLoader().cachedModule(resolvedSpec);
-                    if (moduleRecord != null && moduleRecord.status() == JSDynamicImportModule.Status.EVALUATED_ERROR) {
-                        throw new JSException(moduleRecord.evaluationError());
-                    }
-                } catch (JSException e) {
-                    throw e;
-                } catch (Exception ignored) {
-                    // Specifier resolution failure is handled elsewhere
-                }
-            }
+        for (ModuleImportDeclaration declaration : imports) {
+            declaration.propagateEvaluationError(context, filename);
         }
-
         return environment;
     }
 
@@ -419,6 +222,13 @@ final class EvalRunner {
 
     void scheduleDirectEvalCall() {
         pendingDirectEvalCalls++;
+    }
+
+    private static void addPrivateSymbol(Map<String, JSSymbol> symbols, JSSymbol template, JSSymbol active) {
+        String name = template == null ? null : template.getDescription();
+        if (name != null && name.length() > 1 && name.charAt(0) == '#') {
+            symbols.putIfAbsent(name.substring(1), active == null ? template : active);
+        }
     }
 
     /**
@@ -542,46 +352,12 @@ final class EvalRunner {
          * on whether this was a script (non-configurable) or a global direct eval (configurable).
          */
         private void defineGlobalFunctionBindingsAfterExecution() {
-            if (!isModule && isDirectEval && directEvalCallerFrame != null
-                    && directEvalCallerFrame.getCaller() == null) {
-                if (globalEvalFunctionNames == null) {
-                    globalEvalFunctionNames = new LinkedHashSet<>();
-                }
-                for (String functionName : globalEvalFunctionNames) {
-                    PropertyKey key = PropertyKey.fromString(functionName);
-                    if (!context.getGlobalObject().has(key)) {
-                        continue;
-                    }
-                    JSValue functionValue = context.getGlobalObject().get(key);
-                    PropertyDescriptor existingDescriptor = context.getGlobalObject().getOwnPropertyDescriptor(key);
-                    PropertyDescriptor descriptor = new PropertyDescriptor();
-                    descriptor.setValue(functionValue);
-                    if (existingDescriptor == null || existingDescriptor.isConfigurable()) {
-                        descriptor.setWritable(true);
-                        descriptor.setEnumerable(true);
-                        descriptor.setConfigurable(true);
-                    } else {
-                        descriptor.setWritable(existingDescriptor.isWritable());
-                        descriptor.setEnumerable(existingDescriptor.isEnumerable());
-                        descriptor.setConfigurable(false);
-                    }
-                    context.getGlobalObject().defineProperty(key, descriptor);
-                }
+            if (!isModule && isDirectEval && directEvalCallerFrame != null && directEvalCallerFrame.getCaller() == null
+                    && globalEvalFunctionNames != null) {
+                GlobalFunctionBindings.finish(context.getGlobalObject(), globalEvalFunctionNames, true);
             }
             if (!isModule && !isDirectEval && globalScriptFunctionNames != null) {
-                for (String functionName : globalScriptFunctionNames) {
-                    PropertyKey key = PropertyKey.fromString(functionName);
-                    if (!context.getGlobalObject().has(key)) {
-                        continue;
-                    }
-                    JSValue functionValue = context.getGlobalObject().get(key);
-                    PropertyDescriptor descriptor = new PropertyDescriptor();
-                    descriptor.setValue(functionValue);
-                    descriptor.setWritable(true);
-                    descriptor.setEnumerable(true);
-                    descriptor.setConfigurable(false);
-                    context.getGlobalObject().defineProperty(key, descriptor);
-                }
+                GlobalFunctionBindings.finish(context.getGlobalObject(), globalScriptFunctionNames, false);
             }
         }
 
@@ -682,36 +458,16 @@ final class EvalRunner {
             Program.GlobalDeclarations globalDeclarations = compileResult.ast().getGlobalDeclarations();
             Set<String> evalVarDeclarations = globalDeclarations.varDeclarations();
             globalEvalFunctionNames = globalDeclarations.functionDeclarations();
+            JSObject global = context.getGlobalObject();
+            boolean topLevel = directEvalCallerFrame != null && directEvalCallerFrame.getCaller() == null;
             for (String functionName : globalEvalFunctionNames) {
-                PropertyKey key = PropertyKey.fromString(functionName);
-                PropertyDescriptor desc = context.getGlobalObject().getOwnPropertyDescriptor(key);
-                if (desc != null && !desc.isConfigurable()) {
-                    if (desc.isAccessorDescriptor() || !(desc.isWritable() && desc.isEnumerable())) {
-                        throw new JSException(context.throwTypeError("cannot define variable '" + functionName + "'"));
-                    }
-                }
-                if (desc == null && !context.getGlobalObject().isExtensible()) {
-                    throw new JSException(context.throwTypeError("cannot define variable '" + functionName + "'"));
-                }
-                if (directEvalCallerFrame != null && directEvalCallerFrame.getCaller() == null) {
-                    if (desc == null || desc.isConfigurable()) {
-                        JSValue initialValue = desc != null && desc.hasValue() ? desc.getValue() : JSUndefined.INSTANCE;
-                        context.getGlobalObject().defineProperty(key,
-                                PropertyDescriptor.dataDescriptor(initialValue, PropertyDescriptor.DataState.All));
-                    }
+                PropertyDescriptor existing = GlobalFunctionBindings.checkFunction(global, functionName);
+                if (topLevel) {
+                    GlobalFunctionBindings.prepareEvalFunction(global, functionName, existing);
                 }
             }
-            if (directEvalCallerFrame != null && directEvalCallerFrame.getCaller() == null) {
-                for (String declarationName : evalVarDeclarations) {
-                    if (globalEvalFunctionNames.contains(declarationName)) {
-                        continue;
-                    }
-                    PropertyKey key = PropertyKey.fromString(declarationName);
-                    if (!context.getGlobalObject().has(key) && !context.getGlobalObject().isExtensible()) {
-                        throw new JSException(
-                                context.throwTypeError("cannot define variable '" + declarationName + "'"));
-                    }
-                }
+            if (topLevel) {
+                GlobalFunctionBindings.checkEvalVars(global, evalVarDeclarations, globalEvalFunctionNames);
             }
         }
 
@@ -764,19 +520,7 @@ final class EvalRunner {
 
             // Check CreateGlobalFunctionBinding preconditions before execution.
             for (String functionName : globalScriptFunctionNames) {
-                PropertyKey key = PropertyKey.fromString(functionName);
-                PropertyDescriptor desc = context.getGlobalObject().getOwnPropertyDescriptor(key);
-                if (desc == null) {
-                    if (!context.getGlobalObject().isExtensible()) {
-                        throw new JSException(context.throwTypeError("cannot define variable '" + functionName + "'"));
-                    }
-                    continue;
-                }
-                if (!desc.isConfigurable()) {
-                    if (desc.isAccessorDescriptor() || !(desc.isWritable() && desc.isEnumerable())) {
-                        throw new JSException(context.throwTypeError("cannot define variable '" + functionName + "'"));
-                    }
-                }
+                GlobalFunctionBindings.checkFunction(context.getGlobalObject(), functionName);
             }
 
             // Register new declarations for future collision checks

@@ -20,7 +20,6 @@ import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 import com.caoccao.qjs4j.utils.Float16;
 
-import java.math.BigInteger;
 import java.nio.ByteOrder;
 
 /**
@@ -93,7 +92,7 @@ public final class JSDataView extends JSObject {
     }
 
     public JSBigInt getBigUint64(long byteOffset, boolean littleEndian) {
-        return new JSBigInt(toUnsignedBigInteger(getInt64(byteOffset, littleEndian)));
+        return JSBigInt.fromUnsignedLong(getInt64(byteOffset, littleEndian));
     }
 
     public JSObject getBuffer() {
@@ -182,17 +181,7 @@ public final class JSDataView extends JSObject {
     }
 
     public boolean isOutOfBounds() {
-        if (buffer.isDetached()) {
-            return true;
-        }
-        long currentByteLength = buffer.getByteLength();
-        if (byteOffset > currentByteLength) {
-            return true;
-        }
-        if (lengthTracking) {
-            return false;
-        }
-        return byteLength > currentByteLength - byteOffset;
+        return buffer.isViewOutOfBounds(byteOffset, byteLength, lengthTracking);
     }
 
     public void setBigInt64(long byteOffset, JSBigInt value, boolean littleEndian) {
@@ -329,7 +318,7 @@ public final class JSDataView extends JSObject {
             }
         } else {
             byteLength = buffer.getByteLength() - byteOffset;
-            lengthTracking = isLengthTrackingCandidate(buffer);
+            lengthTracking = buffer.supportsLengthTracking();
         }
 
         if (buffer.isDetached()) {
@@ -355,16 +344,6 @@ public final class JSDataView extends JSObject {
         return context.throwError("Unknown pending exception");
     }
 
-    private static boolean isLengthTrackingCandidate(IJSArrayBuffer buffer) {
-        if (buffer instanceof JSArrayBuffer jsArrayBuffer) {
-            return jsArrayBuffer.isResizable();
-        }
-        if (buffer instanceof JSSharedArrayBuffer jsSharedArrayBuffer) {
-            return jsSharedArrayBuffer.isGrowable();
-        }
-        return false;
-    }
-
     private static Double toIndex(JSContext context, JSValue value, String name) {
         double index = JSTypeConversions.toInteger(context, value);
         if (context.hasPendingException()) {
@@ -381,10 +360,4 @@ public final class JSDataView extends JSObject {
         return index;
     }
 
-    private static BigInteger toUnsignedBigInteger(long value) {
-        if (value >= 0) {
-            return BigInteger.valueOf(value);
-        }
-        return BigInteger.valueOf(value & Long.MAX_VALUE).setBit(63);
-    }
 }

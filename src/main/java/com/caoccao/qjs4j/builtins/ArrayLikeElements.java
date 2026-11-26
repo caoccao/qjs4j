@@ -32,6 +32,36 @@ final class ArrayLikeElements {
         this.typedArray = typedArray;
     }
 
+    JSValue at(JSValue[] args) {
+        long index = ArrayIndexRange.elementIndex(context, args, length);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        return index < 0 || index >= length ? JSUndefined.INSTANCE : getProperty(index);
+    }
+
+    JSValue find(JSValue[] args, boolean reverse, boolean returnIndex) {
+        JSValue callback = args[0];
+        JSValue callbackThis = JSValue.argumentOrUndefined(args, 1);
+        long step = reverse ? -1 : 1;
+        long end = reverse ? -1 : length;
+        for (long i = reverse ? length - 1 : 0; i != end; i += step) {
+            context.getVirtualMachine().checkExecutionInterruptForNative();
+            JSValue element = get(i);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            JSValue result = callElement(context, callback, callbackThis, element, i, object);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
+                return returnIndex ? JSNumber.of(i) : element;
+            }
+        }
+        return returnIndex ? JSNumber.of(-1) : JSUndefined.INSTANCE;
+    }
+
     JSValue get(long index) {
         return typedArray == null
                 ? ArrayPrototype.getElement(context, object, index)
@@ -44,6 +74,12 @@ final class ArrayLikeElements {
             return typedArray.getElementOrUndefined(index);
         }
         return getPresent(context, object, index);
+    }
+
+    JSValue getProperty(long index) {
+        return typedArray == null
+                ? object.get(PropertyKey.fromIndexString(index))
+                : typedArray.getElementOrUndefined(index);
     }
 
     JSValue iterate(JSValue[] args, ArrayIteration iteration) {
@@ -66,6 +102,35 @@ final class ArrayLikeElements {
             }
         }
         return iteration.completion;
+    }
+
+    JSValue reduce(JSValue[] args, boolean reverse) {
+        JSValue callback = args[0];
+        JSValue accumulator = args.length >= 2 ? args[1] : null;
+        long step = reverse ? -1 : 1;
+        long end = reverse ? -1 : length;
+        for (long i = reverse ? length - 1 : 0; i != end; i += step) {
+            context.getVirtualMachine().checkExecutionInterruptForNative();
+            JSValue element = getPresent(i);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (element == null) {
+                continue;
+            }
+            if (accumulator == null) {
+                accumulator = element;
+            } else {
+                accumulator = JSCall.call(context, callback, JSUndefined.INSTANCE,
+                        new JSValue[]{accumulator, element, JSNumber.of(i), object});
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+            }
+        }
+        return accumulator == null
+                ? context.throwTypeError("Reduce of empty array with no initial value")
+                : accumulator;
     }
 
     JSValue search(JSValue[] args, boolean reverse, boolean includes) {
@@ -113,30 +178,9 @@ final class ArrayLikeElements {
         return JSCall.call(context, callback, thisArg, new JSValue[]{element, JSNumber.of(index), receiver});
     }
 
-    static JSValue find(JSContext context, JSObject object, boolean typed, long length, JSValue[] args, boolean reverse,
-            boolean returnIndex) {
-        JSTypedArray view = typed ? (JSTypedArray) object : null;
-        JSValue callback = args[0];
-        JSValue callbackThis = JSValue.argumentOrUndefined(args, 1);
-        long step = reverse ? -1 : 1;
-        long end = reverse ? -1 : length;
-        for (long i = reverse ? length - 1 : 0; i != end; i += step) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            JSValue element = view != null
-                    ? view.getElementOrUndefined(i)
-                    : ArrayPrototype.getElement(context, object, i);
-            if (view == null && context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            JSValue result = callElement(context, callback, callbackThis, element, i, object);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (JSTypeConversions.toBoolean(result) == JSBoolean.TRUE) {
-                return returnIndex ? JSNumber.of(i) : element;
-            }
-        }
-        return returnIndex ? JSNumber.of(-1) : JSUndefined.INSTANCE;
+    static ArrayLikeElements capture(JSContext context, JSObject object) {
+        long length = ArrayPrototype.checkedLength(context, object);
+        return length < 0 ? null : new ArrayLikeElements(context, object, length, null);
     }
 
     static JSValue getPresent(JSContext context, JSObject object, long index) {
@@ -148,40 +192,7 @@ final class ArrayLikeElements {
     }
 
     static ArrayLikeElements ordinary(JSContext context, JSValue receiver, String method) {
-        JSObject object = ArrayPrototype.requireArrayLike(context, receiver, method);
-        long length = ArrayPrototype.checkedLength(context, object);
-        return length < 0 ? null : new ArrayLikeElements(context, object, length, null);
-    }
-
-    static JSValue reduce(JSContext context, JSObject object, boolean typed, long length, JSValue[] args,
-            boolean reverse) {
-        JSTypedArray view = typed ? (JSTypedArray) object : null;
-        JSValue callback = args[0];
-        JSValue accumulator = args.length >= 2 ? args[1] : null;
-        long step = reverse ? -1 : 1;
-        long end = reverse ? -1 : length;
-        for (long i = reverse ? length - 1 : 0; i != end; i += step) {
-            context.getVirtualMachine().checkExecutionInterruptForNative();
-            JSValue element = view != null ? view.getElementOrUndefined(i) : getPresent(context, object, i);
-            if (view == null && context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (element == null) {
-                continue;
-            }
-            if (accumulator == null) {
-                accumulator = element;
-            } else {
-                accumulator = JSCall.call(context, callback, JSUndefined.INSTANCE,
-                        new JSValue[]{accumulator, element, JSNumber.of(i), object});
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-            }
-        }
-        return accumulator == null
-                ? context.throwTypeError("Reduce of empty array with no initial value")
-                : accumulator;
+        return capture(context, ArrayPrototype.requireArrayLike(context, receiver, method));
     }
 
     static ArrayLikeElements typed(JSContext context, JSValue receiver, String method) {
@@ -193,5 +204,4 @@ final class ArrayLikeElements {
         JSTypedArray array = TypedArrayPrototype.toTypedArrayForCallback(context, receiver, args, method);
         return array == null ? null : new ArrayLikeElements(context, array, array.getLength(), array);
     }
-
 }

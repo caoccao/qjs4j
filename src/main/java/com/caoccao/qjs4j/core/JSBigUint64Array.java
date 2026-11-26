@@ -16,8 +16,6 @@
 
 package com.caoccao.qjs4j.core;
 
-import java.math.BigInteger;
-
 /**
  * Represents a JavaScript BigUint64Array. 64-bit unsigned integer array.
  */
@@ -55,12 +53,7 @@ public final class JSBigUint64Array extends JSBigIntTypedArray {
 
     @Override
     JSValue readJSElement(JSByteBuffer buf, long index) {
-        long value = buf.getLong(index * BYTES_PER_ELEMENT);
-        // Convert unsigned long to unsigned BigInteger
-        BigInteger unsigned = value >= 0
-                ? BigInteger.valueOf(value)
-                : BigInteger.valueOf(value).add(BigInteger.ONE.shiftLeft(64));
-        return new JSBigInt(unsigned);
+        return JSBigInt.fromUnsignedLong(buf.getLong(index * BYTES_PER_ELEMENT));
     }
 
     public static JSObject create(JSContext context, JSValue... args) {

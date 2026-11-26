@@ -68,19 +68,11 @@ final class TypedArrayCopy {
         // Step 3: Capture length before coercion
         long length = typedArray.getLength();
 
-        long target = ArrayIndexRange.relativeIndex(context, args, 0, length, 0);
-        if (context.hasPendingException()) {
+        ArrayIndexRange.Copy copy = ArrayIndexRange.Copy.read(context, args, length);
+        if (copy == null) {
             return context.getPendingException();
         }
-        ArrayIndexRange range = ArrayIndexRange.read(context, args, 1, length);
-        if (range == null) {
-            return context.getPendingException();
-        }
-        long start = range.start();
-        long end = range.end();
-
-        // Step 14: Compute count from original length values
-        long count = Math.min(end - start, length - target);
+        long count = copy.count();
         if (count <= 0) {
             return typedArray;
         }
@@ -93,8 +85,8 @@ final class TypedArrayCopy {
 
         // Steps 15d-i: Re-read length, clamp to/from/count
         long currentLength = typedArray.getLength();
-        target = Math.min(target, currentLength);
-        start = Math.min(start, currentLength);
+        long target = Math.min(copy.target(), currentLength);
+        long start = Math.min(copy.start(), currentLength);
         count = Math.min(count, currentLength - target);
         count = Math.min(count, currentLength - start);
 

@@ -21,7 +21,6 @@ import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 
 import java.nio.ByteOrder;
-import java.util.Arrays;
 import java.util.function.Supplier;
 
 /**
@@ -470,16 +469,6 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
         return transferContents(context, -1, false, true);
     }
 
-    /**
-     * Allocate the ArrayBuffer with validated lengths. Performs allocation limit checks (QuickJS INT32_MAX limit).
-     */
-    private static JSArrayBuffer allocateBuffer(JSContext context, long byteLengthLong, long maxByteLengthLong) {
-        if (byteLengthLong > MAX_DATA_BLOCK_BYTE_LENGTH || maxByteLengthLong > MAX_DATA_BLOCK_BYTE_LENGTH) {
-            throw new JSException(context.throwRangeError("invalid array buffer length"));
-        }
-        return new JSArrayBuffer(context, byteLengthLong, maxByteLengthLong);
-    }
-
     static JSObject bufferPrototype(JSContext context, JSValue target, String name) {
         if (!(target instanceof JSObject constructor)) {
             return null;
@@ -497,8 +486,8 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      * Based on ES2020 24.1.1.1
      */
     public static JSArrayBuffer create(JSContext context, JSValue... args) {
-        long[] validated = validateArgs(context, args);
-        return allocateBuffer(context, validated[0], validated[1]);
+        ArrayBufferLengths lengths = ArrayBufferLengths.forArrayBuffer(context, args);
+        return lengths.allocate(context);
     }
 
     /**
@@ -509,9 +498,9 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      */
     public static JSArrayBuffer createForConstruct(JSContext context, JSFunction constructor, JSValue newTarget,
             JSValue... args) {
-        long[] validated = validateArgs(context, args);
+        ArrayBufferLengths lengths = ArrayBufferLengths.forArrayBuffer(context, args);
         JSObject prototype = bufferPrototype(context, newTarget, NAME);
-        JSArrayBuffer buffer = allocateBuffer(context, validated[0], validated[1]);
+        JSArrayBuffer buffer = lengths.allocate(context);
         setBufferPrototype(context, buffer, prototype, constructor, NAME);
         return buffer;
     }
@@ -538,31 +527,4 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
         return relative < 0 ? Math.max(length + relative, 0) : Math.min(relative, length);
     }
 
-    /**
-     * Validate ArrayBuffer constructor arguments. Returns [byteLength, maxByteLength] as longs (-1 for no
-     * maxByteLength). Performs ToIndex and options parsing but NOT allocation limit checks.
-     */
-    private static long[] validateArgs(JSContext context, JSValue[] args) {
-        // Get byteLength using ToIndex (preserves large values, throws RangeError for negative)
-        JSValue byteLengthArg = JSValue.argumentOrUndefined(args, 0);
-        long byteLengthLong = JSTypeConversions.toIndex(context, byteLengthArg);
-
-        // Check for options (maxByteLength for resizable buffers)
-        long maxByteLengthLong = -1;
-        if (args.length >= 2 && args[1] instanceof JSObject options) {
-            JSValue maxByteLengthValue = options.get(PropertyKey.fromString("maxByteLength"));
-            if (context.hasPendingException()) {
-                throw new JSException(context.getPendingException());
-            }
-            if (!(maxByteLengthValue instanceof JSUndefined)) {
-                // QuickJS: JS_ToInt64Free then check bounds
-                long maxLenLong = (long) JSTypeConversions.toInteger(context, maxByteLengthValue);
-                if (byteLengthLong > maxLenLong || maxLenLong > 9007199254740991L) {
-                    throw new JSException(context.throwRangeError("invalid array buffer max length"));
-                }
-                maxByteLengthLong = maxLenLong;
-            }
-        }
-        return new long[]{byteLengthLong, maxByteLengthLong};
-    }
 }
