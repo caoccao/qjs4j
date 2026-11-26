@@ -104,18 +104,9 @@ public record TemporalRoundSettings(TemporalUnit smallestUnit, long roundingIncr
                 context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
                 return null;
             }
-        } else if (smallestUnit.isTimeUnit()) {
-            long maximumIncrement = switch (smallestUnit) {
-                case HOUR -> 24L;
-                case MINUTE, SECOND -> 60L;
-                case MILLISECOND, MICROSECOND, NANOSECOND -> 1_000L;
-                default -> -1L;
-            };
-            if (maximumIncrement > 0
-                    && (roundingIncrement >= maximumIncrement || maximumIncrement % roundingIncrement != 0)) {
-                context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
-                return null;
-            }
+        } else if (!smallestUnit.isValidIncrement(roundingIncrement)) {
+            context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
+            return null;
         }
 
         return new TemporalRoundSettings(smallestUnit, roundingIncrement, roundingMode);

@@ -28,13 +28,6 @@ import java.time.DateTimeException;
 public final class TemporalPlainDatePrototype {
     private static final TemporalReceiver<JSTemporalPlainDate> RECEIVER = new TemporalReceiver<>(
             JSTemporalPlainDate.class, "Temporal.PlainDate");
-    private static final BigInteger SECOND_NANOSECONDS = TemporalConstants.BI_SECOND_NANOSECONDS;
-    private static final long TEMPORAL_MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
-    private static final String UNIT_AUTO = "auto";
-    private static final String UNIT_DAY = "day";
-    private static final String UNIT_MONTH = "month";
-    private static final String UNIT_WEEK = "week";
-    private static final String UNIT_YEAR = "year";
 
     private TemporalPlainDatePrototype() {
     }
@@ -67,17 +60,12 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        if (args.length == 0 || args[0] instanceof JSUndefined) {
-            context.throwTypeError("Temporal error: Must provide a duration.");
+        TemporalDuration durationRecord = TemporalDurationConstructor.toDurationRecord(context,
+                JSValue.argumentOrUndefined(args, 0));
+        if (durationRecord == null) {
             return JSUndefined.INSTANCE;
         }
 
-        JSTemporalDuration temporalDuration = TemporalDurationConstructor.toTemporalDurationObject(context, args[0]);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        TemporalDuration durationRecord = temporalDuration.getDuration();
         if (sign < 0) {
             durationRecord = durationRecord.negated();
         }
@@ -148,62 +136,15 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        return differenceTemporalPlainDate(context, plainDate, args, since);
-    }
-
-    static TemporalDuration differenceCalendarDates(JSContext context, IsoDate firstDate, IsoDate secondDate,
-            TemporalCalendarId calendarId, TemporalUnit largestUnit) {
-        TemporalDurationDateWeek dateDifference = TemporalDurationDateWeek.calendarDateUntil(context, firstDate,
-                secondDate, calendarId, largestUnit);
-        if (context.hasPendingException() || dateDifference == null) {
-            return null;
-        }
-        return new TemporalDuration(dateDifference.years(), dateDifference.months(), dateDifference.weeks(),
-                dateDifference.days(), 0, 0, 0, 0, 0, 0);
-    }
-
-    private static JSValue differenceTemporalPlainDate(JSContext context, JSTemporalPlainDate plainDate, JSValue[] args,
-            boolean sinceOperation) {
         JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
-        JSTemporalPlainDate other = TemporalPlainDateConstructor.toTemporalDateObject(context, otherArg);
+        JSTemporalPlainDate other = otherArg instanceof JSTemporalPlainDate date
+                ? date
+                : TemporalPlainDateConstructor.toTemporalDateObject(context, otherArg);
         if (context.hasPendingException() || other == null) {
             return JSUndefined.INSTANCE;
         }
-        if (!plainDate.getCalendarId().equals(other.getCalendarId())) {
-            context.throwRangeError("Temporal error: Mismatched calendars.");
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
-        TemporalDifferenceSettings settings = TemporalDifferenceSettings.parse(context, sinceOperation, optionsArg,
-                TemporalUnit.YEAR, TemporalUnit.DAY, TemporalUnit.DAY, TemporalUnit.DAY, true, false);
-        if (context.hasPendingException() || settings == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        IsoDate thisDate = plainDate.getIsoDate();
-        IsoDate otherDate = other.getIsoDate();
-        if (thisDate.compareTo(otherDate) == 0) {
-            return JSTemporalDuration.create(context, TemporalDuration.ZERO);
-        }
-
-        TemporalDurationDateWeek dateDifference = TemporalDurationDateWeek.calendarDateUntil(context, thisDate,
-                otherDate, plainDate.getCalendarId(), settings.largestUnit());
-        boolean roundingNoOp = settings.smallestUnit() == TemporalUnit.DAY && settings.roundingIncrement() == 1L;
-        if (!roundingNoOp) {
-            dateDifference = roundRelativeDurationDate(context, dateDifference, otherDate.toEpochDay(), thisDate,
-                    plainDate.getCalendarId(), settings);
-            if (context.hasPendingException() || dateDifference == null) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-
-        TemporalDuration resultDuration = new TemporalDuration(dateDifference.years(), dateDifference.months(),
-                dateDifference.weeks(), dateDifference.days(), 0, 0, 0, 0, 0, 0);
-        if (sinceOperation) {
-            resultDuration = resultDuration.negated();
-        }
-        return JSTemporalDuration.create(context, resultDuration);
+        return TemporalCalendarDifference.between(context, plainDate, other, JSValue.argumentOrUndefined(args, 1),
+                since, TemporalUnit.DAY);
     }
 
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -243,133 +184,6 @@ public final class TemporalPlainDatePrototype {
 
     public static JSValue monthsInYear(JSContext context, JSValue thisArg, JSValue[] args) {
         return TemporalDateProperty.MONTHS_IN_YEAR.read(context, thisArg, RECEIVER);
-    }
-
-    private static TemporalDurationDateWeek nudgeToCalendarUnit(JSContext context, int sign,
-            TemporalDurationDateWeek duration, long destinationEpochDay, IsoDate originDate,
-            TemporalCalendarId calendarId, TemporalDifferenceSettings settings) {
-        TemporalUnit smallestUnit = settings.smallestUnit();
-        long increment = settings.roundingIncrement();
-        long roundingStartValue;
-        long roundingEndValue;
-        TemporalDurationDateWeek startDuration;
-        TemporalDurationDateWeek endDuration;
-        if (smallestUnit == TemporalUnit.YEAR) {
-            long roundedYears = TemporalRoundingMode.TRUNC.roundNumberToIncrement(duration.years(), increment);
-            roundingStartValue = roundedYears;
-            roundingEndValue = roundedYears + increment * sign;
-            startDuration = new TemporalDurationDateWeek(roundedYears, 0, 0, 0);
-            endDuration = new TemporalDurationDateWeek(roundingEndValue, 0, 0, 0);
-        } else if (smallestUnit == TemporalUnit.MONTH) {
-            long roundedMonths = TemporalRoundingMode.TRUNC.roundNumberToIncrement(duration.months(), increment);
-            roundingStartValue = roundedMonths;
-            roundingEndValue = roundedMonths + increment * sign;
-            startDuration = duration.adjust(0, 0L, roundedMonths);
-            endDuration = duration.adjust(0, 0L, roundingEndValue);
-        } else if (smallestUnit == TemporalUnit.WEEK) {
-            TemporalDurationDateWeek yearsAndMonthsDuration = duration.adjust(0, 0L, null);
-            IsoDate weeksStart = originDate.calendarDateAddConstrain(context, calendarId, yearsAndMonthsDuration);
-            if (context.hasPendingException() || weeksStart == null) {
-                return null;
-            }
-            long weeksEndEpochDay = weeksStart.toEpochDay() + duration.days();
-            IsoDate weeksEnd = IsoDate.createFromEpochDay(weeksEndEpochDay);
-            TemporalDurationDateWeek weekDifference = TemporalDurationDateWeek.calendarDateUntil(context, weeksStart,
-                    weeksEnd, calendarId, TemporalUnit.WEEK);
-            if (context.hasPendingException() || weekDifference == null) {
-                return null;
-            }
-            long roundedWeeks = TemporalRoundingMode.TRUNC
-                    .roundNumberToIncrement(duration.weeks() + weekDifference.weeks(), increment);
-            roundingStartValue = roundedWeeks;
-            roundingEndValue = roundedWeeks + increment * sign;
-            startDuration = duration.adjust(0, roundedWeeks, null);
-            endDuration = duration.adjust(0, roundingEndValue, null);
-        } else {
-            long roundedDays = TemporalRoundingMode.TRUNC.roundNumberToIncrement(duration.days(), increment);
-            roundingStartValue = roundedDays;
-            roundingEndValue = roundedDays + increment * sign;
-            startDuration = duration.adjust(roundedDays, null, null);
-            endDuration = duration.adjust(roundingEndValue, null, null);
-        }
-
-        IsoDate startDate = originDate.calendarDateAddConstrain(context, calendarId, startDuration);
-        if (context.hasPendingException() || startDate == null) {
-            return null;
-        }
-        IsoDate endDate = originDate.calendarDateAddConstrain(context, calendarId, endDuration);
-        if (context.hasPendingException() || endDate == null) {
-            return null;
-        }
-        long startEpochDay = startDate.toEpochDay();
-        long endEpochDay = endDate.toEpochDay();
-        long numerator = destinationEpochDay - startEpochDay;
-        long denominator = endEpochDay - startEpochDay;
-        if (denominator == 0) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-
-        TemporalUnsignedRoundingMode unsignedRoundingMode = settings.roundingMode()
-                .toUnsigned(TemporalSign.fromSignum(sign));
-        int comparison = BigInteger.valueOf(Math.abs(numerator)).shiftLeft(1)
-                .compareTo(BigInteger.valueOf(Math.abs(denominator)));
-        int roundingComparison = Integer.compare(comparison, 0);
-        boolean isEvenCardinality = Math.floorMod(Math.abs(roundingStartValue) / increment, 2L) == 0L;
-        long roundedUnit;
-        if (numerator == 0) {
-            roundedUnit = Math.abs(roundingStartValue);
-        } else if (numerator == denominator) {
-            roundedUnit = Math.abs(roundingEndValue);
-        } else {
-            roundedUnit = unsignedRoundingMode.getRoundedUnit(Math.abs(roundingStartValue), Math.abs(roundingEndValue),
-                    roundingComparison, isEvenCardinality);
-        }
-
-        boolean didExpandCalendarUnit = roundedUnit == Math.abs(roundingEndValue);
-        TemporalDurationDateWeek roundedDuration = didExpandCalendarUnit ? endDuration : startDuration;
-        if (didExpandCalendarUnit && smallestUnit != TemporalUnit.WEEK) {
-            TemporalUnit bubbleSmallestUnit;
-            if (smallestUnit.isLargerThan(TemporalUnit.DAY)) {
-                bubbleSmallestUnit = smallestUnit;
-            } else {
-                bubbleSmallestUnit = TemporalUnit.DAY;
-            }
-            long nudgedEpochDay = endEpochDay;
-            return roundedDuration.bubbleRelativeDuration(context, sign, nudgedEpochDay, originDate, calendarId,
-                    settings.largestUnit(), bubbleSmallestUnit);
-        }
-        return roundedDuration;
-    }
-
-    private static TemporalDurationDateWeek nudgeToDayUnit(JSContext context, int sign,
-            TemporalDurationDateWeek duration, long destinationEpochDay, IsoDate originDate,
-            TemporalCalendarId calendarId, TemporalDifferenceSettings settings) {
-        long originalDays = duration.days();
-        long roundedDays = settings.roundingMode().roundNumberToIncrement(originalDays, settings.roundingIncrement());
-        long dayDelta = roundedDays - originalDays;
-        int durationSign = Long.compare(originalDays, 0);
-        int deltaSign = Long.compare(dayDelta, 0);
-        boolean didExpandCalendarUnit = deltaSign == durationSign;
-        TemporalDurationDateWeek roundedDuration = duration.adjust(roundedDays, null, null);
-        if (didExpandCalendarUnit) {
-            long nudgedEpochDay = destinationEpochDay + dayDelta;
-            return roundedDuration.bubbleRelativeDuration(context, sign, nudgedEpochDay, originDate, calendarId,
-                    settings.largestUnit(), TemporalUnit.DAY);
-        }
-        return roundedDuration;
-    }
-
-    private static TemporalDurationDateWeek roundRelativeDurationDate(JSContext context,
-            TemporalDurationDateWeek duration, long destinationEpochDay, IsoDate originDate,
-            TemporalCalendarId calendarId, TemporalDifferenceSettings settings) {
-        int sign = duration.sign() < 0 ? -1 : 1;
-        if (settings.smallestUnit() == TemporalUnit.YEAR || settings.smallestUnit() == TemporalUnit.MONTH
-                || settings.smallestUnit() == TemporalUnit.WEEK) {
-            return nudgeToCalendarUnit(context, sign, duration, destinationEpochDay, originDate, calendarId, settings);
-        } else {
-            return nudgeToDayUnit(context, sign, duration, destinationEpochDay, originDate, calendarId, settings);
-        }
     }
 
     public static JSValue since(JSContext context, JSValue thisArg, JSValue[] args) {

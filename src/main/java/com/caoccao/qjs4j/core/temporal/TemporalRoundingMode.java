@@ -121,6 +121,9 @@ public enum TemporalRoundingMode {
     }
 
     public long roundNumberToIncrement(long quantity, long increment) {
+        if (increment == 1L) {
+            return quantity;
+        }
         long quotient = quantity / increment;
         long remainder = quantity % increment;
         TemporalSign sign = TemporalSign.fromSignum(quantity);

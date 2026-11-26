@@ -65,6 +65,21 @@ final class TemporalPropertyBag {
         return context.hasPendingException() ? null : IsoMonth.fromField(context, value);
     }
 
+    String offset() {
+        JSValue value = value("offset");
+        if (context.hasPendingException() || value == null || value instanceof JSUndefined) {
+            return null;
+        }
+        if (value instanceof JSString string) {
+            return string.value();
+        }
+        if (value instanceof JSObject) {
+            return JSTypeConversions.toString(context, value).value();
+        }
+        context.throwTypeError("Temporal error: Offset must be string.");
+        return null;
+    }
+
     Integer positiveDateField(String name) {
         Integer value = integer(name);
         if (value != null && value < 1) {
@@ -93,4 +108,9 @@ final class TemporalPropertyBag {
         hasTimeField = true;
         return value;
     }
+
+    JSValue value(String name) {
+        return context.hasPendingException() ? null : fields.get(PropertyKey.fromString(name));
+    }
+
 }

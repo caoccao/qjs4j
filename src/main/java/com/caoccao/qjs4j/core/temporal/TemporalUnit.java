@@ -34,7 +34,6 @@ public enum TemporalUnit {
     /** Property access order for a Temporal duration-like object. */
     public static final List<TemporalUnit> DURATION_PROPERTY_ORDER = List.of(DAY, HOUR, MICROSECOND, MILLISECOND,
             MINUTE, MONTH, NANOSECOND, SECOND, WEEK, YEAR);
-    private static final int UNKNOWN_RANK = 10;
     private final PropertyKey durationProperty;
     private final String jsName;
     private final int rank;
@@ -95,6 +94,21 @@ public enum TemporalUnit {
 
         long monthDifference = (long) endDateTime.getMonthValue() - startDateTime.getMonthValue();
         return yearDifference * 12L + monthDifference;
+    }
+
+    /** Length of a fixed unit, including a seven-day week. Calendar months and years have no fixed length. */
+    public BigInteger fixedNanoseconds() {
+        return switch (this) {
+            case WEEK -> TemporalConstants.BI_WEEK_NANOSECONDS;
+            case DAY -> TemporalConstants.BI_DAY_NANOSECONDS;
+            case HOUR -> TemporalConstants.BI_HOUR_NANOSECONDS;
+            case MINUTE -> TemporalConstants.BI_MINUTE_NANOSECONDS;
+            case SECOND -> TemporalConstants.BI_SECOND_NANOSECONDS;
+            case MILLISECOND -> TemporalConstants.BI_MILLISECOND_NANOSECONDS;
+            case MICROSECOND -> TemporalConstants.BI_MICROSECOND_NANOSECONDS;
+            case NANOSECOND -> BigInteger.ONE;
+            default -> BigInteger.ZERO;
+        };
     }
 
     /**

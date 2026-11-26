@@ -16,9 +16,86 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
+import com.caoccao.qjs4j.core.*;
+
 public record TemporalZonedDateTimeToStringSettings(String calendarNameOption, String offsetOption,
         String timeZoneNameOption, TemporalUnit smallestUnit, TemporalRoundingMode roundingMode,
-        boolean autoFractionalSecondDigits, int fractionalSecondDigits, long roundingIncrementNanoseconds) {
+        boolean autoFractionalSecondDigits, int fractionalSecondDigits,
+        long roundingIncrementNanoseconds) implements TemporalTimePrecision {
     public static final TemporalZonedDateTimeToStringSettings DEFAULT = new TemporalZonedDateTimeToStringSettings(
             "auto", "auto", "auto", null, TemporalRoundingMode.TRUNC, true, -1, 1L);
+
+    private static String getToStringOffsetOption(JSContext context, JSObject optionsObject) {
+        String offsetOption = TemporalUtils.getStringOption(context, optionsObject, "offset", "auto");
+        if (context.hasPendingException() || offsetOption == null) {
+            return null;
+        }
+        if (TemporalDisplayOffset.fromString(offsetOption) == null) {
+            context.throwRangeError("Temporal error: Invalid offset option.");
+            return null;
+        }
+        return offsetOption;
+    }
+
+    public static TemporalZonedDateTimeToStringSettings read(JSContext context, JSValue optionsValue) {
+        JSObject optionsObject = TemporalUtils.toOptionalOptionsObject(context, optionsValue,
+                "Temporal error: Option must be object: options.");
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (optionsObject == null) {
+            return TemporalZonedDateTimeToStringSettings.DEFAULT;
+        }
+
+        String calendarNameOption = TemporalUtils.getCalendarNameOption(context, optionsObject);
+        if (context.hasPendingException() || calendarNameOption == null) {
+            return null;
+        }
+
+        TemporalFractionalSecondDigitsOption digits = TemporalFractionalSecondDigitsOption.read(context, optionsObject);
+        if (digits == null) {
+            return null;
+        }
+
+        String offsetOption = getToStringOffsetOption(context, optionsObject);
+        if (context.hasPendingException() || offsetOption == null) {
+            return null;
+        }
+
+        String roundingModeText = TemporalUtils.getStringOption(context, optionsObject, "roundingMode", "trunc");
+        if (context.hasPendingException() || roundingModeText == null) {
+            return null;
+        }
+
+        String smallestUnitText = TemporalUtils.getStringOption(context, optionsObject, "smallestUnit", null);
+        if (context.hasPendingException()) {
+            return null;
+        }
+
+        String timeZoneNameOption = getToStringTimeZoneNameOption(context, optionsObject);
+        if (context.hasPendingException() || timeZoneNameOption == null) {
+            return null;
+        }
+
+        TemporalPlainTimeToStringSettings time = TemporalPlainTimeToStringSettings.resolve(context, roundingModeText,
+                smallestUnitText, digits);
+        if (time == null) {
+            return null;
+        }
+        return new TemporalZonedDateTimeToStringSettings(calendarNameOption, offsetOption, timeZoneNameOption,
+                time.smallestUnit(), time.roundingMode(), time.autoFractionalSecondDigits(),
+                time.fractionalSecondDigits(), time.roundingIncrementNanoseconds());
+    }
+
+    private static String getToStringTimeZoneNameOption(JSContext context, JSObject optionsObject) {
+        String timeZoneNameOption = TemporalUtils.getStringOption(context, optionsObject, "timeZoneName", "auto");
+        if (context.hasPendingException() || timeZoneNameOption == null) {
+            return null;
+        }
+        if (TemporalDisplayTimeZone.fromString(timeZoneNameOption) == null) {
+            context.throwRangeError("Temporal error: Invalid timeZoneName option.");
+            return null;
+        }
+        return timeZoneNameOption;
+    }
 }

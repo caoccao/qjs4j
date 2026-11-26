@@ -16,8 +16,47 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
+import com.caoccao.qjs4j.core.*;
+
 public record TemporalDurationToStringOptions(TemporalUnit smallestUnit, TemporalRoundingMode roundingMode,
         long roundingIncrementNanoseconds, boolean precisionAuto, int fractionalSecondDigits) {
     public static final TemporalDurationToStringOptions DEFAULT = new TemporalDurationToStringOptions(
             TemporalUnit.NANOSECOND, TemporalRoundingMode.TRUNC, 1L, true, -1);
+
+    public static TemporalDurationToStringOptions read(JSContext context, JSValue optionsValue) {
+        JSObject optionsObject = TemporalUtils.toOptionalOptionsObject(context, optionsValue,
+                "Temporal error: Options must be an object.");
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (optionsObject == null) {
+            return TemporalDurationToStringOptions.DEFAULT;
+        }
+
+        TemporalPlainTimeToStringSettings time = TemporalPlainTimeToStringSettings.read(context, optionsObject,
+                TemporalUnit.SECOND, "Temporal error: Invalid smallestUnit.");
+        if (time == null) {
+            return null;
+        }
+        TemporalUnit unit = time.smallestUnit();
+        if (unit == null) {
+            unit = time.autoFractionalSecondDigits()
+                    ? TemporalUnit.NANOSECOND
+                    : smallestUnitFromFractionalSecondDigits(time.fractionalSecondDigits());
+        }
+        return new TemporalDurationToStringOptions(unit, time.roundingMode(), time.roundingIncrementNanoseconds(),
+                time.autoFractionalSecondDigits(), time.fractionalSecondDigits());
+    }
+
+    private static TemporalUnit smallestUnitFromFractionalSecondDigits(int fractionalSecondDigits) {
+        if (fractionalSecondDigits == 0) {
+            return TemporalUnit.SECOND;
+        } else if (fractionalSecondDigits <= 3) {
+            return TemporalUnit.MILLISECOND;
+        } else if (fractionalSecondDigits <= 6) {
+            return TemporalUnit.MICROSECOND;
+        } else {
+            return TemporalUnit.NANOSECOND;
+        }
+    }
 }

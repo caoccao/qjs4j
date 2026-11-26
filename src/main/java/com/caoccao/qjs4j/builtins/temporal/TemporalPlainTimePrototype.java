@@ -41,16 +41,11 @@ public final class TemporalPlainTimePrototype {
         if (plainTime == null) {
             return JSUndefined.INSTANCE;
         }
-        if (args.length == 0 || args[0] instanceof JSUndefined) {
-            context.throwTypeError("Temporal error: Must provide a duration.");
+        TemporalDuration durationRecord = TemporalDurationConstructor.toDurationRecord(context,
+                JSValue.argumentOrUndefined(args, 0));
+        if (durationRecord == null) {
             return JSUndefined.INSTANCE;
         }
-
-        JSTemporalDuration temporalDuration = TemporalDurationConstructor.toTemporalDurationObject(context, args[0]);
-        if (context.hasPendingException() || temporalDuration == null) {
-            return JSUndefined.INSTANCE;
-        }
-        TemporalDuration durationRecord = temporalDuration.getDuration();
         BigInteger durationNanoseconds = durationRecord.dayTimeNanoseconds();
         if (sign < 0) {
             durationNanoseconds = durationNanoseconds.negate();
@@ -224,17 +219,8 @@ public final class TemporalPlainTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        long roundedNanoseconds = plainTime.getIsoTime().totalNanoseconds();
-        if (toStringSettings.roundingIncrementNanoseconds() > 1L) {
-            roundedNanoseconds = toStringSettings.roundingMode().roundLongToIncrementAsIfPositive(roundedNanoseconds,
-                    toStringSettings.roundingIncrementNanoseconds());
-        }
-        if (roundedNanoseconds == DAY_NANOSECONDS.longValue()) {
-            roundedNanoseconds = 0L;
-        }
-        IsoTime roundedTime = IsoTime.createFromNanoseconds(roundedNanoseconds);
-        return new JSString(roundedTime.formatTimeString(toStringSettings.smallestUnit(),
-                toStringSettings.autoFractionalSecondDigits(), toStringSettings.fractionalSecondDigits()));
+        IsoTime roundedTime = IsoTime.createFromNanoseconds(toStringSettings.roundedTime(plainTime.getIsoTime()));
+        return new JSString(toStringSettings.format(roundedTime));
     }
 
     public static JSValue until(JSContext context, JSValue thisArg, JSValue[] args) {

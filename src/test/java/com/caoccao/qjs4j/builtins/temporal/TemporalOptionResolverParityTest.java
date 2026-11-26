@@ -39,6 +39,32 @@ public class TemporalOptionResolverParityTest extends BaseJavetTest {
     }
 
     @Test
+    public void testPrecisionCarriesAcrossDayAndInstantOffset() {
+        assertStringWithJavet("""
+                (() => {
+                  const text = '1999-12-31T23:59:59.999999999';
+                  const opts = { fractionalSecondDigits: 3, roundingMode: 'halfExpand' };
+                  return [Temporal.PlainDateTime.from(text).toString(opts),
+                          Temporal.PlainTime.from(text).toString(opts),
+                          Temporal.Instant.from(text + 'Z').toString({ ...opts, timeZone: '-03:30' }),
+                          Temporal.ZonedDateTime.from(text + '+00:00[UTC]').toString(opts),
+                          Temporal.Instant.fromEpochNanoseconds(-1n).epochMilliseconds].join('|');
+                })()""");
+    }
+
+    @Test
+    public void testRoundAndTotalUseTheSameCalendarEndpoint() {
+        assertStringWithJavet("""
+                (() => {
+                  const duration = Temporal.Duration.from({ months: 1, days: 2, hours: 13 });
+                  return ['2024-01-31', '2024-02-29T12:00-05:00[America/New_York]',
+                          '2024-10-03T12:00-04:00[America/New_York]'].map(relativeTo =>
+                    [duration.round({ relativeTo, smallestUnit: 'day' }).toString(),
+                     duration.total({ relativeTo, unit: 'hour' })].join(':')).join('|');
+                })()""");
+    }
+
+    @Test
     public void testZonedDateTimeWithOptions() {
         assertStringWithJavet(
                 "Temporal.ZonedDateTime.from('2020-01-01T00:00:00+00:00[UTC]').with({ hour: 1 }, { disambiguation: 'compatible', offset: 'prefer', overflow: 'constrain' }).toString()");

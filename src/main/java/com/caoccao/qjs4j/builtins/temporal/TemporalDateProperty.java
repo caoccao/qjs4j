@@ -29,38 +29,34 @@ enum TemporalDateProperty {
         this.key = key;
     }
 
-    <T extends JSTemporalCalendarDate> JSValue read(JSContext context, JSValue receiver, TemporalReceiver<T> type) {
-        T value = type.require(context, receiver, key);
-        return value == null ? JSUndefined.INSTANCE : read(value);
-    }
-
-    JSValue read(JSTemporalCalendarDate value) {
-        IsoDate date = value.getIsoDate();
-        TemporalCalendarId calendar = value.getCalendarId();
+    JSValue read(IsoDate date, TemporalCalendarId calendar) {
         return switch (this) {
-            case DAY -> JSNumber.of(calendarDate(value).day());
-            case MONTH -> JSNumber.of(calendarDate(value).month());
-            case YEAR -> JSNumber.of(calendarDate(value).year());
+            case DAY -> JSNumber.of(calendarDate(date, calendar).day());
+            case MONTH -> JSNumber.of(calendarDate(date, calendar).month());
+            case YEAR -> JSNumber.of(calendarDate(date, calendar).year());
             case DAY_OF_WEEK -> JSNumber.of(date.dayOfWeek());
             case DAY_OF_YEAR -> JSNumber.of(date.dayOfYear(calendar));
             case DAYS_IN_MONTH -> JSNumber.of(date.daysInMonth(calendar));
             case DAYS_IN_YEAR -> JSNumber.of(date.daysInYear(calendar));
-            case IN_LEAP_YEAR -> JSBoolean.valueOf(calendar.isCalendarLeapYear(calendarDate(value).year()));
+            case IN_LEAP_YEAR -> JSBoolean.valueOf(calendar.isCalendarLeapYear(calendarDate(date, calendar).year()));
             case MONTHS_IN_YEAR -> JSNumber.of(TemporalUtils.monthsInYear(date, calendar));
-            case MONTH_CODE -> new JSString(value.toIsoCalendarDate().monthCode());
+            case MONTH_CODE -> new JSString(date.toIsoCalendarDate(calendar).monthCode());
             case WEEK_OF_YEAR ->
                 calendar == TemporalCalendarId.ISO8601 ? JSNumber.of(date.weekOfYear()) : JSUndefined.INSTANCE;
             case YEAR_OF_WEEK ->
                 calendar == TemporalCalendarId.ISO8601 ? JSNumber.of(date.yearOfWeek()) : JSUndefined.INSTANCE;
-            case ERA -> era(value.toTemporalEraYear());
-            case ERA_YEAR -> eraYear(value.toTemporalEraYear());
+            case ERA -> era(date.toTemporalEraYear(calendar));
+            case ERA_YEAR -> eraYear(date.toTemporalEraYear(calendar));
         };
     }
 
-    private static IsoDate calendarDate(JSTemporalCalendarDate value) {
-        return value.getCalendarId() == TemporalCalendarId.ISO8601
-                ? value.getIsoDate()
-                : value.toIsoCalendarDate().toIsoDate();
+    <T extends JSTemporalCalendarDate> JSValue read(JSContext context, JSValue receiver, TemporalReceiver<T> type) {
+        T value = type.require(context, receiver, key);
+        return value == null ? JSUndefined.INSTANCE : read(value.getIsoDate(), value.getCalendarId());
+    }
+
+    private static IsoDate calendarDate(IsoDate date, TemporalCalendarId calendar) {
+        return calendar == TemporalCalendarId.ISO8601 ? date : date.toIsoCalendarDate(calendar).toIsoDate();
     }
 
     private static JSValue era(TemporalEraYear fields) {

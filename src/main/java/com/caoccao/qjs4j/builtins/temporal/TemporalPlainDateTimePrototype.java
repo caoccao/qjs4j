@@ -26,8 +26,6 @@ import java.time.DateTimeException;
  * Implementation of Temporal.PlainDateTime prototype methods.
  */
 public final class TemporalPlainDateTimePrototype {
-    private static final BigInteger DAY_NANOSECONDS = TemporalConstants.BI_DAY_NANOSECONDS;
-    private static final long MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
     private static final TemporalReceiver<JSTemporalPlainDateTime> RECEIVER = new TemporalReceiver<>(
             JSTemporalPlainDateTime.class, "Temporal.PlainDateTime");
 
@@ -52,13 +50,9 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        if (args.length == 0 || args[0] instanceof JSUndefined) {
-            context.throwTypeError("Temporal error: Must provide a duration.");
-            return JSUndefined.INSTANCE;
-        }
-
-        JSTemporalDuration temporalDuration = TemporalDurationConstructor.toTemporalDurationObject(context, args[0]);
-        if (context.hasPendingException()) {
+        TemporalDuration durationRecord = TemporalDurationConstructor.toDurationRecord(context,
+                JSValue.argumentOrUndefined(args, 0));
+        if (durationRecord == null) {
             return JSUndefined.INSTANCE;
         }
 
@@ -67,7 +61,6 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDuration durationRecord = temporalDuration.getDuration();
         if (sign < 0) {
             durationRecord = durationRecord.negated();
         }
@@ -181,10 +174,10 @@ public final class TemporalPlainDateTimePrototype {
         boolean sameTime = firstDateTime.getIsoDateTime().time().compareTo(secondDateTime.getIsoDateTime().time()) == 0;
         boolean dateLargestUnit = settings.largestUnit().isDateUnit();
         if (calendarId != TemporalCalendarId.ISO8601 && noRounding && sameTime && dateLargestUnit) {
-            return TemporalPlainDatePrototype.differenceCalendarDates(context, firstDateTime.getIsoDateTime().date(),
+            return TemporalCalendarDifference.differenceCalendarDates(context, firstDateTime.getIsoDateTime().date(),
                     secondDateTime.getIsoDateTime().date(), calendarId, settings.largestUnit());
         } else {
-            return TemporalDurationPrototype.differencePlainDateTime(context, firstDateTime.getIsoDateTime(),
+            return TemporalDurationArithmetic.differencePlainDateTime(context, firstDateTime.getIsoDateTime(),
                     secondDateTime.getIsoDateTime(), settings.largestUnit(), settings.smallestUnit(),
                     settings.roundingIncrement(), settings.roundingMode());
         }
@@ -237,29 +230,6 @@ public final class TemporalPlainDateTimePrototype {
         return receiver == null ? null : receiver.getIsoDateTime().time();
     }
 
-    private static TemporalPlainDateTimeToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
-        JSObject optionsObject = TemporalUtils.toOptionalOptionsObject(context, optionsValue,
-                "Temporal error: Option must be object: options.");
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (optionsObject == null) {
-            return TemporalPlainDateTimeToStringSettings.DEFAULT;
-        }
-
-        String calendarNameOption = TemporalUtils.getCalendarNameOption(context, optionsObject);
-        if (context.hasPendingException() || calendarNameOption == null) {
-            return null;
-        }
-
-        TemporalPlainTimeToStringSettings time = TemporalPlainTimeToStringSettings.read(context, optionsObject);
-        if (time == null) {
-            return null;
-        }
-        return new TemporalPlainDateTimeToStringSettings(calendarNameOption, time.smallestUnit(), time.roundingMode(),
-                time.autoFractionalSecondDigits(), time.fractionalSecondDigits(), time.roundingIncrementNanoseconds());
-    }
-
     public static JSValue hour(JSContext context, JSValue thisArg, JSValue[] args) {
         IsoTime time = getTime(context, thisArg, "hour");
         return time == null ? JSUndefined.INSTANCE : JSNumber.of(time.hour());
@@ -306,9 +276,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        JSTemporalPlainDate date = JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(),
-                plainDateTime.getCalendarId());
-        return property.read(date);
+        return property.read(plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId());
     }
 
     public static JSValue round(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -348,9 +316,8 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        TemporalPlainDateTimeToStringSettings toStringSettings = new TemporalPlainDateTimeToStringSettings("auto", null,
-                TemporalRoundingMode.TRUNC, true, -1, 1L);
-        String formattedString = toTemporalPlainDateTimeString(context, plainDateTime, toStringSettings);
+        String formattedString = toTemporalPlainDateTimeString(context, plainDateTime,
+                TemporalPlainDateTimeToStringSettings.DEFAULT);
         if (context.hasPendingException() || formattedString == null) {
             return JSUndefined.INSTANCE;
         }
@@ -395,7 +362,8 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
         JSValue optionsValue = JSValue.argumentOrUndefined(args, 0);
-        TemporalPlainDateTimeToStringSettings toStringSettings = getToStringSettings(context, optionsValue);
+        TemporalPlainDateTimeToStringSettings toStringSettings = TemporalPlainDateTimeToStringSettings.read(context,
+                optionsValue);
         if (context.hasPendingException() || toStringSettings == null) {
             return JSUndefined.INSTANCE;
         }
@@ -412,32 +380,15 @@ public final class TemporalPlainDateTimePrototype {
         IsoDate isoDate = plainDateTime.getIsoDateTime().date();
         IsoTime isoTime = plainDateTime.getIsoDateTime().time();
 
-        long roundedNanoseconds = isoTime.totalNanoseconds();
-        if (toStringSettings.roundingIncrementNanoseconds() > 1L) {
-            roundedNanoseconds = toStringSettings.roundingMode().roundLongToIncrementAsIfPositive(roundedNanoseconds,
-                    toStringSettings.roundingIncrementNanoseconds());
-        }
-
-        int dayAdjust = 0;
-        if (roundedNanoseconds == DAY_NANOSECONDS.longValue()) {
-            dayAdjust = 1;
-            roundedNanoseconds = 0L;
-        }
-
-        IsoDate roundedDate = isoDate;
-        if (dayAdjust != 0) {
-            roundedDate = roundedDate.addDays(dayAdjust);
-        }
+        long roundedNanoseconds = toStringSettings.roundedTime(isoTime);
+        IsoDate roundedDate = roundedNanoseconds == TemporalConstants.DAY_NANOSECONDS ? isoDate.addDays(1) : isoDate;
         IsoTime roundedTime = IsoTime.createFromNanoseconds(roundedNanoseconds);
         if (!roundedDate.isWithinPlainDateTimeRange(roundedTime)) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
 
-        String dateString = roundedDate.toString();
-        String timeString = roundedTime.formatTimeString(toStringSettings.smallestUnit(),
-                toStringSettings.autoFractionalSecondDigits(), toStringSettings.fractionalSecondDigits());
-        String dateTimeString = dateString + "T" + timeString;
+        String dateTimeString = roundedDate + "T" + toStringSettings.format(roundedTime);
         return TemporalUtils.maybeAppendCalendar(dateTimeString, plainDateTime.getCalendarId(),
                 toStringSettings.calendarNameOption());
     }

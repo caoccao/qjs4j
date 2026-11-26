@@ -16,9 +16,34 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
+import com.caoccao.qjs4j.core.*;
+
 public record TemporalPlainDateTimeToStringSettings(String calendarNameOption, TemporalUnit smallestUnit,
         TemporalRoundingMode roundingMode, boolean autoFractionalSecondDigits, int fractionalSecondDigits,
-        long roundingIncrementNanoseconds) {
+        long roundingIncrementNanoseconds) implements TemporalTimePrecision {
     public static final TemporalPlainDateTimeToStringSettings DEFAULT = new TemporalPlainDateTimeToStringSettings(
             "auto", null, TemporalRoundingMode.TRUNC, true, -1, 1L);
+
+    public static TemporalPlainDateTimeToStringSettings read(JSContext context, JSValue optionsValue) {
+        JSObject optionsObject = TemporalUtils.toOptionalOptionsObject(context, optionsValue,
+                "Temporal error: Option must be object: options.");
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (optionsObject == null) {
+            return TemporalPlainDateTimeToStringSettings.DEFAULT;
+        }
+
+        String calendarNameOption = TemporalUtils.getCalendarNameOption(context, optionsObject);
+        if (context.hasPendingException() || calendarNameOption == null) {
+            return null;
+        }
+
+        TemporalPlainTimeToStringSettings time = TemporalPlainTimeToStringSettings.read(context, optionsObject);
+        if (time == null) {
+            return null;
+        }
+        return new TemporalPlainDateTimeToStringSettings(calendarNameOption, time.smallestUnit(), time.roundingMode(),
+                time.autoFractionalSecondDigits(), time.fractionalSecondDigits(), time.roundingIncrementNanoseconds());
+    }
 }

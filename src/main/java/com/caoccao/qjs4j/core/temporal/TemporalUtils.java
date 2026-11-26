@@ -77,6 +77,12 @@ public final class TemporalUtils {
         return (T) thisArg;
     }
 
+    public static long epochMilliseconds(BigInteger epochNanoseconds) {
+        BigInteger[] parts = epochNanoseconds.divideAndRemainder(TemporalConstants.BI_MILLISECOND_NANOSECONDS);
+        long milliseconds = parts[0].longValue();
+        return parts[1].signum() < 0 ? milliseconds - 1 : milliseconds;
+    }
+
     public static String firstCalendarAnnotation(String text) {
         int annotationStart = text.indexOf('[');
         while (annotationStart >= 0) {
@@ -201,26 +207,10 @@ public final class TemporalUtils {
 
     public static long getRoundingIncrementOption(JSContext context, JSObject optionsObject,
             String invalidOptionMessage) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString("roundingIncrement"));
+        long integerOptionValue = readRoundingIncrement(context, optionsObject, invalidOptionMessage);
         if (context.hasPendingException()) {
             return Long.MIN_VALUE;
         }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            return 1L;
-        }
-
-        JSNumber optionNumber = JSTypeConversions.toNumber(context, optionValue);
-        if (context.hasPendingException() || optionNumber == null) {
-            return Long.MIN_VALUE;
-        }
-
-        double numericOptionValue = optionNumber.value();
-        if (!Double.isFinite(numericOptionValue)) {
-            context.throwRangeError(invalidOptionMessage);
-            return Long.MIN_VALUE;
-        }
-
-        long integerOptionValue = (long) numericOptionValue;
         if (integerOptionValue < 1L || integerOptionValue > TemporalConstants.MAX_ROUNDING_INCREMENT) {
             context.throwRangeError(invalidOptionMessage);
             return Long.MIN_VALUE;
@@ -453,6 +443,30 @@ public final class TemporalUtils {
             }
             cache.remove(oldestValue);
         }
+    }
+
+    /** Coerce roundingIncrement, leaving the unit-specific bounds check to the caller. */
+    public static long readRoundingIncrement(JSContext context, JSObject optionsObject, String invalidOptionMessage) {
+        JSValue optionValue = optionsObject.get(PropertyKey.fromString("roundingIncrement"));
+        if (context.hasPendingException()) {
+            return Long.MIN_VALUE;
+        }
+        if (optionValue instanceof JSUndefined || optionValue == null) {
+            return 1L;
+        }
+
+        JSNumber optionNumber = JSTypeConversions.toNumber(context, optionValue);
+        if (context.hasPendingException() || optionNumber == null) {
+            return Long.MIN_VALUE;
+        }
+
+        double numericOptionValue = optionNumber.value();
+        if (!Double.isFinite(numericOptionValue)) {
+            context.throwRangeError(invalidOptionMessage);
+            return Long.MIN_VALUE;
+        }
+
+        return (long) numericOptionValue;
     }
 
     public static TemporalCalendarId requireCalendarArgument(JSContext context, JSValue[] args) {

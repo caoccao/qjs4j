@@ -295,6 +295,22 @@ public final class TemporalTimeZone {
         return offsetDesignatorIndex(text, timeSeparatorIndex) >= 0;
     }
 
+    public static boolean hasZuluDesignator(String text, int timeSeparatorIndex) {
+        if (timeSeparatorIndex < 0) {
+            return false;
+        }
+        for (int index = timeSeparatorIndex + 1; index < text.length(); index++) {
+            char character = text.charAt(index);
+            if (character == '[') {
+                break;
+            }
+            if (character == 'Z' || character == 'z') {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static boolean isValidOffsetString(String offsetText) {
         TemporalOffsetParts offsetParts = parseOffsetParts(offsetText);
         if (offsetParts == null) {
@@ -359,6 +375,9 @@ public final class TemporalTimeZone {
         if ("Z".equals(timeZoneId)) {
             return 0;
         }
+        if (timeZoneId.length() != 6 || timeZoneId.charAt(3) != ':') {
+            return null;
+        }
         Matcher offsetMatcher = SIMPLE_OFFSET_PATTERN.matcher(timeZoneId);
         if (!offsetMatcher.matches()) {
             return null;
@@ -375,22 +394,26 @@ public final class TemporalTimeZone {
     }
 
     public static TemporalOffsetParts parseOffsetParts(String offsetText) {
-        Matcher extendedMatcher = OFFSET_EXTENDED_PATTERN.matcher(offsetText);
-        if (extendedMatcher.matches()) {
-            return new TemporalOffsetParts(extendedMatcher.group(1), Integer.parseInt(extendedMatcher.group(2)),
-                    Integer.parseInt(extendedMatcher.group(3)), extendedMatcher.group(4), extendedMatcher.group(5));
+        if (offsetText.length() < 3) {
+            return null;
         }
-        Matcher basicMatcher = OFFSET_BASIC_PATTERN.matcher(offsetText);
-        if (basicMatcher.matches()) {
-            return new TemporalOffsetParts(basicMatcher.group(1), Integer.parseInt(basicMatcher.group(2)),
-                    Integer.parseInt(basicMatcher.group(3)), basicMatcher.group(4), basicMatcher.group(5));
+        char sign = offsetText.charAt(0);
+        if (sign != '+' && sign != '-' && sign != '\u2212') {
+            return null;
         }
-        Matcher hourOnlyMatcher = OFFSET_HOUR_ONLY_PATTERN.matcher(offsetText);
-        if (hourOnlyMatcher.matches()) {
-            return new TemporalOffsetParts(hourOnlyMatcher.group(1), Integer.parseInt(hourOnlyMatcher.group(2)), 0,
-                    null, null);
+        if (offsetText.length() == 3) {
+            Matcher hours = OFFSET_HOUR_ONLY_PATTERN.matcher(offsetText);
+            return hours.matches()
+                    ? new TemporalOffsetParts(hours.group(1), Integer.parseInt(hours.group(2)), 0, null, null)
+                    : null;
         }
-        return null;
+        Pattern pattern = offsetText.charAt(3) == ':' ? OFFSET_EXTENDED_PATTERN : OFFSET_BASIC_PATTERN;
+        Matcher matcher = pattern.matcher(offsetText);
+        if (!matcher.matches()) {
+            return null;
+        }
+        return new TemporalOffsetParts(matcher.group(1), Integer.parseInt(matcher.group(2)),
+                Integer.parseInt(matcher.group(3)), matcher.group(4), matcher.group(5));
     }
 
     public static int parseOffsetSeconds(String offsetText) {

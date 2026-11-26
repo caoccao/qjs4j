@@ -20,20 +20,28 @@ import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSObject;
 
 public record TemporalPlainTimeToStringSettings(TemporalUnit smallestUnit, TemporalRoundingMode roundingMode,
-        boolean autoFractionalSecondDigits, int fractionalSecondDigits, long roundingIncrementNanoseconds) {
+        boolean autoFractionalSecondDigits, int fractionalSecondDigits,
+        long roundingIncrementNanoseconds) implements TemporalTimePrecision {
     public static final TemporalPlainTimeToStringSettings DEFAULT = new TemporalPlainTimeToStringSettings(null,
             TemporalRoundingMode.TRUNC, true, -1, 1L);
 
     public static TemporalPlainTimeToStringSettings resolve(JSContext context, String roundingModeText,
             String smallestUnitText, TemporalFractionalSecondDigitsOption digits) {
+        return resolve(context, roundingModeText, smallestUnitText, digits, TemporalUnit.MINUTE,
+                "Temporal error: Invalid smallestUnit option.");
+    }
+
+    static TemporalPlainTimeToStringSettings resolve(JSContext context, String roundingModeText,
+            String smallestUnitText, TemporalFractionalSecondDigitsOption digits, TemporalUnit largest,
+            String invalidUnit) {
         TemporalRoundingMode roundingMode = TemporalRoundingMode.fromString(roundingModeText);
         if (roundingMode == null) {
             context.throwRangeError("Temporal error: Invalid rounding mode.");
             return null;
         }
         TemporalUnit unit = TemporalUnit.fromString(smallestUnitText).orElse(null);
-        if (smallestUnitText != null && (unit == null || !unit.isSmallerOrEqual(TemporalUnit.MINUTE))) {
-            context.throwRangeError("Temporal error: Invalid smallestUnit option.");
+        if (smallestUnitText != null && (unit == null || !unit.isSmallerOrEqual(largest))) {
+            context.throwRangeError(invalidUnit);
             return null;
         }
         if (unit != null) {
@@ -45,6 +53,11 @@ public record TemporalPlainTimeToStringSettings(TemporalUnit smallestUnit, Tempo
     }
 
     public static TemporalPlainTimeToStringSettings read(JSContext context, JSObject optionsObject) {
+        return read(context, optionsObject, TemporalUnit.MINUTE, "Temporal error: Invalid smallestUnit option.");
+    }
+
+    static TemporalPlainTimeToStringSettings read(JSContext context, JSObject optionsObject, TemporalUnit largest,
+            String invalidUnit) {
         TemporalFractionalSecondDigitsOption digits = TemporalFractionalSecondDigitsOption.read(context, optionsObject);
         if (digits == null) {
             return null;
@@ -60,6 +73,7 @@ public record TemporalPlainTimeToStringSettings(TemporalUnit smallestUnit, Tempo
             return null;
         }
 
-        return TemporalPlainTimeToStringSettings.resolve(context, roundingModeText, smallestUnitText, digits);
+        return TemporalPlainTimeToStringSettings.resolve(context, roundingModeText, smallestUnitText, digits, largest,
+                invalidUnit);
     }
 }
