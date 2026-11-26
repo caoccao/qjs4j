@@ -211,47 +211,18 @@ public final class TemporalTimeZone {
      * Formats an offset in seconds as ±HH:MM.
      */
     public static String formatOffset(int totalSeconds) {
-        String sign = totalSeconds >= 0 ? "+" : "-";
-        int absoluteSeconds = Math.abs(totalSeconds);
-        int hours = absoluteSeconds / 3_600;
-        int minutes = (absoluteSeconds % 3_600) / 60;
-        int seconds = absoluteSeconds % 60;
-        if (seconds == 0) {
-            return String.format(Locale.ROOT, "%s%02d:%02d", sign, hours, minutes);
-        } else {
-            return String.format(Locale.ROOT, "%s%02d:%02d:%02d", sign, hours, minutes, seconds);
-        }
+        return IsoDateTimeFormat.offset(totalSeconds);
     }
 
     public static String formatOffsetRoundedToMinute(int totalSeconds) {
-        int sign = totalSeconds < 0 ? -1 : 1;
-        int absoluteSeconds = Math.abs(totalSeconds);
-        int absoluteMinutes = absoluteSeconds / 60;
-        int remainingSeconds = absoluteSeconds % 60;
-        if (remainingSeconds >= 30) {
-            absoluteMinutes++;
-        }
-        int roundedTotalSeconds = sign * absoluteMinutes * 60;
-        return formatOffset(roundedTotalSeconds);
+        return formatOffset(TemporalUtils.roundOffsetSecondsToMinute(totalSeconds));
     }
 
     /**
      * Gets the next timezone transition after the given instant. Returns null if no further transition.
      */
     public static BigInteger getNextTransition(BigInteger epochNs, String timeZoneId) {
-        Integer fixedOffsetSeconds = parseFixedOffsetSeconds(timeZoneId);
-        if (fixedOffsetSeconds != null) {
-            return null;
-        }
-        ZoneId zone = resolveTimeZone(timeZoneId);
-        Instant javaInstant = toJavaInstant(epochNs);
-        ZoneOffsetTransition transition = zone.getRules().nextTransition(javaInstant);
-        if (transition == null) {
-            return null;
-        }
-        Instant transInstant = transition.getInstant();
-        return BigInteger.valueOf(transInstant.getEpochSecond()).multiply(BILLION)
-                .add(BigInteger.valueOf(transInstant.getNano()));
+        return getTransition(epochNs, timeZoneId, true);
     }
 
     /**
@@ -272,13 +243,19 @@ public final class TemporalTimeZone {
      * Gets the previous timezone transition before the given instant. Returns null if no previous transition.
      */
     public static BigInteger getPreviousTransition(BigInteger epochNs, String timeZoneId) {
+        return getTransition(epochNs, timeZoneId, false);
+    }
+
+    private static BigInteger getTransition(BigInteger epochNs, String timeZoneId, boolean next) {
         Integer fixedOffsetSeconds = parseFixedOffsetSeconds(timeZoneId);
         if (fixedOffsetSeconds != null) {
             return null;
         }
         ZoneId zone = resolveTimeZone(timeZoneId);
         Instant javaInstant = toJavaInstant(epochNs);
-        ZoneOffsetTransition transition = zone.getRules().previousTransition(javaInstant);
+        ZoneOffsetTransition transition = next
+                ? zone.getRules().nextTransition(javaInstant)
+                : zone.getRules().previousTransition(javaInstant);
         if (transition == null) {
             return null;
         }
@@ -312,37 +289,15 @@ public final class TemporalTimeZone {
     }
 
     public static boolean isValidOffsetString(String offsetText) {
-        TemporalOffsetParts offsetParts = parseOffsetParts(offsetText);
-        if (offsetParts == null) {
-            return false;
-        }
-        int hours = offsetParts.hours();
-        int minutes = offsetParts.minutes();
-        String secondsText = offsetParts.secondsText();
-        if (hours > 23 || minutes > 59) {
-            return false;
-        }
-        if (secondsText != null) {
-            int seconds = Integer.parseInt(secondsText);
-            return seconds <= 59;
-        } else {
-            return true;
-        }
+        TemporalOffsetParts parts = parseOffsetParts(offsetText);
+        return parts != null && parts.hasValidHoursAndMinutes()
+                && (parts.secondsText() == null || Integer.parseInt(parts.secondsText()) <= 59);
     }
 
     public static boolean isValidTimeZoneOffsetWithoutSeconds(String offsetText) {
-        TemporalOffsetParts offsetParts = parseOffsetParts(offsetText);
-        if (offsetParts == null) {
-            return false;
-        }
-        int hours = offsetParts.hours();
-        int minutes = offsetParts.minutes();
-        String secondsText = offsetParts.secondsText();
-        String fractionText = offsetParts.fractionText();
-        if (hours > 23 || minutes > 59) {
-            return false;
-        }
-        return secondsText == null && fractionText == null;
+        TemporalOffsetParts parts = parseOffsetParts(offsetText);
+        return parts != null && parts.hasValidHoursAndMinutes() && parts.secondsText() == null
+                && parts.fractionText() == null;
     }
 
     private static int offsetDesignatorIndex(String text, int separator) {
@@ -421,22 +376,7 @@ public final class TemporalTimeZone {
         if (offsetParts == null) {
             throw new DateTimeException("Invalid offset string: " + offsetText);
         }
-        String signText = offsetParts.signText();
-        int sign;
-        if ("-".equals(signText) || "\u2212".equals(signText)) {
-            sign = -1;
-        } else {
-            sign = 1;
-        }
-        int hours = offsetParts.hours();
-        int minutes = offsetParts.minutes();
-        int seconds;
-        if (offsetParts.secondsText() == null) {
-            seconds = 0;
-        } else {
-            seconds = Integer.parseInt(offsetParts.secondsText());
-        }
-        return sign * (hours * 3600 + minutes * 60 + seconds);
+        return offsetParts.totalSeconds();
     }
 
     public static String parseTimeZoneIdentifierString(JSContext context, String timeZoneText) {

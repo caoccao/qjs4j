@@ -24,124 +24,78 @@ record TemporalPartialDate(Integer day, Integer month, String monthCode, Integer
     boolean isEmpty() {
         return day == null && month == null && monthCode == null && year == null && era == null && eraYear == null;
     }
-    JSValue merge(JSContext context, JSTemporalPlainDate plainDate, JSValue optionsValue) {
-        TemporalCalendarId calendarId = plainDate.getCalendarId();
-        IsoCalendarDate calendarFields = plainDate.toIsoCalendarDate();
-        IsoDate calendarDate = calendarFields.toIsoDate();
-        if (context.hasPendingException() || calendarDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        String calendarMonthCode = calendarFields.monthCode();
-        if (context.hasPendingException() || calendarMonthCode == null) {
-            return JSUndefined.INSTANCE;
-        }
-        TemporalEraYear eraFields = plainDate.toTemporalEraYear();
-
-        JSObject mergedFieldsObject = mergeFields(context, calendarId, calendarDate, calendarMonthCode, eraFields,
-                true);
-
-        String overflow = TemporalUtils.getOverflowOption(context, optionsValue);
+    JSValue merge(JSContext context, JSTemporalPlainDate original, JSValue options) {
+        String overflow = TemporalUtils.getOverflowOption(context, options);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        if (!"reject".equals(overflow) && year != null && month == null && monthCode == null) {
-            JSValue mergedMonthCodeValue = mergedFieldsObject.get(PropertyKey.fromString("monthCode"));
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (mergedMonthCodeValue instanceof JSString mergedMonthCodeString) {
-                String constrainedMonthCode = calendarId.constrainMonthCode(year, mergedMonthCodeString.value());
-                if (constrainedMonthCode != null && !constrainedMonthCode.equals(mergedMonthCodeString.value())) {
-                    mergedFieldsObject.set(PropertyKey.fromString("monthCode"), new JSString(constrainedMonthCode));
-                }
-            }
-        }
-        JSObject normalizedOptionsObject = TemporalUtils.overflowOptions(context, overflow);
-        JSValue mergedDateValue = TemporalPlainDateConstructor.dateFromFields(context, mergedFieldsObject,
-                normalizedOptionsObject);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(mergedDateValue instanceof JSTemporalPlainDate mergedDate)) {
-            context.throwTypeError("Temporal error: Date argument must be object or string.");
-            return JSUndefined.INSTANCE;
-        }
-        return JSTemporalPlainDate.create(context, mergedDate.getIsoDate(), calendarId);
+        IsoDate merged = mergeDate(context, original.getIsoDate(), original.getCalendarId(), overflow);
+        return merged == null
+                ? JSUndefined.INSTANCE
+                : JSTemporalPlainDate.create(context, merged, original.getCalendarId());
     }
 
-    JSObject mergeFields(JSContext context, TemporalCalendarId calendarId, IsoDate calendarDate,
-            String calendarMonthCode, TemporalEraYear eraFields, boolean includeDay) {
-        JSObject mergedFieldsObject = new JSObject(context);
-        mergedFieldsObject.set(PropertyKey.fromString("calendar"), new JSString(calendarId.identifier()));
-        if (includeDay) {
-            mergedFieldsObject.set(PropertyKey.fromString("day"), JSNumber.of(calendarDate.day()));
-        }
-        if (calendarId == TemporalCalendarId.ISO8601) {
-            mergedFieldsObject.set(PropertyKey.fromString("month"), JSNumber.of(calendarDate.month()));
-        }
-        mergedFieldsObject.set(PropertyKey.fromString("monthCode"), new JSString(calendarMonthCode));
-        mergedFieldsObject.set(PropertyKey.fromString("year"), JSNumber.of(calendarDate.year()));
-        if (eraFields != null) {
-            mergedFieldsObject.set(PropertyKey.fromString("era"), new JSString(eraFields.era().identifier()));
-            if (eraFields.eraYear() != null) {
-                mergedFieldsObject.set(PropertyKey.fromString("eraYear"), JSNumber.of(eraFields.eraYear()));
-            }
-        }
+    private TemporalPartialDate mergeFields(IsoDate original, TemporalCalendarId calendar) {
+        IsoCalendarDate fields = original.toIsoCalendarDate(calendar);
+        boolean keepMonth = month == null && monthCode == null;
+        boolean keepYear = year == null && era == null && eraYear == null;
+        TemporalEraYear originalEra = keepYear && calendar.hasEra()
+                ? TemporalEraYear.fromDate(original, calendar, fields.year())
+                : null;
+        Integer mergedMonth = keepMonth && calendar == TemporalCalendarId.ISO8601
+                ? Integer.valueOf(fields.month())
+                : month;
+        return new TemporalPartialDate(day == null ? Integer.valueOf(fields.day()) : day, mergedMonth,
+                keepMonth ? fields.monthCode() : monthCode, keepYear ? Integer.valueOf(fields.year()) : year,
+                originalEra == null ? era : originalEra.era().identifier(),
+                originalEra == null ? eraYear : originalEra.eraYear());
+    }
 
-        if (year != null) {
-            mergedFieldsObject.delete(PropertyKey.fromString("era"));
-            mergedFieldsObject.delete(PropertyKey.fromString("eraYear"));
-        }
-        if (era != null || eraYear != null) {
-            mergedFieldsObject.delete(PropertyKey.fromString("year"));
-            mergedFieldsObject.delete(PropertyKey.fromString("era"));
-            mergedFieldsObject.delete(PropertyKey.fromString("eraYear"));
-        }
-        if (month != null) {
-            mergedFieldsObject.delete(PropertyKey.fromString("monthCode"));
-        }
-        if (monthCode != null) {
-            mergedFieldsObject.delete(PropertyKey.fromString("month"));
-        }
+    private Integer resolveYear(JSContext context, TemporalCalendarId calendar, String missingEraMessage) {
+        return TemporalUtils.resolveEraYear(context, calendar, year, era, eraYear, missingEraMessage);
+    }
 
-        if (day != null) {
-            mergedFieldsObject.set(PropertyKey.fromString("day"), JSNumber.of(day));
+    JSValue mergeYearMonth(JSContext context, JSTemporalPlainYearMonth original, String overflow) {
+        TemporalCalendarId calendar = original.getCalendarId();
+        TemporalPartialDate merged = mergeFields(original.getIsoDate(), calendar);
+        IsoMonth code = merged.monthCode == null
+                ? null
+                : IsoMonth.parseByMonthCode(context, merged.monthCode, "Temporal error: Month code out of range.");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
-        if (month != null) {
-            mergedFieldsObject.set(PropertyKey.fromString("month"), JSNumber.of(month));
+        Integer resolvedYear = merged.resolveYear(context, calendar,
+                "Temporal error: year argument must be an object.");
+        if (resolvedYear == null) {
+            return JSUndefined.INSTANCE;
         }
-        if (monthCode != null) {
-            mergedFieldsObject.set(PropertyKey.fromString("monthCode"), new JSString(monthCode));
-        }
-        if (year != null) {
-            mergedFieldsObject.set(PropertyKey.fromString("year"), JSNumber.of(year));
-        }
-        if (era != null) {
-            mergedFieldsObject.set(PropertyKey.fromString("era"), new JSString(era));
-        }
-        if (eraYear != null) {
-            mergedFieldsObject.set(PropertyKey.fromString("eraYear"), JSNumber.of(eraYear));
-        }
-
-        return mergedFieldsObject;
+        return TemporalCalendarFields.yearMonth(context, calendar, resolvedYear, merged.month, code, overflow);
     }
 
     IsoDate mergeDate(JSContext context, IsoDate original, TemporalCalendarId calendar, String overflow) {
         if (isEmpty()) {
             return original;
         }
-        JSTemporalPlainDate date = JSTemporalPlainDate.create(context, original, calendar);
+        TemporalPartialDate merged = mergeFields(original, calendar);
+        String code = merged.monthCode;
+        if (year != null && month == null && monthCode == null && !"reject".equals(overflow)) {
+            String constrained = calendar.constrainMonthCode(year, code);
+            if (constrained != null) {
+                code = constrained;
+            }
+        }
+        IsoMonth parsedCode = code == null
+                ? null
+                : IsoMonth.parseByMonthCode(context, code, "Temporal error: Month code out of range.");
         if (context.hasPendingException()) {
             return null;
         }
-        JSValue merged = merge(context, date, TemporalUtils.overflowOptions(context, overflow));
-        if (context.hasPendingException()) {
+        Integer resolvedYear = merged.resolveYear(context, calendar,
+                "Temporal error: Date argument must be object or string.");
+        if (resolvedYear == null) {
             return null;
         }
-        if (merged instanceof JSTemporalPlainDate result) {
-            return result.getIsoDate();
-        }
-        context.throwTypeError("Temporal error: Date argument must be object or string.");
-        return null;
+        return IsoDate.calendarDateToIsoDate(context, calendar, resolvedYear, merged.month,
+                parsedCode == null ? null : parsedCode.monthCode(), merged.day, overflow);
     }
 }

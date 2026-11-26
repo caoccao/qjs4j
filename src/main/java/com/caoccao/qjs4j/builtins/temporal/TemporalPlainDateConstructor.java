@@ -75,50 +75,6 @@ public final class TemporalPlainDateConstructor {
         return JSTemporalPlainDate.create(context, isoDate, calendarId, resolvedPrototype);
     }
 
-    static JSValue dateFromFields(JSContext context, JSObject fields, JSValue options) {
-        JSValue calendarValue = fields.get(PropertyKey.fromString("calendar"));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        TemporalCalendarId calendarId = TemporalCalendarId.createFromCalendarValue(context, calendarValue);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        TemporalPropertyBag bag = new TemporalPropertyBag(context, fields);
-        Integer dayOfMonth = bag.integer("day");
-        Integer month = bag.integer("month");
-        IsoMonth parsedMonthCode = bag.monthCode();
-        Integer year = bag.integer("year");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        year = TemporalUtils.resolveEraYear(context, fields, calendarId, year,
-                "Temporal error: Date argument must be object or string.");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        if (year == null || dayOfMonth == null || (month == null && parsedMonthCode == null)) {
-            context.throwTypeError("Temporal error: Date argument must be object or string.");
-            return JSUndefined.INSTANCE;
-        }
-
-        String overflow = TemporalUtils.getOverflowOption(context, options);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        String monthCodeText = parsedMonthCode == null ? null : parsedMonthCode.monthCode();
-        IsoDate convertedIsoDate = IsoDate.calendarDateToIsoDate(context, calendarId, year, month, monthCodeText,
-                dayOfMonth, overflow);
-        if (context.hasPendingException() || convertedIsoDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSTemporalPlainDate.create(context, convertedIsoDate, calendarId);
-    }
-
     static JSValue dateFromString(JSContext context, String input) {
         IsoDate date = IsoDate.parseDateString(context, input);
         if (date == null) {
@@ -184,7 +140,7 @@ public final class TemporalPlainDateConstructor {
             return JSTemporalPlainDate.create(context, localDateTime.date(), zonedDateTime.getCalendarId());
         }
         if (item instanceof JSObject itemObj) {
-            return dateFromFields(context, itemObj, options);
+            return TemporalCalendarFields.dateFromFields(context, itemObj, options);
         }
         if (item instanceof JSString itemStr) {
             JSValue parsedDate = dateFromString(context, itemStr.value());

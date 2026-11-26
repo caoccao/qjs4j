@@ -60,19 +60,8 @@ public final class TemporalInstantConstructor {
         if (!TemporalUtils.requireNewTarget(context, "Instant")) {
             return JSUndefined.INSTANCE;
         }
-        JSValue epochNanosecondsArgument = JSValue.argumentOrUndefined(args, 0);
-        final JSBigInt bigInt;
-        try {
-            bigInt = JSTypeConversions.toBigInt(context, epochNanosecondsArgument);
-        } catch (JSErrorException conversionException) {
-            return context.throwError(conversionException);
-        }
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        BigInteger epochNs = bigInt.value();
-        if (!TemporalUtils.isValidEpochNanoseconds(epochNs)) {
-            context.throwRangeError("Temporal error: Nanoseconds out of range.");
+        BigInteger epochNs = readEpochNanoseconds(context, JSValue.argumentOrUndefined(args, 0));
+        if (epochNs == null) {
             return JSUndefined.INSTANCE;
         }
         JSObject resolvedPrototype = TemporalUtils.resolveTemporalPrototype(context, "Instant");
@@ -115,22 +104,30 @@ public final class TemporalInstantConstructor {
      * Temporal.Instant.fromEpochNanoseconds(epochNanoseconds)
      */
     public static JSValue fromEpochNanoseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue epochNanosecondsArgument = JSValue.argumentOrUndefined(args, 0);
+        BigInteger epochNs = readEpochNanoseconds(context, JSValue.argumentOrUndefined(args, 0));
+        if (epochNs == null) {
+            return JSUndefined.INSTANCE;
+        }
+        return JSTemporalInstant.create(context, epochNs);
+    }
+
+    static BigInteger readEpochNanoseconds(JSContext context, JSValue epochNanosecondsArgument) {
         final JSBigInt bigInt;
         try {
             bigInt = JSTypeConversions.toBigInt(context, epochNanosecondsArgument);
         } catch (JSErrorException conversionException) {
-            return context.throwError(conversionException);
+            context.throwError(conversionException);
+            return null;
         }
         if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
+            return null;
         }
         BigInteger epochNs = bigInt.value();
         if (!TemporalUtils.isValidEpochNanoseconds(epochNs)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
-            return JSUndefined.INSTANCE;
+            return null;
         }
-        return JSTemporalInstant.create(context, epochNs);
+        return epochNs;
     }
 
     public static JSValue toTemporalInstant(JSContext context, JSValue item) {

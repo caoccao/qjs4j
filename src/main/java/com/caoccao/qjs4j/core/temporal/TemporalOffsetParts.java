@@ -17,4 +17,28 @@
 package com.caoccao.qjs4j.core.temporal;
 
 public record TemporalOffsetParts(String signText, int hours, int minutes, String secondsText, String fractionText) {
+
+    public boolean hasValidHoursAndMinutes() {
+        return hours <= 23 && minutes <= 59;
+    }
+
+    public boolean hasZeroSubMinutePart() {
+        if (secondsText != null && !"00".equals(secondsText)) {
+            return false;
+        }
+        if (fractionText != null) {
+            for (int i = 0; i < fractionText.length(); i++) {
+                if (fractionText.charAt(i) != '0') {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    public int totalSeconds() {
+        int seconds = secondsText == null ? 0 : Integer.parseInt(secondsText);
+        int magnitude = hours * 3600 + minutes * 60 + seconds;
+        return "+".equals(signText) ? magnitude : -magnitude;
+    }
 }

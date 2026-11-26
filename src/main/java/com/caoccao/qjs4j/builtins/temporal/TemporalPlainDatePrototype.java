@@ -36,70 +36,13 @@ public final class TemporalPlainDatePrototype {
         return addOrSubtract(context, thisArg, args, 1);
     }
 
-    private static IsoDate addDurationToDate(JSContext context, IsoDate date, TemporalDuration durationRecord,
-            String overflow) {
-        BigInteger totalTimeNanoseconds = durationRecord.timeNanoseconds();
-        TemporalDuration balancedTimeDuration = TemporalDuration.createBalance(totalTimeNanoseconds, TemporalUnit.DAY);
-
-        long totalDays;
-        try {
-            long weeksInDays = Math.multiplyExact(durationRecord.weeks(), 7L);
-            totalDays = Math.addExact(durationRecord.days(), weeksInDays);
-            totalDays = Math.addExact(totalDays, balancedTimeDuration.days());
-        } catch (ArithmeticException arithmeticException) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
-        }
-
-        return date.addDurationToIsoDate(context, durationRecord.years(), durationRecord.months(), 0L, totalDays,
-                overflow);
-    }
-
     private static JSValue addOrSubtract(JSContext context, JSValue thisArg, JSValue[] args, int sign) {
         JSTemporalPlainDate plainDate = RECEIVER.require(context, thisArg, sign > 0 ? "add" : "subtract");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        TemporalDuration durationRecord = TemporalDurationConstructor.toDurationRecord(context,
-                JSValue.argumentOrUndefined(args, 0));
-        if (durationRecord == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        if (sign < 0) {
-            durationRecord = durationRecord.negated();
-        }
-
-        String overflow = TemporalUtils.getOverflowOption(context, JSValue.argumentOrUndefined(args, 1));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        TemporalCalendarId calendarId = plainDate.getCalendarId();
-        IsoDate resultIsoDate;
-        if (calendarId == TemporalCalendarId.ISO8601) {
-            resultIsoDate = addDurationToDate(context, plainDate.getIsoDate(), durationRecord, overflow);
-            if (context.hasPendingException() || resultIsoDate == null) {
-                return JSUndefined.INSTANCE;
-            }
-        } else {
-            BigInteger totalTimeNanoseconds = durationRecord.timeNanoseconds();
-            TemporalDuration balancedTimeDuration = TemporalDuration.createBalance(totalTimeNanoseconds,
-                    TemporalUnit.DAY);
-            long dayDelta;
-            try {
-                dayDelta = Math.addExact(durationRecord.days(), balancedTimeDuration.days());
-            } catch (ArithmeticException arithmeticException) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
-            resultIsoDate = plainDate.getIsoDate().addCalendarDate(context, calendarId, durationRecord.years(),
-                    durationRecord.months(), durationRecord.weeks(), dayDelta, overflow);
-            if (context.hasPendingException() || resultIsoDate == null) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        return JSTemporalPlainDate.create(context, resultIsoDate, calendarId);
+        TemporalDateAddition addition = TemporalDateAddition.read(context, args, sign);
+        return addition == null ? JSUndefined.INSTANCE : addition.apply(context, plainDate);
     }
 
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -203,11 +146,7 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue dateTimeFormat = TemporalLocaleFormat.create(context, args, "timeStyle");
-        if (dateTimeFormat == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSIntlObject.dateTimeFormatFormat(context, dateTimeFormat, new JSValue[]{plainDate});
+        return TemporalLocaleFormat.formatDate(context, plainDate, args);
     }
 
     public static JSValue toPlainDateTime(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -239,9 +178,8 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
         IsoCalendarDate calendarDateFields = plainDate.getIsoDate().toIsoCalendarDate(plainDate.getCalendarId());
-        JSTemporalPlainMonthDay plainMonthDay = TemporalPlainMonthDayConstructor
-                .createPlainMonthDayFromCalendarMonthDay(context, plainDate.getCalendarId(),
-                        calendarDateFields.monthCode(), calendarDateFields.day(), "constrain");
+        JSTemporalPlainMonthDay plainMonthDay = TemporalCalendarFields.createPlainMonthDayFromCalendarMonthDay(context,
+                plainDate.getCalendarId(), calendarDateFields.monthCode(), calendarDateFields.day(), "constrain");
         if (context.hasPendingException() || plainMonthDay == null) {
             return JSUndefined.INSTANCE;
         }
@@ -268,13 +206,7 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        String calendarNameOption = TemporalUtils.getCalendarNameOption(context, JSValue.argumentOrUndefined(args, 0));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        String result = plainDate.getIsoDate().toString();
-        result = TemporalUtils.maybeAppendCalendar(result, plainDate.getCalendarId(), calendarNameOption);
-        return new JSString(result);
+        return TemporalDateFormat.format(context, plainDate, JSValue.argumentOrUndefined(args, 0));
     }
 
     private static String toTemporalTimeZoneIdentifier(JSContext context, JSValue timeZoneLike) {

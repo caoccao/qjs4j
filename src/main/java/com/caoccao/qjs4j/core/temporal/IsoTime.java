@@ -58,73 +58,7 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
     }
 
     public static IsoTime parseTimeString(JSContext context, String input) {
-        if (input == null || input.isEmpty()) {
-            context.throwRangeError("Temporal error: Invalid time");
-            return null;
-        }
-        if (input.indexOf('\u2212') >= 0) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-
-        IsoParsingState parsingState = new IsoParsingState(input);
-        IsoTime time;
-        if (parsingState.position() < parsingState.inputLength()
-                && (parsingState.current() == 'T' || parsingState.current() == 't')) {
-            parsingState.advanceOne();
-            time = parsingState.parseInstantTime(context);
-        } else {
-            int initialPosition = parsingState.position();
-            IsoDate parsedDate = parsingState.parseDate(context);
-            if (parsedDate != null && !context.hasPendingException()) {
-                if (parsingState.position() >= parsingState.inputLength()) {
-                    context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return null;
-                }
-                char separator = parsingState.current();
-                if (separator != 'T' && separator != 't' && separator != ' ') {
-                    context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return null;
-                }
-                parsingState.advanceOne();
-                time = parsingState.parseInstantTime(context);
-            } else {
-                context.clearPendingException();
-                parsingState.setPosition(initialPosition);
-                if (IsoParsingState.isAmbiguousTimeStringWithoutDesignator(input)) {
-                    context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return null;
-                }
-                time = parsingState.parseInstantTime(context);
-            }
-        }
-        if (time == null || context.hasPendingException()) {
-            return null;
-        }
-
-        if (parsingState.position() < parsingState.inputLength()) {
-            char marker = parsingState.current();
-            if (marker == 'Z' || marker == 'z') {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
-            }
-            if (marker == '+' || marker == '-') {
-                IsoOffset parsedOffset = parsingState.parseInstantOffsetNanoseconds(context);
-                if (parsedOffset == null || context.hasPendingException()) {
-                    return null;
-                }
-            }
-        }
-
-        parsingState.parseInstantAnnotations(context);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (parsingState.position() != parsingState.inputLength()) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-        return time;
+        return IsoDateTimeParser.parseTimeString(context, input);
     }
 
     public IsoTime clampSecondToValidRange() {
@@ -180,17 +114,7 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
      */
     public String formatTimeString(TemporalUnit smallestUnit, boolean autoFractionalSecondDigits,
             int fractionalSecondDigits) {
-        StringBuilder result = new StringBuilder(18);
-        appendTwoDigits(result, hour);
-        result.append(':');
-        appendTwoDigits(result, minute);
-        if (smallestUnit != TemporalUnit.MINUTE) {
-            result.append(':');
-            appendTwoDigits(result, second);
-            appendFraction(result, millisecond * 1_000_000 + microsecond * 1_000 + nanosecond,
-                    autoFractionalSecondDigits ? -1 : fractionalSecondDigits);
-        }
-        return result.toString();
+        return IsoDateTimeFormat.time(this, smallestUnit, autoFractionalSecondDigits, fractionalSecondDigits);
     }
 
     public boolean isValid() {
@@ -237,28 +161,7 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
         return millisecond * 1_000_000 + microsecond * 1_000 + nanosecond;
     }
 
-    private static void appendTwoDigits(StringBuilder result, int value) {
-        if (value >= 0 && value < 10) {
-            result.append('0');
-        }
-        result.append(value);
-    }
-
     /** Append ISO fractional seconds at fixed precision, or trim trailing zeros for automatic precision. */
-    static void appendFraction(StringBuilder result, int nanos, int digits) {
-        if (digits == 0 || (digits < 0 && nanos == 0)) {
-            return;
-        }
-        // A leading 1 preserves all nine fractional positions, including leading zeros.
-        String padded = Integer.toString(1_000_000_000 + nanos);
-        int end = digits < 0 ? padded.length() : 1 + digits;
-        if (digits < 0) {
-            while (padded.charAt(end - 1) == '0') {
-                end--;
-            }
-        }
-        result.append('.').append(padded, 1, end);
-    }
 
     public static IsoTime regulate(JSContext context, String overflow, String invalidTimeMessage, int hour, int minute,
             int second, int millisecond, int microsecond, int nanosecond) {

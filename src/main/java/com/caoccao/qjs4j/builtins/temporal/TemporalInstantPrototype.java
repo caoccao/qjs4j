@@ -267,13 +267,7 @@ public final class TemporalInstantPrototype {
         if (instant == null) {
             return JSUndefined.INSTANCE;
         }
-        JSValue locales = JSValue.argumentOrUndefined(args, 0);
-        JSValue options = JSValue.argumentOrUndefined(args, 1);
-        JSValue dateTimeFormat = JSIntlObject.createDateTimeFormat(context, null, new JSValue[]{locales, options});
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSIntlObject.dateTimeFormatFormat(context, dateTimeFormat, new JSValue[]{instant});
+        return TemporalLocaleFormat.formatDateTime(context, instant, args, "date");
     }
 
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -39,13 +39,87 @@ final class IsoParsingState {
         position++;
     }
 
+    boolean consumeTimeSeparator() {
+        if (position == input.length()) {
+            return false;
+        }
+        char separator = current();
+        if (separator != 'T' && separator != 't' && separator != ' ') {
+            return false;
+        }
+        advanceOne();
+        return true;
+    }
+
     char current() {
         return input.charAt(position);
     }
 
-    private boolean hasTwoDigits(String value, int index) {
-        return index + 2 <= value.length() && isAsciiDigit(value.charAt(index))
-                && isAsciiDigit(value.charAt(index + 1));
+    ParsedAnnotations finishAnnotations(JSContext context) {
+        int timeZoneAnnotationCount = 0;
+        int calendarAnnotationCount = 0;
+        boolean hasCriticalCalendarAnnotation = false;
+        String firstTimeZoneAnnotation = null;
+        String firstCalendarAnnotation = null;
+        while (position < input.length() && input.charAt(position) == '[') {
+            position++;
+            boolean critical = false;
+            if (position < input.length() && input.charAt(position) == '!') {
+                critical = true;
+                position++;
+            }
+            int contentStart = position;
+            while (position < input.length() && input.charAt(position) != ']') {
+                position++;
+            }
+            if (position >= input.length() || contentStart == position) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
+            String content = input.substring(contentStart, position);
+            position++;
+
+            int equalSignIndex = content.indexOf('=');
+            if (equalSignIndex >= 0) {
+                String annotationKey = content.substring(0, equalSignIndex);
+                if (equalSignIndex == content.length() - 1 || !isLowercaseAnnotationKey(annotationKey)) {
+                    context.throwRangeError("Temporal error: Invalid ISO date.");
+                    return null;
+                }
+                if ("u-ca".equals(annotationKey)) {
+                    calendarAnnotationCount++;
+                    if (firstCalendarAnnotation == null) {
+                        firstCalendarAnnotation = content.substring(equalSignIndex + 1);
+                    }
+                    if (critical) {
+                        hasCriticalCalendarAnnotation = true;
+                    }
+                } else if (critical) {
+                    context.throwRangeError("Temporal error: Invalid ISO date.");
+                    return null;
+                }
+            } else {
+                timeZoneAnnotationCount++;
+                if (timeZoneAnnotationCount > 1) {
+                    context.throwRangeError("Temporal error: Invalid ISO date.");
+                    return null;
+                }
+                if (isOffsetTimeZoneAnnotation(content) && !isMinutePrecisionOffsetTimeZoneAnnotation(content)) {
+                    context.throwRangeError("Temporal error: Invalid ISO date.");
+                    return null;
+                }
+                if (firstTimeZoneAnnotation == null) {
+                    firstTimeZoneAnnotation = content;
+                }
+            }
+        }
+        if (position != input.length() || (calendarAnnotationCount > 1 && hasCriticalCalendarAnnotation)) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        return firstCalendarAnnotation == null && firstTimeZoneAnnotation == null
+                ? ParsedAnnotations.EMPTY
+                : new ParsedAnnotations(firstCalendarAnnotation, firstTimeZoneAnnotation);
     }
 
     String input() {
@@ -395,71 +469,6 @@ final class IsoParsingState {
         return value;
     }
 
-    ParsedAnnotations parseInstantAnnotations(JSContext context) {
-        int timeZoneAnnotationCount = 0;
-        int calendarAnnotationCount = 0;
-        boolean hasCriticalCalendarAnnotation = false;
-        String firstTimeZoneAnnotation = null;
-        String firstCalendarAnnotation = null;
-        while (position < input.length() && input.charAt(position) == '[') {
-            position++;
-            boolean critical = false;
-            if (position < input.length() && input.charAt(position) == '!') {
-                critical = true;
-                position++;
-            }
-            int contentStart = position;
-            while (position < input.length() && input.charAt(position) != ']') {
-                position++;
-            }
-            if (position >= input.length() || contentStart == position) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
-            }
-            String content = input.substring(contentStart, position);
-            position++;
-
-            int equalSignIndex = content.indexOf('=');
-            if (equalSignIndex >= 0) {
-                String annotationKey = content.substring(0, equalSignIndex);
-                if (equalSignIndex == content.length() - 1 || !isLowercaseAnnotationKey(annotationKey)) {
-                    context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return null;
-                }
-                if ("u-ca".equals(annotationKey)) {
-                    calendarAnnotationCount++;
-                    if (firstCalendarAnnotation == null) {
-                        firstCalendarAnnotation = content.substring(equalSignIndex + 1);
-                    }
-                    if (critical) {
-                        hasCriticalCalendarAnnotation = true;
-                    }
-                } else if (critical) {
-                    context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return null;
-                }
-            } else {
-                timeZoneAnnotationCount++;
-                if (timeZoneAnnotationCount > 1) {
-                    context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return null;
-                }
-                if (isOffsetTimeZoneAnnotation(content) && !isMinutePrecisionOffsetTimeZoneAnnotation(content)) {
-                    context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return null;
-                }
-                if (firstTimeZoneAnnotation == null) {
-                    firstTimeZoneAnnotation = content;
-                }
-            }
-        }
-        if (calendarAnnotationCount > 1 && hasCriticalCalendarAnnotation) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-        return new ParsedAnnotations(firstCalendarAnnotation, firstTimeZoneAnnotation);
-    }
-
     IsoOffset parseInstantOffsetNanoseconds(JSContext context) {
         if (position >= input.length()) {
             context.throwRangeError("Temporal error: Instant argument must be Instant or string.");
@@ -468,7 +477,7 @@ final class IsoParsingState {
         char signCharacter = input.charAt(position);
         if (signCharacter == 'Z' || signCharacter == 'z') {
             position++;
-            return new IsoOffset(0, BigInteger.ZERO);
+            return IsoOffset.ZERO;
         }
         int sign;
         if (signCharacter == '+') {
@@ -667,6 +676,22 @@ final class IsoParsingState {
         return value;
     }
 
+    IsoOffset parseOptionalOffset(JSContext context, boolean hasTime, boolean allowZulu) {
+        if (position == input.length()) {
+            return IsoOffset.ZERO;
+        }
+        char marker = current();
+        boolean zulu = marker == 'Z' || marker == 'z';
+        if (!zulu && marker != '+' && marker != '-') {
+            return IsoOffset.ZERO;
+        }
+        if (!hasTime || (zulu && !allowZulu)) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        return parseInstantOffsetNanoseconds(context);
+    }
+
     int parseTwoDigits(JSContext context, String fieldName) {
         if (position + 2 > input.length()) {
             context.throwRangeError("Temporal error: Invalid character while parsing " + fieldName + " value.");
@@ -766,6 +791,11 @@ final class IsoParsingState {
         return new long[]{minutePortion, secondPortion, millisecondPortion, microsecondPortion, nanosecondPortion};
     }
 
+    static boolean hasTwoDigits(String value, int index) {
+        return index + 2 <= value.length() && isAsciiDigit(value.charAt(index))
+                && isAsciiDigit(value.charAt(index + 1));
+    }
+
     private static boolean isAmbiguousFourDigitTime(String value) {
         if (value.length() != 4 || !isAsciiDigit(value.charAt(0)) || !isAsciiDigit(value.charAt(1))
                 || !isAsciiDigit(value.charAt(2)) || !isAsciiDigit(value.charAt(3))) {
@@ -816,40 +846,27 @@ final class IsoParsingState {
     }
 
     static boolean isValidIsoYearMonthDateForParsing(int year, int month, int dayOfMonth) {
-        if (month < 1 || month > 12) {
-            return false;
-        }
-        if (dayOfMonth < 1 || dayOfMonth > IsoDate.daysInMonth(year, month)) {
-            return false;
-        }
-        if (year < -271821 || year > 275760) {
-            return false;
-        }
-        if (year == -271821 && month < 4) {
-            return false;
-        }
-        return year != 275760 || month <= 9;
+        return IsoDate.isValidYearMonth(year, month) && dayOfMonth >= 1
+                && dayOfMonth <= IsoDate.daysInMonth(year, month);
     }
 
     static int parseFixedTwoDigits(String value, int index) {
         return (value.charAt(index) - '0') * 10 + (value.charAt(index + 1) - '0');
     }
 
-    static final class ParsedAnnotations {
-        private final String calendarAnnotation;
-        private final String timeZoneAnnotation;
-
-        private ParsedAnnotations(String calendarAnnotation, String timeZoneAnnotation) {
-            this.calendarAnnotation = calendarAnnotation;
-            this.timeZoneAnnotation = timeZoneAnnotation;
+    static IsoParsingState start(JSContext context, String input, String emptyInputError) {
+        if (input == null || input.isEmpty()) {
+            context.throwRangeError(emptyInputError);
+            return null;
         }
-
-        String calendarAnnotation() {
-            return calendarAnnotation;
+        if (input.indexOf('\u2212') >= 0) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
         }
+        return new IsoParsingState(input);
+    }
 
-        String timeZoneAnnotation() {
-            return timeZoneAnnotation;
-        }
+    record ParsedAnnotations(String calendarAnnotation, String timeZoneAnnotation) {
+        static final ParsedAnnotations EMPTY = new ParsedAnnotations(null, null);
     }
 }

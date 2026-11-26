@@ -19,4 +19,6 @@ package com.caoccao.qjs4j.core.temporal;
 import java.math.BigInteger;
 
 public record IsoOffset(int totalSeconds, BigInteger totalNanoseconds) {
+
+    static final IsoOffset ZERO = new IsoOffset(0, BigInteger.ZERO);
 }

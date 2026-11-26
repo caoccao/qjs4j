@@ -32,6 +32,16 @@ final class TemporalPropertyBag {
         this.fields = fields;
     }
 
+    TemporalCalendarId calendar() {
+        JSValue calendar = value("calendar");
+        return context.hasPendingException() ? null : TemporalCalendarId.createFromCalendarValue(context, calendar);
+    }
+
+    boolean hasDefined(String name) {
+        JSValue field = value(name);
+        return field != null && !(field instanceof JSUndefined);
+    }
+
     boolean hasTimeField() {
         return hasTimeField;
     }
@@ -96,6 +106,13 @@ final class TemporalPropertyBag {
         return new TemporalPartialDate(day, month, monthCode, year, era, eraYear);
     }
 
+    Integer resolvedYear(TemporalCalendarId calendar, String missingEraMessage) {
+        Integer year = integer("year");
+        return context.hasPendingException()
+                ? null
+                : TemporalUtils.resolveEraYear(context, fields, calendar, year, missingEraMessage);
+    }
+
     String string(String name) {
         return context.hasPendingException() ? null : TemporalUtils.getStringOption(context, fields, name, null);
     }
@@ -112,5 +129,4 @@ final class TemporalPropertyBag {
     JSValue value(String name) {
         return context.hasPendingException() ? null : fields.get(PropertyKey.fromString(name));
     }
-
 }

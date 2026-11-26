@@ -180,6 +180,22 @@ final class TemporalOffsetInterpretation {
         }
     }
 
+    static String resolveTimeZoneIdentifier(JSContext context, String text) {
+        String timeZoneId = normalizeTimeZoneIdentifier(context, text);
+        if (timeZoneId == null || context.hasPendingException()) {
+            return null;
+        }
+        if (!isOffsetTimeZoneIdentifier(timeZoneId)) {
+            try {
+                TemporalTimeZone.resolveTimeZone(timeZoneId);
+            } catch (DateTimeException invalidTimeZoneException) {
+                context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
+                return null;
+            }
+        }
+        return timeZoneId;
+    }
+
     private static BigInteger selectMatchingEpochNanosecondsForExplicitOffset(IsoDate isoDate, IsoTime isoTime,
             String timeZoneId, int parsedOffsetSeconds, boolean allowMinuteRounding) {
         int second = isoTime.second();

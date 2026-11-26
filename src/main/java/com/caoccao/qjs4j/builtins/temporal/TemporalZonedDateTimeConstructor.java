@@ -18,7 +18,6 @@ package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.*;
-import com.caoccao.qjs4j.exceptions.JSErrorException;
 
 import java.math.BigInteger;
 import java.time.*;
@@ -59,27 +58,13 @@ public final class TemporalZonedDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue epochNsArg = JSValue.argumentOrUndefined(args, 0);
-        JSBigInt epochNanosecondsBigInt;
-        try {
-            epochNanosecondsBigInt = JSTypeConversions.toBigInt(context, epochNsArg);
-        } catch (JSErrorException conversionException) {
-            return context.throwError(conversionException);
-        }
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        BigInteger epochNs = epochNanosecondsBigInt.value();
-        if (!TemporalUtils.isValidEpochNanoseconds(epochNs)) {
-            context.throwRangeError("Temporal error: Nanoseconds out of range.");
+        BigInteger epochNs = TemporalInstantConstructor.readEpochNanoseconds(context,
+                JSValue.argumentOrUndefined(args, 0));
+        if (epochNs == null) {
             return JSUndefined.INSTANCE;
         }
 
-        if (args.length < 2 || args[1] instanceof JSUndefined) {
-            context.throwTypeError("Temporal error: Time zone must be string");
-            return JSUndefined.INSTANCE;
-        }
-        if (!(args[1] instanceof JSString timeZoneString)) {
+        if (!(JSValue.argumentOrUndefined(args, 1) instanceof JSString timeZoneString)) {
             context.throwTypeError("Temporal error: Time zone must be string");
             return JSUndefined.INSTANCE;
         }
@@ -87,17 +72,9 @@ public final class TemporalZonedDateTimeConstructor {
             context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneString.value());
             return JSUndefined.INSTANCE;
         }
-        String timeZoneId = TemporalOffsetInterpretation.normalizeTimeZoneIdentifier(context, timeZoneString.value());
+        String timeZoneId = TemporalOffsetInterpretation.resolveTimeZoneIdentifier(context, timeZoneString.value());
         if (context.hasPendingException() || timeZoneId == null) {
             return JSUndefined.INSTANCE;
-        }
-        if (!TemporalOffsetInterpretation.isOffsetTimeZoneIdentifier(timeZoneId)) {
-            try {
-                TemporalTimeZone.resolveTimeZone(timeZoneId);
-            } catch (DateTimeException invalidTimeZoneException) {
-                context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
-                return JSUndefined.INSTANCE;
-            }
         }
 
         TemporalCalendarId calendarId = TemporalUtils.calendarArgument(context, args, 2);
@@ -147,31 +124,15 @@ public final class TemporalZonedDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        String timeZoneId = propertyBagData.timeZoneId();
-        BigInteger epochNanoseconds = TemporalOffsetInterpretation.interpretOffset(context, isoDate, isoTime,
-                timeZoneId, propertyBagData.offsetSeconds(), propertyBagData.offsetSeconds() != null, false, false,
-                false, options);
-        if (context.hasPendingException() || epochNanoseconds == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        return JSTemporalZonedDateTime.create(context, epochNanoseconds, timeZoneId, propertyBagData.calendarId());
+        return fromLocalDateTime(context, isoDate, isoTime, propertyBagData.timeZoneId(), propertyBagData.calendarId(),
+                propertyBagData.offsetSeconds(), options);
     }
 
     private static JSValue createZonedDateTimeFromString(JSContext context, String input, IsoZonedDateTimeOffset parsed,
             TemporalZonedDateTimeOptions options) {
-        String timeZoneId = TemporalOffsetInterpretation.normalizeTimeZoneIdentifier(context, parsed.timeZoneId());
+        String timeZoneId = TemporalOffsetInterpretation.resolveTimeZoneIdentifier(context, parsed.timeZoneId());
         if (context.hasPendingException() || timeZoneId == null) {
             return JSUndefined.INSTANCE;
-        }
-
-        if (!TemporalOffsetInterpretation.isOffsetTimeZoneIdentifier(timeZoneId)) {
-            try {
-                TemporalTimeZone.resolveTimeZone(timeZoneId);
-            } catch (DateTimeException invalidTimeZoneException) {
-                context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
-                return JSUndefined.INSTANCE;
-            }
         }
 
         int timeSeparatorIndex = findDateTimeSeparatorIndex(input);
@@ -229,78 +190,27 @@ public final class TemporalZonedDateTimeConstructor {
         JSValue item = JSValue.argumentOrUndefined(args, 0);
         JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
 
-        if (item instanceof JSTemporalZonedDateTime zonedDateTime) {
-            TemporalZonedDateTimeOptions options = TemporalZonedDateTimeOptions.parse(context, optionsArg, "reject");
-            if (context.hasPendingException() || options == null) {
-                return JSUndefined.INSTANCE;
-            }
-            return JSTemporalZonedDateTime.create(context, zonedDateTime.getEpochNanoseconds(),
-                    zonedDateTime.getTimeZoneId(), zonedDateTime.getCalendarId());
-        }
-
-        if (item instanceof JSObject itemObject) {
-            TemporalZonedDateTimePropertyBagData propertyBagData = parseZonedDateTimePropertyBag(context, itemObject);
-            if (context.hasPendingException() || propertyBagData == null) {
-                return JSUndefined.INSTANCE;
-            }
-
-            TemporalZonedDateTimeOptions options = TemporalZonedDateTimeOptions.parse(context, optionsArg, "reject");
-            if (context.hasPendingException() || options == null) {
-                return JSUndefined.INSTANCE;
-            }
-
-            return createZonedDateTimeFromPropertyBag(context, propertyBagData, options);
-        }
-
-        if (item instanceof JSString zonedDateTimeString) {
-            IsoZonedDateTimeOffset parsed = IsoZonedDateTimeOffset.parseZonedDateTimeString(context,
-                    zonedDateTimeString.value());
-            if (context.hasPendingException() || parsed == null) {
-                return JSUndefined.INSTANCE;
-            }
-
-            TemporalZonedDateTimeOptions options = TemporalZonedDateTimeOptions.parse(context, optionsArg, "reject");
-            if (context.hasPendingException() || options == null) {
-                return JSUndefined.INSTANCE;
-            }
-
-            return createZonedDateTimeFromString(context, zonedDateTimeString.value(), parsed, options);
-        }
-
-        context.throwTypeError("Temporal error: DateTime argument must be object or string.");
-        return JSUndefined.INSTANCE;
+        return toTemporalZonedDateTime(context, item, optionsArg);
     }
 
-    private static boolean isValidOffsetString(String offsetText) {
-        TemporalOffsetParts offsetParts = TemporalTimeZone.parseOffsetParts(offsetText);
-        if (offsetParts == null) {
-            return false;
+    static JSValue fromLocalDateTime(JSContext context, IsoDate isoDate, IsoTime isoTime, String timeZoneId,
+            TemporalCalendarId calendar, Integer offsetSeconds, TemporalZonedDateTimeOptions options) {
+        BigInteger epochNanoseconds = TemporalOffsetInterpretation.interpretOffset(context, isoDate, isoTime,
+                timeZoneId, offsetSeconds, offsetSeconds != null, false, false, false, options);
+        if (context.hasPendingException() || epochNanoseconds == null) {
+            return JSUndefined.INSTANCE;
         }
 
-        int hours = offsetParts.hours();
-        int minutes = offsetParts.minutes();
-        String secondsText = offsetParts.secondsText();
-        String fractionText = offsetParts.fractionText();
-        if (hours > 23 || minutes > 59) {
-            return false;
-        }
+        return JSTemporalZonedDateTime.create(context, epochNanoseconds, timeZoneId, calendar);
+    }
 
-        if (secondsText != null) {
-            int seconds = Integer.parseInt(secondsText);
-            if (seconds != 0) {
-                return false;
-            }
+    static Integer parsePropertyOffset(JSContext context, String text) {
+        TemporalOffsetParts parts = TemporalTimeZone.parseOffsetParts(text);
+        if (parts == null || !parts.hasValidHoursAndMinutes() || !parts.hasZeroSubMinutePart()) {
+            context.throwRangeError("Temporal error: Invalid offset string.");
+            return null;
         }
-
-        if (fractionText != null) {
-            for (int index = 0; index < fractionText.length(); index++) {
-                if (fractionText.charAt(index) != '0') {
-                    return false;
-                }
-            }
-        }
-
-        return true;
+        return parts.totalSeconds();
     }
 
     private static TemporalZonedDateTimePropertyBagData parseZonedDateTimePropertyBag(JSContext context,
@@ -344,11 +254,10 @@ public final class TemporalZonedDateTimeConstructor {
         }
         Integer offsetSeconds = null;
         if (offsetText != null) {
-            if (!isValidOffsetString(offsetText)) {
-                context.throwRangeError("Temporal error: Invalid offset string.");
+            offsetSeconds = parsePropertyOffset(context, offsetText);
+            if (offsetSeconds == null) {
                 return null;
             }
-            offsetSeconds = TemporalTimeZone.parseOffsetSeconds(offsetText);
         }
 
         int second = bag.integralOrZero("second");
@@ -431,9 +340,15 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     public static JSValue toTemporalZonedDateTime(JSContext context, JSValue item) {
-        TemporalZonedDateTimeOptions defaultOptions = TemporalZonedDateTimeOptions.DEFAULT_FROM;
+        return toTemporalZonedDateTime(context, item, JSUndefined.INSTANCE);
+    }
 
+    private static JSValue toTemporalZonedDateTime(JSContext context, JSValue item, JSValue optionsArg) {
         if (item instanceof JSTemporalZonedDateTime zonedDateTime) {
+            TemporalZonedDateTimeOptions options = TemporalZonedDateTimeOptions.parse(context, optionsArg, "reject");
+            if (context.hasPendingException() || options == null) {
+                return JSUndefined.INSTANCE;
+            }
             return JSTemporalZonedDateTime.create(context, zonedDateTime.getEpochNanoseconds(),
                     zonedDateTime.getTimeZoneId(), zonedDateTime.getCalendarId());
         }
@@ -443,7 +358,13 @@ public final class TemporalZonedDateTimeConstructor {
             if (context.hasPendingException() || propertyBagData == null) {
                 return JSUndefined.INSTANCE;
             }
-            return createZonedDateTimeFromPropertyBag(context, propertyBagData, defaultOptions);
+
+            TemporalZonedDateTimeOptions options = TemporalZonedDateTimeOptions.parse(context, optionsArg, "reject");
+            if (context.hasPendingException() || options == null) {
+                return JSUndefined.INSTANCE;
+            }
+
+            return createZonedDateTimeFromPropertyBag(context, propertyBagData, options);
         }
 
         if (item instanceof JSString zonedDateTimeString) {
@@ -452,7 +373,13 @@ public final class TemporalZonedDateTimeConstructor {
             if (context.hasPendingException() || parsed == null) {
                 return JSUndefined.INSTANCE;
             }
-            return createZonedDateTimeFromString(context, zonedDateTimeString.value(), parsed, defaultOptions);
+
+            TemporalZonedDateTimeOptions options = TemporalZonedDateTimeOptions.parse(context, optionsArg, "reject");
+            if (context.hasPendingException() || options == null) {
+                return JSUndefined.INSTANCE;
+            }
+
+            return createZonedDateTimeFromString(context, zonedDateTimeString.value(), parsed, options);
         }
 
         context.throwTypeError("Temporal error: DateTime argument must be object or string.");

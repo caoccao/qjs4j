@@ -47,6 +47,40 @@ final class TemporalCalendarDifference {
         return JSTemporalDuration.create(context, since ? result.negated() : result);
     }
 
+    static JSValue between(JSContext context, JSTemporalPlainDateTime plainDateTime, JSTemporalPlainDateTime other,
+            JSValue optionsArg, boolean since) {
+        if (!plainDateTime.getCalendarId().equals(other.getCalendarId())) {
+            context.throwRangeError("Temporal error: Mismatched calendars.");
+            return JSUndefined.INSTANCE;
+        }
+
+        TemporalDifferenceSettings settings = TemporalDifferenceSettings.parse(context, since, optionsArg,
+                TemporalUnit.YEAR, TemporalUnit.NANOSECOND, TemporalUnit.NANOSECOND, TemporalUnit.DAY, true, true);
+        if (context.hasPendingException() || settings == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        TemporalDuration durationRecord = differenceDateTimes(context, plainDateTime.getIsoDateTime(),
+                other.getIsoDateTime(), plainDateTime.getCalendarId(), settings);
+        return finishDifference(context, durationRecord, since);
+    }
+
+    static JSValue between(JSContext context, JSTemporalZonedDateTime zonedDateTime, JSTemporalZonedDateTime other,
+            JSValue optionsArg, boolean since) {
+        if (!zonedDateTime.getCalendarId().equals(other.getCalendarId())) {
+            context.throwRangeError("Temporal error: Mismatched calendars.");
+            return JSUndefined.INSTANCE;
+        }
+
+        TemporalDifferenceSettings settings = zonedSettings(context, since, optionsArg);
+        if (context.hasPendingException() || settings == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        TemporalDuration durationRecord = differenceTemporalZonedDateTime(context, zonedDateTime, other, settings);
+        return finishDifference(context, durationRecord, since);
+    }
+
     private static TemporalDuration dateUntil(JSContext context, IsoDate thisDate, IsoDate otherDate,
             TemporalCalendarId calendarId, TemporalDifferenceSettings settings) {
         if (thisDate.compareTo(otherDate) == 0) {
@@ -80,6 +114,92 @@ final class TemporalCalendarDifference {
         }
         return new TemporalDuration(dateDifference.years(), dateDifference.months(), dateDifference.weeks(),
                 dateDifference.days(), 0, 0, 0, 0, 0, 0);
+    }
+
+    private static TemporalDuration differenceDateTimes(JSContext context, IsoDateTime start, IsoDateTime end,
+            TemporalCalendarId calendarId, TemporalDifferenceSettings settings) {
+        boolean noRounding = settings.roundingIncrement() == 1L && settings.smallestUnit() == TemporalUnit.NANOSECOND;
+        boolean sameTime = start.time().compareTo(end.time()) == 0;
+        boolean dateLargestUnit = settings.largestUnit().isDateUnit();
+        if (calendarId != TemporalCalendarId.ISO8601 && noRounding && sameTime && dateLargestUnit) {
+            return TemporalCalendarDifference.differenceCalendarDates(context, start.date(), end.date(), calendarId,
+                    settings.largestUnit());
+        } else {
+            return TemporalDurationArithmetic.differencePlainDateTime(context, start, end, settings.largestUnit(),
+                    settings.smallestUnit(), settings.roundingIncrement(), settings.roundingMode());
+        }
+    }
+    private static TemporalDuration differenceTemporalZonedDateTime(JSContext context,
+            JSTemporalZonedDateTime startZonedDateTime, JSTemporalZonedDateTime endZonedDateTime,
+            TemporalDifferenceSettings settings) {
+        boolean requiresDateUnits = settings.largestUnit().isDateUnit() || settings.smallestUnit().isDateUnit();
+        if (!requiresDateUnits) {
+            return TemporalDuration.differenceEpochNanoseconds(startZonedDateTime.getEpochNanoseconds(),
+                    endZonedDateTime.getEpochNanoseconds(), settings.largestUnit(),
+                    settings.smallestUnit().getNanosecondFactor(), settings.roundingIncrement(),
+                    settings.roundingMode());
+        }
+
+        String startCanonicalTimeZoneId = TemporalTimeZone.canonicalizeTimeZoneIdentifierForEquals(context,
+                startZonedDateTime.getTimeZoneId());
+        if (context.hasPendingException()) {
+            return null;
+        }
+        String endCanonicalTimeZoneId = TemporalTimeZone.canonicalizeTimeZoneIdentifierForEquals(context,
+                endZonedDateTime.getTimeZoneId());
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (!startCanonicalTimeZoneId.equals(endCanonicalTimeZoneId)) {
+            context.throwRangeError("Temporal error: Mismatched time zones.");
+            return null;
+        }
+
+        IsoDateTime startLocalDateTime = startZonedDateTime.toLocalDateTime();
+        IsoDateTime endLocalDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
+                endZonedDateTime.getEpochNanoseconds(), startZonedDateTime.getTimeZoneId());
+
+        if (settings.largestUnit().isDateUnit() && !settings.smallestUnit().isDateUnit()) {
+            boolean sameDate = startLocalDateTime.date().equals(endLocalDateTime.date());
+            int wallClockSign = Integer.signum(endLocalDateTime.compareTo(startLocalDateTime));
+            int epochSign = Integer
+                    .signum(endZonedDateTime.getEpochNanoseconds().compareTo(startZonedDateTime.getEpochNanoseconds()));
+            if (sameDate && wallClockSign != 0 && epochSign != 0 && wallClockSign != epochSign) {
+                TemporalUnit timeLargestUnit;
+                if (TemporalUnit.HOUR.isLargerThan(settings.smallestUnit())) {
+                    timeLargestUnit = TemporalUnit.HOUR;
+                } else {
+                    timeLargestUnit = settings.smallestUnit();
+                }
+                return TemporalDuration.differenceEpochNanoseconds(startZonedDateTime.getEpochNanoseconds(),
+                        endZonedDateTime.getEpochNanoseconds(), timeLargestUnit,
+                        settings.smallestUnit().getNanosecondFactor(), settings.roundingIncrement(),
+                        settings.roundingMode());
+            }
+        }
+
+        TemporalCalendarId calendarId = startZonedDateTime.getCalendarId();
+        if (calendarId == TemporalCalendarId.ISO8601) {
+            return TemporalDurationArithmetic.differenceZonedDateTime(context, startZonedDateTime.getEpochNanoseconds(),
+                    endZonedDateTime.getEpochNanoseconds(), startZonedDateTime.getTimeZoneId(), settings.largestUnit(),
+                    settings.smallestUnit(), settings.roundingIncrement(), settings.roundingMode());
+        }
+
+        return differenceDateTimes(context, startLocalDateTime, endLocalDateTime, calendarId, settings);
+    }
+
+    private static JSValue finishDifference(JSContext context, TemporalDuration durationRecord, boolean since) {
+        if (context.hasPendingException() || durationRecord == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        TemporalDuration resultRecord = (since ? durationRecord.negated() : durationRecord)
+                .normalizeFloat64RepresentableFields();
+        if (!resultRecord.isValid() || !TemporalDuration.isDurationRecordTimeRangeValid(resultRecord)) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return JSUndefined.INSTANCE;
+        }
+        return JSTemporalDuration.create(context, resultRecord);
     }
 
     private static boolean isRoundedYearMonthInRange(IsoDate origin, long years, long months) {
@@ -189,6 +309,7 @@ final class TemporalCalendarDifference {
         }
         return roundedDuration;
     }
+
     private static TemporalDurationDateWeek roundRelativeDurationDate(JSContext context,
             TemporalDurationDateWeek duration, long destinationEpochDay, IsoDate originDate,
             TemporalCalendarId calendarId, TemporalDifferenceSettings settings) {
@@ -320,5 +441,19 @@ final class TemporalCalendarDifference {
         }
 
         return new TemporalDuration(durationFields.years(), durationFields.months(), 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+
+    private static TemporalDifferenceSettings zonedSettings(JSContext context, boolean sinceOperation,
+            JSValue optionsArg) {
+        TemporalDifferenceSettings settings = TemporalDifferenceSettings.parse(context, sinceOperation, optionsArg,
+                TemporalUnit.YEAR, TemporalUnit.NANOSECOND, TemporalUnit.NANOSECOND, TemporalUnit.HOUR, true, true);
+        if (settings == null) {
+            return null;
+        }
+        if (settings.smallestUnit() == TemporalUnit.DAY && Math.abs(settings.roundingIncrement()) > 100_000_000L) {
+            context.throwRangeError("Temporal error: Invalid rounding increment.");
+            return null;
+        }
+        return settings;
     }
 }

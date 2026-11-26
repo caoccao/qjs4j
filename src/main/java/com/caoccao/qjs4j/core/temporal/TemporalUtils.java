@@ -25,6 +25,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.chrono.HijrahChronology;
+import java.time.temporal.ChronoField;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -330,12 +331,7 @@ public final class TemporalUtils {
     }
 
     static boolean isUnsupportedUmalquraYear(int islamicYear) {
-        try {
-            HijrahChronology.INSTANCE.date(islamicYear, 1, 1);
-            return false;
-        } catch (DateTimeException dateTimeException) {
-            return true;
-        }
+        return !HijrahChronology.INSTANCE.range(ChronoField.YEAR).isValidValue(islamicYear);
     }
 
     public static boolean isValidEpochNanoseconds(BigInteger epochNanoseconds) {

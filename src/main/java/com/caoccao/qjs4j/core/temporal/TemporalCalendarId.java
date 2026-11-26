@@ -325,8 +325,7 @@ public enum TemporalCalendarId {
             case ETHIOAA -> TemporalUtils.alexandrianLeapYear(calendarYear - 5500);
             case HEBREW -> TemporalUtils.isHebrewLeapYear(calendarYear);
             case INDIAN -> TemporalUtils.isLeapYear(calendarYear + 78);
-            case ISLAMIC_CIVIL -> TemporalUtils.islamicDaysInMonth(calendarYear, 12) == 30;
-            case ISLAMIC_TBLA -> TemporalUtils.islamicDaysInMonth(calendarYear, 12) == 30;
+            case ISLAMIC_CIVIL, ISLAMIC_TBLA -> TemporalUtils.islamicDaysInMonth(calendarYear, 12) == 30;
             case ISLAMIC_UMALQURA -> TemporalConstants.UMALQURA_KNOWN_LEAP_YEARS_1390_TO_1469.contains(calendarYear)
                     || (calendarYear < 1390 || calendarYear > 1469) && umalquraDaysInMonth(calendarYear, 12) == 30;
             case PERSIAN -> IsoGregorianYear.isPersianLeapYear(calendarYear);
@@ -583,7 +582,10 @@ public enum TemporalCalendarId {
                 REFERENCE_ISO_DATE_YEAR_CACHE_HIT_COUNT.sum(), REFERENCE_ISO_DATE_YEAR_CACHE_MISS_COUNT.sum());
     }
 
-    private static int umalquraDaysInMonth(int islamicYear, int islamicMonth) {
+    static int umalquraDaysInMonth(int islamicYear, int islamicMonth) {
+        if (TemporalUtils.isUnsupportedUmalquraYear(islamicYear)) {
+            return TemporalUtils.islamicDaysInMonth(islamicYear, islamicMonth);
+        }
         try {
             return HijrahChronology.INSTANCE.date(islamicYear, islamicMonth, 1).lengthOfMonth();
         } catch (DateTimeException dateTimeException) {

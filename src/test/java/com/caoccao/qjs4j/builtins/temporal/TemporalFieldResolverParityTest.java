@@ -69,4 +69,24 @@ public class TemporalFieldResolverParityTest extends BaseJavetTest {
         assertErrorWithJavet(
                 "Temporal.PlainYearMonth.from({ year: 2024, monthCode: { valueOf() { return 1; } }, day: 1, calendar: 'iso8601' })");
     }
+
+    @Test
+    public void testPartialIsoDateFormsAndExtendedYears() {
+        assertStringWithJavet("""
+                [Temporal.PlainMonthDay.from('--02-29').toString(),
+                 Temporal.PlainMonthDay.from('0229[u-ca=iso8601]').toString(),
+                 Temporal.PlainYearMonth.from('-000001-09').toString(),
+                 Temporal.PlainDate.from('+010000-02-29').toString()].join('|')""");
+    }
+
+    @Test
+    public void testZonedWithPreservesOverlapOffset() {
+        assertStringWithJavet("""
+                (() => {
+                  const local = '2024-11-03T01:15';
+                  return ['-04:00', '-05:00'].map(offset =>
+                    Temporal.ZonedDateTime.from(local + offset + '[America/New_York]')
+                      .with({ minute: 45 }).toString()).join('|');
+                })()""");
+    }
 }

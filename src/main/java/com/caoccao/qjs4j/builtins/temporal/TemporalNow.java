@@ -35,6 +35,11 @@ public final class TemporalNow {
     private TemporalNow() {
     }
 
+    private static IsoDateTime currentDateTime(JSContext context, JSValue[] args) {
+        String timeZone = getTimeZone(context, args);
+        return timeZone == null ? null : IsoDateTime.createFromEpochNsAndTimeZoneId(systemEpochNs(), timeZone);
+    }
+
     private static String getTimeZone(JSContext context, JSValue[] args) {
         if (args.length == 0 || args[0] instanceof JSUndefined || args[0] == null) {
             return ZoneId.systemDefault().getId();
@@ -64,33 +69,22 @@ public final class TemporalNow {
     }
 
     public static JSValue plainDateISO(JSContext context, JSValue thisArg, JSValue[] args) {
-        String timeZoneId = getTimeZone(context, args);
-        if (context.hasPendingException() || timeZoneId == null) {
-            return JSUndefined.INSTANCE;
-        }
-        BigInteger epochNs = systemEpochNs();
-        IsoDateTime isoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(epochNs, timeZoneId);
-        return JSTemporalPlainDate.create(context, isoDateTime.date(), TemporalCalendarId.ISO8601);
+        IsoDateTime isoDateTime = currentDateTime(context, args);
+        return isoDateTime == null
+                ? JSUndefined.INSTANCE
+                : JSTemporalPlainDate.create(context, isoDateTime.date(), TemporalCalendarId.ISO8601);
     }
 
     public static JSValue plainDateTimeISO(JSContext context, JSValue thisArg, JSValue[] args) {
-        String timeZoneId = getTimeZone(context, args);
-        if (context.hasPendingException() || timeZoneId == null) {
-            return JSUndefined.INSTANCE;
-        }
-        BigInteger epochNs = systemEpochNs();
-        IsoDateTime isoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(epochNs, timeZoneId);
-        return JSTemporalPlainDateTime.create(context, isoDateTime, TemporalCalendarId.ISO8601);
+        IsoDateTime isoDateTime = currentDateTime(context, args);
+        return isoDateTime == null
+                ? JSUndefined.INSTANCE
+                : JSTemporalPlainDateTime.create(context, isoDateTime, TemporalCalendarId.ISO8601);
     }
 
     public static JSValue plainTimeISO(JSContext context, JSValue thisArg, JSValue[] args) {
-        String timeZoneId = getTimeZone(context, args);
-        if (context.hasPendingException() || timeZoneId == null) {
-            return JSUndefined.INSTANCE;
-        }
-        BigInteger epochNs = systemEpochNs();
-        IsoDateTime isoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(epochNs, timeZoneId);
-        return JSTemporalPlainTime.create(context, isoDateTime.time());
+        IsoDateTime isoDateTime = currentDateTime(context, args);
+        return isoDateTime == null ? JSUndefined.INSTANCE : JSTemporalPlainTime.create(context, isoDateTime.time());
     }
 
     private static BigInteger systemEpochNs() {

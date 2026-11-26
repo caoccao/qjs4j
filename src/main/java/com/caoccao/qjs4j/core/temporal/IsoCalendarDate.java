@@ -20,4 +20,8 @@ public record IsoCalendarDate(int year, int month, String monthCode, int day) {
     public IsoDate toIsoDate() {
         return new IsoDate(year, month, day);
     }
+
+    static IsoCalendarDate regular(int year, int month, int day) {
+        return new IsoCalendarDate(year, month, IsoMonth.toMonthCode(month), day);
+    }
 }

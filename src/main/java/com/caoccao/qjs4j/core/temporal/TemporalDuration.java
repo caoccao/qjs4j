@@ -348,7 +348,7 @@ public record TemporalDuration(long years, long months, long weeks, long days, l
             appendMagnitude(result, minutes, 'M');
             if (showSeconds) {
                 result.append(secondsWithCarry);
-                IsoTime.appendFraction(result, nanos, fractionalDigits);
+                IsoDateTimeFormat.appendFraction(result, nanos, fractionalDigits);
                 result.append('S');
             }
         } else if (years == 0 && months == 0 && weeks == 0 && days == 0) {
@@ -382,6 +382,14 @@ public record TemporalDuration(long years, long months, long weeks, long days, l
             return TemporalUnit.NANOSECOND;
         } else {
             return fallback;
+        }
+    }
+
+    public long wholeTimeDays() {
+        try {
+            return timeNanosecondsLong() / TemporalConstants.DAY_NANOSECONDS;
+        } catch (ArithmeticException overflow) {
+            return timeNanosecondsSlow().divide(TemporalConstants.BI_DAY_NANOSECONDS).longValueExact();
         }
     }
 }

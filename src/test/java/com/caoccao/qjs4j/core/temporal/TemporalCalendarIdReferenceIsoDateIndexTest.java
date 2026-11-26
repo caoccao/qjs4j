@@ -18,6 +18,8 @@ package com.caoccao.qjs4j.core.temporal;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.chrono.HijrahChronology;
+import java.time.temporal.ChronoField;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -50,6 +52,28 @@ public class TemporalCalendarIdReferenceIsoDateIndexTest {
     }
 
     @Test
+    public void testChineseAndDangiMonthBoundaries() {
+        for (TemporalCalendarId calendar : new TemporalCalendarId[]{TemporalCalendarId.CHINESE,
+                TemporalCalendarId.DANGI}) {
+            long epochDay = new IsoDate(1900, 1, 31).toEpochDay();
+            for (int year = 1900; year <= calendar.getLunisolarMaxYear(); year++) {
+                for (IsoCalendarMonth month : TemporalMonths.get(calendar, year)) {
+                    IsoDate first = IsoDate.createFromEpochDay(epochDay);
+                    IsoDate last = IsoDate.createFromEpochDay(epochDay + month.daysInMonth() - 1);
+                    assertEquals(new IsoCalendarDate(year, month.monthNumber(), month.monthCode(), 1),
+                            first.toIsoCalendarDate(calendar));
+                    assertEquals(first, TemporalLunisolarCalendar.toIso(calendar, year, month, 1, "reject"));
+                    assertEquals(last,
+                            TemporalLunisolarCalendar.toIso(calendar, year, month, month.daysInMonth(), "reject"));
+                    assertEquals(new IsoCalendarDate(year, month.monthNumber(), month.monthCode(), month.daysInMonth()),
+                            last.toIsoCalendarDate(calendar));
+                    epochDay += month.daysInMonth();
+                }
+            }
+        }
+    }
+
+    @Test
     public void testFindReferenceIsoDateAtOrBelowForChineseAndDangi() {
         verifyAtOrBelowMatchesManual(TemporalCalendarId.CHINESE, "M01");
         verifyAtOrBelowMatchesManual(TemporalCalendarId.CHINESE, "M03");
@@ -72,6 +96,13 @@ public class TemporalCalendarIdReferenceIsoDateIndexTest {
         assertNull(TemporalCalendarId.CHINESE.findReferenceIsoDateExact("M03", 0));
         assertNull(TemporalCalendarId.CHINESE.findReferenceIsoDateExact("M03", 32));
         assertNull(TemporalCalendarId.CHINESE.findReferenceIsoDateAtOrBelow("M03", 0));
+    }
+
+    @Test
+    public void testUmalquraUsesCivilMonthsBeyondJdkTable() {
+        int nextYear = Math.toIntExact(HijrahChronology.INSTANCE.range(ChronoField.YEAR).getMaximum() + 1);
+        assertEquals(TemporalMonths.get(TemporalCalendarId.ISLAMIC_CIVIL, nextYear),
+                TemporalMonths.get(TemporalCalendarId.ISLAMIC_UMALQURA, nextYear));
     }
 
     private void verifyAtOrBelowMatchesManual(TemporalCalendarId calendarId, String monthCode) {
