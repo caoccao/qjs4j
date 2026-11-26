@@ -158,11 +158,11 @@ public final class ArrayBufferPrototype {
             return context.throwTypeError("Cannot slice a detached ArrayBuffer");
         }
         long length = source.getByteLength();
-        long start = ArrayPrototype.relativeIndex(context, args, 0, length, 0);
+        long start = ArrayIndexRange.relativeIndex(context, args, 0, length, 0);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        long end = ArrayPrototype.relativeIndex(context, args, 1, length, length);
+        long end = ArrayIndexRange.relativeIndex(context, args, 1, length, length);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }

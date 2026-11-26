@@ -43,9 +43,7 @@ public final class JSInt16Array extends JSTypedArray {
     }
 
     @Override
-    public double getElement(long index) {
-        checkIndex(index);
-        JSByteBuffer buf = getByteBuffer();
+    double readElement(JSByteBuffer buf, long index) {
         return buf.getShort(index * BYTES_PER_ELEMENT);
     }
 

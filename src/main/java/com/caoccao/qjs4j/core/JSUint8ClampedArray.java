@@ -44,9 +44,7 @@ public final class JSUint8ClampedArray extends JSTypedArray {
     }
 
     @Override
-    public double getElement(long index) {
-        checkIndex(index);
-        JSByteBuffer buf = getByteBuffer();
+    double readElement(JSByteBuffer buf, long index) {
         return buf.get(index) & 0xFF; // Convert to unsigned
     }
 

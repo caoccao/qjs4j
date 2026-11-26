@@ -45,9 +45,7 @@ public final class JSBigUint64Array extends JSBigIntTypedArray {
     }
 
     @Override
-    public double getElement(long index) {
-        checkIndex(index);
-        JSByteBuffer buf = getByteBuffer();
+    double readElement(JSByteBuffer buf, long index) {
         long value = buf.getLong(index * BYTES_PER_ELEMENT);
         // Convert unsigned long to double (may lose precision for very large values)
         return Long.compareUnsigned(value, 0) < 0
@@ -56,9 +54,7 @@ public final class JSBigUint64Array extends JSBigIntTypedArray {
     }
 
     @Override
-    public JSValue getJSElement(long index) {
-        checkIndex(index);
-        JSByteBuffer buf = getByteBuffer();
+    JSValue readJSElement(JSByteBuffer buf, long index) {
         long value = buf.getLong(index * BYTES_PER_ELEMENT);
         // Convert unsigned long to unsigned BigInteger
         BigInteger unsigned = value >= 0

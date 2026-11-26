@@ -188,7 +188,7 @@ public final class JSMap extends JSObject {
             }
 
             // SameValueZero algorithm
-            return sameValueZero(this.value, other.value);
+            return JSTypeConversions.sameValueZero(this.value, other.value);
         }
 
         @Override
@@ -227,64 +227,5 @@ public final class JSMap extends JSObject {
             return System.identityHashCode(value);
         }
 
-        /**
-         * SameValueZero comparison. Like === but NaN equals NaN, and +0 equals -0.
-         */
-        private boolean sameValueZero(JSValue x, JSValue y) {
-            // Same reference
-            if (x == y) {
-                return true;
-            }
-
-            // Different types
-            if (x.type() != y.type()) {
-                return false;
-            }
-
-            // Numbers
-            if (x instanceof JSNumber xNum && y instanceof JSNumber yNum) {
-                double xVal = xNum.value();
-                double yVal = yNum.value();
-
-                // NaN == NaN in SameValueZero
-                if (Double.isNaN(xVal) && Double.isNaN(yVal)) {
-                    return true;
-                }
-
-                // +0 == -0 in SameValueZero
-                return xVal == yVal;
-            }
-
-            // Strings
-            if (x instanceof JSString xStr && y instanceof JSString yStr) {
-                return xStr.value().equals(yStr.value());
-            }
-
-            // Booleans
-            if (x instanceof JSBoolean xBool && y instanceof JSBoolean yBool) {
-                return xBool.value() == yBool.value();
-            }
-
-            // BigInt
-            if (x instanceof JSBigInt xBig && y instanceof JSBigInt yBig) {
-                return xBig.value().equals(yBig.value());
-            }
-
-            // Symbols (compare by identity, each Symbol is unique except well-known ones)
-            if (x instanceof JSSymbol && y instanceof JSSymbol) {
-                return x == y;
-            }
-
-            // null and undefined
-            if (x instanceof JSNull && y instanceof JSNull) {
-                return true;
-            }
-            if (x instanceof JSUndefined && y instanceof JSUndefined) {
-                return true;
-            }
-
-            // Objects (compare by identity)
-            return x == y;
-        }
     }
 }

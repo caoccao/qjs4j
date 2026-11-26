@@ -43,9 +43,7 @@ public final class JSInt8Array extends JSTypedArray {
     }
 
     @Override
-    public double getElement(long index) {
-        checkIndex(index);
-        JSByteBuffer buf = getByteBuffer();
+    double readElement(JSByteBuffer buf, long index) {
         return buf.get(index);
     }
 

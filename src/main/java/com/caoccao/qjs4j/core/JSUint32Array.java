@@ -43,9 +43,7 @@ public final class JSUint32Array extends JSTypedArray {
     }
 
     @Override
-    public double getElement(long index) {
-        checkIndex(index);
-        JSByteBuffer buf = getByteBuffer();
+    double readElement(JSByteBuffer buf, long index) {
         return buf.getInt(index * BYTES_PER_ELEMENT) & 0xFFFFFFFFL; // Convert to unsigned
     }
 

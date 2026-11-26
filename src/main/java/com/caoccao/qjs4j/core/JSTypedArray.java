@@ -115,6 +115,21 @@ public sealed abstract class JSTypedArray extends JSObject
         this.trackRab = false;
     }
 
+    private JSByteBuffer bufferView(JSByteBuffer backingBuffer, long currentByteLength) {
+        if (cachedBackingBuffer == backingBuffer && cachedByteLength == currentByteLength) {
+            return cachedJSByteBuffer;
+        }
+        JSByteBuffer buf = backingBuffer.duplicate();
+        buf.position(byteOffset);
+        buf.limit(byteOffset + currentByteLength);
+        JSByteBuffer slice = buf.slice();
+        slice.order(backingBuffer.order());
+        cachedBackingBuffer = backingBuffer;
+        cachedByteLength = currentByteLength;
+        cachedJSByteBuffer = slice;
+        return cachedJSByteBuffer;
+    }
+
     /**
      * Check if an index is valid.
      */
@@ -258,20 +273,7 @@ public sealed abstract class JSTypedArray extends JSObject
         if (buffer.isDetached()) {
             throw new JSTypeErrorException("TypedArray buffer is detached");
         }
-        JSByteBuffer backingBuffer = buffer.getBuffer();
-        long currentByteLength = getByteLength();
-        if (cachedBackingBuffer == backingBuffer && cachedByteLength == currentByteLength) {
-            return cachedJSByteBuffer;
-        }
-        JSByteBuffer buf = backingBuffer.duplicate();
-        buf.position(byteOffset);
-        buf.limit(byteOffset + currentByteLength);
-        JSByteBuffer slice = buf.slice();
-        slice.order(backingBuffer.order());
-        cachedBackingBuffer = backingBuffer;
-        cachedByteLength = currentByteLength;
-        cachedJSByteBuffer = slice;
-        return cachedJSByteBuffer;
+        return bufferView(buffer.getBuffer(), getByteLength());
     }
 
     /**
@@ -279,19 +281,7 @@ public sealed abstract class JSTypedArray extends JSObject
      * effective byte length.
      */
     public long getByteLength() {
-        if (trackRab) {
-            if (buffer.isDetached()) {
-                return 0;
-            }
-            long currentByteLength = buffer.getByteLength();
-            if (byteOffset > currentByteLength) {
-                return 0;
-            }
-            // Round down to element boundary for partial elements
-            long remainingBytes = currentByteLength - byteOffset;
-            return (remainingBytes / bytesPerElement) * bytesPerElement;
-        }
-        return byteLength;
+        return trackRab ? getLength() * bytesPerElement : byteLength;
     }
 
     /**
@@ -311,14 +301,28 @@ public sealed abstract class JSTypedArray extends JSObject
     /**
      * Get an element as a number.
      */
-    public abstract double getElement(long index);
+    public final double getElement(long index) {
+        checkIndex(index);
+        return readElement(getByteBuffer(), index);
+    }
+
+    /** Integer-indexed Get, including the undefined result for an invalid or detached index. */
+    public final JSValue getElementOrUndefined(long index) {
+        long currentLength = getLength();
+        if (index < 0 || index >= currentLength) {
+            return JSUndefined.INSTANCE;
+        }
+        JSByteBuffer view = bufferView(buffer.getBuffer(), currentLength * bytesPerElement);
+        return readJSElement(view, index);
+    }
 
     /**
      * Get an element as the appropriate JSValue type. Regular typed arrays return JSNumber, BigInt typed arrays
      * override to return JSBigInt.
      */
-    public JSValue getJSElement(long index) {
-        return JSNumber.of(getElement(index));
+    public final JSValue getJSElement(long index) {
+        checkIndex(index);
+        return readJSElement(getByteBuffer(), index);
     }
 
     /**
@@ -326,21 +330,12 @@ public sealed abstract class JSTypedArray extends JSObject
      * length.
      */
     public long getLength() {
+        // Detached buffers report zero bytes. A fixed-length view outside a resized buffer has no elements.
+        long available = buffer.getByteLength() - byteOffset;
         if (trackRab) {
-            if (buffer.isDetached()) {
-                return 0;
-            }
-            long currentByteLength = buffer.getByteLength();
-            if (byteOffset > currentByteLength) {
-                return 0;
-            }
-            return (currentByteLength - byteOffset) / bytesPerElement;
+            return Math.max(0L, available) / bytesPerElement;
         }
-        // Fixed-length views backed by resizable buffers return 0 when out of bounds
-        if (isOutOfBounds()) {
-            return 0;
-        }
-        return length;
+        return byteLength <= available ? length : 0;
     }
 
     public final String getObjectTag() {
@@ -406,14 +401,7 @@ public sealed abstract class JSTypedArray extends JSObject
         if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
             return super.getWithReceiver(key, receiver, depth);
         }
-        if (canonicalNumericIndex < 0) {
-            return JSUndefined.INSTANCE;
-        }
-        long index = canonicalNumericIndex;
-        if (buffer.isDetached() || isOutOfBounds() || index >= getLength()) {
-            return JSUndefined.INSTANCE;
-        }
-        return getJSElement(index);
+        return getElementOrUndefined(canonicalNumericIndex);
     }
 
     @Override
@@ -511,6 +499,13 @@ public sealed abstract class JSTypedArray extends JSObject
             return false;
         }
         return super.preventExtensionsWithResult();
+    }
+
+    /** Read an element after the caller has validated its index against the current buffer. */
+    abstract double readElement(JSByteBuffer view, long index);
+
+    JSValue readJSElement(JSByteBuffer view, long index) {
+        return JSNumber.of(readElement(view, index));
     }
 
     @Override

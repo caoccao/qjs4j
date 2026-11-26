@@ -88,6 +88,17 @@ public class ArrayConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testFromAsyncRejectsFailedMappedPropertyDefinition() {
+        JSPromise promise = context.eval("""
+                Array.fromAsync.call(function () { return Object.freeze({}); },
+                    {length: 1, 0: Promise.resolve(3)}, async value => value + 1)
+                """).asPromise().orElseThrow();
+        awaitPromise(promise);
+        assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
+        assertTypeError(promise.getResult());
+    }
+
+    @Test
     public void testFromAsyncWithAsyncGenerator() {
         assertStringWithJavet("""
                 async function test() {

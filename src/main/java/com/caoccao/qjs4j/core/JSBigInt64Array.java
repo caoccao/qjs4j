@@ -45,16 +45,12 @@ public final class JSBigInt64Array extends JSBigIntTypedArray {
     }
 
     @Override
-    public double getElement(long index) {
-        checkIndex(index);
-        JSByteBuffer buf = getByteBuffer();
+    double readElement(JSByteBuffer buf, long index) {
         return buf.getLong(index * BYTES_PER_ELEMENT);
     }
 
     @Override
-    public JSValue getJSElement(long index) {
-        checkIndex(index);
-        JSByteBuffer buf = getByteBuffer();
+    JSValue readJSElement(JSByteBuffer buf, long index) {
         return new JSBigInt(BigInteger.valueOf(buf.getLong(index * BYTES_PER_ELEMENT)));
     }
 

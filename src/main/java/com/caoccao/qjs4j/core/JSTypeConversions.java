@@ -412,6 +412,17 @@ public final class JSTypeConversions {
         return JSNumber.of(Double.parseDouble(str));
     }
 
+    /** ECMA-262 SameValueZero, used by includes and keyed collections. */
+    public static boolean sameValueZero(JSValue left, JSValue right) {
+        if (left == right) {
+            return true;
+        }
+        if (left instanceof JSNumber a && right instanceof JSNumber b) {
+            return a.value() == b.value() || Double.isNaN(a.value()) && Double.isNaN(b.value());
+        }
+        return strictEquals(left, right);
+    }
+
     private static void setPendingExceptionFromInvocation(JSContext context, Throwable throwable) {
         if (context == null) {
             return;

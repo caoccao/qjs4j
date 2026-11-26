@@ -45,22 +45,19 @@ public final class TypedArrayConstructor {
             mapFn = mapFnFunc;
         }
 
-        JSArray iterableValues = null;
-        JSObject arrayLike = null;
+        JSObject source;
         long itemsLength;
         JSObject itemsObject = JSTypeConversions.toObject(context, items);
         if (itemsObject == null) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
-        JSValue iteratorMethod = itemsObject.get(PropertyKey.SYMBOL_ITERATOR);
+        JSFunction iteratorFunction = ArrayFrom.iteratorMethod(context, itemsObject, PropertyKey.SYMBOL_ITERATOR,
+                itemsObject, "value is not iterable");
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        if (!(iteratorMethod instanceof JSUndefined) && !(iteratorMethod instanceof JSNull)) {
-            if (!(iteratorMethod instanceof JSFunction iteratorFunction)) {
-                return context.throwTypeError("value is not iterable");
-            }
+        if (iteratorFunction != null) {
             JSValue iterator = iteratorFunction.call(context, items, JSValue.NO_ARGS);
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -68,7 +65,7 @@ public final class TypedArrayConstructor {
             if (!(iterator instanceof JSObject iteratorObject)) {
                 return context.throwTypeError("Result of the Symbol.iterator method is not an object");
             }
-            iterableValues = context.createJSArray();
+            JSArray iterableValues = context.createJSArray();
             while (true) {
                 JSObject iterResult = JSIteratorHelper.iteratorNext(iteratorObject, context);
                 if (context.hasPendingException()) {
@@ -90,14 +87,14 @@ public final class TypedArrayConstructor {
                 }
                 iterableValues.push(value);
             }
+            source = iterableValues;
             itemsLength = iterableValues.getLength();
         } else {
-            arrayLike = itemsObject;
-            JSValue lengthValue = arrayLike.get(PropertyKey.LENGTH);
+            source = itemsObject;
+            itemsLength = ArrayPrototype.lengthOfArrayLike(context, source);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
-            itemsLength = JSTypeConversions.toLength(context, lengthValue);
         }
 
         JSTypedArray target = typedArrayCreate(context, thisArg, itemsLength, "TypedArray.from");
@@ -105,24 +102,9 @@ public final class TypedArrayConstructor {
             return context.getPendingException();
         }
 
-        for (long k = 0; k < itemsLength; k++) {
-            PropertyKey key = PropertyKey.fromIndexString(k);
-            JSValue kValue = iterableValues != null ? iterableValues.get(key) : arrayLike.get(key);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (mapFn != null) {
-                kValue = mapFn.call(context, thisArgValue, new JSValue[]{kValue, JSNumber.of(k)});
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-            }
-            target.set(key, kValue);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-        }
-        return target;
+        return ArrayFrom.copyMapped(context, source, target, itemsLength, mapFn, thisArgValue, true)
+                ? target
+                : context.getPendingException();
     }
 
     public static JSValue getSpecies(JSContext context, JSValue thisArg, JSValue[] args) {

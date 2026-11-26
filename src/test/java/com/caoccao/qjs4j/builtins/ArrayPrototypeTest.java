@@ -90,6 +90,19 @@ public class ArrayPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testBorrowedTypedArrayTraversalReadsLengthAsAProperty() {
+        assertStringWithJavet("""
+                (() => {
+                    const view = new Uint8Array([2, 4, 8]);
+                    Object.defineProperty(view, 'length', { get() { return 1; } });
+                    const sum = (a, b) => a + b;
+                    return [view.reduce(sum), Array.prototype.reduce.call(view, sum),
+                            view.includes(8), Array.prototype.includes.call(view, 8)].join(',');
+                })()
+                """);
+    }
+
+    @Test
     public void testConcat() {
         JSArray arr = new JSArray(context, numberArgs(1, 2));
 
@@ -1050,6 +1063,21 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertObjectWithJavet("[].sort()", "[1.1,2.1].sort()", "['b','a'].sort()", "['b','a'].sort(undefined)",
                 "['a',null,undefined,[],'b'].sort()");
         assertErrorWithJavet("[1].sort(null)", "[1].sort(true)", "[1].sort(1)", "[1].sort('abc')");
+    }
+
+    @Test
+    public void testSpeciesCopyObservesHasBeforeGet() {
+        assertStringWithJavet("""
+                (() => {
+                    const log = [];
+                    const source = new Proxy({length: 3, 0: undefined, 2: 4}, {
+                        has(target, key) { log.push('has ' + key); return Reflect.has(target, key); },
+                        get(target, key) { log.push('get ' + key); return Reflect.get(target, key); }
+                    });
+                    const copy = Array.prototype.slice.call(source);
+                    return JSON.stringify([log, Object.keys(copy), copy]);
+                })()
+                """);
     }
 
     @Test
