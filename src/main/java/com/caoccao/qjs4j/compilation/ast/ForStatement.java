@@ -37,27 +37,8 @@ public final class ForStatement extends Statement {
     }
 
     @Override
-    public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = init != null && init.containsAwait();
-            if (!awaitInside && ((test != null && test.containsAwait()) || (update != null && update.containsAwait())
-                    || (body != null && body.containsAwait()))) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
-    }
-
-    @Override
-    public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = init != null && init.containsYield();
-            if (!yieldInside && ((test != null && test.containsYield()) || (update != null && update.containsYield())
-                    || (body != null && body.containsYield()))) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(init) || kind.in(test) || kind.in(update) || kind.in(body);
     }
 
     public Statement getBody() {

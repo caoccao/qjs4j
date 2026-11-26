@@ -32,13 +32,8 @@ public final class VariableDeclaration extends Statement {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(declarations);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(declarations);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(declarations);
     }
 
     public List<VariableDeclarator> getDeclarations() {

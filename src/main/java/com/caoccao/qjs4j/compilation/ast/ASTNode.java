@@ -34,106 +34,21 @@ public abstract sealed class ASTNode
         this.yieldInside = null;
     }
 
-    /** Leaves and function boundaries do not contain an enclosing await expression. */
-    public boolean containsAwait() {
+    public final boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = containsSuspension(Suspension.AWAIT);
+        }
+        return awaitInside;
+    }
+
+    /** Leaves and function boundaries do not suspend the enclosing evaluation. */
+    boolean containsSuspension(Suspension kind) {
         return false;
     }
 
-    final boolean containsAwaitIn(ASTNode child) {
-        if (awaitInside == null) {
-            awaitInside = childContainsAwait(child);
-        }
-        return awaitInside;
-    }
-
-    final boolean containsAwaitIn(ASTNode first, ASTNode second) {
-        if (awaitInside == null) {
-            awaitInside = childContainsAwait(first);
-            if (!awaitInside && childContainsAwait(second)) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
-    }
-
-    final boolean containsAwaitIn(ASTNode first, ASTNode second, ASTNode third) {
-        if (awaitInside == null) {
-            awaitInside = childContainsAwait(first);
-            if (!awaitInside && (childContainsAwait(second) || childContainsAwait(third))) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
-    }
-
-    final boolean containsAwaitIn(ASTNode first, List<? extends ASTNode> children) {
-        if (awaitInside == null) {
-            awaitInside = childContainsAwait(first);
-            if (!awaitInside && anyContainsAwait(children)) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
-    }
-
-    final boolean containsAwaitIn(List<? extends ASTNode> children) {
-        if (awaitInside == null) {
-            awaitInside = false;
-            if (anyContainsAwait(children)) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
-    }
-
-    /** Leaves and function boundaries do not contain an enclosing yield expression. */
-    public boolean containsYield() {
-        return false;
-    }
-
-    final boolean containsYieldIn(ASTNode child) {
+    public final boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = childContainsYield(child);
-        }
-        return yieldInside;
-    }
-
-    final boolean containsYieldIn(ASTNode first, ASTNode second) {
-        if (yieldInside == null) {
-            yieldInside = childContainsYield(first);
-            if (!yieldInside && childContainsYield(second)) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
-    }
-
-    final boolean containsYieldIn(ASTNode first, ASTNode second, ASTNode third) {
-        if (yieldInside == null) {
-            yieldInside = childContainsYield(first);
-            if (!yieldInside && (childContainsYield(second) || childContainsYield(third))) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
-    }
-
-    final boolean containsYieldIn(ASTNode first, List<? extends ASTNode> children) {
-        if (yieldInside == null) {
-            yieldInside = childContainsYield(first);
-            if (!yieldInside && anyContainsYield(children)) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
-    }
-
-    final boolean containsYieldIn(List<? extends ASTNode> children) {
-        if (yieldInside == null) {
-            yieldInside = false;
-            if (anyContainsYield(children)) {
-                yieldInside = true;
-            }
+            yieldInside = containsSuspension(Suspension.YIELD);
         }
         return yieldInside;
     }
@@ -142,33 +57,25 @@ public abstract sealed class ASTNode
         return location;
     }
 
-    static boolean anyContainsAwait(List<? extends ASTNode> nodes) {
-        if (nodes != null) {
-            for (ASTNode node : nodes) {
-                if (node != null && node.containsAwait()) {
-                    return true;
+    enum Suspension {
+        /** An await expression or a for-await-of loop. */
+        AWAIT,
+        /** A yield expression. */
+        YIELD;
+
+        boolean in(ASTNode node) {
+            return node != null && (this == AWAIT ? node.containsAwait() : node.containsYield());
+        }
+
+        boolean in(List<? extends ASTNode> nodes) {
+            if (nodes != null) {
+                for (ASTNode node : nodes) {
+                    if (in(node)) {
+                        return true;
+                    }
                 }
             }
+            return false;
         }
-        return false;
-    }
-
-    static boolean anyContainsYield(List<? extends ASTNode> nodes) {
-        if (nodes != null) {
-            for (ASTNode node : nodes) {
-                if (node != null && node.containsYield()) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    static boolean childContainsAwait(ASTNode node) {
-        return node != null && node.containsAwait();
-    }
-
-    static boolean childContainsYield(ASTNode node) {
-        return node != null && node.containsYield();
     }
 }

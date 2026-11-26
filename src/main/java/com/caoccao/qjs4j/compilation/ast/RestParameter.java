@@ -29,13 +29,8 @@ public final class RestParameter extends ASTNode {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(argument);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(argument);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(argument);
     }
 
     public Pattern getArgument() {

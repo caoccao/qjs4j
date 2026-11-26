@@ -32,13 +32,8 @@ public final class AssignmentPattern extends Pattern {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(left, right);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(left, right);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(left) || kind.in(right);
     }
 
     @Override

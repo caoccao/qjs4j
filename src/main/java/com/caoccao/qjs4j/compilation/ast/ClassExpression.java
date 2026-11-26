@@ -35,13 +35,8 @@ public final class ClassExpression extends Expression {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(superClass, body);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(superClass, body);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(superClass) || kind.in(body);
     }
 
     public List<ClassElement> getBody() {

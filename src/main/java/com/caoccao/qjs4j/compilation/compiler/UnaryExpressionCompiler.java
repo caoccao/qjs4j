@@ -317,20 +317,9 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
             } else {
                 Integer localIndex = compilerContext.scopeManager.findLocalInScopes(name);
                 if (localIndex != null) {
-                    // Use GET_LOC_CHECK for TDZ locals - typeof of an uninitialized
-                    // lexical binding throws ReferenceError per ES spec
-                    if (compilerContext.tdzLocals.contains(name)) {
-                        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
-                    } else {
-                        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
-                    }
+                    compilerContext.identifierCompiler.emitLocalRead(name, localIndex);
                 } else {
-                    Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
-                    if (capturedIndex != null) {
-                        compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, capturedIndex);
-                    } else {
-                        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR_UNDEF, name);
-                    }
+                    compilerContext.identifierCompiler.emitCapturedOrGlobalIdentifierLookup(name, Opcode.GET_VAR_UNDEF);
                 }
             }
             compilerContext.emitter.emitOpcode(Opcode.TYPEOF);

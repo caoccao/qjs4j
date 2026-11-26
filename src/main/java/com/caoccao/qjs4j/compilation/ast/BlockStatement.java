@@ -32,35 +32,8 @@ public final class BlockStatement extends Statement {
     }
 
     @Override
-    public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = false;
-            if (body != null) {
-                for (Statement item : body) {
-                    if (item != null && item.containsAwait()) {
-                        awaitInside = true;
-                        break;
-                    }
-                }
-            }
-        }
-        return awaitInside;
-    }
-
-    @Override
-    public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = false;
-            if (body != null) {
-                for (Statement item : body) {
-                    if (item != null && item.containsYield()) {
-                        yieldInside = true;
-                        break;
-                    }
-                }
-            }
-        }
-        return yieldInside;
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(body);
     }
 
     public List<Statement> getBody() {

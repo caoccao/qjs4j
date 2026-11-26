@@ -26,13 +26,8 @@ public abstract sealed class JumpStatement extends Statement permits BreakStatem
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(label);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(label);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(label);
     }
 
     public Identifier getLabel() {

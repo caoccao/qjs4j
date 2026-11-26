@@ -35,27 +35,8 @@ public final class TryStatement extends Statement {
     }
 
     @Override
-    public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = block != null && block.containsAwait();
-            if (!awaitInside && ((handler != null && handler.containsAwait())
-                    || (finalizer != null && finalizer.containsAwait()))) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
-    }
-
-    @Override
-    public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = block != null && block.containsYield();
-            if (!yieldInside && ((handler != null && handler.containsYield())
-                    || (finalizer != null && finalizer.containsYield()))) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(block) || kind.in(handler) || kind.in(finalizer);
     }
 
     public BlockStatement getBlock() {
@@ -101,25 +82,8 @@ public final class TryStatement extends Statement {
         }
 
         @Override
-        public boolean containsAwait() {
-            if (awaitInside == null) {
-                awaitInside = param != null && param.containsAwait();
-                if (!awaitInside && body != null && body.containsAwait()) {
-                    awaitInside = true;
-                }
-            }
-            return awaitInside;
-        }
-
-        @Override
-        public boolean containsYield() {
-            if (yieldInside == null) {
-                yieldInside = param != null && param.containsYield();
-                if (!yieldInside && body != null && body.containsYield()) {
-                    yieldInside = true;
-                }
-            }
-            return yieldInside;
+        boolean containsSuspension(Suspension kind) {
+            return kind.in(param) || kind.in(body);
         }
 
         public BlockStatement getBody() {

@@ -38,13 +38,8 @@ public final class ImportExpression extends Expression {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(source, options);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(source, options);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(source) || kind.in(options);
     }
 
     public Expression getOptions() {

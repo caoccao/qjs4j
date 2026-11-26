@@ -35,11 +35,6 @@ public final class ConditionalExpression extends Expression {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(test, consequent, alternate);
-    }
-
-    @Override
     public boolean containsDirectEvalVarArguments() {
         if (directEvalVarArgumentsInside == null) {
             directEvalVarArgumentsInside = test != null && test.containsDirectEvalVarArguments();
@@ -54,8 +49,8 @@ public final class ConditionalExpression extends Expression {
     }
 
     @Override
-    public boolean containsYield() {
-        return containsYieldIn(test, consequent, alternate);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(test) || kind.in(consequent) || kind.in(alternate);
     }
 
     public Expression getAlternate() {

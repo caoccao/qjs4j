@@ -33,13 +33,8 @@ public final class SwitchStatement extends Statement {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(discriminant, cases);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(discriminant, cases);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(discriminant) || kind.in(cases);
     }
 
     public List<SwitchCase> getCases() {
@@ -81,25 +76,8 @@ public final class SwitchStatement extends Statement {
         }
 
         @Override
-        public boolean containsAwait() {
-            if (awaitInside == null) {
-                awaitInside = test != null && test.containsAwait();
-                if (!awaitInside && anyContainsAwait(consequent)) {
-                    awaitInside = true;
-                }
-            }
-            return awaitInside;
-        }
-
-        @Override
-        public boolean containsYield() {
-            if (yieldInside == null) {
-                yieldInside = test != null && test.containsYield();
-                if (!yieldInside && anyContainsYield(consequent)) {
-                    yieldInside = true;
-                }
-            }
-            return yieldInside;
+        boolean containsSuspension(Suspension kind) {
+            return kind.in(test) || kind.in(consequent);
         }
 
         public List<Statement> getConsequent() {

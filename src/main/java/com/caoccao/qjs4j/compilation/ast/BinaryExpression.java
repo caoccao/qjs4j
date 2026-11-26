@@ -38,14 +38,6 @@ public final class BinaryExpression extends Expression {
     }
 
     @Override
-    public boolean containsAwait() {
-        if (awaitInside == null) {
-            containsAlongLeftSpine(this, (node, value) -> node.awaitInside = value, Expression::containsAwait);
-        }
-        return awaitInside;
-    }
-
-    @Override
     public boolean containsDirectEvalVarArguments() {
         if (directEvalVarArgumentsInside == null) {
             containsAlongLeftSpine(this, (node, value) -> node.directEvalVarArgumentsInside = value,
@@ -55,10 +47,12 @@ public final class BinaryExpression extends Expression {
     }
 
     @Override
-    public boolean containsYield() {
-        if (yieldInside == null) {
-            containsAlongLeftSpine(this, (node, value) -> node.yieldInside = value, Expression::containsYield);
+    boolean containsSuspension(Suspension kind) {
+        if (kind == Suspension.AWAIT) {
+            containsAlongLeftSpine(this, (node, value) -> node.awaitInside = value, Expression::containsAwait);
+            return awaitInside;
         }
+        containsAlongLeftSpine(this, (node, value) -> node.yieldInside = value, Expression::containsYield);
         return yieldInside;
     }
 

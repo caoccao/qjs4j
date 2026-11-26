@@ -27,13 +27,8 @@ public final class VariableDeclarator extends ASTNode {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(id, init);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(id, init);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(id) || kind.in(init);
     }
 
     public Pattern getId() {

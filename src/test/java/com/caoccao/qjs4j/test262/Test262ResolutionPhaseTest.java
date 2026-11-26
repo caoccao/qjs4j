@@ -16,14 +16,10 @@
 
 package com.caoccao.qjs4j.test262;
 
-import com.caoccao.qjs4j.test262.harness.HarnessLoader;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -44,35 +40,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>
  * These cases build their own Test262 root, so they need no checkout.
  */
-public class Test262ResolutionPhaseTest {
-    private Test262Executor executor;
-    @TempDir
-    Path test262Root;
-    private Path testDirectory;
+public class Test262ResolutionPhaseTest extends NegativeTest262Fixture {
 
     private Test262TestCase moduleCase(String code, String phase, String type) {
-        Test262TestCase testCase = new Test262TestCase(testDirectory.resolve("synthetic.js"));
-        testCase.setFlags(Set.of("module"));
-        testCase.setCode(code);
-        testCase.setNegative(new Test262TestCase.NegativeInfo(phase, type));
-        testCase.setVariant(Test262TestCase.Variant.MODULE);
-        return testCase;
-    }
-
-    @BeforeEach
-    public void setUp() throws IOException {
-        Path harnessDirectory = test262Root.resolve("harness");
-        Files.createDirectories(harnessDirectory);
-        Files.writeString(harnessDirectory.resolve("assert.js"),
-                "function assert(c, m) { if (!c) throw new Error(m); }\n");
-        // The two definitions every non-raw test gets, copied from the real harness so the probe
-        // wraps exactly what a real test calls.
-        Files.writeString(harnessDirectory.resolve("sta.js"),
-                "function Test262Error(message) { this.message = message || ''; }\n" + "function $DONOTEVALUATE() {\n"
-                        + "  throw 'Test262: This statement should not be evaluated.';\n" + "}\n");
-        testDirectory = test262Root.resolve("test");
-        Files.createDirectories(testDirectory);
-        executor = new Test262Executor(new HarnessLoader(test262Root), 500, 5000);
+        return negativeCase(code, phase, type, Test262TestCase.Variant.MODULE, Set.of("module"));
     }
 
     @Test

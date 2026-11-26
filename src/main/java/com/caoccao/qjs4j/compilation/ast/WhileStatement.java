@@ -26,13 +26,8 @@ public final class WhileStatement extends WhileLoop {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(getTest(), getBody());
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(getTest(), getBody());
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(getTest()) || kind.in(getBody());
     }
 
 }

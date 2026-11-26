@@ -29,13 +29,8 @@ public final class ExportSpecifier extends ASTNode {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(local, exported);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(local, exported);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(local) || kind.in(exported);
     }
 
     public Identifier getExported() {

@@ -47,18 +47,13 @@ public final class MemberExpression extends Expression {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(object, property);
-    }
-
-    @Override
     public boolean containsOptionalChain() {
         return optionalChainInside;
     }
 
     @Override
-    public boolean containsYield() {
-        return containsYieldIn(object, property);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(object) || kind.in(property);
     }
 
     public Expression getObject() {

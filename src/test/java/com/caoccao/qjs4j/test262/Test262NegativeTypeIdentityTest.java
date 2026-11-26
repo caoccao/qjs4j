@@ -16,14 +16,8 @@
 
 package com.caoccao.qjs4j.test262;
 
-import com.caoccao.qjs4j.test262.harness.HarnessLoader;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,43 +32,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The type is now decided by identity the test cannot forge: native errors are sealed Java classes, and
  * {@code Test262Error} is matched against the harness prototype captured before the test ran.
  */
-public class Test262NegativeTypeIdentityTest {
-    private Test262Executor executor;
-    @TempDir
-    Path test262Root;
-    private Path testDirectory;
+public class Test262NegativeTypeIdentityTest extends NegativeTest262Fixture {
 
     private Test262TestCase harnessCase(String code, String type) {
-        Test262TestCase testCase = new Test262TestCase(testDirectory.resolve("synthetic.js"));
-        testCase.setCode(code);
-        testCase.setNegative(new Test262TestCase.NegativeInfo("runtime", type));
-        testCase.setVariant(Test262TestCase.Variant.NON_STRICT);
-        return testCase;
+        return negativeCase(code, "runtime", type, Test262TestCase.Variant.NON_STRICT, Set.of());
     }
 
     private Test262TestCase rawCase(String code, String type) {
-        Test262TestCase testCase = new Test262TestCase(testDirectory.resolve("synthetic.js"));
-        testCase.setFlags(Set.of("raw"));
-        testCase.setCode(code);
-        testCase.setNegative(new Test262TestCase.NegativeInfo("runtime", type));
-        testCase.setVariant(Test262TestCase.Variant.NON_STRICT);
-        return testCase;
-    }
-
-    @BeforeEach
-    public void setUp() throws IOException {
-        Path harnessDirectory = test262Root.resolve("harness");
-        Files.createDirectories(harnessDirectory);
-        Files.writeString(harnessDirectory.resolve("assert.js"),
-                "function assert(c, m) { if (!c) throw new Error(m); }\n");
-        Files.writeString(harnessDirectory.resolve("sta.js"),
-                "function Test262Error(message) { this.message = message || ''; }\n"
-                        + "Test262Error.prototype.toString = function () {\n"
-                        + "  return 'Test262Error: ' + this.message;\n" + "};\n" + "function $DONOTEVALUATE() {\n"
-                        + "  throw 'Test262: This statement should not be evaluated.';\n" + "}\n");
-        testDirectory = test262Root.resolve("test");
-        Files.createDirectories(testDirectory);
-        executor = new Test262Executor(new HarnessLoader(test262Root), 500, 5000);
+        return negativeCase(code, "runtime", type, Test262TestCase.Variant.NON_STRICT, Set.of("raw"));
     }
 
     @Test

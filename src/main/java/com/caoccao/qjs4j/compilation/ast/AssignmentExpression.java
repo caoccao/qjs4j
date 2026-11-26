@@ -42,11 +42,6 @@ public final class AssignmentExpression extends Expression {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(left, right);
-    }
-
-    @Override
     public boolean containsDirectEvalVarArguments() {
         if (directEvalVarArgumentsInside == null) {
             directEvalVarArgumentsInside = right != null && right.containsDirectEvalVarArguments();
@@ -55,8 +50,8 @@ public final class AssignmentExpression extends Expression {
     }
 
     @Override
-    public boolean containsYield() {
-        return containsYieldIn(left, right);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(left) || kind.in(right);
     }
 
     public Expression getLeft() {

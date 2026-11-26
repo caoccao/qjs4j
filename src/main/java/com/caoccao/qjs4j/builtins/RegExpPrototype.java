@@ -40,6 +40,20 @@ public final class RegExpPrototype {
                 PROPERTY_MULTILINE, PROPERTY_DOT_ALL, PROPERTY_UNICODE, PROPERTY_UNICODE_SETS, PROPERTY_STICKY};
     }
 
+    private static boolean advanceAfterEmptyMatch(JSContext context, JSObject regexp, JSString match, String input,
+            boolean fullUnicode) {
+        if (!match.value().isEmpty()) {
+            return true;
+        }
+        long index = readLastIndex(context, regexp);
+        if (context.hasPendingException()) {
+            return false;
+        }
+        long next = fullUnicode && index < input.length() ? advanceStringIndexUnicode(input, (int) index) : index + 1;
+        setLastIndexOrThrow(context, regexp, JSNumber.of(next));
+        return !context.hasPendingException();
+    }
+
     private static int advanceStringIndexUnicode(String s, int index) {
         if (index + 1 >= s.length()) {
             return index + 1;
@@ -270,11 +284,7 @@ public final class RegExpPrototype {
         }
         String str = inputString.value();
 
-        JSValue lastIndexValue = regexp.get(PropertyKey.LAST_INDEX);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        long lastIndexLong = JSTypeConversions.toLength(context, lastIndexValue);
+        long lastIndexLong = readLastIndex(context, regexp);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -582,6 +592,11 @@ public final class RegExpPrototype {
         return context.hasPendingException() ? null : JSTypeConversions.toString(context, matched);
     }
 
+    private static long readLastIndex(JSContext context, JSObject regexp) {
+        JSValue value = regexp.get(PropertyKey.LAST_INDEX);
+        return context.hasPendingException() ? 0 : JSTypeConversions.toLength(context, value);
+    }
+
     private static JSValue regExpExec(JSContext context, JSObject regexpObject, JSString inputString) {
         // ES2024 22.2.5.2 RegExpExec
         // Step 3: Let exec be ? Get(R, "exec").
@@ -677,9 +692,6 @@ public final class RegExpPrototype {
         }
 
         String flags = getFlagsString(context, rxObj);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
         if (flags == null) {
             return JSUndefined.INSTANCE;
         }
@@ -689,7 +701,7 @@ public final class RegExpPrototype {
             return regExpExec(context, rxObj, str);
         }
 
-        boolean fullUnicode = flags.indexOf('u') >= 0 || flags.indexOf('v') >= 0;
+        boolean fullUnicode = usesUnicode(flags);
 
         setLastIndexOrThrow(context, rxObj, JSNumber.of(0));
         if (context.hasPendingException()) {
@@ -721,17 +733,8 @@ public final class RegExpPrototype {
             resultArray.push(matchStr);
             n++;
 
-            if (matchStr.value().isEmpty()) {
-                JSValue lastIndexValue = rxObj.get(PropertyKey.LAST_INDEX);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                long thisIndex = JSTypeConversions.toLength(context, lastIndexValue);
-                long nextIndex = fullUnicode ? advanceStringIndexUnicode(s, (int) thisIndex) : thisIndex + 1;
-                setLastIndexOrThrow(context, rxObj, JSNumber.of(nextIndex));
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
+            if (!advanceAfterEmptyMatch(context, rxObj, matchStr, s, fullUnicode)) {
+                return JSUndefined.INSTANCE;
             }
         }
     }
@@ -756,26 +759,16 @@ public final class RegExpPrototype {
         }
 
         String flags = getFlagsString(context, regexpObject);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
         if (flags == null) {
             return JSUndefined.INSTANCE;
         }
 
         JSObject matcher = constructWithSpecies(context, speciesConstructor, regexpObject, flags);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
         if (matcher == null) {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue lastIndexValue = regexpObject.get(PropertyKey.LAST_INDEX);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        long lastIndex = JSTypeConversions.toLength(context, lastIndexValue);
+        long lastIndex = readLastIndex(context, regexpObject);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -785,7 +778,7 @@ public final class RegExpPrototype {
         }
 
         boolean global = flags.indexOf('g') >= 0;
-        boolean fullUnicode = flags.indexOf('u') >= 0 || flags.indexOf('v') >= 0;
+        boolean fullUnicode = usesUnicode(flags);
         return new JSRegExpStringIterator(context, matcher, inputString, global, fullUnicode);
     }
 
@@ -814,14 +807,11 @@ public final class RegExpPrototype {
 
         // ES2024 22.2.5.11 step 6-8: Read flags string, parse global and unicode from it
         String flags = getFlagsString(context, regexpObject);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
         if (flags == null) {
             return JSUndefined.INSTANCE;
         }
         boolean global = flags.indexOf('g') >= 0;
-        boolean fullUnicode = flags.indexOf('u') >= 0 || flags.indexOf('v') >= 0;
+        boolean fullUnicode = usesUnicode(flags);
 
         if (global) {
             setLastIndexOrThrow(context, regexpObject, JSNumber.of(0));
@@ -851,22 +841,8 @@ public final class RegExpPrototype {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            if (matchedString.value().isEmpty()) {
-                JSValue lastIndexValue = regexpObject.get(PropertyKey.LAST_INDEX);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                long currentIndex = JSTypeConversions.toLength(context, lastIndexValue);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                long nextIndex = fullUnicode
-                        ? advanceStringIndexUnicode(inputString, (int) Math.min(currentIndex, inputString.length()))
-                        : currentIndex + 1;
-                setLastIndexOrThrow(context, regexpObject, JSNumber.of(nextIndex));
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
+            if (!advanceAfterEmptyMatch(context, regexpObject, matchedString, inputString, fullUnicode)) {
+                return JSUndefined.INSTANCE;
             }
         }
 
@@ -888,14 +864,11 @@ public final class RegExpPrototype {
             }
 
             // ES2024 22.2.5.11 step 14c: matched = ToString(Get(result, "0"))
-            JSValue matchedValue = resultObject.get(PropertyKey.fromIndex(0));
+            JSString matchedValue = matchedString(context, resultObject);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            String matched = JSTypeConversions.toString(context, matchedValue).value();
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+            String matched = matchedValue.value();
 
             // ES2024 22.2.5.11 step 14d: position = ToIntegerOrInfinity(Get(result, "index"))
             JSValue positionValue = resultObject.get(PropertyKey.INDEX);
@@ -1049,20 +1022,14 @@ public final class RegExpPrototype {
         }
 
         String flags = getFlagsString(context, regexpObject);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
         if (flags == null) {
             return JSUndefined.INSTANCE;
         }
-        boolean unicodeMatching = flags.indexOf('u') >= 0 || flags.indexOf('v') >= 0;
+        boolean unicodeMatching = usesUnicode(flags);
         String newFlags = flags.indexOf('y') >= 0 ? flags : flags + "y";
 
         // ES2024 22.2.6.14 step 8: Construct splitter.
         JSObject splitter = constructWithSpecies(context, speciesConstructor, regexpObject, newFlags);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
         if (splitter == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1115,11 +1082,7 @@ public final class RegExpPrototype {
                 return context.throwTypeError("RegExp exec method returned something other than an Object or null");
             }
 
-            JSValue lastIndexValue = splitter.get(PropertyKey.LAST_INDEX);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            long eLong = JSTypeConversions.toLength(context, lastIndexValue);
+            long eLong = readLastIndex(context, splitter);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1210,6 +1173,10 @@ public final class RegExpPrototype {
         return new JSString("/" + sourceString.value() + "/" + flagsString.value());
     }
 
+    private static boolean usesUnicode(String flags) {
+        return flags.indexOf('u') >= 0 || flags.indexOf('v') >= 0;
+    }
+
     private static final class JSRegExpStringIterator extends JSObject {
         private boolean done;
         private final boolean fullUnicode;
@@ -1258,35 +1225,13 @@ public final class RegExpPrototype {
                 return createIteratorResultObject(context, matchObject, false);
             }
 
-            JSValue matchStringValue = matchObject.get(PropertyKey.ZERO);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            JSString matchString = JSTypeConversions.toString(context, matchStringValue);
+            JSString matchString = matchedString(context, matchObject);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
 
-            if (matchString.value().isEmpty()) {
-                JSValue lastIndexValue = regexpObject.get(PropertyKey.LAST_INDEX);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                long currentIndex = JSTypeConversions.toLength(context, lastIndexValue);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                long nextIndex;
-                if (fullUnicode) {
-                    int boundedIndex = (int) Math.min(currentIndex, stringValue.value().length());
-                    nextIndex = advanceStringIndexUnicode(stringValue.value(), boundedIndex);
-                } else {
-                    nextIndex = currentIndex + 1;
-                }
-                setLastIndexOrThrow(context, regexpObject, JSNumber.of(nextIndex));
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
+            if (!advanceAfterEmptyMatch(context, regexpObject, matchString, stringValue.value(), fullUnicode)) {
+                return JSUndefined.INSTANCE;
             }
 
             return createIteratorResultObject(context, matchObject, false);

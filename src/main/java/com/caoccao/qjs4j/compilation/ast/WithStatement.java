@@ -32,13 +32,8 @@ public final class WithStatement extends Statement {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(object, body);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(object, body);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(object) || kind.in(body);
     }
 
     public Statement getBody() {

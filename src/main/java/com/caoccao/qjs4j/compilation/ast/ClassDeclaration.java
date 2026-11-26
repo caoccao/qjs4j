@@ -34,13 +34,8 @@ public final class ClassDeclaration extends Declaration {
     }
 
     @Override
-    public boolean containsAwait() {
-        return expression.containsAwait();
-    }
-
-    @Override
-    public boolean containsYield() {
-        return expression.containsYield();
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(expression);
     }
 
     public List<ClassElement> getBody() {

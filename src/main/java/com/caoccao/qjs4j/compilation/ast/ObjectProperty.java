@@ -33,13 +33,8 @@ public abstract sealed class ObjectProperty<V extends Pattern> extends ASTNode
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(key, value);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(key, value);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(key) || kind.in(value);
     }
 
     public Expression getKey() {

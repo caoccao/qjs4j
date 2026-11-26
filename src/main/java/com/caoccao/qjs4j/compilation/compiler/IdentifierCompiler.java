@@ -75,13 +75,13 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         emitIdentifierLookupWithoutWith(name);
     }
 
-    private void emitCapturedOrGlobalIdentifierLookup(String name) {
+    void emitCapturedOrGlobalIdentifierLookup(String name, Opcode globalOpcode) {
         Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
         if (capturedIndex != null) {
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, capturedIndex);
         } else {
             // Not found in local scopes, use global variable
-            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
+            compilerContext.emitter.emitOpcodeAtom(globalOpcode, name);
         }
     }
 
@@ -94,13 +94,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         Integer localIndex = compilerContext.scopeManager.findLocalInScopes(name);
 
         if (localIndex != null) {
-            // Use GET_LOC_CHECK for TDZ locals (let/const/class in program scope)
-            // to throw ReferenceError if accessed before initialization
-            if (compilerContext.tdzLocals.contains(name)) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
-            } else {
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
-            }
+            emitLocalRead(name, localIndex);
             return;
         }
 
@@ -122,7 +116,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
             return;
         }
 
-        emitCapturedOrGlobalIdentifierLookup(name);
+        emitCapturedOrGlobalIdentifierLookup(name, Opcode.GET_VAR);
     }
 
     void emitInheritedWithAwareDeleteIdentifier(String name, List<String> withBindingNames, int withDepth) {
@@ -159,7 +153,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
 
     private void emitInheritedWithAwareIdentifierLookup(String name, List<String> withBindingNames, int withDepth) {
         if (withDepth >= withBindingNames.size()) {
-            emitCapturedOrGlobalIdentifierLookup(name);
+            emitCapturedOrGlobalIdentifierLookup(name, Opcode.GET_VAR);
             return;
         }
 
@@ -175,7 +169,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
     private void emitInheritedWithAwareIdentifierLookupForCall(String name, List<String> withBindingNames,
             int withDepth) {
         if (withDepth >= withBindingNames.size()) {
-            emitCapturedOrGlobalIdentifierLookup(name);
+            emitCapturedOrGlobalIdentifierLookup(name, Opcode.GET_VAR);
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
             return;
         }
@@ -204,6 +198,12 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
             return true;
         }
         return false;
+    }
+
+    /** A local in its temporal dead zone must throw even when read by typeof. */
+    void emitLocalRead(String name, int index) {
+        Opcode opcode = compilerContext.tdzLocals.contains(name) ? Opcode.GET_LOC_CHECK : Opcode.GET_LOC;
+        compilerContext.emitter.emitOpcodeU16(opcode, index);
     }
 
     void emitWithAwareDeleteIdentifier(String name, List<Integer> withObjectLocals, int withDepth) {
@@ -376,5 +376,4 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
             compilerContext.emitter.emitOpcode(Opcode.SWAP);
         }
     }
-
 }

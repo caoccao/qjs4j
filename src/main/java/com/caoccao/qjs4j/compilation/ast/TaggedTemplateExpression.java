@@ -30,13 +30,8 @@ public final class TaggedTemplateExpression extends Expression {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(tag, quasi);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(tag, quasi);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(tag) || kind.in(quasi);
     }
 
     public TemplateLiteral getQuasi() {

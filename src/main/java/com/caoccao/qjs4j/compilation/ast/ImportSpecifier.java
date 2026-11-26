@@ -29,13 +29,8 @@ public final class ImportSpecifier extends ASTNode {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(imported, local);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(imported, local);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(imported) || kind.in(local);
     }
 
     public Identifier getImported() {

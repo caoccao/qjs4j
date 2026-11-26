@@ -28,13 +28,8 @@ public final class ExpressionStatement extends Statement {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(expression);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(expression);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(expression);
     }
 
     public Expression getExpression() {

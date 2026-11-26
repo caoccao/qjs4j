@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.exceptions.JSException;
@@ -1449,6 +1450,13 @@ public final class JSContext implements AutoCloseable {
         return evalOverlayManager.suspend();
     }
 
+    /** Take the pending exception and clear exception state from the context and VM. */
+    public JSValue takeExecutionException() {
+        JSValue exception = getPendingException();
+        clearAllPendingExceptions();
+        return exception;
+    }
+
     JSEvalEnvironment takePendingDirectEvalEnvironment() {
         JSEvalEnvironment environment = pendingDirectEvalEnvironment;
         pendingDirectEvalEnvironment = null;
@@ -1460,6 +1468,28 @@ public final class JSContext implements AutoCloseable {
         JSValue exception = pendingException;
         pendingException = null;
         return exception;
+    }
+
+    /** Recover the JavaScript rejection reason when asynchronous execution fails. */
+    public JSValue takeRejectionReason(Exception e) {
+        if (hasPendingException()) {
+            return takeExecutionException();
+        }
+        if (e instanceof JSException jsException) {
+            return jsException.getErrorValue();
+        }
+        if (e instanceof JSVirtualMachineException virtualMachineException) {
+            if (virtualMachineException.getJsValue() != null) {
+                return virtualMachineException.getJsValue();
+            }
+            if (virtualMachineException.getJsError() != null) {
+                return virtualMachineException.getJsError();
+            }
+        }
+        String message = e.getMessage() != null ? e.getMessage() : e.toString();
+        JSValue error = throwError(message);
+        clearPendingException();
+        return error;
     }
 
     public JSError throwAggregateError(String message) {

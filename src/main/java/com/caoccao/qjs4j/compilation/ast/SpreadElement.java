@@ -28,13 +28,8 @@ public final class SpreadElement extends Expression {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(argument);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(argument);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(argument);
     }
 
     public Expression getArgument() {

@@ -32,13 +32,8 @@ public final class YieldExpression extends Expression {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(argument);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return true;
+    boolean containsSuspension(Suspension kind) {
+        return kind == Suspension.YIELD || kind.in(argument);
     }
 
     public Expression getArgument() {

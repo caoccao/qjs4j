@@ -39,14 +39,6 @@ public final class JSIntlObject {
     private static final String[] CURRENCY_DISPLAY_VALUES = {"code", "symbol", "narrowSymbol", "name"};
     private static final String[] CURRENCY_SIGN_VALUES = {"standard", "accounting"};
     private static final String[] FORMAT_STYLE_VALUES = {"short", "medium", "long", "full"};
-    // ---- CLDR Language Alias Data ----
-    // Maps: old language code → new language code
-    // Some entries have additional script/region that are added only if not already present
-    private static final Map<String, String> LANGUAGE_ALIASES = new HashMap<>();
-    // Maps: old language → region to add if not already present
-    private static final Map<String, String> LANGUAGE_REGION_ADDITIONS = new HashMap<>();
-    // Maps: old language → script to add if not already present
-    private static final Map<String, String> LANGUAGE_SCRIPT_ADDITIONS = new HashMap<>();
     /**
      * CLDR likely subtags data for maximize/minimize. Maps language (or language-script, language-region) to full
      * locale tag.
@@ -55,13 +47,6 @@ public final class JSIntlObject {
     private static final BigInteger NANOS_PER_MILLISECOND = BigInteger.valueOf(1_000_000L);
     private static final String[] NOTATION_VALUES = {"standard", "scientific", "engineering", "compact"};
     private static final String[] NUMBER_STYLE_VALUES = {"decimal", "currency", "percent", "unit"};
-    // ---- Region Alias Data ----
-    // Maps: old region → {language/script → new region}
-    // Default replacement is first, specific language/script replacements follow
-    private static final Map<String, String> REGION_ALIASES = new HashMap<>();
-    private static final Map<String, Map<String, String>> REGION_ALIASES_BY_LANG = new HashMap<>();
-    // Script-based region resolution for SU/810
-    private static final Map<String, String> REGION_BY_SCRIPT = new HashMap<>();
     private static final String[] ROUNDING_MODE_VALUES = {"ceil", "floor", "expand", "trunc", "halfCeil", "halfFloor",
             "halfExpand", "halfTrunc", "halfEven"};
     private static final String[] ROUNDING_PRIORITY_VALUES = {"auto", "morePrecision", "lessPrecision"};
@@ -72,8 +57,6 @@ public final class JSIntlObject {
             "nanosecond", "ounce", "percent", "petabyte", "pound", "second", "stone", "terabit", "terabyte", "week",
             "yard", "year");
     private static final String[] SIGN_DISPLAY_VALUES = {"auto", "never", "always", "exceptZero", "negative"};
-    // ---- Subdivision Aliases ----
-    private static final Map<String, String> SUBDIVISION_ALIASES = new HashMap<>();
     /**
      * Supplementary valid IANA timezone IDs not present in ZoneId.getAvailableZoneIds(). These are real IANA TZDB
      * entries that some JDK versions omit.
@@ -95,20 +78,12 @@ public final class JSIntlObject {
             "olck", "onao", "orya", "osma", "outlined", "rohg", "saur", "segment", "shrd", "sind", "sinh", "sora",
             "sund", "sunu", "takr", "talu", "tamldec", "telu", "thai", "tibt", "tirh", "tnsa", "tols", "vaii", "wara",
             "wcho");
-    // ---- Timezone Aliases ----
-    private static final Map<String, String> TIMEZONE_ALIASES = new HashMap<>();
     /**
      * Lazy-initialized map of lowercased timezone ID → canonical casing. Built from ZoneId.getAvailableZoneIds() plus
      * supplementary valid IANA timezone IDs that Java's ZoneId does not include.
      */
     private static volatile Map<String, String> TIMEZONE_LOOKUP_MAP;
     private static final String[] TRAILING_ZERO_DISPLAY_VALUES = {"auto", "stripIfInteger"};
-    // ---- Transform Extension tvalue Aliases ----
-    private static final Map<String, Map<String, String>> TVALUE_ALIASES = new HashMap<>();
-    // Unicode extension keys where "yes" → "true" (which means omit the value)
-    private static final Set<String> UNICODE_EXT_BOOLEAN_KEYS = Set.of("kb", "kc", "kh", "kk", "kn");
-    // ---- Unicode Extension Value Aliases ----
-    private static final Map<String, Map<String, String>> UNICODE_EXT_VALUE_ALIASES = new HashMap<>();
     /**
      * Pattern for Unicode Locale Identifier type: (3*8alphanum) *("-" (3*8alphanum))
      */
@@ -122,9 +97,6 @@ public final class JSIntlObject {
             "unihan", "zhuyin");
     private static final Set<Integer> VALID_ROUNDING_INCREMENTS = Set.of(1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500,
             1000, 2000, 2500, 5000);
-    // ---- Variant Alias Data ----
-    private static final Map<String, String> VARIANT_ALIASES = new HashMap<>();
-    private static final Map<String, String> VARIANT_TO_LANGUAGE = new HashMap<>();
 
     static {
         AVAILABLE_LOCALE_LANGUAGES = Arrays.stream(Locale.getAvailableLocales()).map(Locale::toLanguageTag)
@@ -134,326 +106,6 @@ public final class JSIntlObject {
                             ? tag.substring(0, dashIndex).toLowerCase(Locale.ROOT)
                             : tag.toLowerCase(Locale.ROOT);
                 }).collect(Collectors.toSet());
-    }
-
-    static {
-        // 3-letter to 2-letter language aliases
-        LANGUAGE_ALIASES.put("aar", "aa");
-        LANGUAGE_ALIASES.put("abk", "ab");
-        LANGUAGE_ALIASES.put("afr", "af");
-        LANGUAGE_ALIASES.put("aka", "ak");
-        LANGUAGE_ALIASES.put("amh", "am");
-        LANGUAGE_ALIASES.put("ara", "ar");
-        LANGUAGE_ALIASES.put("arg", "an");
-        LANGUAGE_ALIASES.put("asm", "as");
-        LANGUAGE_ALIASES.put("ava", "av");
-        LANGUAGE_ALIASES.put("ave", "ae");
-        LANGUAGE_ALIASES.put("aym", "ay");
-        LANGUAGE_ALIASES.put("aze", "az");
-        LANGUAGE_ALIASES.put("bak", "ba");
-        LANGUAGE_ALIASES.put("bam", "bm");
-        LANGUAGE_ALIASES.put("bel", "be");
-        LANGUAGE_ALIASES.put("ben", "bn");
-        LANGUAGE_ALIASES.put("bis", "bi");
-        LANGUAGE_ALIASES.put("bod", "bo");
-        LANGUAGE_ALIASES.put("bos", "bs");
-        LANGUAGE_ALIASES.put("bre", "br");
-        LANGUAGE_ALIASES.put("bul", "bg");
-        LANGUAGE_ALIASES.put("cat", "ca");
-        LANGUAGE_ALIASES.put("ces", "cs");
-        LANGUAGE_ALIASES.put("cha", "ch");
-        LANGUAGE_ALIASES.put("che", "ce");
-        LANGUAGE_ALIASES.put("chu", "cu");
-        LANGUAGE_ALIASES.put("chv", "cv");
-        LANGUAGE_ALIASES.put("cor", "kw");
-        LANGUAGE_ALIASES.put("cos", "co");
-        LANGUAGE_ALIASES.put("cre", "cr");
-        LANGUAGE_ALIASES.put("cym", "cy");
-        LANGUAGE_ALIASES.put("dan", "da");
-        LANGUAGE_ALIASES.put("deu", "de");
-        LANGUAGE_ALIASES.put("div", "dv");
-        LANGUAGE_ALIASES.put("dzo", "dz");
-        LANGUAGE_ALIASES.put("ell", "el");
-        LANGUAGE_ALIASES.put("eng", "en");
-        LANGUAGE_ALIASES.put("epo", "eo");
-        LANGUAGE_ALIASES.put("est", "et");
-        LANGUAGE_ALIASES.put("eus", "eu");
-        LANGUAGE_ALIASES.put("ewe", "ee");
-        LANGUAGE_ALIASES.put("fao", "fo");
-        LANGUAGE_ALIASES.put("fas", "fa");
-        LANGUAGE_ALIASES.put("fij", "fj");
-        LANGUAGE_ALIASES.put("fin", "fi");
-        LANGUAGE_ALIASES.put("fra", "fr");
-        LANGUAGE_ALIASES.put("fry", "fy");
-        LANGUAGE_ALIASES.put("ful", "ff");
-        LANGUAGE_ALIASES.put("gla", "gd");
-        LANGUAGE_ALIASES.put("gle", "ga");
-        LANGUAGE_ALIASES.put("glg", "gl");
-        LANGUAGE_ALIASES.put("glv", "gv");
-        LANGUAGE_ALIASES.put("grn", "gn");
-        LANGUAGE_ALIASES.put("guj", "gu");
-        LANGUAGE_ALIASES.put("hat", "ht");
-        LANGUAGE_ALIASES.put("hau", "ha");
-        LANGUAGE_ALIASES.put("hbs", "sr");
-        LANGUAGE_ALIASES.put("heb", "he");
-        LANGUAGE_ALIASES.put("her", "hz");
-        LANGUAGE_ALIASES.put("hin", "hi");
-        LANGUAGE_ALIASES.put("hmo", "ho");
-        LANGUAGE_ALIASES.put("hrv", "hr");
-        LANGUAGE_ALIASES.put("hun", "hu");
-        LANGUAGE_ALIASES.put("hye", "hy");
-        LANGUAGE_ALIASES.put("ibo", "ig");
-        LANGUAGE_ALIASES.put("ido", "io");
-        LANGUAGE_ALIASES.put("iii", "ii");
-        LANGUAGE_ALIASES.put("iku", "iu");
-        LANGUAGE_ALIASES.put("ile", "ie");
-        LANGUAGE_ALIASES.put("ina", "ia");
-        LANGUAGE_ALIASES.put("ind", "id");
-        LANGUAGE_ALIASES.put("ipk", "ik");
-        LANGUAGE_ALIASES.put("isl", "is");
-        LANGUAGE_ALIASES.put("ita", "it");
-        LANGUAGE_ALIASES.put("jav", "jv");
-        LANGUAGE_ALIASES.put("jpn", "ja");
-        LANGUAGE_ALIASES.put("kal", "kl");
-        LANGUAGE_ALIASES.put("kan", "kn");
-        LANGUAGE_ALIASES.put("kas", "ks");
-        LANGUAGE_ALIASES.put("kat", "ka");
-        LANGUAGE_ALIASES.put("kau", "kr");
-        LANGUAGE_ALIASES.put("kaz", "kk");
-        LANGUAGE_ALIASES.put("khm", "km");
-        LANGUAGE_ALIASES.put("kik", "ki");
-        LANGUAGE_ALIASES.put("kin", "rw");
-        LANGUAGE_ALIASES.put("kir", "ky");
-        LANGUAGE_ALIASES.put("kom", "kv");
-        LANGUAGE_ALIASES.put("kon", "kg");
-        LANGUAGE_ALIASES.put("kor", "ko");
-        LANGUAGE_ALIASES.put("kua", "kj");
-        LANGUAGE_ALIASES.put("kur", "ku");
-        LANGUAGE_ALIASES.put("lao", "lo");
-        LANGUAGE_ALIASES.put("lat", "la");
-        LANGUAGE_ALIASES.put("lav", "lv");
-        LANGUAGE_ALIASES.put("lim", "li");
-        LANGUAGE_ALIASES.put("lin", "ln");
-        LANGUAGE_ALIASES.put("lit", "lt");
-        LANGUAGE_ALIASES.put("ltz", "lb");
-        LANGUAGE_ALIASES.put("lub", "lu");
-        LANGUAGE_ALIASES.put("lug", "lg");
-        LANGUAGE_ALIASES.put("mah", "mh");
-        LANGUAGE_ALIASES.put("mal", "ml");
-        LANGUAGE_ALIASES.put("mar", "mr");
-        LANGUAGE_ALIASES.put("mkd", "mk");
-        LANGUAGE_ALIASES.put("mlg", "mg");
-        LANGUAGE_ALIASES.put("mlt", "mt");
-        LANGUAGE_ALIASES.put("mon", "mn");
-        LANGUAGE_ALIASES.put("mri", "mi");
-        LANGUAGE_ALIASES.put("msa", "ms");
-        LANGUAGE_ALIASES.put("mya", "my");
-        LANGUAGE_ALIASES.put("nau", "na");
-        LANGUAGE_ALIASES.put("nav", "nv");
-        LANGUAGE_ALIASES.put("nbl", "nr");
-        LANGUAGE_ALIASES.put("nde", "nd");
-        LANGUAGE_ALIASES.put("ndo", "ng");
-        LANGUAGE_ALIASES.put("nep", "ne");
-        LANGUAGE_ALIASES.put("nld", "nl");
-        LANGUAGE_ALIASES.put("nno", "nn");
-        LANGUAGE_ALIASES.put("nob", "nb");
-        LANGUAGE_ALIASES.put("nor", "no");
-        LANGUAGE_ALIASES.put("nya", "ny");
-        LANGUAGE_ALIASES.put("oci", "oc");
-        LANGUAGE_ALIASES.put("oji", "oj");
-        LANGUAGE_ALIASES.put("ori", "or");
-        LANGUAGE_ALIASES.put("orm", "om");
-        LANGUAGE_ALIASES.put("oss", "os");
-        LANGUAGE_ALIASES.put("pan", "pa");
-        LANGUAGE_ALIASES.put("pli", "pi");
-        LANGUAGE_ALIASES.put("pol", "pl");
-        LANGUAGE_ALIASES.put("por", "pt");
-        LANGUAGE_ALIASES.put("pus", "ps");
-        LANGUAGE_ALIASES.put("que", "qu");
-        LANGUAGE_ALIASES.put("roh", "rm");
-        LANGUAGE_ALIASES.put("ron", "ro");
-        LANGUAGE_ALIASES.put("run", "rn");
-        LANGUAGE_ALIASES.put("rus", "ru");
-        LANGUAGE_ALIASES.put("sag", "sg");
-        LANGUAGE_ALIASES.put("san", "sa");
-        LANGUAGE_ALIASES.put("sin", "si");
-        LANGUAGE_ALIASES.put("slk", "sk");
-        LANGUAGE_ALIASES.put("slv", "sl");
-        LANGUAGE_ALIASES.put("sme", "se");
-        LANGUAGE_ALIASES.put("smo", "sm");
-        LANGUAGE_ALIASES.put("sna", "sn");
-        LANGUAGE_ALIASES.put("snd", "sd");
-        LANGUAGE_ALIASES.put("som", "so");
-        LANGUAGE_ALIASES.put("sot", "st");
-        LANGUAGE_ALIASES.put("spa", "es");
-        LANGUAGE_ALIASES.put("sqi", "sq");
-        LANGUAGE_ALIASES.put("srd", "sc");
-        LANGUAGE_ALIASES.put("srp", "sr");
-        LANGUAGE_ALIASES.put("ssw", "ss");
-        LANGUAGE_ALIASES.put("sun", "su");
-        LANGUAGE_ALIASES.put("swa", "sw");
-        LANGUAGE_ALIASES.put("swe", "sv");
-        LANGUAGE_ALIASES.put("tah", "ty");
-        LANGUAGE_ALIASES.put("tam", "ta");
-        LANGUAGE_ALIASES.put("tat", "tt");
-        LANGUAGE_ALIASES.put("tel", "te");
-        LANGUAGE_ALIASES.put("tgk", "tg");
-        LANGUAGE_ALIASES.put("tgl", "tl");
-        LANGUAGE_ALIASES.put("tha", "th");
-        LANGUAGE_ALIASES.put("tir", "ti");
-        LANGUAGE_ALIASES.put("ton", "to");
-        LANGUAGE_ALIASES.put("tsn", "tn");
-        LANGUAGE_ALIASES.put("tso", "ts");
-        LANGUAGE_ALIASES.put("tuk", "tk");
-        LANGUAGE_ALIASES.put("tur", "tr");
-        LANGUAGE_ALIASES.put("twi", "tw");
-        LANGUAGE_ALIASES.put("uig", "ug");
-        LANGUAGE_ALIASES.put("ukr", "uk");
-        LANGUAGE_ALIASES.put("urd", "ur");
-        LANGUAGE_ALIASES.put("uzb", "uz");
-        LANGUAGE_ALIASES.put("ven", "ve");
-        LANGUAGE_ALIASES.put("vie", "vi");
-        LANGUAGE_ALIASES.put("vol", "vo");
-        LANGUAGE_ALIASES.put("wln", "wa");
-        LANGUAGE_ALIASES.put("wol", "wo");
-        LANGUAGE_ALIASES.put("xho", "xh");
-        LANGUAGE_ALIASES.put("yid", "yi");
-        LANGUAGE_ALIASES.put("yor", "yo");
-        LANGUAGE_ALIASES.put("zha", "za");
-        LANGUAGE_ALIASES.put("zho", "zh");
-        LANGUAGE_ALIASES.put("zul", "zu");
-
-        // Deprecated 2-letter codes
-        LANGUAGE_ALIASES.put("mo", "ro");
-        LANGUAGE_ALIASES.put("jw", "jv");
-        LANGUAGE_ALIASES.put("tl", "fil");
-
-        // Complex language aliases (language maps to different language + script)
-        LANGUAGE_ALIASES.put("cmn", "zh");
-        LANGUAGE_ALIASES.put("sh", "sr");
-        LANGUAGE_SCRIPT_ADDITIONS.put("sh", "Latn");
-        LANGUAGE_ALIASES.put("cnr", "sr");
-        LANGUAGE_REGION_ADDITIONS.put("cnr", "ME");
-
-        // Sign language aliases
-        LANGUAGE_ALIASES.put("sgn-gr", "gss");
-        LANGUAGE_ALIASES.put("sgn-be-fr", "sfb");
-        LANGUAGE_ALIASES.put("sgn-be-nl", "vgt");
-        LANGUAGE_ALIASES.put("sgn-ch-de", "sgg");
-    }
-
-    static {
-        REGION_ALIASES.put("DD", "DE");
-        REGION_ALIASES.put("YD", "YE");
-        REGION_ALIASES.put("AN", "CW");
-        REGION_ALIASES.put("BU", "MM");
-        REGION_ALIASES.put("CS", "RS");
-        REGION_ALIASES.put("TP", "TL");
-        REGION_ALIASES.put("YU", "RS");
-        REGION_ALIASES.put("ZR", "CD");
-        REGION_ALIASES.put("200", "CZ");
-        REGION_ALIASES.put("530", "CW");
-        REGION_ALIASES.put("532", "CW");
-        REGION_ALIASES.put("536", "SA");
-        REGION_ALIASES.put("582", "FM");
-        REGION_ALIASES.put("736", "SD");
-        REGION_ALIASES.put("554", "NZ");
-        REGION_ALIASES.put("890", "RS");
-
-        // SU (Soviet Union) and 810 → default RU, but hy→AM, ka→GE, etc.
-        REGION_ALIASES.put("SU", "RU");
-        REGION_ALIASES.put("810", "RU");
-        Map<String, String> suByLang = new HashMap<>();
-        suByLang.put("hy", "AM");
-        suByLang.put("ka", "GE");
-        suByLang.put("az", "AZ");
-        suByLang.put("be", "BY");
-        suByLang.put("et", "EE");
-        suByLang.put("lv", "LV");
-        suByLang.put("lt", "LT");
-        suByLang.put("tk", "TM");
-        suByLang.put("uk", "UA");
-        suByLang.put("uz", "UZ");
-        suByLang.put("kk", "KZ");
-        suByLang.put("ky", "KG");
-        suByLang.put("tg", "TJ");
-        suByLang.put("mn", "MN");
-        REGION_ALIASES_BY_LANG.put("SU", suByLang);
-        REGION_ALIASES_BY_LANG.put("810", suByLang);
-
-        // NT (Neutral Zone) → SA (for az)
-        REGION_ALIASES.put("NT", "SA");
-        Map<String, String> ntByLang = new HashMap<>();
-        ntByLang.put("az", "SA");
-        REGION_ALIASES_BY_LANG.put("NT", ntByLang);
-    }
-
-    static {
-        REGION_BY_SCRIPT.put("Armn", "AM");
-        REGION_BY_SCRIPT.put("Geor", "GE");
-    }
-
-    static {
-        VARIANT_ALIASES.put("heploc", "alalc97");
-        // When heploc is replaced by alalc97, hepburn should also be removed
-        // (heploc was a sub-variant of hepburn)
-        // hy-arevela → hy (remove variant, language stays hy)
-        VARIANT_TO_LANGUAGE.put("arevela", "hy");
-        // hy-arevmda → hyw (remove variant, change language to hyw)
-        VARIANT_TO_LANGUAGE.put("arevmda", "hyw");
-
-        // Grandfathered tag variant-to-language aliases (CLDR supplementalMetadata languageAlias)
-        VARIANT_TO_LANGUAGE.put("lojban", "jbo");
-        VARIANT_TO_LANGUAGE.put("gaulish", "xtg");
-        VARIANT_TO_LANGUAGE.put("guoyu", "zh");
-        VARIANT_TO_LANGUAGE.put("hakka", "hak");
-        VARIANT_TO_LANGUAGE.put("xiang", "hsn");
-    }
-
-    static {
-        // ca (calendar)
-        Map<String, String> calendarAliases = new HashMap<>();
-        calendarAliases.put("ethiopic-amete-alem", "ethioaa");
-        calendarAliases.put("islamicc", "islamic-civil");
-        UNICODE_EXT_VALUE_ALIASES.put("ca", calendarAliases);
-
-        // ks (collation strength)
-        Map<String, String> colStrengthAliases = new HashMap<>();
-        colStrengthAliases.put("primary", "level1");
-        colStrengthAliases.put("secondary", "level2");
-        colStrengthAliases.put("tertiary", "level3");
-        colStrengthAliases.put("quaternary", "level4");
-        colStrengthAliases.put("identical", "level5");
-        UNICODE_EXT_VALUE_ALIASES.put("ks", colStrengthAliases);
-
-        // ms (measurement system)
-        Map<String, String> msAliases = new HashMap<>();
-        msAliases.put("imperial", "uksystem");
-        UNICODE_EXT_VALUE_ALIASES.put("ms", msAliases);
-    }
-
-    static {
-        SUBDIVISION_ALIASES.put("no23", "no50");
-        SUBDIVISION_ALIASES.put("cn11", "cnbj");
-        SUBDIVISION_ALIASES.put("cz10a", "cz110");
-        SUBDIVISION_ALIASES.put("fra", "frges");
-        SUBDIVISION_ALIASES.put("frg", "frges");
-        SUBDIVISION_ALIASES.put("lud", "lucl");
-    }
-
-    static {
-        TIMEZONE_ALIASES.put("cnckg", "cnsha");
-        TIMEZONE_ALIASES.put("eire", "iedub");
-        TIMEZONE_ALIASES.put("est", "papty");
-        TIMEZONE_ALIASES.put("gmt0", "gmt");
-        TIMEZONE_ALIASES.put("uct", "utc");
-        TIMEZONE_ALIASES.put("zulu", "utc");
-    }
-
-    static {
-        Map<String, String> m0Aliases = new HashMap<>();
-        m0Aliases.put("names", "prprname");
-        TVALUE_ALIASES.put("m0", m0Aliases);
     }
 
     static {
@@ -676,198 +328,12 @@ public final class JSIntlObject {
     }
 
     /**
-     * Apply CLDR canonicalization to a tag that has already been through Java's Locale processing.
-     */
-    private static String applyCLDRCanonicalization(String tag) {
-        // Parse the tag into components
-        List<String> parts = new ArrayList<>(Arrays.asList(tag.split("-")));
-        if (parts.isEmpty()) {
-            return tag;
-        }
-
-        // Find boundary indices for different subtag types
-        String language = parts.get(0).toLowerCase(Locale.ROOT);
-        int idx = 1;
-        String script = "";
-        String region = "";
-        List<String> variants = new ArrayList<>();
-        Map<Character, String> extensions = new LinkedHashMap<>();
-
-        // Check for sign language prefix mappings first (sgn-XX → replacement)
-        String signKey = language;
-        if (idx < parts.size()) {
-            signKey += "-" + parts.get(idx).toLowerCase(Locale.ROOT);
-            if (idx + 1 < parts.size()) {
-                String threePartKey = signKey + "-" + parts.get(idx + 1).toLowerCase(Locale.ROOT);
-                if (LANGUAGE_ALIASES.containsKey(threePartKey)) {
-                    return LANGUAGE_ALIASES.get(threePartKey);
-                }
-            }
-            if (LANGUAGE_ALIASES.containsKey(signKey) && language.equals("sgn")) {
-                return LANGUAGE_ALIASES.get(signKey);
-            }
-        }
-
-        // Apply language alias
-        String newLanguage = LANGUAGE_ALIASES.get(language);
-        if (newLanguage != null) {
-            language = newLanguage;
-        }
-
-        // Parse script (4 alpha letters, title case after Java processing)
-        if (idx < parts.size() && parts.get(idx).length() == 4
-                && parts.get(idx).chars().allMatch(Character::isLetter)) {
-            script = parts.get(idx);
-            idx++;
-        }
-
-        // For complex language aliases: add script if not already present
-        String scriptAddition = LANGUAGE_SCRIPT_ADDITIONS.get(parts.get(0).toLowerCase(Locale.ROOT));
-        if (scriptAddition != null && script.isEmpty()) {
-            script = scriptAddition;
-        }
-
-        // Parse region (2 alpha or 3 digits)
-        if (idx < parts.size()) {
-            String p = parts.get(idx);
-            if ((p.length() == 2 && p.chars().allMatch(Character::isLetter))
-                    || (p.length() == 3 && p.chars().allMatch(Character::isDigit))) {
-                region = p.toUpperCase(Locale.ROOT);
-                idx++;
-            }
-        }
-
-        // For complex language aliases: add region if not already present
-        String regionAddition = LANGUAGE_REGION_ADDITIONS.get(parts.get(0).toLowerCase(Locale.ROOT));
-        if (regionAddition != null && region.isEmpty()) {
-            region = regionAddition;
-        }
-
-        // Apply region alias
-        if (!region.isEmpty()) {
-            String regionUpper = region.toUpperCase(Locale.ROOT);
-            if (REGION_ALIASES.containsKey(regionUpper)) {
-                // Check language/script-specific replacements
-                Map<String, String> byLang = REGION_ALIASES_BY_LANG.get(regionUpper);
-                if (byLang != null && byLang.containsKey(language)) {
-                    region = byLang.get(language);
-                } else if (byLang != null && !script.isEmpty() && REGION_BY_SCRIPT.containsKey(script)) {
-                    region = REGION_BY_SCRIPT.get(script);
-                } else {
-                    region = REGION_ALIASES.get(regionUpper);
-                }
-            }
-        }
-
-        // Parse variants
-        while (idx < parts.size()) {
-            String p = parts.get(idx);
-            if (p.length() == 1) {
-                break; // Extension singleton
-            }
-            boolean isVariant = (p.length() >= 5 && p.length() <= 8)
-                    || (p.length() == 4 && Character.isDigit(p.charAt(0)));
-            if (!isVariant) {
-                break;
-            }
-            String lowerVariant = p.toLowerCase(Locale.ROOT);
-            // Check variant-to-language mappings (e.g., hy-arevela → hy, hy-arevmda → hyw)
-            if (VARIANT_TO_LANGUAGE.containsKey(lowerVariant)) {
-                language = VARIANT_TO_LANGUAGE.get(lowerVariant);
-                // Don't add this variant
-            } else {
-                // Apply variant alias
-                String aliased = VARIANT_ALIASES.getOrDefault(lowerVariant, lowerVariant);
-                variants.add(aliased);
-            }
-            idx++;
-        }
-
-        // When heploc → alalc97, remove the companion hepburn variant
-        if (variants.contains("alalc97")) {
-            variants.remove("hepburn");
-        }
-
-        // Sort variants alphabetically per CLDR canonicalization
-        variants.sort(String.CASE_INSENSITIVE_ORDER);
-
-        // Parse extensions
-        while (idx < parts.size()) {
-            String p = parts.get(idx);
-            if (p.length() == 1 && !p.equalsIgnoreCase("x")) {
-                char singleton = p.toLowerCase(Locale.ROOT).charAt(0);
-                StringBuilder extValue = new StringBuilder();
-                idx++;
-                while (idx < parts.size() && parts.get(idx).length() > 1) {
-                    if (!extValue.isEmpty()) {
-                        extValue.append("-");
-                    }
-                    extValue.append(parts.get(idx).toLowerCase(Locale.ROOT));
-                    idx++;
-                }
-                extensions.put(singleton, extValue.toString());
-            } else if (p.equalsIgnoreCase("x")) {
-                // Private use
-                StringBuilder privateUse = new StringBuilder("x");
-                idx++;
-                while (idx < parts.size()) {
-                    privateUse.append("-").append(parts.get(idx));
-                    idx++;
-                }
-                extensions.put('x', privateUse.toString());
-            } else {
-                idx++;
-            }
-        }
-
-        // Canonicalize unicode extension (u)
-        if (extensions.containsKey('u')) {
-            extensions.put('u', canonicalizeUnicodeExtension(extensions.get('u')));
-        }
-
-        // Canonicalize transform extension (t)
-        if (extensions.containsKey('t')) {
-            extensions.put('t', canonicalizeTransformExtension(extensions.get('t')));
-        }
-
-        // Reconstruct the tag
-        StringBuilder result = new StringBuilder(language);
-        if (!script.isEmpty()) {
-            // Title case for script
-            result.append("-").append(Character.toUpperCase(script.charAt(0)))
-                    .append(script.substring(1).toLowerCase(Locale.ROOT));
-        }
-        if (!region.isEmpty()) {
-            result.append("-").append(region.toUpperCase(Locale.ROOT));
-        }
-        for (String variant : variants) {
-            result.append("-").append(variant);
-        }
-        // Extensions in singleton order
-        List<Character> sortedSingletons = new ArrayList<>(extensions.keySet());
-        sortedSingletons.sort(Character::compare);
-        for (char singleton : sortedSingletons) {
-            String extValue = extensions.get(singleton);
-            if (singleton == 'x') {
-                result.append("-").append(extValue);
-            } else {
-                result.append("-").append(singleton);
-                if (!extValue.isEmpty()) {
-                    result.append("-").append(extValue);
-                }
-            }
-        }
-
-        return result.toString();
-    }
-
-    /**
      * Build resolved locale tag according to ECMA-402 ResolveLocale rules. Unicode extension keys are included only if:
      * - The extension value matched the resolved value AND - No option explicitly overrode it
      */
     private static Locale buildResolvedLocale(Locale locale, Map<String, String> unicodeExtensions, String calendar,
             String hourCycle, Boolean hour12, String numberingSystem) {
-        Locale base = stripUnicodeExtensions(locale);
+        Locale base = IntlLocaleTag.stripUnicodeExtensions(locale);
         StringBuilder tag = new StringBuilder(base.toLanguageTag());
         int baseLength = tag.length();
         appendMatchingExtension(tag, baseLength, "ca", calendar, canonicalizeCalendar(unicodeExtensions.get("ca")));
@@ -886,7 +352,7 @@ public final class JSIntlObject {
      */
     private static String buildResolvedLocaleTag(Locale baseLocale, String collation, boolean numeric, String caseFirst,
             Map<String, String> unicodeExtensions) {
-        StringBuilder tag = new StringBuilder(stripUnicodeExtensions(baseLocale).toLanguageTag());
+        StringBuilder tag = new StringBuilder(IntlLocaleTag.stripUnicodeExtensions(baseLocale).toLanguageTag());
         int baseLength = tag.length();
         appendMatchingExtension(tag, baseLength, "co", collation, unicodeExtensions.get("co"));
         appendMatchingExtension(tag, baseLength, "kf", caseFirst, unicodeExtensions.get("kf"));
@@ -1029,245 +495,8 @@ public final class JSIntlObject {
         return new ArrayList<>(canonicalLocales);
     }
 
-    /**
-     * Canonicalize a locale tag string per ECMA-402 CanonicalizeUnicodeLocaleId. Applies CLDR language/region/variant
-     * aliases, sorts variants, and canonicalizes extensions.
-     */
     static String canonicalizeLocaleTag(String localeTag) {
-        // First, let Java parse and normalize basic structure (case normalization, grandfathered tag mapping)
-        Locale locale = parseLocaleTag(localeTag);
-        String javaTag = locale.toLanguageTag();
-
-        // Java omits "und" prefix for undetermined language with only extensions/private-use,
-        // producing "x-private" instead of "und-x-private". Fix this.
-        if (locale.getLanguage().isEmpty() && javaTag.startsWith("x-")) {
-            javaTag = "und-" + javaTag;
-        }
-
-        // Strip private-use suffixes that Java adds for grandfathered tags
-        // e.g. "xtg-x-cel-gaulish" → "xtg", "en-GB-x-oed" → needs special handling
-        javaTag = stripJavaGrandfatheredPrivateUse(localeTag, javaTag);
-
-        // Now parse and canonicalize the tag further
-        return applyCLDRCanonicalization(javaTag);
-    }
-
-    /**
-     * Canonicalize a Transform extension value string (the part after "t-"). Sort tfield keys, sort tlang variants,
-     * canonicalize tlang, replace deprecated tvalues.
-     */
-    private static String canonicalizeTransformExtension(String extValue) {
-        if (extValue == null || extValue.isEmpty()) {
-            return extValue;
-        }
-        String[] parts = extValue.split("-");
-        int idx = 0;
-
-        // Parse tlang (optional) - starts with a language subtag
-        String tlang = null;
-        StringBuilder tlangBuilder = new StringBuilder();
-        if (idx < parts.length && parts[idx].length() >= 2 && parts[idx].chars().allMatch(Character::isLetter)) {
-            // This is a language subtag
-            tlangBuilder.append(parts[idx]);
-            idx++;
-            // Parse optional script, region, variants
-            List<String> tlangVariants = new ArrayList<>();
-            String tlangScript = "";
-            String tlangRegion = "";
-
-            // Script
-            if (idx < parts.length && parts[idx].length() == 4 && parts[idx].chars().allMatch(Character::isLetter)) {
-                tlangScript = parts[idx];
-                idx++;
-            }
-            // Region
-            if (idx < parts.length) {
-                String p = parts[idx];
-                if ((p.length() == 2 && p.chars().allMatch(Character::isLetter))
-                        || (p.length() == 3 && p.chars().allMatch(Character::isDigit))) {
-                    tlangRegion = p;
-                    idx++;
-                }
-            }
-            // Variants
-            while (idx < parts.length && parts[idx].length() > 1 && !isTransformFieldKey(parts[idx])) {
-                boolean isVariant = (parts[idx].length() >= 5 && parts[idx].length() <= 8)
-                        || (parts[idx].length() == 4 && Character.isDigit(parts[idx].charAt(0)));
-                if (!isVariant) {
-                    break;
-                }
-                tlangVariants.add(parts[idx].toLowerCase(Locale.ROOT));
-                idx++;
-            }
-
-            // Sort tlang variants
-            tlangVariants.sort(String.CASE_INSENSITIVE_ORDER);
-
-            // Canonicalize tlang language (apply aliases like iw→he)
-            String tlangLang = tlangBuilder.toString().toLowerCase(Locale.ROOT);
-            // Java's legacy code mapping
-            if ("iw".equals(tlangLang)) {
-                tlangLang = "he";
-            } else if ("in".equals(tlangLang)) {
-                tlangLang = "id";
-            } else if ("ji".equals(tlangLang)) {
-                tlangLang = "yi";
-            }
-            // CLDR language aliases
-            String aliased = LANGUAGE_ALIASES.get(tlangLang);
-            if (aliased != null) {
-                tlangLang = aliased;
-            }
-
-            StringBuilder tlangResult = new StringBuilder(tlangLang);
-            if (!tlangScript.isEmpty()) {
-                tlangResult.append("-").append(tlangScript.toLowerCase(Locale.ROOT));
-            }
-            if (!tlangRegion.isEmpty()) {
-                tlangResult.append("-").append(tlangRegion.toLowerCase(Locale.ROOT));
-            }
-            for (String v : tlangVariants) {
-                tlangResult.append("-").append(v);
-            }
-            tlang = tlangResult.toString();
-        }
-
-        // Parse tfields (key-value pairs where key is 2 chars starting with letter/digit)
-        Map<String, List<String>> tfields = new TreeMap<>(); // TreeMap for sorted order
-        while (idx < parts.length) {
-            if (isTransformFieldKey(parts[idx])) {
-                String key = parts[idx].toLowerCase(Locale.ROOT);
-                idx++;
-                List<String> values = new ArrayList<>();
-                while (idx < parts.length && !isTransformFieldKey(parts[idx])) {
-                    values.add(parts[idx].toLowerCase(Locale.ROOT));
-                    idx++;
-                }
-                // Apply tvalue aliases
-                Map<String, String> aliases = TVALUE_ALIASES.get(key);
-                if (aliases != null) {
-                    String joinedValue = String.join("-", values);
-                    if (aliases.containsKey(joinedValue)) {
-                        String replacement = aliases.get(joinedValue);
-                        values = new ArrayList<>(Arrays.asList(replacement.split("-")));
-                    }
-                }
-                tfields.put(key, values);
-            } else {
-                idx++;
-            }
-        }
-
-        // Reconstruct
-        StringBuilder result = new StringBuilder();
-        if (tlang != null) {
-            result.append(tlang);
-        }
-        for (Map.Entry<String, List<String>> entry : tfields.entrySet()) {
-            if (!result.isEmpty()) {
-                result.append("-");
-            }
-            result.append(entry.getKey());
-            if (!entry.getValue().isEmpty()) {
-                result.append("-").append(String.join("-", entry.getValue()));
-            }
-        }
-        return result.toString();
-    }
-
-    /**
-     * Canonicalize a Unicode extension value string (the part after "u-"). Sort key-value pairs by key, apply value
-     * aliases, handle boolean keys.
-     */
-    private static String canonicalizeUnicodeExtension(String extValue) {
-        if (extValue == null || extValue.isEmpty()) {
-            return extValue;
-        }
-        String[] parts = extValue.split("-");
-        List<String> attributes = new ArrayList<>();
-        Map<String, List<String>> keywords = new LinkedHashMap<>();
-        String currentKey = null;
-        List<String> currentValues = new ArrayList<>();
-
-        for (String part : parts) {
-            if (part.length() == 2 && Character.isLetter(part.charAt(0))) {
-                // New keyword key
-                if (currentKey != null) {
-                    keywords.put(currentKey, new ArrayList<>(currentValues));
-                    currentValues.clear();
-                }
-                currentKey = part;
-            } else if (currentKey != null) {
-                currentValues.add(part);
-            } else {
-                // Attribute (before any key)
-                attributes.add(part);
-            }
-        }
-        if (currentKey != null) {
-            keywords.put(currentKey, new ArrayList<>(currentValues));
-        }
-
-        // Sort keywords by key
-        Map<String, List<String>> sortedKeywords = new TreeMap<>(keywords);
-
-        // Apply value aliases and boolean canonicalization
-        for (Map.Entry<String, List<String>> entry : sortedKeywords.entrySet()) {
-            String key = entry.getKey();
-            List<String> values = entry.getValue();
-            String joinedValue = String.join("-", values);
-
-            // Apply value aliases
-            Map<String, String> valueAliases = UNICODE_EXT_VALUE_ALIASES.get(key);
-            if (valueAliases != null && valueAliases.containsKey(joinedValue)) {
-                String replacement = valueAliases.get(joinedValue);
-                entry.setValue(replacement.isEmpty() ? List.of() : List.of(replacement.split("-")));
-            }
-
-            // Handle "rg" and "sd" subdivision aliases
-            if (("rg".equals(key) || "sd".equals(key)) && !values.isEmpty()) {
-                String sdValue = String.join("-", values);
-                if (SUBDIVISION_ALIASES.containsKey(sdValue)) {
-                    entry.setValue(List.of(SUBDIVISION_ALIASES.get(sdValue)));
-                }
-            }
-
-            // Handle "tz" timezone aliases
-            if ("tz".equals(key) && !values.isEmpty()) {
-                String tzValue = String.join("-", values);
-                if (TIMEZONE_ALIASES.containsKey(tzValue)) {
-                    entry.setValue(List.of(TIMEZONE_ALIASES.get(tzValue)));
-                }
-            }
-
-            // Handle boolean keys where "yes" → "true" → omit value
-            if (UNICODE_EXT_BOOLEAN_KEYS.contains(key)) {
-                String val = String.join("-", entry.getValue());
-                if ("yes".equals(val) || "true".equals(val)) {
-                    entry.setValue(List.of()); // Empty value (meaning "true", the default)
-                }
-            }
-        }
-
-        // Reconstruct
-        StringBuilder result = new StringBuilder();
-        for (String attr : attributes) {
-            if (!result.isEmpty()) {
-                result.append("-");
-            }
-            result.append(attr);
-        }
-        for (Map.Entry<String, List<String>> entry : sortedKeywords.entrySet()) {
-            if (!result.isEmpty()) {
-                result.append("-");
-            }
-            result.append(entry.getKey());
-            List<String> values = entry.getValue();
-            if (!values.isEmpty()) {
-                result.append("-").append(String.join("-", values));
-            }
-        }
-        return result.toString();
+        return IntlLocaleTag.canonicalizeLocaleTag(localeTag);
     }
 
     private static JSValue changeLikelySubtags(JSContext context, JSValue thisArg, boolean maximize) {
@@ -1278,12 +507,12 @@ public final class JSIntlObject {
         }
         try {
             String tag = intlLocale.getTag();
-            String baseTag = stripExtensions(tag);
+            String baseTag = IntlLocaleTag.stripExtensions(tag);
             Locale baseLocale = Locale.forLanguageTag(baseTag);
             Locale updated = maximize ? addLikelySubtags(baseLocale) : removeLikelySubtags(baseLocale);
             String updatedTag = canonicalizeLocaleTag(updated.toLanguageTag());
             // Append extensions from the original tag
-            String extensionSuffix = getExtensionSuffix(tag);
+            String extensionSuffix = IntlLocaleTag.getExtensionSuffix(tag);
             if (!extensionSuffix.isEmpty()) {
                 updatedTag = updatedTag + extensionSuffix;
             }
@@ -1384,7 +613,7 @@ public final class JSIntlObject {
             JSValue optionsValue = JSValue.argumentOrUndefined(args, 1);
 
             // Parse unicode extension keys from locale tag (e.g. en-u-kn-true-co-phonebk)
-            Map<String, String> unicodeExtensions = parseUnicodeExtensions(locale.toLanguageTag());
+            Map<String, String> unicodeExtensions = IntlLocaleTag.parseUnicodeExtensions(locale.toLanguageTag());
 
             // Read options in ECMA-402 spec order
 
@@ -1485,7 +714,7 @@ public final class JSIntlObject {
             }
 
             // Build resolved locale with applied unicode extensions
-            Locale resolvedLocale = stripUnicodeExtensions(locale);
+            Locale resolvedLocale = IntlLocaleTag.stripUnicodeExtensions(locale);
             String resolvedLocaleTag = buildResolvedLocaleTag(locale, collation, numeric, caseFirst, unicodeExtensions);
 
             JSIntlCollator collator = new JSIntlCollator(context, resolvedLocale, sensitivity, usage, collation,
@@ -1718,7 +947,7 @@ public final class JSIntlObject {
             }
 
             // Resolve calendar from locale unicode extension if not specified in options
-            Map<String, String> unicodeExtensions = parseUnicodeExtensions(locale.toLanguageTag());
+            Map<String, String> unicodeExtensions = IntlLocaleTag.parseUnicodeExtensions(locale.toLanguageTag());
             // If option value is not a supported calendar, treat as if not specified
             if (calendar != null && !isSupportedCalendar(calendar)) {
                 calendar = null;
@@ -1954,7 +1183,7 @@ public final class JSIntlObject {
         }
 
         // Parse unicode extension "nu" from locale
-        Map<String, String> unicodeExtensions = parseUnicodeExtensions(locale.toLanguageTag());
+        Map<String, String> unicodeExtensions = IntlLocaleTag.parseUnicodeExtensions(locale.toLanguageTag());
         String extensionNu = unicodeExtensions.get("nu");
 
         // Resolve numberingSystem: options > unicode extension > default
@@ -1974,7 +1203,7 @@ public final class JSIntlObject {
         }
 
         // Build resolved locale: strip existing unicode extensions and re-add if needed
-        Locale strippedLocale = stripUnicodeExtensions(locale);
+        Locale strippedLocale = IntlLocaleTag.stripUnicodeExtensions(locale);
         if (useExtensionInLocale) {
             locale = new Locale.Builder().setLocale(strippedLocale).setUnicodeLocaleKeyword("nu", numberingSystem)
                     .build();
@@ -2195,16 +1424,16 @@ public final class JSIntlObject {
             }
 
             // Validate language/script/region/variants options
-            if (languageOpt != null && !isValidLanguageSubtag(languageOpt)) {
+            if (languageOpt != null && !IntlLocaleTag.isValidLanguageSubtag(languageOpt)) {
                 return context.throwRangeError("invalid language: " + languageOpt);
             }
-            if (scriptOpt != null && !isValidScriptSubtag(scriptOpt)) {
+            if (scriptOpt != null && !IntlLocaleTag.isValidScriptSubtag(scriptOpt)) {
                 return context.throwRangeError("invalid script: " + scriptOpt);
             }
-            if (regionOpt != null && !isValidRegionSubtag(regionOpt)) {
+            if (regionOpt != null && !IntlLocaleTag.isValidRegionSubtag(regionOpt)) {
                 return context.throwRangeError("invalid region: " + regionOpt);
             }
-            if (variantsOpt != null && !isValidVariantsSubtag(variantsOpt)) {
+            if (variantsOpt != null && !IntlLocaleTag.isValidVariantsSubtag(variantsOpt)) {
                 return context.throwRangeError("invalid variants: " + variantsOpt);
             }
 
@@ -2269,7 +1498,7 @@ public final class JSIntlObject {
             // Canonicalize calendar values
             calendarOpt = canonicalizeCalendar(calendarOpt);
 
-            Locale locale = parseLocaleTag(localeTag);
+            Locale locale = IntlLocaleTag.parseLocaleTag(localeTag);
 
             // Strip Java-added private use for grandfathered tags.
             // Java maps grandfathered tags like "cel-gaulish" to "xtg-x-cel-gaulish"
@@ -2295,7 +1524,7 @@ public final class JSIntlObject {
             }
 
             // Parse existing unicode extensions from locale tag — collect ALL keys
-            Map<String, String> existingExtensions = parseUnicodeExtensions(locale.toLanguageTag());
+            Map<String, String> existingExtensions = IntlLocaleTag.parseUnicodeExtensions(locale.toLanguageTag());
 
             // Use TreeMap for sorted key order (Unicode BCP 47 requires alphabetical)
             TreeMap<String, String> extMap = new TreeMap<>(existingExtensions);
@@ -2453,21 +1682,17 @@ public final class JSIntlObject {
                 return JSUndefined.INSTANCE;
             }
 
-            Integer minimumIntegerDigitsOption = getOptionIntegerOrUndefined(context, optionsObject,
-                    "minimumIntegerDigits", 1, 21);
+            int minimumIntegerDigits = readMinimumIntegerDigits(context, optionsObject);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            int minimumIntegerDigits = minimumIntegerDigitsOption != null ? minimumIntegerDigitsOption : 1;
 
-            DigitRange fractionDigits = DigitRange.read(context, optionsObject, "minimumFractionDigits",
-                    "maximumFractionDigits", 0, 100);
+            DigitRange fractionDigits = DigitRange.readFraction(context, optionsObject);
             if (fractionDigits == null) {
                 return JSUndefined.INSTANCE;
             }
 
-            DigitRange significantDigits = DigitRange.read(context, optionsObject, "minimumSignificantDigits",
-                    "maximumSignificantDigits", 1, 21);
+            DigitRange significantDigits = DigitRange.readSignificant(context, optionsObject);
             if (significantDigits == null) {
                 return JSUndefined.INSTANCE;
             }
@@ -2586,15 +1811,12 @@ public final class JSIntlObject {
                 return JSUndefined.INSTANCE;
             }
 
-            Integer minimumIntegerDigitsOption = getOptionIntegerOrUndefined(context, optionsObject,
-                    "minimumIntegerDigits", 1, 21);
+            int minimumIntegerDigits = readMinimumIntegerDigits(context, optionsObject);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            int minimumIntegerDigits = minimumIntegerDigitsOption != null ? minimumIntegerDigitsOption : 1;
 
-            DigitRange fractionDigits = DigitRange.read(context, optionsObject, "minimumFractionDigits",
-                    "maximumFractionDigits", 0, 100);
+            DigitRange fractionDigits = DigitRange.readFraction(context, optionsObject);
             if (fractionDigits == null) {
                 return JSUndefined.INSTANCE;
             }
@@ -2602,8 +1824,7 @@ public final class JSIntlObject {
             boolean hasFractionDigits = fractionDigits.specified();
             fractionDigits = fractionDigits.resolveFraction(0, 3);
 
-            DigitRange significantDigits = DigitRange.read(context, optionsObject, "minimumSignificantDigits",
-                    "maximumSignificantDigits", 1, 21);
+            DigitRange significantDigits = DigitRange.readSignificant(context, optionsObject);
             if (significantDigits == null) {
                 return JSUndefined.INSTANCE;
             }
@@ -3364,29 +2585,6 @@ public final class JSIntlObject {
     }
 
     /**
-     * Get the extension suffix of a locale tag (everything from the first singleton onward), including the leading
-     * hyphen. Returns "" if no extensions.
-     */
-    private static String getExtensionSuffix(String tag) {
-        String[] parts = tag.split("-");
-        int extensionStart = -1;
-        for (int i = 0; i < parts.length; i++) {
-            if (parts[i].length() == 1 && i > 0) {
-                extensionStart = i;
-                break;
-            }
-        }
-        if (extensionStart < 0) {
-            return "";
-        }
-        StringBuilder result = new StringBuilder();
-        for (int i = extensionStart; i < parts.length; i++) {
-            result.append("-").append(parts[i]);
-        }
-        return result.toString();
-    }
-
-    /**
      * Get the default first day of the week for a locale. Returns 1-7 (1=Monday through 7=Sunday).
      */
     private static int getLocaleDefaultFirstDay(Locale locale) {
@@ -3753,128 +2951,11 @@ public final class JSIntlObject {
         return true;
     }
 
-    /**
-     * Check if a string is a transform extension field key (2 chars: letter/digit + letter/digit).
-     */
-    private static boolean isTransformFieldKey(String s) {
-        if (s.length() != 2) {
-            return false;
-        }
-        char c0 = s.charAt(0);
-        char c1 = s.charAt(1);
-        // BCP 47 / UTS 35: tkey = alpha digit
-        return Character.isLetter(c0) && Character.isDigit(c1);
-    }
-
     private static boolean isValidCollation(String collation) {
         if (collation == null || collation.isEmpty()) {
             return false;
         }
         return VALID_COLLATION_TYPES.contains(collation);
-    }
-
-    /**
-     * Validate language subtag: unicode_language_subtag = alpha{2,3} | alpha{5,8}
-     */
-    private static boolean isValidLanguageSubtag(String lang) {
-        if (lang == null || lang.isEmpty()) {
-            return false;
-        }
-        int len = lang.length();
-        if (!((len >= 2 && len <= 3) || (len >= 5 && len <= 8))) {
-            return false;
-        }
-        for (int i = 0; i < len; i++) {
-            char c = lang.charAt(i);
-            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * Validate region subtag: unicode_region_subtag = alpha{2} | digit{3}
-     */
-    private static boolean isValidRegionSubtag(String region) {
-        if (region == null || region.isEmpty()) {
-            return false;
-        }
-        int len = region.length();
-        if (len == 2) {
-            return Character.isLetter(region.charAt(0)) && Character.isLetter(region.charAt(1));
-        }
-        if (len == 3) {
-            return Character.isDigit(region.charAt(0)) && Character.isDigit(region.charAt(1))
-                    && Character.isDigit(region.charAt(2));
-        }
-        return false;
-    }
-
-    /**
-     * Validate script subtag: unicode_script_subtag = alpha{4}
-     */
-    private static boolean isValidScriptSubtag(String script) {
-        if (script == null || script.isEmpty()) {
-            return false;
-        }
-        if (script.length() != 4) {
-            return false;
-        }
-        for (int i = 0; i < 4; i++) {
-            char c = script.charAt(i);
-            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * Validate variants subtag: each variant is (alphanum{5,8} | digit alphanum{3}), separated by hyphens. No
-     * duplicates (case-insensitive).
-     */
-    private static boolean isValidVariantsSubtag(String variants) {
-        if (variants == null || variants.isEmpty()) {
-            return false;
-        }
-        String[] parts = variants.split("-", -1);
-        Set<String> seen = new HashSet<>();
-        for (String part : parts) {
-            if (part.isEmpty()) {
-                return false; // empty segment
-            }
-            int len = part.length();
-            boolean valid;
-            if (len >= 5 && len <= 8) {
-                valid = true;
-                for (int i = 0; i < len; i++) {
-                    char c = part.charAt(i);
-                    if (!Character.isLetterOrDigit(c)) {
-                        valid = false;
-                        break;
-                    }
-                }
-            } else if (len == 4 && Character.isDigit(part.charAt(0))) {
-                valid = true;
-                for (int i = 1; i < 4; i++) {
-                    char c = part.charAt(i);
-                    if (!Character.isLetterOrDigit(c)) {
-                        valid = false;
-                        break;
-                    }
-                }
-            } else {
-                valid = false;
-            }
-            if (!valid) {
-                return false;
-            }
-            if (!seen.add(part.toLowerCase(Locale.ROOT))) {
-                return false; // duplicate
-            }
-        }
-        return true;
     }
 
     private static boolean isWellFormedCurrencyCode(String currencyCode) {
@@ -4288,6 +3369,8 @@ public final class JSIntlObject {
         return new JSString(numberFormat.format(number));
     }
 
+    // ---- Locale option validation helpers ----
+
     public static JSValue numberFormatFormatGetter(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlNumberFormat numberFormat)) {
             return context.throwTypeError("Intl.NumberFormat.prototype.format called on incompatible receiver");
@@ -4302,8 +3385,6 @@ public final class JSIntlObject {
         numberFormat.setBoundFormatFunction(boundFormatFunction);
         return boundFormatFunction;
     }
-
-    // ---- Locale option validation helpers ----
 
     public static JSValue numberFormatFormatRange(JSContext context, JSValue thisArg, JSValue[] args) {
         return formatNumberRange(context, thisArg, args, false);
@@ -4420,99 +3501,6 @@ public final class JSIntlObject {
         };
     }
 
-    private static Locale parseLocaleTag(String localeTag) {
-        if (localeTag == null) {
-            throw new IllegalArgumentException("Invalid language tag: null");
-        }
-        // Tags with leading/trailing whitespace or internal whitespace are invalid
-        if (localeTag.isEmpty() || !localeTag.equals(localeTag.strip())) {
-            throw new IllegalArgumentException("Invalid language tag: " + localeTag);
-        }
-        String normalizedTag = localeTag;
-        // Additional BCP 47 structural validation that Java's Locale.Builder doesn't enforce
-        validateBcp47Structure(normalizedTag);
-        try {
-            return new Locale.Builder().setLanguageTag(normalizedTag).build();
-        } catch (java.util.IllformedLocaleException e) {
-            throw new IllegalArgumentException("Invalid language tag: " + localeTag, e);
-        }
-    }
-
-    /**
-     * Parse Unicode extension keys and attributes from a BCP 47 locale tag. Attributes (3-8 alphanum subtags before any
-     * 2-char key) are stored under the special key "_attr" as a sorted hyphen-separated string.
-     */
-    private static Map<String, String> parseUnicodeExtensions(String localeTag) {
-        Map<String, String> extensions = new HashMap<>();
-        if (localeTag == null) {
-            return extensions;
-        }
-        String lowerTag = localeTag.toLowerCase(Locale.ROOT);
-        int uIndex = -1;
-        String[] parts = lowerTag.split("-");
-        for (int i = 0; i < parts.length; i++) {
-            if ("x".equals(parts[i]) && i > 0) {
-                break;
-            }
-            if ("u".equals(parts[i]) && i > 0) {
-                uIndex = i;
-                break;
-            }
-        }
-        if (uIndex < 0) {
-            return extensions;
-        }
-
-        // Parse attributes first (3-8 alphanum subtags before the first 2-char key)
-        List<String> attributes = new ArrayList<>();
-        int i = uIndex + 1;
-        while (i < parts.length) {
-            String part = parts[i];
-            if (part.length() == 1) {
-                break; // next singleton
-            }
-            if (part.length() == 2) {
-                break; // first keyword key
-            }
-            // Attribute: 3-8 alphanum
-            attributes.add(part);
-            i++;
-        }
-        if (!attributes.isEmpty()) {
-            Collections.sort(attributes);
-            extensions.put("_attr", String.join("-", attributes));
-        }
-
-        // Parse key-value pairs
-        String currentKey = null;
-        StringBuilder currentValue = new StringBuilder();
-        for (; i < parts.length; i++) {
-            String part = parts[i];
-            if (part.length() == 1) {
-                // Next singleton extension — stop parsing unicode extension
-                break;
-            }
-            if (part.length() == 2) {
-                // New key: save previous key-value pair
-                if (currentKey != null) {
-                    extensions.put(currentKey, currentValue.toString());
-                }
-                currentKey = part;
-                currentValue.setLength(0);
-            } else if (currentKey != null) {
-                // Value part: concatenate multi-segment values (e.g., "islamic-civil")
-                if (!currentValue.isEmpty()) {
-                    currentValue.append("-");
-                }
-                currentValue.append(part);
-            }
-        }
-        if (currentKey != null) {
-            extensions.put(currentKey, currentValue.toString());
-        }
-        return extensions;
-    }
-
     private static String parseUseGroupingOption(JSContext context, JSValue useGroupingValue, String notation) {
         String defaultValue = "compact".equals(notation) ? "min2" : "auto";
         if (useGroupingValue == null || useGroupingValue instanceof JSUndefined) {
@@ -4558,6 +3546,8 @@ public final class JSIntlObject {
         return defaultValue;
     }
 
+    // ---- New Locale prototype methods ----
+
     public static JSValue pluralRulesResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlPluralRules pluralRules)) {
             return context.throwTypeError("Intl.PluralRules.prototype.resolvedOptions called on incompatible receiver");
@@ -4581,8 +3571,6 @@ public final class JSIntlObject {
         createDataProperty(resolvedOptions, "pluralCategories", categories);
         return resolvedOptions;
     }
-
-    // ---- New Locale prototype methods ----
 
     public static JSValue pluralRulesSelect(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlPluralRules pluralRules)) {
@@ -4623,6 +3611,11 @@ public final class JSIntlObject {
         if (value != null) {
             extensions.put(key, value);
         }
+    }
+
+    private static int readMinimumIntegerDigits(JSContext context, JSObject options) {
+        Integer digits = getOptionIntegerOrUndefined(context, options, "minimumIntegerDigits", 1, 21);
+        return digits == null ? 1 : digits;
     }
 
     private static RoundingOptions readRoundingOptions(JSContext context, JSObject optionsObject,
@@ -4840,7 +3833,7 @@ public final class JSIntlObject {
             return cycle;
         }
         Locale locale = formatter.getLocale();
-        cycle = parseUnicodeExtensions(locale.toLanguageTag()).get("hc");
+        cycle = IntlLocaleTag.parseUnicodeExtensions(locale.toLanguageTag()).get("hc");
         return "h11".equals(cycle) || "h12".equals(cycle) || "h23".equals(cycle) || "h24".equals(cycle)
                 ? cycle
                 : getLocaleDefaultHourCycle(locale);
@@ -5033,103 +4026,6 @@ public final class JSIntlObject {
             result.add(((JSString) value).value());
         }
         return result;
-    }
-
-    /**
-     * Strip all extensions (-u-..., -x-..., etc.) from a locale tag, returning just the language-script-region-variant
-     * part.
-     */
-    private static String stripExtensions(String tag) {
-        String[] parts = tag.split("-");
-        StringBuilder result = new StringBuilder();
-        for (String part : parts) {
-            if (part.length() == 1) {
-                // Singleton starts an extension — stop
-                break;
-            }
-            if (result.length() > 0) {
-                result.append("-");
-            }
-            result.append(part);
-        }
-        return result.toString();
-    }
-
-    /**
-     * Fix Java's handling of grandfathered tags that add unnecessary -x- private use.
-     */
-    private static String stripJavaGrandfatheredPrivateUse(String originalTag, String javaTag) {
-        String lowerOriginal = originalTag.toLowerCase(Locale.ROOT);
-        // cel-gaulish → xtg (Java gives xtg-x-cel-gaulish)
-        if (lowerOriginal.equals("cel-gaulish") && javaTag.contains("-x-")) {
-            return javaTag.substring(0, javaTag.indexOf("-x-"));
-        }
-        // zh-min → nan (Java gives nan-x-zh-min)
-        if (lowerOriginal.equals("zh-min") && javaTag.contains("-x-")) {
-            return javaTag.substring(0, javaTag.indexOf("-x-"));
-        }
-        // zh-guoyu → zh (Java gives cmn which still needs aliasing)
-        if (lowerOriginal.equals("zh-guoyu")) {
-            return "zh";
-        }
-        return javaTag;
-    }
-
-    /**
-     * Strip unicode extension subtags from a locale tag.
-     */
-    private static Locale stripUnicodeExtensions(Locale locale) {
-        String tag = locale.toLanguageTag();
-        String lowerTag = tag.toLowerCase(Locale.ROOT);
-        int xIndex = lowerTag.indexOf("-x-");
-        int uIndex = lowerTag.indexOf("-u-");
-        if (uIndex < 0 || (xIndex >= 0 && xIndex < uIndex)) {
-            return locale;
-        }
-        String[] parts = tag.split("-");
-        StringBuilder builder = new StringBuilder();
-        boolean inUnicodeExt = false;
-        boolean inPrivateUse = false;
-        for (String part : parts) {
-            if (!inPrivateUse && part.length() == 1 && "x".equalsIgnoreCase(part)) {
-                inPrivateUse = true;
-                if (!builder.isEmpty()) {
-                    builder.append("-");
-                }
-                builder.append(part);
-                continue;
-            }
-            if (inPrivateUse) {
-                if (!builder.isEmpty()) {
-                    builder.append("-");
-                }
-                builder.append(part);
-                continue;
-            }
-            if (part.length() == 1 && "u".equalsIgnoreCase(part)) {
-                inUnicodeExt = true;
-                continue;
-            }
-            if (inUnicodeExt) {
-                if (part.length() == 1) {
-                    inUnicodeExt = false;
-                    if (!builder.isEmpty()) {
-                        builder.append("-");
-                    }
-                    builder.append(part);
-                }
-                continue;
-            }
-            if (!builder.isEmpty()) {
-                builder.append("-");
-            }
-            builder.append(part);
-        }
-        String strippedTag = builder.toString();
-        if (strippedTag.isEmpty()) {
-            return locale;
-        }
-        return Locale.forLanguageTag(strippedTag);
     }
 
     public static JSValue supportedLocalesOf(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -5479,266 +4375,6 @@ public final class JSIntlObject {
     }
 
     /**
-     * Validate BCP 47 structural constraints not enforced by Java's Locale.Builder. - 4+ letter primary language
-     * subtags cannot be followed by extlang subtags - Variant subtags must not be duplicated - Extension singletons
-     * must not be duplicated
-     */
-    private static void validateBcp47Structure(String tag) {
-        String[] parts = tag.split("-");
-        if (parts.length == 0) {
-            throw new IllegalArgumentException("Invalid language tag: " + tag);
-        }
-
-        String primaryLanguage = parts[0];
-        // Primary language must be all ASCII alpha
-        if (!primaryLanguage.matches("[a-zA-Z]+")) {
-            throw new IllegalArgumentException("Invalid language tag: " + tag);
-        }
-
-        // Per UTS 35: language = 2-3 alpha or 5-8 alpha
-        // 1-letter (i, x) and 4-letter primary subtags are invalid
-        int langLen = primaryLanguage.length();
-        if (langLen < 2 || langLen == 4 || langLen > 8) {
-            throw new IllegalArgumentException("Invalid language tag: " + tag);
-        }
-
-        // Parse subtags in strict positional order: script?, region?, variants*, extensions*, privateuse?
-        int idx = 1;
-        boolean scriptSeen = false;
-        boolean regionSeen = false;
-        Set<String> variants = new HashSet<>();
-        Set<Character> extensionSingletons = new HashSet<>();
-
-        // Optional script (4 alpha)
-        if (idx < parts.length) {
-            String p = parts[idx];
-            if (p.length() == 4 && p.chars().allMatch(c -> Character.isLetter((char) c))) {
-                scriptSeen = true;
-                idx++;
-            }
-        }
-
-        // Optional region (2 alpha or 3 digit)
-        if (idx < parts.length) {
-            String p = parts[idx];
-            if ((p.length() == 2 && p.chars().allMatch(c -> Character.isLetter((char) c)))
-                    || (p.length() == 3 && p.chars().allMatch(c -> Character.isDigit((char) c)))) {
-                regionSeen = true;
-                idx++;
-            }
-        }
-
-        // Variants (5-8 alphanum or 4 starting with digit)
-        while (idx < parts.length) {
-            String p = parts[idx].toLowerCase(Locale.ROOT);
-            boolean isVariant = (p.length() >= 5 && p.length() <= 8)
-                    || (p.length() == 4 && Character.isDigit(p.charAt(0)));
-            if (!isVariant) {
-                break;
-            }
-            if (!variants.add(p)) {
-                throw new IllegalArgumentException("Invalid language tag: duplicate variant '" + p + "': " + tag);
-            }
-            idx++;
-        }
-
-        // Extensions and private use
-        boolean inPrivateUse = false;
-        char currentSingleton = 0;
-        while (idx < parts.length) {
-            String p = parts[idx];
-            String pLower = p.toLowerCase(Locale.ROOT);
-
-            if (inPrivateUse) {
-                idx++;
-                continue;
-            }
-
-            // Private use prefix
-            if ("x".equalsIgnoreCase(p)) {
-                inPrivateUse = true;
-                idx++;
-                continue;
-            }
-
-            // Extension singleton
-            if (p.length() == 1) {
-                char singleton = pLower.charAt(0);
-                if (!Character.isLetterOrDigit(singleton)) {
-                    throw new IllegalArgumentException("Invalid language tag: " + tag);
-                }
-                if (!extensionSingletons.add(singleton)) {
-                    throw new IllegalArgumentException(
-                            "Invalid language tag: duplicate extension singleton '" + singleton + "': " + tag);
-                }
-                currentSingleton = singleton;
-                idx++;
-                // Must have at least one extension subtag
-                boolean hasValue = false;
-                while (idx < parts.length && parts[idx].length() > 1) {
-                    String extSubtag = parts[idx].toLowerCase(Locale.ROOT);
-                    // Validate Unicode extension keys (u-extension)
-                    if (currentSingleton == 'u' && extSubtag.length() == 2) {
-                        char c1 = extSubtag.charAt(1);
-                        if (Character.isDigit(c1)) {
-                            throw new IllegalArgumentException(
-                                    "Invalid language tag: Unicode extension key second char must be letter: " + tag);
-                        }
-                    }
-                    hasValue = true;
-                    idx++;
-                }
-                if (!hasValue) {
-                    throw new IllegalArgumentException(
-                            "Invalid language tag: extension singleton without value: " + tag);
-                }
-                continue;
-            }
-
-            // If we get here, the subtag doesn't fit any valid position
-            throw new IllegalArgumentException("Invalid language tag: " + tag);
-        }
-
-        // Validate transform extension structure
-        if (extensionSingletons.contains('t')) {
-            validateTransformExtension(tag, parts);
-        }
-    }
-
-    /**
-     * Validate the structure of a transform extension (t-extension) in a BCP 47 tag. Per UTS 35: t-extension = "t" ("-"
-     * tlang)? ("-" tfield)* tlang = unicode_language_id (2-3 or 5-8 alpha language, optional script/region/variants)
-     * tfield = tkey tvalue+ (tkey = 2 chars alphanum+alpha, tvalue = 3-8 alphanum)
-     */
-    private static void validateTransformExtension(String tag, String[] allParts) {
-        // Find the t-extension start
-        int tStart = -1;
-        for (int i = 0; i < allParts.length; i++) {
-            if (allParts[i].length() == 1 && allParts[i].equalsIgnoreCase("t")) {
-                tStart = i + 1;
-                break;
-            }
-        }
-        if (tStart < 0 || tStart >= allParts.length) {
-            throw new IllegalArgumentException("Invalid language tag: empty t-extension: " + tag);
-        }
-
-        // Find the end of the t-extension (next singleton or end)
-        int tEnd = allParts.length;
-        for (int i = tStart; i < allParts.length; i++) {
-            if (allParts[i].length() == 1) {
-                tEnd = i;
-                break;
-            }
-        }
-
-        if (tStart == tEnd) {
-            throw new IllegalArgumentException("Invalid language tag: empty t-extension: " + tag);
-        }
-
-        // Collect t-extension subtags
-        List<String> parts = new ArrayList<>();
-        for (int i = tStart; i < tEnd; i++) {
-            parts.add(allParts[i].toLowerCase(Locale.ROOT));
-        }
-
-        int idx = 0;
-        String first = parts.get(0);
-
-        // Determine if first subtag is a tlang language
-        // Language: 2-3 alpha or 5-8 alpha. NOT 4 alpha (that would be invalid) or 1, 9+ alpha.
-        boolean hasTlang = false;
-        if (first.chars().allMatch(Character::isLetter)) {
-            if (first.length() == 4) {
-                throw new IllegalArgumentException("Invalid language tag: invalid tlang in t-extension: " + tag);
-            }
-            if (first.length() >= 9) {
-                throw new IllegalArgumentException("Invalid language tag: invalid tlang in t-extension: " + tag);
-            }
-            if ((first.length() >= 2 && first.length() <= 3) || (first.length() >= 5 && first.length() <= 8)) {
-                hasTlang = true;
-            }
-        }
-
-        if (hasTlang) {
-            idx++; // consume language
-
-            // Check for invalid extlang (3 alpha after language) — not allowed in unicode_language_id
-            if (idx < parts.size()) {
-                String next = parts.get(idx);
-                if (next.length() == 3 && next.chars().allMatch(Character::isLetter)) {
-                    throw new IllegalArgumentException("Invalid language tag: extlang not allowed in tlang: " + tag);
-                }
-            }
-
-            // Optional script (4 alpha)
-            if (idx < parts.size()) {
-                String next = parts.get(idx);
-                if (next.length() == 4 && next.chars().allMatch(Character::isLetter)) {
-                    idx++;
-                    // Check duplicate script
-                    if (idx < parts.size()) {
-                        String afterScript = parts.get(idx);
-                        if (afterScript.length() == 4 && afterScript.chars().allMatch(Character::isLetter)) {
-                            throw new IllegalArgumentException(
-                                    "Invalid language tag: duplicate script in tlang: " + tag);
-                        }
-                    }
-                }
-            }
-
-            // Optional region (2 alpha or 3 digit)
-            if (idx < parts.size()) {
-                String next = parts.get(idx);
-                if ((next.length() == 2 && next.chars().allMatch(Character::isLetter))
-                        || (next.length() == 3 && next.chars().allMatch(Character::isDigit))) {
-                    idx++;
-                }
-            }
-
-            // Optional variants (5-8 alphanum or 4 starting with digit)
-            Set<String> tlangVariants = new HashSet<>();
-            while (idx < parts.size()) {
-                String next = parts.get(idx);
-                boolean isVariant = (next.length() >= 5 && next.length() <= 8)
-                        || (next.length() == 4 && Character.isDigit(next.charAt(0)));
-                if (!isVariant) {
-                    break;
-                }
-                if (!tlangVariants.add(next)) {
-                    throw new IllegalArgumentException("Invalid language tag: duplicate variant in tlang: " + tag);
-                }
-                idx++;
-            }
-        }
-
-        // Validate tfields
-        while (idx < parts.size()) {
-            String field = parts.get(idx);
-            if (field.length() == 2 && Character.isLetter(field.charAt(0)) && Character.isDigit(field.charAt(1))) {
-                idx++;
-                boolean hasValue = false;
-                while (idx < parts.size()) {
-                    String val = parts.get(idx);
-                    if (val.length() == 2 && Character.isLetter(val.charAt(0)) && Character.isDigit(val.charAt(1))) {
-                        break; // Next tfield key
-                    }
-                    if (val.length() < 3 || val.length() > 8) {
-                        throw new IllegalArgumentException("Invalid language tag: invalid tvalue: " + tag);
-                    }
-                    hasValue = true;
-                    idx++;
-                }
-                if (!hasValue) {
-                    throw new IllegalArgumentException("Invalid language tag: tfield key without value: " + tag);
-                }
-            } else {
-                throw new IllegalArgumentException("Invalid language tag: unexpected subtag in t-extension: " + tag);
-            }
-        }
-    }
-
-    /**
      * WeekdayToString: convert numeric strings "0"-"7" to day names. 0 and 7 → "sun", 1 → "mon", ..., 6 → "sat". Other
      * strings pass through unchanged.
      */
@@ -5815,6 +4451,14 @@ public final class JSIntlObject {
     }
 
     private record DigitRange(Integer minimum, Integer maximum) {
+        static DigitRange readFraction(JSContext context, JSObject options) {
+            return read(context, options, "minimumFractionDigits", "maximumFractionDigits", 0, 100);
+        }
+
+        static DigitRange readSignificant(JSContext context, JSObject options) {
+            return read(context, options, "minimumSignificantDigits", "maximumSignificantDigits", 1, 21);
+        }
+
         static DigitRange read(JSContext context, JSObject options, String minKey, String maxKey, int low, int high) {
             Integer min = getOptionIntegerOrUndefined(context, options, minKey, low, high);
             if (context.hasPendingException()) {
@@ -5850,7 +4494,9 @@ public final class JSIntlObject {
     private record NumberingLocale(Locale locale, String numberingSystem) {
         static NumberingLocale resolve(Locale locale, String option) {
             boolean hasExtensions = locale.hasExtensions();
-            String extension = hasExtensions ? parseUnicodeExtensions(locale.toLanguageTag()).get("nu") : null;
+            String extension = hasExtensions
+                    ? IntlLocaleTag.parseUnicodeExtensions(locale.toLanguageTag()).get("nu")
+                    : null;
             if (extension != null) {
                 extension = extension.toLowerCase(Locale.ROOT);
             }
@@ -5860,7 +4506,7 @@ public final class JSIntlObject {
             } else if (extension != null && SUPPORTED_NUMBERING_SYSTEMS.contains(extension)) {
                 system = extension;
             }
-            Locale resolved = hasExtensions ? stripUnicodeExtensions(locale) : locale;
+            Locale resolved = hasExtensions ? IntlLocaleTag.stripUnicodeExtensions(locale) : locale;
             if (system.equals(extension)) {
                 resolved = new Locale.Builder().setLocale(resolved).setUnicodeLocaleKeyword("nu", system).build();
             }

@@ -48,13 +48,8 @@ public final class PropertyDefinition extends ClassElement {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(key, value);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(key, value);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(key) || kind.in(value);
     }
 
     public Expression getKey() {

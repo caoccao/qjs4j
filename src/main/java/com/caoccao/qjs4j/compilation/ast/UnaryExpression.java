@@ -34,11 +34,6 @@ public final class UnaryExpression extends Expression {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(operand);
-    }
-
-    @Override
     public boolean containsDirectEvalVarArguments() {
         if (directEvalVarArgumentsInside == null) {
             directEvalVarArgumentsInside = operand != null && operand.containsDirectEvalVarArguments();
@@ -47,8 +42,8 @@ public final class UnaryExpression extends Expression {
     }
 
     @Override
-    public boolean containsYield() {
-        return containsYieldIn(operand);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(operand);
     }
 
     public Expression getOperand() {

@@ -32,37 +32,8 @@ public abstract sealed class InvocationExpression extends Expression permits New
     }
 
     @Override
-    public boolean containsAwait() {
-        if (awaitInside == null) {
-            boolean hasAwait = callee != null && callee.containsAwait();
-            if (!hasAwait && arguments != null) {
-                for (Expression argument : arguments) {
-                    if (argument != null && argument.containsAwait()) {
-                        hasAwait = true;
-                        break;
-                    }
-                }
-            }
-            awaitInside = hasAwait;
-        }
-        return awaitInside;
-    }
-
-    @Override
-    public boolean containsYield() {
-        if (yieldInside == null) {
-            boolean hasYield = callee != null && callee.containsYield();
-            if (!hasYield && arguments != null) {
-                for (Expression argument : arguments) {
-                    if (argument != null && argument.containsYield()) {
-                        hasYield = true;
-                        break;
-                    }
-                }
-            }
-            yieldInside = hasYield;
-        }
-        return yieldInside;
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(callee) || kind.in(arguments);
     }
 
     public List<Expression> getArguments() {

@@ -31,13 +31,8 @@ public final class ArrayPattern extends Pattern {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(elements);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(elements);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(elements);
     }
 
     @Override

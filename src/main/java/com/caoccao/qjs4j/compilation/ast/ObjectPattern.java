@@ -33,25 +33,8 @@ public final class ObjectPattern extends Pattern {
     }
 
     @Override
-    public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = false;
-            if ((anyContainsAwait(properties) || (restElement != null && restElement.containsAwait()))) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
-    }
-
-    @Override
-    public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = false;
-            if ((anyContainsYield(properties) || (restElement != null && restElement.containsYield()))) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(properties) || kind.in(restElement);
     }
 
     @Override

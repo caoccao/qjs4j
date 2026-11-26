@@ -33,11 +33,6 @@ public final class SequenceExpression extends Expression {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(expressions);
-    }
-
-    @Override
     public boolean containsDirectEvalVarArguments() {
         if (directEvalVarArgumentsInside == null) {
             directEvalVarArgumentsInside = false;
@@ -54,8 +49,8 @@ public final class SequenceExpression extends Expression {
     }
 
     @Override
-    public boolean containsYield() {
-        return containsYieldIn(expressions);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(expressions);
     }
 
     public List<Expression> getExpressions() {

@@ -35,13 +35,8 @@ public final class IfStatement extends Statement {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(test, consequent, alternate);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(test, consequent, alternate);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(test) || kind.in(consequent) || kind.in(alternate);
     }
 
     public Statement getAlternate() {

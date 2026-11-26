@@ -30,6 +30,56 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 public class RegExpPrototypeTest extends BaseJavetTest {
 
     @Test
+    public void testEmptyMatchStopsWhenLastIndexCoercionThrows() {
+        for (String operation : new String[]{"match", "replace", "matchAll"}) {
+            assertStringWithJavet("""
+                    (() => {
+                        const events = [];
+                        let coercionThrows = false;
+                        const receiver = {
+                            flags: 'gu',
+                            get lastIndex() {
+                                return coercionThrows ? { valueOf() { events.push('coerce'); throw 42; } } : 0;
+                            },
+                            set lastIndex(value) { events.push('set:' + value); },
+                            exec() { coercionThrows = true; return {0: ''}; }
+                        };
+                        receiver.constructor = {[Symbol.species]: function () { return receiver; }};
+                        try {
+                            const result = RegExp.prototype[Symbol.%1$s].call(receiver, 'a', '');
+                            if ('%1$s' === 'matchAll') result.next();
+                        } catch (error) { events.push('caught:' + error); }
+                        return events.join(',');
+                    })()
+                    """.formatted(operation));
+        }
+    }
+
+    @Test
+    public void testEmptyUnicodeMatchAdvancesLargeLastIndex() {
+        for (String operation : new String[]{"match", "replace", "matchAll"}) {
+            assertStringWithJavet("""
+                    (() => {
+                        let calls = 0;
+                        const receiver = {
+                            flags: 'gu',
+                            lastIndex: 0,
+                            exec() {
+                                if (calls++) return null;
+                                this.lastIndex = 2 ** 32 + 1;
+                                return {0: '', length: 1, index: 0};
+                            }
+                        };
+                        receiver.constructor = {[Symbol.species]: function () { return receiver; }};
+                        const result = RegExp.prototype[Symbol.%1$s].call(receiver, 'a', '');
+                        if ('%1$s' === 'matchAll') result.next();
+                        return String(receiver.lastIndex);
+                    })()
+                    """.formatted(operation));
+        }
+    }
+
+    @Test
     public void testExec() {
         // Create a simple regex
         JSRegExp regexp = new JSRegExp(context, "hello", "");

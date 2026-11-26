@@ -35,13 +35,8 @@ public final class ExportDeclaration extends ModuleItem {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(declaration);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(declaration);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(declaration);
     }
 
     public Declaration getDeclaration() {

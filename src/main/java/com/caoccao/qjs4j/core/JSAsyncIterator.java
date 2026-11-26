@@ -74,7 +74,7 @@ public class JSAsyncIterator extends JSObject {
         JSValue returnMethod = iter.get(PropertyKey.RETURN);
         if (context.hasPendingException()) {
             JSPromise rejected = context.createJSPromise();
-            rejected.reject(consumePendingException(context));
+            rejected.reject(context.takeExecutionException());
             return rejected;
         }
         if (!(returnMethod instanceof JSFunction returnFunc)) {
@@ -83,7 +83,7 @@ public class JSAsyncIterator extends JSObject {
         JSValue result = returnFunc.call(context, iter, JSValue.NO_ARGS);
         if (context.hasPendingException()) {
             JSPromise rejected = context.createJSPromise();
-            rejected.reject(consumePendingException(context));
+            rejected.reject(context.takeExecutionException());
             return rejected;
         }
         if (result instanceof JSPromise promise) {
@@ -124,7 +124,7 @@ public class JSAsyncIterator extends JSObject {
         try {
             JSValue returnMethod = syncIterator.get(PropertyKey.RETURN);
             if (context.hasPendingException()) {
-                return createRejectedPromise(context, consumePendingException(context));
+                return createRejectedPromise(context, context.takeExecutionException());
             }
             if (returnMethod.isNullOrUndefined()) {
                 // Step 7: no return method — resolve with { value: undefined, done: true }.
@@ -143,11 +143,11 @@ public class JSAsyncIterator extends JSObject {
             context.clearPendingException();
             return createRejectedPromise(context, e.getErrorValue());
         } catch (JSVirtualMachineException e) {
-            JSValue error = context.hasPendingException() ? consumePendingException(context) : e.getJsValue();
+            JSValue error = context.hasPendingException() ? context.takeExecutionException() : e.getJsValue();
             return createRejectedPromise(context, error != null ? error : context.throwError(e.getMessage()));
         }
         if (context.hasPendingException()) {
-            return createRejectedPromise(context, consumePendingException(context));
+            return createRejectedPromise(context, context.takeExecutionException());
         }
         if (!(result instanceof JSObject resultObject)) {
             JSValue error = context
@@ -157,11 +157,11 @@ public class JSAsyncIterator extends JSObject {
         }
         JSValue done = resultObject.get(PropertyKey.DONE);
         if (context.hasPendingException()) {
-            return createRejectedPromise(context, consumePendingException(context));
+            return createRejectedPromise(context, context.takeExecutionException());
         }
         JSValue resultValue = resultObject.get(PropertyKey.VALUE);
         if (context.hasPendingException()) {
-            return createRejectedPromise(context, consumePendingException(context));
+            return createRejectedPromise(context, context.takeExecutionException());
         }
         // AsyncFromSyncIteratorContinuation: awaits the value, then resolves { value, done }.
         return createAsyncFromSyncResultPromise(context, resultValue,
@@ -182,33 +182,6 @@ public class JSAsyncIterator extends JSObject {
         } finally {
             context.clearAllPendingExceptions();
         }
-    }
-
-    static JSValue consumePendingException(JSContext context) {
-        JSValue reason = context.getPendingException();
-        context.clearAllPendingExceptions();
-        return reason;
-    }
-
-    static JSValue consumePendingExceptionOrCreateStringError(JSContext context, Exception e) {
-        if (context.hasPendingException()) {
-            return consumePendingException(context);
-        }
-        if (e instanceof JSException jsException) {
-            return jsException.getErrorValue();
-        }
-        if (e instanceof JSVirtualMachineException virtualMachineException) {
-            if (virtualMachineException.getJsValue() != null) {
-                return virtualMachineException.getJsValue();
-            }
-            if (virtualMachineException.getJsError() != null) {
-                return virtualMachineException.getJsError();
-            }
-        }
-        String message = e.getMessage() != null ? e.getMessage() : e.toString();
-        JSValue error = context.throwError(message);
-        context.clearPendingException();
-        return error;
     }
 
     /**
@@ -255,7 +228,7 @@ public class JSAsyncIterator extends JSObject {
             // PromiseResolve(%Promise%, value) performs observable constructor access.
             promiseValue.get(PropertyKey.CONSTRUCTOR);
             if (context.hasPendingException()) {
-                JSValue reason = consumePendingException(context);
+                JSValue reason = context.takeExecutionException();
                 if (!done) {
                     closeSyncIteratorAfterRejection(context, syncIterator);
                 }
@@ -266,7 +239,7 @@ public class JSAsyncIterator extends JSObject {
             valueWrapperPromise = context.createJSPromise();
             valueWrapperPromise.resolve(context, value);
             if (context.hasPendingException()) {
-                JSValue reason = consumePendingException(context);
+                JSValue reason = context.takeExecutionException();
                 if (!done) {
                     closeSyncIteratorAfterRejection(context, syncIterator);
                 }
@@ -432,10 +405,10 @@ public class JSAsyncIterator extends JSObject {
             try {
                 result = iterator.next();
             } catch (Exception e) {
-                return createRejectedPromise(context, consumePendingExceptionOrCreateStringError(context, e));
+                return createRejectedPromise(context, context.takeRejectionReason(e));
             }
             if (context.hasPendingException()) {
-                return createRejectedPromise(context, consumePendingException(context));
+                return createRejectedPromise(context, context.takeExecutionException());
             }
             JSValue value = result.get(PropertyKey.VALUE);
             JSValue doneValue = result.get("done");
@@ -630,7 +603,7 @@ public class JSAsyncIterator extends JSObject {
     }
 
     static JSPromise rejectPendingException(JSContext context) {
-        return createRejectedPromise(context, consumePendingException(context));
+        return createRejectedPromise(context, context.takeExecutionException());
     }
 
     static JSPromise rejectTypeError(JSContext context, String message) {
@@ -706,23 +679,23 @@ public class JSAsyncIterator extends JSObject {
             try {
                 result = nextFunc.call(context, iterObj, JSValue.NO_ARGS);
             } catch (Exception e) {
-                return createRejectedPromise(context, consumePendingExceptionOrCreateStringError(context, e));
+                return createRejectedPromise(context, context.takeRejectionReason(e));
             }
             if (context.hasPendingException()) {
-                return createRejectedPromise(context, consumePendingException(context));
+                return createRejectedPromise(context, context.takeExecutionException());
             }
             if (result instanceof JSObject resultObj) {
                 JSValue value = resultObj.get(PropertyKey.VALUE);
                 if (context.hasPendingException()) {
-                    return createRejectedPromise(context, consumePendingException(context));
+                    return createRejectedPromise(context, context.takeExecutionException());
                 }
                 JSValue doneValue = resultObj.get(PropertyKey.DONE);
                 if (context.hasPendingException()) {
-                    return createRejectedPromise(context, consumePendingException(context));
+                    return createRejectedPromise(context, context.takeExecutionException());
                 }
                 boolean done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
                 if (context.hasPendingException()) {
-                    return createRejectedPromise(context, consumePendingException(context));
+                    return createRejectedPromise(context, context.takeExecutionException());
                 }
                 // Per ES spec CreateAsyncFromSyncIterator: resolve promise values
                 return createAsyncFromSyncResultPromise(context, value, done);

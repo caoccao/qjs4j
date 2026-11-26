@@ -30,13 +30,8 @@ public final class ArrayExpression extends Expression {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(elements);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(elements);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(elements);
     }
 
     public List<Expression> getElements() {

@@ -36,13 +36,8 @@ public final class Program extends ASTNode {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(body);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(body);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(body);
     }
 
     public List<Statement> getBody() {

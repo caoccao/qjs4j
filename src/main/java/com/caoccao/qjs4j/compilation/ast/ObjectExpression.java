@@ -30,13 +30,8 @@ public final class ObjectExpression extends Expression {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(properties);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(properties);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(properties);
     }
 
     public List<ObjectExpressionProperty> getProperties() {

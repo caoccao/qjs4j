@@ -32,13 +32,8 @@ public final class LabeledStatement extends Statement {
     }
 
     @Override
-    public boolean containsAwait() {
-        return containsAwaitIn(body);
-    }
-
-    @Override
-    public boolean containsYield() {
-        return containsYieldIn(body);
+    boolean containsSuspension(Suspension kind) {
+        return kind.in(body);
     }
 
     public Statement getBody() {

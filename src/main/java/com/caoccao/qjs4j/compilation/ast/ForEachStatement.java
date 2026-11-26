@@ -42,20 +42,8 @@ public abstract sealed class ForEachStatement extends Statement permits ForInSta
     }
 
     @Override
-    public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = isAsync || (left != null && left.containsAwait()) || (right != null && right.containsAwait())
-                    || (body != null && body.containsAwait());
-        }
-        return awaitInside;
-    }
-
-    @Override
-    public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = childContainsYield(left) || childContainsYield(right) || childContainsYield(body);
-        }
-        return yieldInside;
+    boolean containsSuspension(Suspension kind) {
+        return (isAsync && kind == Suspension.AWAIT) || kind.in(left) || kind.in(right) || kind.in(body);
     }
 
     public Statement getBody() {
