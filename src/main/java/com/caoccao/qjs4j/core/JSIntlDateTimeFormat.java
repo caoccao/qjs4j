@@ -980,6 +980,8 @@ public final class JSIntlDateTimeFormat extends JSObject {
         };
         StringBuilder sb = new StringBuilder(pattern.length());
         boolean inQuote = false;
+        boolean hasDayPeriod = false;
+        int timeFieldEnd = -1;
         for (int i = 0; i < pattern.length(); i++) {
             char c = pattern.charAt(i);
             if (c == '\'') {
@@ -990,6 +992,7 @@ public final class JSIntlDateTimeFormat extends JSObject {
             } else if (c == 'h' || c == 'H' || c == 'K' || c == 'k') {
                 // Replace any hour field letter with the target
                 sb.append(targetHourChar);
+                timeFieldEnd = sb.length();
             } else if (c == 'a' || c == 'b' || c == 'B') {
                 if (want24) {
                     // Remove AM/PM / dayPeriod markers for 24-hour cycles.
@@ -1011,49 +1014,18 @@ public final class JSIntlDateTimeFormat extends JSObject {
                         sb.append(' ');
                     }
                 } else {
+                    hasDayPeriod = true;
                     sb.append(c);
                 }
             } else {
                 sb.append(c);
+                if (c == 'm' || c == 's' || c == 'S') {
+                    timeFieldEnd = sb.length();
+                }
             }
         }
-        // For 12-hour cycles, if no AM/PM marker exists, add one after the time fields
-        if (!want24) {
-            String result = sb.toString();
-            boolean hasAmPm = false;
-            boolean inQ = false;
-            for (int i = 0; i < result.length(); i++) {
-                char c = result.charAt(i);
-                if (c == '\'') {
-                    inQ = !inQ;
-                } else if (!inQ && (c == 'a' || c == 'b' || c == 'B')) {
-                    hasAmPm = true;
-                    break;
-                }
-            }
-            if (!hasAmPm) {
-                // Find the last hour/minute/second field position and insert " a" after it
-                int lastTimeField = -1;
-                inQ = false;
-                for (int i = 0; i < result.length(); i++) {
-                    char c = result.charAt(i);
-                    if (c == '\'') {
-                        inQ = !inQ;
-                    } else if (!inQ
-                            && (c == 'h' || c == 'H' || c == 'K' || c == 'k' || c == 'm' || c == 's' || c == 'S')) {
-                        lastTimeField = i;
-                    }
-                }
-                if (lastTimeField >= 0) {
-                    // Find end of field run
-                    int insertPos = lastTimeField + 1;
-                    while (insertPos < result.length() && result.charAt(insertPos) == result.charAt(lastTimeField)) {
-                        insertPos++;
-                    }
-                    result = result.substring(0, insertPos) + " a" + result.substring(insertPos);
-                }
-                return result;
-            }
+        if (!want24 && !hasDayPeriod && timeFieldEnd >= 0) {
+            sb.insert(timeFieldEnd, " a");
         }
         return sb.toString();
     }

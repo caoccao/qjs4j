@@ -34,7 +34,6 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
             "second", "now");
     private static final Map<String, String> EN_LONG_PLURAL = Map.of("second", "seconds", "minute", "minutes", "hour",
             "hours", "day", "days", "week", "weeks", "month", "months", "quarter", "quarters", "year", "years");
-    private static final Map<String, String> EN_NARROW_MANY;
     private static final Map<String, String> EN_NARROW_ONE = Map.of("second", "s", "minute", "m", "hour", "h", "day",
             "d", "week", "w", "month", "mo", "quarter", "q", "year", "y");
     private static final Map<String, String> EN_SHORT_MANY = Map.of("second", "sec.", "minute", "min.", "hour", "hr.",
@@ -60,9 +59,6 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
             "day", "dni", "week", "tyg.", "month", "mies.", "quarter", "kw.", "year", "lat");
     private static final Map<String, String> PL_SHORT_ONE = Map.of("second", "sek.", "minute", "min", "hour", "godz.",
             "day", "dzień", "week", "tydz.", "month", "mies.", "quarter", "kw.", "year", "rok");
-    static {
-        EN_NARROW_MANY = EN_NARROW_ONE;
-    }
 
     private final Locale locale;
     private final String numberingSystem;
@@ -80,14 +76,15 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
 
     public String format(double value, String unit) {
         String normalizedUnit = normalizeUnit(unit);
-        if (Double.isNaN(value) || Double.isInfinite(value)) {
-            throw new JSRangeErrorException("Invalid value");
+        if (normalizedUnit == null) {
+            throw new JSRangeErrorException("Invalid unit: " + unit);
         }
+        requireFinite(value);
+        return format(value, normalizedUnit, numberFormat().format(Math.abs(value)));
+    }
 
+    private String format(double value, String normalizedUnit, String numberText) {
         boolean isPast = value < 0 || isNegativeZero(value);
-        double absoluteValue = Math.abs(value);
-        String numberText = formatNumber(absoluteValue);
-
         String language = locale.getLanguage();
         if ("pl".equals(language)) {
             return formatPolish(value, normalizedUnit, numberText, isPast);
@@ -119,7 +116,7 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
         if ("short".equals(style)) {
             unitText = singular ? EN_SHORT_ONE.get(normalizedUnit) : EN_SHORT_MANY.get(normalizedUnit);
         } else if ("narrow".equals(style)) {
-            unitText = singular ? EN_NARROW_ONE.get(normalizedUnit) : EN_NARROW_MANY.get(normalizedUnit);
+            unitText = EN_NARROW_ONE.get(normalizedUnit);
         } else {
             unitText = singular ? normalizedUnit : EN_LONG_PLURAL.get(normalizedUnit);
         }
@@ -127,13 +124,6 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
             return numberText + " " + unitText + " ago";
         }
         return "in " + numberText + " " + unitText;
-    }
-
-    private String formatNumber(double absoluteValue) {
-        String useGroupingMode = locale.getLanguage().equals("pl") ? "min2" : "auto";
-        JSIntlNumberFormat numberFormat = new JSIntlNumberFormat(context, locale, "decimal", null, useGroupingMode, 1,
-                0, 3, false, 0, null, null, "auto", "halfExpand", numberingSystem);
-        return numberFormat.format(absoluteValue);
     }
 
     private String formatPolish(double value, String normalizedUnit, String numberText, boolean isPast) {
@@ -168,6 +158,51 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
         return "za " + numberText + " " + unitText;
     }
 
+    JSArray formatToParts(JSContext context, double value, String unit) {
+        String normalizedUnit = normalizeUnit(unit);
+        if (normalizedUnit == null) {
+            throw new IllegalArgumentException("Invalid unit: " + unit);
+        }
+        requireFinite(value);
+        double absoluteValue = Math.abs(value);
+        JSIntlNumberFormat numberFormat = numberFormat();
+        String numberText = numberFormat.format(absoluteValue);
+        String formatted = format(value, normalizedUnit, numberText);
+        int numberStart = formatted.indexOf(numberText);
+
+        JSArray result = context.createJSArray();
+        if (numberStart < 0) {
+            result.push(createRelativeTimeLiteralPart(context, formatted));
+            return result;
+        }
+
+        String prefix = formatted.substring(0, numberStart);
+        if (!prefix.isEmpty()) {
+            result.push(createRelativeTimeLiteralPart(context, prefix));
+        }
+
+        JSArray numberParts = numberFormat.formatToPartsFromFormatted(context, numberText);
+        for (int index = 0; index < numberParts.getLength(); index++) {
+            JSValue numberPartValue = numberParts.get(index);
+            if (numberPartValue instanceof JSObject numberPartObject) {
+                JSIntlObject.createDataProperty(numberPartObject, "unit", new JSString(normalizedUnit));
+                result.push(numberPartObject);
+            }
+        }
+
+        String suffix = formatted.substring(numberStart + numberText.length());
+        if ("pl".equals(locale.getLanguage()) && !isInteger(absoluteValue)) {
+            boolean isPast = value < 0 || isNegativeZero(value);
+            String polishOtherUnit = getPolishOtherUnit(style, normalizedUnit);
+            suffix = isPast ? " " + polishOtherUnit + " temu" : " " + polishOtherUnit;
+        }
+        if (!suffix.isEmpty()) {
+            result.push(createRelativeTimeLiteralPart(context, suffix));
+        }
+        return result;
+
+    }
+
     public Locale getLocale() {
         return locale;
     }
@@ -184,6 +219,12 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
         return style;
     }
 
+    private JSIntlNumberFormat numberFormat() {
+        String useGroupingMode = locale.getLanguage().equals("pl") ? "min2" : "auto";
+        return new JSIntlNumberFormat(context, locale, "decimal", null, useGroupingMode, 1, 0, 3, false, 0, null, null,
+                "auto", "halfExpand", numberingSystem);
+    }
+
     private String selectPolishPluralCategory(double absoluteValue) {
         if (!isInteger(absoluteValue)) {
             return "many";
@@ -198,6 +239,34 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
             return "few";
         }
         return "many";
+    }
+
+    private static JSObject createRelativeTimeLiteralPart(JSContext context, String value) {
+        JSObject part = context.createJSObject();
+        JSIntlObject.createDataProperty(part, "type", new JSString("literal"));
+        JSIntlObject.createDataProperty(part, "value", new JSString(value));
+        return part;
+    }
+
+    private static String getPolishOtherUnit(String style, String unit) {
+        if ("long".equals(style)) {
+            return switch (unit) {
+                case "second" -> "sekundy";
+                case "minute" -> "minuty";
+                case "hour" -> "godziny";
+                case "day" -> "dnia";
+                case "week" -> "tygodnia";
+                case "month" -> "miesiąca";
+                case "quarter" -> "kwartału";
+                case "year" -> "roku";
+                default -> unit;
+            };
+        }
+        return switch (unit) {
+            case "day" -> "dnia";
+            case "year" -> "roku";
+            default -> ("short".equals(style) ? PL_SHORT_MANY : PL_NARROW_MANY).getOrDefault(unit, unit);
+        };
     }
 
     private static boolean isInteger(double value) {
@@ -218,7 +287,13 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
             case "months", "month" -> "month";
             case "quarters", "quarter" -> "quarter";
             case "years", "year" -> "year";
-            default -> throw new JSRangeErrorException("Invalid unit: " + unit);
+            default -> null;
         };
+    }
+
+    private static void requireFinite(double value) {
+        if (!Double.isFinite(value)) {
+            throw new JSRangeErrorException("Invalid value");
+        }
     }
 }

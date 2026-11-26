@@ -491,20 +491,10 @@ public final class JSIntlDurationFormat extends JSObject {
      */
     public static List<FormatPart> formatToPartsBigDecimal(BigDecimal value, boolean is2Digit, boolean suppressSign,
             int minFractionDigits, int maxFractionDigits, boolean truncate, Locale locale) {
-        List<FormatPart> parts = new ArrayList<>();
-        BigDecimal formatValue = suppressSign ? value.abs() : value;
-        boolean isNegative = formatValue.signum() < 0;
-
-        if (isNegative) {
-            parts.add(new FormatPart("minusSign", "-", null));
-            formatValue = formatValue.abs();
-        }
-
-        int minIntDigits = is2Digit ? 2 : 1;
-        String formatted = formatBigDecimalNumber(formatValue, minIntDigits, minFractionDigits, maxFractionDigits,
+        boolean negative = !suppressSign && value.signum() < 0;
+        String magnitude = formatBigDecimalNumber(value.abs(), is2Digit ? 2 : 1, minFractionDigits, maxFractionDigits,
                 false, truncate, locale);
-        addNumberPartsToList(parts, formatted);
-        return parts;
+        return numberParts(magnitude, negative, null, null, locale);
     }
 
     /**
@@ -512,39 +502,18 @@ public final class JSIntlDurationFormat extends JSObject {
      */
     public static List<FormatPart> formatToPartsNumeric(double value, boolean is2Digit, boolean suppressSign,
             int minFractionDigits, int maxFractionDigits, boolean truncate, Locale locale) {
-        List<FormatPart> parts = new ArrayList<>();
-        double formatValue = suppressSign ? Math.abs(value) : value;
-        boolean isNegativeZero = !suppressSign && Double.doubleToRawLongBits(value) == Long.MIN_VALUE;
-        boolean isNegative = formatValue < 0 || isNegativeZero;
-
-        if (isNegative) {
-            parts.add(new FormatPart("minusSign", "-", null));
-            formatValue = Math.abs(formatValue);
-        }
-
-        int minIntDigits = is2Digit ? 2 : 1;
-        String formatted = formatPlainNumber(formatValue, minIntDigits, minFractionDigits, maxFractionDigits, false,
-                truncate, locale);
-        addNumberPartsToList(parts, formatted);
-        return parts;
+        boolean negative = !suppressSign && (value < 0 || Double.doubleToRawLongBits(value) == Long.MIN_VALUE);
+        String magnitude = formatPlainNumber(Math.abs(value), is2Digit ? 2 : 1, minFractionDigits, maxFractionDigits,
+                false, truncate, locale);
+        return numberParts(magnitude, negative, null, null, locale);
     }
 
     public static List<FormatPart> formatToPartsWithUnit(BigDecimal value, String singularUnit, String unitDisplay,
             boolean suppressSign, int minFractionDigits, int maxFractionDigits, Locale locale) {
-        List<FormatPart> parts = new ArrayList<>();
-        BigDecimal formatValue = suppressSign ? value.abs() : value;
-        boolean isNegative = formatValue.signum() < 0;
-
-        if (isNegative) {
-            parts.add(new FormatPart("minusSign", "-", null));
-            formatValue = formatValue.abs();
-        }
-
-        String numberStr = formatBigDecimalNumber(formatValue, 1, minFractionDigits, maxFractionDigits, true, true,
+        boolean negative = !suppressSign && value.signum() < 0;
+        String magnitude = formatBigDecimalNumber(value.abs(), 1, minFractionDigits, maxFractionDigits, true, true,
                 locale);
-        addNumberPartsToList(parts, numberStr);
-        addUnitParts(parts, numberStr, singularUnit, unitDisplay, locale);
-        return parts;
+        return numberParts(magnitude, negative, singularUnit, unitDisplay, locale);
     }
 
     /**
@@ -552,21 +521,9 @@ public final class JSIntlDurationFormat extends JSObject {
      */
     public static List<FormatPart> formatToPartsWithUnit(double value, String singularUnit, String unitDisplay,
             boolean suppressSign, Locale locale) {
-        List<FormatPart> parts = new ArrayList<>();
-        double formatValue = suppressSign ? Math.abs(value) : value;
-        boolean isNegativeZero = !suppressSign && Double.doubleToRawLongBits(value) == Long.MIN_VALUE;
-        boolean isNegative = formatValue < 0 || isNegativeZero;
-
-        if (isNegative) {
-            parts.add(new FormatPart("minusSign", "-", null));
-            formatValue = Math.abs(formatValue);
-        }
-
-        String numberStr = formatPlainNumber(formatValue, 1, -1, -1, true, false, locale);
-        addNumberPartsToList(parts, numberStr);
-        addUnitParts(parts, numberStr, singularUnit, unitDisplay, locale);
-
-        return parts;
+        boolean negative = !suppressSign && (value < 0 || Double.doubleToRawLongBits(value) == Long.MIN_VALUE);
+        String magnitude = formatPlainNumber(Math.abs(value), 1, -1, -1, true, false, locale);
+        return numberParts(magnitude, negative, singularUnit, unitDisplay, locale);
     }
 
     /**
@@ -578,8 +535,7 @@ public final class JSIntlDurationFormat extends JSObject {
 
         String numberPart = formatBigDecimalNumber(formatValue, 1, minFractionDigits, maxFractionDigits, true, true,
                 locale);
-        String english = formatEnglishTimeUnit(numberPart, singularUnit, unitDisplay, locale);
-        return english != null ? english : numberPart + " " + singularUnit;
+        return joinNumberAndUnit(numberPart, singularUnit, unitDisplay, locale);
     }
 
     /**
@@ -607,8 +563,7 @@ public final class JSIntlDurationFormat extends JSObject {
         if (isNegativeZero) {
             numberPart = "-0";
         }
-        String english = formatEnglishTimeUnit(numberPart, singularUnit, unitDisplay, locale);
-        return english != null ? english : numberPart + " " + singularUnit;
+        return joinNumberAndUnit(numberPart, singularUnit, unitDisplay, locale);
     }
 
     /**
@@ -720,6 +675,24 @@ public final class JSIntlDurationFormat extends JSObject {
         }
 
         return true;
+    }
+
+    private static String joinNumberAndUnit(String numberPart, String unit, String display, Locale locale) {
+        String english = formatEnglishTimeUnit(numberPart, unit, display, locale);
+        return english != null ? english : numberPart + " " + unit;
+    }
+
+    private static List<FormatPart> numberParts(String magnitude, boolean negative, String unit, String display,
+            Locale locale) {
+        List<FormatPart> parts = new ArrayList<>();
+        if (negative) {
+            parts.add(new FormatPart("minusSign", "-", null));
+        }
+        addNumberPartsToList(parts, magnitude);
+        if (unit != null) {
+            addUnitParts(parts, magnitude, unit, display, locale);
+        }
+        return parts;
     }
 
     /**

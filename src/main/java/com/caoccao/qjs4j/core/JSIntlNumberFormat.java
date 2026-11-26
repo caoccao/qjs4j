@@ -30,7 +30,19 @@ import java.util.*;
  */
 public final class JSIntlNumberFormat extends JSObject {
     private static final BigDecimal DECIMAL_ONE_HALF = new BigDecimal("0.5");
+    private static final CompactScale[] ENGLISH_SCALES = {new CompactScale(1_000_000, "M", " million"),
+            new CompactScale(1_000, "K", " thousand")};
+    private static final CompactScale[] GERMAN_SCALES = {new CompactScale(1_000_000, "\u00A0Mio.", " Millionen"),
+            new CompactScale(1_000, null, " Tausend")};
+    private static final CompactScale[] INDIAN_ENGLISH_SCALES = {new CompactScale(10_000_000, "Cr", " crore"),
+            new CompactScale(100_000, "L", " lakh"), new CompactScale(1_000, "K", " thousand")};
+    private static final CompactScale[] JAPANESE_SCALES = {new CompactScale(100_000_000, "億"),
+            new CompactScale(10_000, "万")};
+    private static final CompactScale[] KOREAN_SCALES = {new CompactScale(100_000_000, "억"),
+            new CompactScale(10_000, "만"), new CompactScale(1_000, "천")};
     public static final String NAME = "Intl.NumberFormat";
+    private static final CompactScale[] TAIWANESE_CHINESE_SCALES = {new CompactScale(100_000_000, "億"),
+            new CompactScale(10_000, "萬")};
     private JSFunction boundFormatFunction;
     private final String compactDisplay;
     private final String currency;
@@ -48,11 +60,17 @@ public final class JSIntlNumberFormat extends JSObject {
     private final String roundingMode;
     private final String roundingPriority;
     private final String signDisplay;
+
     private final String style;
+
     private final String trailingZeroDisplay;
+
     private final String unit;
+
     private final String unitDisplay;
+
     private final String useGroupingMode;
+
     private final boolean useSignificantDigits;
 
     public JSIntlNumberFormat(JSContext context, Locale locale, String style, String currency) {
@@ -108,6 +126,33 @@ public final class JSIntlNumberFormat extends JSObject {
                 1, "auto", "auto");
     }
 
+    private void appendAffixedNumberParts(List<PartToken> tokens, String body, DecimalFormatSymbols symbols,
+            boolean compact) {
+        int[] numericRange = findNumericCoreRange(body, symbols);
+        if (numericRange[0] < 0) {
+            if (compact) {
+                tokens.add(new PartToken("literal", body));
+            } else {
+                appendStyledAffix(tokens, body, symbols);
+            }
+            return;
+        }
+        String prefix = body.substring(0, numericRange[0]);
+        String numberPortion = body.substring(numericRange[0], numericRange[1] + 1);
+        String suffix = body.substring(numericRange[1] + 1);
+        if (compact) {
+            appendLiteral(tokens, prefix);
+        } else {
+            appendStyledAffix(tokens, prefix, symbols);
+        }
+        appendNumberParts(tokens, numberPortion, symbols);
+        if (compact) {
+            appendAffixWithType(tokens, suffix, "compact");
+        } else {
+            appendStyledAffix(tokens, suffix, symbols);
+        }
+    }
+
     private void appendAffixWithType(List<PartToken> tokens, String affix, String type) {
         if (affix.isEmpty()) {
             return;
@@ -127,20 +172,6 @@ public final class JSIntlNumberFormat extends JSObject {
                 tokens.add(new PartToken(type, segment));
             }
         }
-    }
-
-    private void appendCompactParts(List<PartToken> tokens, String body, DecimalFormatSymbols symbols) {
-        int[] numericRange = findNumericCoreRange(body, symbols);
-        if (numericRange[0] < 0) {
-            tokens.add(new PartToken("literal", body));
-            return;
-        }
-        String prefix = body.substring(0, numericRange[0]);
-        String numberPortion = body.substring(numericRange[0], numericRange[1] + 1);
-        String suffix = body.substring(numericRange[1] + 1);
-        appendLiteral(tokens, prefix);
-        appendNumberParts(tokens, numberPortion, symbols);
-        appendAffixWithType(tokens, suffix, "compact");
     }
 
     private void appendCurrencyAffix(List<PartToken> tokens, String affix, DecimalFormatSymbols symbols) {
@@ -307,20 +338,6 @@ public final class JSIntlNumberFormat extends JSObject {
             case "percent" -> appendAffixWithType(tokens, affix, "percentSign");
             case "unit" -> appendUnitAffix(tokens, affix, symbols);
         }
-    }
-
-    private void appendStyledParts(List<PartToken> tokens, String body, DecimalFormatSymbols symbols) {
-        int[] numericRange = findNumericCoreRange(body, symbols);
-        if (numericRange[0] < 0) {
-            appendStyledAffix(tokens, body, symbols);
-            return;
-        }
-        String prefix = body.substring(0, numericRange[0]);
-        String numberPortion = body.substring(numericRange[0], numericRange[1] + 1);
-        String suffix = body.substring(numericRange[1] + 1);
-        appendStyledAffix(tokens, prefix, symbols);
-        appendNumberParts(tokens, numberPortion, symbols);
-        appendStyledAffix(tokens, suffix, symbols);
     }
 
     private void appendUnitAffix(List<PartToken> tokens, String affix, DecimalFormatSymbols symbols) {
@@ -817,7 +834,7 @@ public final class JSIntlNumberFormat extends JSObject {
         return formatToPartsFromFormatted(context, format(stringValue));
     }
 
-    private JSArray formatToPartsFromFormatted(JSContext context, String formatted) {
+    JSArray formatToPartsFromFormatted(JSContext context, String formatted) {
         DecimalFormatSymbols symbols = DecimalFormatSymbols.getInstance(createCurrencySignLocale());
         List<PartToken> tokens = new ArrayList<>();
         String body = formatted;
@@ -842,9 +859,9 @@ public final class JSIntlNumberFormat extends JSObject {
         } else if ("scientific".equals(notation) || "engineering".equals(notation)) {
             appendScientificParts(tokens, body, symbols);
         } else if ("unit".equals(style) || "percent".equals(style) || "currency".equals(style)) {
-            appendStyledParts(tokens, body, symbols);
+            appendAffixedNumberParts(tokens, body, symbols, false);
         } else if ("compact".equals(notation)) {
-            appendCompactParts(tokens, body, symbols);
+            appendAffixedNumberParts(tokens, body, symbols, true);
         } else {
             appendNumberParts(tokens, body, symbols);
         }
@@ -1034,83 +1051,26 @@ public final class JSIntlNumberFormat extends JSObject {
     }
 
     private CompactSpec resolveCompactSpec(String localeTag, BigDecimal absoluteValue) {
+        CompactScale[] scales;
         if (localeTag.startsWith("en-IN")) {
-            if (absoluteValue.compareTo(new BigDecimal("10000000")) >= 0) {
-                if ("long".equals(compactDisplay)) {
-                    return new CompactSpec(new BigDecimal("10000000"), " crore");
-                }
-                return new CompactSpec(new BigDecimal("10000000"), "Cr");
-            }
-            if (absoluteValue.compareTo(new BigDecimal("100000")) >= 0) {
-                if ("long".equals(compactDisplay)) {
-                    return new CompactSpec(new BigDecimal("100000"), " lakh");
-                }
-                return new CompactSpec(new BigDecimal("100000"), "L");
-            }
-            if (absoluteValue.compareTo(new BigDecimal("1000")) >= 0) {
-                if ("long".equals(compactDisplay)) {
-                    return new CompactSpec(new BigDecimal("1000"), " thousand");
-                }
-                return new CompactSpec(new BigDecimal("1000"), "K");
-            }
+            scales = INDIAN_ENGLISH_SCALES;
+        } else if (localeTag.startsWith("en")) {
+            scales = ENGLISH_SCALES;
+        } else if (localeTag.startsWith("de")) {
+            scales = GERMAN_SCALES;
+        } else if (localeTag.startsWith("ja")) {
+            scales = JAPANESE_SCALES;
+        } else if (localeTag.startsWith("ko")) {
+            scales = KOREAN_SCALES;
+        } else if (localeTag.startsWith("zh-TW")) {
+            scales = TAIWANESE_CHINESE_SCALES;
+        } else {
             return null;
         }
-        if (localeTag.startsWith("en")) {
-            if (absoluteValue.compareTo(new BigDecimal("1000000")) >= 0) {
-                if ("long".equals(compactDisplay)) {
-                    return new CompactSpec(new BigDecimal("1000000"), " million");
-                }
-                return new CompactSpec(new BigDecimal("1000000"), "M");
+        for (CompactScale scale : scales) {
+            if (absoluteValue.compareTo(scale.divisor()) >= 0) {
+                return "long".equals(compactDisplay) ? scale.longForm() : scale.shortForm();
             }
-            if (absoluteValue.compareTo(new BigDecimal("1000")) >= 0) {
-                if ("long".equals(compactDisplay)) {
-                    return new CompactSpec(new BigDecimal("1000"), " thousand");
-                }
-                return new CompactSpec(new BigDecimal("1000"), "K");
-            }
-            return null;
-        }
-        if (localeTag.startsWith("de")) {
-            if (absoluteValue.compareTo(new BigDecimal("1000000")) >= 0) {
-                if ("long".equals(compactDisplay)) {
-                    return new CompactSpec(new BigDecimal("1000000"), " Millionen");
-                }
-                return new CompactSpec(new BigDecimal("1000000"), "\u00A0Mio.");
-            }
-            if ("long".equals(compactDisplay) && absoluteValue.compareTo(new BigDecimal("1000")) >= 0) {
-                return new CompactSpec(new BigDecimal("1000"), " Tausend");
-            }
-            return null;
-        }
-        if (localeTag.startsWith("ja")) {
-            if (absoluteValue.compareTo(new BigDecimal("100000000")) >= 0) {
-                return new CompactSpec(new BigDecimal("100000000"), "億");
-            }
-            if (absoluteValue.compareTo(new BigDecimal("10000")) >= 0) {
-                return new CompactSpec(new BigDecimal("10000"), "万");
-            }
-            return null;
-        }
-        if (localeTag.startsWith("ko")) {
-            if (absoluteValue.compareTo(new BigDecimal("100000000")) >= 0) {
-                return new CompactSpec(new BigDecimal("100000000"), "억");
-            }
-            if (absoluteValue.compareTo(new BigDecimal("10000")) >= 0) {
-                return new CompactSpec(new BigDecimal("10000"), "만");
-            }
-            if (absoluteValue.compareTo(new BigDecimal("1000")) >= 0) {
-                return new CompactSpec(new BigDecimal("1000"), "천");
-            }
-            return null;
-        }
-        if (localeTag.startsWith("zh-TW")) {
-            if (absoluteValue.compareTo(new BigDecimal("100000000")) >= 0) {
-                return new CompactSpec(new BigDecimal("100000000"), "億");
-            }
-            if (absoluteValue.compareTo(new BigDecimal("10000")) >= 0) {
-                return new CompactSpec(new BigDecimal("10000"), "萬");
-            }
-            return null;
         }
         return null;
     }
@@ -1237,6 +1197,21 @@ public final class JSIntlNumberFormat extends JSObject {
             return maximumFractionDigits >= maximumSignificantDigits;
         }
         return false;
+    }
+
+    private record CompactScale(BigDecimal divisor, CompactSpec shortForm, CompactSpec longForm) {
+        private CompactScale(long divisor, String suffix) {
+            this(BigDecimal.valueOf(divisor), suffix, suffix);
+        }
+
+        private CompactScale(long divisor, String shortSuffix, String longSuffix) {
+            this(BigDecimal.valueOf(divisor), shortSuffix, longSuffix);
+        }
+
+        private CompactScale(BigDecimal divisor, String shortSuffix, String longSuffix) {
+            this(divisor, shortSuffix == null ? null : new CompactSpec(divisor, shortSuffix),
+                    new CompactSpec(divisor, longSuffix));
+        }
     }
 
     private record CompactSpec(BigDecimal divisor, String suffix) {

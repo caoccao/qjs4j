@@ -16,18 +16,10 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.core.temporal.TemporalCalendarId;
 import com.caoccao.qjs4j.exceptions.JSException;
 
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.time.DateTimeException;
-import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.time.format.FormatStyle;
 import java.util.*;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -35,28 +27,21 @@ import java.util.stream.Collectors;
  */
 public final class JSIntlObject {
     private static final Set<String> AVAILABLE_LOCALE_LANGUAGES;
-    private static final String[] COMPACT_DISPLAY_VALUES = {"short", "long"};
-    private static final String[] CURRENCY_DISPLAY_VALUES = {"code", "symbol", "narrowSymbol", "name"};
-    private static final String[] CURRENCY_SIGN_VALUES = {"standard", "accounting"};
-    private static final String[] FORMAT_STYLE_VALUES = {"short", "medium", "long", "full"};
+
     /**
      * CLDR likely subtags data for maximize/minimize. Maps language (or language-script, language-region) to full
      * locale tag.
      */
     private static final Map<String, String> LIKELY_SUBTAGS = new HashMap<>();
-    private static final BigInteger NANOS_PER_MILLISECOND = BigInteger.valueOf(1_000_000L);
-    private static final String[] NOTATION_VALUES = {"standard", "scientific", "engineering", "compact"};
-    private static final String[] NUMBER_STYLE_VALUES = {"decimal", "currency", "percent", "unit"};
-    private static final String[] ROUNDING_MODE_VALUES = {"ceil", "floor", "expand", "trunc", "halfCeil", "halfFloor",
-            "halfExpand", "halfTrunc", "halfEven"};
-    private static final String[] ROUNDING_PRIORITY_VALUES = {"auto", "morePrecision", "lessPrecision"};
-    private static final Set<String> SANCTIONED_SIMPLE_UNITS = Set.of("acre", "bit", "byte", "celsius", "centimeter",
+
+    static final Set<String> SANCTIONED_SIMPLE_UNITS;
+    private static final List<String> SORTED_SIMPLE_UNITS = List.of("acre", "bit", "byte", "celsius", "centimeter",
             "day", "degree", "fahrenheit", "fluid-ounce", "foot", "gallon", "gigabit", "gigabyte", "gram", "hectare",
             "hour", "inch", "kilobit", "kilobyte", "kilogram", "kilometer", "liter", "megabit", "megabyte", "meter",
             "microsecond", "mile", "mile-scandinavian", "milliliter", "millimeter", "millisecond", "minute", "month",
             "nanosecond", "ounce", "percent", "petabyte", "pound", "second", "stone", "terabit", "terabyte", "week",
             "yard", "year");
-    private static final String[] SIGN_DISPLAY_VALUES = {"auto", "never", "always", "exceptZero", "negative"};
+
     /**
      * Supplementary valid IANA timezone IDs not present in ZoneId.getAvailableZoneIds(). These are real IANA TZDB
      * entries that some JDK versions omit.
@@ -66,37 +51,23 @@ public final class JSIntlObject {
             "GMT+0", "GMT-0", "GMT0", // IANA backward-compat Link entries
             "ROC", // Republic of China → Asia/Taipei
     };
-    /**
-     * Supported numbering systems with simple digit mappings (per ECMA-402 Table 10). Used by
-     * supportedValuesOf("numberingSystem") and validated in constructors.
-     */
-    private static final Set<String> SUPPORTED_NUMBERING_SYSTEMS = Set.of("adlm", "ahom", "arab", "arabext", "bali",
-            "beng", "bhks", "brah", "cakm", "cham", "deva", "diak", "fullwide", "gong", "gara", "gonm", "gujr", "gukh",
-            "guru", "hanidec", "hmng", "hmnp", "java", "kali", "kawi", "khmr", "knda", "krai", "lana", "lanatham",
-            "laoo", "latn", "lepc", "limb", "mathbold", "mathdbl", "mathmono", "mathsanb", "mathsans", "mlym", "modi",
-            "mong", "mroo", "mtei", "mymr", "mymrepka", "mymrpao", "mymrshan", "mymrtlng", "nagm", "newa", "nkoo",
-            "olck", "onao", "orya", "osma", "outlined", "rohg", "saur", "segment", "shrd", "sind", "sinh", "sora",
-            "sund", "sunu", "takr", "talu", "tamldec", "telu", "thai", "tibt", "tirh", "tnsa", "tols", "vaii", "wara",
-            "wcho");
+
     /**
      * Lazy-initialized map of lowercased timezone ID → canonical casing. Built from ZoneId.getAvailableZoneIds() plus
      * supplementary valid IANA timezone IDs that Java's ZoneId does not include.
      */
     private static volatile Map<String, String> TIMEZONE_LOOKUP_MAP;
-    private static final String[] TRAILING_ZERO_DISPLAY_VALUES = {"auto", "stripIfInteger"};
-    /**
-     * Pattern for Unicode Locale Identifier type: (3*8alphanum) *("-" (3*8alphanum))
-     */
-    private static final Pattern UNICODE_TYPE_PATTERN = Pattern.compile("^[a-zA-Z0-9]{3,8}(-[a-zA-Z0-9]{3,8})*$");
-    private static final String[] UNIT_DISPLAY_VALUES = {"short", "narrow", "long"};
+
     /**
      * Check if a collation value is valid/supported.
      */
     private static final Set<String> VALID_COLLATION_TYPES = Set.of("big5han", "compat", "dict", "direct", "ducet",
             "emoji", "eor", "gb2312", "phonebk", "phonetic", "pinyin", "reformed", "searchjl", "stroke", "trad",
             "unihan", "zhuyin");
-    private static final Set<Integer> VALID_ROUNDING_INCREMENTS = Set.of(1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500,
-            1000, 2000, 2500, 5000);
+
+    static {
+        SANCTIONED_SIMPLE_UNITS = Set.copyOf(SORTED_SIMPLE_UNITS);
+    }
 
     static {
         AVAILABLE_LOCALE_LANGUAGES = Arrays.stream(Locale.getAvailableLocales()).map(Locale::toLanguageTag)
@@ -303,47 +274,11 @@ public final class JSIntlObject {
         return locale;
     }
 
-    private static void appendMatchingExtension(StringBuilder tag, int baseLength, String key, String resolved,
+    static void appendMatchingExtension(StringBuilder tag, int baseLength, String key, String resolved,
             String requested) {
         if (resolved != null && resolved.equals(requested)) {
             tag.append(tag.length() == baseLength ? "-u-" : "-").append(key).append('-').append(resolved);
         }
-    }
-
-    private static void appendRangePartsWithSource(JSContext context, JSArray target, JSArray sourceParts,
-            String sourceName) {
-        int length = (int) sourceParts.getLength();
-        for (int index = 0; index < length; index++) {
-            JSValue partValue = sourceParts.get(index);
-            if (!(partValue instanceof JSObject partObject)) {
-                continue;
-            }
-            JSValue typeValue = partObject.get(PropertyKey.fromString("type"));
-            JSValue valueValue = partObject.get(PropertyKey.VALUE);
-            if (!(typeValue instanceof JSString typeString) || !(valueValue instanceof JSString valueString)) {
-                continue;
-            }
-            target.push(createPartObject(context, typeString.value(), valueString.value(), sourceName));
-        }
-    }
-
-    /**
-     * Build resolved locale tag according to ECMA-402 ResolveLocale rules. Unicode extension keys are included only if:
-     * - The extension value matched the resolved value AND - No option explicitly overrode it
-     */
-    private static Locale buildResolvedLocale(Locale locale, Map<String, String> unicodeExtensions, String calendar,
-            String hourCycle, Boolean hour12, String numberingSystem) {
-        Locale base = IntlLocaleTag.stripUnicodeExtensions(locale);
-        StringBuilder tag = new StringBuilder(base.toLanguageTag());
-        int baseLength = tag.length();
-        appendMatchingExtension(tag, baseLength, "ca", calendar, canonicalizeCalendar(unicodeExtensions.get("ca")));
-        if (hour12 == null) {
-            appendMatchingExtension(tag, baseLength, "hc", hourCycle, unicodeExtensions.get("hc"));
-        }
-        String nu = unicodeExtensions.get("nu");
-        appendMatchingExtension(tag, baseLength, "nu", numberingSystem,
-                nu == null ? null : nu.toLowerCase(Locale.ROOT));
-        return tag.length() == baseLength ? base : Locale.forLanguageTag(tag.toString());
     }
 
     /**
@@ -367,7 +302,7 @@ public final class JSIntlObject {
      * mapping (e.g., "islamicc" → "islamic-civil") - Deprecated calendar fallback ("islamic", "islamic-rgsa" →
      * "islamic-civil")
      */
-    private static String canonicalizeCalendar(String calendar) {
+    static String canonicalizeCalendar(String calendar) {
         if (calendar == null) {
             return null;
         }
@@ -527,19 +462,6 @@ public final class JSIntlObject {
         }
     }
 
-    private static JSValue coerceOptionsObject(JSContext context, JSValue options) {
-        if (options instanceof JSUndefined) {
-            JSObject empty = context.createJSObject();
-            empty.setPrototype(null);
-            return empty;
-        }
-        if (options instanceof JSNull) {
-            return context.throwTypeError("Cannot convert null to object");
-        }
-        JSObject object = JSTypeConversions.toObject(context, options);
-        return object == null || context.hasPendingException() ? JSUndefined.INSTANCE : object;
-    }
-
     public static JSValue collatorCompare(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlCollator collator)) {
             return context.throwTypeError("Intl.Collator.prototype.compare called on incompatible receiver");
@@ -584,26 +506,6 @@ public final class JSIntlObject {
         return resolvedOptions;
     }
 
-    private static String commonLeadingNonNumericPrefix(String start, String end) {
-        int limit = Math.min(start.length(), end.length());
-        int i = 0;
-        while (i < limit) {
-            char a = start.charAt(i);
-            char b = end.charAt(i);
-            if (a != b) {
-                break;
-            }
-            if (Character.isDigit(a) || a == '.' || a == ',' || a == '-') {
-                break;
-            }
-            i++;
-        }
-        if (i <= 0) {
-            return "";
-        }
-        return start.substring(0, i);
-    }
-
     public static JSValue createCollator(JSContext context, JSObject prototype, JSValue[] args) {
         try {
             Locale locale = resolveLocale(context, args, 0);
@@ -618,22 +520,23 @@ public final class JSIntlObject {
             // Read options in ECMA-402 spec order
 
             // 1. usage
-            String usage = normalizedStringOption(context, optionsValue, "usage", "sort", "sort", "search");
+            String usage = IntlFormatOptions.normalizedStringOption(context, optionsValue, "usage", "sort", "sort",
+                    "search");
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
 
             // 2. localeMatcher
-            String localeMatcher = getOptionString(context, optionsValue, "localeMatcher");
+            String localeMatcher = IntlFormatOptions.readStringOption(context, optionsValue, "localeMatcher");
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
-            if (localeMatcher != null && !"lookup".equals(localeMatcher) && !"best fit".equals(localeMatcher)) {
+            if (!IntlFormatOptions.isValidLocaleMatcher(localeMatcher)) {
                 return context.throwRangeError("Invalid option value " + localeMatcher + " for property localeMatcher");
             }
 
             // 3. collation: resolve from option and/or extension per ECMA-402
-            String optionCollation = getOptionString(context, optionsValue, "collation");
+            String optionCollation = IntlFormatOptions.readStringOption(context, optionsValue, "collation");
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -674,7 +577,7 @@ public final class JSIntlObject {
             }
 
             // 5. caseFirst: option overrides extension key "kf"
-            String caseFirst = getOptionString(context, optionsValue, "caseFirst");
+            String caseFirst = IntlFormatOptions.readStringOption(context, optionsValue, "caseFirst");
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -694,12 +597,13 @@ public final class JSIntlObject {
             }
 
             // 6. sensitivity - default depends on usage per ECMA-402 Table 4
-            String sensitivity = getOptionString(context, optionsValue, "sensitivity");
+            String sensitivity = IntlFormatOptions.readStringOption(context, optionsValue, "sensitivity");
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
             String sensitivityDefault = "search".equals(usage) ? "base" : "variant";
-            sensitivity = normalizeOption(sensitivity, sensitivityDefault, "base", "accent", "case", "variant");
+            sensitivity = IntlFormatOptions.normalizeOption(sensitivity, sensitivityDefault, "base", "accent", "case",
+                    "variant");
 
             // 7. ignorePunctuation - Thai locale defaults to true per ECMA-402
             boolean ignorePunctuation = "th".equals(locale.getLanguage());
@@ -719,7 +623,7 @@ public final class JSIntlObject {
 
             JSIntlCollator collator = new JSIntlCollator(context, resolvedLocale, sensitivity, usage, collation,
                     numeric, caseFirst, ignorePunctuation, resolvedLocaleTag);
-            JSObject resolvedPrototype = resolveIntlPrototype(context, prototype, "Collator");
+            JSObject resolvedPrototype = IntlFormatOptions.resolveIntlPrototype(context, prototype, "Collator");
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -734,7 +638,7 @@ public final class JSIntlObject {
      * CreateDataProperty(O, P, V) — creates an own data property directly, bypassing [[Set]] so prototype chain
      * accessors are not triggered. Per ECMA-402 resolvedOptions() steps which use CreateDataPropertyOrThrow.
      */
-    private static void createDataProperty(JSObject obj, String key, JSValue value) {
+    static void createDataProperty(JSObject obj, String key, JSValue value) {
         obj.defineProperty(PropertyKey.fromString(key), value, PropertyDescriptor.DataState.All);
     }
 
@@ -755,291 +659,7 @@ public final class JSIntlObject {
      */
     public static JSValue createDateTimeFormat(JSContext context, JSObject prototype, JSValue[] args, String required,
             String defaults) {
-        try {
-            Locale locale = resolveLocale(context, args, 0);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            JSValue rawOptions = JSValue.argumentOrUndefined(args, 1);
-            boolean optionsIsUndefined = rawOptions instanceof JSUndefined;
-
-            // Convert options to Object per spec: undefined → null-prototype object, null → TypeError
-            // Per ToDateTimeOptions: undefined → OrdinaryObjectCreate(null) to avoid Object.prototype pollution
-            JSObject optionsObject;
-            if (optionsIsUndefined) {
-                optionsObject = context.createJSObject();
-                optionsObject.setPrototype(null);
-            } else if (rawOptions instanceof JSNull) {
-                return context.throwTypeError("Cannot convert null to object");
-            } else if (rawOptions instanceof JSObject obj) {
-                optionsObject = obj;
-            } else {
-                // Primitive → ToObject (wraps as a wrapper object with no own properties)
-                optionsObject = context.createJSObject();
-            }
-
-            // Read ALL options in ECMA-402 CreateDateTimeFormat spec order,
-            // triggering getters and propagating exceptions.
-
-            // 1. localeMatcher
-            String localeMatcher = readStringOption(context, optionsObject, "localeMatcher");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (localeMatcher != null && !"lookup".equals(localeMatcher) && !"best fit".equals(localeMatcher)) {
-                return context.throwRangeError("Invalid option value " + localeMatcher + " for property localeMatcher");
-            }
-
-            // 2. calendar
-            String calendar = readStringOption(context, optionsObject, "calendar");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (calendar != null && !UNICODE_TYPE_PATTERN.matcher(calendar).matches()) {
-                return context.throwRangeError("Invalid calendar: " + calendar);
-            }
-            if (calendar != null) {
-                calendar = canonicalizeCalendar(calendar);
-            }
-
-            // 3. numberingSystem
-            String numberingSystem = readStringOption(context, optionsObject, "numberingSystem");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (numberingSystem != null && !UNICODE_TYPE_PATTERN.matcher(numberingSystem).matches()) {
-                return context.throwRangeError("Invalid numberingSystem: " + numberingSystem);
-            }
-
-            // 4. hour12
-            JSValue hour12Value = optionsObject.get(PropertyKey.fromString("hour12"));
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            // 5. hourCycle
-            String hourCycle = readStringOption(context, optionsObject, "hourCycle");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (hourCycle != null && !"h11".equals(hourCycle) && !"h12".equals(hourCycle) && !"h23".equals(hourCycle)
-                    && !"h24".equals(hourCycle)) {
-                return context.throwRangeError("Invalid hourCycle: " + hourCycle);
-            }
-
-            // 6. timeZone
-            String timeZone = readStringOption(context, optionsObject, "timeZone");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (timeZone != null) {
-                timeZone = validateAndCanonicalizeTimeZone(timeZone);
-                if (timeZone == null) {
-                    return context.throwRangeError("Invalid time zone");
-                }
-            } else {
-                timeZone = ZoneId.systemDefault().getId();
-            }
-
-            // 7-15. Component options
-            String weekdayOption = readValidatedOption(context, optionsObject, "weekday", "long", "short", "narrow");
-            String eraOption = readValidatedOption(context, optionsObject, "era", "long", "short", "narrow");
-            String yearOption = readValidatedOption(context, optionsObject, "year", "numeric", "2-digit");
-            String monthOption = readValidatedOption(context, optionsObject, "month", "numeric", "2-digit", "long",
-                    "short", "narrow");
-            String dayOption = readValidatedOption(context, optionsObject, "day", "numeric", "2-digit");
-            String dayPeriodOption = readValidatedOption(context, optionsObject, "dayPeriod", "long", "short",
-                    "narrow");
-            String hourOption = readValidatedOption(context, optionsObject, "hour", "numeric", "2-digit");
-            String minuteOption = readValidatedOption(context, optionsObject, "minute", "numeric", "2-digit");
-            String secondOption = readValidatedOption(context, optionsObject, "second", "numeric", "2-digit");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            // 16. fractionalSecondDigits (GetNumberOption: ToNumber, range check, then floor)
-            Integer fractionalSecondDigits = null;
-            JSValue fsdValue = optionsObject.get(PropertyKey.fromString("fractionalSecondDigits"));
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (fsdValue != null && !(fsdValue instanceof JSUndefined)) {
-                double fsdDouble = JSTypeConversions.toNumber(context, fsdValue).value();
-                // DefaultNumberOption: check NaN and range BEFORE flooring
-                if (Double.isNaN(fsdDouble) || fsdDouble < 1 || fsdDouble > 3) {
-                    return context.throwRangeError("fractionalSecondDigits value is out of range.");
-                }
-                fractionalSecondDigits = (int) Math.floor(fsdDouble);
-            }
-
-            // 17. timeZoneName
-            String timeZoneNameOption = readValidatedOption(context, optionsObject, "timeZoneName", "long", "short",
-                    "longOffset", "shortOffset", "longGeneric", "shortGeneric");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            // 18. formatMatcher
-            String formatMatcher = readStringOption(context, optionsObject, "formatMatcher");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (formatMatcher != null && !"basic".equals(formatMatcher) && !"best fit".equals(formatMatcher)) {
-                return context.throwRangeError("Invalid formatMatcher: " + formatMatcher);
-            }
-
-            // 19-20. dateStyle and timeStyle
-            String dateStyleStr = readValidatedOption(context, optionsObject, "dateStyle", "full", "long", "medium",
-                    "short");
-            String timeStyleStr = readValidatedOption(context, optionsObject, "timeStyle", "full", "long", "medium",
-                    "short");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            FormatStyle dateStyle = parseFormatStyle(dateStyleStr);
-            FormatStyle timeStyle = parseFormatStyle(timeStyleStr);
-
-            // Check dateStyle/timeStyle conflict with explicit components
-            if (dateStyle != null || timeStyle != null) {
-                if (weekdayOption != null || eraOption != null || yearOption != null || monthOption != null
-                        || dayOption != null || dayPeriodOption != null || hourOption != null || minuteOption != null
-                        || secondOption != null || fractionalSecondDigits != null || timeZoneNameOption != null) {
-                    return context.throwTypeError(
-                            "dateStyle and timeStyle may not be used with other DateTimeFormat options");
-                }
-            }
-
-            // Apply defaults per ECMA-402 ToDateTimeOptions(options, required, defaults):
-            // 'required' determines which component types to check for needDefaults.
-            // 'defaults' determines which defaults to add when needDefaults is true.
-            boolean hasDefaultDateComponents = false;
-            boolean hasDefaultTimeComponents = false;
-            if (dateStyle == null && timeStyle == null) {
-                boolean hasDateComponent = weekdayOption != null || yearOption != null || monthOption != null
-                        || dayOption != null;
-                boolean hasTimeComponent = dayPeriodOption != null || hourOption != null || minuteOption != null
-                        || secondOption != null || fractionalSecondDigits != null;
-                boolean needDefaults;
-                if ("date".equals(required)) {
-                    needDefaults = !hasDateComponent;
-                } else if ("time".equals(required)) {
-                    needDefaults = !hasTimeComponent;
-                } else {
-                    // "any"
-                    needDefaults = !hasDateComponent && !hasTimeComponent;
-                }
-                if (needDefaults) {
-                    if ("date".equals(defaults) || "all".equals(defaults)) {
-                        yearOption = "numeric";
-                        monthOption = "numeric";
-                        dayOption = "numeric";
-                        hasDefaultDateComponents = true;
-                    }
-                    if ("time".equals(defaults) || "all".equals(defaults)) {
-                        hourOption = "numeric";
-                        minuteOption = "numeric";
-                        secondOption = "numeric";
-                        hasDefaultTimeComponents = true;
-                    }
-                }
-            }
-
-            // Resolve calendar from locale unicode extension if not specified in options
-            Map<String, String> unicodeExtensions = IntlLocaleTag.parseUnicodeExtensions(locale.toLanguageTag());
-            // If option value is not a supported calendar, treat as if not specified
-            if (calendar != null && !isSupportedCalendar(calendar)) {
-                calendar = null;
-            }
-            if (calendar == null) {
-                if (unicodeExtensions.containsKey("ca")) {
-                    String extensionCalendar = canonicalizeCalendar(unicodeExtensions.get("ca"));
-                    if (isSupportedCalendar(extensionCalendar)) {
-                        calendar = extensionCalendar;
-                    }
-                }
-            }
-            if (calendar == null) {
-                calendar = "gregory";
-            }
-
-            // Resolve numberingSystem
-            // If option value is not supported, treat as if not specified
-            if (numberingSystem != null && !isSupportedDateTimeNumberingSystem(numberingSystem)) {
-                numberingSystem = null;
-            }
-            if (numberingSystem == null && unicodeExtensions.containsKey("nu")) {
-                String localeNumberingSystem = unicodeExtensions.get("nu").toLowerCase(Locale.ROOT);
-                if (isSupportedDateTimeNumberingSystem(localeNumberingSystem)) {
-                    numberingSystem = localeNumberingSystem;
-                }
-            }
-
-            // Resolve hourCycle per ECMA-402:
-            // 1. If hour12 is not undefined, it takes precedence (sets hourCycle to null, resolved later)
-            // 2. Else if hourCycle option is set, use it
-            // 3. Else if locale has -u-hc- extension, use it
-            // 4. Else use locale default
-            Boolean hour12 = null;
-            if (!(hour12Value instanceof JSUndefined) && hour12Value != null) {
-                hour12 = JSTypeConversions.toBoolean(hour12Value).value();
-                // hour12 takes precedence over hourCycle
-                hourCycle = null;
-            }
-
-            String hourCycleFromExtension = unicodeExtensions.containsKey("hc") ? unicodeExtensions.get("hc") : null;
-
-            if (hourCycle == null && hour12 == null && hourCycleFromExtension != null) {
-                if ("h11".equals(hourCycleFromExtension) || "h12".equals(hourCycleFromExtension)
-                        || "h23".equals(hourCycleFromExtension) || "h24".equals(hourCycleFromExtension)) {
-                    hourCycle = hourCycleFromExtension;
-                }
-            }
-
-            // If hour12 is set, derive hourCycle from locale default
-            if (hour12 != null) {
-                if (hour12) {
-                    // Prefer h12 for most locales, h11 for ja
-                    String lang = locale.getLanguage();
-                    hourCycle = "ja".equals(lang) ? "h11" : "h12";
-                } else {
-                    hourCycle = "h23";
-                }
-            }
-
-            // Resolve the locale tag BEFORE modifying hourCycle for no-hour-component.
-            // Per spec, ResolveLocale (step 9) runs before [[HourCycle]] nullification (step 32).
-            // The pre-nullification hourCycle value determines which extensions appear in the locale tag.
-            Locale resolvedLocale = buildResolvedLocale(locale, unicodeExtensions, calendar, hourCycle, hour12,
-                    numberingSystem);
-
-            // Finalize hourCycle for the instance:
-            // - If no hour component, set to null (step 32 of CreateDateTimeFormat)
-            // - If still null (no option/extension/hour12), use locale default
-            String hourCycleForInstant = hourCycle;
-            boolean hasHourComponent = hourOption != null || timeStyle != null;
-            if (!hasHourComponent) {
-                hourCycle = null;
-            } else if (hourCycle == null) {
-                hourCycle = getLocaleDefaultHourCycle(locale);
-                hourCycleForInstant = hourCycle;
-            }
-
-            JSIntlDateTimeFormat dateTimeFormat = new JSIntlDateTimeFormat(context, resolvedLocale, dateStyle,
-                    timeStyle, calendar, numberingSystem, timeZone, hourCycle, hourCycleForInstant, weekdayOption,
-                    eraOption, yearOption, monthOption, dayOption, dayPeriodOption, hourOption, minuteOption,
-                    secondOption, fractionalSecondDigits, timeZoneNameOption, hasDefaultDateComponents,
-                    hasDefaultTimeComponents);
-            JSObject resolvedDtfPrototype = resolveIntlPrototype(context, prototype, "DateTimeFormat");
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            dateTimeFormat.setPrototype(resolvedDtfPrototype);
-            return dateTimeFormat;
-        } catch (IllegalArgumentException e) {
-            return context.throwRangeError(e.getMessage());
-        }
+        return IntlDateTimeFormatBuiltins.createDateTimeFormat(context, prototype, args, required, defaults);
     }
 
     /**
@@ -1047,15 +667,9 @@ public final class JSIntlObject {
      * locale/options processing. Options are read in order: localeMatcher → style → type → fallback → languageDisplay
      */
     public static JSValue createDisplayNames(JSContext context, JSObject prototype, JSValue[] args) {
-        // Step 2: OrdinaryCreateFromConstructor — resolve prototype from NewTarget FIRST
-        JSObject resolvedPrototype = resolveIntlPrototype(context, prototype, "DisplayNames");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        // Step 3: CanonicalizeLocaleList
-        Locale locale = resolveLocale(context, args, 0);
-        if (context.hasPendingException()) {
+        IntlFormatOptions.ConstructorLocale constructor = IntlFormatOptions.ConstructorLocale.resolve(context,
+                prototype, args, "DisplayNames");
+        if (constructor == null) {
             return JSUndefined.INSTANCE;
         }
 
@@ -1070,18 +684,13 @@ public final class JSIntlObject {
         }
 
         // localeMatcher
-        String localeMatcher = getOptionString(context, options, "localeMatcher");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (localeMatcher != null) {
-            if (!"lookup".equals(localeMatcher) && !"best fit".equals(localeMatcher)) {
-                return context.throwRangeError("localeMatcher must be \"lookup\" or \"best fit\"");
-            }
+        JSValue matcherError = IntlFormatOptions.localeMatcherError(context, options);
+        if (matcherError != null) {
+            return matcherError;
         }
 
         // style (default: "long")
-        String style = getOptionString(context, options, "style");
+        String style = IntlFormatOptions.readStringOption(context, options, "style");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1092,7 +701,7 @@ public final class JSIntlObject {
         }
 
         // type (required — TypeError if undefined)
-        String type = getOptionString(context, options, "type");
+        String type = IntlFormatOptions.readStringOption(context, options, "type");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1106,7 +715,7 @@ public final class JSIntlObject {
         }
 
         // fallback (default: "code")
-        String fallback = getOptionString(context, options, "fallback");
+        String fallback = IntlFormatOptions.readStringOption(context, options, "fallback");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1117,7 +726,7 @@ public final class JSIntlObject {
         }
 
         // languageDisplay (default: "dialect")
-        String languageDisplay = getOptionString(context, options, "languageDisplay");
+        String languageDisplay = IntlFormatOptions.readStringOption(context, options, "languageDisplay");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1128,26 +737,18 @@ public final class JSIntlObject {
         }
 
         // Create instance and set prototype
-        JSIntlDisplayNames displayNames = new JSIntlDisplayNames(context, locale, style, type, fallback,
+        JSIntlDisplayNames displayNames = new JSIntlDisplayNames(context, constructor.locale(), style, type, fallback,
                 languageDisplay);
-        if (resolvedPrototype != null) {
-            displayNames.setPrototype(resolvedPrototype);
-        }
-        return displayNames;
+        return constructor.finish(displayNames);
     }
 
     /**
      * Intl.DurationFormat constructor.
      */
     public static JSValue createDurationFormat(JSContext context, JSObject prototype, JSValue[] args) {
-        JSObject resolvedPrototype = resolveIntlPrototype(context, prototype, "DurationFormat");
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        // Resolve locale
-        Locale locale = resolveLocale(context, args, 0);
-        if (context.hasPendingException()) {
+        IntlFormatOptions.ConstructorLocale constructor = IntlFormatOptions.ConstructorLocale.resolve(context,
+                prototype, args, "DurationFormat");
+        if (constructor == null) {
             return JSUndefined.INSTANCE;
         }
 
@@ -1161,58 +762,27 @@ public final class JSIntlObject {
         }
 
         // Read localeMatcher (not in resolvedOptions, but read from options)
-        if (options != null) {
-            String localeMatcher = getOptionString(context, options, "localeMatcher");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (localeMatcher != null) {
-                if (!"lookup".equals(localeMatcher) && !"best fit".equals(localeMatcher)) {
-                    return context.throwRangeError("localeMatcher must be \"lookup\" or \"best fit\"");
-                }
-            }
+        JSValue matcherError = IntlFormatOptions.localeMatcherError(context, options);
+        if (matcherError != null) {
+            return matcherError;
         }
 
         // Read numberingSystem from options
-        String numberingSystemOption = options != null ? getOptionString(context, options, "numberingSystem") : null;
+        String numberingSystemOption = options != null
+                ? IntlFormatOptions.readStringOption(context, options, "numberingSystem")
+                : null;
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        if (numberingSystemOption != null && !UNICODE_TYPE_PATTERN.matcher(numberingSystemOption).matches()) {
-            return context.throwRangeError("Invalid numberingSystem: " + numberingSystemOption);
+        if (!IntlFormatOptions.validateUnicodeType(context, "numberingSystem", numberingSystemOption)) {
+            return context.getPendingException();
         }
 
-        // Parse unicode extension "nu" from locale
-        Map<String, String> unicodeExtensions = IntlLocaleTag.parseUnicodeExtensions(locale.toLanguageTag());
-        String extensionNu = unicodeExtensions.get("nu");
-
-        // Resolve numberingSystem: options > unicode extension > default
-        String numberingSystem;
-        boolean useExtensionInLocale = false;
-        if (numberingSystemOption != null && SUPPORTED_NUMBERING_SYSTEMS.contains(numberingSystemOption)) {
-            numberingSystem = numberingSystemOption;
-            // Extension is reflected in locale only if it matches the option
-            if (numberingSystem.equals(extensionNu)) {
-                useExtensionInLocale = true;
-            }
-        } else if (extensionNu != null && SUPPORTED_NUMBERING_SYSTEMS.contains(extensionNu)) {
-            numberingSystem = extensionNu;
-            useExtensionInLocale = true;
-        } else {
-            numberingSystem = "latn";
-        }
-
-        // Build resolved locale: strip existing unicode extensions and re-add if needed
-        Locale strippedLocale = IntlLocaleTag.stripUnicodeExtensions(locale);
-        if (useExtensionInLocale) {
-            locale = new Locale.Builder().setLocale(strippedLocale).setUnicodeLocaleKeyword("nu", numberingSystem)
-                    .build();
-        } else {
-            locale = strippedLocale;
-        }
+        IntlFormatOptions.NumberingLocale numbering = IntlFormatOptions.NumberingLocale.resolve(constructor.locale(),
+                numberingSystemOption);
 
         // Read style (default "short")
-        String style = options != null ? getOptionString(context, options, "style") : null;
+        String style = options != null ? IntlFormatOptions.readStringOption(context, options, "style") : null;
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1233,7 +803,7 @@ public final class JSIntlObject {
             String unitName = JSIntlDurationFormat.UNIT_NAMES[i];
 
             // Read unit style from options
-            String unitStyle = options != null ? getOptionString(context, options, unitName) : null;
+            String unitStyle = options != null ? IntlFormatOptions.readStringOption(context, options, unitName) : null;
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1268,7 +838,9 @@ public final class JSIntlObject {
             if (fractional) {
                 displayDefault = "auto";
             }
-            String display = options != null ? getOptionString(context, options, unitName + "Display") : null;
+            String display = options != null
+                    ? IntlFormatOptions.readStringOption(context, options, unitName + "Display")
+                    : null;
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1318,12 +890,9 @@ public final class JSIntlObject {
             }
         }
 
-        JSIntlDurationFormat durationFormat = new JSIntlDurationFormat(context, locale, numberingSystem, style,
-                unitStyles, unitDisplays, fractionalDigits);
-        if (resolvedPrototype != null) {
-            durationFormat.setPrototype(resolvedPrototype);
-        }
-        return durationFormat;
+        JSIntlDurationFormat durationFormat = new JSIntlDurationFormat(context, numbering.locale(),
+                numbering.numberingSystem(), style, unitStyles, unitDisplays, fractionalDigits);
+        return constructor.finish(durationFormat);
     }
 
     public static JSValue createListFormat(JSContext context, JSObject prototype, JSValue[] args) {
@@ -1335,35 +904,37 @@ public final class JSIntlObject {
 
             // GetOptionsObject: validate options argument
             JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
-            JSValue optionsObj = getOptionsObject(context, optionsArg);
+            JSValue optionsObj = IntlFormatOptions.getOptionsObject(context, optionsArg);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
 
             // Read options in spec order: localeMatcher, type, style
-            String localeMatcher = getOptionString(context, optionsObj, "localeMatcher");
+            String localeMatcher = IntlFormatOptions.readStringOption(context, optionsObj, "localeMatcher");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            if (localeMatcher != null && !"lookup".equals(localeMatcher) && !"best fit".equals(localeMatcher)) {
+            if (!IntlFormatOptions.isValidLocaleMatcher(localeMatcher)) {
                 return context.throwRangeError(
                         "Value " + localeMatcher + " out of range for Intl.ListFormat options property localeMatcher");
             }
 
-            String type = normalizeOption(getOptionString(context, optionsObj, "type"), "conjunction", "conjunction",
+            String type = IntlFormatOptions.normalizeOption(
+                    IntlFormatOptions.readStringOption(context, optionsObj, "type"), "conjunction", "conjunction",
                     "disjunction", "unit");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
 
-            String style = normalizeOption(getOptionString(context, optionsObj, "style"), "long", "long", "short",
+            String style = IntlFormatOptions.normalizeOption(
+                    IntlFormatOptions.readStringOption(context, optionsObj, "style"), "long", "long", "short",
                     "narrow");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
 
             JSIntlListFormat listFormat = new JSIntlListFormat(context, locale, style, type);
-            JSObject resolvedPrototype = resolveIntlPrototype(context, prototype, "ListFormat");
+            JSObject resolvedPrototype = IntlFormatOptions.resolveIntlPrototype(context, prototype, "ListFormat");
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1415,10 +986,10 @@ public final class JSIntlObject {
             }
 
             // Read options in spec order
-            String languageOpt = getOptionString(context, optionsValue, "language");
-            String scriptOpt = getOptionString(context, optionsValue, "script");
-            String regionOpt = getOptionString(context, optionsValue, "region");
-            String variantsOpt = getOptionString(context, optionsValue, "variants");
+            String languageOpt = IntlFormatOptions.readStringOption(context, optionsValue, "language");
+            String scriptOpt = IntlFormatOptions.readStringOption(context, optionsValue, "script");
+            String regionOpt = IntlFormatOptions.readStringOption(context, optionsValue, "region");
+            String variantsOpt = IntlFormatOptions.readStringOption(context, optionsValue, "variants");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1437,10 +1008,10 @@ public final class JSIntlObject {
                 return context.throwRangeError("invalid variants: " + variantsOpt);
             }
 
-            String calendarOpt = getOptionString(context, optionsValue, "calendar");
-            String collationOpt = getOptionString(context, optionsValue, "collation");
-            String hourCycleOpt = getOptionString(context, optionsValue, "hourCycle");
-            String caseFirstOpt = getOptionString(context, optionsValue, "caseFirst");
+            String calendarOpt = IntlFormatOptions.readStringOption(context, optionsValue, "calendar");
+            String collationOpt = IntlFormatOptions.readStringOption(context, optionsValue, "collation");
+            String hourCycleOpt = IntlFormatOptions.readStringOption(context, optionsValue, "hourCycle");
+            String caseFirstOpt = IntlFormatOptions.readStringOption(context, optionsValue, "caseFirst");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1459,24 +1030,24 @@ public final class JSIntlObject {
                 }
             }
 
-            String numberingSystemOpt = getOptionString(context, optionsValue, "numberingSystem");
-            String firstDay = getOptionString(context, optionsValue, "firstDayOfWeek");
+            String numberingSystemOpt = IntlFormatOptions.readStringOption(context, optionsValue, "numberingSystem");
+            String firstDay = IntlFormatOptions.readStringOption(context, optionsValue, "firstDayOfWeek");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
             String firstDayOfWeekOpt = firstDay == null ? null : weekdayToString(firstDay);
             if (firstDayOfWeekOpt != null && !"true".equals(firstDayOfWeekOpt)
-                    && !UNICODE_TYPE_PATTERN.matcher(firstDayOfWeekOpt).matches()) {
+                    && !IntlFormatOptions.UNICODE_TYPE_PATTERN.matcher(firstDayOfWeekOpt).matches()) {
                 return context.throwRangeError("invalid firstDayOfWeek: " + firstDay);
             }
 
             // Validate extension values
-            if (calendarOpt != null
-                    && (calendarOpt.isEmpty() || !UNICODE_TYPE_PATTERN.matcher(calendarOpt).matches())) {
+            if (calendarOpt != null && (calendarOpt.isEmpty()
+                    || !IntlFormatOptions.UNICODE_TYPE_PATTERN.matcher(calendarOpt).matches())) {
                 return context.throwRangeError("invalid calendar: " + calendarOpt);
             }
-            if (collationOpt != null
-                    && (collationOpt.isEmpty() || !UNICODE_TYPE_PATTERN.matcher(collationOpt).matches())) {
+            if (collationOpt != null && (collationOpt.isEmpty()
+                    || !IntlFormatOptions.UNICODE_TYPE_PATTERN.matcher(collationOpt).matches())) {
                 return context.throwRangeError("invalid collation: " + collationOpt);
             }
             // hourCycle must be exactly one of h11, h12, h23, h24
@@ -1490,8 +1061,8 @@ public final class JSIntlObject {
                     && !"false".equals(caseFirstOpt)) {
                 return context.throwRangeError("invalid caseFirst: " + caseFirstOpt);
             }
-            if (numberingSystemOpt != null
-                    && (numberingSystemOpt.isEmpty() || !UNICODE_TYPE_PATTERN.matcher(numberingSystemOpt).matches())) {
+            if (numberingSystemOpt != null && (numberingSystemOpt.isEmpty()
+                    || !IntlFormatOptions.UNICODE_TYPE_PATTERN.matcher(numberingSystemOpt).matches())) {
                 return context.throwRangeError("invalid numberingSystem: " + numberingSystemOpt);
             }
 
@@ -1586,7 +1157,7 @@ public final class JSIntlObject {
 
             JSIntlLocale intlLocale = new JSIntlLocale(context, locale, tag, calendar, caseFirst, collation,
                     firstDayOfWeek, hourCycle, numberingSystem, numeric, numericSet);
-            JSObject resolvedPrototype = resolveIntlPrototype(context, prototype, "Locale");
+            JSObject resolvedPrototype = IntlFormatOptions.resolveIntlPrototype(context, prototype, "Locale");
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1598,321 +1169,74 @@ public final class JSIntlObject {
     }
 
     public static JSValue createNumberFormat(JSContext context, JSObject prototype, JSValue[] args) {
-        try {
-            JSObject resolvedPrototype = resolveIntlPrototype(context, prototype, "NumberFormat");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            Locale locale = resolveLocale(context, args, 0);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            JSValue optionsArgument = JSValue.argumentOrUndefined(args, 1);
-            JSObject optionsObject;
-            if (optionsArgument instanceof JSUndefined || optionsArgument == null) {
-                optionsObject = context.createJSObject();
-                optionsObject.setPrototype(null);
-            } else {
-                optionsObject = JSTypeConversions.toObject(context, optionsArgument);
-                if (optionsObject == null) {
-                    return context.throwTypeError("Cannot convert "
-                            + JSTypeConversions.toString(context, optionsArgument).value() + " to object");
-                }
-            }
-
-            // Option read order must match ECMA-402.
-            String localeMatcher = getOptionString(context, optionsObject, "localeMatcher");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (localeMatcher != null && !"lookup".equals(localeMatcher) && !"best fit".equals(localeMatcher)) {
-                return context.throwRangeError("Value " + localeMatcher
-                        + " out of range for Intl.NumberFormat options property localeMatcher");
-            }
-
-            String numberingSystemOption = getOptionString(context, optionsObject, "numberingSystem");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (numberingSystemOption != null && !UNICODE_TYPE_PATTERN.matcher(numberingSystemOption).matches()) {
-                return context.throwRangeError("Invalid numberingSystem: " + numberingSystemOption);
-            }
-            if (numberingSystemOption != null) {
-                numberingSystemOption = numberingSystemOption.toLowerCase(Locale.ROOT);
-            }
-
-            String style = normalizedStringOption(context, optionsObject, "style", "decimal", NUMBER_STYLE_VALUES);
-            String currency = getOptionString(context, optionsObject, "currency");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (currency != null) {
-                if (!isWellFormedCurrencyCode(currency)) {
-                    return context.throwRangeError("Invalid currency code: " + currency);
-                }
-                currency = currency.toUpperCase(Locale.ROOT);
-            }
-
-            String currencyDisplay = normalizedStringOption(context, optionsObject, "currencyDisplay", "symbol",
-                    CURRENCY_DISPLAY_VALUES);
-            String currencySign = normalizedStringOption(context, optionsObject, "currencySign", "standard",
-                    CURRENCY_SIGN_VALUES);
-            String unit = getOptionString(context, optionsObject, "unit");
-            String unitDisplay = normalizedStringOption(context, optionsObject, "unitDisplay", "short",
-                    UNIT_DISPLAY_VALUES);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            if ("currency".equals(style) && currency == null) {
-                return context.throwTypeError("Currency code is required with currency style");
-            }
-            if ("unit".equals(style) && unit == null) {
-                return context.throwTypeError("Unit is required with unit style");
-            }
-            if (unit != null) {
-                if (!isWellFormedUnitIdentifier(unit)) {
-                    return context.throwRangeError("Invalid unit argument: " + unit);
-                }
-            }
-
-            String notation = normalizedStringOption(context, optionsObject, "notation", "standard", NOTATION_VALUES);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            int minimumIntegerDigits = readMinimumIntegerDigits(context, optionsObject);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            DigitRange fractionDigits = DigitRange.readFraction(context, optionsObject);
-            if (fractionDigits == null) {
-                return JSUndefined.INSTANCE;
-            }
-
-            DigitRange significantDigits = DigitRange.readSignificant(context, optionsObject);
-            if (significantDigits == null) {
-                return JSUndefined.INSTANCE;
-            }
-
-            RoundingOptions rounding = readRoundingOptions(context, optionsObject, true);
-            if (rounding == null) {
-                return JSUndefined.INSTANCE;
-            }
-
-            String compactDisplay = normalizedStringOption(context, optionsObject, "compactDisplay", "short",
-                    COMPACT_DISPLAY_VALUES);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            JSValue useGroupingValue = optionsObject.get(PropertyKey.fromString("useGrouping"));
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            String useGroupingMode = parseUseGroupingOption(context, useGroupingValue, notation);
-            String signDisplay = normalizedStringOption(context, optionsObject, "signDisplay", "auto",
-                    SIGN_DISPLAY_VALUES);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            int currencyDigits = 2;
-            if ("currency".equals(style) && currency != null) {
-                currencyDigits = getCurrencyDigits(currency);
-            }
-            int minimumFractionDefault;
-            int maximumFractionDefault;
-            if ("currency".equals(style) && "standard".equals(notation)) {
-                minimumFractionDefault = currencyDigits;
-                maximumFractionDefault = currencyDigits;
-            } else if ("percent".equals(style)) {
-                minimumFractionDefault = 0;
-                maximumFractionDefault = 0;
-            } else if ("currency".equals(style) && "compact".equals(notation)) {
-                minimumFractionDefault = 0;
-                maximumFractionDefault = 0;
-            } else {
-                minimumFractionDefault = 0;
-                maximumFractionDefault = 3;
-            }
-
-            boolean useSignificantDigits = significantDigits.specified();
-            if (useSignificantDigits) {
-                significantDigits = significantDigits.resolveSignificant();
-            }
-            fractionDigits = useSignificantDigits && "auto".equals(rounding.roundingPriority())
-                    ? new DigitRange(minimumFractionDefault, maximumFractionDefault)
-                    : fractionDigits.resolveFraction(minimumFractionDefault, maximumFractionDefault);
-
-            if (rounding.roundingIncrement() != 1) {
-                if (useSignificantDigits || "morePrecision".equals(rounding.roundingPriority())
-                        || "lessPrecision".equals(rounding.roundingPriority())) {
-                    return context.throwTypeError("Invalid roundingIncrement for current rounding settings");
-                }
-                if (!fractionDigits.minimum().equals(fractionDigits.maximum())) {
-                    return context.throwRangeError(
-                            "maximumFractionDigits and minimumFractionDigits must be equal when roundingIncrement is used");
-                }
-            }
-
-            NumberingLocale numbering = NumberingLocale.resolve(locale, numberingSystemOption);
-            JSIntlNumberFormat numberFormat = new JSIntlNumberFormat(context, numbering.locale(), style, currency,
-                    useGroupingMode, minimumIntegerDigits, fractionDigits.minimum(), fractionDigits.maximum(),
-                    useSignificantDigits, useSignificantDigits ? significantDigits.minimum() : 0,
-                    useSignificantDigits ? significantDigits.maximum() : 0, unit, unitDisplay, signDisplay,
-                    rounding.roundingMode(), numbering.numberingSystem(), notation,
-                    "compact".equals(notation) ? compactDisplay : null, currencyDisplay, currencySign,
-                    rounding.roundingIncrement(), rounding.roundingPriority(), rounding.trailingZeroDisplay());
-            if (resolvedPrototype != null) {
-                numberFormat.setPrototype(resolvedPrototype);
-            }
-            return numberFormat;
-        } catch (IllegalArgumentException e) {
-            return context.throwRangeError(e.getMessage());
-        }
+        return IntlNumberFormatBuiltins.createNumberFormat(context, prototype, args);
     }
 
-    private static JSObject createPartObject(JSContext context, String type, String value) {
+    static JSObject createPartObject(JSContext context, String type, String value) {
         JSObject part = context.createJSObject();
         part.set("type", new JSString(type));
         part.set("value", new JSString(value));
         return part;
     }
 
-    private static JSObject createPartObject(JSContext context, String type, String value, String source) {
+    static JSObject createPartObject(JSContext context, String type, String value, String source) {
         JSObject part = createPartObject(context, type, value);
         part.set("source", new JSString(source));
         return part;
     }
 
     public static JSValue createPluralRules(JSContext context, JSObject prototype, JSValue[] args) {
-        try {
-            JSObject resolvedPrototype = resolveIntlPrototype(context, prototype, "PluralRules");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            Locale locale = resolveLocale(context, args, 0);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            JSValue options = coerceOptionsObject(context, JSValue.argumentOrUndefined(args, 1));
-            if (context.hasPendingException() || !(options instanceof JSObject optionsObject)) {
-                return options;
-            }
-
-            String localeMatcher = normalizedStringOption(context, optionsObject, "localeMatcher", "best fit", "lookup",
-                    "best fit");
-            String type = normalizedStringOption(context, optionsObject, "type", "cardinal", "cardinal", "ordinal");
-            String notation = normalizedStringOption(context, optionsObject, "notation", "standard", NOTATION_VALUES);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            int minimumIntegerDigits = readMinimumIntegerDigits(context, optionsObject);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            DigitRange fractionDigits = DigitRange.readFraction(context, optionsObject);
-            if (fractionDigits == null) {
-                return JSUndefined.INSTANCE;
-            }
-
-            boolean hasFractionDigits = fractionDigits.specified();
-            fractionDigits = fractionDigits.resolveFraction(0, 3);
-
-            DigitRange significantDigits = DigitRange.readSignificant(context, optionsObject);
-            if (significantDigits == null) {
-                return JSUndefined.INSTANCE;
-            }
-            if (significantDigits.specified()) {
-                significantDigits = significantDigits.resolveSignificant();
-            } else if ("compact".equals(notation) && !hasFractionDigits) {
-                significantDigits = new DigitRange(1, 2);
-            }
-
-            if (readRoundingOptions(context, optionsObject, false) == null) {
-                return JSUndefined.INSTANCE;
-            }
-            JSIntlPluralRules pluralRules = new JSIntlPluralRules(context, locale, type, notation, minimumIntegerDigits,
-                    fractionDigits.minimum(), fractionDigits.maximum(), significantDigits.minimum(),
-                    significantDigits.maximum());
-            if (resolvedPrototype != null) {
-                pluralRules.setPrototype(resolvedPrototype);
-            }
-            return pluralRules;
-        } catch (IllegalArgumentException e) {
-            return context.throwRangeError(e.getMessage());
-        }
+        return IntlNumberFormatBuiltins.createPluralRules(context, prototype, args);
     }
 
     public static JSValue createRelativeTimeFormat(JSContext context, JSObject prototype, JSValue[] args) {
         try {
-            JSObject resolvedPrototype = resolveIntlPrototype(context, prototype, "RelativeTimeFormat");
-            if (context.hasPendingException()) {
+            IntlFormatOptions.ConstructorLocale constructor = IntlFormatOptions.ConstructorLocale.resolve(context,
+                    prototype, args, "RelativeTimeFormat");
+            if (constructor == null) {
                 return JSUndefined.INSTANCE;
             }
-            Locale locale = resolveLocale(context, args, 0);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            JSValue options = coerceOptionsObject(context, JSValue.argumentOrUndefined(args, 1));
+            JSValue options = IntlFormatOptions.coerceOptionsObject(context, JSValue.argumentOrUndefined(args, 1));
             if (context.hasPendingException() || !(options instanceof JSObject optionsObject)) {
                 return options;
             }
 
-            String localeMatcher = normalizedStringOption(context, optionsObject, "localeMatcher", "best fit", "lookup",
-                    "best fit");
-            String numberingSystemOption = getOptionString(context, optionsObject, "numberingSystem");
+            String localeMatcher = IntlFormatOptions.normalizedStringOption(context, optionsObject, "localeMatcher",
+                    "best fit", "lookup", "best fit");
+            String numberingSystemOption = IntlFormatOptions.readStringOption(context, optionsObject,
+                    "numberingSystem");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
             if (numberingSystemOption != null) {
                 numberingSystemOption = numberingSystemOption.toLowerCase(Locale.ROOT);
-                if (!UNICODE_TYPE_PATTERN.matcher(numberingSystemOption).matches()) {
+                if (!IntlFormatOptions.UNICODE_TYPE_PATTERN.matcher(numberingSystemOption).matches()) {
                     return context.throwRangeError("Invalid numberingSystem: " + numberingSystemOption);
                 }
             }
 
-            String style = normalizedStringOption(context, optionsObject, "style", "long", "long", "short", "narrow");
-            String numeric = normalizedStringOption(context, optionsObject, "numeric", "always", "always", "auto");
+            String style = IntlFormatOptions.normalizedStringOption(context, optionsObject, "style", "long", "long",
+                    "short", "narrow");
+            String numeric = IntlFormatOptions.normalizedStringOption(context, optionsObject, "numeric", "always",
+                    "always", "auto");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
 
-            NumberingLocale numbering = NumberingLocale.resolve(locale, numberingSystemOption);
+            IntlFormatOptions.NumberingLocale numbering = IntlFormatOptions.NumberingLocale
+                    .resolve(constructor.locale(), numberingSystemOption);
             JSIntlRelativeTimeFormat relativeTimeFormat = new JSIntlRelativeTimeFormat(context, numbering.locale(),
                     style, numeric, numbering.numberingSystem());
-            if (resolvedPrototype != null) {
-                relativeTimeFormat.setPrototype(resolvedPrototype);
-            }
-            return relativeTimeFormat;
+            return constructor.finish(relativeTimeFormat);
         } catch (IllegalArgumentException e) {
             return context.throwRangeError(e.getMessage());
         }
     }
 
-    private static JSObject createRelativeTimeLiteralPart(JSContext context, String value) {
-        JSObject part = context.createJSObject();
-        createDataProperty(part, "type", new JSString("literal"));
-        createDataProperty(part, "value", new JSString(value));
-        return part;
-    }
-
-    private static JSIntlNumberFormat createRelativeTimeNumberFormat(JSIntlRelativeTimeFormat relativeTimeFormat) {
-        String useGroupingMode = "pl".equals(relativeTimeFormat.getLocale().getLanguage()) ? "min2" : "auto";
-        return new JSIntlNumberFormat(relativeTimeFormat.context, relativeTimeFormat.getLocale(), "decimal", null,
-                useGroupingMode, 1, 0, 3, false, 0, null, null, "auto", "halfExpand",
-                relativeTimeFormat.getNumberingSystem());
-    }
-
     public static JSValue createSegmenter(JSContext context, JSObject prototype, JSObject segmentsPrototype,
             JSValue[] args) {
         try {
-            JSObject resolvedPrototype = resolveIntlPrototype(context, prototype, "Segmenter");
+            JSObject resolvedPrototype = IntlFormatOptions.resolveIntlPrototype(context, prototype, "Segmenter");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1935,15 +1259,15 @@ public final class JSIntlObject {
                 }
             }
 
-            JSValue options = coerceOptionsObject(context, JSValue.argumentOrUndefined(args, 1));
+            JSValue options = IntlFormatOptions.coerceOptionsObject(context, JSValue.argumentOrUndefined(args, 1));
             if (context.hasPendingException() || !(options instanceof JSObject optionsObject)) {
                 return options;
             }
 
-            String localeMatcher = normalizedStringOption(context, optionsObject, "localeMatcher", "best fit", "lookup",
-                    "best fit");
-            String granularity = normalizedStringOption(context, optionsObject, "granularity", "grapheme", "grapheme",
-                    "word", "sentence");
+            String localeMatcher = IntlFormatOptions.normalizedStringOption(context, optionsObject, "localeMatcher",
+                    "best fit", "lookup", "best fit");
+            String granularity = IntlFormatOptions.normalizedStringOption(context, optionsObject, "granularity",
+                    "grapheme", "grapheme", "word", "sentence");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1958,273 +1282,46 @@ public final class JSIntlObject {
         }
     }
 
-    private static JSIntlDateTimeFormat createTemporalDateTimeFormat(JSContext context,
-            JSIntlDateTimeFormat baseDateTimeFormat, DateTimeFormattableKind formattableKind) {
-        boolean instant = formattableKind == DateTimeFormattableKind.INSTANT;
-        boolean fullDate = instant || formattableKind == DateTimeFormattableKind.PLAIN_DATE
-                || formattableKind == DateTimeFormattableKind.PLAIN_DATE_TIME;
-        boolean supportsYear = fullDate || formattableKind == DateTimeFormattableKind.PLAIN_YEAR_MONTH;
-        boolean supportsDay = fullDate || formattableKind == DateTimeFormattableKind.PLAIN_MONTH_DAY;
-        boolean supportsMonth = supportsYear || supportsDay;
-        boolean supportsTime = instant || formattableKind == DateTimeFormattableKind.PLAIN_DATE_TIME
-                || formattableKind == DateTimeFormattableKind.PLAIN_TIME;
-
-        FormatStyle dateStyle = baseDateTimeFormat.getDateStyle();
-        FormatStyle timeStyle = baseDateTimeFormat.getTimeStyle();
-        String weekdayOption = baseDateTimeFormat.getWeekdayOption();
-        String eraOption = baseDateTimeFormat.getEraOption();
-        String yearOption = baseDateTimeFormat.getYearOption();
-        String monthOption = baseDateTimeFormat.getMonthOption();
-        String dayOption = baseDateTimeFormat.getDayOption();
-        String dayPeriodOption = baseDateTimeFormat.getDayPeriodOption();
-        String hourOption = baseDateTimeFormat.getHourOption();
-        String minuteOption = baseDateTimeFormat.getMinuteOption();
-        String secondOption = baseDateTimeFormat.getSecondOption();
-        Integer fractionalSecondDigits = baseDateTimeFormat.getFractionalSecondDigits();
-
-        if (baseDateTimeFormat.hasDefaultDateComponents()) {
-            yearOption = null;
-            monthOption = null;
-            dayOption = null;
-        }
-        if (baseDateTimeFormat.hasDefaultTimeComponents()) {
-            hourOption = null;
-            minuteOption = null;
-            secondOption = null;
-        }
-
-        if ((formattableKind == DateTimeFormattableKind.PLAIN_YEAR_MONTH
-                || formattableKind == DateTimeFormattableKind.PLAIN_MONTH_DAY) && dateStyle != null) {
-            DateStyleOptionFields dateStyleOptionFields = toDateStyleOptionFields(dateStyle);
-            if (weekdayOption == null) {
-                weekdayOption = dateStyleOptionFields.weekdayOption();
-            }
-            if (yearOption == null) {
-                yearOption = dateStyleOptionFields.yearOption();
-            }
-            if (monthOption == null) {
-                monthOption = dateStyleOptionFields.monthOption();
-            }
-            if (dayOption == null) {
-                dayOption = dateStyleOptionFields.dayOption();
-            }
-            dateStyle = null;
-        }
-
-        boolean hasTime = timeStyle != null || dayPeriodOption != null || hourOption != null || minuteOption != null
-                || secondOption != null || fractionalSecondDigits != null;
-        // An era by itself does not trigger the incompatible-options error.
-        boolean requestedComponents = hasTime || dateStyle != null || weekdayOption != null || yearOption != null
-                || monthOption != null || dayOption != null;
-
-        if (!supportsTime) {
-            timeStyle = null;
-            dayPeriodOption = null;
-            hourOption = null;
-            minuteOption = null;
-            secondOption = null;
-            fractionalSecondDigits = null;
-            hasTime = false;
-        }
-        if (!supportsMonth) {
-            dateStyle = null;
-            monthOption = null;
-        }
-        if (!fullDate) {
-            weekdayOption = null;
-        }
-        if (!supportsYear) {
-            eraOption = null;
-            yearOption = null;
-        }
-        if (!supportsDay) {
-            dayOption = null;
-        }
-
-        boolean hasDate = dateStyle != null || weekdayOption != null || yearOption != null || monthOption != null
-                || dayOption != null;
-        if (!hasDate && !hasTime) {
-            if (requestedComponents && eraOption == null) {
-                context.throwTypeError("Invalid date/time formatting options");
-                return null;
-            }
-            if (supportsYear) {
-                yearOption = "numeric";
-            }
-            if (supportsMonth) {
-                monthOption = "numeric";
-            }
-            if (supportsDay) {
-                dayOption = "numeric";
-            }
-            if (supportsTime) {
-                hourOption = "numeric";
-                minuteOption = "numeric";
-                secondOption = "numeric";
-                hasTime = true;
-            }
-        }
-        String effectiveHourCycle = instant || hasTime
-                ? resolveHourCycle(baseDateTimeFormat)
-                : baseDateTimeFormat.getHourCycle();
-
-        return new JSIntlDateTimeFormat(context, baseDateTimeFormat.getLocale(), dateStyle, timeStyle,
-                baseDateTimeFormat.getCalendar(), baseDateTimeFormat.getNumberingSystem(),
-                instant ? baseDateTimeFormat.getTimeZone() : "UTC", effectiveHourCycle,
-                instant ? effectiveHourCycle : baseDateTimeFormat.getHourCycleForInstant(), weekdayOption, eraOption,
-                yearOption, monthOption, dayOption, dayPeriodOption, hourOption, minuteOption, secondOption,
-                fractionalSecondDigits, instant ? baseDateTimeFormat.getTimeZoneNameOption() : null, false, false);
-    }
-
-    private static JSValue datePartsToJSArray(JSContext context, List<JSIntlDateTimeFormat.DatePart> parts) {
-        JSArray array = context.createJSArray();
-        for (JSIntlDateTimeFormat.DatePart part : parts) {
-            JSObject partObj = createPartObject(context, part.type(), part.value());
-            array.push(partObj);
-        }
-        return array;
-    }
-
     public static JSValue dateTimeFormatFormat(JSContext context, JSValue thisArg, JSValue[] args) {
-        return formatDateTime(context, thisArg, args, false);
+        return IntlDateTimeFormatBuiltins.dateTimeFormatFormat(context, thisArg, args);
     }
 
     /**
      * Getter for Intl.DateTimeFormat.prototype.format.
      */
     public static JSValue dateTimeFormatFormatGetter(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlDateTimeFormat dateTimeFormat)) {
-            return context.throwTypeError("Intl.DateTimeFormat.prototype.format called on incompatible receiver");
-        }
-        JSFunction cachedBoundFormatFunction = dateTimeFormat.getBoundFormatFunction();
-        if (cachedBoundFormatFunction != null) {
-            return cachedBoundFormatFunction;
-        }
-        JSNativeFunction boundFormatFunction = new JSNativeFunction(context, "", 1, (childContext, thisValue,
-                formatArgs) -> dateTimeFormatFormat(childContext, dateTimeFormat, formatArgs));
-        context.transferPrototype(boundFormatFunction, JSFunction.NAME);
-        dateTimeFormat.setBoundFormatFunction(boundFormatFunction);
-        return boundFormatFunction;
+        return IntlDateTimeFormatBuiltins.dateTimeFormatFormatGetter(context, thisArg, args);
     }
 
     /**
      * Intl.DateTimeFormat.prototype.formatRange(startDate, endDate)
      */
     public static JSValue dateTimeFormatFormatRange(JSContext context, JSValue thisArg, JSValue[] args) {
-        return formatDateRange(context, thisArg, args, false);
+        return IntlDateTimeFormatBuiltins.dateTimeFormatFormatRange(context, thisArg, args);
     }
 
     /**
      * Intl.DateTimeFormat.prototype.formatRangeToParts(startDate, endDate)
      */
     public static JSValue dateTimeFormatFormatRangeToParts(JSContext context, JSValue thisArg, JSValue[] args) {
-        return formatDateRange(context, thisArg, args, true);
+        return IntlDateTimeFormatBuiltins.dateTimeFormatFormatRangeToParts(context, thisArg, args);
     }
 
     /**
      * Intl.DateTimeFormat.prototype.formatToParts(date)
      */
     public static JSValue dateTimeFormatFormatToParts(JSContext context, JSValue thisArg, JSValue[] args) {
-        return formatDateTime(context, thisArg, args, true);
+        return IntlDateTimeFormatBuiltins.dateTimeFormatFormatToParts(context, thisArg, args);
     }
 
     public static JSValue dateTimeFormatResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlDateTimeFormat dateTimeFormat)) {
-            return context
-                    .throwTypeError("Intl.DateTimeFormat.prototype.resolvedOptions called on incompatible receiver");
-        }
-        JSObject resolvedOptions = context.createJSObject();
-
-        // Property order per ECMA-402: locale, calendar, numberingSystem, timeZone,
-        // hourCycle, hour12, weekday, era, year, month, day, dayPeriod,
-        // hour, minute, second, fractionalSecondDigits, timeZoneName, dateStyle, timeStyle
-        createDataProperty(resolvedOptions, "locale", new JSString(dateTimeFormat.getLocale().toLanguageTag()));
-        defineStringOption(resolvedOptions, "calendar", dateTimeFormat.getCalendar());
-        if (dateTimeFormat.getNumberingSystem() != null) {
-            createDataProperty(resolvedOptions, "numberingSystem", new JSString(dateTimeFormat.getNumberingSystem()));
-        } else {
-            createDataProperty(resolvedOptions, "numberingSystem", new JSString("latn"));
-        }
-        createDataProperty(resolvedOptions, "timeZone", new JSString(
-                dateTimeFormat.getTimeZone() != null ? dateTimeFormat.getTimeZone() : ZoneId.systemDefault().getId()));
-
-        // hourCycle and hour12: only present when hour component is in use
-        String hourCycle = dateTimeFormat.getHourCycle();
-        if (hourCycle != null) {
-            createDataProperty(resolvedOptions, "hourCycle", new JSString(hourCycle));
-            boolean isHour12 = "h11".equals(hourCycle) || "h12".equals(hourCycle);
-            createDataProperty(resolvedOptions, "hour12", isHour12 ? JSBoolean.TRUE : JSBoolean.FALSE);
-        }
-
-        // When dateStyle or timeStyle is set, individual component options are NOT reported
-        boolean hasDateStyle = dateTimeFormat.getDateStyle() != null;
-        boolean hasTimeStyle = dateTimeFormat.getTimeStyle() != null;
-
-        if (!hasDateStyle && !hasTimeStyle) {
-            // Component options only when not using styles
-            defineStringOption(resolvedOptions, "weekday", dateTimeFormat.getWeekdayOption());
-            defineStringOption(resolvedOptions, "era", dateTimeFormat.getEraOption());
-            defineStringOption(resolvedOptions, "year", dateTimeFormat.getYearOption());
-            defineStringOption(resolvedOptions, "month", dateTimeFormat.getMonthOption());
-            defineStringOption(resolvedOptions, "day", dateTimeFormat.getDayOption());
-            defineStringOption(resolvedOptions, "dayPeriod", dateTimeFormat.getDayPeriodOption());
-            defineStringOption(resolvedOptions, "hour", dateTimeFormat.getHourOption());
-            defineStringOption(resolvedOptions, "minute", dateTimeFormat.getMinuteOption());
-            defineStringOption(resolvedOptions, "second", dateTimeFormat.getSecondOption());
-            if (dateTimeFormat.getFractionalSecondDigits() != null) {
-                createDataProperty(resolvedOptions, "fractionalSecondDigits",
-                        JSNumber.of(dateTimeFormat.getFractionalSecondDigits()));
-            }
-            defineStringOption(resolvedOptions, "timeZoneName", dateTimeFormat.getTimeZoneNameOption());
-        }
-        if (hasDateStyle) {
-            createDataProperty(resolvedOptions, "dateStyle",
-                    new JSString(dateTimeFormat.getDateStyle().name().toLowerCase(Locale.ROOT)));
-        }
-        if (hasTimeStyle) {
-            createDataProperty(resolvedOptions, "timeStyle",
-                    new JSString(dateTimeFormat.getTimeStyle().name().toLowerCase(Locale.ROOT)));
-        }
-        return resolvedOptions;
+        return IntlDateTimeFormatBuiltins.dateTimeFormatResolvedOptions(context, thisArg, args);
     }
 
-    private static void defineDigitRange(JSObject options, boolean significant, int minimum, int maximum) {
-        createDataProperty(options, significant ? "minimumSignificantDigits" : "minimumFractionDigits",
-                JSNumber.of(minimum));
-        createDataProperty(options, significant ? "maximumSignificantDigits" : "maximumFractionDigits",
-                JSNumber.of(maximum));
-    }
-
-    private static void defineStringOption(JSObject options, String key, String value) {
+    static void defineStringOption(JSObject options, String key, String value) {
         if (value != null) {
             createDataProperty(options, key, new JSString(value));
         }
-    }
-
-    private static boolean differsOnlyInTimeParts(List<JSIntlDateTimeFormat.DatePart> startParts,
-            List<JSIntlDateTimeFormat.DatePart> endParts) {
-        if (startParts.size() != endParts.size()) {
-            return false;
-        }
-        boolean hasDifference = false;
-        boolean hasHourDifference = false;
-        for (int index = 0; index < startParts.size(); index++) {
-            JSIntlDateTimeFormat.DatePart startPart = startParts.get(index);
-            JSIntlDateTimeFormat.DatePart endPart = endParts.get(index);
-            if (startPart.equals(endPart)) {
-                continue;
-            }
-            hasDifference = true;
-            String type = startPart.type();
-            if (!"hour".equals(type) && !"minute".equals(type) && !"second".equals(type)
-                    && !"fractionalSecond".equals(type) && !"dayPeriod".equals(type)) {
-                return false;
-            }
-            if ("hour".equals(type)) {
-                hasHourDifference = true;
-            }
-        }
-        return hasDifference && hasHourDifference;
     }
 
     /**
@@ -2309,24 +1406,6 @@ public final class JSIntlObject {
         return result;
     }
 
-    private static int findFirstDigitIndex(String text) {
-        for (int index = 0; index < text.length(); index++) {
-            if (Character.isDigit(text.charAt(index))) {
-                return index;
-            }
-        }
-        return -1;
-    }
-
-    private static int findLastDigitIndex(String text) {
-        for (int index = text.length() - 1; index >= 0; index--) {
-            if (Character.isDigit(text.charAt(index))) {
-                return index;
-            }
-        }
-        return -1;
-    }
-
     /**
      * Convert a firstDayOfWeek day name to its numeric value (1=Monday through 7=Sunday). Returns -1 if not a
      * recognized day name.
@@ -2345,93 +1424,6 @@ public final class JSIntlObject {
             case "sun" -> 7;
             default -> -1;
         };
-    }
-
-    private static JSValue formatDateRange(JSContext context, JSValue thisArg, JSValue[] args, boolean toParts) {
-        if (!(thisArg instanceof JSIntlDateTimeFormat dateTimeFormat)) {
-            String method = toParts ? "formatRangeToParts" : "formatRange";
-            return context
-                    .throwTypeError("Intl.DateTimeFormat.prototype." + method + " called on incompatible receiver");
-        }
-        JSValue startArg = JSValue.argumentOrUndefined(args, 0);
-        JSValue endArg = JSValue.argumentOrUndefined(args, 1);
-        if (startArg instanceof JSUndefined || endArg instanceof JSUndefined) {
-            return context.throwTypeError("start date or end date is undefined");
-        }
-        DateTimeFormattable startFormattable = toDateTimeFormattable(context, startArg, false);
-        if (startFormattable == null || context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        DateTimeFormattable endFormattable = toDateTimeFormattable(context, endArg, false);
-        if (endFormattable == null || context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (startFormattable.kind() != endFormattable.kind()) {
-            return context.throwTypeError("Invalid range");
-        }
-        if (startFormattable.calendarId() != null && endFormattable.calendarId() != null
-                && !startFormattable.calendarId().equals(endFormattable.calendarId())) {
-            return context.throwRangeError("Invalid date/time value");
-        }
-        JSIntlDateTimeFormat effectiveDateTimeFormat = getEffectiveDateTimeFormat(context, dateTimeFormat,
-                startFormattable.kind());
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!isTemporalCalendarCompatibleWithDateTimeFormat(context, startFormattable, effectiveDateTimeFormat)
-                || !isTemporalCalendarCompatibleWithDateTimeFormat(context, endFormattable, effectiveDateTimeFormat)) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!isFormattableEpochMillisValid(context, startFormattable)
-                || !isFormattableEpochMillisValid(context, endFormattable)) {
-            return JSUndefined.INSTANCE;
-        }
-        double startDate = startFormattable.epochMillis();
-        double endDate = endFormattable.epochMillis();
-
-        if (!toParts && Double.compare(startDate, endDate) == 0) {
-            return new JSString(effectiveDateTimeFormat.format(startDate));
-        }
-
-        List<JSIntlDateTimeFormat.DatePart> startParts = effectiveDateTimeFormat.formatToPartsList(startDate);
-        List<JSIntlDateTimeFormat.DatePart> endParts = effectiveDateTimeFormat.formatToPartsList(endDate);
-
-        if (toParts) {
-            JSArray result = context.createJSArray();
-            writeDateRange(effectiveDateTimeFormat, startParts, endParts,
-                    (type, value, source) -> result.push(createPartObject(context, type, value, source)));
-            return result;
-        }
-        StringBuilder text = new StringBuilder();
-        writeDateRange(effectiveDateTimeFormat, startParts, endParts, (type, value, source) -> text.append(value));
-        return new JSString(text.toString());
-    }
-
-    private static JSValue formatDateTime(JSContext context, JSValue thisArg, JSValue[] args, boolean toParts) {
-        if (!(thisArg instanceof JSIntlDateTimeFormat dateTimeFormat)) {
-            return context.throwTypeError(toParts
-                    ? "Intl.DateTimeFormat.prototype.formatToParts called on incompatible receiver"
-                    : "Intl.DateTimeFormat.prototype.format called on incompatible receiver");
-        }
-        DateTimeFormattable formattable = toDateTimeFormattable(context, JSValue.argumentOrUndefined(args, 0), true);
-        if (formattable == null || context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        JSIntlDateTimeFormat effectiveDateTimeFormat = getEffectiveDateTimeFormat(context, dateTimeFormat,
-                formattable.kind());
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!isTemporalCalendarCompatibleWithDateTimeFormat(context, formattable, effectiveDateTimeFormat)) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!isFormattableEpochMillisValid(context, formattable)) {
-            return JSUndefined.INSTANCE;
-        }
-        if (toParts) {
-            return datePartsToJSArray(context, effectiveDateTimeFormat.formatToPartsList(formattable.epochMillis()));
-        }
-        return new JSString(effectiveDateTimeFormat.format(formattable.epochMillis()));
     }
 
     private static JSValue formatDuration(JSContext context, JSValue thisArg, JSValue[] args, boolean partsRequested) {
@@ -2465,85 +1457,32 @@ public final class JSIntlObject {
         return result;
     }
 
-    private static String formatIntlNumberValue(JSContext context, JSIntlNumberFormat numberFormat, JSValue value) {
-        if (value instanceof JSBigInt bigInt) {
-            return numberFormat.format(bigInt.value());
+    private static JSValue formatRelativeTime(JSContext context, JSValue thisArg, JSValue[] args, boolean parts) {
+        String method = parts ? "formatToParts" : "format";
+        if (!(thisArg instanceof JSIntlRelativeTimeFormat relativeTimeFormat)) {
+            return context
+                    .throwTypeError("Intl.RelativeTimeFormat.prototype." + method + " called on incompatible receiver");
         }
-        if (value instanceof JSString jsString) {
-            return numberFormat.format(jsString.value());
+        if (args.length < 2) {
+            return context.throwTypeError("Intl.RelativeTimeFormat.prototype." + method + " requires value and unit");
         }
-        double numeric = JSTypeConversions.toNumber(context, value).value();
-        if (context.hasPendingException()) {
-            return "";
-        }
-        return numberFormat.format(numeric);
-    }
 
-    private static JSValue formatNumberRange(JSContext context, JSValue thisArg, JSValue[] args, boolean toParts) {
-        if (!(thisArg instanceof JSIntlNumberFormat numberFormat)) {
-            String method = toParts ? "formatRangeToParts" : "formatRange";
-            return context.throwTypeError("Intl.NumberFormat.prototype." + method + " called on incompatible receiver");
-        }
-        JSValue startValue = JSValue.argumentOrUndefined(args, 0);
-        JSValue endValue = JSValue.argumentOrUndefined(args, 1);
-        if (startValue instanceof JSUndefined || endValue instanceof JSUndefined) {
-            return context.throwTypeError("start and end must not be undefined");
-        }
-        if (isNaNRangeNumberValue(context, startValue) || isNaNRangeNumberValue(context, endValue)) {
-            return context.throwRangeError("start or end is NaN");
-        }
-        String startFormatted = formatIntlNumberValue(context, numberFormat, startValue);
+        double value = JSTypeConversions.toNumber(context, args[0]).value();
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        String endFormatted = formatIntlNumberValue(context, numberFormat, endValue);
+        String unitValue = JSTypeConversions.toString(context, args[1]).value();
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        if (toParts) {
-            return numberRangeParts(context, numberFormat, startValue, endValue, startFormatted.equals(endFormatted));
-        }
-        if (startFormatted.equals(endFormatted)) {
-            return new JSString("~" + startFormatted);
-        }
 
-        String localeTag = numberFormat.getLocale().toLanguageTag();
-        String separator = localeTag.startsWith("pt") ? " - " : " \u2013 ";
-        if ("currency".equals(numberFormat.getStyle())) {
-            int startDigitStart = findFirstDigitIndex(startFormatted);
-            int startDigitEnd = findLastDigitIndex(startFormatted);
-            int endDigitStart = findFirstDigitIndex(endFormatted);
-            int endDigitEnd = findLastDigitIndex(endFormatted);
-            if (startDigitStart >= 0 && startDigitEnd >= startDigitStart && endDigitStart >= 0
-                    && endDigitEnd >= endDigitStart) {
-                String startPrefix = startFormatted.substring(0, startDigitStart);
-                String startCore = startFormatted.substring(startDigitStart, startDigitEnd + 1);
-                String startSuffix = startFormatted.substring(startDigitEnd + 1);
-                String endPrefix = endFormatted.substring(0, endDigitStart);
-                String endCore = endFormatted.substring(endDigitStart, endDigitEnd + 1);
-                String endSuffix = endFormatted.substring(endDigitEnd + 1);
-
-                if (!startSuffix.isEmpty() && startSuffix.equals(endSuffix)) {
-                    if (startCore.startsWith("+") && endCore.startsWith("+")) {
-                        endCore = endCore.substring(1);
-                    }
-                    return new JSString(startPrefix + startCore + separator + endCore + startSuffix);
-                }
-
-                if ("always".equals(numberFormat.getSignDisplay()) && !startPrefix.isEmpty()
-                        && startPrefix.equals(endPrefix) && startPrefix.startsWith("+")) {
-                    return new JSString(startPrefix + startCore + "\u2013" + endCore + startSuffix);
-                }
-            }
+        try {
+            return parts
+                    ? relativeTimeFormat.formatToParts(context, value, unitValue)
+                    : new JSString(relativeTimeFormat.format(value, unitValue));
+        } catch (IllegalArgumentException e) {
+            return context.throwRangeError(e.getMessage());
         }
-
-        if ("currency".equals(numberFormat.getStyle())) {
-            return new JSString(startFormatted + separator + endFormatted);
-        }
-        if (localeTag.startsWith("pt")) {
-            return new JSString(startFormatted + " - " + endFormatted);
-        }
-        return new JSString(startFormatted + "\u2013" + endFormatted);
     }
 
     public static JSValue getCanonicalLocales(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -2557,31 +1496,6 @@ public final class JSIntlObject {
         } catch (IllegalArgumentException e) {
             return context.throwRangeError(e.getMessage());
         }
-    }
-
-    private static int getCurrencyDigits(String currencyCode) {
-        try {
-            Currency currency = Currency.getInstance(currencyCode);
-            int digits = currency.getDefaultFractionDigits();
-            if (digits < 0) {
-                return 2;
-            }
-            return digits;
-        } catch (IllegalArgumentException e) {
-            return 2;
-        }
-    }
-
-    private static JSIntlDateTimeFormat getEffectiveDateTimeFormat(JSContext context,
-            JSIntlDateTimeFormat baseDateTimeFormat, DateTimeFormattableKind formattableKind) {
-        return switch (formattableKind) {
-            case NUMBER -> baseDateTimeFormat;
-            case ZONED_DATE_TIME -> {
-                context.throwTypeError("Invalid date/time value");
-                yield null;
-            }
-            default -> createTemporalDateTimeFormat(context, baseDateTimeFormat, formattableKind);
-        };
     }
 
     /**
@@ -2600,7 +1514,7 @@ public final class JSIntlObject {
     /**
      * Get the default hourCycle for a locale by inspecting the locale's time format pattern.
      */
-    private static String getLocaleDefaultHourCycle(Locale locale) {
+    static String getLocaleDefaultHourCycle(Locale locale) {
         java.text.DateFormat df = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT, locale);
         if (df instanceof java.text.SimpleDateFormat sdf) {
             String pattern = sdf.toPattern();
@@ -2620,107 +1534,7 @@ public final class JSIntlObject {
         return "h23"; // Default fallback
     }
 
-    private static Integer getOptionIntegerOrUndefined(JSContext context, JSObject optionsObject, String key,
-            int minimum, int maximum) {
-        JSValue rawValue = optionsObject.get(PropertyKey.fromString(key));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (rawValue == null || rawValue instanceof JSUndefined) {
-            return null;
-        }
-        double numberValue = JSTypeConversions.toNumber(context, rawValue).value();
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (Double.isNaN(numberValue) || Double.isInfinite(numberValue)) {
-            context.throwRangeError(
-                    "Value " + numberValue + " out of range for Intl.NumberFormat options property " + key);
-            return null;
-        }
-        int integerValue = (int) Math.floor(numberValue);
-        if (integerValue < minimum || integerValue > maximum || integerValue != numberValue) {
-            context.throwRangeError(
-                    "Value " + numberValue + " out of range for Intl.NumberFormat options property " + key);
-            return null;
-        }
-        return integerValue;
-    }
-
-    /**
-     * GetOptionsObject (ECMA-402 §9.2.11). Converts the options argument to an object per spec: - undefined → empty
-     * object - object → return as-is - anything else (null, boolean, number, string, symbol, bigint) → TypeError
-     */
-    private static JSValue getOptionsObject(JSContext context, JSValue options) {
-        if (options instanceof JSUndefined || options == null) {
-            // Create null-prototype object to avoid triggering Object.prototype getters
-            JSObject obj = context.createJSObject();
-            obj.setPrototype(null);
-            return obj;
-        }
-        if (options instanceof JSObject) {
-            return options;
-        }
-        context.throwTypeError("Cannot convert " + JSTypeConversions.toString(context, options).value() + " to object");
-        return JSUndefined.INSTANCE;
-    }
-
-    private static String getOptionString(JSContext context, JSValue optionsValue, String key) {
-        if (!(optionsValue instanceof JSObject optionsObject)) {
-            return null;
-        }
-        return readStringOption(context, optionsObject, key);
-    }
-
-    /**
-     * Like getOptionString but checks for pending exceptions after property access. Returns null if an exception
-     * occurred (caller must check context.hasPendingException()).
-     */
-    private static String getPolishOtherUnit(String style, String unit) {
-        if ("long".equals(style)) {
-            return switch (unit) {
-                case "second" -> "sekundy";
-                case "minute" -> "minuty";
-                case "hour" -> "godziny";
-                case "day" -> "dnia";
-                case "week" -> "tygodnia";
-                case "month" -> "miesiąca";
-                case "quarter" -> "kwartału";
-                case "year" -> "roku";
-                default -> unit;
-            };
-        }
-        if ("short".equals(style)) {
-            return switch (unit) {
-                case "day" -> "dnia";
-                case "year" -> "roku";
-                default -> switch (unit) {
-                    case "second" -> "sek.";
-                    case "minute" -> "min";
-                    case "hour" -> "godz.";
-                    case "week" -> "tyg.";
-                    case "month" -> "mies.";
-                    case "quarter" -> "kw.";
-                    default -> unit;
-                };
-            };
-        }
-        return switch (unit) {
-            case "day" -> "dnia";
-            case "year" -> "roku";
-            default -> switch (unit) {
-                case "second" -> "s";
-                case "minute" -> "min";
-                case "hour" -> "g.";
-                case "week" -> "tyg.";
-                case "month" -> "mies.";
-                case "quarter" -> "kw.";
-                default -> unit;
-            };
-        };
-    }
-
-    private static Map<String, String> getTimezoneLookupMap() {
+    static Map<String, String> getTimezoneLookupMap() {
         if (TIMEZONE_LOOKUP_MAP == null) {
             synchronized (JSIntlObject.class) {
                 if (TIMEZONE_LOOKUP_MAP == null) {
@@ -2838,55 +1652,10 @@ public final class JSIntlObject {
         return sorted;
     }
 
-    private static boolean isFormattableEpochMillisValid(JSContext context, DateTimeFormattable formattable) {
-        if (!Double.isFinite(formattable.epochMillis())) {
-            context.throwRangeError("Invalid time value");
-            return false;
-        }
-        if (formattable.kind() == DateTimeFormattableKind.NUMBER && Math.abs(formattable.epochMillis()) > 8.64e15) {
-            context.throwRangeError("Invalid time value");
-            return false;
-        }
-        return true;
-    }
-
-    private static boolean isNaNRangeNumberValue(JSContext context, JSValue value) {
-        if (value instanceof JSBigInt) {
-            return false;
-        }
-        if (value instanceof JSString jsString) {
-            String text = jsString.value().trim();
-            if (text.isEmpty()) {
-                return false;
-            }
-            try {
-                new BigDecimal(text);
-                return false;
-            } catch (RuntimeException ignored) {
-                try {
-                    double parsed = Double.parseDouble(text);
-                    return Double.isNaN(parsed);
-                } catch (RuntimeException parseError) {
-                    return true;
-                }
-            }
-        }
-        double numericValue = JSTypeConversions.toNumber(context, value).value();
-        return !context.hasPendingException() && Double.isNaN(numericValue);
-    }
-
-    private static boolean isNegativeZero(double value) {
-        return Double.doubleToRawLongBits(value) == Double.doubleToRawLongBits(-0.0d);
-    }
-
-    private static boolean isPolishIntegerPlural(double absoluteValue) {
-        return Double.isFinite(absoluteValue) && Math.floor(absoluteValue) == absoluteValue;
-    }
-
     /**
      * Check if a calendar name is supported by the Java platform.
      */
-    private static boolean isSupportedCalendar(String calendar) {
+    static boolean isSupportedCalendar(String calendar) {
         if (calendar == null) {
             return false;
         }
@@ -2922,67 +1691,11 @@ public final class JSIntlObject {
         };
     }
 
-    private static boolean isSupportedDateTimeNumberingSystem(String numberingSystem) {
-        if (numberingSystem == null) {
-            return false;
-        }
-        return SUPPORTED_NUMBERING_SYSTEMS.contains(numberingSystem);
-    }
-
-    private static boolean isTemporalCalendarCompatibleWithDateTimeFormat(JSContext context,
-            DateTimeFormattable formattable, JSIntlDateTimeFormat dateTimeFormat) {
-        TemporalCalendarId temporalCalendarId = formattable.calendarId();
-        if (temporalCalendarId == null) {
-            return true;
-        }
-        String canonicalTemporalCalendarId = canonicalizeCalendar(temporalCalendarId.identifier());
-        if ("iso8601".equals(canonicalTemporalCalendarId)) {
-            return true;
-        }
-        String formatterCalendarId = dateTimeFormat.getCalendar();
-        if (formatterCalendarId == null || formatterCalendarId.isEmpty()) {
-            return true;
-        }
-        String canonicalFormatterCalendarId = canonicalizeCalendar(formatterCalendarId);
-        if (!canonicalTemporalCalendarId.equals(canonicalFormatterCalendarId)) {
-            context.throwRangeError("Invalid date/time value");
-            return false;
-        }
-        return true;
-    }
-
     private static boolean isValidCollation(String collation) {
         if (collation == null || collation.isEmpty()) {
             return false;
         }
         return VALID_COLLATION_TYPES.contains(collation);
-    }
-
-    private static boolean isWellFormedCurrencyCode(String currencyCode) {
-        if (currencyCode.length() != 3) {
-            return false;
-        }
-        for (int index = 0; index < currencyCode.length(); index++) {
-            char character = currencyCode.charAt(index);
-            if (!((character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z'))) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static boolean isWellFormedUnitIdentifier(String unitIdentifier) {
-        if (!unitIdentifier.equals(unitIdentifier.toLowerCase(Locale.ROOT))) {
-            return false;
-        }
-        if (SANCTIONED_SIMPLE_UNITS.contains(unitIdentifier)) {
-            return true;
-        }
-        String[] parts = unitIdentifier.split("-per-", -1);
-        if (parts.length != 2) {
-            return false;
-        }
-        return SANCTIONED_SIMPLE_UNITS.contains(parts[0]) && SANCTIONED_SIMPLE_UNITS.contains(parts[1]);
     }
 
     public static JSValue listFormatFormat(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -3244,367 +1957,44 @@ public final class JSIntlObject {
         return localeString(context, thisArg, "toString", JSIntlLocale::getTag);
     }
 
-    private static String normalizedStringOption(JSContext context, JSValue options, String key, String fallback,
-            String... allowed) {
-        String value = getOptionString(context, options, key);
-        return context.hasPendingException() ? null : normalizeOption(value, fallback, allowed);
-    }
-
-    /**
-     * Normalize an offset timezone string to the canonical form: +HH:MM or -HH:MM. -00 and -00:00 normalize to +00:00.
-     */
-    private static String normalizeOffsetTimeZone(String timeZone) {
-        char sign = timeZone.charAt(0);
-        String offsetPart = timeZone.substring(1);
-
-        // Reject any non-digit, non-colon characters (e.g., '.', ',')
-        for (int i = 0; i < offsetPart.length(); i++) {
-            char c = offsetPart.charAt(i);
-            if (c != ':' && (c < '0' || c > '9')) {
-                return null;
-            }
-        }
-
-        int hours;
-        int minutes;
-
-        if (offsetPart.contains(":")) {
-            String[] hm = offsetPart.split(":", -1);
-            if (hm.length != 2) {
-                return null;
-            }
-            // Both parts must be exactly 2 digits
-            if (hm[0].length() != 2 || hm[1].length() != 2) {
-                return null;
-            }
-            int hourTens = hm[0].charAt(0) - '0';
-            int hourOnes = hm[0].charAt(1) - '0';
-            int minuteTens = hm[1].charAt(0) - '0';
-            int minuteOnes = hm[1].charAt(1) - '0';
-            if (hourTens < 0 || hourTens > 9 || hourOnes < 0 || hourOnes > 9 || minuteTens < 0 || minuteTens > 9
-                    || minuteOnes < 0 || minuteOnes > 9) {
-                return null;
-            }
-            hours = hourTens * 10 + hourOnes;
-            minutes = minuteTens * 10 + minuteOnes;
-        } else if (offsetPart.length() == 4) {
-            int h0 = offsetPart.charAt(0) - '0';
-            int h1 = offsetPart.charAt(1) - '0';
-            int m0 = offsetPart.charAt(2) - '0';
-            int m1 = offsetPart.charAt(3) - '0';
-            if (h0 < 0 || h0 > 9 || h1 < 0 || h1 > 9 || m0 < 0 || m0 > 9 || m1 < 0 || m1 > 9) {
-                return null;
-            }
-            hours = h0 * 10 + h1;
-            minutes = m0 * 10 + m1;
-        } else if (offsetPart.length() == 2) {
-            int h0 = offsetPart.charAt(0) - '0';
-            int h1 = offsetPart.charAt(1) - '0';
-            if (h0 < 0 || h0 > 9 || h1 < 0 || h1 > 9) {
-                return null;
-            }
-            hours = h0 * 10 + h1;
-            minutes = 0;
-        } else {
-            return null;
-        }
-
-        if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-            return null;
-        }
-
-        // Normalize -00:00 to +00:00
-        if (hours == 0 && minutes == 0) {
-            sign = '+';
-        }
-
-        return String.format("%c%02d:%02d", sign, hours, minutes);
-    }
-
-    private static String normalizeOption(String rawValue, String defaultValue, String... allowedValues) {
-        if (rawValue == null) {
-            return defaultValue;
-        }
-        for (String allowedValue : allowedValues) {
-            if (allowedValue.equals(rawValue)) {
-                return allowedValue;
-            }
-        }
-        throw new IllegalArgumentException("Invalid option value: " + rawValue);
-    }
-
-    private static String normalizeRelativeTimeUnit(String unit) {
-        return switch (unit) {
-            case "second", "seconds" -> "second";
-            case "minute", "minutes" -> "minute";
-            case "hour", "hours" -> "hour";
-            case "day", "days" -> "day";
-            case "week", "weeks" -> "week";
-            case "month", "months" -> "month";
-            case "quarter", "quarters" -> "quarter";
-            case "year", "years" -> "year";
-            default -> throw new IllegalArgumentException("Invalid unit: " + unit);
-        };
-    }
-
     private static String nullIfEmpty(String value) {
         return (value != null && !value.isEmpty()) ? value : null;
     }
 
     public static JSValue numberFormatFormat(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlNumberFormat numberFormat)) {
-            return context.throwTypeError("Intl.NumberFormat.prototype.format called on incompatible receiver");
-        }
-        JSValue value = JSValue.argumentOrUndefined(args, 0);
-        if (value instanceof JSBigInt bigInt) {
-            return new JSString(numberFormat.format(bigInt.value()));
-        }
-        if (value instanceof JSString jsString) {
-            return new JSString(numberFormat.format(jsString.value()));
-        }
-        double number = JSTypeConversions.toNumber(context, value).value();
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(numberFormat.format(number));
+        return IntlNumberFormatBuiltins.numberFormatFormat(context, thisArg, args);
     }
 
-    // ---- Locale option validation helpers ----
-
     public static JSValue numberFormatFormatGetter(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlNumberFormat numberFormat)) {
-            return context.throwTypeError("Intl.NumberFormat.prototype.format called on incompatible receiver");
-        }
-        JSFunction cachedBoundFormatFunction = numberFormat.getBoundFormatFunction();
-        if (cachedBoundFormatFunction != null) {
-            return cachedBoundFormatFunction;
-        }
-        JSNativeFunction boundFormatFunction = new JSNativeFunction(context, "", 1,
-                (childContext, thisValue, formatArgs) -> numberFormatFormat(childContext, numberFormat, formatArgs));
-        context.transferPrototype(boundFormatFunction, JSFunction.NAME);
-        numberFormat.setBoundFormatFunction(boundFormatFunction);
-        return boundFormatFunction;
+        return IntlNumberFormatBuiltins.numberFormatFormatGetter(context, thisArg, args);
     }
 
     public static JSValue numberFormatFormatRange(JSContext context, JSValue thisArg, JSValue[] args) {
-        return formatNumberRange(context, thisArg, args, false);
+        return IntlNumberFormatBuiltins.numberFormatFormatRange(context, thisArg, args);
     }
 
     public static JSValue numberFormatFormatRangeToParts(JSContext context, JSValue thisArg, JSValue[] args) {
-        return formatNumberRange(context, thisArg, args, true);
+        return IntlNumberFormatBuiltins.numberFormatFormatRangeToParts(context, thisArg, args);
     }
 
     public static JSValue numberFormatFormatToParts(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlNumberFormat numberFormat)) {
-            return context.throwTypeError("Intl.NumberFormat.prototype.formatToParts called on incompatible receiver");
-        }
-        if (args.length == 0) {
-            return numberFormat.formatToParts(context, Double.NaN);
-        }
-        JSValue arg = args[0];
-        if (arg instanceof JSBigInt jsBigInt) {
-            return numberFormat.formatToParts(context, jsBigInt.value().toString());
-        }
-        if (arg instanceof JSString str) {
-            return numberFormat.formatToParts(context, str.value());
-        }
-        double numValue = JSTypeConversions.toNumber(context, arg).value();
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        return numberFormat.formatToParts(context, numValue);
+        return IntlNumberFormatBuiltins.numberFormatFormatToParts(context, thisArg, args);
     }
 
     public static JSValue numberFormatResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlNumberFormat numberFormat)) {
-            return context
-                    .throwTypeError("Intl.NumberFormat.prototype.resolvedOptions called on incompatible receiver");
-        }
-        JSObject resolvedOptions = context.createJSObject();
-        createDataProperty(resolvedOptions, "locale", new JSString(numberFormat.getLocale().toLanguageTag()));
-        createDataProperty(resolvedOptions, "numberingSystem", new JSString(numberFormat.getNumberingSystem()));
-        createDataProperty(resolvedOptions, "style", new JSString(numberFormat.getStyle()));
-        if ("currency".equals(numberFormat.getStyle()) && numberFormat.getCurrency() != null) {
-            createDataProperty(resolvedOptions, "currency", new JSString(numberFormat.getCurrency()));
-            createDataProperty(resolvedOptions, "currencyDisplay", new JSString(numberFormat.getCurrencyDisplay()));
-            createDataProperty(resolvedOptions, "currencySign", new JSString(numberFormat.getCurrencySign()));
-        }
-        if ("unit".equals(numberFormat.getStyle()) && numberFormat.getUnit() != null) {
-            createDataProperty(resolvedOptions, "unit", new JSString(numberFormat.getUnit()));
-            createDataProperty(resolvedOptions, "unitDisplay", new JSString(numberFormat.getUnitDisplay()));
-        }
-        createDataProperty(resolvedOptions, "minimumIntegerDigits",
-                JSNumber.of(numberFormat.getMinimumIntegerDigits()));
-        if (numberFormat.getUseSignificantDigits()) {
-            defineDigitRange(resolvedOptions, true, numberFormat.getMinimumSignificantDigits(),
-                    numberFormat.getMaximumSignificantDigits());
-        } else {
-            defineDigitRange(resolvedOptions, false, numberFormat.getMinimumFractionDigits(),
-                    numberFormat.getMaximumFractionDigits());
-        }
-        if ("false".equals(numberFormat.getUseGroupingMode())) {
-            createDataProperty(resolvedOptions, "useGrouping", JSBoolean.FALSE);
-        } else {
-            createDataProperty(resolvedOptions, "useGrouping", new JSString(numberFormat.getUseGroupingMode()));
-        }
-        createDataProperty(resolvedOptions, "notation", new JSString(numberFormat.getNotation()));
-        if ("compact".equals(numberFormat.getNotation()) && numberFormat.getCompactDisplay() != null) {
-            createDataProperty(resolvedOptions, "compactDisplay", new JSString(numberFormat.getCompactDisplay()));
-        }
-        createDataProperty(resolvedOptions, "signDisplay", new JSString(numberFormat.getSignDisplay()));
-        createDataProperty(resolvedOptions, "roundingIncrement", JSNumber.of(numberFormat.getRoundingIncrement()));
-        createDataProperty(resolvedOptions, "roundingMode", new JSString(numberFormat.getRoundingMode()));
-        createDataProperty(resolvedOptions, "roundingPriority", new JSString(numberFormat.getRoundingPriority()));
-        createDataProperty(resolvedOptions, "trailingZeroDisplay", new JSString(numberFormat.getTrailingZeroDisplay()));
-        return resolvedOptions;
+        return IntlNumberFormatBuiltins.numberFormatResolvedOptions(context, thisArg, args);
     }
-
-    private static JSValue numberRangeParts(JSContext context, JSIntlNumberFormat numberFormat, JSValue startValue,
-            JSValue endValue, boolean equalAfterFormatting) {
-        JSValue startPartsValue = numberFormatFormatToParts(context, numberFormat, new JSValue[]{startValue});
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue endPartsValue = numberFormatFormatToParts(context, numberFormat, new JSValue[]{endValue});
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(startPartsValue instanceof JSArray startParts) || !(endPartsValue instanceof JSArray endParts)) {
-            return context.throwTypeError("formatToParts did not return an array");
-        }
-
-        JSArray result = context.createJSArray();
-        if (equalAfterFormatting) {
-            result.push(createPartObject(context, "approximatelySign", "~", "shared"));
-            appendRangePartsWithSource(context, result, startParts, "shared");
-            return result;
-        }
-
-        appendRangePartsWithSource(context, result, startParts, "startRange");
-        String localeTag = numberFormat.getLocale().toLanguageTag();
-        String separator = localeTag.startsWith("pt") ? " - " : " \u2013 ";
-        result.push(createPartObject(context, "literal", separator, "shared"));
-        appendRangePartsWithSource(context, result, endParts, "endRange");
-        return result;
-    }
-
-    private static FormatStyle parseFormatStyle(String rawStyle) {
-        if (rawStyle == null) {
-            return null;
-        }
-        return switch (rawStyle) {
-            case "short" -> FormatStyle.SHORT;
-            case "medium" -> FormatStyle.MEDIUM;
-            case "long" -> FormatStyle.LONG;
-            case "full" -> FormatStyle.FULL;
-            default -> null;
-        };
-    }
-
-    private static String parseUseGroupingOption(JSContext context, JSValue useGroupingValue, String notation) {
-        String defaultValue = "compact".equals(notation) ? "min2" : "auto";
-        if (useGroupingValue == null || useGroupingValue instanceof JSUndefined) {
-            return defaultValue;
-        }
-        if (useGroupingValue instanceof JSBoolean jsBoolean) {
-            if (jsBoolean.value()) {
-                return "always";
-            }
-            return "false";
-        }
-        if (useGroupingValue instanceof JSNull) {
-            return "false";
-        }
-        if (useGroupingValue instanceof JSString jsString) {
-            String value = jsString.value();
-            if ("auto".equals(value) || "always".equals(value) || "min2".equals(value)) {
-                return value;
-            }
-            if ("true".equals(value) || "false".equals(value)) {
-                return defaultValue;
-            }
-            if (value.isEmpty()) {
-                return "false";
-            }
-            context.throwRangeError("Invalid option value: " + value);
-            return defaultValue;
-        }
-        if (useGroupingValue instanceof JSNumber jsNumber) {
-            double number = jsNumber.value();
-            if (number == 0) {
-                return "false";
-            }
-            context.throwRangeError("Invalid option value: " + useGroupingValue);
-            return defaultValue;
-        }
-        boolean booleanValue = JSTypeConversions.toBoolean(useGroupingValue).value();
-        if (!booleanValue) {
-            return "false";
-        }
-        context.throwRangeError(
-                "Invalid option value: " + JSTypeConversions.toString(context, useGroupingValue).value());
-        return defaultValue;
-    }
-
-    // ---- New Locale prototype methods ----
 
     public static JSValue pluralRulesResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlPluralRules pluralRules)) {
-            return context.throwTypeError("Intl.PluralRules.prototype.resolvedOptions called on incompatible receiver");
-        }
-        JSObject resolvedOptions = context.createJSObject();
-        createDataProperty(resolvedOptions, "locale", new JSString(pluralRules.getLocale().toLanguageTag()));
-        createDataProperty(resolvedOptions, "type", new JSString(pluralRules.getType()));
-        createDataProperty(resolvedOptions, "notation", new JSString(pluralRules.getNotation()));
-        createDataProperty(resolvedOptions, "minimumIntegerDigits", JSNumber.of(pluralRules.getMinimumIntegerDigits()));
-        if (pluralRules.getMinimumSignificantDigits() != null) {
-            defineDigitRange(resolvedOptions, true, pluralRules.getMinimumSignificantDigits(),
-                    pluralRules.getMaximumSignificantDigits());
-        } else {
-            defineDigitRange(resolvedOptions, false, pluralRules.getMinimumFractionDigits(),
-                    pluralRules.getMaximumFractionDigits());
-        }
-        JSArray categories = context.createJSArray();
-        for (String category : pluralRules.getPluralCategories()) {
-            categories.push(new JSString(category));
-        }
-        createDataProperty(resolvedOptions, "pluralCategories", categories);
-        return resolvedOptions;
+        return IntlNumberFormatBuiltins.pluralRulesResolvedOptions(context, thisArg, args);
     }
 
     public static JSValue pluralRulesSelect(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlPluralRules pluralRules)) {
-            return context.throwTypeError("Intl.PluralRules.prototype.select called on incompatible receiver");
-        }
-        double value = args.length > 0 ? JSTypeConversions.toNumber(context, args[0]).value() : Double.NaN;
-        return new JSString(pluralRules.select(value));
+        return IntlNumberFormatBuiltins.pluralRulesSelect(context, thisArg, args);
     }
 
     public static JSValue pluralRulesSelectRange(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlPluralRules pluralRules)) {
-            return context.throwTypeError("Intl.PluralRules.prototype.selectRange called on incompatible receiver");
-        }
-        JSValue startValue = JSValue.argumentOrUndefined(args, 0);
-        JSValue endValue = JSValue.argumentOrUndefined(args, 1);
-        if (startValue instanceof JSUndefined || endValue instanceof JSUndefined) {
-            return context.throwTypeError("Intl.PluralRules.prototype.selectRange requires start and end");
-        }
-        double start = JSTypeConversions.toNumber(context, startValue).value();
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        double end = JSTypeConversions.toNumber(context, endValue).value();
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (Double.isNaN(start) || Double.isNaN(end)) {
-            return context.throwRangeError("NaN is not allowed in Intl.PluralRules.prototype.selectRange");
-        }
-        try {
-            return new JSString(pluralRules.selectRange(start, end));
-        } catch (IllegalArgumentException e) {
-            return context.throwRangeError(e.getMessage());
-        }
+        return IntlNumberFormatBuiltins.pluralRulesSelectRange(context, thisArg, args);
     }
 
     private static void putLocaleOption(Map<String, String> extensions, String key, String value) {
@@ -3613,150 +2003,12 @@ public final class JSIntlObject {
         }
     }
 
-    private static int readMinimumIntegerDigits(JSContext context, JSObject options) {
-        Integer digits = getOptionIntegerOrUndefined(context, options, "minimumIntegerDigits", 1, 21);
-        return digits == null ? 1 : digits;
-    }
-
-    private static RoundingOptions readRoundingOptions(JSContext context, JSObject optionsObject,
-            boolean validateIncrement) {
-        Integer increment = getOptionIntegerOrUndefined(context, optionsObject, "roundingIncrement", 1, 5000);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        int roundingIncrement = increment == null ? 1 : increment;
-        if (validateIncrement && !VALID_ROUNDING_INCREMENTS.contains(roundingIncrement)) {
-            context.throwRangeError("Invalid roundingIncrement value: " + roundingIncrement);
-            return null;
-        }
-        String mode = normalizedStringOption(context, optionsObject, "roundingMode", "halfExpand",
-                ROUNDING_MODE_VALUES);
-        String priority = normalizedStringOption(context, optionsObject, "roundingPriority", "auto",
-                ROUNDING_PRIORITY_VALUES);
-        String trailingZero = normalizedStringOption(context, optionsObject, "trailingZeroDisplay", "auto",
-                TRAILING_ZERO_DISPLAY_VALUES);
-        return context.hasPendingException()
-                ? null
-                : new RoundingOptions(roundingIncrement, mode, priority, trailingZero);
-    }
-
-    /**
-     * Read a string option from options object. Returns null if option is undefined.
-     */
-    private static String readStringOption(JSContext context, JSObject optionsObject, String key) {
-        if (context.hasPendingException()) {
-            return null;
-        }
-        JSValue rawValue = optionsObject.get(PropertyKey.fromString(key));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (rawValue == null || rawValue instanceof JSUndefined) {
-            return null;
-        }
-        return JSTypeConversions.toString(context, rawValue).value();
-    }
-
-    /**
-     * Read a string option from options object, validate against allowed values. Returns null if option is undefined.
-     * Throws RangeError for invalid values.
-     */
-    private static String readValidatedOption(JSContext context, JSObject optionsObject, String key,
-            String... allowedValues) {
-        String stringValue = readStringOption(context, optionsObject, key);
-        if (stringValue == null || context.hasPendingException()) {
-            return null;
-        }
-        for (String allowed : allowedValues) {
-            if (allowed.equals(stringValue)) {
-                return stringValue;
-            }
-        }
-        context.throwRangeError("Value " + stringValue + " out of range for property " + key);
-        return null;
-    }
-
     public static JSValue relativeTimeFormatFormat(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlRelativeTimeFormat relativeTimeFormat)) {
-            return context.throwTypeError("Intl.RelativeTimeFormat.prototype.format called on incompatible receiver");
-        }
-        if (args.length < 2) {
-            return context.throwTypeError("Intl.RelativeTimeFormat.prototype.format requires value and unit");
-        }
-        double value = JSTypeConversions.toNumber(context, args[0]).value();
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        String unit = JSTypeConversions.toString(context, args[1]).value();
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        try {
-            return new JSString(relativeTimeFormat.format(value, unit));
-        } catch (IllegalArgumentException e) {
-            return context.throwRangeError(e.getMessage());
-        }
+        return formatRelativeTime(context, thisArg, args, false);
     }
 
     public static JSValue relativeTimeFormatFormatToParts(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlRelativeTimeFormat relativeTimeFormat)) {
-            return context
-                    .throwTypeError("Intl.RelativeTimeFormat.prototype.formatToParts called on incompatible receiver");
-        }
-        if (args.length < 2) {
-            return context.throwTypeError("Intl.RelativeTimeFormat.prototype.formatToParts requires value and unit");
-        }
-
-        double value = JSTypeConversions.toNumber(context, args[0]).value();
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        String unitValue = JSTypeConversions.toString(context, args[1]).value();
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        try {
-            String normalizedUnit = normalizeRelativeTimeUnit(unitValue);
-            String formatted = relativeTimeFormat.format(value, normalizedUnit);
-            double absoluteValue = Math.abs(value);
-            JSIntlNumberFormat numberFormat = createRelativeTimeNumberFormat(relativeTimeFormat);
-            String numberText = numberFormat.format(absoluteValue);
-            int numberStart = formatted.indexOf(numberText);
-
-            JSArray result = context.createJSArray();
-            if (numberStart < 0) {
-                result.push(createRelativeTimeLiteralPart(context, formatted));
-                return result;
-            }
-
-            String prefix = formatted.substring(0, numberStart);
-            if (!prefix.isEmpty()) {
-                result.push(createRelativeTimeLiteralPart(context, prefix));
-            }
-
-            JSArray numberParts = numberFormat.formatToParts(context, absoluteValue);
-            for (int index = 0; index < numberParts.getLength(); index++) {
-                JSValue numberPartValue = numberParts.get(index);
-                if (numberPartValue instanceof JSObject numberPartObject) {
-                    createDataProperty(numberPartObject, "unit", new JSString(normalizedUnit));
-                    result.push(numberPartObject);
-                }
-            }
-
-            String suffix = formatted.substring(numberStart + numberText.length());
-            if ("pl".equals(relativeTimeFormat.getLocale().getLanguage()) && !isPolishIntegerPlural(absoluteValue)) {
-                boolean isPast = value < 0 || isNegativeZero(value);
-                String polishOtherUnit = getPolishOtherUnit(relativeTimeFormat.getStyle(), normalizedUnit);
-                suffix = isPast ? " " + polishOtherUnit + " temu" : " " + polishOtherUnit;
-            }
-            if (!suffix.isEmpty()) {
-                result.push(createRelativeTimeLiteralPart(context, suffix));
-            }
-            return result;
-        } catch (IllegalArgumentException e) {
-            return context.throwRangeError(e.getMessage());
-        }
+        return formatRelativeTime(context, thisArg, args, true);
     }
 
     public static JSValue relativeTimeFormatResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -3821,58 +2073,6 @@ public final class JSIntlObject {
             builder.setVariant(variant);
         }
         return builder.build();
-    }
-
-    private static String resolveHourCycle(JSIntlDateTimeFormat formatter) {
-        String cycle = formatter.getHourCycle();
-        if (cycle != null) {
-            return cycle;
-        }
-        cycle = formatter.getHourCycleForInstant();
-        if (cycle != null) {
-            return cycle;
-        }
-        Locale locale = formatter.getLocale();
-        cycle = IntlLocaleTag.parseUnicodeExtensions(locale.toLanguageTag()).get("hc");
-        return "h11".equals(cycle) || "h12".equals(cycle) || "h23".equals(cycle) || "h24".equals(cycle)
-                ? cycle
-                : getLocaleDefaultHourCycle(locale);
-    }
-
-    /**
-     * Resolve the prototype for an Intl constructor per GetPrototypeFromConstructor. When called via Reflect.construct
-     * with a newTarget from another realm whose prototype is not an object, falls back to that realm's
-     * Intl.X.prototype.
-     */
-    private static JSObject resolveIntlPrototype(JSContext context, JSObject defaultPrototype,
-            String intlConstructorName) {
-        JSValue newTarget = context.getNativeConstructorNewTarget();
-        if (!(newTarget instanceof JSObject newTargetObject)) {
-            return defaultPrototype;
-        }
-        JSValue newTargetProto = newTargetObject.get(PropertyKey.PROTOTYPE);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (newTargetProto instanceof JSObject newTargetProtoObj) {
-            return newTargetProtoObj;
-        }
-        // newTarget.prototype is not an object; fall back to realm's Intl.X.prototype
-        JSContext functionRealm = context.getFunctionRealm(newTargetObject);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        JSValue intlObj = functionRealm.getGlobalObject().get("Intl");
-        if (intlObj instanceof JSObject intlObject) {
-            JSValue ctor = intlObject.get(intlConstructorName);
-            if (ctor instanceof JSObject ctorObj) {
-                JSValue proto = ctorObj.get("prototype");
-                if (proto instanceof JSObject protoObj) {
-                    return protoObj;
-                }
-            }
-        }
-        return defaultPrototype;
     }
 
     public static Locale resolveLocale(JSContext context, JSValue[] args, int index) {
@@ -4047,11 +2247,11 @@ public final class JSIntlObject {
                     }
                 }
                 // Validate localeMatcher
-                String localeMatcher = getOptionString(context, optionsObj, "localeMatcher");
+                String localeMatcher = IntlFormatOptions.readStringOption(context, optionsObj, "localeMatcher");
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
-                if (localeMatcher != null && !"lookup".equals(localeMatcher) && !"best fit".equals(localeMatcher)) {
+                if (!IntlFormatOptions.isValidLocaleMatcher(localeMatcher)) {
                     return context.throwRangeError("Value " + localeMatcher
                             + " out of range for supportedLocalesOf options property localeMatcher");
                 }
@@ -4109,7 +2309,7 @@ public final class JSIntlObject {
                 values = currencies.stream().map(Currency::getCurrencyCode).sorted().collect(Collectors.toList());
             }
             case "numberingSystem" -> {
-                values = new ArrayList<>(SUPPORTED_NUMBERING_SYSTEMS);
+                values = new ArrayList<>(IntlFormatOptions.SUPPORTED_NUMBERING_SYSTEMS);
                 Collections.sort(values);
             }
             case "timeZone" -> {
@@ -4164,14 +2364,7 @@ public final class JSIntlObject {
                                 && !id.equals("CST6CDT") && !id.equals("MST7MDT") && !id.equals("PST8PDT"))
                         .sorted().collect(Collectors.toList());
             }
-            case "unit" -> {
-                values = new ArrayList<>(List.of("acre", "bit", "byte", "celsius", "centimeter", "day", "degree",
-                        "fahrenheit", "fluid-ounce", "foot", "gallon", "gigabit", "gigabyte", "gram", "hectare", "hour",
-                        "inch", "kilobit", "kilobyte", "kilogram", "kilometer", "liter", "megabit", "megabyte", "meter",
-                        "microsecond", "mile", "mile-scandinavian", "milliliter", "millimeter", "millisecond", "minute",
-                        "month", "nanosecond", "ounce", "percent", "petabyte", "pound", "second", "stone", "terabit",
-                        "terabyte", "week", "yard", "year"));
-            }
+            case "unit" -> values = SORTED_SIMPLE_UNITS;
             default -> {
                 return context.throwRangeError("Invalid key : " + key);
             }
@@ -4181,197 +2374,6 @@ public final class JSIntlObject {
             result.push(new JSString(value));
         }
         return result;
-    }
-
-    private static DateStyleOptionFields toDateStyleOptionFields(FormatStyle dateStyle) {
-        return switch (dateStyle) {
-            case FULL -> new DateStyleOptionFields("long", "numeric", "long", "numeric");
-            case LONG -> new DateStyleOptionFields(null, "numeric", "long", "numeric");
-            case MEDIUM -> new DateStyleOptionFields(null, "numeric", "short", "numeric");
-            case SHORT -> new DateStyleOptionFields(null, "2-digit", "numeric", "numeric");
-        };
-    }
-
-    private static DateTimeFormattable toDateTimeFormattable(JSContext context, JSValue value,
-            boolean useCurrentTimeForUndefined) {
-        if (useCurrentTimeForUndefined && value instanceof JSUndefined) {
-            return new DateTimeFormattable(DateTimeFormattableKind.NUMBER, System.currentTimeMillis(), null);
-        }
-
-        if (value instanceof JSDate jsDate) {
-            return new DateTimeFormattable(DateTimeFormattableKind.NUMBER, jsDate.getTimeValue(), null);
-        }
-        if (value instanceof JSTemporalInstant temporalInstant) {
-            return new DateTimeFormattable(DateTimeFormattableKind.INSTANT, toEpochMillis(temporalInstant), null);
-        }
-        if (value instanceof JSTemporalPlainDate temporalPlainDate) {
-            double epochMillis = toEpochMillis(temporalPlainDate, context);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            return new DateTimeFormattable(DateTimeFormattableKind.PLAIN_DATE, epochMillis,
-                    temporalPlainDate.getCalendarId());
-        }
-        if (value instanceof JSTemporalPlainDateTime temporalPlainDateTime) {
-            double epochMillis = toEpochMillis(temporalPlainDateTime, context);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            return new DateTimeFormattable(DateTimeFormattableKind.PLAIN_DATE_TIME, epochMillis,
-                    temporalPlainDateTime.getCalendarId());
-        }
-        if (value instanceof JSTemporalPlainMonthDay temporalPlainMonthDay) {
-            double epochMillis = toEpochMillis(temporalPlainMonthDay, context);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            return new DateTimeFormattable(DateTimeFormattableKind.PLAIN_MONTH_DAY, epochMillis,
-                    temporalPlainMonthDay.getCalendarId());
-        }
-        if (value instanceof JSTemporalPlainTime temporalPlainTime) {
-            double epochMillis = toEpochMillis(temporalPlainTime, context);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            return new DateTimeFormattable(DateTimeFormattableKind.PLAIN_TIME, epochMillis, null);
-        }
-        if (value instanceof JSTemporalPlainYearMonth temporalPlainYearMonth) {
-            double epochMillis = toEpochMillis(temporalPlainYearMonth, context);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            return new DateTimeFormattable(DateTimeFormattableKind.PLAIN_YEAR_MONTH, epochMillis,
-                    temporalPlainYearMonth.getCalendarId());
-        }
-        if (value instanceof JSTemporalZonedDateTime temporalZonedDateTime) {
-            return new DateTimeFormattable(DateTimeFormattableKind.ZONED_DATE_TIME,
-                    toEpochMillis(temporalZonedDateTime), temporalZonedDateTime.getCalendarId());
-        }
-
-        double epochMillis = JSTypeConversions.toNumber(context, value).value();
-        if (context.hasPendingException()) {
-            return null;
-        }
-        return new DateTimeFormattable(DateTimeFormattableKind.NUMBER, epochMillis, null);
-    }
-
-    private static double toEpochMillis(int year, int month, int day, int hour, int minute, int second, int millisecond,
-            int microsecond, int nanosecond, JSContext context, String errorMessage) {
-        int nanosecondOfSecond = millisecond * 1_000_000 + microsecond * 1_000 + nanosecond;
-        try {
-            LocalDate localDate = LocalDate.of(year, month, day);
-            return localDate.atTime(hour, minute, second, nanosecondOfSecond).toInstant(ZoneOffset.UTC).toEpochMilli();
-        } catch (DateTimeException e) {
-            context.throwRangeError(errorMessage);
-            return Double.NaN;
-        }
-    }
-
-    private static double toEpochMillis(JSTemporalInstant temporalInstant) {
-        return toEpochMillisFromEpochNanoseconds(temporalInstant.getEpochNanoseconds());
-    }
-
-    private static double toEpochMillis(JSTemporalPlainDate temporalPlainDate, JSContext context) {
-        try {
-            LocalDate localDate = LocalDate.of(temporalPlainDate.getIsoDate().year(),
-                    temporalPlainDate.getIsoDate().month(), temporalPlainDate.getIsoDate().day());
-            return localDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
-        } catch (DateTimeException e) {
-            context.throwRangeError("Invalid Temporal.PlainDate value");
-            return Double.NaN;
-        }
-    }
-
-    private static double toEpochMillis(JSTemporalPlainDateTime temporalPlainDateTime, JSContext context) {
-        try {
-            return toEpochMillis(temporalPlainDateTime.getIsoDateTime().date().year(),
-                    temporalPlainDateTime.getIsoDateTime().date().month(),
-                    temporalPlainDateTime.getIsoDateTime().date().day(),
-                    temporalPlainDateTime.getIsoDateTime().time().hour(),
-                    temporalPlainDateTime.getIsoDateTime().time().minute(),
-                    temporalPlainDateTime.getIsoDateTime().time().second(),
-                    temporalPlainDateTime.getIsoDateTime().time().millisecond(),
-                    temporalPlainDateTime.getIsoDateTime().time().microsecond(),
-                    temporalPlainDateTime.getIsoDateTime().time().nanosecond(), context,
-                    "Invalid Temporal.PlainDateTime value");
-        } catch (DateTimeException e) {
-            context.throwRangeError("Invalid Temporal.PlainDateTime value");
-            return Double.NaN;
-        }
-    }
-
-    private static double toEpochMillis(JSTemporalPlainMonthDay temporalPlainMonthDay, JSContext context) {
-        try {
-            LocalDate referenceDate = LocalDate.of(temporalPlainMonthDay.getIsoDate().year(),
-                    temporalPlainMonthDay.getIsoDate().month(), temporalPlainMonthDay.getIsoDate().day());
-            return referenceDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
-        } catch (DateTimeException e) {
-            context.throwRangeError("Invalid Temporal.PlainMonthDay value");
-            return Double.NaN;
-        }
-    }
-
-    private static double toEpochMillis(JSTemporalPlainTime temporalPlainTime, JSContext context) {
-        try {
-            return toEpochMillis(1970, 1, 1, temporalPlainTime.getIsoTime().hour(),
-                    temporalPlainTime.getIsoTime().minute(), temporalPlainTime.getIsoTime().second(),
-                    temporalPlainTime.getIsoTime().millisecond(), temporalPlainTime.getIsoTime().microsecond(),
-                    temporalPlainTime.getIsoTime().nanosecond(), context, "Invalid Temporal.PlainTime value");
-        } catch (DateTimeException e) {
-            context.throwRangeError("Invalid Temporal.PlainTime value");
-            return Double.NaN;
-        }
-    }
-
-    private static double toEpochMillis(JSTemporalPlainYearMonth temporalPlainYearMonth, JSContext context) {
-        try {
-            LocalDate localDate = LocalDate.of(temporalPlainYearMonth.getIsoDate().year(),
-                    temporalPlainYearMonth.getIsoDate().month(), temporalPlainYearMonth.getIsoDate().day());
-            return localDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
-        } catch (DateTimeException e) {
-            context.throwRangeError("Invalid Temporal.PlainYearMonth value");
-            return Double.NaN;
-        }
-    }
-
-    private static double toEpochMillis(JSTemporalZonedDateTime temporalZonedDateTime) {
-        return toEpochMillisFromEpochNanoseconds(temporalZonedDateTime.getEpochNanoseconds());
-    }
-
-    private static double toEpochMillisFromEpochNanoseconds(BigInteger epochNanoseconds) {
-        BigInteger[] quotientAndRemainder = epochNanoseconds.divideAndRemainder(NANOS_PER_MILLISECOND);
-        BigInteger epochMilliseconds = quotientAndRemainder[0];
-        if (epochNanoseconds.signum() < 0 && quotientAndRemainder[1].signum() != 0) {
-            epochMilliseconds = epochMilliseconds.subtract(BigInteger.ONE);
-        }
-        return epochMilliseconds.doubleValue();
-    }
-
-    /**
-     * Validate and canonicalize a time zone string. Returns the canonical time zone name, or null if invalid.
-     */
-    private static String validateAndCanonicalizeTimeZone(String timeZone) {
-        if (timeZone == null || timeZone.isEmpty()) {
-            return null;
-        }
-        // Reject U+2212 MINUS SIGN per ECMA-402: only ASCII hyphen-minus is valid
-        if (timeZone.indexOf('\u2212') >= 0) {
-            return null;
-        }
-        // Reject non-ASCII letters
-        for (int i = 0; i < timeZone.length(); i++) {
-            char c = timeZone.charAt(i);
-            if (c > 127 && Character.isLetter(c)) {
-                return null;
-            }
-        }
-        // Check for offset timezone format
-        if (timeZone.startsWith("+") || timeZone.startsWith("-")) {
-            return normalizeOffsetTimeZone(timeZone);
-        }
-        // Named timezone - case-insensitive lookup via the comprehensive map
-        String canonical = getTimezoneLookupMap().get(timeZone.toLowerCase(Locale.ROOT));
-        return canonical;
     }
 
     /**
@@ -4389,132 +2391,5 @@ public final class JSIntlObject {
             case "6" -> "sat";
             default -> value;
         };
-    }
-
-    private static void writeDateRange(JSIntlDateTimeFormat format, List<JSIntlDateTimeFormat.DatePart> start,
-            List<JSIntlDateTimeFormat.DatePart> end, DateRangeOutput output) {
-        int first = 0;
-        int startLimit = start.size();
-        int endLimit = end.size();
-        if (startLimit == endLimit) {
-            while (first < startLimit && start.get(first).equals(end.get(first))) {
-                first++;
-            }
-            if (first == startLimit) {
-                output.append(start, 0, first, "shared");
-                return;
-            }
-            boolean sameYear = true;
-            for (int i = first; i < startLimit; i++) {
-                if ("year".equals(start.get(i).type()) && !start.get(i).equals(end.get(i))) {
-                    sameYear = false;
-                    break;
-                }
-            }
-            if ((format.hasTextMonth() && sameYear) || differsOnlyInTimeParts(start, end)) {
-                while (startLimit > first && start.get(startLimit - 1).equals(end.get(endLimit - 1))) {
-                    startLimit--;
-                    endLimit--;
-                }
-            } else {
-                first = 0;
-            }
-        }
-        output.append(start, 0, first, "shared");
-        output.append(start, first, startLimit, "startRange");
-        output.append("literal", " \u2013 ", "shared");
-        output.append(end, first, endLimit, "endRange");
-        output.append(start, startLimit, start.size(), "shared");
-    }
-
-    private interface DateRangeOutput {
-        default void append(List<JSIntlDateTimeFormat.DatePart> parts, int start, int end, String source) {
-            for (int i = start; i < end; i++) {
-                JSIntlDateTimeFormat.DatePart part = parts.get(i);
-                append(part.type(), part.value(), source);
-            }
-        }
-
-        void append(String type, String value, String source);
-    }
-
-    private record DateStyleOptionFields(String weekdayOption, String yearOption, String monthOption,
-            String dayOption) {
-    }
-
-    private record DateTimeFormattable(DateTimeFormattableKind kind, double epochMillis,
-            TemporalCalendarId calendarId) {
-    }
-
-    private enum DateTimeFormattableKind {
-        INSTANT, NUMBER, PLAIN_DATE, PLAIN_DATE_TIME, PLAIN_MONTH_DAY, PLAIN_TIME, PLAIN_YEAR_MONTH, ZONED_DATE_TIME
-    }
-
-    private record DigitRange(Integer minimum, Integer maximum) {
-        static DigitRange readFraction(JSContext context, JSObject options) {
-            return read(context, options, "minimumFractionDigits", "maximumFractionDigits", 0, 100);
-        }
-
-        static DigitRange readSignificant(JSContext context, JSObject options) {
-            return read(context, options, "minimumSignificantDigits", "maximumSignificantDigits", 1, 21);
-        }
-
-        static DigitRange read(JSContext context, JSObject options, String minKey, String maxKey, int low, int high) {
-            Integer min = getOptionIntegerOrUndefined(context, options, minKey, low, high);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            Integer max = getOptionIntegerOrUndefined(context, options, maxKey, low, high);
-            return context.hasPendingException() ? null : new DigitRange(min, max);
-        }
-
-        boolean specified() {
-            return minimum != null || maximum != null;
-        }
-
-        DigitRange resolveFraction(int defaultMin, int defaultMax) {
-            int min = minimum != null ? minimum : maximum == null ? defaultMin : Math.min(defaultMin, maximum);
-            int max = maximum != null ? maximum : Math.max(min, defaultMax);
-            if (min > max) {
-                throw new IllegalArgumentException("minimumFractionDigits value is out of range");
-            }
-            return new DigitRange(min, max);
-        }
-
-        DigitRange resolveSignificant() {
-            int min = minimum == null ? 1 : minimum;
-            int max = maximum == null ? 21 : maximum;
-            if (min > max) {
-                throw new IllegalArgumentException("minimumSignificantDigits value is out of range");
-            }
-            return new DigitRange(min, max);
-        }
-    }
-
-    private record NumberingLocale(Locale locale, String numberingSystem) {
-        static NumberingLocale resolve(Locale locale, String option) {
-            boolean hasExtensions = locale.hasExtensions();
-            String extension = hasExtensions
-                    ? IntlLocaleTag.parseUnicodeExtensions(locale.toLanguageTag()).get("nu")
-                    : null;
-            if (extension != null) {
-                extension = extension.toLowerCase(Locale.ROOT);
-            }
-            String system = "latn";
-            if (option != null && SUPPORTED_NUMBERING_SYSTEMS.contains(option)) {
-                system = option;
-            } else if (extension != null && SUPPORTED_NUMBERING_SYSTEMS.contains(extension)) {
-                system = extension;
-            }
-            Locale resolved = hasExtensions ? IntlLocaleTag.stripUnicodeExtensions(locale) : locale;
-            if (system.equals(extension)) {
-                resolved = new Locale.Builder().setLocale(resolved).setUnicodeLocaleKeyword("nu", system).build();
-            }
-            return new NumberingLocale(resolved, system);
-        }
-    }
-
-    private record RoundingOptions(int roundingIncrement, String roundingMode, String roundingPriority,
-            String trailingZeroDisplay) {
     }
 }
