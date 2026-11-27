@@ -41,17 +41,15 @@ public class TypedArrayCallbackTest extends BaseJavetTest {
     @ParameterizedTest
     @MethodSource("callbackMethods")
     public void testCallbackExceptionsStopIteration(String method) {
-        assertStringWithJavet("""
-                (() => {
-                  const log = [];
-                  const marker = {};
-                  const array = new Uint8Array([1, 2, 3]);
-                  try {
-                    array['%s'](function () { log.push('callback'); throw marker; }, 0);
-                  } catch (e) { return (e === marker) + '|' + log.join(','); }
-                  return 'missing error';
-                })()
-                """.formatted(method));
+        assertStringWithJavet(inArrowFunction("""
+                const log = [];
+                const marker = {};
+                const array = new Uint8Array([1, 2, 3]);
+                try {
+                  array['%s'](function () { log.push('callback'); throw marker; }, 0);
+                } catch (e) { return (e === marker) + '|' + log.join(','); }
+                return 'missing error';
+                """.formatted(method)));
     }
 
     @ParameterizedTest
@@ -86,31 +84,29 @@ public class TypedArrayCallbackTest extends BaseJavetTest {
     @ParameterizedTest
     @MethodSource("callbackMethods")
     public void testEmptyArraysAndInvalidReceivers(String method) {
-        assertStringWithJavet("""
-                (() => {
-                  const method = '%s';
-                  const outcomes = [];
-                  for (const initial of [[], [undefined], ['seed']]) {
-                    let called = false;
-                    try {
-                      const result = new Uint8Array()[method](() => { called = true; }, ...initial);
-                      outcomes.push(String(result) + ':' + called);
-                    } catch (e) { outcomes.push(e.name + ':' + called); }
-                  }
-                  for (const kind of ['plain', 'proxy', 'detached', 'outOfBounds', 'empty']) {
-                    const buffer = new ArrayBuffer(4, { maxByteLength: 8 });
-                    let array = new Uint8Array(buffer, 2, 2);
-                    if (kind === 'plain') array = {};
-                    if (kind === 'proxy') array = new Proxy(array, {});
-                    if (kind === 'detached') buffer.transfer();
-                    if (kind === 'outOfBounds') buffer.resize(0);
-                    if (kind === 'empty') array = new Uint8Array();
-                    try { Uint8Array.prototype[method].call(array, null); }
-                    catch (e) { outcomes.push(kind + ':' + e.name); }
-                  }
-                  return outcomes.join('|');
-                })()
-                """.formatted(method));
+        assertStringWithJavet(inArrowFunction("""
+                const method = '%s';
+                const outcomes = [];
+                for (const initial of [[], [undefined], ['seed']]) {
+                  let called = false;
+                  try {
+                    const result = new Uint8Array()[method](() => { called = true; }, ...initial);
+                    outcomes.push(String(result) + ':' + called);
+                  } catch (e) { outcomes.push(e.name + ':' + called); }
+                }
+                for (const kind of ['plain', 'proxy', 'detached', 'outOfBounds', 'empty']) {
+                  const buffer = new ArrayBuffer(4, { maxByteLength: 8 });
+                  let array = new Uint8Array(buffer, 2, 2);
+                  if (kind === 'plain') array = {};
+                  if (kind === 'proxy') array = new Proxy(array, {});
+                  if (kind === 'detached') buffer.transfer();
+                  if (kind === 'outOfBounds') buffer.resize(0);
+                  if (kind === 'empty') array = new Uint8Array();
+                  try { Uint8Array.prototype[method].call(array, null); }
+                  catch (e) { outcomes.push(kind + ':' + e.name); }
+                }
+                return outcomes.join('|');
+                """.formatted(method)));
     }
 
     @ParameterizedTest
@@ -134,22 +130,20 @@ public class TypedArrayCallbackTest extends BaseJavetTest {
     @ParameterizedTest
     @ValueSource(strings = {"map", "filter"})
     public void testSpeciesConstructionOrder(String method) {
-        assertStringWithJavet("""
-                (() => {
-                  const log = [];
-                  const array = new Uint8Array([2, 4]);
-                  Object.defineProperty(array, 'length', { get() { throw 'observable length'; } });
-                  Object.defineProperty(array, 'constructor', { get() {
-                    log.push('constructor');
-                    return { get [Symbol.species]() {
-                      log.push('species');
-                      return function (length) { log.push('construct:' + length); return new Uint8Array(length); };
-                    } };
-                  } });
-                  const result = array['%s']((value, index) => { log.push('callback:' + index); return value; });
-                  return Array.from(result).join(',') + '|' + log.join(',');
-                })()
-                """.formatted(method));
+        assertStringWithJavet(inArrowFunction("""
+                const log = [];
+                const array = new Uint8Array([2, 4]);
+                Object.defineProperty(array, 'length', { get() { throw 'observable length'; } });
+                Object.defineProperty(array, 'constructor', { get() {
+                  log.push('constructor');
+                  return { get [Symbol.species]() {
+                    log.push('species');
+                    return function (length) { log.push('construct:' + length); return new Uint8Array(length); };
+                  } };
+                } });
+                const result = array['%s']((value, index) => { log.push('callback:' + index); return value; });
+                return Array.from(result).join(',') + '|' + log.join(',');
+                """.formatted(method)));
     }
 
     private static Stream<String> callbackMethods() {

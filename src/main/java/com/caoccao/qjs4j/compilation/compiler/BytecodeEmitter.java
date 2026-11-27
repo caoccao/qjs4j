@@ -143,6 +143,10 @@ public final class BytecodeEmitter {
         return index;
     }
 
+    public void emitGetLocal(int localIndex) {
+        emitOpcodeU16(Opcode.GET_LOC, localIndex);
+    }
+
     void emitGoto(int target) {
         emitOpcode(Opcode.GOTO);
         emitU32(target - (currentOffset() + 4));
@@ -224,6 +228,14 @@ public final class BytecodeEmitter {
     public void emitOpcodeU8(Opcode op, int value) {
         emitOpcode(op);
         emitU8(value);
+    }
+
+    public void emitPushConstant(JSValue value) {
+        emitOpcodeConstant(Opcode.PUSH_CONST, value);
+    }
+
+    public void emitPutLocal(int localIndex) {
+        emitOpcodeU16(Opcode.PUT_LOC, localIndex);
     }
 
     /**

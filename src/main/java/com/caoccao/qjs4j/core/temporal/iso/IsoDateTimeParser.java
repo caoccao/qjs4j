@@ -28,7 +28,7 @@ import static com.caoccao.qjs4j.core.temporal.TemporalConstants.*;
 final class IsoDateTimeParser extends IsoParsingState {
     private static final String INVALID_DATE = TemporalError.INVALID_ISO_DATE.message();
     private static final String INVALID_INSTANT = "Temporal error: Instant argument must be Instant or string.";
-    private static final String INVALID_TIME = "Temporal error: Invalid time";
+    private static final String INVALID_TIME = TemporalError.INVALID_TIME.message();
     private static final String INVALID_YEAR = "Temporal error: Invalid character while parsing year value.";
     private static final int NO_SECOND = -2;
     private IsoDateTimeParser(JSContext context, String input) {

@@ -66,10 +66,10 @@ final class FunctionDeclarationCompiler {
         }
         if (isAnnexB && !compilerContext.suppressAnnexBVarStore) {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
+            compilerContext.emitter.emitPutLocal(localIndex);
             compilerContext.emitHelpers.emitAnnexBVarStore(functionName);
         } else {
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
+            compilerContext.emitter.emitPutLocal(localIndex);
         }
     }
 }

@@ -222,15 +222,16 @@ public class IteratorPrototypeTest extends BaseJavetTest {
         JSIterator iterator = JSIterator.arrayIterator(context, array);
 
         // Normal case: next() on iterator
-        JSValue result = IteratorPrototype.next(context, iterator, JSValue.NO_ARGS);
+        var next = builtin(IteratorPrototype::next, iterator);
+        JSValue result = next.call();
         assertIteratorResult(result, new JSNumber(1.0), false);
 
         // Continue iteration
-        result = IteratorPrototype.next(context, iterator, JSValue.NO_ARGS);
+        result = next.call();
         assertIteratorResult(result, new JSNumber(2.0), false);
 
         // End of iteration
-        result = IteratorPrototype.next(context, iterator, JSValue.NO_ARGS);
+        result = next.call();
         assertIteratorResult(result, JSUndefined.INSTANCE, true);
 
         // Edge case: called on non-iterator

@@ -86,7 +86,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
             if (compilerContext.scopeManager.currentScope().getLocal(variableName) == null) {
                 int localIndex = compilerContext.scopeManager.currentScope().declareLocal(variableName);
                 compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
+                compilerContext.emitter.emitPutLocal(localIndex);
             }
         }
 
@@ -188,7 +188,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
                         localIndex = compilerContext.scopeManager.currentScope().declareLocal(varName);
                     }
                     compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
+                    compilerContext.emitter.emitPutLocal(localIndex);
                 } else {
                     compilerContext.emitHelpers.emitConditionalVarInit(varName);
                 }
@@ -221,7 +221,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
             int evalRetLocalIndex = compilerContext.scopeManager.currentScope().declareLocal("#eval_ret");
             compilerContext.evalReturnLocalIndex = evalRetLocalIndex;
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, evalRetLocalIndex);
+            compilerContext.emitter.emitPutLocal(evalRetLocalIndex);
 
             // Phase 2: Compile all non-FunctionDeclaration statements in source order.
             for (int i = 0; i < body.size(); i++) {
@@ -234,7 +234,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
 
             compilerContext.evalReturnLocalIndex = -1;
 
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, evalRetLocalIndex);
+            compilerContext.emitter.emitGetLocal(evalRetLocalIndex);
         }
         finishProgram();
     }
@@ -257,11 +257,9 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
     }
 
     private void finishProgram() {
-        int programResultLocalIndex = compilerContext.scopeManager.currentScope()
-                .declareLocal("#program_result_" + compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, programResultLocalIndex);
+        int programResultLocalIndex = compilerContext.storeTemporary("#program_result_");
         compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, programResultLocalIndex);
+        compilerContext.emitter.emitGetLocal(programResultLocalIndex);
         compilerContext.emitter.emitOpcode(Opcode.RETURN);
 
         int localCount = compilerContext.scopeManager.currentScope().getLocalCount();

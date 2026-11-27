@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core.temporal.calendar;
 
 import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 
 public enum TemporalEra {
     AA("aa"),
@@ -60,13 +61,11 @@ public enum TemporalEra {
 
     public static TemporalEra createByCalendarId(JSContext context, TemporalCalendarId calendarId, String era) {
         if (era == null) {
-            context.throwRangeError("Temporal error: Invalid era.");
-            return null;
+            return TemporalError.INVALID_ERA.reject(context);
         }
         TemporalEra temporalEra = calendarId.toTemporalEra(era);
         if (temporalEra == null) {
-            context.throwRangeError("Temporal error: Invalid era.");
-            return null;
+            return TemporalError.INVALID_ERA.reject(context);
         }
         return temporalEra;
     }

@@ -44,7 +44,7 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
         // When eval_ret_idx is active, store the completion value first.
         if (compilerContext.evalReturnLocalIndex >= 0) {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         } else if (!compilerContext.isLastInProgram) {
             compilerContext.emitter.emitOpcode(Opcode.DROP);
@@ -62,12 +62,11 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
         compilerContext.finallySubroutineDepth++;
         int savedEvalReturnLocalIndex = -1;
         if (compilerContext.evalReturnLocalIndex >= 0) {
-            savedEvalReturnLocalIndex = compilerContext.scopeManager.currentScope()
-                    .declareLocal("#finally_eval_ret_" + compilerContext.emitter.currentOffset());
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, compilerContext.evalReturnLocalIndex);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, savedEvalReturnLocalIndex);
+            savedEvalReturnLocalIndex = compilerContext.declareTemporary("#finally_eval_ret_");
+            compilerContext.emitter.emitGetLocal(compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitPutLocal(savedEvalReturnLocalIndex);
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
         }
         try {
             for (Statement stmt : block.getBody()) {
@@ -77,8 +76,8 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
             compilerContext.finallySubroutineDepth--;
         }
         if (savedEvalReturnLocalIndex >= 0) {
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, savedEvalReturnLocalIndex);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitGetLocal(savedEvalReturnLocalIndex);
+            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
         }
         compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.scopeManager.exitScope();
@@ -156,13 +155,13 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
             // Leave exactly one result above the catch marker, including when the last statement
             // is another try. A missing result here would make NIP_CATCH corrupt the handler stack.
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
             for (Statement statement : body) {
                 if (!(statement instanceof FunctionDeclaration)) {
                     compilerContext.statementCompiler.compile(statement);
                 }
             }
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitGetLocal(compilerContext.evalReturnLocalIndex);
         } else {
             // Phase 3: compile non-function statements and preserve block completion value.
             int effectiveLastIndex = -1;
@@ -185,7 +184,7 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
                     compilerContext.expressionCompiler.compile(expressionStatement.getExpression());
                     if (compilerContext.evalReturnLocalIndex >= 0) {
                         compilerContext.emitter.emitOpcode(Opcode.DUP);
-                        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+                        compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
                     }
                     if (!isLast) {
                         compilerContext.emitter.emitOpcode(Opcode.DROP);
@@ -320,7 +319,7 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
         compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         if (compilerContext.evalReturnLocalIndex >= 0) {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
         }
     }
 
@@ -335,7 +334,7 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
             // A new binding on every entry, so a closure from an earlier pass through this catch, in a loop,
             // keeps its own exception.
             compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
+            compilerContext.emitter.emitPutLocal(localIndex);
         } else {
             compilerContext.patternCompiler.declarePatternVariables(catchParam);
             emitFreshCatchBindings(catchParam);

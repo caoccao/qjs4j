@@ -62,17 +62,16 @@ public class JSArrayDeepPrototypeSetTest extends BaseJavetTest {
     @Timeout(60)
     public void testDeepNonWritableInheritedPropertyBlocksTheWrite() {
         // The same false negative could bypass a distant non-writable property.
-        assertStringWithJavet("""
-                (function () {
-                  'use strict';
-                  let terminal = {};
-                  Object.defineProperty(terminal, '0', { value: 7, writable: false });
-                  let head = terminal;
-                  for (let i = 0; i < 1001; i++) head = Object.create(head);
-                  let array = [];
-                  Object.setPrototypeOf(array, head);
-                  try { array[0] = 1; return 'ASSIGNED' } catch (e) { return e.name }
-                })()""");
+        assertStringWithJavet(inFunction("""
+                'use strict';
+                let terminal = {};
+                Object.defineProperty(terminal, '0', { value: 7, writable: false });
+                let head = terminal;
+                for (let i = 0; i < 1001; i++) head = Object.create(head);
+                let array = [];
+                Object.setPrototypeOf(array, head);
+                try { array[0] = 1; return 'ASSIGNED' } catch (e) { return e.name }
+                """));
     }
 
     @Test
@@ -105,27 +104,25 @@ public class JSArrayDeepPrototypeSetTest extends BaseJavetTest {
     public void testOrdinaryArrayWriteStillTakesTheFastPath() {
         // The complement: a plain array with the ordinary prototype chain must still store
         // elements densely and keep length in step.
-        assertStringWithJavet("""
-                (function () {
-                  let array = [];
-                  for (let i = 0; i < 100; i++) array[i] = i * 2;
-                  return array.length + ',' + array[99] + ','
-                      + Object.prototype.hasOwnProperty.call(array, '50');
-                })()""");
+        assertStringWithJavet(inFunction("""
+                let array = [];
+                for (let i = 0; i < 100; i++) array[i] = i * 2;
+                return array.length + ',' + array[99] + ','
+                    + Object.prototype.hasOwnProperty.call(array, '50');
+                """));
     }
 
     @Test
     @Timeout(60)
     public void testProxyInTheChainForcesTheSlowPath() {
-        assertStringWithJavet("""
-                (function () {
-                  let trapped = 'no';
-                  const proxy = new Proxy({}, { set(t, k, v) { trapped = k; return true } });
-                  const array = [];
-                  Object.setPrototypeOf(array, proxy);
-                  array[0] = 1;
-                  return trapped;
-                })()""");
+        assertStringWithJavet(inFunction("""
+                let trapped = 'no';
+                const proxy = new Proxy({}, { set(t, k, v) { trapped = k; return true } });
+                const array = [];
+                Object.setPrototypeOf(array, proxy);
+                array[0] = 1;
+                return trapped;
+                """));
     }
 
     @Test
@@ -133,12 +130,11 @@ public class JSArrayDeepPrototypeSetTest extends BaseJavetTest {
     public void testTypedArrayInTheChainForcesTheSlowPath() {
         // A TypedArray has exotic [[Set]] for canonical numeric indices, so the fast path must
         // defer to it rather than writing an own element.
-        assertStringWithJavet("""
-                (function () {
-                  const array = [];
-                  Object.setPrototypeOf(array, new Int8Array(4));
-                  array[0] = 1;
-                  return array[0] + ',' + Object.prototype.hasOwnProperty.call(array, '0');
-                })()""");
+        assertStringWithJavet(inFunction("""
+                const array = [];
+                Object.setPrototypeOf(array, new Int8Array(4));
+                array[0] = 1;
+                return array[0] + ',' + Object.prototype.hasOwnProperty.call(array, '0');
+                """));
     }
 }

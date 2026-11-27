@@ -151,8 +151,7 @@ public record TemporalDifferenceSettings(TemporalUnit largestUnit, TemporalUnit 
 
         // 8. Validate largestUnit >= smallestUnit
         if (largestUnit.rank() > smallestUnit.rank()) {
-            context.throwRangeError("Temporal error: smallestUnit must be smaller than largestUnit.");
-            return null;
+            return TemporalError.INVALID_UNIT_ORDER.reject(context);
         }
 
         // 9. Validate rounding increment

@@ -18,7 +18,6 @@ package com.caoccao.qjs4j.compilation.ast;
 
 import com.caoccao.qjs4j.BaseTest;
 import com.caoccao.qjs4j.core.JSBytecodeFunction;
-import com.caoccao.qjs4j.core.JSNumber;
 import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.vm.Bytecode;
 import com.caoccao.qjs4j.vm.Opcode;

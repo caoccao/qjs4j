@@ -51,9 +51,7 @@ public final class AsyncIteratorPrototype {
 
         JSValue returnMethodValue = iteratorObject.get(PropertyKey.RETURN);
         if (context.hasPendingException()) {
-            JSValue exception = context.getPendingException();
-            context.clearAllPendingExceptions();
-            resultPromise.reject(exception);
+            resultPromise.reject(context.takeExecutionException());
             return resultPromise;
         }
         if (returnMethodValue.isNullOrUndefined()) {
@@ -73,26 +71,13 @@ public final class AsyncIteratorPrototype {
         } catch (JSException e) {
             resultPromise.reject(e.getErrorValue());
             return resultPromise;
-        } catch (JSVirtualMachineException e) {
-            if (context.hasPendingException()) {
-                JSValue exception = context.getPendingException();
-                context.clearAllPendingExceptions();
-                resultPromise.reject(exception);
-            } else if (e.getJsValue() != null) {
-                resultPromise.reject(e.getJsValue());
-            } else if (e.getJsError() != null) {
-                resultPromise.reject(e.getJsError());
-            } else {
-                JSValue error = context.throwError(e.getMessage() != null ? e.getMessage() : e.toString());
-                context.clearAllPendingExceptions();
-                resultPromise.reject(error);
-            }
-            return resultPromise;
         } catch (Exception e) {
             if (context.hasPendingException()) {
-                JSValue exception = context.getPendingException();
-                context.clearAllPendingExceptions();
-                resultPromise.reject(exception);
+                resultPromise.reject(context.takeExecutionException());
+            } else if (e instanceof JSVirtualMachineException vmError && vmError.getJsValue() != null) {
+                resultPromise.reject(vmError.getJsValue());
+            } else if (e instanceof JSVirtualMachineException vmError && vmError.getJsError() != null) {
+                resultPromise.reject(vmError.getJsError());
             } else {
                 JSValue error = context.throwError(e.getMessage() != null ? e.getMessage() : e.toString());
                 context.clearAllPendingExceptions();
@@ -101,9 +86,7 @@ public final class AsyncIteratorPrototype {
             return resultPromise;
         }
         if (context.hasPendingException()) {
-            JSValue exception = context.getPendingException();
-            context.clearAllPendingExceptions();
-            resultPromise.reject(exception);
+            resultPromise.reject(context.takeExecutionException());
             return resultPromise;
         }
 
@@ -121,17 +104,13 @@ public final class AsyncIteratorPrototype {
         if (value instanceof JSPromise promiseValue) {
             promiseValue.get(PropertyKey.CONSTRUCTOR);
             if (context.hasPendingException()) {
-                JSValue exception = context.getPendingException();
-                context.clearAllPendingExceptions();
-                wrapperPromise.reject(exception);
+                wrapperPromise.reject(context.takeExecutionException());
                 return wrapperPromise;
             }
         }
         wrapperPromise.resolve(context, value);
         if (context.hasPendingException()) {
-            JSValue exception = context.getPendingException();
-            context.clearAllPendingExceptions();
-            wrapperPromise.reject(exception);
+            wrapperPromise.reject(context.takeExecutionException());
         }
         return wrapperPromise;
     }

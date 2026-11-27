@@ -30,10 +30,10 @@ final class WithBindingCompiler {
         BytecodeEmitter emitter = compilerContext.emitter;
         int jumpToFallback = emitHasPropertyTest(emitter, name);
         emitter.emitOpcode(Opcode.DUP);
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSSymbol.UNSCOPABLES);
+        emitter.emitPushConstant(JSSymbol.UNSCOPABLES);
         emitter.emitOpcode(Opcode.GET_ARRAY_EL);
         int[] jumpToResolveWithoutUnscopables = emitWithUnscopablesSkipJumps(compilerContext);
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
+        emitter.emitPushConstant(new JSString(name));
         emitter.emitOpcode(Opcode.GET_ARRAY_EL);
         int jumpToFallbackWhenBlocked = emitter.emitJump(Opcode.IF_TRUE);
 
@@ -51,7 +51,7 @@ final class WithBindingCompiler {
 
     static int emitHasPropertyTest(BytecodeEmitter emitter, String name) {
         emitter.emitOpcode(Opcode.DUP);
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
+        emitter.emitPushConstant(new JSString(name));
         emitter.emitOpcode(Opcode.ROT3L);
         emitter.emitOpcode(Opcode.IN);
         return emitter.emitJump(Opcode.IF_FALSE);
@@ -64,13 +64,13 @@ final class WithBindingCompiler {
 
         compilerContext.emitter.emitOpcode(Opcode.DUP);
         compilerContext.emitter.emitOpcode(Opcode.TYPEOF);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("object"));
+        compilerContext.emitter.emitPushConstant(new JSString("object"));
         compilerContext.emitter.emitOpcode(Opcode.STRICT_EQ);
         int jumpToCheckBlockedWhenObject = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
 
         compilerContext.emitter.emitOpcode(Opcode.DUP);
         compilerContext.emitter.emitOpcode(Opcode.TYPEOF);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("function"));
+        compilerContext.emitter.emitPushConstant(new JSString("function"));
         compilerContext.emitter.emitOpcode(Opcode.STRICT_EQ);
         int jumpToResolveWithoutUnscopablesOnPrimitive = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
 

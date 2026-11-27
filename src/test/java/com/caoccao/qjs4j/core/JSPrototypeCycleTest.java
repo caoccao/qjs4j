@@ -124,34 +124,31 @@ public class JSPrototypeCycleTest extends BaseJavetTest {
     @Timeout(60)
     public void testDeepAcyclicChainIsStillAccepted() {
         // The complement: removing the cutoff must not start rejecting legitimate deep chains.
-        assertStringWithJavet("""
-                (function () {
-                  let a = {};
-                  let proposed = {};
-                  for (let i = 0; i < 5000; i++) proposed = Object.create(proposed);
-                  try { Object.setPrototypeOf(a, proposed); return 'ALLOWED' } catch (e) { return e.name }
-                })()""");
+        assertStringWithJavet(inFunction("""
+                let a = {};
+                let proposed = {};
+                for (let i = 0; i < 5000; i++) proposed = Object.create(proposed);
+                try { Object.setPrototypeOf(a, proposed); return 'ALLOWED' } catch (e) { return e.name }
+                """));
     }
 
     @Test
     @Timeout(60)
     public void testDirectSelfAssignmentIsRejected() {
-        assertStringWithJavet("""
-                (function () {
-                  let a = {};
-                  try { Object.setPrototypeOf(a, a); return 'ALLOWED' } catch (e) { return e.name }
-                })()""");
+        assertStringWithJavet(inFunction("""
+                let a = {};
+                try { Object.setPrototypeOf(a, a); return 'ALLOWED' } catch (e) { return e.name }
+                """));
     }
 
     @Test
     @Timeout(60)
     public void testNullPrototypeIsNeverCircular() {
-        assertStringWithJavet("""
-                (function () {
-                  let a = { x: 1 };
-                  try { Object.setPrototypeOf(a, null); return String(Object.getPrototypeOf(a)) }
-                  catch (e) { return e.name }
-                })()""");
+        assertStringWithJavet(inFunction("""
+                let a = { x: 1 };
+                try { Object.setPrototypeOf(a, null); return String(Object.getPrototypeOf(a)) }
+                catch (e) { return e.name }
+                """));
     }
 
     @Test
@@ -159,13 +156,12 @@ public class JSPrototypeCycleTest extends BaseJavetTest {
     public void testProxyInTheChainStopsTheWalk() {
         // ES2024 10.1.2 step 8.c: the walk stops at a non-ordinary object rather than running its
         // getPrototypeOf trap.
-        assertStringWithJavet("""
-                (function () {
-                  let a = {};
-                  let p = new Proxy({}, { getPrototypeOf() { return a } });
-                  let child = Object.create(p);
-                  try { Object.setPrototypeOf(a, child); return 'ALLOWED' } catch (e) { return e.name }
-                })()""");
+        assertStringWithJavet(inFunction("""
+                let a = {};
+                let p = new Proxy({}, { getPrototypeOf() { return a } });
+                let child = Object.create(p);
+                try { Object.setPrototypeOf(a, child); return 'ALLOWED' } catch (e) { return e.name }
+                """));
     }
 
     @Test
@@ -184,10 +180,9 @@ public class JSPrototypeCycleTest extends BaseJavetTest {
         assertThat(sealed.setPrototypeChecked(proto)).isEqualTo(JSObject.SetPrototypeResult.NOT_EXTENSIBLE);
 
         // Immutable prototype exotic object: Object.prototype.
-        assertStringWithJavet("""
-                (function () {
-                  try { Object.setPrototypeOf(Object.prototype, {}); return 'ALLOWED' }
-                  catch (e) { return e.name }
-                })()""");
+        assertStringWithJavet(inFunction("""
+                try { Object.setPrototypeOf(Object.prototype, {}); return 'ALLOWED' }
+                catch (e) { return e.name }
+                """));
     }
 }

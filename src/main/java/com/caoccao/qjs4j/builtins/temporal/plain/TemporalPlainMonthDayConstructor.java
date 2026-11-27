@@ -128,16 +128,14 @@ public final class TemporalPlainMonthDayConstructor {
         if (item instanceof JSObject itemObj) {
             JSObject plainMonthDayPrototype = TemporalUtils.getTemporalPrototype(context, "PlainMonthDay");
             if (itemObj == plainMonthDayPrototype) {
-                context.throwTypeError("Temporal error: MonthDay argument must be object or string.");
-                return JSUndefined.INSTANCE;
+                return TemporalError.INVALID_MONTH_DAY_ARGUMENT.undefined(context);
             }
             return TemporalCalendarFields.monthDayFromFields(context, itemObj, options);
         }
         if (item instanceof JSString itemStr) {
             return TemporalUtils.finishStringConversion(context, monthDayFromString(context, itemStr.value()), options);
         }
-        context.throwTypeError("Temporal error: MonthDay argument must be object or string.");
-        return JSUndefined.INSTANCE;
+        return TemporalError.INVALID_MONTH_DAY_ARGUMENT.undefined(context);
     }
 
     public static JSTemporalPlainMonthDay toTemporalMonthDayObject(JSContext context, JSValue item) {

@@ -152,8 +152,7 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
         int forOfUsingStackLocal = -1;
         if (isUsingForOf) {
             boolean useAsyncStack = isAwaitUsingForOf || compilerContext.isInAsyncFunction;
-            forOfUsingStackLocal = compilerContext.scopeManager.currentScope()
-                    .declareLocal("#forof_using_stack_" + compilerContext.emitter.currentOffset());
+            forOfUsingStackLocal = compilerContext.declareTemporary("#forof_using_stack_");
             compilerContext.scopeManager.currentScope().setUsingStackLocal(forOfUsingStackLocal, useAsyncStack);
         }
 
@@ -161,12 +160,11 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
         // Stack: iter next marker -> iter next marker iter next marker -> iter next marker iter -> iter next marker
         int asyncIteratorLocal = -1;
         if (forOfStmt.isAsync()) {
-            asyncIteratorLocal = compilerContext.scopeManager.currentScope()
-                    .declareLocal("#for_await_iterator_" + compilerContext.emitter.currentOffset());
+            asyncIteratorLocal = compilerContext.declareTemporary("#for_await_iterator_");
             compilerContext.emitter.emitOpcode(Opcode.DUP3);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, asyncIteratorLocal);
+            compilerContext.emitter.emitPutLocal(asyncIteratorLocal);
         }
 
         int loopStart = compilerContext.emitter.currentOffset();
@@ -193,13 +191,11 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
             int bodyJump = compilerContext.emitter.emitJump(Opcode.GOTO);
 
             compilerContext.emitter.patchJumpToHere(nextError);
-            int errorLocal = compilerContext.scopeManager.currentScope()
-                    .declareLocal("#for_await_next_error_" + compilerContext.emitter.currentOffset());
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, errorLocal);
+            int errorLocal = compilerContext.storeTemporary("#for_await_next_error_");
             compilerContext.emitter.emitOpcode(Opcode.DROP);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, errorLocal);
+            compilerContext.emitter.emitGetLocal(errorLocal);
             compilerContext.emitter.emitOpcode(Opcode.THROW);
 
             compilerContext.emitter.patchJumpToHere(doneJump);
@@ -219,7 +215,7 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
             String constructorName = useAsyncStack ? JSAsyncDisposableStack.NAME : JSDisposableStack.NAME;
             compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, constructorName);
             compilerContext.emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, 0);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, forOfUsingStackLocal);
+            compilerContext.emitter.emitPutLocal(forOfUsingStackLocal);
 
             // Call stack.use(value) - value is on the stack
             compilerContext.emitHelpers.emitMethodCallWithSingleArgOnLocalObject(forOfUsingStackLocal, "use");

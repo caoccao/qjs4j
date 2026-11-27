@@ -20,9 +20,6 @@ import com.caoccao.qjs4j.compilation.ast.CallExpression;
 import com.caoccao.qjs4j.compilation.ast.ReturnStatement;
 import com.caoccao.qjs4j.vm.Opcode;
 
-import java.util.Iterator;
-import java.util.List;
-
 /**
  * Compiles return-statement AST nodes into bytecode.
  */
@@ -66,9 +63,7 @@ final class ReturnStatementCompiler {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
 
-        int returnValueIndex = compilerContext.scopeManager.currentScope()
-                .declareLocal("#return_value_" + compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
+        int returnValueIndex = compilerContext.storeTemporary("#return_value_");
 
         compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(0);
 
@@ -87,7 +82,7 @@ final class ReturnStatementCompiler {
             compilerContext.emitHelpers.emitAbruptCompletionIteratorClose();
         }
 
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
+        compilerContext.emitter.emitGetLocal(returnValueIndex);
         // ES2024 ReturnStatement step 3: If GetGeneratorKind() is async, set exprValue to Await(exprValue)
         // This only applies to explicit return expressions in async generators, not implicit returns
         if (compilerContext.isInAsyncFunction && compilerContext.isInGeneratorFunction

@@ -49,30 +49,40 @@ final class MemberExpressionCompiler extends AstNodeCompiler<MemberExpression> {
         if (memberExpr.isOptional()) {
             compilerContext.emitHelpers.emitOptionalChainTest(1);
         }
-        emitPropertyAccess(memberExpr);
+        emitPropertyAccess(memberExpr, false);
     }
 
-    private void emitPropertyAccess(MemberExpression memberExpr) {
-        if (memberExpr.isComputed()) {
-            compilerContext.expressionCompiler.compile(memberExpr.getProperty());
+    /** A method call keeps the receiver below its function on the operand stack. */
+    void emitPropertyAccess(MemberExpression memberExpr, boolean keepReceiver) {
+        if (keepReceiver) {
             compilerContext.emitHelpers.emitMemberSourcePosition(memberExpr);
-            compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-        } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
-            String fieldName = privateId.getName();
-            JSSymbol symbol = compilerContext.privateSymbols != null
-                    ? compilerContext.privateSymbols.get(fieldName)
-                    : null;
-            if (symbol != null) {
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-                compilerContext.emitHelpers.emitMemberSourcePosition(memberExpr);
-                compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
-            } else {
-                throw new JSSyntaxErrorException("Unexpected private field", privateId.getLocation());
+        }
+        if (memberExpr.isComputed() || memberExpr.getProperty() instanceof PrivateIdentifier) {
+            if (keepReceiver) {
+                compilerContext.emitter.emitOpcode(Opcode.DUP);
             }
-        } else if (memberExpr.getProperty() instanceof Identifier propId) {
-            // A failing property read reports the position of the property name, as V8 does.
-            compilerContext.emitHelpers.emitMemberSourcePosition(memberExpr);
-            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.getName());
+            Opcode read;
+            if (memberExpr.isComputed()) {
+                compilerContext.expressionCompiler.compile(memberExpr.getProperty());
+                read = Opcode.GET_ARRAY_EL;
+            } else {
+                PrivateIdentifier id = (PrivateIdentifier) memberExpr.getProperty();
+                JSSymbol symbol = compilerContext.privateSymbol(id);
+                if (symbol == null) {
+                    throw new JSSyntaxErrorException("Unexpected private field", id.getLocation());
+                }
+                compilerContext.emitter.emitPushConstant(symbol);
+                read = Opcode.GET_PRIVATE_FIELD;
+            }
+            if (!keepReceiver) {
+                compilerContext.emitHelpers.emitMemberSourcePosition(memberExpr);
+            }
+            compilerContext.emitter.emitOpcode(read);
+        } else if (memberExpr.getProperty() instanceof Identifier id) {
+            if (!keepReceiver) {
+                compilerContext.emitHelpers.emitMemberSourcePosition(memberExpr);
+            }
+            compilerContext.emitter.emitOpcodeAtom(keepReceiver ? Opcode.GET_FIELD2 : Opcode.GET_FIELD, id.getName());
         }
     }
 }

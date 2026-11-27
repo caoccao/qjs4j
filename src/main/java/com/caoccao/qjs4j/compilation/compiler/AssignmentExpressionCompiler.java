@@ -142,7 +142,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         if (isFunctionNameLocal || isFunctionNameCaptured) {
             if (operator != AssignmentOperator.ASSIGN) {
                 if (isFunctionNameLocal) {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
+                    compilerContext.emitter.emitGetLocal(localIndex);
                 } else {
                     compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
                 }
@@ -212,7 +212,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                 if (compilerContext.tdzLocals.contains(name)) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
                 } else {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
+                    compilerContext.emitter.emitGetLocal(localIndex);
                 }
             } else {
                 Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
@@ -333,14 +333,14 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         } else if (member.isComputed()) {
             compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
         } else if (member.getProperty() instanceof PrivateIdentifier id) {
-            JSSymbol symbol = privateSymbol(id);
+            JSSymbol symbol = compilerContext.privateSymbol(id);
             if (symbol == null) {
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             } else {
                 if (!compound) {
                     compilerContext.emitter.emitOpcode(Opcode.SWAP);
                 }
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+                compilerContext.emitter.emitPushConstant(symbol);
                 compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
             }
         } else if (member.getProperty() instanceof Identifier id) {
@@ -406,16 +406,16 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
             return 2;
         }
         if (member.getProperty() instanceof PrivateIdentifier id) {
-            JSSymbol symbol = privateSymbol(id);
+            JSSymbol symbol = compilerContext.privateSymbol(id);
             if (logical) {
                 if (symbol == null) {
                     throw new JSCompilerException("undefined private field '#" + id.getName() + "'", id);
                 }
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+                compilerContext.emitter.emitPushConstant(symbol);
                 compilerContext.emitter.emitOpcode(Opcode.DUP2);
             } else if (symbol != null) {
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+                compilerContext.emitter.emitPushConstant(symbol);
             } else {
                 compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
                 return 1;
@@ -440,7 +440,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
 
         List<Integer> withObjectLocals = compilerContext.withObjectManager.getActiveLocals();
         for (int withObjectLocalIndex : withObjectLocals) {
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withObjectLocalIndex);
+            compilerContext.emitter.emitGetLocal(withObjectLocalIndex);
             emitWithCandidateReference(name, jumpToResolvedOffsets);
         }
 
@@ -457,12 +457,9 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
 
     private void emitWithCandidateReference(String name, List<Integer> resolved) {
         var fallback = WithBindingCompiler.emitHasBinding(compilerContext, name);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
+        compilerContext.emitter.emitPushConstant(new JSString(name));
         resolved.add(compilerContext.emitter.emitJump(Opcode.GOTO));
         fallback.begin(compilerContext.emitter);
     }
 
-    private JSSymbol privateSymbol(PrivateIdentifier id) {
-        return compilerContext.privateSymbols == null ? null : compilerContext.privateSymbols.get(id.getName());
-    }
 }

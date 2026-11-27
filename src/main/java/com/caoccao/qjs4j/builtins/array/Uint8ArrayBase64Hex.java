@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.builtins.array;
 
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.buffer.JSUint8Array;
+import com.caoccao.qjs4j.utils.AsciiHex;
 
 import java.util.Arrays;
 import java.util.Set;
@@ -56,12 +57,6 @@ public final class Uint8ArrayBase64Hex {
         return decodeTable[ch];
     }
 
-    private static byte[] copyBytes(byte[] source, int length) {
-        byte[] result = new byte[length];
-        System.arraycopy(source, 0, result, 0, length);
-        return result;
-    }
-
     private static JSValue decodeBase64(JSContext context, String input, JSValue options, JSUint8Array target) {
         String alphabet = getStringOption(context, options, "alphabet", "base64", ALPHABETS);
         if (alphabet == null) {
@@ -81,19 +76,20 @@ public final class Uint8ArrayBase64Hex {
     }
 
     private static JSValue finishDecode(JSContext context, DecodeResult result, JSUint8Array target) {
-        if (target == null && result.error != null) {
-            return context.throwSyntaxError(result.error);
-        }
-        JSUint8Array array = target == null ? context.createJSUint8Array(result.bytes.length) : target;
-        for (int i = 0; i < result.bytes.length; i++) {
-            array.setElement(i, result.bytes[i] & 0xFF);
+        if (target == null) {
+            if (result.error != null) {
+                return context.throwSyntaxError(result.error);
+            }
+            JSUint8Array array = context.createJSUint8Array(result.bytes.length);
+            array.getBuffer().getBuffer().duplicate().put(result.bytes);
+            return array;
         }
         // The setters must write the valid prefix before reporting a syntax error.
+        for (int i = 0; i < result.bytes.length; i++) {
+            target.setElement(i, result.bytes[i] & 0xFF);
+        }
         if (result.error != null) {
             return context.throwSyntaxError(result.error);
-        }
-        if (target == null) {
-            return array;
         }
         JSObject counts = context.createJSObject();
         counts.set(PropertyKey.fromString("read"), JSNumber.of(result.read));
@@ -153,7 +149,7 @@ public final class Uint8ArrayBase64Hex {
             if (ch == '=') {
                 // Padding encountered
                 if (chunkLength < 2) {
-                    return new DecodeResult(read, copyBytes(output, outputIndex), "invalid base64 string");
+                    return DecodeResult.invalidBase64(read, output, outputIndex);
                 }
 
                 index = skipAsciiWhitespace(input, index);
@@ -163,12 +159,12 @@ public final class Uint8ArrayBase64Hex {
                     if (index >= length) {
                         // Single '=' at end with 2 data chars - partial padding
                         if ("stop-before-partial".equals(lastChunkHandling)) {
-                            return new DecodeResult(read, copyBytes(output, outputIndex), null);
+                            return new DecodeResult(read, output, outputIndex, null);
                         }
-                        return new DecodeResult(read, copyBytes(output, outputIndex), "invalid base64 string");
+                        return DecodeResult.invalidBase64(read, output, outputIndex);
                     }
                     if (input.charAt(index) != '=') {
-                        return new DecodeResult(read, copyBytes(output, outputIndex), "invalid base64 string");
+                        return DecodeResult.invalidBase64(read, output, outputIndex);
                     }
                     index++;
                     index = skipAsciiWhitespace(input, index);
@@ -176,7 +172,7 @@ public final class Uint8ArrayBase64Hex {
 
                 // After padding: no more non-whitespace chars allowed
                 if (index < length) {
-                    return new DecodeResult(read, copyBytes(output, outputIndex), "invalid base64 string");
+                    return DecodeResult.invalidBase64(read, output, outputIndex);
                 }
 
                 // Check if all decoded bytes from padded chunk would fit within maxLength.
@@ -184,31 +180,31 @@ public final class Uint8ArrayBase64Hex {
                 // don't consume the padded chunk at all.
                 int paddedByteCount = (chunkLength == 2) ? 1 : 2;
                 if (outputIndex + paddedByteCount > maxLength) {
-                    return new DecodeResult(read, copyBytes(output, outputIndex), null);
+                    return new DecodeResult(read, output, outputIndex, null);
                 }
 
                 // Decode the padded chunk
                 if (chunkLength == 2) {
                     // 2 data chars + == → 1 byte
                     if ("strict".equals(lastChunkHandling) && (chunkBuffer & 0xF) != 0) {
-                        return new DecodeResult(read, copyBytes(output, outputIndex), "invalid base64 string");
+                        return DecodeResult.invalidBase64(read, output, outputIndex);
                     }
                     output[outputIndex++] = (byte) ((chunkBuffer >> 4) & 0xFF);
                 } else {
                     // 3 data chars + = → 2 bytes
                     if ("strict".equals(lastChunkHandling) && (chunkBuffer & 0x3) != 0) {
-                        return new DecodeResult(read, copyBytes(output, outputIndex), "invalid base64 string");
+                        return DecodeResult.invalidBase64(read, output, outputIndex);
                     }
                     output[outputIndex++] = (byte) ((chunkBuffer >> 10) & 0xFF);
                     output[outputIndex++] = (byte) ((chunkBuffer >> 2) & 0xFF);
                 }
-                return new DecodeResult(length, copyBytes(output, outputIndex), null);
+                return new DecodeResult(length, output, outputIndex, null);
             }
 
             // Regular base64 character
             int charValue = base64CharValue(ch, decodeTable);
             if (charValue == -1) {
-                return new DecodeResult(read, copyBytes(output, outputIndex), "invalid base64 string");
+                return DecodeResult.invalidBase64(read, output, outputIndex);
             }
 
             chunkBuffer = (chunkBuffer << 6) | charValue;
@@ -222,7 +218,7 @@ public final class Uint8ArrayBase64Hex {
 
                 if (outputIndex + 3 > maxLength) {
                     // Can't fit all 3 bytes, stop before this chunk
-                    return new DecodeResult(read, copyBytes(output, outputIndex), null);
+                    return new DecodeResult(read, output, outputIndex, null);
                 }
 
                 output[outputIndex++] = (byte) byte1;
@@ -233,7 +229,7 @@ public final class Uint8ArrayBase64Hex {
                 read = index;
 
                 if (outputIndex >= maxLength) {
-                    return new DecodeResult(read, copyBytes(output, outputIndex), null);
+                    return new DecodeResult(read, output, outputIndex, null);
                 }
             }
         }
@@ -243,18 +239,18 @@ public final class Uint8ArrayBase64Hex {
             if (chunkLength == 1) {
                 // Single char is always invalid (not enough data for even 1 byte)
                 if ("stop-before-partial".equals(lastChunkHandling)) {
-                    return new DecodeResult(read, copyBytes(output, outputIndex), null);
+                    return new DecodeResult(read, output, outputIndex, null);
                 }
-                return new DecodeResult(read, copyBytes(output, outputIndex),
+                return new DecodeResult(read, output, outputIndex,
                         "The base64 input terminates with a single character, excluding padding (=).");
             }
 
             if ("stop-before-partial".equals(lastChunkHandling)) {
-                return new DecodeResult(read, copyBytes(output, outputIndex), null);
+                return new DecodeResult(read, output, outputIndex, null);
             }
 
             if ("strict".equals(lastChunkHandling)) {
-                return new DecodeResult(read, copyBytes(output, outputIndex), "invalid base64 string");
+                return DecodeResult.invalidBase64(read, output, outputIndex);
             }
 
             // "loose" mode: decode partial chunk
@@ -275,7 +271,7 @@ public final class Uint8ArrayBase64Hex {
             read = length;
         }
 
-        return new DecodeResult(read, copyBytes(output, outputIndex), null);
+        return new DecodeResult(read, output, outputIndex, null);
     }
 
     /**
@@ -307,21 +303,17 @@ public final class Uint8ArrayBase64Hex {
         }
 
         byte[] output = new byte[Math.min(length / 2, maxLength)];
-        int written = 0;
-        int index = 0;
-
-        while (index + 1 < length && written < maxLength) {
-            int high = hexCharValue(input.charAt(index));
-            int low = hexCharValue(input.charAt(index + 1));
+        for (int written = 0; written < output.length; written++) {
+            int index = written * 2;
+            int high = AsciiHex.value(input.charAt(index));
+            int low = AsciiHex.value(input.charAt(index + 1));
             if (high == -1 || low == -1) {
-                return new DecodeResult(index, copyBytes(output, written),
+                return new DecodeResult(index, output, written,
                         "Input string must contain hex characters in even length");
             }
-            output[written++] = (byte) ((high << 4) | low);
-            index += 2;
+            output[written] = (byte) ((high << 4) | low);
         }
-
-        return new DecodeResult(index, copyBytes(output, written), null);
+        return new DecodeResult(output.length * 2, output, null);
     }
 
     /**
@@ -376,19 +368,6 @@ public final class Uint8ArrayBase64Hex {
             return null;
         }
         return value;
-    }
-
-    private static int hexCharValue(char ch) {
-        if (ch >= '0' && ch <= '9') {
-            return ch - '0';
-        }
-        if (ch >= 'a' && ch <= 'f') {
-            return ch - 'a' + 10;
-        }
-        if (ch >= 'A' && ch <= 'F') {
-            return ch - 'A' + 10;
-        }
-        return -1;
     }
 
     private static boolean isAsciiWhitespace(char ch) {
@@ -540,5 +519,12 @@ public final class Uint8ArrayBase64Hex {
      * contain valid partial data even when error is set.
      */
     private record DecodeResult(int read, byte[] bytes, String error) {
+        private DecodeResult(int read, byte[] output, int written, String error) {
+            this(read, written == output.length ? output : Arrays.copyOf(output, written), error);
+        }
+
+        private static DecodeResult invalidBase64(int read, byte[] output, int written) {
+            return new DecodeResult(read, output, written, "invalid base64 string");
+        }
     }
 }

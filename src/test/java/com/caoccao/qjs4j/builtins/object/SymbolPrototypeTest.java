@@ -79,20 +79,16 @@ public class SymbolPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testWellKnownPrototypeProperties() {
-        assertBooleanWithJavet("""
-                (() => {
-                  const d = Object.getOwnPropertyDescriptor(Symbol.prototype, Symbol.toPrimitive);
-                  return typeof d.value === "function"
-                    && d.enumerable === false;
-                })()
-                """, methodDescriptor("Symbol.prototype", "toString"), """
-                (() => {
-                  const d = Object.getOwnPropertyDescriptor(Symbol.prototype, "constructor");
-                  return d.value === Symbol
-                    && d.writable === true
-                    && d.enumerable === false
-                    && d.configurable === true;
-                })()
-                """);
+        assertBooleanWithJavet(inArrowFunction("""
+                const d = Object.getOwnPropertyDescriptor(Symbol.prototype, Symbol.toPrimitive);
+                return typeof d.value === "function"
+                  && d.enumerable === false;
+                """), methodDescriptor("Symbol.prototype", "toString"), inArrowFunction("""
+                const d = Object.getOwnPropertyDescriptor(Symbol.prototype, "constructor");
+                return d.value === Symbol
+                  && d.writable === true
+                  && d.enumerable === false
+                  && d.configurable === true;
+                """));
     }
 }

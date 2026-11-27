@@ -29,18 +29,6 @@ public record TemporalZonedDateTimeToStringSettings(String calendarNameOption, S
     public static final TemporalZonedDateTimeToStringSettings DEFAULT = new TemporalZonedDateTimeToStringSettings(
             "auto", "auto", "auto", null, TemporalRoundingMode.TRUNC, true, -1, 1L);
 
-    private static String getToStringOffsetOption(JSContext context, JSObject optionsObject) {
-        String offsetOption = TemporalUtils.getStringOption(context, optionsObject, "offset", "auto");
-        if (context.hasPendingException() || offsetOption == null) {
-            return null;
-        }
-        if (TemporalDisplayOffset.fromString(offsetOption) == null) {
-            context.throwRangeError("Temporal error: Invalid offset option.");
-            return null;
-        }
-        return offsetOption;
-    }
-
     public static TemporalZonedDateTimeToStringSettings read(JSContext context, JSValue optionsValue) {
         JSObject optionsObject = TemporalUtils.toOptionalOptionsObject(context, optionsValue,
                 TemporalError.INVALID_OPTIONS.message());
@@ -61,7 +49,8 @@ public record TemporalZonedDateTimeToStringSettings(String calendarNameOption, S
             return null;
         }
 
-        String offsetOption = getToStringOffsetOption(context, optionsObject);
+        String offsetOption = TemporalUtils.getEnumOption(context, optionsObject, "offset", "auto",
+                TemporalDisplayOffset::fromString);
         if (context.hasPendingException() || offsetOption == null) {
             return null;
         }
@@ -71,7 +60,8 @@ public record TemporalZonedDateTimeToStringSettings(String calendarNameOption, S
             return null;
         }
 
-        String timeZoneNameOption = getToStringTimeZoneNameOption(context, optionsObject);
+        String timeZoneNameOption = TemporalUtils.getEnumOption(context, optionsObject, "timeZoneName", "auto",
+                TemporalDisplayTimeZone::fromString);
         if (context.hasPendingException() || timeZoneNameOption == null) {
             return null;
         }
@@ -86,15 +76,4 @@ public record TemporalZonedDateTimeToStringSettings(String calendarNameOption, S
                 time.fractionalSecondDigits(), time.roundingIncrementNanoseconds());
     }
 
-    private static String getToStringTimeZoneNameOption(JSContext context, JSObject optionsObject) {
-        String timeZoneNameOption = TemporalUtils.getStringOption(context, optionsObject, "timeZoneName", "auto");
-        if (context.hasPendingException() || timeZoneNameOption == null) {
-            return null;
-        }
-        if (TemporalDisplayTimeZone.fromString(timeZoneNameOption) == null) {
-            context.throwRangeError("Temporal error: Invalid timeZoneName option.");
-            return null;
-        }
-        return timeZoneNameOption;
-    }
 }

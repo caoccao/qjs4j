@@ -35,6 +35,7 @@ import java.time.temporal.ChronoField;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 /**
  * Shared utilities for Temporal types.
@@ -132,21 +133,7 @@ public final class TemporalUtils {
      * Gets a calendar name display option from options. Returns "auto", "always", "never", or "critical".
      */
     public static String getCalendarNameOption(JSContext context, JSValue options) {
-        if (options instanceof JSUndefined || options == null) {
-            return "auto";
-        }
-        if (!(options instanceof JSObject optionsObj)) {
-            return TemporalError.INVALID_OPTIONS.reject(context);
-        }
-        String calendarNameOption = getStringOption(context, optionsObj, "calendarName", "auto");
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (TemporalDisplayCalendar.fromString(calendarNameOption) == null) {
-            context.throwRangeError("Temporal error: Invalid calendarName option: " + calendarNameOption);
-            return null;
-        }
-        return calendarNameOption;
+        return getEnumOption(context, options, "calendarName", "auto", TemporalDisplayCalendar::fromString, true);
     }
 
     public static long getCalendarYearCacheKey(TemporalCalendarId calendarId, int calendarYear) {
@@ -171,6 +158,32 @@ public final class TemporalUtils {
         };
         long normalizedYear = (long) calendarYear - Integer.MIN_VALUE;
         return ((long) calendarKey << 32) | (normalizedYear & 0xFFFF_FFFFL);
+    }
+
+    /** Read an optional string-valued Temporal option and validate its canonical spelling. */
+    public static String getEnumOption(JSContext context, JSValue options, String name, String fallback,
+            Function<String, ?> parse) {
+        return getEnumOption(context, options, name, fallback, parse, false);
+    }
+
+    private static String getEnumOption(JSContext context, JSValue options, String name, String fallback,
+            Function<String, ?> parse, boolean includeInvalidValue) {
+        if (options == null || options instanceof JSUndefined) {
+            return fallback;
+        }
+        if (!(options instanceof JSObject object)) {
+            return TemporalError.INVALID_OPTIONS.reject(context);
+        }
+        String value = getStringOption(context, object, name, fallback);
+        if (context.hasPendingException() || (value == null && !includeInvalidValue)) {
+            return null;
+        }
+        if (parse.apply(value) == null) {
+            context.throwRangeError(
+                    "Temporal error: Invalid " + name + " option" + (includeInvalidValue ? ": " + value : "."));
+            return null;
+        }
+        return value;
     }
 
     /**
@@ -200,21 +213,7 @@ public final class TemporalUtils {
      * Gets the overflow option from an options object. Returns "constrain" or "reject".
      */
     public static String getOverflowOption(JSContext context, JSValue options) {
-        if (options instanceof JSUndefined || options == null) {
-            return "constrain";
-        }
-        if (!(options instanceof JSObject optionsObj)) {
-            return TemporalError.INVALID_OPTIONS.reject(context);
-        }
-        String overflow = getStringOption(context, optionsObj, "overflow", "constrain");
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (TemporalOverflow.fromString(overflow) == null) {
-            context.throwRangeError("Temporal error: Invalid overflow option: " + overflow);
-            return null;
-        }
-        return overflow;
+        return getEnumOption(context, options, "overflow", "constrain", TemporalOverflow::fromString, true);
     }
 
     public static long getRoundingIncrementOption(JSContext context, JSObject optionsObject,

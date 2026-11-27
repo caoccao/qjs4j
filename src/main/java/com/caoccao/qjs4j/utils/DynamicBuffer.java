@@ -135,10 +135,7 @@ public final class DynamicBuffer {
      */
     public void appendU32(long value) {
         ensureCapacity(size + 4);
-        buffer[size++] = (byte) value;
-        buffer[size++] = (byte) (value >> 8);
-        buffer[size++] = (byte) (value >> 16);
-        buffer[size++] = (byte) (value >> 24);
+        writeU32(value);
     }
 
     /**
@@ -146,14 +143,8 @@ public final class DynamicBuffer {
      */
     public void appendU64(long value) {
         ensureCapacity(size + 8);
-        buffer[size++] = (byte) value;
-        buffer[size++] = (byte) (value >> 8);
-        buffer[size++] = (byte) (value >> 16);
-        buffer[size++] = (byte) (value >> 24);
-        buffer[size++] = (byte) (value >> 32);
-        buffer[size++] = (byte) (value >> 40);
-        buffer[size++] = (byte) (value >> 48);
-        buffer[size++] = (byte) (value >> 56);
+        writeU32(value);
+        writeU32(value >>> 32);
     }
 
     /**
@@ -327,5 +318,12 @@ public final class DynamicBuffer {
             throw new JSRangeErrorException("Invalid size");
         }
         size = newSize;
+    }
+
+    private void writeU32(long value) {
+        buffer[size++] = (byte) value;
+        buffer[size++] = (byte) (value >> 8);
+        buffer[size++] = (byte) (value >> 16);
+        buffer[size++] = (byte) (value >> 24);
     }
 }

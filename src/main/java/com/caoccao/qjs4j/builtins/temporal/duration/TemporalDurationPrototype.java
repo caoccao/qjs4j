@@ -227,8 +227,7 @@ public final class TemporalDurationPrototype {
                 return null;
             }
         } else {
-            context.throwTypeError("Temporal error: roundTo must be an object.");
-            return null;
+            return TemporalError.INVALID_ROUND_TO.reject(context);
         }
 
         TemporalUnit canonicalLargestUnit = null;
@@ -266,8 +265,7 @@ public final class TemporalDurationPrototype {
         }
 
         if (smallestRoundUnit.rank() < largestRoundUnit.rank()) {
-            context.throwRangeError("Temporal error: smallestUnit must be smaller than largestUnit.");
-            return null;
+            return TemporalError.INVALID_UNIT_ORDER.reject(context);
         }
 
         if (!canonicalSmallestUnit.isValidIncrement(roundingIncrement)) {
@@ -311,8 +309,7 @@ public final class TemporalDurationPrototype {
             return JSUndefined.INSTANCE;
         }
         if (args.length == 0 || args[0] instanceof JSUndefined) {
-            context.throwTypeError("Temporal error: Must specify a roundTo parameter.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.MISSING_ROUND_TO.undefined(context);
         }
 
         TemporalRoundOptions roundOptions = parseRoundOptions(context, args[0], duration.getDuration());

@@ -49,13 +49,14 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         });
 
         // Test the custom generator
-        JSValue result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
+        var next = builtin(GeneratorPrototype::next, generator);
+        JSValue result = next.call();
         assertIteratorResult(result, new JSString("first"), false);
 
-        result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
+        result = next.call();
         assertIteratorResult(result, new JSString("second"), false);
 
-        result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
+        result = next.call();
         assertIteratorResult(result, JSUndefined.INSTANCE, true);
     }
 
@@ -125,27 +126,28 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         JSGenerator generator = JSGenerator.fromArray(context, array);
 
         // Normal case: first next() call
-        JSValue result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
+        var next = builtin(GeneratorPrototype::next, generator);
+        JSValue result = next.call();
         assertIteratorResult(result, new JSNumber(1.0), false);
 
         // Normal case: second next() call
-        result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
+        result = next.call();
         assertIteratorResult(result, new JSNumber(2.0), false);
 
         // Normal case: third next() call
-        result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
+        result = next.call();
         assertIteratorResult(result, new JSNumber(3.0), false);
 
         // Normal case: fourth next() call (done)
-        result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
+        result = next.call();
         assertIteratorResult(result, JSUndefined.INSTANCE, true);
 
         // Normal case: subsequent calls after done
-        result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
+        result = next.call();
         assertIteratorResult(result, JSUndefined.INSTANCE, true);
 
         // Normal case: next() with value argument (ignored in this simple implementation)
-        result = GeneratorPrototype.next(context, generator, stringArgs("ignored"));
+        result = next.call(stringArgs("ignored"));
         assertIteratorResult(result, JSUndefined.INSTANCE, true);
 
         // Edge case: called on non-generator

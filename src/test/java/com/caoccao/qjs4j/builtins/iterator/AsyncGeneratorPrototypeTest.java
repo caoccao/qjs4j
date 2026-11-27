@@ -83,7 +83,8 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
         JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(context, values);
 
         // Get first value
-        JSValue result1 = AsyncGeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
+        var next = builtin(AsyncGeneratorPrototype::next, generator);
+        JSValue result1 = next.call();
         JSPromise promise1 = (JSPromise) result1;
         assertThat(awaitPromise(promise1)).isTrue();
 
@@ -91,7 +92,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
         assertIteratorResult(resultObj1, new JSNumber(42), false);
 
         // Get second value (should be done)
-        JSValue result2 = AsyncGeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
+        JSValue result2 = next.call();
         JSPromise promise2 = (JSPromise) result2;
         assertThat(awaitPromise(promise2)).isTrue();
 

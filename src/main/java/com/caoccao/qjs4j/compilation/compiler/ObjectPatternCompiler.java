@@ -120,13 +120,9 @@ final class ObjectPatternCompiler extends AstNodeCompiler<ObjectPattern> {
         String bindingName = bindingIdentifier.getName();
         compilerContext.assignmentExpressionCompiler.emitIdentifierReference(bindingName);
 
-        int propertyLocalIndex = compilerContext.scopeManager.currentScope()
-                .declareLocal("#preResolvedRefProp" + compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, propertyLocalIndex);
+        int propertyLocalIndex = compilerContext.storeTemporary("#preResolvedRefProp");
 
-        int objectLocalIndex = compilerContext.scopeManager.currentScope()
-                .declareLocal("#preResolvedRefObj" + compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, objectLocalIndex);
+        int objectLocalIndex = compilerContext.storeTemporary("#preResolvedRefObj");
 
         compilerContext.preResolvedBindingReferences.computeIfAbsent(bindingName, ignored -> new ArrayDeque<>())
                 .addLast(new CompilerContext.PreResolvedReference(objectLocalIndex, propertyLocalIndex));

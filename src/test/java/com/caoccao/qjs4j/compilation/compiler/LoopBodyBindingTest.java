@@ -54,11 +54,10 @@ public class LoopBodyBindingTest extends BaseJavetTest {
                         for (let i = 0; i < 3; i++) {
                           const { a, b: [c] } = { a: i, b: [i * 2] };
                           fs.push(() => a + ':' + c);
-                        }"""), """
-                        (() => {
-                          function* g() { for (let i = 0; i < 3; i++) { const k = i; yield () => k; } }
-                          return [...g()].map(f => f()).join();
-                        })()""");
+                        }"""), inArrowFunction("""
+                        function* g() { for (let i = 0; i < 3; i++) { const k = i; yield () => k; } }
+                        return [...g()].map(f => f()).join();
+                        """));
     }
 
     @Test
@@ -70,12 +69,11 @@ public class LoopBodyBindingTest extends BaseJavetTest {
                         }"""), collect("""
                         for (let i = 0; i < 3; i++) {
                           try { throw { v: i } } catch ({ v }) { fs.push(() => v) } finally { fs.push(() => 'f') }
-                        }"""), """
-                        (() => {
-                          try {
-                            try { throw {} } catch ({ a = typeof b, b }) { return a }
-                          } catch (e) { return e.name + ': ' + e.message }
-                        })()""");
+                        }"""), inArrowFunction("""
+                        try {
+                          try { throw {} } catch ({ a = typeof b, b }) { return a }
+                        } catch (e) { return e.name + ': ' + e.message }
+                        """));
     }
 
     private static String collect(String loop) {

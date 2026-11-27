@@ -76,24 +76,25 @@ public class SetPrototypeTest extends BaseJavetTest {
         JSSet set = new JSSet(context);
 
         // Normal case: add new value
-        JSValue result = SetPrototype.add(context, set, stringArgs("value1"));
+        var addMethod = builtin(SetPrototype::add, set);
+        JSValue result = addMethod.call(stringArgs("value1"));
         assertThat(result).isSameAs(set);
         assertThat(set.size()).isEqualTo(1);
         assertThat(set.setHas(new JSString("value1"))).isTrue();
 
         // Normal case: add duplicate value (should not increase size)
-        result = SetPrototype.add(context, set, stringArgs("value1"));
+        result = addMethod.call(stringArgs("value1"));
         assertThat(result).isSameAs(set);
         assertThat(set.size()).isEqualTo(1);
 
         // Normal case: add different value
-        result = SetPrototype.add(context, set, numberArgs(42));
+        result = addMethod.call(numberArgs(42));
         assertThat(result).isSameAs(set);
         assertThat(set.size()).isEqualTo(2);
         assertThat(set.setHas(new JSNumber(42))).isTrue();
 
         // Edge case: no arguments (adds undefined)
-        result = SetPrototype.add(context, set, JSValue.NO_ARGS);
+        result = addMethod.call();
         assertThat(result).isSameAs(set);
         assertThat(set.size()).isEqualTo(3); // Should add undefined, increasing size
 
@@ -464,7 +465,8 @@ public class SetPrototypeTest extends BaseJavetTest {
             return JSUndefined.INSTANCE;
         });
 
-        JSValue forEachResult = SetPrototype.forEach(context, set, new JSValue[]{callback});
+        var forEachMethod = builtin(SetPrototype::forEach, set);
+        JSValue forEachResult = forEachMethod.call(callback);
         assertThat(forEachResult).isEqualTo(JSUndefined.INSTANCE);
         // Note: Order might vary, but both values should be present
         String resultStr = result.toString();
@@ -472,10 +474,10 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertThat(resultStr).contains("value2");
 
         // Edge case: no callback function
-        assertPendingTypeError(context, SetPrototype.forEach(context, set, JSValue.NO_ARGS));
+        assertPendingTypeError(context, forEachMethod.call());
 
         // Edge case: non-function callback
-        assertPendingTypeError(context, SetPrototype.forEach(context, set, stringArgs("not function")));
+        assertPendingTypeError(context, forEachMethod.call(stringArgs("not function")));
 
         // Edge case: called on non-Set
         assertPendingTypeError(context,
@@ -744,13 +746,14 @@ public class SetPrototypeTest extends BaseJavetTest {
         JSSet set = new JSSet(context);
 
         // Normal case: empty set
-        JSValue result = SetPrototype.getSize(context, set, JSValue.NO_ARGS);
+        var getSize = builtin(SetPrototype::getSize, set);
+        JSValue result = getSize.call();
         assertNumberValue(result, 0.0);
 
         // Normal case: set with values
         set.setAdd(new JSString("value1"));
         set.setAdd(new JSString("value2"));
-        result = SetPrototype.getSize(context, set, JSValue.NO_ARGS);
+        result = getSize.call();
         assertNumberValue(result, 2.0);
 
         // Edge case: called on non-Set
@@ -1109,8 +1112,7 @@ public class SetPrototypeTest extends BaseJavetTest {
         assertIntegerWithJavet("new Set().size");
 
         // Set with values
-        assertIntegerWithJavet("new Set([1,2,3]).size");
-        assertIntegerWithJavet("new Set([1,2,3,2,1]).size"); // duplicates
+        assertIntegerWithJavet("new Set([1,2,3]).size", "new Set([1,2,3,2,1]).size"); // duplicates
 
         // Size after operations
         assertIntegerWithJavet("var s = new Set(); s.add(1); s.add(2); s.size",

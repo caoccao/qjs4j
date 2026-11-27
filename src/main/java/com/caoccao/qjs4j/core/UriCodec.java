@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.utils.AsciiHex;
+
 /** Encoding and decoding algorithms used by the URI and legacy escape global functions. */
 final class UriCodec {
     private static final char[] HEX_CHARS = "0123456789ABCDEF".toCharArray();
@@ -214,22 +216,9 @@ final class UriCodec {
         return new JSString(result.toString());
     }
 
-    private static int fromHex(char c) {
-        if (c >= '0' && c <= '9') {
-            return c - '0';
-        }
-        if (c >= 'a' && c <= 'f') {
-            return c - 'a' + 10;
-        }
-        if (c >= 'A' && c <= 'F') {
-            return c - 'A' + 10;
-        }
-        return -1;
-    }
-
     private static int hexByte(String input, int percent) {
-        int high = fromHex(input.charAt(percent + 1));
-        int low = fromHex(input.charAt(percent + 2));
+        int high = AsciiHex.value(input.charAt(percent + 1));
+        int low = AsciiHex.value(input.charAt(percent + 2));
         return low < 0 ? -1 : (high << 4) | low;
     }
 

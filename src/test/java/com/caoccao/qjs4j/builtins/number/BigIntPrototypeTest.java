@@ -83,22 +83,23 @@ public class BigIntPrototypeTest extends BaseJavetTest {
     public void testToString() {
         JSBigInt bigInt = new JSBigInt(BigInteger.valueOf(12345));
         // Normal case: default radix (10)
-        JSValue result = BigIntPrototype.toString(context, bigInt, JSValue.NO_ARGS);
+        var toString = builtin(BigIntPrototype::toString, bigInt);
+        JSValue result = toString.call();
         JSString str = result.asString().orElseThrow();
         assertThat(str.value()).isEqualTo("12345");
 
         // Normal case: explicit radix 10
-        result = BigIntPrototype.toString(context, bigInt, numberArgs(10));
+        result = toString.call(numberArgs(10));
         str = result.asString().orElseThrow();
         assertThat(str.value()).isEqualTo("12345");
 
         // Normal case: radix 16
-        result = BigIntPrototype.toString(context, bigInt, numberArgs(16));
+        result = toString.call(numberArgs(16));
         str = result.asString().orElseThrow();
         assertThat(str.value()).isEqualTo("3039");
 
         // Normal case: radix 2
-        result = BigIntPrototype.toString(context, bigInt, numberArgs(2));
+        result = toString.call(numberArgs(2));
         str = result.asString().orElseThrow();
         assertThat(str.value()).isEqualTo("11000000111001");
 
@@ -109,21 +110,21 @@ public class BigIntPrototypeTest extends BaseJavetTest {
         assertThat(str.value()).isEqualTo("-12345");
 
         // Edge case: radix 2 (minimum)
-        result = BigIntPrototype.toString(context, bigInt, numberArgs(2));
+        result = toString.call(numberArgs(2));
         str = result.asString().orElseThrow();
         assertThat(str.value()).isEqualTo("11000000111001");
 
         // Edge case: radix 36 (maximum)
-        result = BigIntPrototype.toString(context, bigInt, numberArgs(36));
+        result = toString.call(numberArgs(36));
         str = result.asString().orElseThrow();
         assertThat(str.value()).isEqualTo("9ix");
 
         // Edge case: radix too small
-        result = BigIntPrototype.toString(context, bigInt, numberArgs(1));
+        result = toString.call(numberArgs(1));
         assertPendingRangeError(context, result);
 
         // Edge case: radix too large
-        result = BigIntPrototype.toString(context, bigInt, numberArgs(37));
+        result = toString.call(numberArgs(37));
         assertPendingRangeError(context, result);
 
         // Edge case: called on non-BigInt

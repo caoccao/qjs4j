@@ -21,7 +21,6 @@ import com.caoccao.qjs4j.compilation.lexer.Token;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
-import com.caoccao.qjs4j.unicode.UnicodeStringUtils;
 
 import java.util.ArrayList;
 import java.util.Deque;

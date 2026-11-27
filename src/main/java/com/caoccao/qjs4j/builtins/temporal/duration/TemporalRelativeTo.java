@@ -173,8 +173,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
         IsoTime relativeTime = new IsoTime(hourInt, minuteInt, secondInt, millisecondInt, microsecondInt,
                 nanosecondInt);
         if (!relativeTime.isValid()) {
-            context.throwRangeError("Temporal error: Invalid time");
-            return null;
+            return TemporalError.INVALID_TIME.reject(context);
         }
         IsoDateTime relativeDateTime = isoDate.atTime(relativeTime);
         if (timeZoneValue instanceof JSUndefined || timeZoneValue == null) {
@@ -218,8 +217,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
                 }
             }
             if (zoneOffsetSeconds != offsetSeconds) {
-                context.throwRangeError("Temporal error: Invalid offset.");
-                return null;
+                return TemporalError.INVALID_OFFSET.reject(context);
             }
             epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(isoDate, relativeTime, offsetSeconds);
             referenceOffsetSeconds = offsetSeconds;
@@ -251,8 +249,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
 
         if (hasTimeZoneAnnotation || (hasTimeComponent && hasOffsetDesignator)) {
             if (!hasTimeZoneAnnotation && hasZuluDesignator(relativeToText)) {
-                context.throwRangeError("Temporal error: Invalid relativeTo string.");
-                return null;
+                return TemporalError.INVALID_RELATIVE_TO_STRING.reject(context);
             }
             String offsetText = TemporalTimeZone.extractOffsetText(relativeToText);
             if (offsetText != null && !TemporalTimeZone.isValidOffsetString(offsetText)) {
@@ -310,8 +307,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
             }
             if (offsetText != null && !TemporalOffsetInterpretation.matches(zoneOffsetSeconds,
                     parsedZonedDateTime.offsetSeconds(), !hasSecondOrFractionOffset)) {
-                context.throwRangeError("Temporal error: Invalid offset.");
-                return null;
+                return TemporalError.INVALID_OFFSET.reject(context);
             }
             int referenceOffsetSeconds = hasSecondOrFractionOffset
                     ? parsedZonedDateTime.offsetSeconds()
@@ -321,8 +317,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
         }
 
         if (hasOffsetDesignator) {
-            context.throwRangeError("Temporal error: Invalid relativeTo string.");
-            return null;
+            return TemporalError.INVALID_RELATIVE_TO_STRING.reject(context);
         }
 
         return parsePlainDateTime(context, constrainedRelativeToText);

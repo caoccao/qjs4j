@@ -47,7 +47,7 @@ final class IdentifierPatternCompiler extends AstNodeCompiler<Identifier> {
             // TDZ local: let/const was pre-declared as a local for TDZ enforcement
             Integer tdzLocal = compilerContext.scopeManager.findLocalInScopes(varName);
             if (tdzLocal != null) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, tdzLocal);
+                compilerContext.emitter.emitPutLocal(tdzLocal);
             } else {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
             }
@@ -59,7 +59,7 @@ final class IdentifierPatternCompiler extends AstNodeCompiler<Identifier> {
             // a local (e.g., catch parameter per ES B.3.5), in which case use PUT_LOCAL.
             Integer existingLocal = compilerContext.scopeManager.findLocalInScopes(varName);
             if (existingLocal != null) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, existingLocal);
+                compilerContext.emitter.emitPutLocal(existingLocal);
             } else {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
             }
@@ -85,7 +85,7 @@ final class IdentifierPatternCompiler extends AstNodeCompiler<Identifier> {
                     localIndex = compilerContext.scopeManager.currentScope().declareLocal(varName);
                 }
             }
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
+            compilerContext.emitter.emitPutLocal(localIndex);
         }
     }
 
@@ -101,8 +101,8 @@ final class IdentifierPatternCompiler extends AstNodeCompiler<Identifier> {
             compilerContext.preResolvedBindingReferences.remove(variableName);
         }
 
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, reference.objectLocalIndex());
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, reference.propertyLocalIndex());
+        compilerContext.emitter.emitGetLocal(reference.objectLocalIndex());
+        compilerContext.emitter.emitGetLocal(reference.propertyLocalIndex());
         compilerContext.emitter.emitOpcode(Opcode.ROT3L);
         compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
         return true;

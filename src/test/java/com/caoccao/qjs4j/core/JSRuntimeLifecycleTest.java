@@ -63,47 +63,16 @@ public class JSRuntimeLifecycleTest extends BaseTest {
         int refusedAcrossRounds = 0;
         for (int round = 0; round < RACE_ROUNDS; round++) {
             JSRuntime runtime = new JSRuntime();
-            CountDownLatch start = new CountDownLatch(1);
-            CountDownLatch running = new CountDownLatch(4);
             AtomicInteger accepted = new AtomicInteger();
-            AtomicInteger refused = new AtomicInteger();
-            List<Thread> producers = new ArrayList<>();
-            for (int producerIndex = 0; producerIndex < 4; producerIndex++) {
-                Thread producer = new Thread(() -> {
-                    try {
-                        start.await();
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        return;
-                    }
-                    running.countDown();
-                    // Keep going until the runtime is observed closed, so the producers really are
-                    // mid-flight across the instant close clears the queue.
-                    while (refused.get() < 4) {
-                        try {
-                            runtime.enqueueJob(() -> {
-                            });
-                            accepted.incrementAndGet();
-                        } catch (IllegalStateException rejected) {
-                            refused.incrementAndGet();
-                        }
-                    }
-                }, "job-producer");
-                producer.setDaemon(true);
-                producers.add(producer);
-                producer.start();
-            }
-            start.countDown();
-            assertThat(running.await(30, TimeUnit.SECONDS)).isTrue();
-            runtime.close();
-            for (Thread producer : producers) {
-                producer.join(30_000);
-                assertThat(producer.isAlive()).isFalse();
-            }
+            int refused = raceClose(runtime, "job-producer", (producer, attempt) -> {
+                runtime.enqueueJob(() -> {
+                });
+                accepted.incrementAndGet();
+            });
             assertThat(runtime.hasPendingJobs())
                     .as("round " + round + ": nothing may be deposited after close cleared the queue").isFalse();
             acceptedAcrossRounds += accepted.get();
-            refusedAcrossRounds += refused.get();
+            refusedAcrossRounds += refused;
         }
         // Both outcomes have to occur, or the rounds never straddled the close at all.
         assertThat(acceptedAcrossRounds).as("jobs accepted before close").isPositive();
@@ -116,43 +85,9 @@ public class JSRuntimeLifecycleTest extends BaseTest {
         int createdAcrossRounds = 0;
         for (int round = 0; round < RACE_ROUNDS; round++) {
             JSRuntime runtime = new JSRuntime();
-            CountDownLatch start = new CountDownLatch(1);
-            CountDownLatch running = new CountDownLatch(4);
             List<JSSymbol> created = java.util.Collections.synchronizedList(new ArrayList<>());
-            AtomicInteger refused = new AtomicInteger();
-            List<Thread> producers = new ArrayList<>();
-            for (int producerIndex = 0; producerIndex < 4; producerIndex++) {
-                final int base = producerIndex * 100_000;
-                Thread producer = new Thread(() -> {
-                    try {
-                        start.await();
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        return;
-                    }
-                    running.countDown();
-                    int attempt = 0;
-                    while (refused.get() < 4) {
-                        try {
-                            created.add(runtime.getOrCreateGlobalSymbol("key-" + (base + attempt++)));
-                        } catch (IllegalStateException rejected) {
-                            // Refused because the runtime closed first, which is the other
-                            // acceptable outcome.
-                            refused.incrementAndGet();
-                        }
-                    }
-                }, "symbol-producer");
-                producer.setDaemon(true);
-                producers.add(producer);
-                producer.start();
-            }
-            start.countDown();
-            assertThat(running.await(30, TimeUnit.SECONDS)).isTrue();
-            runtime.close();
-            for (Thread producer : producers) {
-                producer.join(30_000);
-                assertThat(producer.isAlive()).isFalse();
-            }
+            raceClose(runtime, "symbol-producer", (producer, attempt) -> created
+                    .add(runtime.getOrCreateGlobalSymbol("key-" + (producer * 100_000 + attempt))));
             for (JSSymbol symbol : created) {
                 assertThat(runtime.getGlobalSymbolKey(symbol))
                         .as("round " + round + ": no symbol may remain registered after close").isNull();
@@ -279,5 +214,49 @@ public class JSRuntimeLifecycleTest extends BaseTest {
         runtime.close();
         assertThat(runtime.hasPendingJobs()).isFalse();
         assertThat(ran[0]).isZero();
+    }
+
+    private static int raceClose(JSRuntime runtime, String threadName, Producer operation) throws InterruptedException {
+        int producerCount = 4;
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch running = new CountDownLatch(producerCount);
+        AtomicInteger refused = new AtomicInteger();
+        List<Thread> producers = new ArrayList<>();
+        for (int i = 0; i < producerCount; i++) {
+            int index = i;
+            Thread producer = new Thread(() -> {
+                try {
+                    start.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                running.countDown();
+                int attempt = 0;
+                while (refused.get() < producerCount) {
+                    try {
+                        operation.run(index, attempt++);
+                    } catch (IllegalStateException closed) {
+                        refused.incrementAndGet();
+                    }
+                }
+            }, threadName);
+            producer.setDaemon(true);
+            producers.add(producer);
+            producer.start();
+        }
+        start.countDown();
+        assertThat(running.await(30, TimeUnit.SECONDS)).isTrue();
+        runtime.close();
+        for (Thread producer : producers) {
+            producer.join(30_000);
+            assertThat(producer.isAlive()).isFalse();
+        }
+        return refused.get();
+    }
+
+    @FunctionalInterface
+    private interface Producer {
+        void run(int producer, int attempt);
     }
 }

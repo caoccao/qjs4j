@@ -97,8 +97,7 @@ public record TemporalPartialDate(Integer day, Integer month, String monthCode, 
         if (context.hasPendingException()) {
             return null;
         }
-        Integer resolvedYear = merged.resolveYear(context, calendar,
-                "Temporal error: Date argument must be object or string.");
+        Integer resolvedYear = merged.resolveYear(context, calendar, TemporalError.INVALID_DATE_ARGUMENT.message());
         if (resolvedYear == null) {
             return null;
         }

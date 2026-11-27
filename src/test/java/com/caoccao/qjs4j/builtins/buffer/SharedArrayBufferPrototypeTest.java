@@ -78,18 +78,19 @@ public class SharedArrayBufferPrototypeTest extends BaseJavetTest {
     public void testGrow() {
         JSSharedArrayBuffer growable = new JSSharedArrayBuffer(context, 8, 32);
 
-        JSValue result = SharedArrayBufferPrototype.grow(context, growable, numberArgs(16));
+        var grow = builtin(SharedArrayBufferPrototype::grow, growable);
+        JSValue result = grow.call(numberArgs(16));
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
         assertThat(growable.getByteLength()).isEqualTo(16);
 
-        result = SharedArrayBufferPrototype.grow(context, growable, numberArgs(16));
+        result = grow.call(numberArgs(16));
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
         assertThat(growable.getByteLength()).isEqualTo(16);
 
-        result = SharedArrayBufferPrototype.grow(context, growable, numberArgs(33));
+        result = grow.call(numberArgs(33));
         assertPendingRangeError(context, result);
 
-        result = SharedArrayBufferPrototype.grow(context, growable, numberArgs(15));
+        result = grow.call(numberArgs(15));
         assertPendingRangeError(context, result);
 
         JSSharedArrayBuffer fixed = new JSSharedArrayBuffer(context, 8);
@@ -105,32 +106,33 @@ public class SharedArrayBufferPrototypeTest extends BaseJavetTest {
         JSSharedArrayBuffer sab = new JSSharedArrayBuffer(context, 16);
 
         // Normal case: slice entire buffer
-        JSValue result = SharedArrayBufferPrototype.slice(context, sab, JSValue.NO_ARGS);
+        var sliceMethod = builtin(SharedArrayBufferPrototype::slice, sab);
+        JSValue result = sliceMethod.call();
         assertThat(result).isInstanceOfSatisfying(JSSharedArrayBuffer.class,
                 jsSab -> assertThat(jsSab.getByteLength()).isEqualTo(16));
 
         // Normal case: slice with start only
-        result = SharedArrayBufferPrototype.slice(context, sab, numberArgs(4));
+        result = sliceMethod.call(numberArgs(4));
         assertThat(result).isInstanceOfSatisfying(JSSharedArrayBuffer.class,
                 jsSab -> assertThat(jsSab.getByteLength()).isEqualTo(12)); // 16 - 4
 
         // Normal case: slice with start and end
-        result = SharedArrayBufferPrototype.slice(context, sab, numberArgs(4, 12));
+        result = sliceMethod.call(numberArgs(4, 12));
         assertThat(result).isInstanceOfSatisfying(JSSharedArrayBuffer.class,
                 jsSab -> assertThat(jsSab.getByteLength()).isEqualTo(8)); // 12 - 4
 
         // Normal case: negative start (from end)
-        result = SharedArrayBufferPrototype.slice(context, sab, numberArgs(-8));
+        result = sliceMethod.call(numberArgs(-8));
         assertThat(result).isInstanceOfSatisfying(JSSharedArrayBuffer.class,
                 jsSab -> assertThat(jsSab.getByteLength()).isEqualTo(8)); // 16 - 8
 
         // Normal case: negative end (from end)
-        result = SharedArrayBufferPrototype.slice(context, sab, numberArgs(4, -4));
+        result = sliceMethod.call(numberArgs(4, -4));
         assertThat(result).isInstanceOfSatisfying(JSSharedArrayBuffer.class,
                 jsSab -> assertThat(jsSab.getByteLength()).isEqualTo(8)); // 12 - 4
 
         // Edge case: start >= end (empty slice)
-        result = SharedArrayBufferPrototype.slice(context, sab, numberArgs(8, 4));
+        result = sliceMethod.call(numberArgs(8, 4));
         assertThat(result).isInstanceOfSatisfying(JSSharedArrayBuffer.class,
                 jsSab -> assertThat(jsSab.getByteLength()).isEqualTo(0));
 
@@ -145,22 +147,18 @@ public class SharedArrayBufferPrototypeTest extends BaseJavetTest {
                 getterDescriptor("SharedArrayBuffer.prototype", "maxByteLength"),
                 getterDescriptor("SharedArrayBuffer.prototype", "growable"),
                 methodDescriptor("SharedArrayBuffer.prototype", "grow"),
-                toStringTagDescriptor("SharedArrayBuffer.prototype", "SharedArrayBuffer"), """
-                        (() => {
-                          const sab = new SharedArrayBuffer(8, { maxByteLength: 32 });
+                toStringTagDescriptor("SharedArrayBuffer.prototype", "SharedArrayBuffer"), inArrowFunction("""
+                        const sab = new SharedArrayBuffer(8, { maxByteLength: 32 });
+                        sab.grow(16);
+                        return sab.byteLength === 16 && sab.maxByteLength === 32 && sab.growable === true;
+                        """), inArrowFunction("""
+                        const sab = new SharedArrayBuffer(8);
+                        try {
                           sab.grow(16);
-                          return sab.byteLength === 16 && sab.maxByteLength === 32 && sab.growable === true;
-                        })()
-                        """, """
-                        (() => {
-                          const sab = new SharedArrayBuffer(8);
-                          try {
-                            sab.grow(16);
-                            return false;
-                          } catch (e) {
-                            return e instanceof TypeError;
-                          }
-                        })()
-                        """);
+                          return false;
+                        } catch (e) {
+                          return e instanceof TypeError;
+                        }
+                        """));
     }
 }

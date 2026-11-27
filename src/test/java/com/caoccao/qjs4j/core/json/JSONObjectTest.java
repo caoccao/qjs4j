@@ -236,15 +236,14 @@ public class JSONObjectTest extends BaseJavetTest {
 
     @Test
     public void testParseTrailingData() {
-        assertBooleanWithJavet("""
-                (() => {
-                  try {
-                    JSON.parse('1 2');
-                    return false;
-                  } catch (e) {
-                    return e instanceof SyntaxError;
-                  }
-                })()""");
+        assertBooleanWithJavet(inArrowFunction("""
+                try {
+                  JSON.parse('1 2');
+                  return false;
+                } catch (e) {
+                  return e instanceof SyntaxError;
+                }
+                """));
     }
 
     @Test
@@ -446,15 +445,14 @@ public class JSONObjectTest extends BaseJavetTest {
 
     @Test
     public void testParseWithWhitespaceFormFeed() {
-        assertBooleanWithJavet("""
-                (() => {
-                  try {
-                    JSON.parse('\\f1\\f');
-                    return false;
-                  } catch (e) {
-                    return e instanceof SyntaxError;
-                  }
-                })()""");
+        assertBooleanWithJavet(inArrowFunction("""
+                try {
+                  JSON.parse('\\f1\\f');
+                  return false;
+                } catch (e) {
+                  return e instanceof SyntaxError;
+                }
+                """));
     }
 
     @Test

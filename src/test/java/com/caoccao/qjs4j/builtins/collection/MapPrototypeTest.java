@@ -459,7 +459,8 @@ public class MapPrototypeTest extends BaseJavetTest {
             return JSUndefined.INSTANCE;
         });
 
-        JSValue forEachResult = MapPrototype.forEach(context, map, new JSValue[]{callback});
+        var forEachMethod = builtin(MapPrototype::forEach, map);
+        JSValue forEachResult = forEachMethod.call(callback);
         assertThat(forEachResult.isUndefined()).isTrue();
         // Note: Order might vary, but both entries should be present
         String resultStr = result.toString();
@@ -467,10 +468,10 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertThat(resultStr.contains("key2:value2")).isTrue();
 
         // Edge case: no callback function
-        assertPendingTypeError(context, MapPrototype.forEach(context, map, JSValue.NO_ARGS));
+        assertPendingTypeError(context, forEachMethod.call());
 
         // Edge case: non-function callback
-        assertPendingTypeError(context, MapPrototype.forEach(context, map, stringArgs("not function")));
+        assertPendingTypeError(context, forEachMethod.call(stringArgs("not function")));
 
         // Edge case: called on non-Map
         assertPendingTypeError(context,
@@ -657,15 +658,16 @@ public class MapPrototypeTest extends BaseJavetTest {
         map.mapSet(new JSString("key1"), new JSString("value1"));
 
         // Normal case: existing key
-        JSValue result = MapPrototype.get(context, map, stringArgs("key1"));
+        var get = builtin(MapPrototype::get, map);
+        JSValue result = get.call(stringArgs("key1"));
         assertStringValue(result, "value1");
 
         // Normal case: non-existing key
-        result = MapPrototype.get(context, map, stringArgs("key2"));
+        result = get.call(stringArgs("key2"));
         assertThat(result.isUndefined()).isTrue();
 
         // Normal case: no arguments
-        result = MapPrototype.get(context, map, JSValue.NO_ARGS);
+        result = get.call();
         assertThat(result.isUndefined()).isTrue();
 
         // Edge case: called on non-Map
@@ -720,13 +722,14 @@ public class MapPrototypeTest extends BaseJavetTest {
         JSMap map = new JSMap(context);
 
         // Normal case: empty map
-        JSValue result = MapPrototype.getSize(context, map, JSValue.NO_ARGS);
+        var getSize = builtin(MapPrototype::getSize, map);
+        JSValue result = getSize.call();
         assertNumberValue(result, 0.0);
 
         // Normal case: map with entries
         map.mapSet(new JSString("key1"), new JSString("value1"));
         map.mapSet(new JSString("key2"), new JSString("value2"));
-        result = MapPrototype.getSize(context, map, JSValue.NO_ARGS);
+        result = getSize.call();
         assertNumberValue(result, 2.0);
 
         // Edge case: called on non-Map
@@ -1227,19 +1230,20 @@ public class MapPrototypeTest extends BaseJavetTest {
         JSMap map = new JSMap(context);
 
         // Normal case: set key-value pair
-        JSValue result = MapPrototype.set(context, map, stringArgs("key", "value"));
+        var setMethod = builtin(MapPrototype::set, map);
+        JSValue result = setMethod.call(stringArgs("key", "value"));
         assertThat(result).isEqualTo(map); // Should return the map
         assertThat(map.size()).isEqualTo(1);
         assertThat(map.mapGet(new JSString("key")).asString().map(JSString::value).orElseThrow()).isEqualTo("value");
 
         // Normal case: update existing key
-        result = MapPrototype.set(context, map, stringArgs("key", "newValue"));
+        result = setMethod.call(stringArgs("key", "newValue"));
         assertThat(result).isEqualTo(map);
         assertThat(map.size()).isEqualTo(1);
         assertThat(map.mapGet(new JSString("key")).asString().map(JSString::value).orElseThrow()).isEqualTo("newValue");
 
         // Normal case: set with undefined value
-        result = MapPrototype.set(context, map, stringArgs("key2"));
+        result = setMethod.call(stringArgs("key2"));
         assertThat(result).isEqualTo(map);
         assertThat(map.size()).isEqualTo(2);
         assertThat(map.mapGet(new JSString("key2")).isUndefined()).isTrue();

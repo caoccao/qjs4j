@@ -29,16 +29,7 @@ public final class FunctionPrototype {
         // thisArg for apply() is the function itself (or a proxy to a function)
         // Following QuickJS: proxies to functions should work with Function.prototype.apply
 
-        JSProxy callableProxy = null;
-        JSFunction callableFunction = null;
-        if (thisArg instanceof JSProxy proxy) {
-            if (!JSTypeChecking.isFunction(proxy.getTarget())) {
-                return context.throwTypeError("Function.prototype.apply called on non-function");
-            }
-            callableProxy = proxy;
-        } else if (thisArg instanceof JSFunction func) {
-            callableFunction = func;
-        } else {
+        if (!JSTypeChecking.isCallable(thisArg)) {
             return context.throwTypeError("Function.prototype.apply called on non-function");
         }
 
@@ -50,11 +41,7 @@ public final class FunctionPrototype {
             return context.getPendingException();
         }
 
-        if (callableProxy != null) {
-            return callableProxy.apply(context, applyThisArg, callArgs);
-        } else {
-            return callableFunction.call(context, applyThisArg, callArgs);
-        }
+        return JSCall.call(context, thisArg, applyThisArg, callArgs);
     }
 
     /**
@@ -157,34 +144,15 @@ public final class FunctionPrototype {
      * Function.prototype.call(thisArg, ...args) ES2020 19.2.3.3
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
-        // thisArg for call() is the function itself (or a proxy to a function)
-        // Following QuickJS: proxies to functions should work with Function.prototype.call
-        if (thisArg instanceof JSProxy proxy) {
-            // Check if proxy's target is callable
-            if (!JSTypeChecking.isFunction(proxy.getTarget())) {
-                return context.throwTypeError("Function.prototype.call called on non-function");
-            }
-            // Use the proxy's apply mechanism
-            JSValue callThisArg = JSValue.argumentOrUndefined(args, 0);
-            JSValue[] callArgs = new JSValue[Math.max(0, args.length - 1)];
-            if (args.length > 1) {
-                System.arraycopy(args, 1, callArgs, 0, args.length - 1);
-            }
-            return proxy.apply(context, callThisArg, callArgs);
-        } else if (thisArg instanceof JSFunction func) {
-            // First argument is the 'this' value for the called function
-            JSValue callThisArg = JSValue.argumentOrUndefined(args, 0);
-
-            // Remaining arguments are passed to the function
-            JSValue[] callArgs = new JSValue[Math.max(0, args.length - 1)];
-            if (args.length > 1) {
-                System.arraycopy(args, 1, callArgs, 0, args.length - 1);
-            }
-
-            return func.call(context, callThisArg, callArgs);
-        } else {
+        if (!JSTypeChecking.isCallable(thisArg)) {
             return context.throwTypeError("Function.prototype.call called on non-function");
         }
+        JSValue receiver = JSValue.argumentOrUndefined(args, 0);
+        JSValue[] arguments = new JSValue[Math.max(0, args.length - 1)];
+        if (arguments.length != 0) {
+            System.arraycopy(args, 1, arguments, 0, arguments.length);
+        }
+        return JSCall.call(context, thisArg, receiver, arguments);
     }
 
     /**

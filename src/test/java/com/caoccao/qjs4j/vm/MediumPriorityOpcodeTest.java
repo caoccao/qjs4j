@@ -47,9 +47,9 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         excludeList.push(symbol);
 
         BytecodeEmitter emitter = new BytecodeEmitter();
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, target);
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, source);
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, excludeList);
+        emitter.emitPushConstant(target);
+        emitter.emitPushConstant(source);
+        emitter.emitPushConstant(excludeList);
         // target offset=2, source offset=1, exclude offset=0 => 0b00000110
         emitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 6);
         emitter.emitOpcode(Opcode.DROP);
@@ -65,7 +65,7 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
 
         BytecodeEmitter typeErrorEmitter = new BytecodeEmitter();
         typeErrorEmitter.emitOpcodeU32(Opcode.PUSH_I32, 1);
-        typeErrorEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, source);
+        typeErrorEmitter.emitPushConstant(source);
         typeErrorEmitter.emitOpcode(Opcode.NULL);
         typeErrorEmitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 6);
         typeErrorEmitter.emitOpcode(Opcode.RETURN_UNDEF);
@@ -80,9 +80,9 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
                 (ctx, thisArg, args) -> JSUndefined.INSTANCE);
 
         BytecodeEmitter emitter = new BytecodeEmitter();
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("DynamicClass"));
+        emitter.emitPushConstant(new JSString("DynamicClass"));
         emitter.emitOpcode(Opcode.UNDEFINED);
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, constructor);
+        emitter.emitPushConstant(constructor);
         emitter.emitOpcode(Opcode.DEFINE_CLASS_COMPUTED);
         emitter.emitAtom("FallbackClass");
         emitter.emitU8(0);
@@ -96,9 +96,9 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         assertThat(classCtor.get("prototype")).isInstanceOf(JSObject.class);
 
         BytecodeEmitter fallbackEmitter = new BytecodeEmitter();
-        fallbackEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(""));
+        fallbackEmitter.emitPushConstant(new JSString(""));
         fallbackEmitter.emitOpcode(Opcode.UNDEFINED);
-        fallbackEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, constructor);
+        fallbackEmitter.emitPushConstant(constructor);
         fallbackEmitter.emitOpcode(Opcode.DEFINE_CLASS_COMPUTED);
         fallbackEmitter.emitAtom("FallbackClass");
         fallbackEmitter.emitU8(0);
@@ -115,9 +115,9 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         JSFunction parent = (JSFunction) context.eval("(class Parent {})");
         JSSymbol name = new JSSymbol("DynamicClass");
         BytecodeEmitter emitter = new BytecodeEmitter();
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, name);
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, parent);
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, constructor);
+        emitter.emitPushConstant(name);
+        emitter.emitPushConstant(parent);
+        emitter.emitPushConstant(constructor);
         emitter.emitOpcode(Opcode.DEFINE_CLASS_COMPUTED);
         emitter.emitAtom("FallbackClass");
         emitter.emitU8(1);
@@ -141,9 +141,9 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         JSNativeFunction constructor = new JSNativeFunction(context, "old", 0,
                 (ctx, thisArg, args) -> JSUndefined.INSTANCE);
         BytecodeEmitter emitter = new BytecodeEmitter();
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("DynamicClass"));
+        emitter.emitPushConstant(new JSString("DynamicClass"));
         emitter.emitOpcode(Opcode.UNDEFINED);
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, constructor);
+        emitter.emitPushConstant(constructor);
         emitter.emitOpcode(Opcode.DEFINE_CLASS_COMPUTED);
         emitter.emitAtom("FallbackClass");
         emitter.emitU8(1);
@@ -161,17 +161,17 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         JSNativeFunction setter = new JSNativeFunction(context, "s", 1, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
 
         BytecodeEmitter emitter = new BytecodeEmitter();
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, target);
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("m"));
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, method);
+        emitter.emitPushConstant(target);
+        emitter.emitPushConstant(new JSString("m"));
+        emitter.emitPushConstant(method);
         emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("x"));
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, getter);
+        emitter.emitPushConstant(new JSString("x"));
+        emitter.emitPushConstant(getter);
         emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 1);
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("x"));
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, setter);
+        emitter.emitPushConstant(new JSString("x"));
+        emitter.emitPushConstant(setter);
         emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 2);
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("x"));
+        emitter.emitPushConstant(new JSString("x"));
         emitter.emitOpcode(Opcode.GET_ARRAY_EL);
         emitter.emitOpcode(Opcode.RETURN);
 
@@ -200,7 +200,7 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         JSArray array = context.createJSArray(new JSNumber(10), new JSNumber(20));
 
         BytecodeEmitter getArrayEl2Emitter = new BytecodeEmitter();
-        getArrayEl2Emitter.emitOpcodeConstant(Opcode.PUSH_CONST, array);
+        getArrayEl2Emitter.emitPushConstant(array);
         getArrayEl2Emitter.emitOpcodeU32(Opcode.PUSH_I32, 1);
         getArrayEl2Emitter.emitOpcode(Opcode.GET_ARRAY_EL2);
         getArrayEl2Emitter.emitOpcode(Opcode.SWAP);
@@ -212,7 +212,7 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         assertNumberValue(getArrayEl2Result, 22);
 
         BytecodeEmitter getLengthStringEmitter = new BytecodeEmitter();
-        getLengthStringEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("abcd"));
+        getLengthStringEmitter.emitPushConstant(new JSString("abcd"));
         getLengthStringEmitter.emitOpcode(Opcode.GET_LENGTH);
         getLengthStringEmitter.emitOpcode(Opcode.RETURN);
 
@@ -224,13 +224,13 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
     public void testMakeRefOpcodes() {
         BytecodeEmitter locRefEmitter = new BytecodeEmitter();
         locRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 3);
-        locRefEmitter.emitOpcodeU16(Opcode.PUT_LOC, 0);
+        locRefEmitter.emitPutLocal(0);
         locRefEmitter.emitOpcode(Opcode.MAKE_LOC_REF);
         locRefEmitter.emitAtom("x");
         locRefEmitter.emitU16(0);
         locRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 9);
         locRefEmitter.emitOpcode(Opcode.PUT_REF_VALUE);
-        locRefEmitter.emitOpcodeU16(Opcode.GET_LOC, 0);
+        locRefEmitter.emitGetLocal(0);
         locRefEmitter.emitOpcode(Opcode.RETURN);
 
         JSValue locRefResult = execute(locRefEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE);
@@ -304,8 +304,8 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         obj.set("x", new JSNumber(1));
 
         BytecodeEmitter getRefEmitter = new BytecodeEmitter();
-        getRefEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, obj);
-        getRefEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("x"));
+        getRefEmitter.emitPushConstant(obj);
+        getRefEmitter.emitPushConstant(new JSString("x"));
         getRefEmitter.emitOpcode(Opcode.GET_REF_VALUE);
         getRefEmitter.emitOpcode(Opcode.RETURN);
 
@@ -313,11 +313,11 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         assertNumberValue(getRefResult, 1);
 
         BytecodeEmitter putRefEmitter = new BytecodeEmitter();
-        putRefEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, obj);
-        putRefEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("x"));
+        putRefEmitter.emitPushConstant(obj);
+        putRefEmitter.emitPushConstant(new JSString("x"));
         putRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 5);
         putRefEmitter.emitOpcode(Opcode.PUT_REF_VALUE);
-        putRefEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, obj);
+        putRefEmitter.emitPushConstant(obj);
         putRefEmitter.emitOpcodeAtom(Opcode.GET_FIELD, "x");
         putRefEmitter.emitOpcode(Opcode.RETURN);
 
@@ -326,7 +326,7 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
 
         BytecodeEmitter nonStrictGlobalEmitter = new BytecodeEmitter();
         nonStrictGlobalEmitter.emitOpcode(Opcode.UNDEFINED);
-        nonStrictGlobalEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("newGlobalRef"));
+        nonStrictGlobalEmitter.emitPushConstant(new JSString("newGlobalRef"));
         nonStrictGlobalEmitter.emitOpcodeU32(Opcode.PUSH_I32, 11);
         nonStrictGlobalEmitter.emitOpcode(Opcode.PUT_REF_VALUE);
         nonStrictGlobalEmitter.emitOpcodeAtom(Opcode.GET_VAR, "newGlobalRef");
@@ -338,7 +338,7 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
 
         BytecodeEmitter strictMissingGetEmitter = new BytecodeEmitter();
         strictMissingGetEmitter.emitOpcode(Opcode.UNDEFINED);
-        strictMissingGetEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("missing"));
+        strictMissingGetEmitter.emitPushConstant(new JSString("missing"));
         strictMissingGetEmitter.emitOpcode(Opcode.GET_REF_VALUE);
         strictMissingGetEmitter.emitOpcode(Opcode.RETURN);
 
@@ -346,8 +346,8 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
                 .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("missing is not defined");
 
         BytecodeEmitter strictMissingPutEmitter = new BytecodeEmitter();
-        strictMissingPutEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, context.createJSObject());
-        strictMissingPutEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("missing"));
+        strictMissingPutEmitter.emitPushConstant(context.createJSObject());
+        strictMissingPutEmitter.emitPushConstant(new JSString("missing"));
         strictMissingPutEmitter.emitOpcodeU32(Opcode.PUSH_I32, 1);
         strictMissingPutEmitter.emitOpcode(Opcode.PUT_REF_VALUE);
         strictMissingPutEmitter.emitOpcode(Opcode.RETURN_UNDEF);
@@ -409,7 +409,7 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
     public void testSetNameOpcodes() {
         JSNativeFunction f1 = new JSNativeFunction(context, "oldName", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
         BytecodeEmitter setNameEmitter = new BytecodeEmitter();
-        setNameEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, f1);
+        setNameEmitter.emitPushConstant(f1);
         setNameEmitter.emitOpcodeAtom(Opcode.SET_NAME, "renamed");
         setNameEmitter.emitOpcodeAtom(Opcode.GET_FIELD, "name");
         setNameEmitter.emitOpcode(Opcode.RETURN);
@@ -419,8 +419,8 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
 
         JSNativeFunction f2 = new JSNativeFunction(context, "", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
         BytecodeEmitter setNameComputedEmitter = new BytecodeEmitter();
-        setNameComputedEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("dynamic"));
-        setNameComputedEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, f2);
+        setNameComputedEmitter.emitPushConstant(new JSString("dynamic"));
+        setNameComputedEmitter.emitPushConstant(f2);
         setNameComputedEmitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
         setNameComputedEmitter.emitOpcodeAtom(Opcode.GET_FIELD, "name");
         setNameComputedEmitter.emitOpcode(Opcode.RETURN);
@@ -430,8 +430,8 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
 
         JSNativeFunction f3 = new JSNativeFunction(context, "", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
         BytecodeEmitter setNameSymbolEmitter = new BytecodeEmitter();
-        setNameSymbolEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSSymbol("s"));
-        setNameSymbolEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, f3);
+        setNameSymbolEmitter.emitPushConstant(new JSSymbol("s"));
+        setNameSymbolEmitter.emitPushConstant(f3);
         setNameSymbolEmitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
         setNameSymbolEmitter.emitOpcodeAtom(Opcode.GET_FIELD, "name");
         setNameSymbolEmitter.emitOpcode(Opcode.RETURN);

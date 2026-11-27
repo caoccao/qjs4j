@@ -16,11 +16,12 @@
 
 package com.caoccao.qjs4j.regexp;
 
+import com.caoccao.qjs4j.utils.AsciiHex;
+
 import static com.caoccao.qjs4j.regexp.RegExpCompiler.*;
 
 /** Escape decoding shared by atoms, capture names and character classes. */
 final class RegExpEscapes {
-    private static final byte[] HEX_VALUES = hexValues();
 
     private RegExpEscapes() {
     }
@@ -52,31 +53,13 @@ final class RegExpEscapes {
         }
         int value = 0;
         for (int i = 0; i < digits; i++) {
-            int digit = hexValue(codePoints[start + i]);
+            int digit = AsciiHex.value(codePoints[start + i]);
             if (digit < 0) {
                 return -1;
             }
             value = (value << 4) | digit;
         }
         return value;
-    }
-
-    private static int hexValue(int ch) {
-        return ch >= 0 && ch < HEX_VALUES.length ? HEX_VALUES[ch] : -1;
-    }
-
-    private static byte[] hexValues() {
-        byte[] values = new byte[128];
-        java.util.Arrays.fill(values, (byte) -1);
-        for (int i = 0; i < 16; i++) {
-            if (i < 10) {
-                values['0' + i] = (byte) i;
-            } else {
-                values['a' + i - 10] = (byte) i;
-                values['A' + i - 10] = (byte) i;
-            }
-        }
-        return values;
     }
 
     /**
@@ -92,7 +75,7 @@ final class RegExpEscapes {
         int firstDigit = ++context.pos;
         int value = 0;
         while (context.pos < context.codePoints.length && context.codePoints[context.pos] != '}') {
-            int digit = hexValue(context.codePoints[context.pos]);
+            int digit = AsciiHex.value(context.codePoints[context.pos]);
             if (digit < 0) {
                 throw new RegExpSyntaxException("Invalid unicode escape");
             }
@@ -205,7 +188,7 @@ final class RegExpEscapes {
             int value = 0;
             int digitCount = 0;
             while (currentPos < codePoints.length && codePoints[currentPos] != '}') {
-                int hexValue = hexValue(codePoints[currentPos]);
+                int hexValue = AsciiHex.value(codePoints[currentPos]);
                 if (hexValue < 0) {
                     return null;
                 }

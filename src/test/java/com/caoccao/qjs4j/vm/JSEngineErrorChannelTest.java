@@ -112,27 +112,24 @@ public class JSEngineErrorChannelTest extends BaseJavetTest {
 
     @Test
     public void testTemporalDeadZoneClassIsCatchable() {
-        assertStringWithJavet("""
-                (function () {
-                    try { new Later() } catch (e) { return 'CAUGHT ' + e.name }
-                    class Later {}
-                })()""");
+        assertStringWithJavet(inFunction("""
+                  try { new Later() } catch (e) { return 'CAUGHT ' + e.name }
+                  class Later {}
+                """));
     }
 
     @Test
     public void testTemporalDeadZoneConstIsCatchable() {
-        assertStringWithJavet("try { tc; const tc = 1 } catch (e) { 'CAUGHT ' + e.name }", """
-                (function () {
-                    try { tc; const tc = 1 } catch (e) { return 'CAUGHT ' + e.name }
-                })()""");
+        assertStringWithJavet("try { tc; const tc = 1 } catch (e) { 'CAUGHT ' + e.name }", inFunction("""
+                  try { tc; const tc = 1 } catch (e) { return 'CAUGHT ' + e.name }
+                """));
     }
 
     @Test
     public void testTemporalDeadZoneLetIsCatchable() {
-        assertStringWithJavet("try { tz; let tz = 1 } catch (e) { 'CAUGHT ' + e.name }", """
-                (function () {
-                    try { tz; let tz = 1 } catch (e) { return 'CAUGHT ' + e.name }
-                })()""");
+        assertStringWithJavet("try { tz; let tz = 1 } catch (e) { 'CAUGHT ' + e.name }", inFunction("""
+                  try { tz; let tz = 1 } catch (e) { return 'CAUGHT ' + e.name }
+                """));
     }
 
     @Test

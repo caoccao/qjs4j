@@ -33,50 +33,46 @@ public class RegExpPrototypeTest extends BaseJavetTest {
     @Test
     public void testEmptyMatchStopsWhenLastIndexCoercionThrows() {
         for (String operation : new String[]{"match", "replace", "matchAll"}) {
-            assertStringWithJavet("""
-                    (() => {
-                        const events = [];
-                        let coercionThrows = false;
-                        const receiver = {
-                            flags: 'gu',
-                            get lastIndex() {
-                                return coercionThrows ? { valueOf() { events.push('coerce'); throw 42; } } : 0;
-                            },
-                            set lastIndex(value) { events.push('set:' + value); },
-                            exec() { coercionThrows = true; return {0: ''}; }
-                        };
-                        receiver.constructor = {[Symbol.species]: function () { return receiver; }};
-                        try {
-                            const result = RegExp.prototype[Symbol.%1$s].call(receiver, 'a', '');
-                            if ('%1$s' === 'matchAll') result.next();
-                        } catch (error) { events.push('caught:' + error); }
-                        return events.join(',');
-                    })()
-                    """.formatted(operation));
+            assertStringWithJavet(inArrowFunction("""
+                      const events = [];
+                      let coercionThrows = false;
+                      const receiver = {
+                          flags: 'gu',
+                          get lastIndex() {
+                              return coercionThrows ? { valueOf() { events.push('coerce'); throw 42; } } : 0;
+                          },
+                          set lastIndex(value) { events.push('set:' + value); },
+                          exec() { coercionThrows = true; return {0: ''}; }
+                      };
+                      receiver.constructor = {[Symbol.species]: function () { return receiver; }};
+                      try {
+                          const result = RegExp.prototype[Symbol.%1$s].call(receiver, 'a', '');
+                          if ('%1$s' === 'matchAll') result.next();
+                      } catch (error) { events.push('caught:' + error); }
+                      return events.join(',');
+                    """.formatted(operation)));
         }
     }
 
     @Test
     public void testEmptyUnicodeMatchAdvancesLargeLastIndex() {
         for (String operation : new String[]{"match", "replace", "matchAll"}) {
-            assertStringWithJavet("""
-                    (() => {
-                        let calls = 0;
-                        const receiver = {
-                            flags: 'gu',
-                            lastIndex: 0,
-                            exec() {
-                                if (calls++) return null;
-                                this.lastIndex = 2 ** 32 + 1;
-                                return {0: '', length: 1, index: 0};
-                            }
-                        };
-                        receiver.constructor = {[Symbol.species]: function () { return receiver; }};
-                        const result = RegExp.prototype[Symbol.%1$s].call(receiver, 'a', '');
-                        if ('%1$s' === 'matchAll') result.next();
-                        return String(receiver.lastIndex);
-                    })()
-                    """.formatted(operation));
+            assertStringWithJavet(inArrowFunction("""
+                      let calls = 0;
+                      const receiver = {
+                          flags: 'gu',
+                          lastIndex: 0,
+                          exec() {
+                              if (calls++) return null;
+                              this.lastIndex = 2 ** 32 + 1;
+                              return {0: '', length: 1, index: 0};
+                          }
+                      };
+                      receiver.constructor = {[Symbol.species]: function () { return receiver; }};
+                      const result = RegExp.prototype[Symbol.%1$s].call(receiver, 'a', '');
+                      if ('%1$s' === 'matchAll') result.next();
+                      return String(receiver.lastIndex);
+                    """.formatted(operation)));
         }
     }
 
@@ -213,16 +209,12 @@ public class RegExpPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testIndicesResultWithNamedGroups() {
-        assertBooleanWithJavet("Array.isArray(/(?<x>a)(b)?/d.exec('ab').indices)");
-        assertBooleanWithJavet(
-                "(() => { const m = /(?<x>a)(b)?/d.exec('ab'); return m.indices[0][0] === 0 && m.indices[0][1] === 2; })()");
-        assertBooleanWithJavet(
-                "(() => { const m = /(?<x>a)(b)?/d.exec('ab'); return m.indices[1][0] === 0 && m.indices[1][1] === 1; })()");
-        assertBooleanWithJavet(
-                "(() => { const m = /(?<x>a)(b)?/d.exec('ab'); return m.indices[2][0] === 1 && m.indices[2][1] === 2; })()");
-        assertBooleanWithJavet(
-                "(() => { const m = /(?<x>a)(b)?/d.exec('ab'); return m.indices.groups.x[0] === 0 && m.indices.groups.x[1] === 1; })()");
-        assertBooleanWithJavet("/a/.exec('a').indices === undefined");
+        assertBooleanWithJavet("Array.isArray(/(?<x>a)(b)?/d.exec('ab').indices)",
+                "(() => { const m = /(?<x>a)(b)?/d.exec('ab'); return m.indices[0][0] === 0 && m.indices[0][1] === 2; })()",
+                "(() => { const m = /(?<x>a)(b)?/d.exec('ab'); return m.indices[1][0] === 0 && m.indices[1][1] === 1; })()",
+                "(() => { const m = /(?<x>a)(b)?/d.exec('ab'); return m.indices[2][0] === 1 && m.indices[2][1] === 2; })()",
+                "(() => { const m = /(?<x>a)(b)?/d.exec('ab'); return m.indices.groups.x[0] === 0 && m.indices.groups.x[1] === 1; })()",
+                "/a/.exec('a').indices === undefined");
     }
 
     @Test
@@ -444,11 +436,12 @@ public class RegExpPrototypeTest extends BaseJavetTest {
 
         // Normal case: global regex with lastIndex
         JSRegExp global = new JSRegExp(context, "test", "g");
-        result = RegExpPrototype.test(context, global, stringArgs("test test test"));
+        var testMethod = builtin(RegExpPrototype::test, global);
+        result = testMethod.call(stringArgs("test test test"));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
         assertThat(global.getLastIndex()).isEqualTo(4); // After first match
 
-        result = RegExpPrototype.test(context, global, stringArgs("test test test"));
+        result = testMethod.call(stringArgs("test test test"));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
         assertThat(global.getLastIndex()).isEqualTo(9); // After second match
 

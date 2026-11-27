@@ -72,8 +72,7 @@ public final class TemporalPlainDateTimeConstructor {
         }
 
         if (!isoTime.isValid()) {
-            context.throwRangeError("Temporal error: Invalid time");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_TIME.undefined(context);
         }
 
         if (!isoDate.isWithinPlainDateTimeRange(isoTime)) {
@@ -133,7 +132,7 @@ public final class TemporalPlainDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        IsoTime resultTime = bag.regulate(IsoTime.MIDNIGHT, overflow, "Temporal error: Invalid time");
+        IsoTime resultTime = bag.regulate(IsoTime.MIDNIGHT, overflow, TemporalError.INVALID_TIME.message());
         if (resultTime == null) {
             return JSUndefined.INSTANCE;
         }

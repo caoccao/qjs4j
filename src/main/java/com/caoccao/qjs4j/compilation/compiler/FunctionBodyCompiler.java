@@ -75,9 +75,9 @@ enum FunctionBodyCompiler {
     void emitReturn(CompilerContext context, boolean async) {
         int result = context.scopeManager.currentScope()
                 .declareLocal(returnLocalPrefix + context.emitter.currentOffset());
-        context.emitter.emitOpcodeU16(Opcode.PUT_LOC, result);
+        context.emitter.emitPutLocal(result);
         context.emitHelpers.emitCurrentScopeUsingDisposal();
-        context.emitter.emitOpcodeU16(Opcode.GET_LOC, result);
+        context.emitter.emitGetLocal(result);
         context.emitter.emitOpcode(async ? Opcode.RETURN_ASYNC : Opcode.RETURN);
     }
 }

@@ -21,6 +21,7 @@ import com.caoccao.qjs4j.core.buffer.IJSArrayBuffer;
 import com.caoccao.qjs4j.core.buffer.JSBigInt64Array;
 import com.caoccao.qjs4j.core.buffer.JSBigUint64Array;
 import com.caoccao.qjs4j.core.buffer.JSTypedArray;
+import com.caoccao.qjs4j.core.iterator.IteratorKind;
 import com.caoccao.qjs4j.core.iterator.JSIterator;
 
 import java.util.ArrayList;
@@ -500,12 +501,6 @@ public final class TypedArrayPrototype {
 
     public static JSValue withMethod(JSContext context, JSValue thisArg, JSValue[] args) {
         return TypedArrayCopy.withMethod(context, thisArg, args);
-    }
-
-    private enum IteratorKind {
-        ENTRIES,
-        KEYS,
-        VALUES
     }
 
     private enum Search {

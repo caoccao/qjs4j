@@ -27,7 +27,7 @@ final class ThrowStatementCompiler {
     static void compile(CompilerContext compilerContext, ThrowStatement throwStmt) {
         if (compilerContext.evalReturnLocalIndex >= 0) {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
         }
         compilerContext.expressionCompiler.compile(throwStmt.getArgument());
 
@@ -50,28 +50,23 @@ final class ThrowStatementCompiler {
         }
 
         // Legacy path: when no block-level CATCH protects using declarations
-        int throwValueIndex = compilerContext.scopeManager.currentScope()
-                .declareLocal("#throw_value_" + compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, throwValueIndex);
+        int throwValueIndex = compilerContext.storeTemporary("#throw_value_");
 
         int disposalCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
         compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(0);
         compilerContext.emitter.emitOpcode(Opcode.DROP);
 
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, throwValueIndex);
+        compilerContext.emitter.emitGetLocal(throwValueIndex);
         compilerContext.emitter.emitOpcode(Opcode.THROW);
 
         compilerContext.emitter.patchJumpToHere(disposalCatchJump);
 
-        int disposalErrorIndex = compilerContext.scopeManager.currentScope()
-                .declareLocal("#disposal_error_" + compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, disposalErrorIndex);
+        int disposalErrorIndex = compilerContext.storeTemporary("#disposal_error_");
 
         compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, "SuppressedError");
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, disposalErrorIndex);
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, throwValueIndex);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST,
-                new JSString("An error was suppressed during disposal"));
+        compilerContext.emitter.emitGetLocal(disposalErrorIndex);
+        compilerContext.emitter.emitGetLocal(throwValueIndex);
+        compilerContext.emitter.emitPushConstant(new JSString("An error was suppressed during disposal"));
         compilerContext.emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, 3);
         compilerContext.emitter.emitOpcode(Opcode.THROW);
     }

@@ -120,7 +120,7 @@ final class OrdinaryFunctionCompiler {
             bodyScopeEnteredLocalIndex = functionContext.scopeManager.currentScope()
                     .declareLocal("#function_expression_body_entered_" + selfName);
             functionContext.emitter.emitOpcode(Opcode.PUSH_TRUE);
-            functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, bodyScopeEnteredLocalIndex);
+            functionContext.emitter.emitPutLocal(bodyScopeEnteredLocalIndex);
             functionContext.scopeManager.currentScope().shadowLocalWithFreshSlot(selfName,
                     "#function_expression_name_" + selfName);
         }

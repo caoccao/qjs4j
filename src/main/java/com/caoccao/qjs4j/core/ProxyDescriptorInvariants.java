@@ -31,6 +31,29 @@ final class ProxyDescriptorInvariants {
                 && !descriptor.isWritable();
     }
 
+    /** A successful delete and a failed has trap both report that an own property is absent. */
+    static boolean canHideProperty(JSContext context, JSObject target, PropertyKey key, boolean deleting) {
+        PropertyDescriptor descriptor = target.getOwnPropertyDescriptor(key);
+        if (descriptor == null) {
+            return true;
+        }
+        String detail;
+        if (!descriptor.isConfigurable()) {
+            detail = deleting
+                    ? "which is non-configurable in the proxy target"
+                    : "which exists in the proxy target as non-configurable";
+        } else if (!target.isExtensible()) {
+            detail = deleting ? "but the proxy target is non-extensible" : "but the proxy target is not extensible";
+        } else {
+            return true;
+        }
+        String failure = deleting
+                ? "'deleteProperty' on proxy: trap returned truish"
+                : "'has' on proxy: trap returned falsish";
+        context.throwTypeError(failure + " for property '" + key.toPropertyString() + "' " + detail);
+        return false;
+    }
+
     static boolean canReport(PropertyDescriptor descriptor, PropertyDescriptor current, boolean extensible) {
         if (current == null) {
             return extensible && !setsNonConfigurable(descriptor);

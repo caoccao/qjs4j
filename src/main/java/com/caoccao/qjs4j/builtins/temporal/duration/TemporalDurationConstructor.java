@@ -129,8 +129,7 @@ public final class TemporalDurationConstructor {
             values[unit.rank()] = value == null ? BigInteger.ZERO : value;
         }
         if (!any) {
-            context.throwTypeError("Temporal error: Must provide a duration.");
-            return null;
+            return TemporalError.MISSING_DURATION.reject(context);
         }
         normalizeSubseconds(values);
         long[] components = new long[values.length];
@@ -249,8 +248,7 @@ public final class TemporalDurationConstructor {
         if (item instanceof JSObject fields) {
             return durationFromFields(context, fields);
         }
-        context.throwTypeError("Temporal error: Must provide a duration.");
-        return null;
+        return TemporalError.MISSING_DURATION.reject(context);
     }
 
     private static long toLongDurationField(JSContext context, BigInteger value) {

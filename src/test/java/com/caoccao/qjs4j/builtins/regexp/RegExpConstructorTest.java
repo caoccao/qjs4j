@@ -144,7 +144,8 @@ public class RegExpConstructorTest extends BaseJavetTest {
         JSRegExp regexp = new JSRegExp(context, "hello", "");
 
         // Normal case: match
-        JSValue result = RegExpPrototype.exec(context, regexp, stringArgs("hello world"));
+        var exec = builtin(RegExpPrototype::exec, regexp);
+        JSValue result = exec.call(stringArgs("hello world"));
         assertThat(result).isInstanceOfSatisfying(JSArray.class, arr -> {
             assertThat(arr.getLength()).isEqualTo(1); // Just the matched string, no captures
             assertStringValue(arr.get(0), "hello");
@@ -159,7 +160,7 @@ public class RegExpConstructorTest extends BaseJavetTest {
         });
 
         // Normal case: no match
-        result = RegExpPrototype.exec(context, regexp, stringArgs("goodbye"));
+        result = exec.call(stringArgs("goodbye"));
         assertThat(result.isNull()).isTrue();
 
         // Edge case: called on non-RegExp
@@ -186,20 +187,21 @@ public class RegExpConstructorTest extends BaseJavetTest {
         JSRegExp regexp = new JSRegExp(context, "o", "g");
 
         // First exec
-        JSValue result = RegExpPrototype.exec(context, regexp, stringArgs("foo bar"));
+        var execMethod = builtin(RegExpPrototype::exec, regexp);
+        JSValue result = execMethod.call(stringArgs("foo bar"));
         assertThat(result).isInstanceOfSatisfying(JSArray.class, arr -> {
             assertStringValue(arr.get(0), "o");
         });
         assertThat(regexp.getLastIndex() > 0).isTrue();
 
         // Second exec (should get next match)
-        result = RegExpPrototype.exec(context, regexp, stringArgs("foo bar"));
+        result = execMethod.call(stringArgs("foo bar"));
         assertThat(result).isInstanceOfSatisfying(JSArray.class, arr -> {
             assertStringValue(arr.get(0), "o");
         });
 
         // Third exec (no more matches, should return null and reset lastIndex)
-        result = RegExpPrototype.exec(context, regexp, stringArgs("foo bar"));
+        result = execMethod.call(stringArgs("foo bar"));
         assertThat(result.isNull()).isTrue();
         assertThat(regexp.getLastIndex()).isEqualTo(0);
     }
@@ -431,35 +433,31 @@ public class RegExpConstructorTest extends BaseJavetTest {
         assertIntegerWithJavet("RegExp.escape.length");
         assertStringWithJavet("RegExp.escape.name");
 
-        assertBooleanWithJavet("""
-                (() => {
-                    const desc = Object.getOwnPropertyDescriptor(RegExp, 'escape');
-                    return desc.writable === true
-                        && desc.enumerable === false
-                        && desc.configurable === true;
-                })()""");
-        assertBooleanWithJavet("""
-                (() => {
-                    const lengthDesc = Object.getOwnPropertyDescriptor(RegExp.escape, 'length');
-                    return lengthDesc.value === 1
-                        && lengthDesc.writable === false
-                        && lengthDesc.enumerable === false
-                        && lengthDesc.configurable === true;
-                })()""");
-        assertBooleanWithJavet("""
-                (() => {
-                    const nameDesc = Object.getOwnPropertyDescriptor(RegExp.escape, 'name');
-                    return nameDesc.value === 'escape'
-                        && nameDesc.writable === false
-                        && nameDesc.enumerable === false
-                        && nameDesc.configurable === true;
-                })()""");
+        assertBooleanWithJavet(inArrowFunction("""
+                  const desc = Object.getOwnPropertyDescriptor(RegExp, 'escape');
+                  return desc.writable === true
+                      && desc.enumerable === false
+                      && desc.configurable === true;
+                """));
+        assertBooleanWithJavet(inArrowFunction("""
+                  const lengthDesc = Object.getOwnPropertyDescriptor(RegExp.escape, 'length');
+                  return lengthDesc.value === 1
+                      && lengthDesc.writable === false
+                      && lengthDesc.enumerable === false
+                      && lengthDesc.configurable === true;
+                """));
+        assertBooleanWithJavet(inArrowFunction("""
+                  const nameDesc = Object.getOwnPropertyDescriptor(RegExp.escape, 'name');
+                  return nameDesc.value === 'escape'
+                      && nameDesc.writable === false
+                      && nameDesc.enumerable === false
+                      && nameDesc.configurable === true;
+                """));
 
         assertStringWithJavet("RegExp.escape('')", "RegExp.escape('.')", "RegExp.escape('/')", "RegExp.escape('abc')",
                 "RegExp.escape('1+1')", "RegExp.escape('\\t\\n\\v\\f\\r')");
-        assertStringWithJavet("RegExp.escape(' ,-')", "RegExp.escape(' ,-')");
-        assertStringWithJavet("RegExp.escape('\\u2028\\u2029')", "RegExp.escape('\\uD800')",
-                "RegExp.escape('hello_world')", "RegExp.escape('Γειά σου')");
+        assertStringWithJavet("RegExp.escape(' ,-')", "RegExp.escape(' ,-')", "RegExp.escape('\\u2028\\u2029')",
+                "RegExp.escape('\\uD800')", "RegExp.escape('hello_world')", "RegExp.escape('Γειά σου')");
 
         assertErrorWithJavet("RegExp.escape(123)", "RegExp.escape({})", "RegExp.escape([])", "RegExp.escape(null)",
                 "RegExp.escape(undefined)");
@@ -468,8 +466,8 @@ public class RegExpConstructorTest extends BaseJavetTest {
     @Test
     void testRegExpLiteralVsConstructor() {
         // Literals and constructor should be equivalent
-        assertStringWithJavet("/test/.source", "new RegExp('test').source");
-        assertStringWithJavet("/test/gi.flags", "new RegExp('test', 'gi').flags");
+        assertStringWithJavet("/test/.source", "new RegExp('test').source", "/test/gi.flags",
+                "new RegExp('test', 'gi').flags");
         assertBooleanWithJavet("/test/.test('test')", "new RegExp('test').test('test')");
     }
 

@@ -43,16 +43,15 @@ public class WeakSetConstructorTest extends BaseJavetTest {
                   get [Symbol.iterator]() {
                     throw new Error('iterator getter boom');
                   }
-                })""", """
-                (() => {
-                  Object.defineProperty(WeakSet.prototype, 'add', {
-                    configurable: true,
-                    get() {
-                      throw new Error('adder getter boom');
-                    }
-                  });
-                  return new WeakSet([{}]);
-                })()""", """
+                })""", inArrowFunction("""
+                Object.defineProperty(WeakSet.prototype, 'add', {
+                  configurable: true,
+                  get() {
+                    throw new Error('adder getter boom');
+                  }
+                });
+                return new WeakSet([{}]);
+                """), """
                 new WeakSet({
                   [Symbol.iterator]() {
                     return {
@@ -117,21 +116,20 @@ public class WeakSetConstructorTest extends BaseJavetTest {
 
     @Test
     void testWeakSetPrototypeDescriptors() {
-        assertBooleanWithJavet("""
-                (() => {
-                  const addDesc = Object.getOwnPropertyDescriptor(WeakSet.prototype, 'add');
-                  const tagDesc = Object.getOwnPropertyDescriptor(WeakSet.prototype, Symbol.toStringTag);
-                  return !!addDesc
-                    && addDesc.writable
-                    && !addDesc.enumerable
-                    && addDesc.configurable
-                    && !!tagDesc
-                    && tagDesc.value === 'WeakSet'
-                    && !tagDesc.writable
-                    && !tagDesc.enumerable
-                    && tagDesc.configurable
-                    && typeof tagDesc.get === 'undefined';
-                })()""");
+        assertBooleanWithJavet(inArrowFunction("""
+                const addDesc = Object.getOwnPropertyDescriptor(WeakSet.prototype, 'add');
+                const tagDesc = Object.getOwnPropertyDescriptor(WeakSet.prototype, Symbol.toStringTag);
+                return !!addDesc
+                  && addDesc.writable
+                  && !addDesc.enumerable
+                  && addDesc.configurable
+                  && !!tagDesc
+                  && tagDesc.value === 'WeakSet'
+                  && !tagDesc.writable
+                  && !tagDesc.enumerable
+                  && tagDesc.configurable
+                  && typeof tagDesc.get === 'undefined';
+                """));
     }
 
     @Test

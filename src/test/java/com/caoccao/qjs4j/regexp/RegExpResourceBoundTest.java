@@ -98,11 +98,10 @@ public class RegExpResourceBoundTest extends BaseJavetTest {
     @Test
     @Timeout(300)
     public void testGreedyMatchOverAHalfMillionCharacterSubject() {
-        assertStringWithJavet("""
-                (function () {
-                  const subject = 'x'.repeat(500000);
-                  try { return String(/^([\\s\\S])+$/u.test(subject)) } catch (e) { return e.name }
-                })()""");
+        assertStringWithJavet(inFunction("""
+                const subject = 'x'.repeat(500000);
+                try { return String(/^([\\s\\S])+$/u.test(subject)) } catch (e) { return e.name }
+                """));
     }
 
     @Test
@@ -141,12 +140,11 @@ public class RegExpResourceBoundTest extends BaseJavetTest {
     @Test
     @Timeout(60)
     public void testOrdinaryCaptureHeavyPatternStillMatches() {
-        assertStringWithJavet("""
-                (function () {
-                  const pattern = new RegExp('%s' + '(x)');
-                  const match = pattern.exec('x');
-                  return match.length + ',' + match[match.length - 1];
-                })()""".formatted(groups(200)));
+        assertStringWithJavet(inFunction("""
+                const pattern = new RegExp('%s' + '(x)');
+                const match = pattern.exec('x');
+                return match.length + ',' + match[match.length - 1];
+                """.formatted(groups(200))));
     }
 
     @Test

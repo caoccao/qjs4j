@@ -18,8 +18,6 @@ package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.core.JSKeyword;
-import com.caoccao.qjs4j.core.JSSymbol;
-import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.vm.Opcode;
 
 final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
@@ -193,39 +191,13 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
         }
     }
 
-    private void emitMemberFunctionWithReceiver(MemberExpression memberExpr) {
-        compilerContext.emitHelpers.emitMemberSourcePosition(memberExpr);
-        if (memberExpr.isComputed()) {
-            compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.expressionCompiler.compile(memberExpr.getProperty());
-            compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-            return;
-        }
-        if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
-            compilerContext.emitter.emitOpcode(Opcode.DUP);
-            String fieldName = privateId.getName();
-            JSSymbol symbol = compilerContext.privateSymbols != null
-                    ? compilerContext.privateSymbols.get(fieldName)
-                    : null;
-            if (symbol == null) {
-                throw new JSSyntaxErrorException("Unexpected private field", privateId.getLocation());
-            }
-            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-            compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
-            return;
-        }
-        if (memberExpr.getProperty() instanceof Identifier propId) {
-            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.getName());
-        }
-    }
-
     private void emitMemberLinkWithReceiver(MemberExpression memberExpr) {
         // Stack: -> object -> object function
         compilerContext.emitHelpers.compileOptionalChainLinkTarget(memberExpr, memberExpr.getObject());
         if (memberExpr.isOptional()) {
             compilerContext.emitHelpers.emitOptionalChainTest(1);
         }
-        emitMemberFunctionWithReceiver(memberExpr);
+        compilerContext.memberExpressionCompiler.emitPropertyAccess(memberExpr, true);
     }
 
     private void emitPendingPostSuperInitialization() {

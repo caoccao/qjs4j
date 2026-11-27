@@ -31,7 +31,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.caoccao.qjs4j.exceptions.JSTerminationException;
 
 public abstract class BaseTest {
@@ -206,21 +205,25 @@ public abstract class BaseTest {
             this.receiver = receiver;
         }
 
+        public JSValue call(JSValue... arguments) {
+            return callback.call(context, receiver, arguments);
+        }
+
         public void expectNaN(JSValue... arguments) {
-            assertThat(callback.call(context, receiver, arguments)).isInstanceOfSatisfying(JSNumber.class,
+            assertThat(call(arguments)).isInstanceOfSatisfying(JSNumber.class,
                     number -> assertThat(number.value()).isNaN());
         }
 
         public void expectNumber(double expected, JSValue... arguments) {
-            assertNumberValue(callback.call(context, receiver, arguments), expected);
+            assertNumberValue(call(arguments), expected);
         }
 
         public void expectString(String expected, JSValue... arguments) {
-            assertStringValue(callback.call(context, receiver, arguments), expected);
+            assertStringValue(call(arguments), expected);
         }
 
         public void expectValue(JSValue expected, JSValue... arguments) {
-            assertThat(callback.call(context, receiver, arguments)).isEqualTo(expected);
+            assertThat(call(arguments)).isEqualTo(expected);
         }
     }
 }

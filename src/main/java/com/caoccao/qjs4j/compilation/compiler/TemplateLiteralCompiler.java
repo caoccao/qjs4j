@@ -40,7 +40,7 @@ final class TemplateLiteralCompiler {
 
         if (quasis.isEmpty()) {
             // Empty template literal
-            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(""));
+            compilerContext.emitter.emitPushConstant(new JSString(""));
             return;
         }
 
@@ -49,7 +49,7 @@ final class TemplateLiteralCompiler {
         if (firstQuasi == null) {
             throw new JSCompilerException("Invalid escape sequence in untagged template literal", templateLiteral);
         }
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(firstQuasi));
+        compilerContext.emitter.emitPushConstant(new JSString(firstQuasi));
 
         if (expressions.isEmpty()) {
             return;
@@ -70,7 +70,7 @@ final class TemplateLiteralCompiler {
                             templateLiteral);
                 }
                 if (!quasi.isEmpty()) {
-                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(quasi));
+                    compilerContext.emitter.emitPushConstant(new JSString(quasi));
                     argumentCount++;
                 }
             }

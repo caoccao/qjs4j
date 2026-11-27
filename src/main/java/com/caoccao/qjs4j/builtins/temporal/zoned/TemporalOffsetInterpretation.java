@@ -90,8 +90,7 @@ public final class TemporalOffsetInterpretation {
                     stringInput && !stringOffsetIncludesSecondsOrFraction);
             if (epochNanoseconds == null && !context.hasPendingException()) {
                 if ("reject".equals(option)) {
-                    context.throwRangeError("Temporal error: Invalid offset.");
-                    return null;
+                    return TemporalError.INVALID_OFFSET.reject(context);
                 }
                 epochNanoseconds = resolveEpochNanosecondsIgnoringOffset(context, isoDate, isoTime, timeZoneId,
                         offsetTimeZoneIdentifier, options.disambiguation());

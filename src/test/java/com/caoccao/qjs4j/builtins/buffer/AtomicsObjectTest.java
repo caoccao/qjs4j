@@ -329,10 +329,8 @@ public class AtomicsObjectTest extends BaseJavetTest {
     public void testNotifyWithJavet() {
         assertIntegerWithJavet("Atomics.notify(new BigInt64Array(new ArrayBuffer(8)), 0, 0)",
                 "Atomics.notify(new Int32Array(new ArrayBuffer(4)), 0, -1)");
-        assertErrorWithJavet("Atomics.notify(new Uint8Array(new SharedArrayBuffer(8)), 0, 0)");
-        assertErrorWithJavet(
-                "Atomics.notify(new BigInt64Array(new ArrayBuffer(8)), { valueOf() { throw new Error('index'); } }, 0)");
-        assertErrorWithJavet(
+        assertErrorWithJavet("Atomics.notify(new Uint8Array(new SharedArrayBuffer(8)), 0, 0)",
+                "Atomics.notify(new BigInt64Array(new ArrayBuffer(8)), { valueOf() { throw new Error('index'); } }, 0)",
                 "Atomics.notify(new BigInt64Array(new ArrayBuffer(8)), 0, { valueOf() { throw new Error('count'); } })");
     }
 

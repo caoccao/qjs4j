@@ -30,30 +30,29 @@ public class SymbolConstructorTest extends BaseJavetTest {
     @Test
     public void testCall() {
         // Normal case: with description
-        JSValue result = SymbolConstructor.call(context, JSUndefined.INSTANCE, stringArgs("test"));
+        var symbolConstructor = builtin(SymbolConstructor::call, JSUndefined.INSTANCE);
+        JSValue result = symbolConstructor.call(stringArgs("test"));
         JSSymbol symbol = result.asSymbol().orElseThrow();
         assertThat(symbol.getDescription()).isEqualTo("test");
 
         // Normal case: with numeric description
-        result = SymbolConstructor.call(context, JSUndefined.INSTANCE, numberArgs(42));
+        result = symbolConstructor.call(numberArgs(42));
         symbol = result.asSymbol().orElseThrow();
         assertThat(symbol.getDescription()).isEqualTo("42");
 
         // Normal case: with undefined description
-        result = SymbolConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{JSUndefined.INSTANCE});
+        result = symbolConstructor.call(JSUndefined.INSTANCE);
         symbol = result.asSymbol().orElseThrow();
         assertThat(symbol.getDescription()).isNull();
 
         // Normal case: no arguments
-        result = SymbolConstructor.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+        result = symbolConstructor.call();
         symbol = result.asSymbol().orElseThrow();
         assertThat(symbol.getDescription()).isNull();
 
         // Normal case: symbols are unique
-        JSSymbol symbol1 = SymbolConstructor.call(context, JSUndefined.INSTANCE, stringArgs("same")).asSymbol()
-                .orElseThrow();
-        JSSymbol symbol2 = SymbolConstructor.call(context, JSUndefined.INSTANCE, stringArgs("same")).asSymbol()
-                .orElseThrow();
+        JSSymbol symbol1 = symbolConstructor.call(stringArgs("same")).asSymbol().orElseThrow();
+        JSSymbol symbol2 = symbolConstructor.call(stringArgs("same")).asSymbol().orElseThrow();
         assertThat(symbol1).isNotEqualTo(symbol2);
         assertThat(symbol1.getDescription()).isEqualTo("same");
         assertThat(symbol2.getDescription()).isEqualTo("same");
@@ -113,85 +112,84 @@ public class SymbolConstructorTest extends BaseJavetTest {
         // Normal case: symbol from registry
         JSSymbol symbol = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, stringArgs("registryKey"))
                 .asSymbol().orElseThrow();
-        JSValue result = SymbolConstructor.keyFor(context, JSUndefined.INSTANCE, new JSValue[]{symbol});
+        var keyFor = builtin(SymbolConstructor::keyFor, JSUndefined.INSTANCE);
+        JSValue result = keyFor.call(symbol);
         assertStringValue(result, "registryKey");
 
         // Normal case: symbol not in registry
         JSSymbol unregisteredSymbol = SymbolConstructor.call(context, JSUndefined.INSTANCE, stringArgs("unregistered"))
                 .asSymbol().orElseThrow();
-        result = SymbolConstructor.keyFor(context, JSUndefined.INSTANCE, new JSValue[]{unregisteredSymbol});
+        result = keyFor.call(unregisteredSymbol);
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
         // Edge case: no arguments
-        result = SymbolConstructor.keyFor(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+        result = keyFor.call();
         assertPendingTypeError(context, result);
 
         // Edge case: non-symbol argument
-        result = SymbolConstructor.keyFor(context, JSUndefined.INSTANCE, stringArgs("not a symbol"));
+        result = keyFor.call(stringArgs("not a symbol"));
         assertPendingTypeError(context, result);
 
         // Edge case: null
-        result = SymbolConstructor.keyFor(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE});
+        result = keyFor.call(JSNull.INSTANCE);
         assertPendingTypeError(context, result);
 
         // Edge case: undefined
-        result = SymbolConstructor.keyFor(context, JSUndefined.INSTANCE, new JSValue[]{JSUndefined.INSTANCE});
+        result = keyFor.call(JSUndefined.INSTANCE);
         assertPendingTypeError(context, result);
     }
 
     @Test
     public void testSymbolFor() {
         // Normal case: create new symbol in registry
-        JSValue result = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, stringArgs("test"));
+        var symbolFor = builtin(SymbolConstructor::symbolFor, JSUndefined.INSTANCE);
+        JSValue result = symbolFor.call(stringArgs("test"));
         JSSymbol symbol1 = result.asSymbol().orElseThrow();
         assertThat(symbol1.getDescription()).isEqualTo("test");
 
         // Normal case: get existing symbol from registry
-        result = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, stringArgs("test"));
+        result = symbolFor.call(stringArgs("test"));
         JSSymbol symbol2 = result.asSymbol().orElseThrow();
         assertThat(symbol2).isEqualTo(symbol1); // Same symbol instance
 
         // Normal case: different keys create different symbols
-        result = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, stringArgs("other"));
+        result = symbolFor.call(stringArgs("other"));
         JSSymbol symbol3 = result.asSymbol().orElseThrow();
         assertThat(symbol3).isNotEqualTo(symbol1);
         assertThat(symbol3.getDescription()).isEqualTo("other");
 
         // Normal case: numeric key
-        result = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, numberArgs(123));
+        result = symbolFor.call(numberArgs(123));
         JSSymbol symbol4 = result.asSymbol().orElseThrow();
         assertThat(symbol4.getDescription()).isEqualTo("123");
 
         // Edge case: no arguments coerces undefined to "undefined" key
-        result = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+        result = symbolFor.call();
         JSSymbol symbol5 = result.asSymbol().orElseThrow();
         assertThat(symbol5.getDescription()).isEqualTo("undefined");
 
-        result = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, new JSValue[]{JSUndefined.INSTANCE});
+        result = symbolFor.call(JSUndefined.INSTANCE);
         JSSymbol symbol6 = result.asSymbol().orElseThrow();
         assertThat(symbol6).isEqualTo(symbol5);
     }
 
     @Test
     public void testSymbolRegistrationDescriptors() {
-        assertBooleanWithJavet(methodDescriptor("Symbol", "for"), methodDescriptor("Symbol", "keyFor"), """
-                (() => {
-                  const d = Object.getOwnPropertyDescriptor(Symbol, "iterator");
-                  return typeof d.value === "symbol"
-                    && d.value === Symbol.iterator
-                    && d.writable === false
-                    && d.enumerable === false
-                    && d.configurable === false;
-                })()
-                """, """
-                (() => {
-                  const d = Object.getOwnPropertyDescriptor(Symbol, "prototype");
-                  return d.value === Symbol.prototype
-                    && d.writable === false
-                    && d.enumerable === false
-                    && d.configurable === false;
-                })()
-                """);
+        assertBooleanWithJavet(methodDescriptor("Symbol", "for"), methodDescriptor("Symbol", "keyFor"),
+                inArrowFunction("""
+                        const d = Object.getOwnPropertyDescriptor(Symbol, "iterator");
+                        return typeof d.value === "symbol"
+                          && d.value === Symbol.iterator
+                          && d.writable === false
+                          && d.enumerable === false
+                          && d.configurable === false;
+                        """), inArrowFunction("""
+                        const d = Object.getOwnPropertyDescriptor(Symbol, "prototype");
+                        return d.value === Symbol.prototype
+                          && d.writable === false
+                          && d.enumerable === false
+                          && d.configurable === false;
+                        """));
     }
 
     @Test
@@ -221,31 +219,27 @@ public class SymbolConstructorTest extends BaseJavetTest {
 
     @Test
     public void testWellKnownSymbolProperties() {
-        assertBooleanWithJavet("""
-                (() => {
-                  const names = [
-                    "iterator", "asyncIterator", "toStringTag", "hasInstance",
-                    "isConcatSpreadable", "toPrimitive", "match", "matchAll",
-                    "replace", "search", "split", "species", "unscopables",
-                    "dispose", "asyncDispose"
-                  ];
-                  return names.every(name => typeof Symbol[name] === "symbol");
-                })()
-                """, """
-                (() => {
-                  const sym = Symbol.iterator;
-                  const before = Symbol.iterator;
-                  let strictTypeError = false;
-                  try {
-                    (function() {
-                      "use strict";
-                      Symbol.iterator = Symbol("x");
-                    })();
-                  } catch (e) {
-                    strictTypeError = e instanceof TypeError;
-                  }
-                  return strictTypeError && Symbol.iterator === before && Symbol.iterator === sym;
-                })()
-                """);
+        assertBooleanWithJavet(inArrowFunction("""
+                const names = [
+                  "iterator", "asyncIterator", "toStringTag", "hasInstance",
+                  "isConcatSpreadable", "toPrimitive", "match", "matchAll",
+                  "replace", "search", "split", "species", "unscopables",
+                  "dispose", "asyncDispose"
+                ];
+                return names.every(name => typeof Symbol[name] === "symbol");
+                """), inArrowFunction("""
+                const sym = Symbol.iterator;
+                const before = Symbol.iterator;
+                let strictTypeError = false;
+                try {
+                  (function() {
+                    "use strict";
+                    Symbol.iterator = Symbol("x");
+                  })();
+                } catch (e) {
+                  strictTypeError = e instanceof TypeError;
+                }
+                return strictTypeError && Symbol.iterator === before && Symbol.iterator === sym;
+                """));
     }
 }

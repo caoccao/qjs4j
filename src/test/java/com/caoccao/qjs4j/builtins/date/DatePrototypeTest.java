@@ -57,10 +57,8 @@ public class DatePrototypeTest extends BaseJavetTest {
     @Test
     public void testDateDescriptorsWithJavet() {
         assertStringWithJavet(
-                "var d = Object.getOwnPropertyDescriptor(Date.prototype, 'getYear'); JSON.stringify([typeof d.value, d.enumerable, d.writable, d.configurable]);");
-        assertStringWithJavet(
-                "var d = Object.getOwnPropertyDescriptor(Date.prototype, 'setYear'); JSON.stringify([typeof d.value, d.enumerable, d.writable, d.configurable]);");
-        assertStringWithJavet(
+                "var d = Object.getOwnPropertyDescriptor(Date.prototype, 'getYear'); JSON.stringify([typeof d.value, d.enumerable, d.writable, d.configurable]);",
+                "var d = Object.getOwnPropertyDescriptor(Date.prototype, 'setYear'); JSON.stringify([typeof d.value, d.enumerable, d.writable, d.configurable]);",
                 "var d = Object.getOwnPropertyDescriptor(Date.prototype, 'toGMTString'); JSON.stringify([typeof d.value, d.enumerable, d.writable, d.configurable]);");
     }
 
@@ -90,8 +88,9 @@ public class DatePrototypeTest extends BaseJavetTest {
         // Multiple calls should return consistent format
         JSDate date = new JSDate(context, 1704067200000L); // 2024-01-01 00:00:00 UTC
 
-        JSValue result1 = DatePrototype.toStringMethod(context, date, JSValue.NO_ARGS);
-        JSValue result2 = DatePrototype.toStringMethod(context, date, JSValue.NO_ARGS);
+        var toStringMethod = builtin(DatePrototype::toStringMethod, date);
+        JSValue result1 = toStringMethod.call();
+        JSValue result2 = toStringMethod.call();
 
         assertThat(((JSString) result1).value()).isEqualTo(((JSString) result2).value());
     }

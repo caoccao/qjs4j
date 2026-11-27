@@ -151,7 +151,7 @@ final class EmitHelpers {
         } else {
             Integer funcScopeLocal = compilerContext.annexBFunctionScopeLocals.get(functionName);
             if (funcScopeLocal != null) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, funcScopeLocal);
+                compilerContext.emitter.emitPutLocal(funcScopeLocal);
             } else {
                 // Fallback: store as global var (shouldn't normally happen)
                 compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
@@ -191,7 +191,7 @@ final class EmitHelpers {
      * Stack: unchanged
      */
     void emitAsyncIteratorReturn(int iteratorLocal) {
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, iteratorLocal);
+        compilerContext.emitter.emitGetLocal(iteratorLocal);
         compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
@@ -251,7 +251,7 @@ final class EmitHelpers {
                 compilerContext.expressionCompiler.compile(method.getKey());
             }
         } else if (method.getKey() instanceof Identifier) {
-            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(methodName));
+            compilerContext.emitter.emitPushConstant(new JSString(methodName));
         } else {
             // For Literal keys (numeric, null, string), compile the expression directly
             // to preserve the correct type (e.g., JSNumber for numeric property names)
@@ -409,7 +409,7 @@ final class EmitHelpers {
             }
             // PUT_LOCAL idx - store into the local variable slot
             int parameterSlotIndex = parameterSlotIndexes.get(i);
-            functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, parameterSlotIndex);
+            functionContext.emitter.emitPutLocal(parameterSlotIndex);
             pendingParameterTdzNames.removeAll(parameterBoundNames.get(i));
         }
         functionContext.tdzLocals.clear();
@@ -448,7 +448,7 @@ final class EmitHelpers {
         // Load the function from its block-scope local, then store in var scope
         Integer blockLocalIndex = compilerContext.scopeManager.findLocalInScopes(functionName);
         if (blockLocalIndex != null) {
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, blockLocalIndex);
+            compilerContext.emitter.emitGetLocal(blockLocalIndex);
             emitAnnexBVarStore(functionName);
         }
     }
@@ -505,7 +505,7 @@ final class EmitHelpers {
     }
 
     void emitIteratorCloseUnlessDone(int doneLocal) {
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, doneLocal);
+        compilerContext.emitter.emitGetLocal(doneLocal);
         int exhausted = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
         compilerContext.emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
         int end = compilerContext.emitter.emitJump(Opcode.GOTO);
@@ -556,21 +556,19 @@ final class EmitHelpers {
     }
 
     void emitMethodCallOnLocalObject(int localIndex, String methodName, int argCount) {
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
+        compilerContext.emitter.emitGetLocal(localIndex);
         compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, methodName);
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
         compilerContext.emitter.emitOpcodeU16(Opcode.CALL, argCount);
     }
 
     void emitMethodCallWithSingleArgOnLocalObject(int localIndex, String methodName) {
-        int argLocalIndex = compilerContext.scopeManager.currentScope()
-                .declareLocal("#using_arg_" + compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, argLocalIndex);
+        int argLocalIndex = compilerContext.storeTemporary("#using_arg_");
 
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
+        compilerContext.emitter.emitGetLocal(localIndex);
         compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, methodName);
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, argLocalIndex);
+        compilerContext.emitter.emitGetLocal(argLocalIndex);
         compilerContext.emitter.emitOpcodeU16(Opcode.CALL, 1);
     }
 
@@ -578,14 +576,14 @@ final class EmitHelpers {
         compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, depth);
         if (doneLocal >= 0) {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, doneLocal);
+            compilerContext.emitter.emitPutLocal(doneLocal);
         }
         compilerContext.emitter.emitOpcode(Opcode.DROP);
     }
 
     void emitNonComputedPublicFieldKey(Expression key) {
         if (key instanceof Identifier id) {
-            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.getName()));
+            compilerContext.emitter.emitPushConstant(new JSString(id.getName()));
             return;
         }
         if (key instanceof Literal literal) {
@@ -595,11 +593,11 @@ final class EmitHelpers {
             } else if (value instanceof Boolean bool) {
                 compilerContext.emitter.emitOpcode(bool ? Opcode.PUSH_TRUE : Opcode.PUSH_FALSE);
             } else if (value instanceof BigInteger bigInt) {
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSBigInt(bigInt));
+                compilerContext.emitter.emitPushConstant(new JSBigInt(bigInt));
             } else if (value instanceof Number num) {
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(num.doubleValue()));
+                compilerContext.emitter.emitPushConstant(JSNumber.of(num.doubleValue()));
             } else if (value instanceof String str) {
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(str));
+                compilerContext.emitter.emitPushConstant(new JSString(str));
             } else {
                 throw new JSCompilerException("Unsupported field key literal type: " + value.getClass(), key);
             }
@@ -631,15 +629,13 @@ final class EmitHelpers {
     }
 
     void emitPrivateSymbol(PrivateIdentifier privateIdentifier) {
-        JSSymbol symbol = compilerContext.privateSymbols != null
-                ? compilerContext.privateSymbols.get(privateIdentifier.getName())
-                : null;
+        JSSymbol symbol = compilerContext.privateSymbol(privateIdentifier);
         if (symbol == null) {
             throw new JSCompilerException("undefined private field '#" + privateIdentifier.getName() + "'",
                     privateIdentifier);
         }
 
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+        compilerContext.emitter.emitPushConstant(symbol);
     }
 
     void emitScopeUsingDisposal(CompilerScope scope) {
@@ -672,32 +668,30 @@ final class EmitHelpers {
 
         // Stack: [caught_exception]
         // Save exception to a temp local so we can pass it as an argument
-        int exceptionLocalIndex = compilerContext.scopeManager.currentScope()
-                .declareLocal("#using_exception_" + compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, exceptionLocalIndex);
+        int exceptionLocalIndex = compilerContext.storeTemporary("#using_exception_");
 
         // Check if the using stack was actually initialized at runtime.
         // If the exception occurred before the `using` declaration executed,
         // the stack local is still uninitialized - just re-throw.
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, usingStackLocalIndex);
+        compilerContext.emitter.emitGetLocal(usingStackLocalIndex);
         compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
         int skipDisposeJump = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
 
         if (scope.isUsingStackAsync()) {
             // Call disposeAsync(caughtException)
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, usingStackLocalIndex);
+            compilerContext.emitter.emitGetLocal(usingStackLocalIndex);
             compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, "disposeAsync");
             compilerContext.emitter.emitOpcode(Opcode.SWAP);
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, exceptionLocalIndex);
+            compilerContext.emitter.emitGetLocal(exceptionLocalIndex);
             compilerContext.emitter.emitOpcodeU16(Opcode.CALL, 1);
             compilerContext.emitter.emitOpcode(Opcode.AWAIT);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         } else {
             // Call dispose(caughtException)
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, usingStackLocalIndex);
+            compilerContext.emitter.emitGetLocal(usingStackLocalIndex);
             compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, "dispose");
             compilerContext.emitter.emitOpcode(Opcode.SWAP);
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, exceptionLocalIndex);
+            compilerContext.emitter.emitGetLocal(exceptionLocalIndex);
             compilerContext.emitter.emitOpcodeU16(Opcode.CALL, 1);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
@@ -707,7 +701,7 @@ final class EmitHelpers {
 
         // Stack local was uninitialized - just re-throw the original exception
         compilerContext.emitter.patchJumpToHere(skipDisposeJump);
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, exceptionLocalIndex);
+        compilerContext.emitter.emitGetLocal(exceptionLocalIndex);
         compilerContext.emitter.emitOpcode(Opcode.THROW);
 
         compilerContext.emitter.patchJumpToHere(skipRethrowJump);
@@ -717,7 +711,7 @@ final class EmitHelpers {
         if (memberExpr.isComputed()) {
             compilerContext.expressionCompiler.compile(memberExpr.getProperty());
         } else if (memberExpr.getProperty() instanceof Identifier propId) {
-            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(propId.getName()));
+            compilerContext.emitter.emitPushConstant(new JSString(propId.getName()));
         } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateIdentifier) {
             throw new JSCompilerException("super private fields are not supported", privateIdentifier);
         } else {
@@ -773,7 +767,7 @@ final class EmitHelpers {
 
         compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, constructorName);
         compilerContext.emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, 0);
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, stackLocalIndex);
+        compilerContext.emitter.emitPutLocal(stackLocalIndex);
 
         scope.setUsingStackLocal(stackLocalIndex, useAsyncStack);
         return stackLocalIndex;
@@ -808,7 +802,7 @@ final class EmitHelpers {
         int doneLocal = compilerContext.scopeManager.currentScope()
                 .declareLocal(doneLocalPrefix + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, doneLocal);
+        compilerContext.emitter.emitPutLocal(doneLocal);
         return doneLocal;
     }
 

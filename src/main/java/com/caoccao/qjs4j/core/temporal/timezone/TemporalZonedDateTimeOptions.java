@@ -49,33 +49,25 @@ public record TemporalZonedDateTimeOptions(String disambiguation, String offset,
             return TemporalError.INVALID_OPTIONS.reject(context);
         }
 
-        String disambiguation = TemporalUtils.getStringOption(context, optionsObject, "disambiguation", "compatible");
-        if (context.hasPendingException() || disambiguation == null) {
+        String disambiguation = disambiguation(context, optionsObject);
+        if (disambiguation == null) {
             return null;
         }
-        if (TemporalDisambiguation.fromString(disambiguation) == null) {
-            context.throwRangeError("Temporal error: Invalid disambiguation option.");
+        String offset = TemporalUtils.getEnumOption(context, optionsObject, "offset", defaultOffset,
+                TemporalOffsetOption::fromString);
+        if (offset == null) {
             return null;
         }
-
-        String offset = TemporalUtils.getStringOption(context, optionsObject, "offset", defaultOffset);
-        if (context.hasPendingException() || offset == null) {
+        String overflow = TemporalUtils.getEnumOption(context, optionsObject, "overflow", "constrain",
+                TemporalOverflow::fromString);
+        if (overflow == null) {
             return null;
         }
-        if (TemporalOffsetOption.fromString(offset) == null) {
-            context.throwRangeError("Temporal error: Invalid offset option.");
-            return null;
-        }
-
-        String overflow = TemporalUtils.getStringOption(context, optionsObject, "overflow", "constrain");
-        if (context.hasPendingException() || overflow == null) {
-            return null;
-        }
-        if (TemporalOverflow.fromString(overflow) == null) {
-            context.throwRangeError("Temporal error: Invalid overflow option.");
-            return null;
-        }
-
         return createCanonical(disambiguation, offset, overflow);
+    }
+
+    public static String disambiguation(JSContext context, JSValue options) {
+        return TemporalUtils.getEnumOption(context, options, "disambiguation", "compatible",
+                TemporalDisambiguation::fromString);
     }
 }

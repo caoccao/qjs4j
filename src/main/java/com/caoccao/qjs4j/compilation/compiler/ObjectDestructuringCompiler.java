@@ -52,14 +52,14 @@ final class ObjectDestructuringCompiler {
     static String prepareRead(CompilerContext context, ObjectProperty<?> property, int computedKeyLocal) {
         Expression key = property.getKey();
         if (computedKeyLocal >= 0) {
-            context.emitter.emitOpcodeU16(Opcode.GET_LOC, computedKeyLocal);
+            context.emitter.emitGetLocal(computedKeyLocal);
         } else if (!property.isComputed() && key instanceof Literal literal
                 && (literal.getValue() instanceof Integer || literal.getValue() instanceof Long)) {
             long index = ((Number) literal.getValue()).longValue();
             if (index == (int) index) {
                 context.emitter.emitOpcodeU32(Opcode.PUSH_I32, (int) index);
             } else {
-                context.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(index));
+                context.emitter.emitPushConstant(JSNumber.of(index));
             }
         } else {
             String name = staticKey(property);

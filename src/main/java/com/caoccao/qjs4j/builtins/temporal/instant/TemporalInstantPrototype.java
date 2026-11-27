@@ -169,8 +169,7 @@ public final class TemporalInstantPrototype {
             return JSUndefined.INSTANCE;
         }
         if (args.length == 0 || args[0] instanceof JSUndefined) {
-            context.throwTypeError("Temporal error: Must specify a roundTo parameter.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.MISSING_ROUND_TO.undefined(context);
         }
         String smallestUnitText;
         long roundingIncrement = 1L;
@@ -196,8 +195,7 @@ public final class TemporalInstantPrototype {
                 return JSUndefined.INSTANCE;
             }
         } else {
-            context.throwTypeError("Temporal error: roundTo must be an object.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_ROUND_TO.undefined(context);
         }
 
         if (smallestUnitText == null) {

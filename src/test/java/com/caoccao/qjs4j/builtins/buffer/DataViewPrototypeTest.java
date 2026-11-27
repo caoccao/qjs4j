@@ -142,15 +142,16 @@ public class DataViewPrototypeTest extends BaseJavetTest {
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
         JSDataView dataView = new JSDataView(context, buffer);
 
-        JSValue result = DataViewPrototype.setBigInt64(context, dataView,
-                new JSValue[]{new JSNumber(0), new JSString("1")});
+        var setBigInt64 = builtin(DataViewPrototype::setBigInt64, dataView);
+        JSValue result = setBigInt64.call(new JSNumber(0), new JSString("1"));
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
-        result = DataViewPrototype.getBigInt64(context, dataView, numberArgs(0));
+        var getBigInt64 = builtin(DataViewPrototype::getBigInt64, dataView);
+        result = getBigInt64.call(numberArgs(0));
         assertThat(result).isEqualTo(new JSBigInt(1));
 
-        result = DataViewPrototype.setBigInt64(context, dataView, new JSValue[]{new JSNumber(0), JSBoolean.TRUE});
+        result = setBigInt64.call(new JSNumber(0), JSBoolean.TRUE);
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
-        result = DataViewPrototype.getBigInt64(context, dataView, numberArgs(0));
+        result = getBigInt64.call(numberArgs(0));
         assertThat(result).isEqualTo(new JSBigInt(1));
 
         result = DataViewPrototype.setBigUint64(context, dataView, new JSValue[]{new JSNumber(8), new JSBigInt(-1)});
@@ -158,10 +159,10 @@ public class DataViewPrototypeTest extends BaseJavetTest {
         result = DataViewPrototype.getBigUint64(context, dataView, numberArgs(8));
         assertThat(result).isEqualTo(new JSBigInt("18446744073709551615"));
 
-        result = DataViewPrototype.setBigInt64(context, dataView, numberArgs(0, 1));
+        result = setBigInt64.call(numberArgs(0, 1));
         assertPendingTypeError(context, result);
 
-        result = DataViewPrototype.setBigInt64(context, dataView, new JSValue[]{new JSNumber(0), JSUndefined.INSTANCE});
+        result = setBigInt64.call(new JSNumber(0), JSUndefined.INSTANCE);
         assertPendingTypeError(context, result);
     }
 
@@ -197,13 +198,14 @@ public class DataViewPrototypeTest extends BaseJavetTest {
 
         JSValue result = DataViewPrototype.setInt8(context, dataView, numberArgs(1.9, 7));
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
-        result = DataViewPrototype.getInt8(context, dataView, numberArgs(1));
+        var getInt8 = builtin(DataViewPrototype::getInt8, dataView);
+        result = getInt8.call(numberArgs(1));
         assertNumberValue(result, 7.0);
 
-        result = DataViewPrototype.getInt8(context, dataView, numberArgs(-1));
+        result = getInt8.call(numberArgs(-1));
         assertPendingRangeError(context, result);
 
-        result = DataViewPrototype.getInt8(context, dataView, new JSValue[]{new JSSymbol("offset")});
+        result = getInt8.call(new JSSymbol("offset"));
         assertPendingTypeError(context, result);
     }
 

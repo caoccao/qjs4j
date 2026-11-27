@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.core.temporal.calendar;
 
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.TemporalConstants;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.iso.IsoCalendarDateTime;
 import com.caoccao.qjs4j.core.temporal.iso.IsoDate;
@@ -483,13 +484,11 @@ public enum TemporalCalendarId {
             return TemporalCalendarId.ISO8601;
         }
         if (!(calendarValue instanceof JSString calendarString)) {
-            context.throwTypeError("Temporal error: Calendar must be string.");
-            return null;
+            return TemporalError.INVALID_CALENDAR_TYPE.reject(context);
         }
         TemporalCalendarId canonicalCalendarId = TemporalCalendarId.fromIdentifier(calendarString.value());
         if (canonicalCalendarId == null) {
-            context.throwRangeError("Temporal error: Invalid calendar.");
-            return null;
+            return TemporalError.INVALID_CALENDAR.reject(context);
         }
         return canonicalCalendarId;
     }
@@ -502,8 +501,7 @@ public enum TemporalCalendarId {
             return date.getCalendarId();
         }
         if (!(calendarValue instanceof JSString calendarString)) {
-            context.throwTypeError("Temporal error: Calendar must be string.");
-            return null;
+            return TemporalError.INVALID_CALENDAR_TYPE.reject(context);
         }
 
         TemporalCalendarId canonicalCalendarId = TemporalCalendarId.fromIdentifier(calendarString.value());
@@ -513,8 +511,7 @@ public enum TemporalCalendarId {
 
         String calendarStringValue = calendarString.value();
         if (!canParseCalendarLikeString(context, calendarStringValue)) {
-            context.throwRangeError("Temporal error: Invalid calendar.");
-            return null;
+            return TemporalError.INVALID_CALENDAR.reject(context);
         }
 
         String firstCalendarAnnotation = TemporalUtils.firstCalendarAnnotation(calendarStringValue);

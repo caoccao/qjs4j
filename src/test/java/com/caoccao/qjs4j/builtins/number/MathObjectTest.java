@@ -304,12 +304,13 @@ public class MathObjectTest extends BaseJavetTest {
     @Test
     public void testRandom() {
         // Normal case: random number
-        JSValue result = MathObject.random(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+        var randomMethod = builtin(MathObject::random, JSUndefined.INSTANCE);
+        JSValue result = randomMethod.call();
         double randomValue = result.asNumber().map(JSNumber::value).orElseThrow();
         assertThat(randomValue >= 0.0 && randomValue < 1.0).isTrue();
 
         // Edge case: with arguments (should ignore them)
-        result = MathObject.random(context, JSUndefined.INSTANCE, numberArgs(42));
+        result = randomMethod.call(numberArgs(42));
         randomValue = result.asNumber().map(JSNumber::value).orElseThrow();
         assertThat(randomValue >= 0.0 && randomValue < 1.0).isTrue();
     }

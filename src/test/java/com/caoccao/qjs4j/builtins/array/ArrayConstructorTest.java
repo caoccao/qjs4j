@@ -191,12 +191,13 @@ public class ArrayConstructorTest extends BaseJavetTest {
 
     @Test
     public void testOf() {
-        assertElements(ArrayConstructor.of(context, JSUndefined.INSTANCE, numberArgs(1, 2, 3)), numberArgs(1, 2, 3));
-        assertElements(ArrayConstructor.of(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
-        assertElements(ArrayConstructor.of(context, JSUndefined.INSTANCE, stringArgs("hello")), new JSString("hello"));
+        var of = builtin(ArrayConstructor::of, JSUndefined.INSTANCE);
+        assertElements(of.call(numberArgs(1, 2, 3)), numberArgs(1, 2, 3));
+        assertElements(of.call());
+        assertElements(of.call(stringArgs("hello")), new JSString("hello"));
 
         JSValue[] mixed = {JSNumber.of(1), new JSString("two"), JSBoolean.TRUE};
-        assertElements(ArrayConstructor.of(context, JSUndefined.INSTANCE, mixed), mixed);
+        assertElements(of.call(mixed), mixed);
         assertStringWithJavet("JSON.stringify(Array.of(...[1,2,3]))");
     }
 

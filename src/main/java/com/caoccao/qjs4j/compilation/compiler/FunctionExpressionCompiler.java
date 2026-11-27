@@ -104,7 +104,7 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
             // A frame failing to destructure an argument reports the parameter's position.
             functionContext.emitter.emitSourcePosition(pattern.getLocation());
             // Push the argument value onto the stack
-            functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, slotIndex);
+            functionContext.emitter.emitGetLocal(slotIndex);
             // Destructure and assign to local variables
             functionContext.patternCompiler.compile(pattern);
         }

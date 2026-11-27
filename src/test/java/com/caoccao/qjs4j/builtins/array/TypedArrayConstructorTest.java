@@ -207,43 +207,40 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
 
     @Test
     public void testTypedArrayOfConstructorBehavior() {
-        assertStringWithJavet("TypedArray.of.call(Uint8Array, 1, 2, 3).toString()", """
-                (() => {
-                  let capturedLength = -1;
-                  const ctor = function(length) {
-                    capturedLength = length;
-                    return new Uint8Array(length);
-                  };
-                  const out = TypedArray.of.call(ctor, 8, 9);
-                  return [capturedLength, out.length, out[0], out[1]].join(',');
-                })()""");
+        assertStringWithJavet("TypedArray.of.call(Uint8Array, 1, 2, 3).toString()", inArrowFunction("""
+                let capturedLength = -1;
+                const ctor = function(length) {
+                  capturedLength = length;
+                  return new Uint8Array(length);
+                };
+                const out = TypedArray.of.call(ctor, 8, 9);
+                return [capturedLength, out.length, out[0], out[1]].join(',');
+                """));
         assertErrorWithJavet("TypedArray.of.call({}, 1)", "TypedArray.of.call(function() { return {}; }, 1)");
     }
 
     @Test
     public void testTypedArrayPrototypeExoticSetWithArrayReceiver() {
-        assertStringWithJavet("""
-                (() => {
-                  const typedArray = new Uint8Array([7]);
-                  const receiverArray = [];
-                  Object.setPrototypeOf(receiverArray, typedArray);
-                  receiverArray[0] = 9;
-                  return [
-                    receiverArray.hasOwnProperty('0'),
-                    receiverArray[0],
-                    typedArray[0]
-                  ].join(',');
-                })()""", """
-                (() => {
-                  const typedArray = new Uint8Array([7]);
-                  const receiverArray = [];
-                  Object.setPrototypeOf(receiverArray, typedArray);
-                  receiverArray[1] = 9;
-                  return [
-                    receiverArray.hasOwnProperty('1'),
-                    String(typedArray[1])
-                  ].join(',');
-                })()""");
+        assertStringWithJavet(inArrowFunction("""
+                const typedArray = new Uint8Array([7]);
+                const receiverArray = [];
+                Object.setPrototypeOf(receiverArray, typedArray);
+                receiverArray[0] = 9;
+                return [
+                  receiverArray.hasOwnProperty('0'),
+                  receiverArray[0],
+                  typedArray[0]
+                ].join(',');
+                """), inArrowFunction("""
+                const typedArray = new Uint8Array([7]);
+                const receiverArray = [];
+                Object.setPrototypeOf(receiverArray, typedArray);
+                receiverArray[1] = 9;
+                return [
+                  receiverArray.hasOwnProperty('1'),
+                  String(typedArray[1])
+                ].join(',');
+                """));
     }
 
     @Test
@@ -254,12 +251,11 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
 
     @Test
     public void testTypedArrayWithDetachedDuringValueOf() {
-        assertErrorWithJavet("""
-                (() => {
-                    let ta = new Int32Array(5);
-                    let value = { valueOf() { $262.detachArrayBuffer(ta.buffer); return 0; } };
-                    ta.with(0, value);
-                })()""");
+        assertErrorWithJavet(inArrowFunction("""
+                  let ta = new Int32Array(5);
+                  let value = { valueOf() { $262.detachArrayBuffer(ta.buffer); return 0; } };
+                  ta.with(0, value);
+                """));
     }
 
     @Test

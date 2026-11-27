@@ -80,7 +80,7 @@ final class StatementCompiler extends AstNodeCompiler<Statement> {
     private void compileExpressionStatement(Expression expr) {
         compilerContext.expressionCompiler.compile(expr);
         if (compilerContext.evalReturnLocalIndex >= 0) {
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
         } else if (!compilerContext.isLastInProgram) {
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
@@ -99,7 +99,7 @@ final class StatementCompiler extends AstNodeCompiler<Statement> {
     public void emitEvalReturnUndefinedIfNeeded() {
         if (compilerContext.evalReturnLocalIndex >= 0) {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
         }
     }
 

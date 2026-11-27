@@ -135,8 +135,7 @@ public final class TemporalPlainDateConstructor {
         if (item instanceof JSString itemStr) {
             return TemporalUtils.finishStringConversion(context, dateFromString(context, itemStr.value()), options);
         }
-        context.throwTypeError("Temporal error: Date argument must be object or string.");
-        return JSUndefined.INSTANCE;
+        return TemporalError.INVALID_DATE_ARGUMENT.undefined(context);
     }
 
     public static JSTemporalPlainDate toTemporalDateObject(JSContext context, JSValue item) {

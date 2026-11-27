@@ -33,8 +33,8 @@ import com.caoccao.qjs4j.core.temporal.iso.IsoDate;
 import com.caoccao.qjs4j.core.temporal.iso.IsoDateTime;
 import com.caoccao.qjs4j.core.temporal.iso.IsoTime;
 import com.caoccao.qjs4j.core.temporal.rounding.TemporalRoundSettings;
-import com.caoccao.qjs4j.core.temporal.timezone.TemporalDisambiguation;
 import com.caoccao.qjs4j.core.temporal.timezone.TemporalTimeZone;
+import com.caoccao.qjs4j.core.temporal.timezone.TemporalZonedDateTimeOptions;
 
 import java.math.BigInteger;
 import java.time.DateTimeException;
@@ -95,24 +95,6 @@ public final class TemporalPlainDateTimePrototype {
 
     public static JSValue eraYear(JSContext context, JSValue thisArg, JSValue[] args) {
         return TemporalDateProperty.ERA_YEAR.read(context, thisArg, RECEIVER);
-    }
-
-    private static String getTemporalDisambiguation(JSContext context, JSValue optionsArg) {
-        if (optionsArg instanceof JSUndefined || optionsArg == null) {
-            return "compatible";
-        }
-        if (!(optionsArg instanceof JSObject optionsObject)) {
-            return TemporalError.INVALID_OPTIONS.reject(context);
-        }
-        String disambiguation = TemporalUtils.getStringOption(context, optionsObject, "disambiguation", "compatible");
-        if (context.hasPendingException() || disambiguation == null) {
-            return null;
-        }
-        if (TemporalDisambiguation.fromString(disambiguation) == null) {
-            context.throwRangeError("Temporal error: Invalid disambiguation option.");
-            return null;
-        }
-        return disambiguation;
     }
 
     public static JSValue hour(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -268,7 +250,7 @@ public final class TemporalPlainDateTimePrototype {
         }
 
         JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
-        String disambiguation = getTemporalDisambiguation(context, optionsArg);
+        String disambiguation = TemporalZonedDateTimeOptions.disambiguation(context, optionsArg);
         if (context.hasPendingException() || disambiguation == null) {
             return JSUndefined.INSTANCE;
         }

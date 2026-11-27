@@ -162,8 +162,8 @@ final class ClassExpressionCompiler {
             // while it is on the stack, so they share both that brand and the lexical environment.
             for (ClassDeclarationCompiler.PrivateMethodEntry entry : privateInstanceMethodFunctions) {
                 compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, entry.function());
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC,
-                        compilerContext.scopeManager.currentScope().getLocal(entry.bindingName()));
+                compilerContext.emitter
+                        .emitPutLocal(compilerContext.scopeManager.currentScope().getLocal(entry.bindingName()));
             }
             // The constructor reads its private methods through references to these slots, which every evaluation
             // of the class in the same frame writes again. Close the slots as soon as they hold this evaluation's
@@ -203,7 +203,7 @@ final class ClassExpressionCompiler {
 
             if (hasClassNameScope) {
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, classNameLocalIndex);
+                compilerContext.emitter.emitPutLocal(classNameLocalIndex);
             }
 
             for (ClassElement staticInitializer : staticInitializers) {

@@ -328,7 +328,8 @@ public class NumberPrototypeTest extends BaseJavetTest {
         JSNumber num = new JSNumber(123.456);
 
         // Normal case: default precision (no argument - uses minimal precision)
-        JSValue result = NumberPrototype.toExponential(context, num, JSValue.NO_ARGS);
+        var toExponential = builtin(NumberPrototype::toExponential, num);
+        JSValue result = toExponential.call();
         assertStringValue(result, "1.23456e+2");
         result = NumberPrototype.toExponential(context, new JSNumber(123123123123123.456D), JSValue.NO_ARGS);
         assertStringValue(result, "1.2312312312312345e+14");
@@ -336,7 +337,7 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "1.2312312312312312e+17");
 
         // Normal case: specific precision
-        result = NumberPrototype.toExponential(context, num, numberArgs(2));
+        result = toExponential.call(numberArgs(2));
         assertStringValue(result, "1.23e+2");
 
         // Normal case: zero
@@ -360,10 +361,10 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "-Infinity");
 
         // Edge case: precision too low - skip error check due to JSObject implementation
-        assertPendingRangeError(context, NumberPrototype.toExponential(context, num, numberArgs(-1)));
+        assertPendingRangeError(context, toExponential.call(numberArgs(-1)));
 
         // Edge case: precision too high - skip error check due to JSObject implementation
-        assertPendingRangeError(context, NumberPrototype.toExponential(context, num, numberArgs(101)));
+        assertPendingRangeError(context, toExponential.call(numberArgs(101)));
     }
 
     @Test
@@ -422,10 +423,11 @@ public class NumberPrototypeTest extends BaseJavetTest {
                 .satisfies(s -> assertThat(s.contains("e")).isTrue());
 
         // Edge case: precision too low - skip error check due to JSObject implementation
-        assertPendingRangeError(context, NumberPrototype.toFixed(context, num, numberArgs(-1)));
+        var toFixedMethod = builtin(NumberPrototype::toFixed, num);
+        assertPendingRangeError(context, toFixedMethod.call(numberArgs(-1)));
 
         // Edge case: precision too high - skip error check due to JSObject implementation
-        assertPendingRangeError(context, NumberPrototype.toFixed(context, num, numberArgs(101)));
+        assertPendingRangeError(context, toFixedMethod.call(numberArgs(101)));
     }
 
     @Test
@@ -464,11 +466,12 @@ public class NumberPrototypeTest extends BaseJavetTest {
         JSNumber num = new JSNumber(123.456);
 
         // Normal case: default precision
-        JSValue result = NumberPrototype.toPrecision(context, num, JSValue.NO_ARGS);
+        var toPrecision = builtin(NumberPrototype::toPrecision, num);
+        JSValue result = toPrecision.call();
         assertStringValue(result, "123.456");
 
         // Normal case: specific precision
-        result = NumberPrototype.toPrecision(context, num, numberArgs(4));
+        result = toPrecision.call(numberArgs(4));
         assertStringValue(result, "123.5");
 
         // Normal case: exponential notation for small numbers
@@ -492,10 +495,10 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "Infinity");
 
         // Edge case: precision too low - skip error check due to JSObject implementation
-        assertPendingRangeError(context, NumberPrototype.toPrecision(context, num, numberArgs(0)));
+        assertPendingRangeError(context, toPrecision.call(numberArgs(0)));
 
         // Edge case: precision too high - skip error check due to JSObject implementation
-        assertPendingRangeError(context, NumberPrototype.toPrecision(context, num, numberArgs(101)));
+        assertPendingRangeError(context, toPrecision.call(numberArgs(101)));
     }
 
     @Test
@@ -538,10 +541,11 @@ public class NumberPrototypeTest extends BaseJavetTest {
         assertStringValue(result, "0");
 
         // Edge case: radix too low - skip error check due to JSObject implementation
-        assertPendingRangeError(context, NumberPrototype.toString(context, num, numberArgs(1)));
+        var toStringMethod = builtin(NumberPrototype::toString, num);
+        assertPendingRangeError(context, toStringMethod.call(numberArgs(1)));
 
         // Edge case: radix too high - skip error check due to JSObject implementation
-        assertPendingRangeError(context, NumberPrototype.toString(context, num, numberArgs(37)));
+        assertPendingRangeError(context, toStringMethod.call(numberArgs(37)));
 
         // Edge case: non-integer with non-10 radix (now supported for floating-point conversion)
         result = NumberPrototype.toString(context, new JSNumber(42.5), numberArgs(16));

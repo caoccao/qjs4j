@@ -29,7 +29,7 @@ final class ImportExpressionCompiler {
         if (importExpr.getOptions() != null) {
             compilerContext.expressionCompiler.compile(importExpr.getOptions());
         } else if (importExpr.isDefer()) {
-            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSImportDeferMarker.VALUE);
+            compilerContext.emitter.emitPushConstant(JSImportDeferMarker.VALUE);
         } else {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }

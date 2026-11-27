@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.builtins.temporal.plain;
 import com.caoccao.qjs4j.builtins.temporal.TemporalTimeFields;
 import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.iso.IsoDateTime;
 import com.caoccao.qjs4j.core.temporal.iso.IsoTime;
@@ -52,8 +53,7 @@ public final class TemporalPlainTimeConstructor {
         }
 
         if (!isoTime.isValid()) {
-            context.throwRangeError("Temporal error: Invalid time");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_TIME.undefined(context);
         }
 
         JSObject resolvedPrototype = TemporalUtils.resolveTemporalPrototype(context, "PlainTime");
@@ -122,7 +122,7 @@ public final class TemporalPlainTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        IsoTime time = bag.regulate(original, overflow, "Temporal error: Invalid time");
+        IsoTime time = bag.regulate(original, overflow, TemporalError.INVALID_TIME.message());
         return time == null ? JSUndefined.INSTANCE : JSTemporalPlainTime.create(context, time);
     }
 

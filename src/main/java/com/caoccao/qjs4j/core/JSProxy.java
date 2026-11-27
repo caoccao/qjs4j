@@ -257,22 +257,9 @@ public final class JSProxy extends JSObject {
             boolean success = JSTypeConversions.toBoolean(result) == JSBoolean.TRUE;
 
             if (success) {
-                PropertyDescriptor targetDesc = targetObj.getOwnPropertyDescriptor(key);
-                if (targetDesc != null) {
-                    if (!targetDesc.isConfigurable()) {
-                        executionContext.throwTypeError("'deleteProperty' on proxy: trap returned truish for property '"
-                                + key.toPropertyString() + "' which is non-configurable in the proxy target");
-                        return false;
-                    }
-                    if (!targetObj.isExtensible()) {
-                        executionContext.throwTypeError("'deleteProperty' on proxy: trap returned truish for property '"
-                                + key.toPropertyString() + "' but the proxy target is non-extensible");
-                        return false;
-                    }
-                }
+                return ProxyDescriptorInvariants.canHideProperty(executionContext, targetObj, key, true);
             }
-
-            if (!success && strictMode) {
+            if (strictMode) {
                 executionContext.throwTypeError("'deleteProperty' on proxy: trap returned falsish for property '"
                         + key.toPropertyString() + "'");
                 return false;
@@ -612,19 +599,8 @@ public final class JSProxy extends JSObject {
             boolean trapResult = JSTypeConversions.toBoolean(result) == JSBoolean.TRUE;
 
             if (!trapResult) {
-                PropertyDescriptor targetDesc = targetObj.getOwnPropertyDescriptor(key);
-                if (targetDesc != null && (!targetDesc.isConfigurable() || !targetObj.isExtensible())) {
-                    if (!targetDesc.isConfigurable()) {
-                        executionContext.throwTypeError("'has' on proxy: trap returned falsish for property '"
-                                + key.toPropertyString() + "' which exists in the proxy target as non-configurable");
-                        return false;
-                    }
-                    executionContext.throwTypeError("'has' on proxy: trap returned falsish for property '"
-                            + key.toPropertyString() + "' but the proxy target is not extensible");
-                    return false;
-                }
+                ProxyDescriptorInvariants.canHideProperty(executionContext, targetObj, key, false);
             }
-
             return trapResult;
         }
 

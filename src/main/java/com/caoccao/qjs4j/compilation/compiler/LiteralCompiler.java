@@ -47,7 +47,7 @@ final class LiteralCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_BIGINT_I32);
                 compilerContext.emitter.emitI32(bigInt.intValue());
             } else {
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSBigInt(bigInt));
+                compilerContext.emitter.emitPushConstant(new JSBigInt(bigInt));
             }
         } else if (value instanceof Number num) {
             // Try to emit as i32 if it's an integer in range
@@ -60,7 +60,7 @@ final class LiteralCompiler {
                 }
             }
             // Otherwise emit as constant
-            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(num.doubleValue()));
+            compilerContext.emitter.emitPushConstant(JSNumber.of(num.doubleValue()));
         } else if (value instanceof RegExpLiteralValue regExpLiteralValue) {
             String source = regExpLiteralValue.source();
             int lastSlash = source.lastIndexOf('/');
@@ -81,7 +81,7 @@ final class LiteralCompiler {
             }
             throw new JSSyntaxErrorException("Invalid regular expression literal: " + source, literal.getLocation());
         } else if (value instanceof String str) {
-            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(str));
+            compilerContext.emitter.emitPushConstant(new JSString(str));
         } else {
             // Other types as constants
             throw new JSCompilerException("Unsupported literal type: " + value.getClass(), literal);

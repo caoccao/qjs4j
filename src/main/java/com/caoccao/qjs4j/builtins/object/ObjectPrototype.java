@@ -104,21 +104,7 @@ public final class ObjectPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        // Proxies have their own setPrototype logic with trap handling
-        if (obj instanceof JSProxy) {
-            obj.setPrototype(protoObj);
-            return JSUndefined.INSTANCE;
-        }
-
-        JSObject.SetPrototypeResult result = obj.setPrototypeChecked(protoObj);
-        if (result != JSObject.SetPrototypeResult.SUCCESS) {
-            String msg = result == JSObject.SetPrototypeResult.NOT_EXTENSIBLE
-                    ? "object is not extensible"
-                    : "circular prototype chain";
-            return context.throwTypeError(msg);
-        }
-
-        return JSUndefined.INSTANCE;
+        return ObjectConstructor.setPrototype(context, obj, protoObj, JSUndefined.INSTANCE);
     }
 
     /**

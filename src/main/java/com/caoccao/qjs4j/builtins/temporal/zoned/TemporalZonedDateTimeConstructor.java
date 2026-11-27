@@ -118,8 +118,8 @@ public final class TemporalZonedDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        IsoTime isoTime = IsoTime.regulate(context, options.overflow(), "Temporal error: Invalid time", hour, minute,
-                second, millisecond, microsecond, nanosecond);
+        IsoTime isoTime = IsoTime.regulate(context, options.overflow(), TemporalError.INVALID_TIME.message(), hour,
+                minute, second, millisecond, microsecond, nanosecond);
         if (isoTime == null) {
             return JSUndefined.INSTANCE;
         }

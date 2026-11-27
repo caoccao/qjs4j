@@ -100,8 +100,8 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         JSObject boundThis = new JSObject(context);
         boundThis.set("value", new JSNumber(10));
 
-        JSValue result = FunctionPrototype.bind(context, testFunc,
-                new JSValue[]{boundThis, new JSNumber(1), new JSNumber(2)});
+        var bindMethod = builtin(FunctionPrototype::bind, testFunc);
+        JSValue result = bindMethod.call(boundThis, new JSNumber(1), new JSNumber(2));
         JSBoundFunction boundFunc = result.asBoundFunction().orElseThrow();
 
         // Call the bound function
@@ -115,7 +115,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
                                              // 3
 
         // Normal case: bind with no pre-bound arguments
-        result = FunctionPrototype.bind(context, testFunc, new JSValue[]{boundThis});
+        result = bindMethod.call(boundThis);
         boundFunc = result.asBoundFunction().orElseThrow();
 
         callResult = boundFunc.call(context, JSUndefined.INSTANCE, numberArgs(5));
@@ -193,38 +193,36 @@ public class FunctionPrototypeTest extends BaseJavetTest {
     @Test
     public void testFunctionConstructor() {
         // Normal case: function with parameters and body
-        JSValue result = FunctionConstructor.call(context, JSUndefined.INSTANCE, stringArgs("a", "b", "return a + b;"));
+        var functionConstructor = builtin(FunctionConstructor::call, JSUndefined.INSTANCE);
+        JSValue result = functionConstructor.call(stringArgs("a", "b", "return a + b;"));
         assertThat(result).isInstanceOfSatisfying(JSFunction.class, func -> {
             JSValue callResult = func.call(context, JSUndefined.INSTANCE, numberArgs(2, 3));
             assertNumberValue(callResult, 5.0);
         });
 
         // Normal case: function with only body (no parameters)
-        result = FunctionConstructor.call(context, JSUndefined.INSTANCE, stringArgs("return 42;"));
+        result = functionConstructor.call(stringArgs("return 42;"));
         assertThat(result).isInstanceOfSatisfying(JSFunction.class, func -> {
             JSValue callResult = func.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
             assertNumberValue(callResult, 42.0);
         });
 
         // Normal case: function with empty body
-        result = FunctionConstructor.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+        result = functionConstructor.call();
         assertThat(result).isInstanceOfSatisfying(JSFunction.class, func -> {
             JSValue callResult = func.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
             assertThat(callResult).isEqualTo(JSUndefined.INSTANCE);
         });
 
         // Normal case: function with multiple parameters
-        result = FunctionConstructor.call(context, JSUndefined.INSTANCE,
-                stringArgs("x", "y", "z", "return x * y + z;"));
+        result = functionConstructor.call(stringArgs("x", "y", "z", "return x * y + z;"));
         assertThat(result).isInstanceOfSatisfying(JSFunction.class, func -> {
             JSValue callResult = func.call(context, JSUndefined.INSTANCE, numberArgs(3, 4, 5));
             assertNumberValue(callResult, 17.0);
         });
 
         // Edge case: syntax error in function body
-        result = FunctionConstructor.call(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSString("a"), new JSString("return a +") // Incomplete expression
-                });
+        result = functionConstructor.call(new JSString("a"), new JSString("return a +")); // Incomplete expression
         assertPendingSyntaxError(context, result);
     }
 
@@ -264,46 +262,38 @@ public class FunctionPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testFunctionEdgeCasesWithJavet() {
-        assertIntegerWithJavet("""
-                (() => {
-                  function sum(a, b, c) {
-                    return a + b + c;
-                  }
-                  return sum.apply(null, { 0: 1, 1: 2, 2: 3, length: 3 });
-                })()
-                """, """
-                (() => {
-                  function sum(a, b, c) {
-                    return a + b + c;
-                  }
-                  const args = (function() { return arguments; })(1, 2, 3);
-                  return sum.apply(null, args);
-                })()
-                """);
+        assertIntegerWithJavet(inArrowFunction("""
+                function sum(a, b, c) {
+                  return a + b + c;
+                }
+                return sum.apply(null, { 0: 1, 1: 2, 2: 3, length: 3 });
+                """), inArrowFunction("""
+                function sum(a, b, c) {
+                  return a + b + c;
+                }
+                const args = (function() { return arguments; })(1, 2, 3);
+                return sum.apply(null, args);
+                """));
 
-        assertBooleanWithJavet("""
-                (() => {
-                  function C(a, b) {
-                    this.sum = a + b;
-                  }
-                  const Bound = C.bind({ sum: -1 }, 2);
-                  const instance = new Bound(5);
-                  return instance.sum === 7 && instance instanceof C && instance instanceof Bound;
-                })()
-                """, """
-                (() => {
-                  const methods = ['call', 'apply', 'bind', 'toString'];
-                  const methodsOk = methods.every((name) => {
-                    const d = Object.getOwnPropertyDescriptor(Function.prototype, name);
-                    return d.writable === true && d.enumerable === false && d.configurable === true;
-                  });
-                  const constructorDesc = Object.getOwnPropertyDescriptor(Function, 'prototype');
-                  return methodsOk
-                    && constructorDesc.writable === false
-                    && constructorDesc.enumerable === false
-                    && constructorDesc.configurable === false;
-                })()
-                """);
+        assertBooleanWithJavet(inArrowFunction("""
+                function C(a, b) {
+                  this.sum = a + b;
+                }
+                const Bound = C.bind({ sum: -1 }, 2);
+                const instance = new Bound(5);
+                return instance.sum === 7 && instance instanceof C && instance instanceof Bound;
+                """), inArrowFunction("""
+                const methods = ['call', 'apply', 'bind', 'toString'];
+                const methodsOk = methods.every((name) => {
+                  const d = Object.getOwnPropertyDescriptor(Function.prototype, name);
+                  return d.writable === true && d.enumerable === false && d.configurable === true;
+                });
+                const constructorDesc = Object.getOwnPropertyDescriptor(Function, 'prototype');
+                return methodsOk
+                  && constructorDesc.writable === false
+                  && constructorDesc.enumerable === false
+                  && constructorDesc.configurable === false;
+                """));
 
         assertErrorWithJavet("new Function(Symbol('x'))");
 

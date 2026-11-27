@@ -94,19 +94,15 @@ final class VariableDeclarationCompiler {
                     && declarator.getInit() != null && compilerContext.withObjectManager.hasActiveWithObject()) {
                 // Resolve binding before evaluating initializer (ES VariableDeclaration semantics).
                 compilerContext.assignmentExpressionCompiler.emitIdentifierReference(identifier.getName());
-                int preResolvedPropertyLocalIndex = compilerContext.scopeManager.currentScope()
-                        .declareLocal("#preResolvedVarProperty_" + compilerContext.emitter.currentOffset());
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, preResolvedPropertyLocalIndex);
-                int preResolvedObjectLocalIndex = compilerContext.scopeManager.currentScope()
-                        .declareLocal("#preResolvedVarObject_" + compilerContext.emitter.currentOffset());
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, preResolvedObjectLocalIndex);
+                int preResolvedPropertyLocalIndex = compilerContext.storeTemporary("#preResolvedVarProperty_");
+                int preResolvedObjectLocalIndex = compilerContext.storeTemporary("#preResolvedVarObject_");
 
                 compilerContext.expressionCompiler.compile(declarator.getInit());
                 if (declarator.getInit().isAnonymousFunction()) {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
                 }
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, preResolvedObjectLocalIndex);
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, preResolvedPropertyLocalIndex);
+                compilerContext.emitter.emitGetLocal(preResolvedObjectLocalIndex);
+                compilerContext.emitter.emitGetLocal(preResolvedPropertyLocalIndex);
                 compilerContext.emitter.emitOpcode(Opcode.ROT3L);
                 compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
                 continue;

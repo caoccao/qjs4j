@@ -166,41 +166,38 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
     public void testInstanceofInvokesTheGetPrototypeOfTrap() {
         // OrdinaryHasInstance step 4.b calls O.[[GetPrototypeOf]] on each step, so a Proxy in the
         // chain must be consulted rather than traversed as its target.
-        assertStringWithJavet("""
-                (function () {
-                  let trapCalls = 0;
-                  function Ctor() {}
-                  const proxyProto = new Proxy({}, {
-                    getPrototypeOf() { trapCalls++; return Ctor.prototype },
-                  });
-                  const obj = Object.create(proxyProto);
-                  const result = obj instanceof Ctor;
-                  return 'result=' + result + ' trapCalls=' + trapCalls;
-                })()""");
+        assertStringWithJavet(inFunction("""
+                let trapCalls = 0;
+                function Ctor() {}
+                const proxyProto = new Proxy({}, {
+                  getPrototypeOf() { trapCalls++; return Ctor.prototype },
+                });
+                const obj = Object.create(proxyProto);
+                const result = obj instanceof Ctor;
+                return 'result=' + result + ' trapCalls=' + trapCalls;
+                """));
     }
 
     @Test
     public void testProxyInThePrototypeChainStillSeesTheHasTrap() {
-        assertStringWithJavet("""
-                (function () {
-                  let trapKeys = [];
-                  const proxyProto = new Proxy({}, {
-                    has(target, key) { trapKeys.push(key); return key === 'viaTrap' },
-                  });
-                  const obj = Object.create(proxyProto);
-                  return ('viaTrap' in obj) + ',' + ('absent' in obj) + ',' + trapKeys.join('|');
-                })()""");
+        assertStringWithJavet(inFunction("""
+                let trapKeys = [];
+                const proxyProto = new Proxy({}, {
+                  has(target, key) { trapKeys.push(key); return key === 'viaTrap' },
+                });
+                const obj = Object.create(proxyProto);
+                return ('viaTrap' in obj) + ',' + ('absent' in obj) + ',' + trapKeys.join('|');
+                """));
     }
 
     @Test
     public void testSetPrototypeOfStillRejectsACycle() {
-        assertStringWithJavet("""
-                (function () {
-                  const a = {};
-                  const b = Object.create(a);
-                  try { Object.setPrototypeOf(a, b); return 'NO ERROR' }
-                  catch (e) { return 'CAUGHT ' + e.name }
-                })()""");
+        assertStringWithJavet(inFunction("""
+                const a = {};
+                const b = Object.create(a);
+                try { Object.setPrototypeOf(a, b); return 'NO ERROR' }
+                catch (e) { return 'CAUGHT ' + e.name }
+                """));
     }
 
     @Test
@@ -235,10 +232,9 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
     @Test
     public void testTypedArrayInheritsTheDepthBoundedWalk() {
         // JSTypedArray overrides the walk; it must carry the depth through to super.
-        assertStringWithJavet("""
-                (function () {
-                  const a = new Int32Array([1, 2, 3]);
-                  return (0 in a) + ',' + (3 in a) + ',' + ('length' in a) + ',' + ('map' in a);
-                })()""");
+        assertStringWithJavet(inFunction("""
+                const a = new Int32Array([1, 2, 3]);
+                return (0 in a) + ',' + (3 in a) + ',' + ('length' in a) + ',' + ('map' in a);
+                """));
     }
 }

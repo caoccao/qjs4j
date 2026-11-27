@@ -51,14 +51,13 @@ final class TemporalCalendarFields {
         Integer dayOfMonth = bag.integer("day");
         Integer month = bag.integer("month");
         IsoMonth parsedMonthCode = bag.monthCode();
-        Integer year = bag.resolvedYear(calendarId, "Temporal error: Date argument must be object or string.");
+        Integer year = bag.resolvedYear(calendarId, TemporalError.INVALID_DATE_ARGUMENT.message());
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
 
         if (year == null || dayOfMonth == null || (month == null && parsedMonthCode == null)) {
-            context.throwTypeError("Temporal error: Date argument must be object or string.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_DATE_ARGUMENT.undefined(context);
         }
 
         String overflow = TemporalUtils.getOverflowOption(context, options);
@@ -88,15 +87,13 @@ final class TemporalCalendarFields {
         IsoMonth parsedMonthCode = monthCode == null
                 ? null
                 : IsoMonth.parseByMonthCode(context, monthCode, TemporalError.INVALID_ISO_DATE.message());
-        Integer resolvedYear = bag.resolvedYear(calendarId,
-                "Temporal error: MonthDay argument must be object or string.");
+        Integer resolvedYear = bag.resolvedYear(calendarId, TemporalError.INVALID_MONTH_DAY_ARGUMENT.message());
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
         if (dayOfMonth == null || (month == null && parsedMonthCode == null)
                 || (resolvedYear == null && month != null && calendarId != TemporalCalendarId.ISO8601)) {
-            context.throwTypeError("Temporal error: MonthDay argument must be object or string.");
-            return JSUndefined.INSTANCE;
+            return TemporalError.INVALID_MONTH_DAY_ARGUMENT.undefined(context);
         }
 
         String overflow = TemporalUtils.getOverflowOption(context, options);

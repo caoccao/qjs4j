@@ -59,7 +59,7 @@ final class TaggedTemplateExpressionCompiler extends AstNodeCompiler<TaggedTempl
 
         // QuickJS behavior: each call site uses a stable, frozen template object.
         // Build it once in the constant pool and pass it as the first argument.
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, createTaggedTemplateObject(template));
+        compilerContext.emitter.emitPushConstant(createTaggedTemplateObject(template));
 
         // Add substitution expressions as additional arguments
         for (Expression expr : expressions) {

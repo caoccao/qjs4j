@@ -47,7 +47,7 @@ final class IfStatementCompiler extends AstNodeCompiler<IfStatement> {
             // IfStatement completion defaults to undefined before branch evaluation.
             // Branch statements that produce a completion value overwrite this slot.
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
         }
 
         // Compile condition

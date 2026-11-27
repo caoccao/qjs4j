@@ -63,14 +63,14 @@ final class ArrayExpressionDestructuringAssignmentCompiler extends AstNodeCompil
         for (int valueIndex = preservedValueCount - 1; valueIndex >= 0; valueIndex--) {
             int localIndex = compilerContext.scopeManager.currentScope()
                     .declareLocal("#iter_preserve_" + valueIndex + "_" + compilerContext.emitter.currentOffset());
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
+            compilerContext.emitter.emitPutLocal(localIndex);
             preservedLocalIndexes[valueIndex] = localIndex;
         }
 
         compilerContext.emitHelpers.emitDropIteratorState();
 
         for (int valueIndex = 0; valueIndex < preservedValueCount; valueIndex++) {
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, preservedLocalIndexes[valueIndex]);
+            compilerContext.emitter.emitGetLocal(preservedLocalIndexes[valueIndex]);
         }
     }
 }

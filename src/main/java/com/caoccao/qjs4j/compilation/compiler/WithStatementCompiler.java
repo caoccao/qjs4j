@@ -36,7 +36,7 @@ final class WithStatementCompiler {
         if (compilerContext.evalReturnLocalIndex >= 0) {
             // Default with completion value is undefined.
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
         }
 
         compilerContext.scopeManager.enterScope();
@@ -44,7 +44,7 @@ final class WithStatementCompiler {
                 .declareLocal("#withObject" + compilerContext.scopeManager.getScopeDepth());
         compilerContext.expressionCompiler.compile(withStmt.getObject());
         compilerContext.emitter.emitOpcode(Opcode.TO_OBJECT);
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, withObjectLocalIndex);
+        compilerContext.emitter.emitPutLocal(withObjectLocalIndex);
 
         compilerContext.withObjectManager.pushLocal(withObjectLocalIndex);
         boolean savedIsLastInProgram = compilerContext.isLastInProgram;

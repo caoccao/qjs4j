@@ -60,17 +60,14 @@ final class ObjectExpressionDestructuringAssignmentCompiler {
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
 
-        int sourceLocalIndex = compilerContext.scopeManager.currentScope()
-                .declareLocal("#objectAssignSource" + compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, sourceLocalIndex);
+        int sourceLocalIndex = compilerContext.storeTemporary("#objectAssignSource");
 
         // If there's a rest element with regular properties, create an exclude list
         int excludeListLocalIndex = -1;
         if (restTarget != null && !regularProperties.isEmpty()) {
             compilerContext.emitter.emitOpcode(Opcode.OBJECT);
-            excludeListLocalIndex = compilerContext.scopeManager.currentScope()
-                    .declareLocal("#excludeList" + compilerContext.emitter.currentOffset());
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, excludeListLocalIndex);
+            excludeListLocalIndex = compilerContext.declareTemporary("#excludeList");
+            compilerContext.emitter.emitPutLocal(excludeListLocalIndex);
         }
 
         for (ObjectExpressionProperty property : regularProperties) {
@@ -78,14 +75,13 @@ final class ObjectExpressionDestructuringAssignmentCompiler {
             if (property.isComputed()) {
                 compilerContext.expressionCompiler.compile(property.getKey());
                 compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
-                propertyKeyLocalIndex = compilerContext.scopeManager.currentScope()
-                        .declareLocal("#objectAssignKey" + compilerContext.emitter.currentOffset());
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, propertyKeyLocalIndex);
+                propertyKeyLocalIndex = compilerContext.declareTemporary("#objectAssignKey");
+                compilerContext.emitter.emitPutLocal(propertyKeyLocalIndex);
             }
 
             int targetDepth = compilerContext.expressionCompiler.preEvaluateAssignmentTarget(property.getValue());
 
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, sourceLocalIndex);
+            compilerContext.emitter.emitGetLocal(sourceLocalIndex);
             String atom = ObjectDestructuringCompiler.prepareRead(compilerContext, property, propertyKeyLocalIndex);
             ObjectDestructuringCompiler.read(compilerContext.emitter, atom);
 
@@ -96,14 +92,14 @@ final class ObjectExpressionDestructuringAssignmentCompiler {
             if (restTarget != null) {
                 if (property.isComputed()) {
                     // Computed property: use PUT_ARRAY_EL which works with objects.
-                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, excludeListLocalIndex);
-                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, propertyKeyLocalIndex);
+                    compilerContext.emitter.emitGetLocal(excludeListLocalIndex);
+                    compilerContext.emitter.emitGetLocal(propertyKeyLocalIndex);
                     compilerContext.emitter.emitOpcode(Opcode.NULL);
                     compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                     compilerContext.emitter.emitOpcode(Opcode.DROP); // drop null value
                 } else {
                     // Non-computed: use DEFINE_FIELD with atom name.
-                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, excludeListLocalIndex);
+                    compilerContext.emitter.emitGetLocal(excludeListLocalIndex);
                     compilerContext.emitter.emitOpcode(Opcode.NULL);
                     String name = ObjectDestructuringCompiler.staticKey(property);
                     if (name != null) {
@@ -117,9 +113,9 @@ final class ObjectExpressionDestructuringAssignmentCompiler {
         if (restTarget != null) {
             boolean hasExclusions = excludeListLocalIndex >= 0;
             if (hasExclusions) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, excludeListLocalIndex);
+                compilerContext.emitter.emitGetLocal(excludeListLocalIndex);
             }
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, sourceLocalIndex);
+            compilerContext.emitter.emitGetLocal(sourceLocalIndex);
             ObjectDestructuringCompiler.copyRest(compilerContext.emitter, hasExclusions);
             compilerContext.expressionDestructuringAssignmentCompiler.compile(restTarget);
             ObjectDestructuringCompiler.finishRest(compilerContext.emitter, hasExclusions);

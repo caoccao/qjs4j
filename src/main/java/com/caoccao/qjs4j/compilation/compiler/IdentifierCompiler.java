@@ -176,7 +176,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
     boolean emitInheritedWithObject(String bindingName) {
         Integer localIndex = compilerContext.scopeManager.findLocalInScopes(bindingName);
         if (localIndex != null) {
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
+            compilerContext.emitter.emitGetLocal(localIndex);
             return true;
         }
         Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(bindingName);
@@ -210,7 +210,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
 
         int withObjectLocalIndex = withObjectLocals.get(withDepth);
         // Load with-object and check if it has the property
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withObjectLocalIndex);
+        compilerContext.emitter.emitGetLocal(withObjectLocalIndex);
         emitWithObjectDelete(name,
                 () -> emitWithAwareDeleteIdentifier(name, withObjectLocals, withDepth + 1, fallbackToFalse));
     }
@@ -231,7 +231,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         }
 
         int withObjectLocalIndex = withObjectLocals.get(withDepth);
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withObjectLocalIndex);
+        compilerContext.emitter.emitGetLocal(withObjectLocalIndex);
         emitWithObjectLookup(name, forCall,
                 () -> emitWithAwareIdentifierLookup(name, withObjectLocals, withDepth + 1, forCall));
     }
@@ -257,7 +257,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
      */
     private void emitWithObjectDelete(String name, Runnable emitFallback) {
         var fallback = WithBindingCompiler.emitHasBinding(compilerContext, name);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
+        compilerContext.emitter.emitPushConstant(new JSString(name));
         compilerContext.emitter.emitOpcode(Opcode.DELETE);
         int end = compilerContext.emitter.emitJump(Opcode.GOTO);
         fallback.begin(compilerContext.emitter);

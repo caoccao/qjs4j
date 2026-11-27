@@ -76,8 +76,8 @@ public class HighPriorityOpcodeTest extends OpcodeTest {
         iteratorWithReturn.set("return", returnMethod);
 
         BytecodeEmitter closeEmitter = new BytecodeEmitter();
-        closeEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, iteratorWithReturn);
-        closeEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSUndefined.INSTANCE);
+        closeEmitter.emitPushConstant(iteratorWithReturn);
+        closeEmitter.emitPushConstant(JSUndefined.INSTANCE);
         closeEmitter.emitOpcodeU32(Opcode.PUSH_I32, 0);
         closeEmitter.emitOpcode(Opcode.ITERATOR_CLOSE);
         closeEmitter.emitOpcode(Opcode.PUSH_TRUE);
@@ -89,7 +89,7 @@ public class HighPriorityOpcodeTest extends OpcodeTest {
 
         JSObject iteratorWithoutThrow = context.createJSObject();
         BytecodeEmitter callEmitter = new BytecodeEmitter();
-        callEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, iteratorWithoutThrow);
+        callEmitter.emitPushConstant(iteratorWithoutThrow);
         callEmitter.emitOpcode(Opcode.UNDEFINED);
         callEmitter.emitOpcodeU32(Opcode.PUSH_I32, 0);
         callEmitter.emitOpcodeU32(Opcode.PUSH_I32, 1);
@@ -112,8 +112,8 @@ public class HighPriorityOpcodeTest extends OpcodeTest {
         iterator.set("next", nextMethod);
 
         BytecodeEmitter emitter = new BytecodeEmitter();
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, iterator);
-        emitter.emitOpcodeConstant(Opcode.PUSH_CONST, nextMethod);
+        emitter.emitPushConstant(iterator);
+        emitter.emitPushConstant(nextMethod);
         emitter.emitOpcodeU32(Opcode.PUSH_I32, 0);
         emitter.emitOpcodeU32(Opcode.PUSH_I32, 9);
         emitter.emitOpcode(Opcode.ITERATOR_NEXT);
@@ -132,7 +132,7 @@ public class HighPriorityOpcodeTest extends OpcodeTest {
         emitter.emitOpcodeU32(Opcode.PUSH_I32, 2);
         emitter.emitOpcodeU16(Opcode.SET_LOC, 0);
         emitter.emitOpcode(Opcode.DROP);
-        emitter.emitOpcodeU16(Opcode.GET_LOC, 0);
+        emitter.emitGetLocal(0);
         emitter.emitOpcodeU32(Opcode.PUSH_I32, 3);
         emitter.emitOpcode(Opcode.POW);
         emitter.emitOpcode(Opcode.LNOT);
@@ -159,8 +159,8 @@ public class HighPriorityOpcodeTest extends OpcodeTest {
         JSObject object = context.createJSObject();
 
         BytecodeEmitter setProtoEmitter = new BytecodeEmitter();
-        setProtoEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, object);
-        setProtoEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, prototype);
+        setProtoEmitter.emitPushConstant(object);
+        setProtoEmitter.emitPushConstant(prototype);
         setProtoEmitter.emitOpcode(Opcode.SET_PROTO);
         setProtoEmitter.emitOpcodeAtom(Opcode.GET_FIELD, "marker");
         setProtoEmitter.emitOpcode(Opcode.RETURN);
@@ -172,8 +172,8 @@ public class HighPriorityOpcodeTest extends OpcodeTest {
         JSNativeFunction method = new JSNativeFunction(context, "m", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
 
         BytecodeEmitter homeObjectEmitter = new BytecodeEmitter();
-        homeObjectEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, homeObject);
-        homeObjectEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, method);
+        homeObjectEmitter.emitPushConstant(homeObject);
+        homeObjectEmitter.emitPushConstant(method);
         homeObjectEmitter.emitOpcode(Opcode.SET_HOME_OBJECT);
         homeObjectEmitter.emitOpcode(Opcode.NIP);
         homeObjectEmitter.emitOpcode(Opcode.RETURN);
@@ -186,9 +186,9 @@ public class HighPriorityOpcodeTest extends OpcodeTest {
     public void testVarRefAndVarInitOpcodes() {
         BytecodeEmitter localRefEmitter = new BytecodeEmitter();
         localRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 41);
-        localRefEmitter.emitOpcodeU16(Opcode.PUT_LOC, 0);
+        localRefEmitter.emitPutLocal(0);
         localRefEmitter.emitOpcodeU16(Opcode.CLOSE_LOC, 0);
-        localRefEmitter.emitOpcodeU16(Opcode.GET_LOC, 0);
+        localRefEmitter.emitGetLocal(0);
         localRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 1);
         localRefEmitter.emitOpcode(Opcode.ADD);
         localRefEmitter.emitOpcodeU16(Opcode.SET_VAR_REF, 0);

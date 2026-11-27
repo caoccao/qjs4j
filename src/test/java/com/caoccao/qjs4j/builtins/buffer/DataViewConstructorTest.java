@@ -54,10 +54,7 @@ public class DataViewConstructorTest extends BaseJavetTest {
 
     @Test
     public void testBasicConstructor() {
-        assertIntegerWithJavet("""
-                const buffer = new ArrayBuffer(16);
-                const dv = new DataView(buffer);
-                dv.byteLength;""");
+        assertIntegerWithJavet(dataViewScript(16, "dv.byteLength"));
     }
 
     @Test
@@ -86,74 +83,47 @@ public class DataViewConstructorTest extends BaseJavetTest {
 
     @Test
     public void testBufferReference() {
-        assertBooleanWithJavet("""
-                const buffer = new ArrayBuffer(16);
-                const dv = new DataView(buffer);
-                dv.buffer === buffer;""");
+        assertBooleanWithJavet(dataViewScript(16, "dv.buffer === buffer"));
     }
 
     @Test
     public void testByteOffset() {
-        assertIntegerWithJavet("""
-                const buffer = new ArrayBuffer(16);
-                const dv = new DataView(buffer, 8);
-                dv.byteOffset;""");
+        assertIntegerWithJavet(dataViewScript(16, "dv.byteOffset", 8));
     }
 
     @Test
     public void testConstructorWithBuffer() {
-        assertIntegerWithJavet("""
-                const buffer = new ArrayBuffer(16);
-                const dv = new DataView(buffer);
-                dv.byteLength;""");
+        assertIntegerWithJavet(dataViewScript(16, "dv.byteLength"));
     }
 
     @Test
     public void testConstructorWithByteOffset() {
-        assertIntegerWithJavet("""
-                const buffer = new ArrayBuffer(16);
-                const dv = new DataView(buffer, 4);
-                dv.byteLength;""");
+        assertIntegerWithJavet(dataViewScript(16, "dv.byteLength", 4));
     }
 
     @Test
     public void testConstructorWithByteOffsetAndLength() {
-        assertIntegerWithJavet("""
-                const buffer = new ArrayBuffer(16);
-                const dv = new DataView(buffer, 4, 8);
-                dv.byteLength;""");
+        assertIntegerWithJavet(dataViewScript(16, "dv.byteLength", 4, 8));
     }
 
     @Test
     public void testConstructorWithOffset() {
-        assertIntegerWithJavet("""
-                const buffer = new ArrayBuffer(16);
-                const dv = new DataView(buffer, 4);
-                dv.byteLength;""");
+        assertIntegerWithJavet(dataViewScript(16, "dv.byteLength", 4));
     }
 
     @Test
     public void testConstructorWithOffsetAndLength() {
-        assertIntegerWithJavet("""
-                const buffer = new ArrayBuffer(16);
-                const dv = new DataView(buffer, 4, 8);
-                dv.byteLength;""");
+        assertIntegerWithJavet(dataViewScript(16, "dv.byteLength", 4, 8));
     }
 
     @Test
     public void testDataViewBuffer() {
-        assertBooleanWithJavet("""
-                const buffer = new ArrayBuffer(16);
-                const dv = new DataView(buffer);
-                dv.buffer === buffer;""");
+        assertBooleanWithJavet(dataViewScript(16, "dv.buffer === buffer"));
     }
 
     @Test
     public void testDataViewByteOffset() {
-        assertIntegerWithJavet("""
-                const buffer = new ArrayBuffer(16);
-                const dv = new DataView(buffer, 8);
-                dv.byteOffset;""");
+        assertIntegerWithJavet(dataViewScript(16, "dv.byteOffset", 8));
     }
 
     @Test
@@ -166,18 +136,12 @@ public class DataViewConstructorTest extends BaseJavetTest {
 
     @Test
     public void testDataViewInstanceOf() {
-        assertBooleanWithJavet("""
-                const buffer = new ArrayBuffer(8);
-                const dv = new DataView(buffer);
-                dv instanceof DataView;""");
+        assertBooleanWithJavet(dataViewScript(8, "dv instanceof DataView"));
     }
 
     @Test
     public void testDataViewIsNotArray() {
-        assertBooleanWithJavet("""
-                const buffer = new ArrayBuffer(8);
-                const dv = new DataView(buffer);
-                Array.isArray(dv);""");
+        assertBooleanWithJavet(dataViewScript(8, "Array.isArray(dv)"));
     }
 
     @Test
@@ -225,10 +189,7 @@ public class DataViewConstructorTest extends BaseJavetTest {
 
     @Test
     public void testDataViewPrototypeChain() {
-        assertBooleanWithJavet("""
-                const buffer = new ArrayBuffer(8);
-                const dv = new DataView(buffer);
-                Object.getPrototypeOf(dv) === DataView.prototype;""");
+        assertBooleanWithJavet(dataViewScript(8, "Object.getPrototypeOf(dv) === DataView.prototype"));
     }
 
     @Test
@@ -242,10 +203,7 @@ public class DataViewConstructorTest extends BaseJavetTest {
 
     @Test
     public void testDataViewToString() {
-        assertStringWithJavet("""
-                const buffer = new ArrayBuffer(8);
-                const dv = new DataView(buffer);
-                Object.prototype.toString.call(dv);""");
+        assertStringWithJavet(dataViewScript(8, "Object.prototype.toString.call(dv)"));
     }
 
     @Test
@@ -255,10 +213,7 @@ public class DataViewConstructorTest extends BaseJavetTest {
 
     @Test
     public void testInstanceOf() {
-        assertBooleanWithJavet("""
-                const buffer = new ArrayBuffer(8);
-                const dv = new DataView(buffer);
-                dv instanceof DataView;""");
+        assertBooleanWithJavet(dataViewScript(8, "dv instanceof DataView"));
     }
 
     @Test
@@ -298,10 +253,7 @@ public class DataViewConstructorTest extends BaseJavetTest {
 
     @Test
     public void testNewDataViewWorks() {
-        assertStringWithJavet("""
-                const buffer = new ArrayBuffer(16);
-                const dv = new DataView(buffer);
-                typeof dv;""");
+        assertStringWithJavet(dataViewScript(16, "typeof dv"));
     }
 
     @Test
@@ -370,5 +322,17 @@ public class DataViewConstructorTest extends BaseJavetTest {
     public void testTypeof() {
         assertStringWithJavet("typeof DataView;");
         assertIntegerWithJavet("DataView.length;");
+    }
+
+    private static String dataViewScript(int bufferLength, String expression, int... viewArguments) {
+        StringBuilder arguments = new StringBuilder("buffer");
+        for (int argument : viewArguments) {
+            arguments.append(", ").append(argument);
+        }
+        return """
+                const buffer = new ArrayBuffer(%d);
+                const dv = new DataView(%s);
+                %s;
+                """.formatted(bufferLength, arguments, expression);
     }
 }

@@ -118,8 +118,7 @@ public final class JSAsyncGenerator extends JSObject {
         } catch (RuntimeException e) {
             state = AsyncGeneratorState.COMPLETED;
             if (context.hasPendingException()) {
-                JSValue error = context.getPendingException();
-                context.clearAllPendingExceptions();
+                JSValue error = context.takeExecutionException();
                 request.promise().reject(error);
             } else {
                 request.promise().reject(new JSString(e.getMessage() != null ? e.getMessage() : e.toString()));
@@ -257,8 +256,7 @@ public final class JSAsyncGenerator extends JSObject {
         } catch (Exception e) {
             state = AsyncGeneratorState.COMPLETED;
             if (context.hasPendingException()) {
-                JSValue error = context.getPendingException();
-                context.clearAllPendingExceptions();
+                JSValue error = context.takeExecutionException();
                 request.promise().reject(error);
             } else if (isThrow) {
                 request.promise().reject(request.value());

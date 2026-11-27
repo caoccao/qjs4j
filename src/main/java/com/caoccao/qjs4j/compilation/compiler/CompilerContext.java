@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.Expression;
+import com.caoccao.qjs4j.compilation.ast.PrivateIdentifier;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSSymbol;
@@ -181,6 +182,10 @@ final class CompilerContext {
         initializeDelegates();
     }
 
+    int declareTemporary(String prefix) {
+        return scopeManager.currentScope().declareLocal(prefix + emitter.currentOffset());
+    }
+
     void enterFunctionScope(boolean async, boolean generator) {
         scopeManager.enterScope();
         inGlobalScope = false;
@@ -269,9 +274,20 @@ final class CompilerContext {
         inferredClassName = frame.inferredClassName();
     }
 
+    JSSymbol privateSymbol(PrivateIdentifier identifier) {
+        return privateSymbols == null ? null : privateSymbols.get(identifier.getName());
+    }
+
     void pushState() {
         stateStack.push(new CompilerStateFrame(strictMode, inGlobalScope, inClassBody, inClassFieldInitializer,
                 emitTailCalls, varInGlobalProgram, privateSymbols, inferredClassName));
+    }
+
+    /** Save the operand at the top of the stack and return the local that holds it. */
+    int storeTemporary(String prefix) {
+        int local = declareTemporary(prefix);
+        emitter.emitPutLocal(local);
+        return local;
     }
 
     /**

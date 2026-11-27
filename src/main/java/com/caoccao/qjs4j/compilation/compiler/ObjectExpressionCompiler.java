@@ -66,7 +66,7 @@ final class ObjectExpressionCompiler {
                     compilerContext.expressionCompiler.compile(prop.getKey());
                     compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                 } else if (prop.getKey() instanceof Identifier id) {
-                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.getName()));
+                    compilerContext.emitter.emitPushConstant(new JSString(id.getName()));
                 } else {
                     compilerContext.expressionCompiler.compile(prop.getKey());
                     compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
@@ -91,7 +91,7 @@ final class ObjectExpressionCompiler {
                     if (prop.isMethod() && prop.getValue() instanceof FunctionExpression methodFunc) {
                         // Push key for DEFINE_METHOD_COMPUTED
                         if (prop.getKey() instanceof Identifier id && !prop.isComputed()) {
-                            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.getName()));
+                            compilerContext.emitter.emitPushConstant(new JSString(id.getName()));
                         } else {
                             compilerContext.expressionCompiler.compile(prop.getKey());
                             compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);

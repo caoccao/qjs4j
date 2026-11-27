@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.core.temporal.rounding;
 
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.TemporalConstants;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.core.temporal.iso.IsoDate;
@@ -93,8 +94,7 @@ public record TemporalRoundSettings(TemporalUnit smallestUnit, long roundingIncr
                 return null;
             }
         } else {
-            context.throwTypeError("Temporal error: roundTo must be an object.");
-            return null;
+            return TemporalError.INVALID_ROUND_TO.reject(context);
         }
 
         TemporalUnit smallestUnit = TemporalUnit.fromString(smallestUnitText).orElse(null);
@@ -131,8 +131,7 @@ public record TemporalRoundSettings(TemporalUnit smallestUnit, long roundingIncr
 
     public static TemporalRoundSettings parseRoundTo(JSContext context, JSValue[] args, TemporalUnit largestUnit) {
         if (args.length == 0 || args[0] instanceof JSUndefined) {
-            context.throwTypeError("Temporal error: Must specify a roundTo parameter.");
-            return null;
+            return TemporalError.MISSING_ROUND_TO.reject(context);
         }
         return parse(context, args[0], largestUnit, TemporalUnit.NANOSECOND);
     }

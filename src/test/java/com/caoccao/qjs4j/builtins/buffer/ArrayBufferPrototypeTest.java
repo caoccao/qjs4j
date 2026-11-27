@@ -74,12 +74,13 @@ public class ArrayBufferPrototypeTest extends BaseTest {
     public void testGetDetached() {
         // Normal case: non-detached buffer
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
-        JSValue result = ArrayBufferPrototype.getDetached(context, buffer, JSValue.NO_ARGS);
+        var getDetached = builtin(ArrayBufferPrototype::getDetached, buffer);
+        JSValue result = getDetached.call();
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Normal case: detached buffer
         buffer.detach();
-        result = ArrayBufferPrototype.getDetached(context, buffer, JSValue.NO_ARGS);
+        result = getDetached.call();
         assertThat(result.isBooleanTrue()).isTrue();
 
         // Edge case: called on non-ArrayBuffer
@@ -140,12 +141,13 @@ public class ArrayBufferPrototypeTest extends BaseTest {
     public void testResize() {
         // Normal case: resize to larger size
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16, 64);
-        JSValue result = ArrayBufferPrototype.resize(context, buffer, numberArgs(32));
+        var resizeMethod = builtin(ArrayBufferPrototype::resize, buffer);
+        JSValue result = resizeMethod.call(numberArgs(32));
         assertThat(result.isUndefined()).isTrue();
         assertThat(buffer.getByteLength()).isEqualTo(32);
 
         // Normal case: resize to smaller size
-        result = ArrayBufferPrototype.resize(context, buffer, numberArgs(8));
+        result = resizeMethod.call(numberArgs(8));
         assertThat(result.isUndefined()).isTrue();
         assertThat(buffer.getByteLength()).isEqualTo(8);
 
@@ -156,7 +158,7 @@ public class ArrayBufferPrototypeTest extends BaseTest {
 
         // Edge case: resize detached buffer (TypeError per ES2024 spec)
         buffer.detach();
-        result = ArrayBufferPrototype.resize(context, buffer, numberArgs(16));
+        result = resizeMethod.call(numberArgs(16));
         assertPendingTypeError(context, result);
 
         // Edge case: resize beyond maxByteLength
@@ -181,42 +183,43 @@ public class ArrayBufferPrototypeTest extends BaseTest {
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
 
         // Normal case: slice entire buffer
-        JSValue result = ArrayBufferPrototype.slice(context, buffer, JSValue.NO_ARGS);
+        var sliceMethod = builtin(ArrayBufferPrototype::slice, buffer);
+        JSValue result = sliceMethod.call();
         JSArrayBuffer sliced = result.asArrayBuffer().orElseThrow();
         assertThat(sliced.getByteLength()).isEqualTo(16);
 
         // Normal case: slice with begin only
-        result = ArrayBufferPrototype.slice(context, buffer, numberArgs(4));
+        result = sliceMethod.call(numberArgs(4));
         sliced = result.asArrayBuffer().orElseThrow();
         assertThat(sliced.getByteLength()).isEqualTo(12);
 
         // Normal case: slice with begin and end
-        result = ArrayBufferPrototype.slice(context, buffer, numberArgs(4, 8));
+        result = sliceMethod.call(numberArgs(4, 8));
         sliced = result.asArrayBuffer().orElseThrow();
         assertThat(sliced.getByteLength()).isEqualTo(4);
 
         // Normal case: negative begin
-        result = ArrayBufferPrototype.slice(context, buffer, numberArgs(-4));
+        result = sliceMethod.call(numberArgs(-4));
         sliced = result.asArrayBuffer().orElseThrow();
         assertThat(sliced.getByteLength()).isEqualTo(4);
 
         // Normal case: negative end
-        result = ArrayBufferPrototype.slice(context, buffer, numberArgs(0, -4));
+        result = sliceMethod.call(numberArgs(0, -4));
         sliced = result.asArrayBuffer().orElseThrow();
         assertThat(sliced.getByteLength()).isEqualTo(12);
 
         // Normal case: begin > end (empty slice)
-        result = ArrayBufferPrototype.slice(context, buffer, numberArgs(8, 4));
+        result = sliceMethod.call(numberArgs(8, 4));
         sliced = result.asArrayBuffer().orElseThrow();
         assertThat(sliced.getByteLength()).isEqualTo(0);
 
         // Normal case: begin out of bounds
-        result = ArrayBufferPrototype.slice(context, buffer, numberArgs(20));
+        result = sliceMethod.call(numberArgs(20));
         sliced = result.asArrayBuffer().orElseThrow();
         assertThat(sliced.getByteLength()).isEqualTo(0);
 
         // Normal case: end out of bounds
-        result = ArrayBufferPrototype.slice(context, buffer, numberArgs(0, 20));
+        result = sliceMethod.call(numberArgs(0, 20));
         sliced = result.asArrayBuffer().orElseThrow();
         assertThat(sliced.getByteLength()).isEqualTo(16);
 
@@ -227,7 +230,7 @@ public class ArrayBufferPrototypeTest extends BaseTest {
 
         // Edge case: slice on detached buffer
         buffer.detach();
-        result = ArrayBufferPrototype.slice(context, buffer, JSValue.NO_ARGS);
+        result = sliceMethod.call();
         assertPendingTypeError(context, result);
     }
 

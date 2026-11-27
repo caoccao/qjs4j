@@ -46,7 +46,7 @@ final class IdentifierDestructuringAssignmentCompiler extends AstNodeCompiler<Id
             if (compilerContext.tdzLocals.contains(name)) {
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC_CHECK, localIndex);
             } else {
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
+                compilerContext.emitter.emitPutLocal(localIndex);
             }
         } else {
             Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);

@@ -220,6 +220,16 @@ public class BaseJavetTest extends BaseTest {
                 """.formatted(owner, key);
     }
 
+    /** Evaluate a test body with lexical this and its own local declarations. */
+    protected static String inArrowFunction(String body) {
+        return "(() => {\n" + body.indent(2) + "})()";
+    }
+
+    /** Evaluate a test body with an ordinary function's this and arguments bindings. */
+    protected static String inFunction(String body) {
+        return "(function () {\n" + body.indent(2) + "})()";
+    }
+
     protected static String methodDescriptor(String owner, String key) {
         return """
                 (() => {

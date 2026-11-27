@@ -278,21 +278,22 @@ public class DateConstructorTest extends BaseJavetTest {
     @Test
     public void testParse() {
         // Normal case: ISO 8601 format
-        JSValue result = DateConstructor.parse(context, JSUndefined.INSTANCE, stringArgs("2025-01-01T00:00:00.000Z"));
+        var parse = builtin(DateConstructor::parse, JSUndefined.INSTANCE);
+        JSValue result = parse.call(stringArgs("2025-01-01T00:00:00.000Z"));
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
             double timestamp = jsNum.value();
             assertThat(timestamp).isGreaterThan(0.0);
         });
 
         // Edge case: no arguments
-        result = DateConstructor.parse(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+        result = parse.call();
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
             double nanValue = jsNum.value();
             assertThat(nanValue).isNaN();
         });
 
         // Edge case: invalid date string
-        result = DateConstructor.parse(context, JSUndefined.INSTANCE, stringArgs("not a date"));
+        result = parse.call(stringArgs("not a date"));
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
             double invalidValue = jsNum.value();
             assertThat(invalidValue).isNaN();
@@ -339,32 +340,31 @@ public class DateConstructorTest extends BaseJavetTest {
     @Test
     public void testUTC() {
         // Normal case: Date.UTC(2025, 0, 1, 0, 0, 0)
-        JSValue result = DateConstructor.UTC(context, JSUndefined.INSTANCE,
-                new JSValue[]{new JSNumber(2025), new JSNumber(0), // January
-                        new JSNumber(1), new JSNumber(0), new JSNumber(0), new JSNumber(0)});
+        var utc = builtin(DateConstructor::UTC, JSUndefined.INSTANCE);
+        JSValue result = utc.call(new JSNumber(2025), new JSNumber(0), // January
+                new JSNumber(1), new JSNumber(0), new JSNumber(0), new JSNumber(0));
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
             double timestamp = jsNum.value();
             assertThat(timestamp).isGreaterThan(0.0);
         });
 
         // Edge case: only year
-        result = DateConstructor.UTC(context, JSUndefined.INSTANCE, numberArgs(2025));
+        result = utc.call(numberArgs(2025));
         assertThat(result).isInstanceOf(JSNumber.class);
 
         // Edge case: year and month
-        result = DateConstructor.UTC(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(2025), new JSNumber(5) // June
-        });
+        result = utc.call(new JSNumber(2025), new JSNumber(5)); // June
         assertThat(result).isInstanceOf(JSNumber.class);
 
         // Edge case: no arguments (should return NaN)
-        result = DateConstructor.UTC(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+        result = utc.call();
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
             double nanValue = jsNum.value();
             assertThat(nanValue).isNaN();
         });
 
         // Edge case: overflow fields should normalize instead of returning NaN.
-        result = DateConstructor.UTC(context, JSUndefined.INSTANCE, numberArgs(2025, 12, 32));
+        result = utc.call(numberArgs(2025, 12, 32));
         assertThat(result).isInstanceOf(JSNumber.class);
         assertDoubleWithJavet("Date.UTC(2025, 12, 32);");
     }

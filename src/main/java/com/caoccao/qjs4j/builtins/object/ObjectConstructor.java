@@ -560,6 +560,25 @@ public final class ObjectConstructor {
         return ObjectIntegrity.SEAL.apply(context, args);
     }
 
+    static JSValue setPrototype(JSContext context, JSObject obj, JSObject proto, JSValue successValue) {
+        // Proxies have their own setPrototype logic with trap handling
+        if (obj instanceof JSProxy) {
+            obj.setPrototype(proto);
+            return successValue;
+        }
+
+        // Following QuickJS: Object.setPrototypeOf uses throw_flag=TRUE
+        JSObject.SetPrototypeResult result = obj.setPrototypeChecked(proto);
+        if (result != JSObject.SetPrototypeResult.SUCCESS) {
+            String msg = result == JSObject.SetPrototypeResult.NOT_EXTENSIBLE
+                    ? "object is not extensible"
+                    : "circular prototype chain";
+            return context.throwTypeError(msg);
+        }
+
+        return successValue;
+    }
+
     /**
      * Object.setPrototypeOf(obj, prototype) ES2020 19.1.2.18 Sets the prototype of a specified object.
      */
@@ -585,29 +604,7 @@ public final class ObjectConstructor {
             return objValue;
         }
 
-        JSObject proto;
-        if (protoValue instanceof JSObject protoObj) {
-            proto = protoObj;
-        } else {
-            proto = null;
-        }
-
-        // Proxies have their own setPrototype logic with trap handling
-        if (obj instanceof JSProxy) {
-            obj.setPrototype(proto);
-            return obj;
-        }
-
-        // Following QuickJS: Object.setPrototypeOf uses throw_flag=TRUE
-        JSObject.SetPrototypeResult result = obj.setPrototypeChecked(proto);
-        if (result != JSObject.SetPrototypeResult.SUCCESS) {
-            String msg = result == JSObject.SetPrototypeResult.NOT_EXTENSIBLE
-                    ? "object is not extensible"
-                    : "circular prototype chain";
-            return context.throwTypeError(msg);
-        }
-
-        return obj;
+        return setPrototype(context, obj, protoValue instanceof JSObject prototype ? prototype : null, obj);
     }
 
     /**

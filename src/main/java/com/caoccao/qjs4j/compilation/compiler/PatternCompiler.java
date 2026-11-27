@@ -54,12 +54,12 @@ final class PatternCompiler extends AstNodeCompiler<Pattern> {
         if (isVar && pattern instanceof Identifier id) {
             Integer localIndex = compilerContext.scopeManager.findLocalInScopes(id.getName());
             if (localIndex != null) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
+                compilerContext.emitter.emitPutLocal(localIndex);
             } else if (compilerContext.inGlobalScope) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.getName());
             } else {
                 int idx = compilerContext.scopeManager.currentScope().declareLocal(id.getName());
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, idx);
+                compilerContext.emitter.emitPutLocal(idx);
             }
         } else {
             if (isVar) {

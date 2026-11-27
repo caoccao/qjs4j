@@ -38,30 +38,28 @@ public class StackFrameArgumentOwnershipTest extends BaseJavetTest {
 
     @Test
     public void testArgumentsSurviveANestedCallFromJavaScript() {
-        assertStringWithJavet("""
-                (function () {
-                  function inner(a, b, c) { return a + b + c }
-                  function outer() {
-                    const before = arguments[0];
-                    const middle = inner(9, 9, 9);
-                    return before + '/' + middle + '/' + arguments[0];
-                  }
-                  return outer(1, 2, 3);
-                })()""");
+        assertStringWithJavet(inFunction("""
+                function inner(a, b, c) { return a + b + c }
+                function outer() {
+                  const before = arguments[0];
+                  const middle = inner(9, 9, 9);
+                  return before + '/' + middle + '/' + arguments[0];
+                }
+                return outer(1, 2, 3);
+                """));
     }
 
     @Test
     public void testArgumentsSurviveANestedCallInAFunctionWithNoDeclaredLocals() {
-        assertStringWithJavet("""
-                (function () {
-                  function noLocals() { return arguments.length }
-                  function outer() {
-                    const before = arguments[0];
-                    noLocals(7, 7, 7, 7);
-                    return before + '/' + arguments[0];
-                  }
-                  return outer(1, 2, 3);
-                })()""");
+        assertStringWithJavet(inFunction("""
+                function noLocals() { return arguments.length }
+                function outer() {
+                  const before = arguments[0];
+                  noLocals(7, 7, 7, 7);
+                  return before + '/' + arguments[0];
+                }
+                return outer(1, 2, 3);
+                """));
     }
 
     @Test
@@ -94,18 +92,17 @@ public class StackFrameArgumentOwnershipTest extends BaseJavetTest {
 
     @Test
     public void testTailCallDoesNotCorruptArguments() {
-        assertStringWithJavet("""
-                (function () {
-                  'use strict';
-                  function target(a, b) { return a * 10 + b }
-                  function viaTail(x, y) { return target(x, y) }
-                  function outer() {
-                    const before = arguments[0];
-                    const result = viaTail(3, 4);
-                    return before + '/' + result + '/' + arguments[0];
-                  }
-                  return outer(5, 6);
-                })()""");
+        assertStringWithJavet(inFunction("""
+                'use strict';
+                function target(a, b) { return a * 10 + b }
+                function viaTail(x, y) { return target(x, y) }
+                function outer() {
+                  const before = arguments[0];
+                  const result = viaTail(3, 4);
+                  return before + '/' + result + '/' + arguments[0];
+                }
+                return outer(5, 6);
+                """));
     }
 
     @Test

@@ -121,16 +121,22 @@ public class JSIterator extends JSObject {
      * Create a Map entries iterator.
      */
     public static JSIterator mapEntriesIterator(JSContext context, JSMap map) {
-        final JSMap.IterationCursor cursor = map.createIterationCursor();
+        return mapIterator(context, map, IteratorKind.ENTRIES);
+    }
+
+    private static JSIterator mapIterator(JSContext context, JSMap map, IteratorKind kind) {
+        JSMap.IterationCursor cursor = map.createIterationCursor();
         return new JSIterator(context, () -> {
             JSMap.IterationEntry entry = map.nextIterationEntry(cursor);
-            if (entry != null) {
-                JSArray pair = context.createJSArray();
-                pair.push(entry.key());
-                pair.push(entry.value());
-                return IteratorResult.of(context, pair);
+            if (entry == null) {
+                return IteratorResult.done(context);
             }
-            return IteratorResult.done(context);
+            JSValue value = switch (kind) {
+                case KEYS -> entry.key();
+                case VALUES -> entry.value();
+                case ENTRIES -> context.createJSArray(entry.key(), entry.value());
+            };
+            return IteratorResult.of(context, value);
         }, "Map Iterator", false);
     }
 
@@ -138,28 +144,14 @@ public class JSIterator extends JSObject {
      * Create a Map keys iterator.
      */
     public static JSIterator mapKeysIterator(JSContext context, JSMap map) {
-        final JSMap.IterationCursor cursor = map.createIterationCursor();
-        return new JSIterator(context, () -> {
-            JSMap.IterationEntry entry = map.nextIterationEntry(cursor);
-            if (entry != null) {
-                return IteratorResult.of(context, entry.key());
-            }
-            return IteratorResult.done(context);
-        }, "Map Iterator", false);
+        return mapIterator(context, map, IteratorKind.KEYS);
     }
 
     /**
      * Create a Map values iterator.
      */
     public static JSIterator mapValuesIterator(JSContext context, JSMap map) {
-        final JSMap.IterationCursor cursor = map.createIterationCursor();
-        return new JSIterator(context, () -> {
-            JSMap.IterationEntry entry = map.nextIterationEntry(cursor);
-            if (entry != null) {
-                return IteratorResult.of(context, entry.value());
-            }
-            return IteratorResult.done(context);
-        }, "Map Iterator", false);
+        return mapIterator(context, map, IteratorKind.VALUES);
     }
 
     /**

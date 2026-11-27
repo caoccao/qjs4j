@@ -85,11 +85,8 @@ public class ExpressionContainsAwaitYieldTest {
                         new YieldExpression(new Literal(1, LOCATION), false, LOCATION)), LOCATION),
                 false, LOCATION);
 
-        // ES2024 8.1.4: Contains always returns false for function boundaries.
-        assertThat(functionExpression.containsAwait()).isFalse();
-        assertThat(functionExpression.containsYield()).isFalse();
-        assertThat(arrowFunctionExpression.containsAwait()).isFalse();
-        assertThat(arrowFunctionExpression.containsYield()).isFalse();
+        assertFunctionBoundary(functionExpression);
+        assertFunctionBoundary(arrowFunctionExpression);
     }
 
     @Test
@@ -105,11 +102,8 @@ public class ExpressionContainsAwaitYieldTest {
                                 new AwaitExpression(new Literal(1, LOCATION), LOCATION), LOCATION), LOCATION)),
                 new Identifier("body", LOCATION), false, LOCATION);
 
-        // ES2024 8.1.4: Contains always returns false for function boundaries.
-        assertThat(functionExpression.containsAwait()).isFalse();
-        assertThat(functionExpression.containsYield()).isFalse();
-        assertThat(arrowFunctionExpression.containsAwait()).isFalse();
-        assertThat(arrowFunctionExpression.containsYield()).isFalse();
+        assertFunctionBoundary(functionExpression);
+        assertFunctionBoundary(arrowFunctionExpression);
     }
 
     @Test
@@ -144,5 +138,11 @@ public class ExpressionContainsAwaitYieldTest {
         assertThat(awaitChain.containsDirectEvalVarArguments()).isFalse();
         // Cached on every node of the spine.
         assertThat(((BinaryExpression) yieldChain).getLeft().containsYield()).isFalse();
+    }
+
+    /** ES2024 8.1.4 stops Contains at an ordinary or arrow function boundary. */
+    private static void assertFunctionBoundary(Expression function) {
+        assertThat(function.containsAwait()).isFalse();
+        assertThat(function.containsYield()).isFalse();
     }
 }

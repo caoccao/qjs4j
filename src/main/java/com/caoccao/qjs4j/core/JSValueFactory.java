@@ -67,9 +67,7 @@ final class JSValueFactory {
      * @return A new JSArray instance with prototype set
      */
     JSArray createJSArray(JSValue... values) {
-        JSArray jsArray = new JSArray(context, values);
-        context.transferPrototype(jsArray, JSArray.NAME);
-        return jsArray;
+        return initializePrototype(new JSArray(context, values), JSArray.NAME);
     }
 
     /**
@@ -77,9 +75,7 @@ final class JSValueFactory {
      * defensive copy in hot built-in paths.
      */
     JSArray createJSArray(JSValue[] values, boolean takeOwnership) {
-        JSArray jsArray = new JSArray(context, values, takeOwnership);
-        context.transferPrototype(jsArray, JSArray.NAME);
-        return jsArray;
+        return initializePrototype(new JSArray(context, values, takeOwnership), JSArray.NAME);
     }
 
     /**
@@ -113,9 +109,7 @@ final class JSValueFactory {
      *             when {@code length} is not a valid ECMAScript array length
      */
     JSArray createJSArray(long length, int capacity) {
-        JSArray jsArray = new JSArray(context, length, capacity);
-        context.transferPrototype(jsArray, JSArray.NAME);
-        return jsArray;
+        return initializePrototype(new JSArray(context, length, capacity), JSArray.NAME);
     }
 
     /**
@@ -126,9 +120,7 @@ final class JSValueFactory {
      * @return A new JSArrayBuffer instance with prototype set
      */
     JSArrayBuffer createJSArrayBuffer(long byteLength) {
-        JSArrayBuffer jsArrayBuffer = new JSArrayBuffer(context, byteLength);
-        context.transferPrototype(jsArrayBuffer, JSArrayBuffer.NAME);
-        return jsArrayBuffer;
+        return initializePrototype(new JSArrayBuffer(context, byteLength), JSArrayBuffer.NAME);
     }
 
     /**
@@ -141,9 +133,7 @@ final class JSValueFactory {
      * @return A new JSArrayBuffer instance with prototype set
      */
     JSArrayBuffer createJSArrayBuffer(long byteLength, long maxByteLength) {
-        JSArrayBuffer jsArrayBuffer = new JSArrayBuffer(context, byteLength, maxByteLength);
-        context.transferPrototype(jsArrayBuffer, JSArrayBuffer.NAME);
-        return jsArrayBuffer;
+        return initializePrototype(new JSArrayBuffer(context, byteLength, maxByteLength), JSArrayBuffer.NAME);
     }
 
     /**
@@ -237,9 +227,7 @@ final class JSValueFactory {
     }
 
     JSBigIntObject createJSBigIntObject(JSBigInt value) {
-        JSBigIntObject wrapper = new JSBigIntObject(context, value);
-        context.transferPrototype(wrapper, JSBigIntObject.NAME);
-        return wrapper;
+        return initializePrototype(new JSBigIntObject(context, value), JSBigIntObject.NAME);
     }
 
     JSBigUint64Array createJSBigUint64Array(IJSArrayBuffer buffer, long byteOffset, long length) {
@@ -258,9 +246,7 @@ final class JSValueFactory {
     }
 
     JSBooleanObject createJSBooleanObject(JSBoolean value) {
-        JSBooleanObject wrapper = new JSBooleanObject(context, value);
-        context.transferPrototype(wrapper, JSBooleanObject.NAME);
-        return wrapper;
+        return initializePrototype(new JSBooleanObject(context, value), JSBooleanObject.NAME);
     }
 
     /**
@@ -275,9 +261,7 @@ final class JSValueFactory {
      * @return A new JSDataView instance with prototype set
      */
     JSDataView createJSDataView(IJSArrayBuffer buffer, long byteOffset, long byteLength) {
-        JSDataView jsDataView = new JSDataView(context, buffer, byteOffset, byteLength);
-        context.transferPrototype(jsDataView, JSDataView.NAME);
-        return jsDataView;
+        return initializePrototype(new JSDataView(context, buffer, byteOffset, byteLength), JSDataView.NAME);
     }
 
     /**
@@ -298,9 +282,7 @@ final class JSValueFactory {
     }
 
     JSDisposableStack createJSDisposableStack() {
-        JSDisposableStack stack = new JSDisposableStack(context);
-        context.transferPrototype(stack, JSDisposableStack.NAME);
-        return stack;
+        return initializePrototype(new JSDisposableStack(context), JSDisposableStack.NAME);
     }
 
     JSError createJSError(String message) {
@@ -407,15 +389,11 @@ final class JSValueFactory {
      * @return A new JSMap instance with prototype set
      */
     JSMap createJSMap() {
-        JSMap jsMap = new JSMap(context);
-        context.transferPrototype(jsMap, JSMap.NAME);
-        return jsMap;
+        return initializePrototype(new JSMap(context), JSMap.NAME);
     }
 
     JSNumberObject createJSNumberObject(JSNumber value) {
-        JSNumberObject wrapper = new JSNumberObject(context, value);
-        context.transferPrototype(wrapper, JSNumberObject.NAME);
-        return wrapper;
+        return initializePrototype(new JSNumberObject(context, value), JSNumberObject.NAME);
     }
 
     /**
@@ -482,21 +460,15 @@ final class JSValueFactory {
      * @return A new JSSet instance with prototype set
      */
     JSSet createJSSet() {
-        JSSet jsSet = new JSSet(context);
-        context.transferPrototype(jsSet, JSSet.NAME);
-        return jsSet;
+        return initializePrototype(new JSSet(context), JSSet.NAME);
     }
 
     JSStringObject createJSStringObject() {
-        JSStringObject wrapper = new JSStringObject(context);
-        context.transferPrototype(wrapper, JSStringObject.NAME);
-        return wrapper;
+        return initializePrototype(new JSStringObject(context), JSStringObject.NAME);
     }
 
     JSStringObject createJSStringObject(JSString value) {
-        JSStringObject wrapper = new JSStringObject(context, value);
-        context.transferPrototype(wrapper, JSStringObject.NAME);
-        return wrapper;
+        return initializePrototype(new JSStringObject(context, value), JSStringObject.NAME);
     }
 
     JSSuppressedError createJSSuppressedError(String message) {
@@ -504,9 +476,7 @@ final class JSValueFactory {
     }
 
     JSSymbolObject createJSSymbolObject(JSSymbol value) {
-        JSSymbolObject wrapper = new JSSymbolObject(context, value);
-        context.transferPrototype(wrapper, JSSymbolObject.NAME);
-        return wrapper;
+        return initializePrototype(new JSSymbolObject(context, value), JSSymbolObject.NAME);
     }
 
     JSSyntaxError createJSSyntaxError(String message) {
@@ -587,9 +557,7 @@ final class JSValueFactory {
      * @return A new JSWeakMap instance with prototype set
      */
     JSWeakMap createJSWeakMap() {
-        JSWeakMap jsWeakMap = new JSWeakMap(context);
-        context.transferPrototype(jsWeakMap, JSWeakMap.NAME);
-        return jsWeakMap;
+        return initializePrototype(new JSWeakMap(context), JSWeakMap.NAME);
     }
 
     /**
@@ -598,15 +566,18 @@ final class JSValueFactory {
      * @return A new JSWeakSet instance with prototype set
      */
     JSWeakSet createJSWeakSet() {
-        JSWeakSet jsWeakSet = new JSWeakSet(context);
-        context.transferPrototype(jsWeakSet, JSWeakSet.NAME);
-        return jsWeakSet;
+        return initializePrototype(new JSWeakSet(context), JSWeakSet.NAME);
     }
 
     private <T extends JSError> T initializeError(T error) {
         context.transferPrototype(error, error.getErrorName());
         context.captureStackTrace(error);
         return error;
+    }
+
+    private <T extends JSObject> T initializePrototype(T value, String constructorName) {
+        context.transferPrototype(value, constructorName);
+        return value;
     }
 
     private <T extends JSTypedArray> T initializeTypedArray(T typedArray) {

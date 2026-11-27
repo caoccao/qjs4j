@@ -170,46 +170,42 @@ public class PromiseConstructorTest extends BaseJavetTest {
 
     @Test
     public void testPromiseRegistration() {
-        assertBooleanWithJavet("""
-                (() => {
-                  const protoDesc = Object.getOwnPropertyDescriptor(Promise, 'prototype');
-                  const thenDesc = Object.getOwnPropertyDescriptor(Promise.prototype, 'then');
-                  const catchDesc = Object.getOwnPropertyDescriptor(Promise.prototype, 'catch');
-                  const finallyDesc = Object.getOwnPropertyDescriptor(Promise.prototype, 'finally');
-                  const tagDesc = Object.getOwnPropertyDescriptor(Promise.prototype, Symbol.toStringTag);
-                  const speciesDesc = Object.getOwnPropertyDescriptor(Promise, Symbol.species);
-                  return protoDesc.writable === false
-                    && protoDesc.enumerable === false
-                    && protoDesc.configurable === false
-                    && thenDesc.writable === true
-                    && thenDesc.enumerable === false
-                    && thenDesc.configurable === true
-                    && catchDesc.writable === true
-                    && catchDesc.enumerable === false
-                    && catchDesc.configurable === true
-                    && finallyDesc.writable === true
-                    && finallyDesc.enumerable === false
-                    && finallyDesc.configurable === true
-                    && tagDesc.value === 'Promise'
-                    && tagDesc.writable === false
-                    && tagDesc.enumerable === false
-                    && tagDesc.configurable === true
-                    && typeof speciesDesc.get === 'function'
-                    && speciesDesc.set === undefined
-                    && speciesDesc.enumerable === false
-                    && speciesDesc.configurable === true;
-                })()
-                """);
+        assertBooleanWithJavet(inArrowFunction("""
+                const protoDesc = Object.getOwnPropertyDescriptor(Promise, 'prototype');
+                const thenDesc = Object.getOwnPropertyDescriptor(Promise.prototype, 'then');
+                const catchDesc = Object.getOwnPropertyDescriptor(Promise.prototype, 'catch');
+                const finallyDesc = Object.getOwnPropertyDescriptor(Promise.prototype, 'finally');
+                const tagDesc = Object.getOwnPropertyDescriptor(Promise.prototype, Symbol.toStringTag);
+                const speciesDesc = Object.getOwnPropertyDescriptor(Promise, Symbol.species);
+                return protoDesc.writable === false
+                  && protoDesc.enumerable === false
+                  && protoDesc.configurable === false
+                  && thenDesc.writable === true
+                  && thenDesc.enumerable === false
+                  && thenDesc.configurable === true
+                  && catchDesc.writable === true
+                  && catchDesc.enumerable === false
+                  && catchDesc.configurable === true
+                  && finallyDesc.writable === true
+                  && finallyDesc.enumerable === false
+                  && finallyDesc.configurable === true
+                  && tagDesc.value === 'Promise'
+                  && tagDesc.writable === false
+                  && tagDesc.enumerable === false
+                  && tagDesc.configurable === true
+                  && typeof speciesDesc.get === 'function'
+                  && speciesDesc.set === undefined
+                  && speciesDesc.enumerable === false
+                  && speciesDesc.configurable === true;
+                """));
     }
 
     @Test
     public void testPromiseResolveReturnsSamePromise() {
-        assertBooleanWithJavet("""
-                (() => {
-                  const p = Promise.resolve(1);
-                  return Promise.resolve(p) === p;
-                })()
-                """);
+        assertBooleanWithJavet(inArrowFunction("""
+                const p = Promise.resolve(1);
+                return Promise.resolve(p) === p;
+                """));
     }
 
     @Test
@@ -262,13 +258,11 @@ public class PromiseConstructorTest extends BaseJavetTest {
                     .promise
                     .constructor === Promise
                 """);
-        assertBooleanWithJavet("""
-                (() => {
-                  const cap = Promise.withResolvers();
-                  cap.resolve(Promise.resolve(1));
-                  cap.reject(2);
-                  return cap.promise.then(v => v === 1, () => false);
-                })()
-                """);
+        assertBooleanWithJavet(inArrowFunction("""
+                const cap = Promise.withResolvers();
+                cap.resolve(Promise.resolve(1));
+                cap.reject(2);
+                return cap.promise.then(v => v === 1, () => false);
+                """));
     }
 }

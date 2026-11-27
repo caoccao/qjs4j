@@ -67,7 +67,7 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                         compilerContext.expressionCompiler.compile(memberExpr.getProperty());
                     } else if (memberExpr.getProperty() instanceof Identifier propId) {
                         // obj.prop
-                        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(propId.getName()));
+                        compilerContext.emitter.emitPushConstant(new JSString(propId.getName()));
                     }
 
                     compilerContext.emitter.emitOpcode(Opcode.DELETE);
@@ -204,22 +204,22 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                         if (isPrefix) {
                             // Prefix: ++obj.#field - returns new value
                             compilerContext.emitter.emitOpcode(Opcode.DUP); // obj obj
-                            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+                            compilerContext.emitter.emitPushConstant(symbol);
                             compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD); // obj old_val
                             compilerContext.emitter.emitOpcode(isInc ? Opcode.INC : Opcode.DEC); // obj new_val
-                            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // obj new_val symbol
+                            compilerContext.emitter.emitPushConstant(symbol); // obj new_val symbol
                             compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD); // new_val
                         } else {
                             // Postfix: obj.#field++ - returns old value
                             compilerContext.emitter.emitOpcode(Opcode.DUP); // obj obj
-                            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+                            compilerContext.emitter.emitPushConstant(symbol);
                             compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD); // obj old_val
                             compilerContext.emitter.emitOpcode(isInc ? Opcode.POST_INC : Opcode.POST_DEC); // obj
                                                                                                            // old_val
                                                                                                            // new_val
                             compilerContext.emitter.emitOpcode(Opcode.ROT3L); // old_val new_val obj
-                            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // old_val new_val
-                                                                                                   // obj symbol
+                            compilerContext.emitter.emitPushConstant(symbol); // old_val new_val
+                                                                              // obj symbol
                             compilerContext.emitter.emitOpcode(Opcode.ROT3L); // old_val obj symbol new_val
                             compilerContext.emitter.emitOpcode(Opcode.SWAP); // old_val obj new_val symbol
                             compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD); // old_val
@@ -296,8 +296,8 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                 compilerContext.expressionCompiler.compile(memberExpression.getProperty());
             } else {
                 // The parser rejects `delete a?.#x`, so a non-computed property is an identifier.
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST,
-                        new JSString(((Identifier) memberExpression.getProperty()).getName()));
+                compilerContext.emitter
+                        .emitPushConstant(new JSString(((Identifier) memberExpression.getProperty()).getName()));
             }
             compilerContext.emitter.emitOpcode(Opcode.DELETE);
         }, () -> {
