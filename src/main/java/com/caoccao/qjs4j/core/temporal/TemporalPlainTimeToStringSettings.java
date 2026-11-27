@@ -27,29 +27,8 @@ public record TemporalPlainTimeToStringSettings(TemporalUnit smallestUnit, Tempo
 
     public static TemporalPlainTimeToStringSettings resolve(JSContext context, String roundingModeText,
             String smallestUnitText, TemporalFractionalSecondDigitsOption digits) {
-        return resolve(context, roundingModeText, smallestUnitText, digits, TemporalUnit.MINUTE,
-                "Temporal error: Invalid smallestUnit option.");
-    }
-
-    static TemporalPlainTimeToStringSettings resolve(JSContext context, String roundingModeText,
-            String smallestUnitText, TemporalFractionalSecondDigitsOption digits, TemporalUnit largest,
-            String invalidUnit) {
-        TemporalRoundingMode roundingMode = TemporalRoundingMode.fromString(roundingModeText);
-        if (roundingMode == null) {
-            context.throwRangeError("Temporal error: Invalid rounding mode.");
-            return null;
-        }
-        TemporalUnit unit = TemporalUnit.fromString(smallestUnitText).orElse(null);
-        if (smallestUnitText != null && (unit == null || !unit.isSmallerOrEqual(largest))) {
-            context.throwRangeError(invalidUnit);
-            return null;
-        }
-        if (unit != null) {
-            return new TemporalPlainTimeToStringSettings(unit, roundingMode, false,
-                    unit.getStringFractionalSecondDigits(), unit.getStringRoundingIncrementNanoseconds());
-        }
-        return new TemporalPlainTimeToStringSettings(null, roundingMode, digits.auto(),
-                digits.auto() ? -1 : digits.digits(), digits.roundingIncrementNanoseconds());
+        return new TemporalTimeStringOptions(roundingModeText, smallestUnitText).resolve(context, digits,
+                TemporalUnit.MINUTE, "Temporal error: Invalid smallestUnit option.");
     }
 
     public static TemporalPlainTimeToStringSettings read(JSContext context, JSObject optionsObject) {
@@ -63,17 +42,7 @@ public record TemporalPlainTimeToStringSettings(TemporalUnit smallestUnit, Tempo
             return null;
         }
 
-        String roundingModeText = TemporalUtils.getStringOption(context, optionsObject, "roundingMode", "trunc");
-        if (context.hasPendingException() || roundingModeText == null) {
-            return null;
-        }
-
-        String smallestUnitText = TemporalUtils.getStringOption(context, optionsObject, "smallestUnit", null);
-        if (context.hasPendingException()) {
-            return null;
-        }
-
-        return TemporalPlainTimeToStringSettings.resolve(context, roundingModeText, smallestUnitText, digits, largest,
-                invalidUnit);
+        TemporalTimeStringOptions options = TemporalTimeStringOptions.read(context, optionsObject);
+        return options == null ? null : options.resolve(context, digits, largest, invalidUnit);
     }
 }

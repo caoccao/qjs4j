@@ -96,8 +96,7 @@ public record TemporalDuration(long years, long months, long weeks, long days, l
             context.throwRangeError("Temporal error: Invalid duration string.");
             return null;
         }
-        IsoParsingState parsingState = new IsoParsingState(input);
-        return parsingState.parseDuration(context);
+        return IsoDurationParser.parse(context, input);
     }
 
     public TemporalDuration abs() {

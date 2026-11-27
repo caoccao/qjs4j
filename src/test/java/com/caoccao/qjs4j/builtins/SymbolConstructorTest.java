@@ -174,23 +174,7 @@ public class SymbolConstructorTest extends BaseJavetTest {
 
     @Test
     public void testSymbolRegistrationDescriptors() {
-        assertBooleanWithJavet("""
-                (() => {
-                  const d = Object.getOwnPropertyDescriptor(Symbol, "for");
-                  return typeof d.value === "function"
-                    && d.writable === true
-                    && d.enumerable === false
-                    && d.configurable === true;
-                })()
-                """, """
-                (() => {
-                  const d = Object.getOwnPropertyDescriptor(Symbol, "keyFor");
-                  return typeof d.value === "function"
-                    && d.writable === true
-                    && d.enumerable === false
-                    && d.configurable === true;
-                })()
-                """, """
+        assertBooleanWithJavet(methodDescriptor("Symbol", "for"), methodDescriptor("Symbol", "keyFor"), """
                 (() => {
                   const d = Object.getOwnPropertyDescriptor(Symbol, "iterator");
                   return typeof d.value === "symbol"

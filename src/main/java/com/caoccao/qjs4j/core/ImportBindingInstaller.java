@@ -34,35 +34,10 @@ final class ImportBindingInstaller {
     }
 
     void applyImportClauseBindings(JSObject globalObject, JSObject namespaceObject, String importClause) {
-        String clause = importClause.trim();
-        if (clause.isEmpty()) {
-            return;
-        }
-        if (clause.startsWith("{")) {
-            bindNamedImports(globalObject, namespaceObject, clause);
-            return;
-        }
-
-        int commaIndex = clause.indexOf(',');
-        if (commaIndex < 0) {
-            bindImportLiveBinding(globalObject, clause, namespaceObject, "default");
-            return;
-        }
-
-        String defaultBinding = clause.substring(0, commaIndex).trim();
-        if (!defaultBinding.isEmpty()) {
-            bindImportLiveBinding(globalObject, defaultBinding, namespaceObject, "default");
-        }
-
-        String remainder = clause.substring(commaIndex + 1).trim();
-        if (remainder.startsWith("*")) {
-            String namespaceBinding = remainder.replaceFirst("^\\*\\s*as\\s+", "").trim();
-            if (!namespaceBinding.isEmpty()) {
-                bindImportValue(globalObject, namespaceBinding, namespaceObject);
-            }
-        } else if (remainder.startsWith("{")) {
-            bindNamedImports(globalObject, namespaceObject, remainder);
-        }
+        ModuleImportDeclaration.visitBindings(importClause,
+                name -> bindImportLiveBinding(globalObject, name, namespaceObject, "default"),
+                named -> bindNamedImports(globalObject, namespaceObject, named),
+                name -> bindImportValue(globalObject, name, namespaceObject));
     }
 
     /**

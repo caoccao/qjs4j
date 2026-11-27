@@ -58,6 +58,21 @@ final class IntlFormatOptions {
         return object == null || context.hasPendingException() ? JSUndefined.INSTANCE : object;
     }
 
+    static JSValue coerceOptionsWithLocaleMatcher(JSContext context, JSValue[] args) {
+        JSValue options = coerceOptionsObject(context, JSValue.argumentOrUndefined(args, 1));
+        if (context.hasPendingException()) {
+            return options;
+        }
+        String matcher = readStringOption(context, options, "localeMatcher");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!isValidLocaleMatcher(matcher)) {
+            throw new IllegalArgumentException("Invalid option value: " + matcher);
+        }
+        return options;
+    }
+
     static JSObject emptyOptions(JSContext context) {
         JSObject empty = context.createJSObject();
         empty.setPrototype(null);

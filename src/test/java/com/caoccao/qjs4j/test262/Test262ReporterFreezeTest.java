@@ -52,29 +52,14 @@ public class Test262ReporterFreezeTest {
         // The write is held open exactly where the race lived. freeze() must not be able to
         // complete around it, so the result is wholly included rather than partially applied after
         // the caller has its numbers.
-        PausableReporter reporter = new PausableReporter();
+        ContendedReporter reporter = new ContendedReporter();
         Thread writer = new Thread(() -> reporter.recordResult(passingResult()), "reporter-writer");
         writer.start();
-        assertThat(reporter.admitted.await(30, TimeUnit.SECONDS)).as("the writer is inside an admission").isTrue();
+        assertThat(reporter.awaitAdmissions(1, 30, TimeUnit.SECONDS)).as("the writer is inside an admission").isTrue();
 
-        AtomicBoolean frozeEarly = new AtomicBoolean(true);
-        CountDownLatch freezerAtGate = new CountDownLatch(1);
-        Thread freezer = new Thread(() -> {
-            freezerAtGate.countDown();
-            reporter.freeze();
-            frozeEarly.set(false);
-        }, "reporter-freezer");
-        freezer.start();
+        Thread freezer = startBlockedFreezer(reporter);
 
-        // Not "wait a while and hope": wait until the freezer has reached freeze() and parked in
-        // it. Its only blocking call is the write lock, so a parked freezer is a blocked freeze().
-        assertThat(freezerAtGate.await(30, TimeUnit.SECONDS)).isTrue();
-        awaitParked(freezer);
-        assertThat(freezer.getState()).as("freeze() is blocked, not merely unscheduled")
-                .isNotEqualTo(Thread.State.TERMINATED);
-        assertThat(frozeEarly.get()).as("freeze() cannot complete while a result is being admitted").isTrue();
-
-        reporter.release.countDown();
+        reporter.releaseAdmissions();
         writer.join(30_000);
         freezer.join(30_000);
 
@@ -124,17 +109,7 @@ public class Test262ReporterFreezeTest {
         assertThat(reporter.awaitAdmissions(writerCount, 60, TimeUnit.SECONDS))
                 .as("every writer is inside an admission, not merely past one").isTrue();
 
-        AtomicBoolean frozeEarly = new AtomicBoolean(true);
-        CountDownLatch freezerAtGate = new CountDownLatch(1);
-        Thread freezer = new Thread(() -> {
-            freezerAtGate.countDown();
-            reporter.freeze();
-            frozeEarly.set(false);
-        }, "reporter-freezer");
-        freezer.start();
-        assertThat(freezerAtGate.await(30, TimeUnit.SECONDS)).isTrue();
-        awaitParked(freezer);
-        assertThat(frozeEarly.get()).as("freeze() is blocked behind eight live admissions").isTrue();
+        Thread freezer = startBlockedFreezer(reporter);
 
         reporter.releaseAdmissions();
         freezer.join(60_000);
@@ -203,6 +178,20 @@ public class Test262ReporterFreezeTest {
         return TestResult.pass(new Test262TestCase(Paths.get("concurrent.js")));
     }
 
+    private static Thread startBlockedFreezer(Test262Reporter reporter) throws InterruptedException {
+        CountDownLatch started = new CountDownLatch(1);
+        Thread freezer = new Thread(() -> {
+            started.countDown();
+            reporter.freeze();
+        }, "reporter-freezer");
+        freezer.start();
+        assertThat(started.await(30, TimeUnit.SECONDS)).isTrue();
+        // Its only blocking call is the write lock. Parking proves freeze reached that lock.
+        awaitParked(freezer);
+        assertThat(freezer.isAlive()).as("freeze is blocked behind the active writers").isTrue();
+        return freezer;
+    }
+
     /**
      * A reporter that holds each thread inside its <em>first</em> admission until released.
      * <p>
@@ -244,28 +233,6 @@ public class Test262ReporterFreezeTest {
 
         private void releaseAdmissions() {
             release.countDown();
-        }
-    }
-
-    /**
-     * A reporter that can be held open at the moment a result is being admitted.
-     */
-    private static final class PausableReporter extends Test262Reporter {
-        private final CountDownLatch admitted = new CountDownLatch(1);
-        private final AtomicBoolean pauseNext = new AtomicBoolean(true);
-        private final CountDownLatch release = new CountDownLatch(1);
-
-        @Override
-        protected void onAdmitting() {
-            if (!pauseNext.compareAndSet(true, false)) {
-                return;
-            }
-            admitted.countDown();
-            try {
-                release.await(30, TimeUnit.SECONDS);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-            }
         }
     }
 }

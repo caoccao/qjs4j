@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.core;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 
 /** An import matched in transformed source, retained through loading, linking and error propagation. */
@@ -124,6 +125,34 @@ final class ModuleImportDeclaration {
         }
         declarations.sort(Comparator.comparingInt(declaration -> declaration.start));
         return declarations;
+    }
+
+    static void visitBindings(String importClause, Consumer<String> defaultBinding, Consumer<String> namedClause,
+            Consumer<String> namespaceBinding) {
+        String clause = importClause.trim();
+        if (clause.isEmpty() || clause.startsWith("*") || clause.startsWith("defer *")) {
+            // Standalone namespace imports are handled by the namespace declaration kind.
+            return;
+        }
+        if (!clause.startsWith("{")) {
+            int comma = clause.indexOf(',');
+            String name = comma < 0 ? clause : clause.substring(0, comma).trim();
+            if (!name.isEmpty()) {
+                defaultBinding.accept(name);
+            }
+            if (comma < 0) {
+                return;
+            }
+            clause = clause.substring(comma + 1).trim();
+        }
+        if (clause.startsWith("{")) {
+            namedClause.accept(clause);
+        } else if (clause.startsWith("*")) {
+            String name = clause.replaceFirst("^\\*\\s*as\\s+", "").trim();
+            if (!name.isEmpty()) {
+                namespaceBinding.accept(name);
+            }
+        }
     }
 
     private enum Kind {

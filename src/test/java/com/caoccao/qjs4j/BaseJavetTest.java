@@ -53,7 +53,9 @@ public class BaseJavetTest extends BaseTest {
     }
 
     protected boolean debugMode;
+
     protected boolean moduleMode;
+
     protected V8Runtime v8Runtime;
 
     protected void assertBigIntegerObjectWithJavet(String... codeArray) {
@@ -203,5 +205,41 @@ public class BaseJavetTest extends BaseTest {
         debugMode = false;
         moduleMode = false;
         super.tearDown();
+    }
+
+    protected static String getterDescriptor(String owner, String key) {
+        return """
+                (() => {
+                    const d = Object.getOwnPropertyDescriptor(%s, "%s");
+                    return typeof d.get === "function"
+                        && d.set === undefined
+                        && d.enumerable === false
+                        && d.configurable === true;
+                })()
+                """.formatted(owner, key);
+    }
+
+    protected static String methodDescriptor(String owner, String key) {
+        return """
+                (() => {
+                    const d = Object.getOwnPropertyDescriptor(%s, "%s");
+                    return typeof d.value === "function"
+                        && d.writable === true
+                        && d.enumerable === false
+                        && d.configurable === true;
+                })()
+                """.formatted(owner, key);
+    }
+
+    protected static String toStringTagDescriptor(String owner, String tag) {
+        return """
+                (() => {
+                    const d = Object.getOwnPropertyDescriptor(%s, Symbol.toStringTag);
+                    return d.value === "%s"
+                        && d.writable === false
+                        && d.enumerable === false
+                        && d.configurable === true;
+                })()
+                """.formatted(owner, tag);
     }
 }

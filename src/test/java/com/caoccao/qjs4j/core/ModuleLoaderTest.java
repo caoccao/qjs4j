@@ -254,6 +254,20 @@ public class ModuleLoaderTest extends ModuleFileTest {
     }
 
     @Test
+    public void testIndirectExportResolutionReportsMissingAndAmbiguousBindings() {
+        JSDynamicImportModule target = moduleRecord("target.mjs");
+        target.localExportBindings().add(new JSDynamicImportModule.LocalExportBinding("local", "exported"));
+        target.ambiguousExportNames().add("conflict");
+        ModuleLinker linker = context.moduleLinker();
+        assertThat(linker.getDynamicImportModuleExport(target, "exported", "target.mjs")).isEqualTo("exported");
+        assertThatThrownBy(() -> linker.getDynamicImportModuleExport(target, "default", "target.mjs"))
+                .isInstanceOf(JSException.class).hasMessageContaining("does not provide export 'default'");
+        context.clearPendingException();
+        assertThatThrownBy(() -> linker.getDynamicImportModuleExport(target, "conflict", "target.mjs"))
+                .isInstanceOf(JSException.class).hasMessageContaining("ambiguous indirect export: conflict");
+    }
+
+    @Test
     public void testJsonImportParsesThroughTheRealmsJson() throws IOException {
         String resolvedSpecifier = write("data.json", "{\"answer\": 42}");
         JSDynamicImportModule moduleRecord = loader().loadJSDynamicImportModule(resolvedSpecifier, new HashSet<>(),
@@ -350,6 +364,21 @@ public class ModuleLoaderTest extends ModuleFileTest {
         assertThatThrownBy(() -> loader().resolveDynamicImportSpecifier("./dep.mjs", "<eval>", "./dep.mjs"))
                 .isInstanceOf(JSException.class);
         context.clearPendingException();
+    }
+
+    @Test
+    public void testStarReExportKeepsExplicitBindingsAndWithdrawsAmbiguousNames() {
+        JSDynamicImportModule target = moduleRecord("target.mjs");
+        JSDynamicImportModule entry = moduleRecord("entry.mjs");
+        target.explicitExportNames().addAll(List.of("default", "own", "missing", "conflict", "valid"));
+        target.localExportBindings().add(new JSDynamicImportModule.LocalExportBinding("value", "valid"));
+        target.ambiguousExportNames().add("conflict");
+        entry.explicitExportNames().add("own");
+        context.moduleLinker().mergeStarReExport(entry, target, entry.exportOrigins(), "target.mjs");
+        assertThat(entry.exportOrigins()).containsOnlyKeys("valid");
+        assertThat(entry.ambiguousExportNames()).containsExactly("conflict");
+        assertThat(entry.namespace().has("valid")).isTrue();
+        assertThat(entry.namespace().has("default")).isFalse();
     }
 
     @Test

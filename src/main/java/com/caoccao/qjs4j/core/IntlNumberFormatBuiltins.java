@@ -256,13 +256,11 @@ final class IntlNumberFormatBuiltins {
             if (constructor == null) {
                 return JSUndefined.INSTANCE;
             }
-            JSValue options = IntlFormatOptions.coerceOptionsObject(context, JSValue.argumentOrUndefined(args, 1));
+            JSValue options = IntlFormatOptions.coerceOptionsWithLocaleMatcher(context, args);
             if (context.hasPendingException() || !(options instanceof JSObject optionsObject)) {
                 return options;
             }
 
-            String localeMatcher = IntlFormatOptions.normalizedStringOption(context, optionsObject, "localeMatcher",
-                    "best fit", "lookup", "best fit");
             String type = IntlFormatOptions.normalizedStringOption(context, optionsObject, "type", "cardinal",
                     "cardinal", "ordinal");
             DigitOptions digits = DigitOptions.read(context, optionsObject);

@@ -311,6 +311,15 @@ public class ModuleSourceTransformerTest extends BaseTest {
     }
 
     @Test
+    public void testSyntheticModuleImportClausesDistinguishDefaultAliasesFromOtherNames() {
+        ModuleSourceTransformer transformer = transformer();
+        assertThat(transformer.hasNonDefaultNamedBindings("value")).isFalse();
+        assertThat(transformer.hasNonDefaultNamedBindings("value, {}")).isFalse();
+        assertThat(transformer.hasNonDefaultNamedBindings("{default as payload,}")).isFalse();
+        assertThat(transformer.hasNonDefaultNamedBindings("value, {default as payload, name as local}")).isTrue();
+    }
+
+    @Test
     public void testTokenizingModuleSourceDropsTheTerminatingEof() {
         assertThat(transformer().scan("const a = 1;").tokens()).isNotEmpty()
                 .noneMatch(token -> token.type().name().equals("EOF"));

@@ -18,7 +18,6 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.compilation.lexer.Token;
-import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
@@ -101,24 +100,18 @@ final class ModuleLinker {
         if (sourceCode == null || (!sourceCode.contains("import") && !sourceCode.contains("export"))) {
             return List.of();
         }
-        List<Token> tokens = transformer.scan(sourceCode).tokens();
+        List<Token> tokens = ModuleSourceScan.tokenize(context, sourceCode);
         if (tokens == null) {
             return null;
         }
-        List<LinkedModuleRequest> requests = new ArrayList<>();
-        for (int index = ModuleSourceScan.nextModuleDeclaration(tokens, 0); index >= 0; index = ModuleSourceScan
-                .nextModuleDeclaration(tokens, index + 1)) {
-            Token token = tokens.get(index);
-            if (index + 1 >= tokens.size()) {
-                break;
-            }
-            if (token.type() == TokenType.EXPORT) {
-                index = readExportDeclaration(tokens, index, sourceCode, requests);
-                continue;
-            }
-            index = readImportDeclaration(tokens, index, sourceCode, requests);
-        }
-        return requests;
+        return new ModuleRequestReader(tokens, sourceCode).read();
+    }
+
+    private JSDynamicImportModule loadReExportTarget(JSDynamicImportModule module,
+            JSDynamicImportModule.ReExportBinding binding) {
+        String specifier = context.moduleLoader().resolveDynamicImportSpecifier(binding.sourceSpecifier(),
+                module.resolvedSpecifier(), binding.sourceSpecifier());
+        return context.moduleLoader().loadJSDynamicImportModule(specifier, new HashSet<>(), null);
     }
 
     void mergeStarReExport(JSDynamicImportModule moduleRecord, JSDynamicImportModule targetModuleRecord,
@@ -182,177 +175,6 @@ final class ModuleLinker {
     }
 
     /**
-     * Read one {@code export} declaration, and record what it asks another module for.
-     * <p>
-     * Only the forms with a {@code from} clause name a module. {@code export \{ a \} from '…'} asks for {@code a}
-     * exactly as an import does; {@code export * from '…'} and {@code export * as ns from '…'} ask for no particular
-     * name but still name a module, which has to link.
-     *
-     * @param tokens
-     *            the token list
-     * @param start
-     *            the index of the {@code export} keyword
-     * @param sourceCode
-     *            the source the tokens came from, for positions
-     * @param requests
-     *            collects the declaration, when it names a module
-     * @return the index of the last token consumed
-     */
-    int readExportDeclaration(List<Token> tokens, int start, String sourceCode, List<LinkedModuleRequest> requests) {
-        int index = start + 1;
-        List<LinkedExportNameRequest> requestedNames = new ArrayList<>();
-        if (tokens.get(index).type() == TokenType.MUL) {
-            index++;
-            if (index < tokens.size() && tokens.get(index).type() == TokenType.AS) {
-                index += 2;
-            }
-        } else if (tokens.get(index).type() == TokenType.LBRACE) {
-            index = readNamedImports(tokens, index, sourceCode, requestedNames) + 1;
-        } else {
-            // `export default …` and `export <declaration>` name no module.
-            return start;
-        }
-        if (index >= tokens.size() || tokens.get(index).type() != TokenType.FROM) {
-            // `export { a, b };` re-exports local bindings, which are this module's own.
-            return Math.min(Math.max(index - 1, start), tokens.size() - 1);
-        }
-        index++;
-        if (index >= tokens.size() || tokens.get(index).type() != TokenType.STRING) {
-            return Math.min(index, tokens.size() - 1);
-        }
-        requests.add(new LinkedModuleRequest(tokens.get(index).value(),
-                ModuleSourceScan.moduleTokenLocation(tokens, index, sourceCode), readImportAttributes(tokens, index),
-                List.copyOf(requestedNames)));
-        return ModuleSourceScan.skipModuleDeclarationTail(tokens, index);
-    }
-
-    /**
-     * Read a {@code with}/{@code assert} attributes clause that follows a module specifier.
-     *
-     * @param tokens
-     *            the token list
-     * @param specifierIndex
-     *            the index of the specifier string token
-     * @return the attributes, empty when the declaration carries none
-     */
-    Map<String, String> readImportAttributes(List<Token> tokens, int specifierIndex) {
-        int index = specifierIndex + 1;
-        if (index + 1 >= tokens.size()
-                || !("with".equals(tokens.get(index).value()) || "assert".equals(tokens.get(index).value()))
-                || tokens.get(index + 1).type() != TokenType.LBRACE) {
-            return Map.of();
-        }
-        Map<String, String> attributes = new LinkedHashMap<>();
-        index += 2;
-        while (index < tokens.size() && tokens.get(index).type() != TokenType.RBRACE) {
-            if (tokens.get(index).type() == TokenType.COMMA) {
-                index++;
-                continue;
-            }
-            String key = tokens.get(index).value();
-            index++;
-            if (index < tokens.size() && tokens.get(index).type() == TokenType.COLON) {
-                index++;
-                if (index < tokens.size()) {
-                    attributes.put(key, tokens.get(index).value());
-                    index++;
-                }
-            }
-        }
-        return attributes;
-    }
-
-    /**
-     * Read one static {@code import} declaration, from its keyword to its last token.
-     *
-     * @param tokens
-     *            the token list
-     * @param start
-     *            the index of the {@code import} keyword
-     * @param sourceCode
-     *            the source the tokens came from, for positions
-     * @param requests
-     *            collects the declaration, when it names a module
-     * @return the index of the declaration's last token
-     */
-    int readImportDeclaration(List<Token> tokens, int start, String sourceCode, List<LinkedModuleRequest> requests) {
-        int index = start + 1;
-        List<LinkedExportNameRequest> importedNames = new ArrayList<>();
-        if (tokens.get(index).type() != TokenType.STRING) {
-            // `import defer * as ns from '…'` is this engine's deferred-namespace form.
-            if ("defer".equals(tokens.get(index).value()) && index + 1 < tokens.size()
-                    && tokens.get(index + 1).type() == TokenType.MUL) {
-                index++;
-            }
-            if (tokens.get(index).type() == TokenType.LBRACE) {
-                index = readNamedImports(tokens, index, sourceCode, importedNames);
-            } else if (tokens.get(index).type() != TokenType.MUL) {
-                // An ImportedDefaultBinding asks for the name `default`, and fails to link exactly
-                // as any other name does.
-                importedNames.add(new LinkedExportNameRequest("default",
-                        ModuleSourceScan.moduleTokenLocation(tokens, index, sourceCode)));
-                index++;
-                if (index < tokens.size() && tokens.get(index).type() == TokenType.COMMA) {
-                    index++;
-                    if (index < tokens.size() && tokens.get(index).type() == TokenType.LBRACE) {
-                        index = readNamedImports(tokens, index, sourceCode, importedNames);
-                    }
-                }
-            }
-            // Whatever the clause was, the specifier is the string after `from`.
-            while (index < tokens.size() && tokens.get(index).type() != TokenType.FROM
-                    && tokens.get(index).type() != TokenType.SEMICOLON) {
-                index++;
-            }
-            if (index >= tokens.size() || tokens.get(index).type() != TokenType.FROM) {
-                return Math.min(index, tokens.size() - 1);
-            }
-            index++;
-        }
-        if (index >= tokens.size() || tokens.get(index).type() != TokenType.STRING) {
-            return Math.min(Math.max(index, start + 1), tokens.size() - 1);
-        }
-        requests.add(new LinkedModuleRequest(tokens.get(index).value(),
-                ModuleSourceScan.moduleTokenLocation(tokens, index, sourceCode), readImportAttributes(tokens, index),
-                List.copyOf(importedNames)));
-        return ModuleSourceScan.skipModuleDeclarationTail(tokens, index);
-    }
-
-    /**
-     * Read a {@code \{ a, b as c, "d-e" as f \}} import clause.
-     *
-     * @param tokens
-     *            the token list
-     * @param lbraceIndex
-     *            the index of the opening brace
-     * @param sourceCode
-     *            the source the tokens came from, for positions
-     * @param importedNames
-     *            collects the names the clause asks the exporting module for
-     * @return the index of the closing brace
-     */
-    int readNamedImports(List<Token> tokens, int lbraceIndex, String sourceCode,
-            List<LinkedExportNameRequest> importedNames) {
-        int index = lbraceIndex + 1;
-        while (index < tokens.size() && tokens.get(index).type() != TokenType.RBRACE) {
-            if (tokens.get(index).type() == TokenType.COMMA) {
-                index++;
-                continue;
-            }
-            // A ModuleExportName is an IdentifierName — reserved words included — or a string, and
-            // the token's value is the decoded one either way.
-            importedNames.add(new LinkedExportNameRequest(tokens.get(index).value(),
-                    ModuleSourceScan.moduleTokenLocation(tokens, index, sourceCode)));
-            index++;
-            if (index < tokens.size() && tokens.get(index).type() == TokenType.AS) {
-                // `as` and the local binding it introduces, which the exporting module never sees.
-                index += 2;
-            }
-        }
-        return Math.min(index, tokens.size() - 1);
-    }
-
-    /**
      * Load and parse every module the graph reaches, and check every name it imports, before any module body is
      * evaluated.
      * <p>
@@ -412,11 +234,7 @@ final class ModuleLinker {
             if (!exportName.equals(reExportBinding.exportedName())) {
                 continue;
             }
-            String targetSpecifier = context.moduleLoader().resolveDynamicImportSpecifier(
-                    reExportBinding.sourceSpecifier(), moduleRecord.resolvedSpecifier(),
-                    reExportBinding.sourceSpecifier());
-            JSDynamicImportModule targetModuleRecord = context.moduleLoader().loadJSDynamicImportModule(targetSpecifier,
-                    new HashSet<>(), null);
+            JSDynamicImportModule targetModuleRecord = loadReExportTarget(moduleRecord, reExportBinding);
             if (ModuleSourceTransformer.MODULE_NAMESPACE_EXPORT_NAME.equals(reExportBinding.importedName())) {
                 return DynamicImportExportResolution.resolvedResolution(targetModuleRecord,
                         ModuleSourceTransformer.MODULE_NAMESPACE_EXPORT_NAME);
@@ -439,11 +257,7 @@ final class ModuleLinker {
             if (!reExportBinding.starExport()) {
                 continue;
             }
-            String targetSpecifier = context.moduleLoader().resolveDynamicImportSpecifier(
-                    reExportBinding.sourceSpecifier(), moduleRecord.resolvedSpecifier(),
-                    reExportBinding.sourceSpecifier());
-            JSDynamicImportModule targetModuleRecord = context.moduleLoader().loadJSDynamicImportModule(targetSpecifier,
-                    new HashSet<>(), null);
+            JSDynamicImportModule targetModuleRecord = loadReExportTarget(moduleRecord, reExportBinding);
             DynamicImportExportResolution resolution = resolveDynamicImportExport(targetModuleRecord, exportName,
                     resolveSet, exportStarSet);
             if (resolution.ambiguous()) {
@@ -585,29 +399,10 @@ final class ModuleLinker {
     }
 
     private void validateImportClause(String importClause, Consumer<String> checkName) {
-        String clause = importClause.trim();
-        if (clause.isEmpty() || clause.startsWith("*") || clause.startsWith("defer *")) {
-            return;
-        }
-        if (clause.startsWith("{")) {
-            validateNamedImportSpecifiers(clause, checkName);
-            return;
-        }
-        int commaIdx = clause.indexOf(',');
-        if (commaIdx < 0) {
-            checkName.accept("default");
-            return;
-        }
-
-        String defaultBinding = clause.substring(0, commaIdx).trim();
-        if (!defaultBinding.isEmpty()) {
-            checkName.accept("default");
-        }
-
-        String remainder = clause.substring(commaIdx + 1).trim();
-        if (remainder.startsWith("{")) {
-            validateNamedImportSpecifiers(remainder, checkName);
-        }
+        ModuleImportDeclaration.visitBindings(importClause, local -> checkName.accept("default"),
+                clause -> transformer.forEachNamedImport(clause, (imported, local) -> checkName.accept(imported)),
+                local -> {
+                });
     }
 
     void validateImportNameAgainstModuleRecord(JSDynamicImportModule moduleRecord, String importedName) {
@@ -655,10 +450,6 @@ final class ModuleLinker {
 
     void validateNamedImportBindingsAgainstExplicitExports(JSDynamicImportModule moduleRecord, String importClause) {
         validateImportClause(importClause, name -> validateImportNameAgainstModuleRecord(moduleRecord, name));
-    }
-
-    private void validateNamedImportSpecifiers(String namedClause, Consumer<String> checkName) {
-        transformer.forEachNamedImport(namedClause, (importedName, localName) -> checkName.accept(importedName));
     }
 
     record DynamicImportExportResolution(JSDynamicImportModule moduleRecord, String bindingName, boolean ambiguous) {

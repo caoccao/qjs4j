@@ -16,8 +16,6 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.exceptions.JSException;
-
 import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -82,18 +80,11 @@ public final class JSIntlObject {
             }
         }
         String lowered = sb.toString();
-        // Legacy alias
-        if ("islamicc".equals(lowered)) {
-            return "islamic-civil";
-        }
-        if ("ethiopic-amete-alem".equals(lowered)) {
-            return "ethioaa";
-        }
         // Deprecated calendars: implementation-defined fallback
         if ("islamic".equals(lowered) || "islamic-rgsa".equals(lowered)) {
             return "islamic-civil";
         }
-        return lowered;
+        return IntlLocaleAliases.calendar(lowered);
     }
 
     static String canonicalizeLocaleTag(String localeTag) {
@@ -267,13 +258,11 @@ public final class JSIntlObject {
             if (constructor == null) {
                 return JSUndefined.INSTANCE;
             }
-            JSValue options = IntlFormatOptions.coerceOptionsObject(context, JSValue.argumentOrUndefined(args, 1));
+            JSValue options = IntlFormatOptions.coerceOptionsWithLocaleMatcher(context, args);
             if (context.hasPendingException() || !(options instanceof JSObject optionsObject)) {
                 return options;
             }
 
-            String localeMatcher = IntlFormatOptions.normalizedStringOption(context, optionsObject, "localeMatcher",
-                    "best fit", "lookup", "best fit");
             String numberingSystemOption = IntlFormatOptions.readStringOption(context, optionsObject,
                     "numberingSystem");
             if (context.hasPendingException()) {
@@ -329,13 +318,11 @@ public final class JSIntlObject {
                 }
             }
 
-            JSValue options = IntlFormatOptions.coerceOptionsObject(context, JSValue.argumentOrUndefined(args, 1));
+            JSValue options = IntlFormatOptions.coerceOptionsWithLocaleMatcher(context, args);
             if (context.hasPendingException() || !(options instanceof JSObject optionsObject)) {
                 return options;
             }
 
-            String localeMatcher = IntlFormatOptions.normalizedStringOption(context, optionsObject, "localeMatcher",
-                    "best fit", "lookup", "best fit");
             String granularity = IntlFormatOptions.normalizedStringOption(context, optionsObject, "granularity",
                     "grapheme", "grapheme", "word", "sentence");
             if (context.hasPendingException()) {

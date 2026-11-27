@@ -53,32 +53,7 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
      */
     private void assertImportOfAMissingNameRunsNothing(String entryName, String entrySource) throws IOException {
         writeModule("dep.mjs", "globalThis.dependencyBodyRan = true;\nexport const other = 1;\n");
-        assertLinkFailsBeforeAnythingRuns(entrySource, entryName, "does not provide an export named");
-    }
-
-    /**
-     * Evaluate an entry module and assert that the graph failed to link without running anything.
-     *
-     * @param entrySource
-     *            the entry module's source
-     * @param entryName
-     *            the entry module's file name
-     * @param expectedMessagePart
-     *            text the reported error must contain
-     */
-    private void assertLinkFailsBeforeAnythingRuns(String entrySource, String entryName, String expectedMessagePart)
-            throws IOException {
-        Path entry = writeModule(entryName, entrySource);
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            assertThatThrownBy(() -> context.eval(entrySource, entry.toString(), true)).isInstanceOf(JSException.class)
-                    .hasMessageContaining(expectedMessagePart);
-            assertThat(context.eval("String(globalThis.dependencyBodyRan)", "probe.js", false).toString())
-                    .as("no dependency body may run for a graph that fails to link").isEqualTo("undefined");
-            assertThat(context.eval("String(globalThis.rootBodyRan)", "probe.js", false).toString())
-                    .as("nor the entry module's own body").isEqualTo("undefined");
-            assertThat(context.getModuleBodyEvaluationCount()).as("the engine agrees that nothing was evaluated")
-                    .isZero();
-        }
+        assertModuleFailsBeforeEvaluation(entryName, entrySource, "does not provide an export named");
     }
 
     @Test
@@ -97,8 +72,9 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
                 "import { b } from './cyc-b.mjs';\n" + "globalThis.dependencyBodyRan = true;\nexport const a = 1;\n");
         writeModule("cyc-b.mjs", "import { missing } from './cyc-a.mjs';\n"
                 + "globalThis.dependencyBodyRan = true;\nexport const b = 1;\n");
-        assertLinkFailsBeforeAnythingRuns("import { a } from './cyc-a.mjs';\nglobalThis.rootBodyRan = true;\n",
-                "main-cycle-missing.mjs", "does not provide an export named 'missing'");
+        assertModuleFailsBeforeEvaluation("main-cycle-missing.mjs",
+                "import { a } from './cyc-a.mjs';\nglobalThis.rootBodyRan = true;\n",
+                "does not provide an export named 'missing'");
     }
 
     @Test
@@ -107,12 +83,8 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
         // declining to look, and resolving must not turn a working graph into a link error.
         writeModule("cycle-b.mjs",
                 "import { a } from './cycle-a.mjs';\nexport const b = 'b';\nglobalThis.sawA = typeof a;\n");
-        Path entry = writeModule("cycle-a.mjs",
-                "import { b } from './cycle-b.mjs';\nexport const a = 'a';\nglobalThis.result = b;\n");
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            context.eval(Files.readString(entry), entry.toString(), true);
-            assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString()).isEqualTo("b");
-        }
+        assertThat(evaluateModuleResult("cycle-a.mjs",
+                "import { b } from './cycle-b.mjs';\nexport const a = 'a';\nglobalThis.result = b;\n")).isEqualTo("b");
     }
 
     @Test
@@ -126,8 +98,8 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
     @Test
     public void testADefaultImportOfAModuleWithNoDefaultRunsNothing() throws IOException {
         writeModule("dep-no-default.mjs", "globalThis.dependencyBodyRan = true;\nexport const other = 1;\n");
-        assertLinkFailsBeforeAnythingRuns(
-                "import theDefault from './dep-no-default.mjs';\nglobalThis.rootBodyRan = true;\n", "main-default.mjs",
+        assertModuleFailsBeforeEvaluation("main-default.mjs",
+                "import theDefault from './dep-no-default.mjs';\nglobalThis.rootBodyRan = true;\n",
                 "does not provide an export named 'default'");
     }
 
@@ -138,9 +110,8 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
         // ahead of it, which the engine used to evaluate on the way past.
         writeModule("parses.mjs", "globalThis.dependencyBodyRan = true;\n");
         writeModule("broken.mjs", "break;\n");
-        assertLinkFailsBeforeAnythingRuns(
-                "import './parses.mjs';\nimport './broken.mjs';\nglobalThis.rootBodyRan = true;\n",
-                "main-parse-order.mjs", "SyntaxError");
+        assertModuleFailsBeforeEvaluation("main-parse-order.mjs",
+                "import './parses.mjs';\nimport './broken.mjs';\nglobalThis.rootBodyRan = true;\n", "SyntaxError");
     }
 
     @Test
@@ -218,8 +189,8 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
     public void testAMissingExportBehindAStarReExportRunsNothing() throws IOException {
         writeModule("star-leaf.mjs", "globalThis.dependencyBodyRan = true;\nexport const other = 1;\n");
         writeModule("star-middle.mjs", "globalThis.dependencyBodyRan = true;\nexport * from './star-leaf.mjs';\n");
-        assertLinkFailsBeforeAnythingRuns(
-                "import { missing } from './star-middle.mjs';\nglobalThis.rootBodyRan = true;\n", "main-star.mjs",
+        assertModuleFailsBeforeEvaluation("main-star.mjs",
+                "import { missing } from './star-middle.mjs';\nglobalThis.rootBodyRan = true;\n",
                 "does not provide an export named 'missing'");
     }
 
@@ -228,8 +199,9 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
         // A graph whose dependency uses top-level await is still linked before it is evaluated, and
         // the await must not be an excuse to start running it.
         writeModule("tla-dep.mjs", "globalThis.dependencyBodyRan = true;\n" + "export const ready = await 1;\n");
-        assertLinkFailsBeforeAnythingRuns("import { missing } from './tla-dep.mjs';\nglobalThis.rootBodyRan = true;\n",
-                "main-tla.mjs", "does not provide an export named 'missing'");
+        assertModuleFailsBeforeEvaluation("main-tla.mjs",
+                "import { missing } from './tla-dep.mjs';\nglobalThis.rootBodyRan = true;\n",
+                "does not provide an export named 'missing'");
     }
 
     @Test
@@ -239,16 +211,18 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
         writeModule("leaf.mjs", "globalThis.dependencyBodyRan = true;\nexport const other = 1;\n");
         writeModule("middle.mjs", "globalThis.dependencyBodyRan = true;\n" + "import { missing } from './leaf.mjs';\n"
                 + "export const middle = 1;\n");
-        assertLinkFailsBeforeAnythingRuns("import { middle } from './middle.mjs';\nglobalThis.rootBodyRan = true;\n",
-                "main-deep.mjs", "does not provide an export named 'missing'");
+        assertModuleFailsBeforeEvaluation("main-deep.mjs",
+                "import { middle } from './middle.mjs';\nglobalThis.rootBodyRan = true;\n",
+                "does not provide an export named 'missing'");
     }
 
     @Test
     public void testANamedImportOfAMissingExportRunsNothing() throws IOException {
         // The review's reproduction.
         writeModule("dep.mjs", "globalThis.dependencyBodyRan = true;\nexport const other = 1;\n");
-        assertLinkFailsBeforeAnythingRuns("import { missing } from './dep.mjs';\nglobalThis.rootBodyRan = true;\n",
-                "main.mjs", "does not provide an export named 'missing'");
+        assertModuleFailsBeforeEvaluation("main.mjs",
+                "import { missing } from './dep.mjs';\nglobalThis.rootBodyRan = true;\n",
+                "does not provide an export named 'missing'");
     }
 
     @Test
@@ -259,12 +233,9 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
         writeModule("shared-one.mjs", "export * as shared from './shared-leaf.mjs';\n");
         writeModule("shared-two.mjs", "import * as shared from './shared-leaf.mjs';\nexport { shared };\n");
         writeModule("shared-middle.mjs", "export * from './shared-one.mjs';\nexport * from './shared-two.mjs';\n");
-        Path entry = writeModule("main-shared.mjs",
-                "import { shared } from './shared-middle.mjs';\nglobalThis.result = shared.reached;\n");
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            context.eval(Files.readString(entry), entry.toString(), true);
-            assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString()).isEqualTo("leaf");
-        }
+        assertThat(evaluateModuleResult("main-shared.mjs",
+                "import { shared } from './shared-middle.mjs';\nglobalThis.result = shared.reached;\n"))
+                .isEqualTo("leaf");
     }
 
     @Test
@@ -272,12 +243,8 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
         // The acceptance side: a name that does resolve through `export *` must not be rejected.
         writeModule("ok-leaf.mjs", "export const reached = 'leaf';\n");
         writeModule("ok-middle.mjs", "export * from './ok-leaf.mjs';\n");
-        Path entry = writeModule("main-ok-star.mjs",
-                "import { reached } from './ok-middle.mjs';\nglobalThis.result = reached;\n");
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            context.eval(Files.readString(entry), entry.toString(), true);
-            assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString()).isEqualTo("leaf");
-        }
+        assertThat(evaluateModuleResult("main-ok-star.mjs",
+                "import { reached } from './ok-middle.mjs';\nglobalThis.result = reached;\n")).isEqualTo("leaf");
     }
 
     @Test
@@ -288,12 +255,8 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
         writeModule("ns-a.mjs", "export const x = 1;\nexport const only = 'a';\n");
         writeModule("ns-b.mjs", "export const x = 2;\n");
         writeModule("ns-middle.mjs", "export * from './ns-a.mjs';\nexport * from './ns-b.mjs';\n");
-        Path entry = writeModule("main-namespace.mjs",
-                "import * as ns from './ns-middle.mjs';\nglobalThis.result = ns.only;\n");
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            context.eval(Files.readString(entry), entry.toString(), true);
-            assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString()).isEqualTo("a");
-        }
+        assertThat(evaluateModuleResult("main-namespace.mjs",
+                "import * as ns from './ns-middle.mjs';\nglobalThis.result = ns.only;\n")).isEqualTo("a");
     }
 
     @Test
@@ -304,8 +267,8 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
         writeModule("ambiguous-b.mjs", "globalThis.dependencyBodyRan = true;\nexport const x = 2;\n");
         writeModule("ambiguous-middle.mjs", "globalThis.dependencyBodyRan = true;\n"
                 + "export * from './ambiguous-a.mjs';\n" + "export * from './ambiguous-b.mjs';\n");
-        assertLinkFailsBeforeAnythingRuns(
-                "import { x } from './ambiguous-middle.mjs';\nglobalThis.rootBodyRan = true;\n", "main-ambiguous.mjs",
+        assertModuleFailsBeforeEvaluation("main-ambiguous.mjs",
+                "import { x } from './ambiguous-middle.mjs';\nglobalThis.rootBodyRan = true;\n",
                 "contains conflicting star exports for the name 'x'");
     }
 
@@ -330,8 +293,8 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
     public void testAnIndirectExportOfAMissingNameRunsNothing() throws IOException {
         // `export { x } from './dep.mjs'` asks for a name exactly as an import does.
         writeModule("dep-indirect.mjs", "globalThis.dependencyBodyRan = true;\nexport const other = 1;\n");
-        assertLinkFailsBeforeAnythingRuns(
-                "export { missing } from './dep-indirect.mjs';\nglobalThis.rootBodyRan = true;\n", "main-indirect.mjs",
+        assertModuleFailsBeforeEvaluation("main-indirect.mjs",
+                "export { missing } from './dep-indirect.mjs';\nglobalThis.rootBodyRan = true;\n",
                 "does not provide an export named 'missing'");
     }
 
@@ -350,9 +313,9 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
     @Test
     public void testARenamedImportOfAMissingExportRunsNothing() throws IOException {
         writeModule("dep-renamed.mjs", "globalThis.dependencyBodyRan = true;\nexport const other = 1;\n");
-        assertLinkFailsBeforeAnythingRuns(
+        assertModuleFailsBeforeEvaluation("main-renamed.mjs",
                 "import { missing as here } from './dep-renamed.mjs';\nglobalThis.rootBodyRan = true;\n",
-                "main-renamed.mjs", "does not provide an export named 'missing'");
+                "does not provide an export named 'missing'");
     }
 
     @Test

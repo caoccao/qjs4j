@@ -295,18 +295,7 @@ final class ModuleSourceScan {
     List<Token> tokens() {
         if (!tokenized) {
             tokenized = true;
-            try {
-                Lexer lexer = new Lexer(sourceCode);
-                List<Token> result = new ArrayList<>();
-                for (Token token = lexer.nextToken(); token != null
-                        && token.type() != TokenType.EOF; token = lexer.nextToken()) {
-                    result.add(token);
-                }
-                tokens = result;
-            } catch (RuntimeException invalidSource) {
-                // The compiler supplies the syntax error. Callers fall back to their textual scan.
-                context.clearPendingException();
-            }
+            tokens = tokenize(context, sourceCode);
         }
         return tokens;
     }
@@ -534,6 +523,23 @@ final class ModuleSourceScan {
             end = next;
         }
         return end;
+    }
+
+    static List<Token> tokenize(JSContext context, String sourceCode) {
+        try {
+            Lexer lexer = new Lexer(sourceCode);
+            // Reserve space for a short declaration without scaling the initial allocation to a whole file.
+            List<Token> result = new ArrayList<>(Math.min(64, sourceCode.length() / 4));
+            for (Token token = lexer.nextToken(); token != null
+                    && token.type() != TokenType.EOF; token = lexer.nextToken()) {
+                result.add(token);
+            }
+            return result;
+        } catch (RuntimeException invalidSource) {
+            // The compiler supplies the syntax error. Callers fall back to their textual scan.
+            context.clearPendingException();
+            return null;
+        }
     }
 
     /**

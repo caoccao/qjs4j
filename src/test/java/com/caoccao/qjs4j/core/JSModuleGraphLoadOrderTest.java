@@ -25,7 +25,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
  * A module a graph names but cannot load fails the whole graph, before any of it runs.
@@ -61,20 +60,7 @@ public class JSModuleGraphLoadOrderTest extends ModuleFileTest {
     private JSException assertGraphFailsBeforeAnythingRuns(String entryName, String entrySource,
             String expectedMessagePart) throws IOException {
         writeModule("side-effect.mjs", "globalThis.dependencyBodyRan = true;\nexport const ok = 1;\n");
-        Path entry = writeModule(entryName, entrySource);
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            JSException failure = catchThrowableOfType(JSException.class,
-                    () -> context.eval(entrySource, entry.toString(), true));
-            assertThat(failure).as("the graph must fail").isNotNull();
-            assertThat(failure).hasMessageContaining(expectedMessagePart);
-            assertThat(context.eval("String(globalThis.dependencyBodyRan)", "probe.js", false).toString())
-                    .as("the dependency named before the bad one must not have run").isEqualTo("undefined");
-            assertThat(context.eval("String(globalThis.rootBodyRan)", "probe.js", false).toString())
-                    .as("nor the entry module's own body").isEqualTo("undefined");
-            assertThat(context.getModuleBodyEvaluationCount()).as("the engine agrees that nothing was evaluated")
-                    .isZero();
-            return failure;
-        }
+        return assertModuleFailsBeforeEvaluation(entryName, entrySource, expectedMessagePart);
     }
 
     @Test

@@ -62,13 +62,8 @@ public record TemporalZonedDateTimeToStringSettings(String calendarNameOption, S
             return null;
         }
 
-        String roundingModeText = TemporalUtils.getStringOption(context, optionsObject, "roundingMode", "trunc");
-        if (context.hasPendingException() || roundingModeText == null) {
-            return null;
-        }
-
-        String smallestUnitText = TemporalUtils.getStringOption(context, optionsObject, "smallestUnit", null);
-        if (context.hasPendingException()) {
+        TemporalTimeStringOptions options = TemporalTimeStringOptions.read(context, optionsObject);
+        if (options == null) {
             return null;
         }
 
@@ -77,8 +72,8 @@ public record TemporalZonedDateTimeToStringSettings(String calendarNameOption, S
             return null;
         }
 
-        TemporalPlainTimeToStringSettings time = TemporalPlainTimeToStringSettings.resolve(context, roundingModeText,
-                smallestUnitText, digits);
+        TemporalPlainTimeToStringSettings time = options.resolve(context, digits, TemporalUnit.MINUTE,
+                "Temporal error: Invalid smallestUnit option.");
         if (time == null) {
             return null;
         }

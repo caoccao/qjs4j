@@ -36,12 +36,8 @@ public record TemporalInstantToStringOptions(TemporalFractionalSecondDigitsOptio
         if (fractionalSecondDigitsOption == null) {
             return null;
         }
-        String roundingModeText = TemporalUtils.getStringOption(context, optionsObject, "roundingMode", "trunc");
-        if (context.hasPendingException()) {
-            return null;
-        }
-        String smallestUnitText = TemporalUtils.getStringOption(context, optionsObject, "smallestUnit", null);
-        if (context.hasPendingException()) {
+        TemporalTimeStringOptions options = TemporalTimeStringOptions.read(context, optionsObject);
+        if (options == null) {
             return null;
         }
         JSValue timeZoneValue = optionsObject.get(PropertyKey.fromString("timeZone"));
@@ -61,22 +57,11 @@ public record TemporalInstantToStringOptions(TemporalFractionalSecondDigitsOptio
             }
         }
 
-        TemporalRoundingMode roundingMode = TemporalRoundingMode.fromString(roundingModeText);
-        if (roundingMode == null) {
-            context.throwRangeError("Temporal error: Invalid rounding mode.");
+        TemporalPlainTimeToStringSettings time = options.resolve(context, fractionalSecondDigitsOption,
+                TemporalUnit.MINUTE, "Temporal error: Invalid smallest unit.");
+        if (time == null) {
             return null;
         }
-
-        TemporalUnit smallestUnit = null;
-        if (smallestUnitText != null) {
-            smallestUnit = TemporalUnit.fromString(smallestUnitText)
-                    .filter(u -> u.isTimeUnit() && u != TemporalUnit.HOUR).orElse(null);
-            if (smallestUnit == null) {
-                context.throwRangeError("Temporal error: Invalid smallest unit.");
-                return null;
-            }
-        }
-
         if (timeZoneId != null) {
             try {
                 TemporalTimeZone.resolveTimeZone(timeZoneId);
@@ -86,7 +71,8 @@ public record TemporalInstantToStringOptions(TemporalFractionalSecondDigitsOptio
             }
         }
 
-        return new TemporalInstantToStringOptions(fractionalSecondDigitsOption, roundingMode, smallestUnit, timeZoneId);
+        return new TemporalInstantToStringOptions(fractionalSecondDigitsOption, time.roundingMode(),
+                time.smallestUnit(), timeZoneId);
     }
 
     @Override
