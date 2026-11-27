@@ -23,6 +23,8 @@ import java.util.regex.Pattern;
  * Locale resolution and option access shared by Intl constructors.
  */
 final class IntlFormatOptions {
+    private static final String[] NUMERIC_WIDTHS = {"numeric", "2-digit"};
+
     /**
      * Supported numbering systems with simple digit mappings (per ECMA-402 Table 10). Used by
      * supportedValuesOf("numberingSystem") and validated in constructors.
@@ -34,6 +36,8 @@ final class IntlFormatOptions {
             "mroo", "mtei", "mymr", "mymrepka", "mymrpao", "mymrshan", "mymrtlng", "nagm", "newa", "nkoo", "olck",
             "onao", "orya", "osma", "outlined", "rohg", "saur", "segment", "shrd", "sind", "sinh", "sora", "sund",
             "sunu", "takr", "talu", "tamldec", "telu", "thai", "tibt", "tirh", "tnsa", "tols", "vaii", "wara", "wcho");
+
+    private static final String[] TEXT_WIDTHS = {"long", "short", "narrow"};
 
     /**
      * Pattern for Unicode Locale Identifier type: (3*8alphanum) *("-" (3*8alphanum))
@@ -62,6 +66,11 @@ final class IntlFormatOptions {
 
     static Integer getOptionIntegerOrUndefined(JSContext context, JSObject optionsObject, String key, int minimum,
             int maximum) {
+        return getOptionIntegerOrUndefined(context, optionsObject, key, minimum, maximum, null);
+    }
+
+    static Integer getOptionIntegerOrUndefined(JSContext context, JSObject optionsObject, String key, int minimum,
+            int maximum, String rangeError) {
         JSValue rawValue = optionsObject.get(PropertyKey.fromString(key));
         if (context.hasPendingException()) {
             return null;
@@ -74,8 +83,9 @@ final class IntlFormatOptions {
             return null;
         }
         if (numberValue < minimum || numberValue > maximum || numberValue != (int) numberValue) {
-            context.throwRangeError(
-                    "Value " + numberValue + " out of range for Intl.NumberFormat options property " + key);
+            context.throwRangeError(rangeError != null
+                    ? rangeError
+                    : "Value " + numberValue + " out of range for Intl.NumberFormat options property " + key);
             return null;
         }
         return (int) numberValue;
@@ -130,6 +140,10 @@ final class IntlFormatOptions {
         throw new IllegalArgumentException("Invalid option value: " + rawValue);
     }
 
+    static String readNumericWidth(JSContext context, JSObject options, String key) {
+        return readValidatedOption(context, options, key, NUMERIC_WIDTHS);
+    }
+
     /**
      * Read a string option from options object. Returns null if option is undefined.
      */
@@ -145,6 +159,10 @@ final class IntlFormatOptions {
             return null;
         }
         return JSTypeConversions.toString(context, rawValue).value();
+    }
+
+    static String readTextWidth(JSContext context, JSObject options, String key) {
+        return readValidatedOption(context, options, key, TEXT_WIDTHS);
     }
 
     /**
@@ -225,7 +243,6 @@ final class IntlFormatOptions {
             return instance;
         }
     }
-
     record NumberingLocale(Locale locale, String numberingSystem) {
         static NumberingLocale resolve(Locale locale, String option) {
             boolean hasExtensions = locale.hasExtensions();

@@ -17,6 +17,8 @@
 package com.caoccao.qjs4j.core.temporal;
 
 import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.JSString;
+import com.caoccao.qjs4j.core.JSValue;
 
 import java.math.BigInteger;
 import java.time.*;
@@ -429,6 +431,14 @@ public final class TemporalTimeZone {
         } else {
             return formatOffset(parsedInstant.offset().totalSeconds());
         }
+    }
+
+    public static String requireTimeZoneIdentifier(JSContext context, JSValue timeZoneLike) {
+        if (!(timeZoneLike instanceof JSString timeZoneString)) {
+            context.throwTypeError("Temporal error: Time zone must be string.");
+            return null;
+        }
+        return parseTimeZoneIdentifierString(context, timeZoneString.value());
     }
 
     /**

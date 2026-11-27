@@ -34,20 +34,8 @@ public final class TemporalZonedDateTimeConstructor {
      * Temporal.ZonedDateTime.compare(one, two)
      */
     public static JSValue compare(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue oneArg = JSValue.argumentOrUndefined(args, 0);
-        JSValue twoArg = JSValue.argumentOrUndefined(args, 1);
-
-        JSTemporalZonedDateTime firstZonedDateTime = toTemporalZonedDateTimeObject(context, oneArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        JSTemporalZonedDateTime secondZonedDateTime = toTemporalZonedDateTimeObject(context, twoArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        return JSNumber
-                .of(firstZonedDateTime.getEpochNanoseconds().compareTo(secondZonedDateTime.getEpochNanoseconds()));
+        return TemporalReceiver.ZONED_DATE_TIME.compare(context, args,
+                (left, right) -> left.getEpochNanoseconds().compareTo(right.getEpochNanoseconds()));
     }
 
     /**
@@ -387,11 +375,7 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     public static JSTemporalZonedDateTime toTemporalZonedDateTimeObject(JSContext context, JSValue item) {
-        JSValue result = toTemporalZonedDateTime(context, item);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        return (JSTemporalZonedDateTime) result;
+        return TemporalReceiver.ZONED_DATE_TIME.convert(context, item);
     }
 
 }

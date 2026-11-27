@@ -26,8 +26,7 @@ import java.math.BigInteger;
  */
 public final class TemporalPlainTimePrototype {
     private static final BigInteger DAY_NANOSECONDS = TemporalConstants.BI_DAY_NANOSECONDS;
-    private static final TemporalReceiver<JSTemporalPlainTime> RECEIVER = new TemporalReceiver<>(
-            JSTemporalPlainTime.class, "Temporal.PlainTime");
+    private static final TemporalReceiver<JSTemporalPlainTime> RECEIVER = TemporalReceiver.PLAIN_TIME;
 
     private TemporalPlainTimePrototype() {
     }
@@ -92,15 +91,7 @@ public final class TemporalPlainTimePrototype {
             differenceNanoseconds = BigInteger.valueOf(rightNanoseconds - leftNanoseconds);
         }
 
-        long smallestUnitNanoseconds = differenceSettings.smallestUnit().getNanosecondFactor();
-        BigInteger incrementNanoseconds = BigInteger.valueOf(smallestUnitNanoseconds)
-                .multiply(BigInteger.valueOf(differenceSettings.roundingIncrement()));
-        BigInteger roundedNanoseconds = differenceSettings.roundingMode()
-                .roundBigIntegerToIncrementSigned(differenceNanoseconds, incrementNanoseconds);
-
-        TemporalDuration balancedDuration = TemporalDuration.createBalance(roundedNanoseconds,
-                differenceSettings.largestUnit());
-        TemporalDuration normalizedDuration = balancedDuration.normalizeFloat64RepresentableFields();
+        TemporalDuration normalizedDuration = differenceSettings.roundTimeDifference(differenceNanoseconds);
         if (!normalizedDuration.isValid() || !TemporalDuration.isDurationRecordTimeRangeValid(normalizedDuration)) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
@@ -109,22 +100,8 @@ public final class TemporalPlainTimePrototype {
     }
 
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainTime plainTime = RECEIVER.require(context, thisArg, "equals");
-        if (plainTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
-        JSTemporalPlainTime other = TemporalPlainTimeConstructor.toTemporalTimeObject(context, otherArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        boolean equal = plainTime.getIsoTime().compareTo(other.getIsoTime()) == 0;
-        return equal ? JSBoolean.TRUE : JSBoolean.FALSE;
-    }
-
-    private static IsoTime getTime(JSContext context, JSValue thisArg, String field) {
-        JSTemporalPlainTime receiver = RECEIVER.require(context, thisArg, field);
-        return receiver == null ? null : receiver.getIsoTime();
+        return RECEIVER.equalTo(context, thisArg, args,
+                (left, right) -> left.getIsoTime().compareTo(right.getIsoTime()) == 0);
     }
 
     private static TemporalPlainTimeToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
@@ -141,28 +118,23 @@ public final class TemporalPlainTimePrototype {
     }
 
     public static JSValue hour(JSContext context, JSValue thisArg, JSValue[] args) {
-        IsoTime time = getTime(context, thisArg, "hour");
-        return time == null ? JSUndefined.INSTANCE : JSNumber.of(time.hour());
+        return TemporalTimeProperty.HOUR.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue microsecond(JSContext context, JSValue thisArg, JSValue[] args) {
-        IsoTime time = getTime(context, thisArg, "microsecond");
-        return time == null ? JSUndefined.INSTANCE : JSNumber.of(time.microsecond());
+        return TemporalTimeProperty.MICROSECOND.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue millisecond(JSContext context, JSValue thisArg, JSValue[] args) {
-        IsoTime time = getTime(context, thisArg, "millisecond");
-        return time == null ? JSUndefined.INSTANCE : JSNumber.of(time.millisecond());
+        return TemporalTimeProperty.MILLISECOND.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue minute(JSContext context, JSValue thisArg, JSValue[] args) {
-        IsoTime time = getTime(context, thisArg, "minute");
-        return time == null ? JSUndefined.INSTANCE : JSNumber.of(time.minute());
+        return TemporalTimeProperty.MINUTE.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue nanosecond(JSContext context, JSValue thisArg, JSValue[] args) {
-        IsoTime time = getTime(context, thisArg, "nanosecond");
-        return time == null ? JSUndefined.INSTANCE : JSNumber.of(time.nanosecond());
+        return TemporalTimeProperty.NANOSECOND.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue round(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -180,8 +152,7 @@ public final class TemporalPlainTimePrototype {
     }
 
     public static JSValue second(JSContext context, JSValue thisArg, JSValue[] args) {
-        IsoTime time = getTime(context, thisArg, "second");
-        return time == null ? JSUndefined.INSTANCE : JSNumber.of(time.second());
+        return TemporalTimeProperty.SECOND.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue since(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -62,18 +62,12 @@ public final class ObjectPrototype {
         if (thisArg.isNullOrUndefined()) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
-        JSObject obj;
-        if (thisArg instanceof JSObject jsObj) {
-            obj = jsObj;
-        } else {
-            obj = JSTypeConversions.toObject(context, thisArg);
-            if (obj == null || context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+        JSObject obj = ObjectConstructor.objectArgument(context, thisArg);
+        if (obj == null) {
+            return JSUndefined.INSTANCE;
         }
 
-        JSObject proto = obj.getPrototype();
-        return proto != null ? proto : JSNull.INSTANCE;
+        return ObjectConstructor.prototypeOf(obj);
     }
 
     /**
@@ -257,14 +251,9 @@ public final class ObjectPrototype {
         if (thisArg.isNullOrUndefined()) {
             return context.throwTypeError(method + " called on null or undefined");
         }
-        JSObject obj;
-        if (thisArg instanceof JSObject jsObj) {
-            obj = jsObj;
-        } else {
-            obj = JSTypeConversions.toObject(context, thisArg);
-            if (obj == null || context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+        JSObject obj = ObjectConstructor.objectArgument(context, thisArg);
+        if (obj == null) {
+            return JSUndefined.INSTANCE;
         }
 
         JSValue accessor = args[1];
@@ -506,14 +495,9 @@ public final class ObjectPrototype {
         if (args.length < 1) {
             return JSUndefined.INSTANCE;
         }
-        JSObject obj;
-        if (thisArg instanceof JSObject jsObj) {
-            obj = jsObj;
-        } else {
-            obj = JSTypeConversions.toObject(context, thisArg);
-            if (obj == null || context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+        JSObject obj = ObjectConstructor.objectArgument(context, thisArg);
+        if (obj == null) {
+            return JSUndefined.INSTANCE;
         }
 
         JSValue prop = args[0];
@@ -556,14 +540,9 @@ public final class ObjectPrototype {
         if (thisArg.isNullOrUndefined()) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
-        JSObject obj;
-        if (thisArg instanceof JSObject jsObj) {
-            obj = jsObj;
-        } else {
-            obj = JSTypeConversions.toObject(context, thisArg);
-            if (obj == null || context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+        JSObject obj = ObjectConstructor.objectArgument(context, thisArg);
+        if (obj == null) {
+            return JSUndefined.INSTANCE;
         }
 
         PropertyDescriptor descriptor = obj.getOwnPropertyDescriptor(key);
@@ -616,14 +595,9 @@ public final class ObjectPrototype {
         }
 
         // Step 3: Let O be ToObject(this)
-        JSObject obj;
-        if (thisArg instanceof JSObject jsObj) {
-            obj = jsObj;
-        } else {
-            obj = JSTypeConversions.toObject(context, thisArg);
-            if (obj == null || context.hasPendingException()) {
-                return new JSString("[object Object]");
-            }
+        JSObject obj = ObjectConstructor.objectArgument(context, thisArg);
+        if (obj == null) {
+            return new JSString("[object Object]");
         }
 
         // Steps 4-14: Determine builtinTag based on internal slots per spec

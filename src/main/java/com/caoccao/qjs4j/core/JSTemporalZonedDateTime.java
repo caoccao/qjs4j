@@ -17,12 +17,14 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.core.temporal.IsoDateTime;
+import com.caoccao.qjs4j.core.temporal.IsoDate;
+import com.caoccao.qjs4j.core.temporal.IsoTime;
 import com.caoccao.qjs4j.core.temporal.TemporalCalendarId;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
 import java.math.BigInteger;
 
-public final class JSTemporalZonedDateTime extends JSObject {
+public final class JSTemporalZonedDateTime extends JSObject implements JSTemporalDateValue, JSTemporalTimeValue {
     private final TemporalCalendarId calendarId;
     private final BigInteger epochNanoseconds;
     private final String timeZoneId;
@@ -35,12 +37,23 @@ public final class JSTemporalZonedDateTime extends JSObject {
         this.calendarId = calendarId;
     }
 
+    @Override
     public TemporalCalendarId getCalendarId() {
         return calendarId;
     }
 
     public BigInteger getEpochNanoseconds() {
         return epochNanoseconds;
+    }
+
+    @Override
+    public IsoDate getIsoDate() {
+        return toLocalDateTime().date();
+    }
+
+    @Override
+    public IsoTime getIsoTime() {
+        return toLocalDateTime().time();
     }
 
     public String getTimeZoneId() {

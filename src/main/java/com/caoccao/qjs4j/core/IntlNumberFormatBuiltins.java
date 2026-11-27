@@ -164,21 +164,13 @@ final class IntlNumberFormatBuiltins {
                 }
             }
 
-            String notation = IntlFormatOptions.normalizedStringOption(context, optionsObject, "notation", "standard",
-                    NOTATION_VALUES);
-            if (context.hasPendingException()) {
+            DigitOptions digits = DigitOptions.read(context, optionsObject);
+            if (digits == null) {
                 return JSUndefined.INSTANCE;
             }
-
-            int minimumIntegerDigits = readMinimumIntegerDigits(context, optionsObject);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            DigitRange fractionDigits = DigitRange.readFraction(context, optionsObject);
-            if (fractionDigits == null) {
-                return JSUndefined.INSTANCE;
-            }
+            String notation = digits.notation();
+            int minimumIntegerDigits = digits.minimumIntegerDigits();
+            DigitRange fractionDigits = digits.fractionDigits();
 
             DigitRange significantDigits = DigitRange.readSignificant(context, optionsObject);
             if (significantDigits == null) {
@@ -277,21 +269,13 @@ final class IntlNumberFormatBuiltins {
                     "best fit", "lookup", "best fit");
             String type = IntlFormatOptions.normalizedStringOption(context, optionsObject, "type", "cardinal",
                     "cardinal", "ordinal");
-            String notation = IntlFormatOptions.normalizedStringOption(context, optionsObject, "notation", "standard",
-                    NOTATION_VALUES);
-            if (context.hasPendingException()) {
+            DigitOptions digits = DigitOptions.read(context, optionsObject);
+            if (digits == null) {
                 return JSUndefined.INSTANCE;
             }
-
-            int minimumIntegerDigits = readMinimumIntegerDigits(context, optionsObject);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            DigitRange fractionDigits = DigitRange.readFraction(context, optionsObject);
-            if (fractionDigits == null) {
-                return JSUndefined.INSTANCE;
-            }
+            String notation = digits.notation();
+            int minimumIntegerDigits = digits.minimumIntegerDigits();
+            DigitRange fractionDigits = digits.fractionDigits();
 
             boolean hasFractionDigits = fractionDigits.specified();
             fractionDigits = fractionDigits.resolveFraction(0, 3);
@@ -760,6 +744,22 @@ final class IntlNumberFormatBuiltins {
         return context.hasPendingException()
                 ? null
                 : new RoundingOptions(roundingIncrement, mode, priority, trailingZero);
+    }
+
+    private record DigitOptions(String notation, int minimumIntegerDigits, DigitRange fractionDigits) {
+        static DigitOptions read(JSContext context, JSObject optionsObject) {
+            String notation = IntlFormatOptions.normalizedStringOption(context, optionsObject, "notation", "standard",
+                    NOTATION_VALUES);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            int minimum = readMinimumIntegerDigits(context, optionsObject);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            DigitRange fraction = DigitRange.readFraction(context, optionsObject);
+            return fraction == null ? null : new DigitOptions(notation, minimum, fraction);
+        }
     }
 
     private record DigitRange(Integer minimum, Integer maximum) {

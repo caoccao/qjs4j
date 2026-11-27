@@ -555,44 +555,14 @@ public final class ObjectConstructor {
      * an object.
      */
     public static JSValue getOwnPropertyDescriptor(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue target = JSValue.argumentOrUndefined(args, 0);
-        JSObject obj = objectArgument(context, target);
-        if (obj == null) {
-            return objectArgumentError(context, target);
-        }
-
-        JSValue propertyArg = JSValue.argumentOrUndefined(args, 1);
-        PropertyKey key = PropertyKey.fromValue(context, propertyArg);
-        PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
-
-        if (desc == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        return desc.toDescriptorObject(context);
+        return withObjectArgument(context, args, ObjectConstructor::ownDescriptor);
     }
 
     /**
      * Object.getOwnPropertyDescriptors(obj) ES2017 19.1.2.7 Returns all own property descriptors of an object.
      */
     public static JSValue getOwnPropertyDescriptors(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue target = JSValue.argumentOrUndefined(args, 0);
-        JSObject obj = objectArgument(context, target);
-        if (obj == null) {
-            return objectArgumentError(context, target);
-        }
-
-        JSObject result = context.createJSObject();
-        List<PropertyKey> keys = obj.getOwnPropertyKeys();
-
-        for (PropertyKey key : keys) {
-            PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
-            if (desc != null) {
-                result.set(key, desc.toDescriptorObject(context));
-            }
-        }
-
-        return result;
+        return withObjectArgument(context, args, ObjectConstructor::ownDescriptors);
     }
 
     /**
@@ -614,14 +584,7 @@ public final class ObjectConstructor {
      * Object.getPrototypeOf(obj) ES2020 19.1.2.9 Returns the prototype of the specified object.
      */
     public static JSValue getPrototypeOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue target = JSValue.argumentOrUndefined(args, 0);
-        JSObject obj = objectArgument(context, target);
-        if (obj == null) {
-            return objectArgumentError(context, target);
-        }
-
-        JSObject prototype = obj.getPrototype();
-        return prototype != null ? prototype : JSNull.INSTANCE;
+        return withObjectArgument(context, args, (ctx, object, arguments) -> prototypeOf(object));
     }
 
     /**
@@ -661,12 +624,10 @@ public final class ObjectConstructor {
      * Object.hasOwn(obj, prop) ES2022 20.1.2.10 Static method to check if an object has a property as its own property.
      */
     public static JSValue hasOwn(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue target = JSValue.argumentOrUndefined(args, 0);
-        JSObject obj = objectArgument(context, target);
-        if (obj == null) {
-            return objectArgumentError(context, target);
-        }
+        return withObjectArgument(context, args, ObjectConstructor::hasOwnKey);
+    }
 
+    private static JSValue hasOwnKey(JSContext context, JSObject obj, JSValue[] args) {
         if (args.length < 2) {
             return JSBoolean.FALSE;
         }
@@ -743,7 +704,7 @@ public final class ObjectConstructor {
         return enumerableOwnProperties(context, args, EnumerableKind.KEY);
     }
 
-    private static JSObject objectArgument(JSContext context, JSValue target) {
+    static JSObject objectArgument(JSContext context, JSValue target) {
         if (target instanceof JSObject object) {
             return object;
         }
@@ -755,6 +716,32 @@ public final class ObjectConstructor {
         return target.isNullOrUndefined()
                 ? context.throwTypeError("Cannot convert undefined or null to object")
                 : JSUndefined.INSTANCE;
+    }
+
+    private static JSValue ownDescriptor(JSContext context, JSObject obj, JSValue[] args) {
+        JSValue propertyArg = JSValue.argumentOrUndefined(args, 1);
+        PropertyKey key = PropertyKey.fromValue(context, propertyArg);
+        PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
+
+        if (desc == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        return desc.toDescriptorObject(context);
+    }
+
+    private static JSValue ownDescriptors(JSContext context, JSObject obj, JSValue[] args) {
+        JSObject result = context.createJSObject();
+        List<PropertyKey> keys = obj.getOwnPropertyKeys();
+
+        for (PropertyKey key : keys) {
+            PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
+            if (desc != null) {
+                result.set(key, desc.toDescriptorObject(context));
+            }
+        }
+
+        return result;
     }
 
     private static JSValue ownPropertyKeys(JSContext context, JSValue[] args, boolean symbols) {
@@ -798,6 +785,11 @@ public final class ObjectConstructor {
             return context.throwTypeError("Cannot prevent extensions");
         }
         return obj;
+    }
+
+    static JSValue prototypeOf(JSObject obj) {
+        JSObject prototype = obj.getPrototype();
+        return prototype != null ? prototype : JSNull.INSTANCE;
     }
 
     /**
@@ -922,7 +914,18 @@ public final class ObjectConstructor {
         return enumerableOwnProperties(context, args, EnumerableKind.VALUE);
     }
 
+    private static JSValue withObjectArgument(JSContext context, JSValue[] args, ObjectOperation operation) {
+        JSValue target = JSValue.argumentOrUndefined(args, 0);
+        JSObject object = objectArgument(context, target);
+        return object == null ? objectArgumentError(context, target) : operation.apply(context, object, args);
+    }
+
     private enum EnumerableKind {
         ENTRY, KEY, VALUE
+    }
+
+    @FunctionalInterface
+    private interface ObjectOperation {
+        JSValue apply(JSContext context, JSObject object, JSValue[] args);
     }
 }

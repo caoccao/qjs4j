@@ -22,7 +22,7 @@ import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 /**
  * JSObject subclass representing a Temporal.PlainTime value. Internal slot: [[ISOTime]]
  */
-public final class JSTemporalPlainTime extends JSObject {
+public final class JSTemporalPlainTime extends JSObject implements JSTemporalTimeValue {
     private final IsoTime isoTime;
 
     public JSTemporalPlainTime(JSContext context, IsoTime isoTime) {
@@ -30,6 +30,7 @@ public final class JSTemporalPlainTime extends JSObject {
         this.isoTime = isoTime;
     }
 
+    @Override
     public IsoTime getIsoTime() {
         return isoTime;
     }

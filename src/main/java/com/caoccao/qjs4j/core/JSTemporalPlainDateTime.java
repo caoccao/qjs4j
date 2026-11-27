@@ -17,10 +17,12 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.core.temporal.IsoDateTime;
+import com.caoccao.qjs4j.core.temporal.IsoDate;
+import com.caoccao.qjs4j.core.temporal.IsoTime;
 import com.caoccao.qjs4j.core.temporal.TemporalCalendarId;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
-public final class JSTemporalPlainDateTime extends JSObject {
+public final class JSTemporalPlainDateTime extends JSObject implements JSTemporalDateValue, JSTemporalTimeValue {
     private final TemporalCalendarId calendarId;
     private final IsoDateTime isoDateTime;
 
@@ -30,12 +32,23 @@ public final class JSTemporalPlainDateTime extends JSObject {
         this.calendarId = calendarId;
     }
 
+    @Override
     public TemporalCalendarId getCalendarId() {
         return calendarId;
     }
 
+    @Override
+    public IsoDate getIsoDate() {
+        return isoDateTime.date();
+    }
+
     public IsoDateTime getIsoDateTime() {
         return isoDateTime;
+    }
+
+    @Override
+    public IsoTime getIsoTime() {
+        return isoDateTime.time();
     }
 
     public static JSTemporalPlainDateTime create(JSContext context, IsoDateTime isoDateTime,

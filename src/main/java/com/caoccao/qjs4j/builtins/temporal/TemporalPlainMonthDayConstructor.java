@@ -147,11 +147,7 @@ public final class TemporalPlainMonthDayConstructor {
     }
 
     public static JSTemporalPlainMonthDay toTemporalMonthDayObject(JSContext context, JSValue item) {
-        JSValue result = toTemporalMonthDay(context, item, JSUndefined.INSTANCE);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        return (JSTemporalPlainMonthDay) result;
+        return TemporalReceiver.PLAIN_MONTH_DAY.convert(context, item);
     }
 
 }

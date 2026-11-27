@@ -25,8 +25,7 @@ import com.caoccao.qjs4j.core.temporal.*;
 public final class TemporalPlainMonthDayPrototype {
     private static final String[] MONTH_DAY_FIELDS = {"day", "monthCode", "year", "era", "eraYear"};
 
-    private static final TemporalReceiver<JSTemporalPlainMonthDay> RECEIVER = new TemporalReceiver<>(
-            JSTemporalPlainMonthDay.class, "Temporal.PlainMonthDay");
+    private static final TemporalReceiver<JSTemporalPlainMonthDay> RECEIVER = TemporalReceiver.PLAIN_MONTH_DAY;
 
     private TemporalPlainMonthDayPrototype() {
     }
@@ -52,20 +51,7 @@ public final class TemporalPlainMonthDayPrototype {
     }
 
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainMonthDay plainMonthDay = RECEIVER.require(context, thisArg, "equals");
-        if (plainMonthDay == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
-        JSTemporalPlainMonthDay other = TemporalPlainMonthDayConstructor.toTemporalMonthDayObject(context, otherArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        boolean equal = plainMonthDay.getIsoDate().month() == other.getIsoDate().month()
-                && plainMonthDay.getIsoDate().day() == other.getIsoDate().day()
-                && plainMonthDay.getIsoDate().year() == other.getIsoDate().year()
-                && plainMonthDay.getCalendarId().equals(other.getCalendarId());
-        return equal ? JSBoolean.TRUE : JSBoolean.FALSE;
+        return RECEIVER.equalTo(context, thisArg, args, JSTemporalCalendarDate::sameDate);
     }
 
     public static JSValue monthCode(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -96,11 +82,7 @@ public final class TemporalPlainMonthDayPrototype {
     }
 
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainMonthDay plainMonthDay = RECEIVER.require(context, thisArg, "toLocaleString");
-        if (plainMonthDay == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return TemporalLocaleFormat.formatDate(context, plainMonthDay, args);
+        return TemporalLocaleFormat.formatDate(context, thisArg, args, RECEIVER);
     }
 
     public static JSValue toPlainDate(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -133,11 +115,7 @@ public final class TemporalPlainMonthDayPrototype {
     }
 
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainMonthDay plainMonthDay = RECEIVER.require(context, thisArg, "toString");
-        if (plainMonthDay == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return TemporalDateFormat.format(context, plainMonthDay, JSValue.argumentOrUndefined(args, 0));
+        return TemporalDateFormat.formatDate(context, thisArg, args, RECEIVER);
     }
 
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {

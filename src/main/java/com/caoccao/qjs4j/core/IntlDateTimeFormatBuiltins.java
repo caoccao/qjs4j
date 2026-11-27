@@ -35,10 +35,6 @@ final class IntlDateTimeFormatBuiltins {
 
     private static final BigInteger NANOS_PER_MILLISECOND = BigInteger.valueOf(1_000_000L);
 
-    private static final String[] NUMERIC_WIDTHS = {"numeric", "2-digit"};
-
-    private static final String[] TEXT_WIDTHS = {"long", "short", "narrow"};
-
     private static final IsoDate UNIX_EPOCH_DATE = new IsoDate(1970, 1, 1);
 
     private IntlDateTimeFormatBuiltins() {
@@ -153,20 +149,8 @@ final class IntlDateTimeFormatBuiltins {
             }
 
             // 7-15. Component options
-            String weekdayOption = IntlFormatOptions.readValidatedOption(context, optionsObject, "weekday",
-                    TEXT_WIDTHS);
-            String eraOption = IntlFormatOptions.readValidatedOption(context, optionsObject, "era", TEXT_WIDTHS);
-            String yearOption = IntlFormatOptions.readValidatedOption(context, optionsObject, "year", NUMERIC_WIDTHS);
-            String monthOption = IntlFormatOptions.readValidatedOption(context, optionsObject, "month", "numeric",
-                    "2-digit", "long", "short", "narrow");
-            String dayOption = IntlFormatOptions.readValidatedOption(context, optionsObject, "day", NUMERIC_WIDTHS);
-            String dayPeriodOption = IntlFormatOptions.readValidatedOption(context, optionsObject, "dayPeriod",
-                    TEXT_WIDTHS);
-            String hourOption = IntlFormatOptions.readValidatedOption(context, optionsObject, "hour", NUMERIC_WIDTHS);
-            String minuteOption = IntlFormatOptions.readValidatedOption(context, optionsObject, "minute",
-                    NUMERIC_WIDTHS);
-            String secondOption = IntlFormatOptions.readValidatedOption(context, optionsObject, "second",
-                    NUMERIC_WIDTHS);
+            IntlDateFields dateFields = IntlDateFields.read(context, optionsObject);
+            IntlTimeFields timeFields = IntlTimeFields.read(context, optionsObject);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -216,9 +200,8 @@ final class IntlDateTimeFormatBuiltins {
 
             // Check dateStyle/timeStyle conflict with explicit components
             if (dateStyle != null || timeStyle != null) {
-                if (weekdayOption != null || eraOption != null || yearOption != null || monthOption != null
-                        || dayOption != null || dayPeriodOption != null || hourOption != null || minuteOption != null
-                        || secondOption != null || fractionalSecondDigits != null || timeZoneNameOption != null) {
+                if (dateFields.specified() || dateFields.era() != null || timeFields.specified()
+                        || fractionalSecondDigits != null || timeZoneNameOption != null) {
                     return context.throwTypeError(
                             "dateStyle and timeStyle may not be used with other DateTimeFormat options");
                 }
@@ -230,10 +213,8 @@ final class IntlDateTimeFormatBuiltins {
             boolean hasDefaultDateComponents = false;
             boolean hasDefaultTimeComponents = false;
             if (dateStyle == null && timeStyle == null) {
-                boolean hasDateComponent = weekdayOption != null || yearOption != null || monthOption != null
-                        || dayOption != null;
-                boolean hasTimeComponent = dayPeriodOption != null || hourOption != null || minuteOption != null
-                        || secondOption != null || fractionalSecondDigits != null;
+                boolean hasDateComponent = dateFields.specified();
+                boolean hasTimeComponent = timeFields.specified() || fractionalSecondDigits != null;
                 boolean needDefaults;
                 if ("date".equals(required)) {
                     needDefaults = !hasDateComponent;
@@ -245,15 +226,11 @@ final class IntlDateTimeFormatBuiltins {
                 }
                 if (needDefaults) {
                     if ("date".equals(defaults) || "all".equals(defaults)) {
-                        yearOption = "numeric";
-                        monthOption = "numeric";
-                        dayOption = "numeric";
+                        dateFields = dateFields.withDate("numeric", "numeric", "numeric");
                         hasDefaultDateComponents = true;
                     }
                     if ("time".equals(defaults) || "all".equals(defaults)) {
-                        hourOption = "numeric";
-                        minuteOption = "numeric";
-                        secondOption = "numeric";
+                        timeFields = timeFields.withClock("numeric");
                         hasDefaultTimeComponents = true;
                     }
                 }
@@ -331,7 +308,7 @@ final class IntlDateTimeFormatBuiltins {
             // - If no hour component, set to null (step 32 of CreateDateTimeFormat)
             // - If still null (no option/extension/hour12), use locale default
             String hourCycleForInstant = hourCycle;
-            boolean hasHourComponent = hourOption != null || timeStyle != null;
+            boolean hasHourComponent = timeFields.hour() != null || timeStyle != null;
             if (!hasHourComponent) {
                 hourCycle = null;
             } else if (hourCycle == null) {
@@ -340,9 +317,8 @@ final class IntlDateTimeFormatBuiltins {
             }
 
             JSIntlDateTimeFormat dateTimeFormat = new JSIntlDateTimeFormat(context, resolvedLocale, dateStyle,
-                    timeStyle, calendar, numberingSystem, timeZone, hourCycle, hourCycleForInstant, weekdayOption,
-                    eraOption, yearOption, monthOption, dayOption, dayPeriodOption, hourOption, minuteOption,
-                    secondOption, fractionalSecondDigits, timeZoneNameOption, hasDefaultDateComponents,
+                    timeStyle, calendar, numberingSystem, timeZone, hourCycle, hourCycleForInstant, dateFields,
+                    timeFields, fractionalSecondDigits, timeZoneNameOption, hasDefaultDateComponents,
                     hasDefaultTimeComponents);
             JSObject resolvedDtfPrototype = IntlFormatOptions.resolveIntlPrototype(context, prototype,
                     "DateTimeFormat");
@@ -369,96 +345,46 @@ final class IntlDateTimeFormatBuiltins {
 
         FormatStyle dateStyle = baseDateTimeFormat.getDateStyle();
         FormatStyle timeStyle = baseDateTimeFormat.getTimeStyle();
-        String weekdayOption = baseDateTimeFormat.getWeekdayOption();
-        String eraOption = baseDateTimeFormat.getEraOption();
-        String yearOption = baseDateTimeFormat.getYearOption();
-        String monthOption = baseDateTimeFormat.getMonthOption();
-        String dayOption = baseDateTimeFormat.getDayOption();
-        String dayPeriodOption = baseDateTimeFormat.getDayPeriodOption();
-        String hourOption = baseDateTimeFormat.getHourOption();
-        String minuteOption = baseDateTimeFormat.getMinuteOption();
-        String secondOption = baseDateTimeFormat.getSecondOption();
+        IntlDateFields date = baseDateTimeFormat.dateFields();
+        IntlTimeFields time = baseDateTimeFormat.timeFields();
         Integer fractionalSecondDigits = baseDateTimeFormat.getFractionalSecondDigits();
 
         if (baseDateTimeFormat.hasDefaultDateComponents()) {
-            yearOption = null;
-            monthOption = null;
-            dayOption = null;
+            date = date.withDate(null, null, null);
         }
         if (baseDateTimeFormat.hasDefaultTimeComponents()) {
-            hourOption = null;
-            minuteOption = null;
-            secondOption = null;
+            time = time.withClock(null);
         }
 
         if ((formattableKind == DateTimeFormattableKind.PLAIN_YEAR_MONTH
                 || formattableKind == DateTimeFormattableKind.PLAIN_MONTH_DAY) && dateStyle != null) {
-            DateStyleOptionFields dateStyleOptionFields = toDateStyleOptionFields(dateStyle);
-            if (weekdayOption == null) {
-                weekdayOption = dateStyleOptionFields.weekdayOption();
-            }
-            if (yearOption == null) {
-                yearOption = dateStyleOptionFields.yearOption();
-            }
-            if (monthOption == null) {
-                monthOption = dateStyleOptionFields.monthOption();
-            }
-            if (dayOption == null) {
-                dayOption = dateStyleOptionFields.dayOption();
-            }
+            date = date.withStyle(dateStyle);
             dateStyle = null;
         }
 
-        boolean hasTime = timeStyle != null || dayPeriodOption != null || hourOption != null || minuteOption != null
-                || secondOption != null || fractionalSecondDigits != null;
+        boolean hasTime = timeStyle != null || time.specified() || fractionalSecondDigits != null;
         // An era by itself does not trigger the incompatible-options error.
-        boolean requestedComponents = hasTime || dateStyle != null || weekdayOption != null || yearOption != null
-                || monthOption != null || dayOption != null;
-
+        boolean requestedComponents = hasTime || dateStyle != null || date.specified();
         if (!supportsTime) {
             timeStyle = null;
-            dayPeriodOption = null;
-            hourOption = null;
-            minuteOption = null;
-            secondOption = null;
+            time = IntlTimeFields.EMPTY;
             fractionalSecondDigits = null;
             hasTime = false;
         }
         if (!supportsMonth) {
             dateStyle = null;
-            monthOption = null;
         }
-        if (!fullDate) {
-            weekdayOption = null;
-        }
-        if (!supportsYear) {
-            eraOption = null;
-            yearOption = null;
-        }
-        if (!supportsDay) {
-            dayOption = null;
-        }
-
-        boolean hasDate = dateStyle != null || weekdayOption != null || yearOption != null || monthOption != null
-                || dayOption != null;
+        date = date.forTemporal(fullDate, supportsYear, supportsMonth, supportsDay);
+        boolean hasDate = dateStyle != null || date.specified();
         if (!hasDate && !hasTime) {
-            if (requestedComponents && eraOption == null) {
+            if (requestedComponents && date.era() == null) {
                 context.throwTypeError("Invalid date/time formatting options");
                 return null;
             }
-            if (supportsYear) {
-                yearOption = "numeric";
-            }
-            if (supportsMonth) {
-                monthOption = "numeric";
-            }
-            if (supportsDay) {
-                dayOption = "numeric";
-            }
+            date = date.withDate(supportsYear ? "numeric" : null, supportsMonth ? "numeric" : null,
+                    supportsDay ? "numeric" : null);
             if (supportsTime) {
-                hourOption = "numeric";
-                minuteOption = "numeric";
-                secondOption = "numeric";
+                time = time.withClock("numeric");
                 hasTime = true;
             }
         }
@@ -469,8 +395,7 @@ final class IntlDateTimeFormatBuiltins {
         return new JSIntlDateTimeFormat(context, baseDateTimeFormat.getLocale(), dateStyle, timeStyle,
                 baseDateTimeFormat.getCalendar(), baseDateTimeFormat.getNumberingSystem(),
                 instant ? baseDateTimeFormat.getTimeZone() : "UTC", effectiveHourCycle,
-                instant ? effectiveHourCycle : baseDateTimeFormat.getHourCycleForInstant(), weekdayOption, eraOption,
-                yearOption, monthOption, dayOption, dayPeriodOption, hourOption, minuteOption, secondOption,
+                instant ? effectiveHourCycle : baseDateTimeFormat.getHourCycleForInstant(), date, time,
                 fractionalSecondDigits, instant ? baseDateTimeFormat.getTimeZoneNameOption() : null, false, false);
     }
 
@@ -550,15 +475,8 @@ final class IntlDateTimeFormatBuiltins {
 
         if (!hasDateStyle && !hasTimeStyle) {
             // Component options only when not using styles
-            JSIntlObject.defineStringOption(resolvedOptions, "weekday", dateTimeFormat.getWeekdayOption());
-            JSIntlObject.defineStringOption(resolvedOptions, "era", dateTimeFormat.getEraOption());
-            JSIntlObject.defineStringOption(resolvedOptions, "year", dateTimeFormat.getYearOption());
-            JSIntlObject.defineStringOption(resolvedOptions, "month", dateTimeFormat.getMonthOption());
-            JSIntlObject.defineStringOption(resolvedOptions, "day", dateTimeFormat.getDayOption());
-            JSIntlObject.defineStringOption(resolvedOptions, "dayPeriod", dateTimeFormat.getDayPeriodOption());
-            JSIntlObject.defineStringOption(resolvedOptions, "hour", dateTimeFormat.getHourOption());
-            JSIntlObject.defineStringOption(resolvedOptions, "minute", dateTimeFormat.getMinuteOption());
-            JSIntlObject.defineStringOption(resolvedOptions, "second", dateTimeFormat.getSecondOption());
+            dateTimeFormat.dateFields().defineOptions(resolvedOptions);
+            dateTimeFormat.timeFields().defineOptions(resolvedOptions);
             if (dateTimeFormat.getFractionalSecondDigits() != null) {
                 JSIntlObject.createDataProperty(resolvedOptions, "fractionalSecondDigits",
                         JSNumber.of(dateTimeFormat.getFractionalSecondDigits()));
@@ -853,15 +771,6 @@ final class IntlDateTimeFormatBuiltins {
                 : JSIntlObject.getLocaleDefaultHourCycle(locale);
     }
 
-    private static DateStyleOptionFields toDateStyleOptionFields(FormatStyle dateStyle) {
-        return switch (dateStyle) {
-            case FULL -> new DateStyleOptionFields("long", "numeric", "long", "numeric");
-            case LONG -> new DateStyleOptionFields(null, "numeric", "long", "numeric");
-            case MEDIUM -> new DateStyleOptionFields(null, "numeric", "short", "numeric");
-            case SHORT -> new DateStyleOptionFields(null, "2-digit", "numeric", "numeric");
-        };
-    }
-
     private static DateTimeFormattable toDateTimeFormattable(JSContext context, JSValue value,
             boolean useCurrentTimeForUndefined) {
         if (useCurrentTimeForUndefined && value instanceof JSUndefined) {
@@ -993,10 +902,6 @@ final class IntlDateTimeFormatBuiltins {
         }
 
         void append(String type, String value, String source);
-    }
-
-    private record DateStyleOptionFields(String weekdayOption, String yearOption, String monthOption,
-            String dayOption) {
     }
 
     private record DateTimeFormattable(DateTimeFormattableKind kind, double epochMillis,

@@ -19,7 +19,7 @@ package com.caoccao.qjs4j.core;
 import com.caoccao.qjs4j.core.temporal.*;
 
 /** Shared ISO reference date and calendar slots of PlainDate, PlainYearMonth, and PlainMonthDay. */
-public abstract sealed class JSTemporalCalendarDate extends JSObject
+public abstract sealed class JSTemporalCalendarDate extends JSObject implements JSTemporalDateValue
         permits JSTemporalPlainDate, JSTemporalPlainMonthDay, JSTemporalPlainYearMonth {
     private final TemporalCalendarId calendarId;
     private final IsoDate isoDate;
@@ -36,9 +36,13 @@ public abstract sealed class JSTemporalCalendarDate extends JSObject
     public final IsoDate getIsoDate() {
         return isoDate;
     }
+    public boolean sameDate(JSTemporalCalendarDate other) {
+        return getIsoDate().compareTo(other.getIsoDate()) == 0 && getCalendarId() == other.getCalendarId();
+    }
     public final IsoCalendarDate toIsoCalendarDate() {
         return isoDate.toIsoCalendarDate(calendarId);
     }
+
     public final TemporalEraYear toTemporalEraYear() {
         return isoDate.toTemporalEraYear(calendarId);
     }

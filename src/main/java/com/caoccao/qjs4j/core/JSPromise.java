@@ -180,6 +180,28 @@ public final class JSPromise extends JSObject {
         });
     }
 
+    private void rejectVmException(JSContext context, ResolveState state, JSVirtualMachineException exception,
+            String prefix) {
+        if (!state.alreadyResolved) {
+            state.alreadyResolved = true;
+            JSValue error = exception.getJsValue();
+            if (error == null) {
+                error = exception.getJsError();
+            }
+            if (error == null && context.hasPendingException()) {
+                error = context.takePendingException();
+            }
+            if (error == null) {
+                error = new JSString(
+                        prefix + (exception.getMessage() == null ? "Unhandled exception" : exception.getMessage()));
+            }
+            reject(error);
+        }
+        if (context.hasPendingException()) {
+            context.clearPendingException();
+        }
+    }
+
     /**
      * Resolve the promise using the Promise Resolution Procedure.
      */
@@ -213,32 +235,9 @@ public final class JSPromise extends JSObject {
 
         ResolveState resolveState = new ResolveState();
         context.enqueueMicrotask(() -> {
-            JSNativeFunction resolveFunc = new JSNativeFunction(context, "", 1, (childContext, thisArg, funcArgs) -> {
-                if (resolveState.alreadyResolved) {
-                    return JSUndefined.INSTANCE;
-                }
-                resolveState.alreadyResolved = true;
-                JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-                resolve(context, value);
-                return JSUndefined.INSTANCE;
-            });
-            JSNativeFunction rejectFunc = new JSNativeFunction(context, "", 1, (childContext, thisArg, funcArgs) -> {
-                if (resolveState.alreadyResolved) {
-                    return JSUndefined.INSTANCE;
-                }
-                resolveState.alreadyResolved = true;
-                JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-                reject(reason);
-                return JSUndefined.INSTANCE;
-            });
-            context.transferPrototype(resolveFunc, JSFunction.NAME);
-            context.transferPrototype(rejectFunc, JSFunction.NAME);
+            JSValue[] resolvingFunctions = resolvingFunctions(context, resolveState, false);
             try {
-                if (thenValue instanceof JSProxy thenProxy) {
-                    thenProxy.apply(context, resolutionObject, new JSValue[]{resolveFunc, rejectFunc});
-                } else {
-                    ((JSFunction) thenValue).call(context, resolutionObject, new JSValue[]{resolveFunc, rejectFunc});
-                }
+                JSCall.call(context, thenValue, resolutionObject, resolvingFunctions);
                 if (context.hasPendingException() && !resolveState.alreadyResolved) {
                     JSValue error = context.takePendingException();
                     resolveState.alreadyResolved = true;
@@ -253,23 +252,7 @@ public final class JSPromise extends JSObject {
                     context.clearPendingException();
                 }
             } catch (JSVirtualMachineException e) {
-                if (!resolveState.alreadyResolved) {
-                    resolveState.alreadyResolved = true;
-                    if (e.getJsValue() != null) {
-                        reject(e.getJsValue());
-                    } else if (e.getJsError() != null) {
-                        reject(e.getJsError());
-                    } else if (context.hasPendingException()) {
-                        JSValue error = context.takePendingException();
-                        reject(error);
-                    } else {
-                        reject(new JSString("Error in promise resolution: "
-                                + (e.getMessage() != null ? e.getMessage() : "Unhandled exception")));
-                    }
-                }
-                if (context.hasPendingException()) {
-                    context.clearPendingException();
-                }
+                rejectVmException(context, resolveState, e, "Error in promise resolution: ");
             } catch (Exception e) {
                 if (!resolveState.alreadyResolved) {
                     resolveState.alreadyResolved = true;
@@ -282,6 +265,26 @@ public final class JSPromise extends JSObject {
                 }
             }
         });
+    }
+
+    private JSValue[] resolvingFunctions(JSContext context, ResolveState state, boolean useCallerContext) {
+        JSNativeFunction resolve = new JSNativeFunction(context, "", 1, (caller, receiver, args) -> {
+            if (!state.alreadyResolved) {
+                state.alreadyResolved = true;
+                resolve(useCallerContext ? caller : context, JSValue.argumentOrUndefined(args, 0));
+            }
+            return JSUndefined.INSTANCE;
+        });
+        JSNativeFunction reject = new JSNativeFunction(context, "", 1, (caller, receiver, args) -> {
+            if (!state.alreadyResolved) {
+                state.alreadyResolved = true;
+                reject(JSValue.argumentOrUndefined(args, 0));
+            }
+            return JSUndefined.INSTANCE;
+        });
+        context.transferPrototype(resolve, JSFunction.NAME);
+        context.transferPrototype(reject, JSFunction.NAME);
+        return new JSValue[]{resolve, reject};
     }
 
     @Override
@@ -359,30 +362,8 @@ public final class JSPromise extends JSObject {
         // Create Promise object
         JSPromise jsPromise = context.createJSPromise();
         final ResolveState resolveState = new ResolveState();
-        // Create resolve and reject functions
-        JSNativeFunction resolveFunc = new JSNativeFunction(context, "", 1, (childContext, thisArg, funcArgs) -> {
-            if (resolveState.alreadyResolved) {
-                return JSUndefined.INSTANCE;
-            }
-            resolveState.alreadyResolved = true;
-            JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-            jsPromise.resolve(childContext, value);
-            return JSUndefined.INSTANCE;
-        });
-        JSNativeFunction rejectFunc = new JSNativeFunction(context, "", 1, (childContext, thisArg, funcArgs) -> {
-            if (resolveState.alreadyResolved) {
-                return JSUndefined.INSTANCE;
-            }
-            resolveState.alreadyResolved = true;
-            JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-            jsPromise.reject(reason);
-            return JSUndefined.INSTANCE;
-        });
-        context.transferPrototype(resolveFunc, JSFunction.NAME);
-        context.transferPrototype(rejectFunc, JSFunction.NAME);
-        // Call the executor with resolve and reject
+        JSValue[] executorArgs = jsPromise.resolvingFunctions(context, resolveState, true);
         try {
-            JSValue[] executorArgs = new JSValue[]{resolveFunc, rejectFunc};
             JSCall.call(context, executor, JSUndefined.INSTANCE, executorArgs);
             if (context.hasPendingException()) {
                 JSValue error = context.takePendingException();
@@ -400,22 +381,7 @@ public final class JSPromise extends JSObject {
                 context.clearPendingException();
             }
         } catch (JSVirtualMachineException e) {
-            if (!resolveState.alreadyResolved) {
-                resolveState.alreadyResolved = true;
-                if (e.getJsValue() != null) {
-                    jsPromise.reject(e.getJsValue());
-                } else if (e.getJsError() != null) {
-                    jsPromise.reject(e.getJsError());
-                } else if (context.hasPendingException()) {
-                    JSValue error = context.takePendingException();
-                    jsPromise.reject(error);
-                } else {
-                    jsPromise.reject(new JSString(e.getMessage() != null ? e.getMessage() : "Unhandled exception"));
-                }
-            }
-            if (context.hasPendingException()) {
-                context.clearPendingException();
-            }
+            jsPromise.rejectVmException(context, resolveState, e, "");
         } catch (Exception e) {
             // If executor throws, reject the promise
             if (!resolveState.alreadyResolved) {

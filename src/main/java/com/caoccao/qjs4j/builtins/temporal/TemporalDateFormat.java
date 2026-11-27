@@ -43,4 +43,10 @@ final class TemporalDateFormat {
         }
         return new JSString(TemporalUtils.maybeAppendCalendar(text, calendar, calendarName));
     }
+
+    static <T extends JSTemporalCalendarDate> JSValue formatDate(JSContext context, JSValue receiver, JSValue[] args,
+            TemporalReceiver<T> type) {
+        T date = type.require(context, receiver, "toString");
+        return date == null ? JSUndefined.INSTANCE : format(context, date, JSValue.argumentOrUndefined(args, 0));
+    }
 }

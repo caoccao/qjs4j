@@ -42,6 +42,8 @@ public final class TemporalUtils {
     private static final BigInteger NS_MAX_INSTANT = new BigInteger("8640000000000000000000");
     private static final BigInteger NS_MIN_INSTANT = new BigInteger("-8640000000000000000000");
 
+    private static final PropertyKey TEMPORAL = PropertyKey.fromString("Temporal");
+
     private TemporalUtils() {
     }
 
@@ -238,9 +240,14 @@ public final class TemporalUtils {
     }
 
     public static JSObject getTemporalPrototype(JSContext context, String typeName) {
-        JSValue temporal = context.getGlobalObject().get(PropertyKey.fromString("Temporal"));
+        return getTemporalPrototypeByKey(context, PropertyKey.fromString(typeName));
+    }
+
+    /** Look up the constructor and prototype in the active realm, including any accessor calls. */
+    public static JSObject getTemporalPrototypeByKey(JSContext context, PropertyKey type) {
+        JSValue temporal = context.getGlobalObject().get(TEMPORAL);
         if (temporal instanceof JSObject temporalObject) {
-            JSValue constructor = temporalObject.get(PropertyKey.fromString(typeName));
+            JSValue constructor = temporalObject.get(type);
             if (constructor instanceof JSObject constructorObject) {
                 JSValue prototype = constructorObject.get(PropertyKey.PROTOTYPE);
                 if (prototype instanceof JSObject prototypeObject) {

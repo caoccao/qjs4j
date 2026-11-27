@@ -29,53 +29,36 @@ public final class NumberPrototype {
      * Number.isFinite(value) ES2020 20.1.2.2
      */
     public static JSValue isFinite(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSBoolean.FALSE;
-        }
-        JSValue value = args[0];
-        return JSBoolean.valueOf(value instanceof JSNumber n && Double.isFinite(n.value()));
+        return JSBoolean.valueOf(
+                JSValue.argumentOrUndefined(args, 0) instanceof JSNumber number && Double.isFinite(number.value()));
     }
 
     /**
      * Number.isInteger(value) ES2020 20.1.2.3
      */
     public static JSValue isInteger(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSBoolean.FALSE;
-        }
-        JSValue value = args[0];
-        if (!(value instanceof JSNumber n)) {
-            return JSBoolean.FALSE;
-        }
-        double doubleValue = n.value();
-        return JSBoolean.valueOf(Double.isFinite(doubleValue) && doubleValue == Math.floor(doubleValue));
+        return JSBoolean
+                .valueOf(JSValue.argumentOrUndefined(args, 0) instanceof JSNumber number && isIntegral(number.value()));
+    }
+
+    private static boolean isIntegral(double value) {
+        return Double.isFinite(value) && value == Math.floor(value);
     }
 
     /**
      * Number.isNaN(value) ES2020 20.1.2.4
      */
     public static JSValue isNaN(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSBoolean.FALSE;
-        }
-        JSValue value = args[0];
-        return JSBoolean.valueOf(value instanceof JSNumber n && Double.isNaN(n.value()));
+        return JSBoolean.valueOf(
+                JSValue.argumentOrUndefined(args, 0) instanceof JSNumber number && Double.isNaN(number.value()));
     }
 
     /**
      * Number.isSafeInteger(value) ES2020 20.1.2.5
      */
     public static JSValue isSafeInteger(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return JSBoolean.FALSE;
-        }
-        JSValue value = args[0];
-        if (!(value instanceof JSNumber n)) {
-            return JSBoolean.FALSE;
-        }
-        double doubleValue = n.value();
-        return JSBoolean.valueOf(Double.isFinite(doubleValue) && doubleValue == Math.floor(doubleValue)
-                && Math.abs(doubleValue) <= MAX_SAFE_INTEGER);
+        return JSBoolean.valueOf(JSValue.argumentOrUndefined(args, 0) instanceof JSNumber number
+                && isIntegral(number.value()) && Math.abs(number.value()) <= MAX_SAFE_INTEGER);
     }
 
     /**

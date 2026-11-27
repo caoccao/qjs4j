@@ -28,6 +28,7 @@ public final class JSIntlLocale extends JSObject {
     private final String collation;
     private final String firstDayOfWeek;
     private final String hourCycle;
+    private LanguageId languageId;
     private final Locale locale;
     private final String numberingSystem;
     private final boolean numeric;
@@ -65,18 +66,7 @@ public final class JSIntlLocale extends JSObject {
      * (everything before the first singleton extension).
      */
     public String getBaseName() {
-        String[] parts = tag.split("-");
-        StringBuilder sb = new StringBuilder();
-        for (String part : parts) {
-            if (part.length() == 1) {
-                break; // singleton extension
-            }
-            if (!sb.isEmpty()) {
-                sb.append("-");
-            }
-            sb.append(part);
-        }
-        return sb.toString();
+        return languageId == null ? baseName(tag) : languageId.baseName();
     }
 
     public String getCalendar() {
@@ -103,8 +93,8 @@ public final class JSIntlLocale extends JSObject {
      * Per spec: GetLocaleLanguage returns the first subtag of baseName.
      */
     public String getLanguage() {
-        String[] parts = tag.split("-", 2);
-        return parts[0];
+        int end = tag.indexOf('-');
+        return end < 0 ? tag : tag.substring(0, end);
     }
 
     public Locale getLocale() {
@@ -124,16 +114,7 @@ public final class JSIntlLocale extends JSObject {
      * appearing after language and optional script.
      */
     public String getRegion() {
-        String baseName = getBaseName();
-        String[] parts = baseName.split("-");
-        for (int i = 1; i < parts.length; i++) {
-            String p = parts[i];
-            if ((p.length() == 2 && p.chars().allMatch(Character::isLetter))
-                    || (p.length() == 3 && p.chars().allMatch(Character::isDigit))) {
-                return p;
-            }
-        }
-        return "";
+        return languageId().region();
     }
 
     /**
@@ -141,12 +122,7 @@ public final class JSIntlLocale extends JSObject {
      * letters.
      */
     public String getScript() {
-        String baseName = getBaseName();
-        String[] parts = baseName.split("-");
-        if (parts.length >= 2 && parts[1].length() == 4 && parts[1].chars().allMatch(Character::isLetter)) {
-            return parts[1];
-        }
-        return "";
+        return languageId().script();
     }
 
     public String getTag() {
@@ -158,33 +134,65 @@ public final class JSIntlLocale extends JSObject {
      * or digit+3alphanum), or empty string.
      */
     public String getVariant() {
-        String baseName = getBaseName();
-        String[] parts = baseName.split("-");
-        int variantStart = -1;
-        for (int i = parts.length - 1; i >= 1; i--) {
-            String p = parts[i];
-            boolean isVariant = (p.length() >= 5 && p.length() <= 8)
-                    || (p.length() == 4 && Character.isDigit(p.charAt(0)));
-            if (isVariant) {
-                variantStart = i;
-            } else {
-                break;
-            }
-        }
-        if (variantStart < 0) {
-            return "";
-        }
-        StringBuilder sb = new StringBuilder();
-        for (int i = variantStart; i < parts.length; i++) {
-            if (!sb.isEmpty()) {
-                sb.append("-");
-            }
-            sb.append(parts[i]);
-        }
-        return sb.toString();
+        return languageId().variant();
     }
 
     public boolean isNumericSet() {
         return numericSet;
+    }
+
+    private LanguageId languageId() {
+        if (languageId == null) {
+            languageId = LanguageId.from(tag);
+        }
+        return languageId;
+    }
+
+    private static String baseName(String tag) {
+        // Java callers may supply noncanonical tags with empty subtags.
+        if (tag.startsWith("-") || tag.endsWith("-") || tag.contains("--")) {
+            StringBuilder base = new StringBuilder();
+            for (String part : tag.split("-")) {
+                if (part.length() == 1) {
+                    break;
+                }
+                if (!base.isEmpty()) {
+                    base.append('-');
+                }
+                base.append(part);
+            }
+            return base.toString();
+        }
+        return IntlLocaleTag.stripExtensions(tag);
+    }
+
+    private record LanguageId(String baseName, String script, String region, String variant) {
+        static LanguageId from(String tag) {
+            String base = JSIntlLocale.baseName(tag);
+            String[] parts = base.split("-");
+            String script = parts.length >= 2 && parts[1].length() == 4
+                    && parts[1].chars().allMatch(Character::isLetter) ? parts[1] : "";
+            String region = "";
+            int variantStart = -1;
+            for (int i = 1; i < parts.length; i++) {
+                String part = parts[i];
+                if (region.isEmpty() && ((part.length() == 2 && part.chars().allMatch(Character::isLetter))
+                        || (part.length() == 3 && part.chars().allMatch(Character::isDigit)))) {
+                    region = part;
+                }
+                if ((part.length() >= 5 && part.length() <= 8)
+                        || (part.length() == 4 && Character.isDigit(part.charAt(0)))) {
+                    if (variantStart < 0) {
+                        variantStart = i;
+                    }
+                } else {
+                    variantStart = -1;
+                }
+            }
+            String variant = variantStart < 0
+                    ? ""
+                    : String.join("-", java.util.Arrays.copyOfRange(parts, variantStart, parts.length));
+            return new LanguageId(base, script, region, variant);
+        }
     }
 }

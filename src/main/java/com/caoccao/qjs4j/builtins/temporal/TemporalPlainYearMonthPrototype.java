@@ -23,8 +23,7 @@ import com.caoccao.qjs4j.core.temporal.*;
  * Implementation of Temporal.PlainYearMonth prototype methods.
  */
 public final class TemporalPlainYearMonthPrototype {
-    private static final TemporalReceiver<JSTemporalPlainYearMonth> RECEIVER = new TemporalReceiver<>(
-            JSTemporalPlainYearMonth.class, "Temporal.PlainYearMonth");
+    private static final TemporalReceiver<JSTemporalPlainYearMonth> RECEIVER = TemporalReceiver.PLAIN_YEAR_MONTH;
 
     private TemporalPlainYearMonthPrototype() {
     }
@@ -34,12 +33,7 @@ public final class TemporalPlainYearMonthPrototype {
     }
 
     private static JSValue addOrSubtract(JSContext context, JSValue thisArg, JSValue[] args, int sign) {
-        JSTemporalPlainYearMonth plainYearMonth = RECEIVER.require(context, thisArg, sign > 0 ? "add" : "subtract");
-        if (plainYearMonth == null) {
-            return JSUndefined.INSTANCE;
-        }
-        TemporalDateAddition addition = TemporalDateAddition.read(context, args, sign);
-        return addition == null ? JSUndefined.INSTANCE : addition.apply(context, plainYearMonth);
+        return TemporalDateAddition.apply(context, thisArg, args, sign, RECEIVER, TemporalDateAddition::apply);
     }
 
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -56,39 +50,13 @@ public final class TemporalPlainYearMonthPrototype {
     }
 
     private static JSValue difference(JSContext context, JSValue thisArg, JSValue[] args, boolean since) {
-        JSTemporalPlainYearMonth plainYearMonth = RECEIVER.require(context, thisArg, since ? "since" : "until");
-        if (plainYearMonth == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue otherArgument = JSValue.argumentOrUndefined(args, 0);
-        JSTemporalPlainYearMonth otherPlainYearMonth = otherArgument instanceof JSTemporalPlainYearMonth yearMonth
-                ? yearMonth
-                : TemporalPlainYearMonthConstructor.toTemporalYearMonthObject(context, otherArgument);
-        if (context.hasPendingException() || otherPlainYearMonth == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return TemporalCalendarDifference.between(context, plainYearMonth, otherPlainYearMonth,
-                JSValue.argumentOrUndefined(args, 1), since, TemporalUnit.MONTH);
+        return RECEIVER.difference(context, thisArg, args, since,
+                (ctx, left, right, options, sinceOperation) -> TemporalCalendarDifference.between(ctx, left, right,
+                        options, sinceOperation, TemporalUnit.MONTH));
     }
 
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainYearMonth plainYearMonth = RECEIVER.require(context, thisArg, "equals");
-        if (plainYearMonth == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
-        JSTemporalPlainYearMonth other = TemporalPlainYearMonthConstructor.toTemporalYearMonthObject(context, otherArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        boolean equal = plainYearMonth.getIsoDate().year() == other.getIsoDate().year()
-                && plainYearMonth.getIsoDate().month() == other.getIsoDate().month()
-                && plainYearMonth.getIsoDate().day() == other.getIsoDate().day()
-                && plainYearMonth.getCalendarId().equals(other.getCalendarId());
-        if (equal) {
-            return JSBoolean.TRUE;
-        }
-        return JSBoolean.FALSE;
+        return RECEIVER.equalTo(context, thisArg, args, JSTemporalCalendarDate::sameDate);
     }
 
     public static JSValue era(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -137,11 +105,7 @@ public final class TemporalPlainYearMonthPrototype {
     }
 
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainYearMonth plainYearMonth = RECEIVER.require(context, thisArg, "toLocaleString");
-        if (plainYearMonth == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return TemporalLocaleFormat.formatDate(context, plainYearMonth, args);
+        return TemporalLocaleFormat.formatDate(context, thisArg, args, RECEIVER);
     }
 
     public static JSValue toPlainDate(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -172,11 +136,7 @@ public final class TemporalPlainYearMonthPrototype {
     }
 
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainYearMonth plainYearMonth = RECEIVER.require(context, thisArg, "toString");
-        if (plainYearMonth == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return TemporalDateFormat.format(context, plainYearMonth, JSValue.argumentOrUndefined(args, 0));
+        return TemporalDateFormat.formatDate(context, thisArg, args, RECEIVER);
     }
 
     public static JSValue until(JSContext context, JSValue thisArg, JSValue[] args) {

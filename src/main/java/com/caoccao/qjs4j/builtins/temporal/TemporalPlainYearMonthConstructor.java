@@ -30,29 +30,8 @@ public final class TemporalPlainYearMonthConstructor {
      * Temporal.PlainYearMonth.compare(one, two)
      */
     public static JSValue compare(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue oneArg = JSValue.argumentOrUndefined(args, 0);
-        JSValue twoArg = JSValue.argumentOrUndefined(args, 1);
-
-        JSTemporalPlainYearMonth firstYearMonth = toTemporalYearMonthObject(context, oneArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        JSTemporalPlainYearMonth secondYearMonth = toTemporalYearMonthObject(context, twoArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        int comparisonResult = Integer.compare(firstYearMonth.getIsoDate().year(), secondYearMonth.getIsoDate().year());
-        if (comparisonResult != 0) {
-            return JSNumber.of(comparisonResult);
-        }
-
-        comparisonResult = Integer.compare(firstYearMonth.getIsoDate().month(), secondYearMonth.getIsoDate().month());
-        if (comparisonResult != 0) {
-            return JSNumber.of(comparisonResult);
-        }
-
-        return JSNumber.of(Integer.compare(firstYearMonth.getIsoDate().day(), secondYearMonth.getIsoDate().day()));
+        return TemporalReceiver.PLAIN_YEAR_MONTH.compare(context, args,
+                (left, right) -> left.getIsoDate().compareTo(right.getIsoDate()));
     }
 
     /**
@@ -147,11 +126,7 @@ public final class TemporalPlainYearMonthConstructor {
     }
 
     public static JSTemporalPlainYearMonth toTemporalYearMonthObject(JSContext context, JSValue item) {
-        JSValue result = toTemporalYearMonth(context, item, JSUndefined.INSTANCE);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        return (JSTemporalPlainYearMonth) result;
+        return TemporalReceiver.PLAIN_YEAR_MONTH.convert(context, item);
     }
 
     static JSValue yearMonthFromString(JSContext context, String input) {

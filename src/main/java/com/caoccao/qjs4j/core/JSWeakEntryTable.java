@@ -56,6 +56,19 @@ final class JSWeakEntryTable {
 
     private final List<Entry> entries = new ArrayList<>(2);
 
+    private Entry find(Object owner) {
+        for (int index = entries.size() - 1; index >= 0; index--) {
+            Entry entry = entries.get(index);
+            Object entryOwner = entry.get();
+            if (entryOwner == null) {
+                entries.remove(index);
+            } else if (entryOwner == owner) {
+                return entry;
+            }
+        }
+        return null;
+    }
+
     /**
      * The value this key holds for a collection.
      *
@@ -64,16 +77,8 @@ final class JSWeakEntryTable {
      * @return the value, or {@code null} when this key is not in that collection
      */
     JSValue get(Object owner) {
-        for (int index = entries.size() - 1; index >= 0; index--) {
-            Entry entry = entries.get(index);
-            Object entryOwner = entry.get();
-            if (entryOwner == null) {
-                entries.remove(index);
-            } else if (entryOwner == owner) {
-                return entry.value;
-            }
-        }
-        return null;
+        Entry entry = find(owner);
+        return entry == null ? null : entry.value;
     }
 
     /**
@@ -98,17 +103,12 @@ final class JSWeakEntryTable {
      *            the runtime's queue, which the new entry registers itself with
      */
     void put(Object owner, JSValue value, ReferenceQueue<Object> deadOwners) {
-        for (int index = entries.size() - 1; index >= 0; index--) {
-            Entry entry = entries.get(index);
-            Object entryOwner = entry.get();
-            if (entryOwner == null) {
-                entries.remove(index);
-            } else if (entryOwner == owner) {
-                entry.value = value;
-                return;
-            }
+        Entry entry = find(owner);
+        if (entry == null) {
+            entries.add(new Entry(owner, value, deadOwners));
+        } else {
+            entry.value = value;
         }
-        entries.add(new Entry(owner, value, deadOwners));
     }
 
     /**

@@ -26,8 +26,7 @@ import java.math.BigInteger;
  */
 public final class TemporalInstantPrototype {
     private static final long MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
-    private static final TemporalReceiver<JSTemporalInstant> RECEIVER = new TemporalReceiver<>(JSTemporalInstant.class,
-            "Temporal.Instant");
+    private static final TemporalReceiver<JSTemporalInstant> RECEIVER = TemporalReceiver.INSTANT;
 
     private TemporalInstantPrototype() {
     }
@@ -95,16 +94,8 @@ public final class TemporalInstantPrototype {
     }
 
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalInstant instant = RECEIVER.require(context, thisArg, "equals");
-        if (instant == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
-        JSTemporalInstant other = TemporalInstantConstructor.toTemporalInstantObject(context, otherArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        return instant.getEpochNanoseconds().equals(other.getEpochNanoseconds()) ? JSBoolean.TRUE : JSBoolean.FALSE;
+        return RECEIVER.equalTo(context, thisArg, args,
+                (left, right) -> left.getEpochNanoseconds().equals(right.getEpochNanoseconds()));
     }
 
     private static JSString formatInstantWithOptions(JSContext context, JSTemporalInstant instant, JSValue optionsArg) {
@@ -154,15 +145,7 @@ public final class TemporalInstantPrototype {
 
         BigInteger differenceNanoseconds = leftInstant.getEpochNanoseconds()
                 .subtract(rightInstant.getEpochNanoseconds());
-        BigInteger smallestUnitNanoseconds = getUnitNs(differenceOptions.smallestUnit());
-        BigInteger incrementNanoseconds = smallestUnitNanoseconds
-                .multiply(BigInteger.valueOf(differenceOptions.roundingIncrement()));
-        BigInteger roundedNanoseconds = differenceOptions.roundingMode()
-                .roundBigIntegerToIncrementSigned(differenceNanoseconds, incrementNanoseconds);
-
-        TemporalDuration balancedDuration = TemporalDuration.createBalance(roundedNanoseconds,
-                differenceOptions.largestUnit());
-        TemporalDuration normalizedDuration = balancedDuration.normalizeFloat64RepresentableFields();
+        TemporalDuration normalizedDuration = differenceOptions.roundTimeDifference(differenceNanoseconds);
         if (!TemporalDuration.isDurationRecordTimeRangeValid(normalizedDuration)) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;

@@ -31,19 +31,8 @@ public final class TemporalPlainDateConstructor {
      * Temporal.PlainDate.compare(one, two)
      */
     public static JSValue compare(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue oneArg = JSValue.argumentOrUndefined(args, 0);
-        JSValue twoArg = JSValue.argumentOrUndefined(args, 1);
-
-        JSTemporalPlainDate firstDate = toTemporalDateObject(context, oneArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        JSTemporalPlainDate secondDate = toTemporalDateObject(context, twoArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        return JSNumber.of(firstDate.getIsoDate().compareTo(secondDate.getIsoDate()));
+        return TemporalReceiver.PLAIN_DATE.compare(context, args,
+                (left, right) -> left.getIsoDate().compareTo(right.getIsoDate()));
     }
 
     /**
@@ -158,10 +147,6 @@ public final class TemporalPlainDateConstructor {
     }
 
     public static JSTemporalPlainDate toTemporalDateObject(JSContext context, JSValue item) {
-        JSValue result = toTemporalDate(context, item, JSUndefined.INSTANCE);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        return (JSTemporalPlainDate) result;
+        return TemporalReceiver.PLAIN_DATE.convert(context, item);
     }
 }

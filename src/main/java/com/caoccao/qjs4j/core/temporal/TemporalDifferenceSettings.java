@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.core.temporal;
 import com.caoccao.qjs4j.core.*;
 
 import java.util.Optional;
+import java.math.BigInteger;
 
 /**
  * Parsed and validated settings for Temporal since()/until() operations.
@@ -164,5 +165,12 @@ public record TemporalDifferenceSettings(TemporalUnit largestUnit, TemporalUnit 
         }
 
         return new TemporalDifferenceSettings(largestUnit, smallestUnit, roundingIncrement, roundingMode);
+    }
+
+    public TemporalDuration roundTimeDifference(BigInteger nanoseconds) {
+        BigInteger increment = BigInteger.valueOf(smallestUnit.getNanosecondFactor())
+                .multiply(BigInteger.valueOf(roundingIncrement));
+        BigInteger rounded = roundingMode.roundBigIntegerToIncrementSigned(nanoseconds, increment);
+        return TemporalDuration.createBalance(rounded, largestUnit).normalizeFloat64RepresentableFields();
     }
 }

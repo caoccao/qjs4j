@@ -27,8 +27,7 @@ import java.time.DateTimeException;
  */
 public final class TemporalZonedDateTimePrototype {
     private static final BigInteger NS_PER_HOUR = TemporalConstants.BI_HOUR_NANOSECONDS;
-    private static final TemporalReceiver<JSTemporalZonedDateTime> RECEIVER = new TemporalReceiver<>(
-            JSTemporalZonedDateTime.class, "Temporal.ZonedDateTime");
+    private static final TemporalReceiver<JSTemporalZonedDateTime> RECEIVER = TemporalReceiver.ZONED_DATE_TIME;
 
     private TemporalZonedDateTimePrototype() {
     }
@@ -38,12 +37,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     private static JSValue addOrSubtract(JSContext context, JSValue thisArg, JSValue[] args, int sign) {
-        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, sign > 0 ? "add" : "subtract");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        TemporalDateAddition addition = TemporalDateAddition.read(context, args, sign);
-        return addition == null ? JSUndefined.INSTANCE : addition.apply(context, zonedDateTime);
+        return TemporalDateAddition.apply(context, thisArg, args, sign, RECEIVER, TemporalDateAddition::apply);
     }
 
     public static JSValue calendar(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -57,7 +51,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue day(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, TemporalDateProperty.DAY);
+        return TemporalDateProperty.DAY.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue dayOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -66,11 +60,11 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue dayOfYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, TemporalDateProperty.DAY_OF_YEAR);
+        return TemporalDateProperty.DAY_OF_YEAR.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue daysInMonth(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, TemporalDateProperty.DAYS_IN_MONTH);
+        return TemporalDateProperty.DAYS_IN_MONTH.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue daysInWeek(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -78,23 +72,11 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue daysInYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, TemporalDateProperty.DAYS_IN_YEAR);
+        return TemporalDateProperty.DAYS_IN_YEAR.read(context, thisArg, RECEIVER);
     }
 
     private static JSValue difference(JSContext context, JSValue thisArg, JSValue[] args, boolean since) {
-        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, since ? "since" : "until");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
-        JSTemporalZonedDateTime other = otherArg instanceof JSTemporalZonedDateTime existing
-                ? existing
-                : TemporalZonedDateTimeConstructor.toTemporalZonedDateTimeObject(context, otherArg);
-        if (other == null || context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        return TemporalCalendarDifference.between(context, zonedDateTime, other, JSValue.argumentOrUndefined(args, 1),
-                since);
+        return RECEIVER.difference(context, thisArg, args, since, TemporalCalendarDifference::between);
     }
 
     public static JSValue epochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -142,11 +124,11 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue era(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, TemporalDateProperty.ERA);
+        return TemporalDateProperty.ERA.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue eraYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, TemporalDateProperty.ERA_YEAR);
+        return TemporalDateProperty.ERA_YEAR.read(context, thisArg, RECEIVER);
     }
 
     private static String formatZonedDateTime(JSTemporalZonedDateTime zonedDateTime) {
@@ -248,8 +230,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue hour(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "hour",
-                zonedDateTime -> JSNumber.of(zonedDateTime.toLocalDateTime().time().hour()));
+        return TemporalTimeProperty.HOUR.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue hoursInDay(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -263,39 +244,35 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue inLeapYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, TemporalDateProperty.IN_LEAP_YEAR);
+        return TemporalDateProperty.IN_LEAP_YEAR.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue microsecond(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "microsecond",
-                zonedDateTime -> JSNumber.of(zonedDateTime.toLocalDateTime().time().microsecond()));
+        return TemporalTimeProperty.MICROSECOND.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue millisecond(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "millisecond",
-                zonedDateTime -> JSNumber.of(zonedDateTime.toLocalDateTime().time().millisecond()));
+        return TemporalTimeProperty.MILLISECOND.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue minute(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "minute",
-                zonedDateTime -> JSNumber.of(zonedDateTime.toLocalDateTime().time().minute()));
+        return TemporalTimeProperty.MINUTE.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue month(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, TemporalDateProperty.MONTH);
+        return TemporalDateProperty.MONTH.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue monthCode(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, TemporalDateProperty.MONTH_CODE);
+        return TemporalDateProperty.MONTH_CODE.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue monthsInYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, TemporalDateProperty.MONTHS_IN_YEAR);
+        return TemporalDateProperty.MONTHS_IN_YEAR.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue nanosecond(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "nanosecond",
-                zonedDateTime -> JSNumber.of(zonedDateTime.toLocalDateTime().time().nanosecond()));
+        return TemporalTimeProperty.NANOSECOND.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue offset(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -316,14 +293,6 @@ public final class TemporalZonedDateTimePrototype {
         int offsetSeconds = TemporalTimeZone.getOffsetSecondsFor(zonedDateTime.getEpochNanoseconds(),
                 zonedDateTime.getTimeZoneId());
         return JSNumber.of((long) offsetSeconds * 1_000_000_000L);
-    }
-
-    private static JSValue readDateField(JSContext context, JSValue thisArg, TemporalDateProperty property) {
-        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, property.key);
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return property.read(zonedDateTime.toLocalDateTime().date(), zonedDateTime.getCalendarId());
     }
 
     public static JSValue round(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -363,8 +332,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue second(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "second",
-                zonedDateTime -> JSNumber.of(zonedDateTime.toLocalDateTime().time().second()));
+        return TemporalTimeProperty.SECOND.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue since(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -681,7 +649,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue year(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readDateField(context, thisArg, TemporalDateProperty.YEAR);
+        return TemporalDateProperty.YEAR.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue yearOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {

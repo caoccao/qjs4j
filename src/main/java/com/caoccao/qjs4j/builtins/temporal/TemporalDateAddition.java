@@ -144,4 +144,19 @@ record TemporalDateAddition(TemporalDuration duration, String overflow) {
         return JSTemporalZonedDateTime.create(context, epochNanoseconds, zonedDateTime.getTimeZoneId(),
                 zonedDateTime.getCalendarId());
     }
+
+    static <T extends JSObject> JSValue apply(JSContext context, JSValue receiver, JSValue[] args, int sign,
+            TemporalReceiver<T> type, Apply<T> operation) {
+        T date = type.require(context, receiver, sign > 0 ? "add" : "subtract");
+        if (date == null) {
+            return JSUndefined.INSTANCE;
+        }
+        TemporalDateAddition addition = read(context, args, sign);
+        return addition == null ? JSUndefined.INSTANCE : operation.apply(addition, context, date);
+    }
+
+    @FunctionalInterface
+    interface Apply<T> {
+        JSValue apply(TemporalDateAddition addition, JSContext context, T date);
+    }
 }

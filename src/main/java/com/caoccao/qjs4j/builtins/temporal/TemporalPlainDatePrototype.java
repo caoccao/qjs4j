@@ -26,8 +26,7 @@ import java.time.DateTimeException;
  * Implementation of Temporal.PlainDate prototype methods.
  */
 public final class TemporalPlainDatePrototype {
-    private static final TemporalReceiver<JSTemporalPlainDate> RECEIVER = new TemporalReceiver<>(
-            JSTemporalPlainDate.class, "Temporal.PlainDate");
+    private static final TemporalReceiver<JSTemporalPlainDate> RECEIVER = TemporalReceiver.PLAIN_DATE;
 
     private TemporalPlainDatePrototype() {
     }
@@ -37,12 +36,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     private static JSValue addOrSubtract(JSContext context, JSValue thisArg, JSValue[] args, int sign) {
-        JSTemporalPlainDate plainDate = RECEIVER.require(context, thisArg, sign > 0 ? "add" : "subtract");
-        if (plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        TemporalDateAddition addition = TemporalDateAddition.read(context, args, sign);
-        return addition == null ? JSUndefined.INSTANCE : addition.apply(context, plainDate);
+        return TemporalDateAddition.apply(context, thisArg, args, sign, RECEIVER, TemporalDateAddition::apply);
     }
 
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -75,34 +69,13 @@ public final class TemporalPlainDatePrototype {
     }
 
     private static JSValue difference(JSContext context, JSValue thisArg, JSValue[] args, boolean since) {
-        JSTemporalPlainDate plainDate = RECEIVER.require(context, thisArg, since ? "since" : "until");
-        if (plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
-        JSTemporalPlainDate other = otherArg instanceof JSTemporalPlainDate date
-                ? date
-                : TemporalPlainDateConstructor.toTemporalDateObject(context, otherArg);
-        if (context.hasPendingException() || other == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return TemporalCalendarDifference.between(context, plainDate, other, JSValue.argumentOrUndefined(args, 1),
-                since, TemporalUnit.DAY);
+        return RECEIVER.difference(context, thisArg, args, since,
+                (ctx, left, right, options, sinceOperation) -> TemporalCalendarDifference.between(ctx, left, right,
+                        options, sinceOperation, TemporalUnit.DAY));
     }
 
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = RECEIVER.require(context, thisArg, "equals");
-        if (plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue otherArg = JSValue.argumentOrUndefined(args, 0);
-        JSTemporalPlainDate other = TemporalPlainDateConstructor.toTemporalDateObject(context, otherArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        boolean equal = plainDate.getIsoDate().compareTo(other.getIsoDate()) == 0
-                && plainDate.getCalendarId().equals(other.getCalendarId());
-        return equal ? JSBoolean.TRUE : JSBoolean.FALSE;
+        return RECEIVER.equalTo(context, thisArg, args, JSTemporalCalendarDate::sameDate);
     }
 
     public static JSValue era(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -142,11 +115,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = RECEIVER.require(context, thisArg, "toLocaleString");
-        if (plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return TemporalLocaleFormat.formatDate(context, plainDate, args);
+        return TemporalLocaleFormat.formatDate(context, thisArg, args, RECEIVER);
     }
 
     public static JSValue toPlainDateTime(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -154,13 +123,9 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        IsoTime time = IsoTime.MIDNIGHT;
-        if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
-            JSValue temporalTime = TemporalPlainTimeConstructor.toTemporalTime(context, args[0], JSUndefined.INSTANCE);
-            if (context.hasPendingException() || !(temporalTime instanceof JSTemporalPlainTime plainTime)) {
-                return JSUndefined.INSTANCE;
-            }
-            time = plainTime.getIsoTime();
+        IsoTime time = TemporalPlainTimeConstructor.optionalTime(context, args);
+        if (time == null) {
+            return JSUndefined.INSTANCE;
         }
 
         IsoDate isoDate = plainDate.getIsoDate();
@@ -202,19 +167,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = RECEIVER.require(context, thisArg, "toString");
-        if (plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return TemporalDateFormat.format(context, plainDate, JSValue.argumentOrUndefined(args, 0));
-    }
-
-    private static String toTemporalTimeZoneIdentifier(JSContext context, JSValue timeZoneLike) {
-        if (!(timeZoneLike instanceof JSString timeZoneString)) {
-            context.throwTypeError("Temporal error: Time zone must be string.");
-            return null;
-        }
-        return TemporalTimeZone.parseTimeZoneIdentifierString(context, timeZoneString.value());
+        return TemporalDateFormat.formatDate(context, thisArg, args, RECEIVER);
     }
 
     public static JSValue toZonedDateTime(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -240,7 +193,7 @@ public final class TemporalPlainDatePrototype {
             }
         }
 
-        String timeZoneId = toTemporalTimeZoneIdentifier(context, timeZoneLike);
+        String timeZoneId = TemporalTimeZone.requireTimeZoneIdentifier(context, timeZoneLike);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

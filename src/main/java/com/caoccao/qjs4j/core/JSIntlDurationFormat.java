@@ -40,11 +40,7 @@ public final class JSIntlDurationFormat extends JSObject {
             "numeric", "numeric", "numeric", // hours, minutes, seconds
             "numeric", "numeric", "numeric" // milliseconds, microseconds, nanoseconds
     };
-    /**
-     * English CLDR unit names: {singular long, plural long, singular short, plural short, narrow}. Narrow uses no space
-     * between the number and the unit symbol.
-     */
-    private static final Map<String, String[]> EN_UNIT_DATA = new HashMap<>();
+
     public static final String NAME = "Intl.DurationFormat";
     /**
      * Singular unit names (for NumberFormat unit option).
@@ -59,24 +55,13 @@ public final class JSIntlDurationFormat extends JSObject {
     public static final String[] UNIT_NAMES = {"years", "months", "weeks", "days", "hours", "minutes", "seconds",
             "milliseconds", "microseconds", "nanoseconds"};
 
-    static {
-        EN_UNIT_DATA.put("year", new String[]{"year", "years", "yr", "yrs", "y"});
-        EN_UNIT_DATA.put("month", new String[]{"month", "months", "mth", "mths", "m"});
-        EN_UNIT_DATA.put("week", new String[]{"week", "weeks", "wk", "wks", "w"});
-        EN_UNIT_DATA.put("day", new String[]{"day", "days", "day", "days", "d"});
-        EN_UNIT_DATA.put("hour", new String[]{"hour", "hours", "hr", "hr", "h"});
-        EN_UNIT_DATA.put("minute", new String[]{"minute", "minutes", "min", "min", "m"});
-        EN_UNIT_DATA.put("second", new String[]{"second", "seconds", "sec", "sec", "s"});
-        EN_UNIT_DATA.put("millisecond", new String[]{"millisecond", "milliseconds", "ms", "ms", "ms"});
-        EN_UNIT_DATA.put("microsecond", new String[]{"microsecond", "microseconds", "\u03BCs", "\u03BCs", "\u03BCs"});
-        EN_UNIT_DATA.put("nanosecond", new String[]{"nanosecond", "nanoseconds", "ns", "ns", "ns"});
-    }
-
     private final Integer fractionalDigits;
+    private JSIntlListFormat listFormat;
     private final Locale locale;
     private final String numberingSystem;
     private final String style;
     private final String[] unitDisplays;
+    private IntlDurationUnitFormat[] unitFormats;
     private final String[] unitStyles;
 
     public JSIntlDurationFormat(JSContext context, Locale locale, String numberingSystem, String style,
@@ -150,39 +135,16 @@ public final class JSIntlDurationFormat extends JSObject {
     }
 
     private String formatUnit(int index, double value, BigDecimal fraction, boolean suppressSign) {
-        String unitStyle = unitStyles[index];
-        int minFrac = fractionalDigits != null ? fractionalDigits : 0;
-        int maxFrac = fractionalDigits != null ? fractionalDigits : 9;
-        if (isNumericStyle(unitStyle)) {
-            boolean twoDigit = "2-digit".equals(unitStyle);
-            return fraction == null
-                    ? formatNumericValue(value, twoDigit, suppressSign, -1, -1, false, locale)
-                    : formatNumericBigDecimal(fraction, twoDigit, suppressSign, minFrac, maxFrac, true, locale);
-        }
-        String unit = SINGULAR_UNIT_NAMES[index];
-        String formatted = fraction == null
-                ? formatWithUnit(value, unit, unitStyle, suppressSign, locale)
-                : formatWithUnit(fraction, unit, unitStyle, suppressSign, minFrac, maxFrac, locale);
-        if ("digital".equals(style) && "day".equals(unit) && Math.abs(value) >= 1000 && formatted.endsWith(" day")) {
+        String formatted = unitFormat(index, fraction != null).format(value, fraction, suppressSign);
+        if ("digital".equals(style) && "day".equals(SINGULAR_UNIT_NAMES[index]) && Math.abs(value) >= 1000
+                && formatted.endsWith(" day")) {
             return formatted + "s";
         }
         return formatted;
     }
 
     private List<FormatPart> formatUnitParts(int index, double value, BigDecimal fraction, boolean suppressSign) {
-        String unitStyle = unitStyles[index];
-        int minFrac = fractionalDigits != null ? fractionalDigits : 0;
-        int maxFrac = fractionalDigits != null ? fractionalDigits : 9;
-        if (isNumericStyle(unitStyle)) {
-            boolean twoDigit = "2-digit".equals(unitStyle);
-            return fraction == null
-                    ? formatToPartsNumeric(value, twoDigit, suppressSign, -1, -1, false, locale)
-                    : formatToPartsBigDecimal(fraction, twoDigit, suppressSign, minFrac, maxFrac, true, locale);
-        }
-        String unit = SINGULAR_UNIT_NAMES[index];
-        return fraction == null
-                ? formatToPartsWithUnit(value, unit, unitStyle, suppressSign, locale)
-                : formatToPartsWithUnit(fraction, unit, unitStyle, suppressSign, minFrac, maxFrac, locale);
+        return unitFormat(index, fraction != null).parts(value, fraction, suppressSign);
     }
 
     public Integer getFractionalDigits() {
@@ -260,38 +222,28 @@ public final class JSIntlDurationFormat extends JSObject {
         return flattened;
     }
 
-    private JSIntlListFormat unitListFormat() {
-        return new JSIntlListFormat(context, locale, "digital".equals(style) ? "short" : style, "unit");
+    private synchronized IntlDurationUnitFormat unitFormat(int index, boolean fractional) {
+        if (unitFormats == null) {
+            unitFormats = new IntlDurationUnitFormat[unitStyles.length * 2];
+        }
+        int slot = fractional ? index + unitStyles.length : index;
+        IntlDurationUnitFormat format = unitFormats[slot];
+        if (format == null) {
+            String display = unitStyles[index];
+            String unit = isNumericStyle(display) ? null : SINGULAR_UNIT_NAMES[index];
+            int min = fractional ? (fractionalDigits == null ? 0 : fractionalDigits) : -1;
+            int max = fractional ? (fractionalDigits == null ? 9 : fractionalDigits) : -1;
+            format = new IntlDurationUnitFormat(locale, unit, display, "2-digit".equals(display), min, max, fractional);
+            unitFormats[slot] = format;
+        }
+        return format;
     }
 
-    /**
-     * Split a formatted number string into integer/decimal/fraction parts.
-     */
-    private static void addNumberPartsToList(List<FormatPart> parts, String formatted) {
-        int dotIndex = formatted.indexOf('.');
-        if (dotIndex >= 0) {
-            parts.add(new FormatPart("integer", formatted.substring(0, dotIndex), null));
-            parts.add(new FormatPart("decimal", ".", null));
-            if (dotIndex + 1 < formatted.length()) {
-                parts.add(new FormatPart("fraction", formatted.substring(dotIndex + 1), null));
-            }
-        } else {
-            parts.add(new FormatPart("integer", formatted, null));
+    private synchronized JSIntlListFormat unitListFormat() {
+        if (listFormat == null) {
+            listFormat = new JSIntlListFormat(context, locale, "digital".equals(style) ? "short" : style, "unit");
         }
-    }
-
-    private static void addUnitParts(List<FormatPart> parts, String numberPart, String singularUnit, String unitDisplay,
-            Locale locale) {
-        String unitName = getEnglishTimeUnitName(numberPart, singularUnit, unitDisplay, locale);
-        if (unitName == null) {
-            parts.add(new FormatPart("literal", " ", null));
-            parts.add(new FormatPart("unit", singularUnit, null));
-        } else {
-            if (!"narrow".equals(unitDisplay)) {
-                parts.add(new FormatPart("literal", " ", null));
-            }
-            parts.add(new FormatPart("unit", unitName, null));
-        }
+        return listFormat;
     }
 
     /**
@@ -359,30 +311,13 @@ public final class JSIntlDurationFormat extends JSObject {
         return fraction.signum() < 0 && fraction.precision() <= exponent ? fraction.abs() : fraction;
     }
 
-    private static NumberFormat createNumberFormat(int minimumIntegerDigits, int minimumFractionDigits,
-            int maximumFractionDigits, boolean useGrouping, boolean truncate, Locale locale) {
-        NumberFormat format = NumberFormat.getNumberInstance(locale);
-        format.setGroupingUsed(useGrouping);
-        format.setMinimumIntegerDigits(minimumIntegerDigits);
-        if (minimumFractionDigits >= 0) {
-            format.setMinimumFractionDigits(minimumFractionDigits);
-        }
-        if (maximumFractionDigits >= 0) {
-            format.setMaximumFractionDigits(maximumFractionDigits);
-        }
-        if (truncate) {
-            format.setRoundingMode(RoundingMode.DOWN);
-        }
-        return format;
-    }
-
     /**
      * Format a BigDecimal number for precise fractional seconds.
      */
     public static String formatBigDecimalNumber(BigDecimal value, int minimumIntegerDigits, int minimumFractionDigits,
             int maximumFractionDigits, boolean useGrouping, boolean truncate, Locale locale) {
-        return createNumberFormat(minimumIntegerDigits, minimumFractionDigits, maximumFractionDigits, useGrouping,
-                truncate, locale).format(value);
+        return IntlDurationUnitFormat.createNumberFormat(minimumIntegerDigits, minimumFractionDigits,
+                maximumFractionDigits, useGrouping, truncate, locale).format(value);
     }
 
     /**
@@ -401,11 +336,7 @@ public final class JSIntlDurationFormat extends JSObject {
      * @return the formatted unit, or null when the locale is not English or the unit is not a time unit
      */
     public static String formatEnglishTimeUnit(String numberPart, String unit, String unitDisplay, Locale locale) {
-        String unitName = getEnglishTimeUnitName(numberPart, unit, unitDisplay, locale);
-        if (unitName == null) {
-            return null;
-        }
-        return "narrow".equals(unitDisplay) ? numberPart + unitName : numberPart + " " + unitName;
+        return IntlDurationUnitFormat.formatEnglishTimeUnit(numberPart, unit, unitDisplay, locale);
     }
 
     /**
@@ -413,38 +344,18 @@ public final class JSIntlDurationFormat extends JSObject {
      * (long/short) or " " (narrow), with no conjunction word (unlike "conjunction" type which uses "and"/"or").
      */
     public static List<ListFormatPart> formatListToParts(JSIntlListFormat listFormat, List<String> values) {
+        int count = values.size();
         List<ListFormatPart> parts = new ArrayList<>();
-        if (values.isEmpty()) {
-            return parts;
-        }
-        if (values.size() == 1) {
+        if (count > 0) {
             parts.add(new ListFormatPart("element", values.get(0)));
-            return parts;
-        }
-
-        JSIntlListFormat.ListPatterns patterns = listFormat.getPatterns();
-
-        if (values.size() == 2) {
-            parts.add(new ListFormatPart("element", values.get(0)));
-            parts.add(new ListFormatPart("literal", patterns.pairSep()));
-            parts.add(new ListFormatPart("element", values.get(1)));
-            return parts;
-        }
-
-        // 3+ items: use start/middle/end separators
-        int n = values.size();
-        parts.add(new ListFormatPart("element", values.get(0)));
-        parts.add(new ListFormatPart("literal", patterns.startSep()));
-        for (int i = 1; i < n - 1; i++) {
-            parts.add(new ListFormatPart("element", values.get(i)));
-            if (i < n - 2) {
-                parts.add(new ListFormatPart("literal", patterns.middleSep()));
-            } else {
-                parts.add(new ListFormatPart("literal", patterns.endSep()));
+            if (count > 1) {
+                JSIntlListFormat.ListPatterns patterns = listFormat.getPatterns();
+                for (int i = 1; i < count; i++) {
+                    parts.add(new ListFormatPart("literal", patterns.separator(i, count)));
+                    parts.add(new ListFormatPart("element", values.get(i)));
+                }
             }
         }
-        parts.add(new ListFormatPart("element", values.get(n - 1)));
-
         return parts;
     }
 
@@ -453,9 +364,8 @@ public final class JSIntlDurationFormat extends JSObject {
      */
     public static String formatNumericBigDecimal(BigDecimal value, boolean is2Digit, boolean suppressSign,
             int minFractionDigits, int maxFractionDigits, boolean truncate, Locale locale) {
-        BigDecimal formatValue = suppressSign ? value.abs() : value;
-        return formatBigDecimalNumber(formatValue, is2Digit ? 2 : 1, minFractionDigits, maxFractionDigits, false,
-                truncate, locale);
+        return new IntlDurationUnitFormat(locale, null, null, is2Digit, minFractionDigits, maxFractionDigits, truncate)
+                .format(0, value, suppressSign);
     }
 
     /**
@@ -463,18 +373,8 @@ public final class JSIntlDurationFormat extends JSObject {
      */
     public static String formatNumericValue(double value, boolean is2Digit, boolean suppressSign, int minFractionDigits,
             int maxFractionDigits, boolean truncate, Locale locale) {
-        double formatValue = suppressSign ? Math.abs(value) : value;
-        boolean isNegativeZero = !suppressSign && Double.doubleToRawLongBits(value) == Long.MIN_VALUE;
-
-        int minIntDigits = is2Digit ? 2 : 1;
-        String result = formatPlainNumber(formatValue, minIntDigits, minFractionDigits, maxFractionDigits, false,
-                truncate, locale);
-
-        if (isNegativeZero) {
-            result = "-" + formatPlainNumber(0.0, minIntDigits, minFractionDigits, maxFractionDigits, false, truncate,
-                    locale);
-        }
-        return result;
+        return new IntlDurationUnitFormat(locale, null, null, is2Digit, minFractionDigits, maxFractionDigits, truncate)
+                .format(value, null, suppressSign);
     }
 
     /**
@@ -482,8 +382,8 @@ public final class JSIntlDurationFormat extends JSObject {
      */
     public static String formatPlainNumber(double value, int minimumIntegerDigits, int minimumFractionDigits,
             int maximumFractionDigits, boolean useGrouping, boolean truncate, Locale locale) {
-        return createNumberFormat(minimumIntegerDigits, minimumFractionDigits, maximumFractionDigits, useGrouping,
-                truncate, locale).format(value);
+        return IntlDurationUnitFormat.createNumberFormat(minimumIntegerDigits, minimumFractionDigits,
+                maximumFractionDigits, useGrouping, truncate, locale).format(value);
     }
 
     /**
@@ -491,10 +391,8 @@ public final class JSIntlDurationFormat extends JSObject {
      */
     public static List<FormatPart> formatToPartsBigDecimal(BigDecimal value, boolean is2Digit, boolean suppressSign,
             int minFractionDigits, int maxFractionDigits, boolean truncate, Locale locale) {
-        boolean negative = !suppressSign && value.signum() < 0;
-        String magnitude = formatBigDecimalNumber(value.abs(), is2Digit ? 2 : 1, minFractionDigits, maxFractionDigits,
-                false, truncate, locale);
-        return numberParts(magnitude, negative, null, null, locale);
+        return new IntlDurationUnitFormat(locale, null, null, is2Digit, minFractionDigits, maxFractionDigits, truncate)
+                .parts(0, value, suppressSign);
     }
 
     /**
@@ -502,18 +400,14 @@ public final class JSIntlDurationFormat extends JSObject {
      */
     public static List<FormatPart> formatToPartsNumeric(double value, boolean is2Digit, boolean suppressSign,
             int minFractionDigits, int maxFractionDigits, boolean truncate, Locale locale) {
-        boolean negative = !suppressSign && (value < 0 || Double.doubleToRawLongBits(value) == Long.MIN_VALUE);
-        String magnitude = formatPlainNumber(Math.abs(value), is2Digit ? 2 : 1, minFractionDigits, maxFractionDigits,
-                false, truncate, locale);
-        return numberParts(magnitude, negative, null, null, locale);
+        return new IntlDurationUnitFormat(locale, null, null, is2Digit, minFractionDigits, maxFractionDigits, truncate)
+                .parts(value, null, suppressSign);
     }
 
     public static List<FormatPart> formatToPartsWithUnit(BigDecimal value, String singularUnit, String unitDisplay,
             boolean suppressSign, int minFractionDigits, int maxFractionDigits, Locale locale) {
-        boolean negative = !suppressSign && value.signum() < 0;
-        String magnitude = formatBigDecimalNumber(value.abs(), 1, minFractionDigits, maxFractionDigits, true, true,
-                locale);
-        return numberParts(magnitude, negative, singularUnit, unitDisplay, locale);
+        return new IntlDurationUnitFormat(locale, singularUnit, unitDisplay, false, minFractionDigits,
+                maxFractionDigits, true).parts(0, value, suppressSign);
     }
 
     /**
@@ -521,9 +415,8 @@ public final class JSIntlDurationFormat extends JSObject {
      */
     public static List<FormatPart> formatToPartsWithUnit(double value, String singularUnit, String unitDisplay,
             boolean suppressSign, Locale locale) {
-        boolean negative = !suppressSign && (value < 0 || Double.doubleToRawLongBits(value) == Long.MIN_VALUE);
-        String magnitude = formatPlainNumber(Math.abs(value), 1, -1, -1, true, false, locale);
-        return numberParts(magnitude, negative, singularUnit, unitDisplay, locale);
+        return new IntlDurationUnitFormat(locale, singularUnit, unitDisplay, false, -1, -1, false).parts(value, null,
+                suppressSign);
     }
 
     /**
@@ -531,11 +424,8 @@ public final class JSIntlDurationFormat extends JSObject {
      */
     public static String formatWithUnit(BigDecimal value, String singularUnit, String unitDisplay, boolean suppressSign,
             int minFractionDigits, int maxFractionDigits, Locale locale) {
-        BigDecimal formatValue = suppressSign ? value.abs() : value;
-
-        String numberPart = formatBigDecimalNumber(formatValue, 1, minFractionDigits, maxFractionDigits, true, true,
-                locale);
-        return joinNumberAndUnit(numberPart, singularUnit, unitDisplay, locale);
+        return new IntlDurationUnitFormat(locale, singularUnit, unitDisplay, false, minFractionDigits,
+                maxFractionDigits, true).format(0, value, suppressSign);
     }
 
     /**
@@ -555,15 +445,8 @@ public final class JSIntlDurationFormat extends JSObject {
      */
     public static String formatWithUnit(double value, String singularUnit, String unitDisplay, boolean suppressSign,
             Locale locale) {
-        double formatValue = suppressSign ? Math.abs(value) : value;
-        // Handle -0 → show minus sign when not suppressed
-        boolean isNegativeZero = !suppressSign && Double.doubleToRawLongBits(value) == Long.MIN_VALUE;
-
-        String numberPart = formatPlainNumber(formatValue, 1, -1, -1, true, false, locale);
-        if (isNegativeZero) {
-            numberPart = "-0";
-        }
-        return joinNumberAndUnit(numberPart, singularUnit, unitDisplay, locale);
+        return new IntlDurationUnitFormat(locale, singularUnit, unitDisplay, false, -1, -1, false).format(value, null,
+                suppressSign);
     }
 
     /**
@@ -571,21 +454,6 @@ public final class JSIntlDurationFormat extends JSObject {
      */
     public static String getDigitalDefault(int unitIndex) {
         return DIGITAL_DEFAULTS[unitIndex];
-    }
-
-    private static String getEnglishTimeUnitName(String numberPart, String unit, String unitDisplay, Locale locale) {
-        String[] names = EN_UNIT_DATA.get(unit);
-        if (names == null || !"en".equals(locale.getLanguage())) {
-            return null;
-        }
-        // CLDR English plural category "one": exactly 1 with no visible fraction digits, whatever the sign.
-        String digits = numberPart.startsWith("-") || numberPart.startsWith("+") ? numberPart.substring(1) : numberPart;
-        boolean one = "1".equals(digits);
-        return switch (unitDisplay) {
-            case "long" -> one ? names[0] : names[1];
-            case "narrow" -> names[4];
-            default -> one ? names[2] : names[3];
-        };
     }
 
     /**
@@ -601,7 +469,7 @@ public final class JSIntlDurationFormat extends JSObject {
         }
     }
 
-    private static boolean isNumericStyle(String unitStyle) {
+    static boolean isNumericStyle(String unitStyle) {
         return "numeric".equals(unitStyle) || "2-digit".equals(unitStyle);
     }
 
@@ -675,24 +543,6 @@ public final class JSIntlDurationFormat extends JSObject {
         }
 
         return true;
-    }
-
-    private static String joinNumberAndUnit(String numberPart, String unit, String display, Locale locale) {
-        String english = formatEnglishTimeUnit(numberPart, unit, display, locale);
-        return english != null ? english : numberPart + " " + unit;
-    }
-
-    private static List<FormatPart> numberParts(String magnitude, boolean negative, String unit, String display,
-            Locale locale) {
-        List<FormatPart> parts = new ArrayList<>();
-        if (negative) {
-            parts.add(new FormatPart("minusSign", "-", null));
-        }
-        addNumberPartsToList(parts, magnitude);
-        if (unit != null) {
-            addUnitParts(parts, magnitude, unit, display, locale);
-        }
-        return parts;
     }
 
     /**

@@ -733,21 +733,12 @@ public final class RegExpPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        // ES2024 22.2.6.9 step 4: SpeciesConstructor BEFORE reading flags (step 5).
-        JSValue speciesConstructor = getRegExpSpeciesConstructor(context, regexpObject);
-        if (context.hasPendingException()) {
+        SpeciesMatcher species = SpeciesMatcher.create(context, regexpObject, false);
+        if (species == null) {
             return JSUndefined.INSTANCE;
         }
-
-        String flags = getFlagsString(context, regexpObject);
-        if (flags == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        JSObject matcher = constructWithSpecies(context, speciesConstructor, regexpObject, flags);
-        if (matcher == null) {
-            return JSUndefined.INSTANCE;
-        }
+        JSObject matcher = species.matcher();
+        String flags = species.flags();
 
         long lastIndex = readLastIndex(context, regexpObject);
         if (context.hasPendingException()) {
@@ -995,24 +986,12 @@ public final class RegExpPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        // ES2024 22.2.6.14 step 4: SpeciesConstructor BEFORE reading flags (step 5).
-        JSValue speciesConstructor = getRegExpSpeciesConstructor(context, regexpObject);
-        if (context.hasPendingException()) {
+        SpeciesMatcher species = SpeciesMatcher.create(context, regexpObject, true);
+        if (species == null) {
             return JSUndefined.INSTANCE;
         }
-
-        String flags = getFlagsString(context, regexpObject);
-        if (flags == null) {
-            return JSUndefined.INSTANCE;
-        }
-        boolean unicodeMatching = usesUnicode(flags);
-        String newFlags = flags.indexOf('y') >= 0 ? flags : flags + "y";
-
-        // ES2024 22.2.6.14 step 8: Construct splitter.
-        JSObject splitter = constructWithSpecies(context, speciesConstructor, regexpObject, newFlags);
-        if (splitter == null) {
-            return JSUndefined.INSTANCE;
-        }
+        JSObject splitter = species.matcher();
+        boolean unicodeMatching = usesUnicode(species.flags());
 
         long limit = args.length > 1 && !(args[1] instanceof JSUndefined)
                 ? JSTypeConversions.toUint32(context, args[1])
@@ -1215,6 +1194,23 @@ public final class RegExpPrototype {
             }
 
             return createIteratorResultObject(context, matchObject, false);
+        }
+    }
+
+    private record SpeciesMatcher(JSObject matcher, String flags) {
+        static SpeciesMatcher create(JSContext context, JSObject regexp, boolean sticky) {
+            // Both algorithms resolve the species before reading the flags.
+            JSValue constructor = getRegExpSpeciesConstructor(context, regexp);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            String flags = getFlagsString(context, regexp);
+            if (flags == null) {
+                return null;
+            }
+            String matcherFlags = sticky && flags.indexOf('y') < 0 ? flags + "y" : flags;
+            JSObject matcher = constructWithSpecies(context, constructor, regexp, matcherFlags);
+            return matcher == null ? null : new SpeciesMatcher(matcher, flags);
         }
     }
 }

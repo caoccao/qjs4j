@@ -119,19 +119,11 @@ public final class JSIntlListFormat extends JSObject {
         }
 
         ListPatterns patterns = getPatterns();
-
-        if (values.size() == 2) {
-            return values.get(0) + patterns.pairSep() + values.get(1);
+        int count = values.size();
+        StringBuilder result = new StringBuilder().append(values.get(0));
+        for (int index = 1; index < count; index++) {
+            result.append(patterns.separator(index, count)).append(values.get(index));
         }
-
-        // 3+ items: use start/middle/end pattern
-        int n = values.size();
-        StringBuilder result = new StringBuilder();
-        result.append(values.get(n - 2)).append(patterns.endSep()).append(values.get(n - 1));
-        for (int i = n - 3; i >= 1; i--) {
-            result.insert(0, values.get(i) + patterns.middleSep());
-        }
-        result.insert(0, values.get(0) + patterns.startSep());
         return result.toString();
     }
 
@@ -168,5 +160,14 @@ public final class JSIntlListFormat extends JSObject {
      * CLDR list format patterns: pair, start, middle, end separators.
      */
     public record ListPatterns(String pairSep, String startSep, String middleSep, String endSep) {
+        String separator(int index, int count) {
+            if (count == 2) {
+                return pairSep;
+            }
+            if (index == 1) {
+                return startSep;
+            }
+            return index == count - 1 ? endSep : middleSep;
+        }
     }
 }

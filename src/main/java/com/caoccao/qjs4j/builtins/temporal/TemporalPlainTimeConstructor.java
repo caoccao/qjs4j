@@ -33,19 +33,8 @@ public final class TemporalPlainTimeConstructor {
      * Temporal.PlainTime.compare(one, two)
      */
     public static JSValue compare(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue oneArg = JSValue.argumentOrUndefined(args, 0);
-        JSValue twoArg = JSValue.argumentOrUndefined(args, 1);
-
-        JSTemporalPlainTime firstTime = toTemporalTimeObject(context, oneArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        JSTemporalPlainTime secondTime = toTemporalTimeObject(context, twoArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        return JSNumber.of(firstTime.getIsoTime().compareTo(secondTime.getIsoTime()));
+        return TemporalReceiver.PLAIN_TIME.compare(context, args,
+                (left, right) -> left.getIsoTime().compareTo(right.getIsoTime()));
     }
 
     /**
@@ -79,6 +68,14 @@ public final class TemporalPlainTimeConstructor {
         JSValue item = JSValue.argumentOrUndefined(args, 0);
         JSValue options = JSValue.argumentOrUndefined(args, 1);
         return toTemporalTime(context, item, options);
+    }
+
+    static IsoTime optionalTime(JSContext context, JSValue[] arguments) {
+        if (arguments.length == 0 || arguments[0] instanceof JSUndefined) {
+            return IsoTime.MIDNIGHT;
+        }
+        JSTemporalPlainTime time = toTemporalTimeObject(context, arguments[0]);
+        return time == null ? null : time.getIsoTime();
     }
 
     static IsoTime readTimeArguments(JSContext context, JSValue[] args, int start) {
@@ -185,10 +182,6 @@ public final class TemporalPlainTimeConstructor {
     }
 
     public static JSTemporalPlainTime toTemporalTimeObject(JSContext context, JSValue item) {
-        JSValue result = toTemporalTime(context, item, JSUndefined.INSTANCE);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        return (JSTemporalPlainTime) result;
+        return TemporalReceiver.PLAIN_TIME.convert(context, item);
     }
 }

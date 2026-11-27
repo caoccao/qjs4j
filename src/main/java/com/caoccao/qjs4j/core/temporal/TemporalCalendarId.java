@@ -482,20 +482,8 @@ public enum TemporalCalendarId {
         if (calendarValue instanceof JSUndefined || calendarValue == null) {
             return TemporalCalendarId.ISO8601;
         }
-        if (calendarValue instanceof JSTemporalPlainDate temporalPlainDate) {
-            return temporalPlainDate.getCalendarId();
-        }
-        if (calendarValue instanceof JSTemporalPlainDateTime temporalPlainDateTime) {
-            return temporalPlainDateTime.getCalendarId();
-        }
-        if (calendarValue instanceof JSTemporalPlainMonthDay temporalPlainMonthDay) {
-            return temporalPlainMonthDay.getCalendarId();
-        }
-        if (calendarValue instanceof JSTemporalPlainYearMonth temporalPlainYearMonth) {
-            return temporalPlainYearMonth.getCalendarId();
-        }
-        if (calendarValue instanceof JSTemporalZonedDateTime temporalZonedDateTime) {
-            return temporalZonedDateTime.getCalendarId();
+        if (calendarValue instanceof JSTemporalDateValue date) {
+            return date.getCalendarId();
         }
         if (!(calendarValue instanceof JSString calendarString)) {
             context.throwTypeError("Temporal error: Calendar must be string.");

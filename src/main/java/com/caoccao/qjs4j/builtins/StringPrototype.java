@@ -87,46 +87,43 @@ public final class StringPrototype {
         return JSCall.call(context, method, object, new JSValue[]{input});
     }
 
+    private static JSValue characterAt(JSContext context, JSValue receiver, JSValue[] args, CharacterResult kind) {
+        String value = toStringCheckObject(context, receiver).value();
+        long position = integerArgument(context, args, 0, 0);
+        if (position < 0 || position >= value.length()) {
+            return switch (kind) {
+                case CHARACTER -> new JSString("");
+                case CODE_UNIT -> JSNumber.of(Double.NaN);
+                case CODE_POINT -> JSUndefined.INSTANCE;
+            };
+        }
+        int index = (int) position;
+        return switch (kind) {
+            case CHARACTER -> new JSString(String.valueOf(value.charAt(index)));
+            case CODE_UNIT -> JSNumber.of(value.charAt(index));
+            case CODE_POINT -> JSNumber.of(value.codePointAt(index));
+        };
+    }
+
     /**
      * String.prototype.charAt(index) ES2020 21.1.3.1
      */
     public static JSValue charAt(JSContext context, JSValue thisArg, JSValue[] args) {
-        String s = toStringCheckObject(context, thisArg).value();
-        long pos = integerArgument(context, args, 0, 0);
-
-        if (pos < 0 || pos >= s.length()) {
-            return new JSString("");
-        }
-
-        return new JSString(String.valueOf(s.charAt((int) pos)));
+        return characterAt(context, thisArg, args, CharacterResult.CHARACTER);
     }
 
     /**
      * String.prototype.charCodeAt(index) ES2020 21.1.3.2
      */
     public static JSValue charCodeAt(JSContext context, JSValue thisArg, JSValue[] args) {
-        String s = toStringCheckObject(context, thisArg).value();
-        long pos = integerArgument(context, args, 0, 0);
-
-        if (pos < 0 || pos >= s.length()) {
-            return JSNumber.of(Double.NaN);
-        }
-
-        return JSNumber.of(s.charAt((int) pos));
+        return characterAt(context, thisArg, args, CharacterResult.CODE_UNIT);
     }
 
     /**
      * String.prototype.codePointAt(index) ES2020 21.1.3.3
      */
     public static JSValue codePointAt(JSContext context, JSValue thisArg, JSValue[] args) {
-        String s = toStringCheckObject(context, thisArg).value();
-        long pos = integerArgument(context, args, 0, 0);
-
-        if (pos < 0 || pos >= s.length()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        return JSNumber.of(s.codePointAt((int) pos));
+        return characterAt(context, thisArg, args, CharacterResult.CODE_POINT);
     }
 
     /**
@@ -302,6 +299,11 @@ public final class StringPrototype {
                 : (long) JSTypeConversions.toInteger(context, args[index]);
     }
 
+    /**
+     * ES2024 WhiteSpace + LineTerminator predicate. Matches: TAB, VT, FF, SP, NBSP, BOM/ZWNBSP, USP (Unicode
+     * Space_Separator), LF, CR, LS, PS.
+     */
+
     private static JSValue invokeRegExpMethod(JSContext context, JSValue thisArg, JSValue[] args,
             PropertyKey methodKey) {
         if (thisArg == null || thisArg.isNullOrUndefined()) {
@@ -341,11 +343,6 @@ public final class StringPrototype {
         JSValue method = regexp.get(methodKey);
         return context.hasPendingException() ? JSUndefined.INSTANCE : callRegExpMethod(context, method, regexp, input);
     }
-
-    /**
-     * ES2024 WhiteSpace + LineTerminator predicate. Matches: TAB, VT, FF, SP, NBSP, BOM/ZWNBSP, USP (Unicode
-     * Space_Separator), LF, CR, LS, PS.
-     */
 
     /**
      * String.prototype.isWellFormed() Returns true if the string contains no unpaired surrogates.
@@ -394,6 +391,17 @@ public final class StringPrototype {
      */
     public static JSValue link(JSContext context, JSValue thisArg, JSValue[] args) {
         return createHTML(context, thisArg, args, "a", "href");
+    }
+
+    private static JSValue localeCase(JSContext context, JSValue receiver, JSValue[] args, boolean upper) {
+        JSString value = toStringCheckObject(context, receiver);
+        Locale locale = JSIntlObject.resolveLocale(context, args, 0);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return new JSString(upper
+                ? UnicodeCaseMapping.upper(context.getUnicodePropertyResolver(), value.value(), locale)
+                : UnicodeCaseMapping.lower(context.getUnicodePropertyResolver(), value.value(), locale));
     }
 
     /**
@@ -916,12 +924,7 @@ public final class StringPrototype {
      * now, this is the same as toLowerCase() (locale parameter is ignored).
      */
     public static JSValue toLocaleLowerCase(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = toStringCheckObject(context, thisArg);
-        Locale locale = JSIntlObject.resolveLocale(context, args, 0);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(UnicodeCaseMapping.lower(context.getUnicodePropertyResolver(), str.value(), locale));
+        return localeCase(context, thisArg, args, false);
     }
 
     /**
@@ -929,12 +932,7 @@ public final class StringPrototype {
      * now, this is the same as toUpperCase() (locale parameter is ignored).
      */
     public static JSValue toLocaleUpperCase(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSString str = toStringCheckObject(context, thisArg);
-        Locale locale = JSIntlObject.resolveLocale(context, args, 0);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(UnicodeCaseMapping.upper(context.getUnicodePropertyResolver(), str.value(), locale));
+        return localeCase(context, thisArg, args, true);
     }
 
     /**
@@ -1054,6 +1052,10 @@ public final class StringPrototype {
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
         return thisArg.asStringWithDownCast().map(jsString -> (JSValue) jsString)
                 .orElseGet(() -> context.throwTypeError("String.prototype.valueOf requires that 'this' be a String"));
+    }
+
+    private enum CharacterResult {
+        CHARACTER, CODE_POINT, CODE_UNIT
     }
 
     private enum SearchMode {

@@ -271,11 +271,7 @@ public final class TemporalDurationConstructor {
     }
 
     public static JSTemporalDuration toTemporalDurationObject(JSContext context, JSValue item) {
-        JSValue result = toTemporalDuration(context, item);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        return (JSTemporalDuration) result;
+        return TemporalReceiver.DURATION.convert(context, item);
     }
 
     private static boolean validateRecord(JSContext context, TemporalDuration record) {

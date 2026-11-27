@@ -30,36 +30,14 @@ public final class BigIntConstructor {
      * BigInt.asIntN(bits, bigint) ES2020 20.2.2.1 Wraps a BigInt value to a signed integer of the given bit width.
      */
     public static JSValue asIntN(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue bitsArg = JSValue.argumentOrUndefined(args, 0);
-        JSValue bigIntArg = JSValue.argumentOrUndefined(args, 1);
-        try {
-            long bits = JSTypeConversions.toIndex(context, bitsArg);
-            JSBigInt bigInt = JSTypeConversions.toBigInt(context, bigIntArg);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            return wrapBigIntSigned(bits, bigInt);
-        } catch (JSErrorException e) {
-            return context.throwError(e);
-        }
+        return truncate(context, args, true);
     }
 
     /**
      * BigInt.asUintN(bits, bigint) ES2020 20.2.2.2 Wraps a BigInt value to an unsigned integer of the given bit width.
      */
     public static JSValue asUintN(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue bitsArg = JSValue.argumentOrUndefined(args, 0);
-        JSValue bigIntArg = JSValue.argumentOrUndefined(args, 1);
-        try {
-            long bits = JSTypeConversions.toIndex(context, bitsArg);
-            JSBigInt bigInt = JSTypeConversions.toBigInt(context, bigIntArg);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            return wrapBigIntUnsigned(bits, bigInt);
-        } catch (JSErrorException e) {
-            return context.throwError(e);
-        }
+        return truncate(context, args, false);
     }
 
     /**
@@ -114,48 +92,35 @@ public final class BigIntConstructor {
         }
     }
 
-    private static JSBigInt wrapBigIntSigned(long bitsLong, JSBigInt bigInt) {
-        if (bitsLong == 0) {
-            return new JSBigInt(BigInteger.ZERO);
-        }
-        if (bitsLong > Integer.MAX_VALUE) {
-            BigInteger value = bigInt.value();
-            if (value.signum() >= 0) {
-                if ((long) value.bitLength() < bitsLong) {
-                    return bigInt;
-                }
-            } else {
-                BigInteger minAbs = value.negate().subtract(BigInteger.ONE);
-                if ((long) minAbs.bitLength() < bitsLong) {
-                    return bigInt;
-                }
+    private static JSValue truncate(JSContext context, JSValue[] args, boolean signed) {
+        JSValue bitsArg = JSValue.argumentOrUndefined(args, 0);
+        JSValue bigIntArg = JSValue.argumentOrUndefined(args, 1);
+        try {
+            long bits = JSTypeConversions.toIndex(context, bitsArg);
+            JSBigInt bigInt = JSTypeConversions.toBigInt(context, bigIntArg);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
             }
+            return wrap(bits, bigInt, signed);
+        } catch (JSErrorException e) {
+            return context.throwError(e);
         }
-        int bits = (int) bitsLong;
-        BigInteger modulus = BigInteger.ONE.shiftLeft(bits);
-        BigInteger result = bigInt.value().mod(modulus);
-        BigInteger halfModulus = BigInteger.ONE.shiftLeft(bits - 1);
-        if (result.compareTo(halfModulus) >= 0) {
-            result = result.subtract(modulus);
-        }
-        return new JSBigInt(result);
     }
 
-    private static JSBigInt wrapBigIntUnsigned(long bitsLong, JSBigInt bigInt) {
-        if (bitsLong == 0) {
+    private static JSBigInt wrap(long width, JSBigInt bigInt, boolean signed) {
+        if (width == 0) {
             return new JSBigInt(BigInteger.ZERO);
         }
-        if (bitsLong > Integer.MAX_VALUE) {
-            BigInteger value = bigInt.value();
-            if (value.signum() >= 0 && (long) value.bitLength() <= bitsLong) {
-                return bigInt;
-            }
+        BigInteger value = bigInt.value();
+        if (width > Integer.MAX_VALUE
+                && (signed ? value.bitLength() < width : value.signum() >= 0 && value.bitLength() <= width)) {
+            return bigInt;
         }
-        int bits = (int) bitsLong;
+        int bits = (int) width;
         BigInteger modulus = BigInteger.ONE.shiftLeft(bits);
-        BigInteger result = bigInt.value().mod(modulus);
-        if (result.signum() < 0) {
-            result = result.add(modulus);
+        BigInteger result = value.mod(modulus);
+        if (signed && result.testBit(bits - 1)) {
+            result = result.subtract(modulus);
         }
         return new JSBigInt(result);
     }

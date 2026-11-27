@@ -28,8 +28,7 @@ public final class TemporalDurationPrototype {
 
     private static final BigInteger MAX_ABSOLUTE_TIME_NANOSECONDS = TemporalConstants.MAX_ABSOLUTE_TIME_NANOSECONDS;
 
-    private static final TemporalReceiver<JSTemporalDuration> RECEIVER = new TemporalReceiver<>(
-            JSTemporalDuration.class, "Temporal.Duration");
+    private static final TemporalReceiver<JSTemporalDuration> RECEIVER = TemporalReceiver.DURATION;
 
     private TemporalDurationPrototype() {
     }

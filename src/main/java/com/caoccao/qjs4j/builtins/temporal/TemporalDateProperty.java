@@ -50,7 +50,8 @@ enum TemporalDateProperty {
         };
     }
 
-    <T extends JSTemporalCalendarDate> JSValue read(JSContext context, JSValue receiver, TemporalReceiver<T> type) {
+    <T extends JSObject & JSTemporalDateValue> JSValue read(JSContext context, JSValue receiver,
+            TemporalReceiver<T> type) {
         T value = type.require(context, receiver, key);
         return value == null ? JSUndefined.INSTANCE : read(value.getIsoDate(), value.getCalendarId());
     }

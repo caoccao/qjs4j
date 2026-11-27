@@ -38,19 +38,8 @@ public final class TemporalInstantConstructor {
      * Temporal.Instant.compare(one, two)
      */
     public static JSValue compare(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue oneArg = JSValue.argumentOrUndefined(args, 0);
-        JSValue twoArg = JSValue.argumentOrUndefined(args, 1);
-
-        JSTemporalInstant firstInstant = toTemporalInstantObject(context, oneArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        JSTemporalInstant secondInstant = toTemporalInstantObject(context, twoArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        return JSNumber.of(firstInstant.getEpochNanoseconds().compareTo(secondInstant.getEpochNanoseconds()));
+        return TemporalReceiver.INSTANT.compare(context, args,
+                (left, right) -> left.getEpochNanoseconds().compareTo(right.getEpochNanoseconds()));
     }
 
     /**
@@ -172,10 +161,6 @@ public final class TemporalInstantConstructor {
     }
 
     public static JSTemporalInstant toTemporalInstantObject(JSContext context, JSValue item) {
-        JSValue result = toTemporalInstant(context, item);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        return (JSTemporalInstant) result;
+        return TemporalReceiver.INSTANT.convert(context, item);
     }
 }

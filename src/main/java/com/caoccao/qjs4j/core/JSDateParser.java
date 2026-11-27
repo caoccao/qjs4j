@@ -73,6 +73,10 @@ final class JSDateParser {
         return x >= low && x <= high;
     }
 
+    private static boolean isClockComponent(Token token, boolean midnight) {
+        return token.isFixedLengthNumber(2) && isMinute(token.value) && (!midnight || token.value == 0);
+    }
+
     private static boolean isDay(int x) {
         return between(x, 1, 31);
     }
@@ -271,14 +275,12 @@ final class JSDateParser {
             if (!scanner.skipSymbol(':')) {
                 return Token.INVALID;
             }
-            if (!scanner.peek().isFixedLengthNumber(2) || !isMinute(scanner.peek().value)
-                    || (hourIs24 && scanner.peek().value > 0)) {
+            if (!isClockComponent(scanner.peek(), hourIs24)) {
                 return Token.INVALID;
             }
             time.add(scanner.next().value);
             if (scanner.skipSymbol(':')) {
-                if (!scanner.peek().isFixedLengthNumber(2) || !isMinute(scanner.peek().value)
-                        || (hourIs24 && scanner.peek().value > 0)) {
+                if (!isClockComponent(scanner.peek(), hourIs24)) {
                     return Token.INVALID;
                 }
                 time.add(scanner.next().value);

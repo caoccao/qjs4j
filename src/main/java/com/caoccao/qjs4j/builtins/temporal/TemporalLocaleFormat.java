@@ -144,6 +144,12 @@ final class TemporalLocaleFormat {
         return JSIntlObject.dateTimeFormatFormat(context, formatter, new JSValue[]{date});
     }
 
+    static <T extends JSTemporalCalendarDate> JSValue formatDate(JSContext context, JSValue receiver, JSValue[] args,
+            TemporalReceiver<T> type) {
+        T date = type.require(context, receiver, "toLocaleString");
+        return date == null ? JSUndefined.INSTANCE : formatDate(context, date, args);
+    }
+
     static JSValue formatDateTime(JSContext context, JSValue value, JSValue[] args, String defaults) {
         JSValue locales = JSValue.argumentOrUndefined(args, 0);
         JSValue options = JSValue.argumentOrUndefined(args, 1);
