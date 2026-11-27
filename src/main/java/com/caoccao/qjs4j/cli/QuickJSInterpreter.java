@@ -17,6 +17,9 @@
 package com.caoccao.qjs4j.cli;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.module.JSFileSystemModuleLoader;
+import com.caoccao.qjs4j.core.promise.JSPromise;
+import com.caoccao.qjs4j.core.promise.PromiseRejectEvent;
 import com.caoccao.qjs4j.exceptions.JSException;
 
 import java.io.IOException;

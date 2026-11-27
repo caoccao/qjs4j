@@ -18,6 +18,8 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.compilation.ast.Program;
 import com.caoccao.qjs4j.compilation.compiler.Compiler;
+import com.caoccao.qjs4j.core.error.JSStackFrame;
+import com.caoccao.qjs4j.core.promise.JSPromise;
 import com.caoccao.qjs4j.exceptions.*;
 import com.caoccao.qjs4j.vm.StackFrame;
 import com.caoccao.qjs4j.vm.VarRef;

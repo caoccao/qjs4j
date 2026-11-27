@@ -1,0 +1,98 @@
+/*
+ * Copyright (c) 2025-2026. caoccao.com Sam Cao
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.caoccao.qjs4j.core.error;
+
+import com.caoccao.qjs4j.compilation.ast.SourceLocation;
+import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.iterator.JSIteratorHelper;
+
+/**
+ * Represents a JavaScript AggregateError object. AggregateError represents an error when multiple errors need to be
+ * wrapped in a single error.
+ */
+public final class JSAggregateError extends JSError {
+
+    public static final String NAME = "AggregateError";
+
+    /**
+     * Create an AggregateError with a message.
+     */
+    public JSAggregateError(JSContext context, String message) {
+        super(context, message);
+    }
+
+    public JSAggregateError(JSContext context, String message, SourceLocation sourceLocation) {
+        super(context, message, sourceLocation);
+    }
+
+    @Override
+    public String getErrorName() {
+        return NAME;
+    }
+
+    /**
+     * Get the errors array.
+     */
+    public JSArray getErrors() {
+        return get("errors").asArray().orElseGet(() -> new JSArray(context));
+    }
+
+    public static JSValue create(JSContext context, JSValue... args) {
+        String message = "";
+
+        // Step 3: If message is not undefined, CreateMethodProperty(O, "message", ToString(message))
+        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
+            message = JSTypeConversions.toString(context, args[1]).value();
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        JSAggregateError jsAggregateError = context.createJSAggregateError(message);
+        if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
+            JSError.defineEmptyMessage(jsAggregateError, message);
+        }
+
+        // Step 4: InstallErrorCause(O, options)
+        if (args.length > 2) {
+            if (!JSError.installErrorCause(context, jsAggregateError, args[2])) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        // Step 5: Let errorsList be ? IterableToList(errors).
+        JSValue errorsArg = JSValue.argumentOrUndefined(args, 0);
+        JSArray errorsList = JSIteratorHelper.iterableToList(context, errorsArg);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        jsAggregateError.defineProperty(PropertyKey.ERRORS,
+                PropertyDescriptor.dataDescriptor(errorsList, PropertyDescriptor.DataState.ConfigurableWritable));
+
+        JSError.captureStackTraceBelowNewTarget(context, jsAggregateError);
+        return jsAggregateError;
+    }
+
+    public static JSObject createPrototype(JSContext context, JSValue... args) {
+        JSObject constructor = createNativeErrorPrototype(context, NAME, 2,
+                (ctx, receiver, arguments) -> create(ctx, arguments));
+        if (context.getGlobalObject().get(JSError.NAME) instanceof JSObject parentConstructor) {
+            constructor.setPrototype(parentConstructor);
+        }
+        return constructor;
+    }
+}

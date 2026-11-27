@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.promise.JSPromise;
+
 import java.util.ArrayDeque;
 
 /**

@@ -18,6 +18,8 @@ package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.disposable.JSAsyncDisposableStack;
+import com.caoccao.qjs4j.core.disposable.JSDisposableStack;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 

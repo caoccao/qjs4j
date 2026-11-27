@@ -16,7 +16,32 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.builtins.*;
+import com.caoccao.qjs4j.builtins.array.ArrayConstructor;
+import com.caoccao.qjs4j.builtins.array.ArrayPrototype;
+import com.caoccao.qjs4j.builtins.array.TypedArrayPrototype;
+import com.caoccao.qjs4j.builtins.array.Uint8ArrayBase64Hex;
+import com.caoccao.qjs4j.builtins.buffer.ArrayBufferPrototype;
+import com.caoccao.qjs4j.builtins.buffer.DataViewPrototype;
+import com.caoccao.qjs4j.builtins.buffer.SharedArrayBufferPrototype;
+import com.caoccao.qjs4j.builtins.collection.MapPrototype;
+import com.caoccao.qjs4j.builtins.collection.SetPrototype;
+import com.caoccao.qjs4j.builtins.collection.WeakMapPrototype;
+import com.caoccao.qjs4j.builtins.collection.WeakSetPrototype;
+import com.caoccao.qjs4j.builtins.date.DateConstructor;
+import com.caoccao.qjs4j.builtins.date.DatePrototype;
+import com.caoccao.qjs4j.builtins.iterator.GeneratorPrototype;
+import com.caoccao.qjs4j.builtins.iterator.IteratorPrototype;
+import com.caoccao.qjs4j.builtins.number.BigIntPrototype;
+import com.caoccao.qjs4j.builtins.number.MathObject;
+import com.caoccao.qjs4j.builtins.number.NumberPrototype;
+import com.caoccao.qjs4j.builtins.object.FunctionPrototype;
+import com.caoccao.qjs4j.builtins.object.ObjectConstructor;
+import com.caoccao.qjs4j.builtins.object.ObjectPrototype;
+import com.caoccao.qjs4j.builtins.promise.PromiseConstructor;
+import com.caoccao.qjs4j.builtins.promise.PromisePrototype;
+import com.caoccao.qjs4j.builtins.regexp.RegExpPrototype;
+import com.caoccao.qjs4j.builtins.text.StringConstructor;
+import com.caoccao.qjs4j.builtins.text.StringPrototype;
 import com.caoccao.qjs4j.core.JSGlobalObject.GlobalFunction;
 
 import java.util.function.Consumer;

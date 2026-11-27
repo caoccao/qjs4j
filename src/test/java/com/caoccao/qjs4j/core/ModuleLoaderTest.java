@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.buffer.JSUint8Array;
+import com.caoccao.qjs4j.core.module.ModuleFileTest;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
@@ -421,9 +423,25 @@ public class ModuleLoaderTest extends ModuleFileTest {
                 .as("an unresolvable name is answered, not thrown, and leaves no exception behind").isFalse();
     }
 
+    @Test
+    public void testWithoutALoaderAPathReadDirectlyIsStillRefused() throws IOException {
+        // The loader's own entry points, below specifier resolution, also refuse.
+        Path payload = moduleDirectory.resolve("payload.txt");
+        Files.writeString(payload, "data");
+        try (JSRuntime runtime = new JSRuntime(); JSContext loaderContext = runtime.createContext()) {
+            assertThat(runtime.getOptions().getModuleLoader()).isNull();
+            assertThatThrownBy(() -> loaderContext.moduleLoader().readModuleText(payload.toString()))
+                    .isInstanceOf(IOException.class).hasMessage("No module loader is installed");
+            assertThatThrownBy(() -> loaderContext.moduleLoader().loadJSDynamicImportModule(payload.toString(),
+                    new HashSet<>(), Map.of("type", "text"))).isInstanceOf(JSException.class)
+                    .hasMessageContaining("Cannot find module");
+        }
+    }
+
     private String write(String fileName, String content) throws IOException {
         Path path = moduleDirectory.resolve(fileName);
         Files.writeString(path, content, StandardCharsets.UTF_8);
         return path.toString();
     }
+
 }

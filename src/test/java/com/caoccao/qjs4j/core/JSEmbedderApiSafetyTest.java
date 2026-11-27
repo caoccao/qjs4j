@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.BaseTest;
+import com.caoccao.qjs4j.core.promise.JSPromise;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import org.junit.jupiter.api.Test;
 

@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.buffer.JSTypedArray;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 
 import java.util.*;

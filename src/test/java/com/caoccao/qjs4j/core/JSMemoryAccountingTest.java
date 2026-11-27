@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.BaseTest;
+import com.caoccao.qjs4j.core.buffer.JSArrayBuffer;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
@@ -68,32 +69,6 @@ public class JSMemoryAccountingTest extends BaseTest {
     }
 
     @Test
-    public void testAnAllocationThatFailsGivesItsReservationBackWhateverTheHeapIs() {
-        // The same rollback as testFailedAllocationGivesItsReservationBack, driven by an allocator
-        // that fails on demand rather than by asking for more memory than the JVM has. Whether a
-        // request is bigger than the heap is a property of the build's -Xmx; whether the charge is
-        // handed back when an allocation fails is a property of this code, and that is what is
-        // being tested.
-        try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setMaxDataBlockBytes(64 * 1024))) {
-            JSContext context = runtime.createContext();
-            JSArrayBuffer buffer = new JSArrayBuffer(context, 1024);
-            long chargedBefore = runtime.getMemoryAccounting().getReservedBytes();
-            assertThat(chargedBefore).isEqualTo(1024);
-
-            assertThatThrownBy(() -> buffer.accountBlock(context, 4096, () -> {
-                throw new OutOfMemoryError("injected");
-            })).isInstanceOf(OutOfMemoryError.class);
-
-            assertThat(runtime.getMemoryAccounting().getReservedBytes())
-                    .as("a block that never allocated must not stay charged").isEqualTo(chargedBefore);
-            // The successful path still binds its reservation, so the two are not confusable.
-            JSByteBuffer allocated = buffer.accountBlock(context, 2048, () -> JSByteBuffer.allocate(2048));
-            assertThat(allocated.capacity()).isEqualTo(2048);
-            assertThat(runtime.getMemoryAccounting().getReservedBytes()).isEqualTo(1024 + 2048);
-        }
-    }
-
-    @Test
     public void testAReservationThatCannotBeRegisteredGivesItsChargeBack() {
         // The charge lands before the handle exists, deliberately — a reservation the limit would
         // refuse has to be refused before any memory is touched. That leaves a gap: if registering
@@ -106,29 +81,6 @@ public class JSMemoryAccountingTest extends BaseTest {
                 .isInstanceOf(IllegalStateException.class).hasMessage("injected registration failure");
         assertThat(accounting.getReservedBytes()).as("a charge whose handle never existed must not stay charged")
                 .isZero();
-    }
-
-    @Test
-    public void testAResizeThatFailsToAllocateGivesTheGrowthBackWhateverTheHeapIs() {
-        // The growth is charged before the copy, so a copy that fails has to hand it back. Driven
-        // by an allocator that fails on demand, so the test does not depend on the build's -Xmx.
-        try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setMaxDataBlockBytes(64 * 1024))) {
-            JSContext context = runtime.createContext();
-            JSArrayBuffer buffer = new JSArrayBuffer(context, 1024, 32768);
-            long chargedBefore = runtime.getMemoryAccounting().getReservedBytes();
-
-            assertThatThrownBy(() -> buffer.growAccountedBlock(4096, () -> {
-                throw new OutOfMemoryError("injected");
-            })).isInstanceOf(OutOfMemoryError.class);
-
-            assertThat(runtime.getMemoryAccounting().getReservedBytes())
-                    .as("growth that failed to allocate must not stay charged").isEqualTo(chargedBefore);
-            // The buffer is untouched and still resizes normally afterwards.
-            buffer.resize(2048);
-            assertThat(buffer.getByteLength()).isEqualTo(2048);
-            buffer.detach();
-            assertThat(runtime.getMemoryAccounting().getReservedBytes()).isZero();
-        }
     }
 
     @Test

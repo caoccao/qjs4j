@@ -29,6 +29,7 @@ import com.caoccao.javet.values.reference.V8ValueBooleanObject;
 import com.caoccao.javet.values.reference.V8ValueLongObject;
 import com.caoccao.javet.values.reference.V8ValuePromise;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.promise.JSPromise;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

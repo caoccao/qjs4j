@@ -16,7 +16,10 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.module.ModuleSourceScan;
+import com.caoccao.qjs4j.core.module.ModuleSourceText;
 import com.caoccao.qjs4j.exceptions.JSException;
+
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;

@@ -16,8 +16,9 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.compilation.compiler.Compiler;
+import com.caoccao.qjs4j.core.error.JSError;
+import com.caoccao.qjs4j.core.module.*;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.exceptions.JSException;

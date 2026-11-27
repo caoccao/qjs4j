@@ -17,7 +17,7 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.ImportExpression;
-import com.caoccao.qjs4j.core.JSImportDeferMarker;
+import com.caoccao.qjs4j.core.module.JSImportDeferMarker;
 import com.caoccao.qjs4j.vm.Opcode;
 
 final class ImportExpressionCompiler {

@@ -16,8 +16,9 @@
 
 package com.caoccao.qjs4j.test262;
 
-import com.caoccao.qjs4j.builtins.AtomicsObject;
+import com.caoccao.qjs4j.builtins.buffer.AtomicsObject;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.promise.JSPromise;
 
 import java.util.List;
 import java.util.concurrent.BlockingQueue;

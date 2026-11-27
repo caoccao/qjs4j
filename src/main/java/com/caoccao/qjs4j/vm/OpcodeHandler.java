@@ -16,9 +16,9 @@
 
 package com.caoccao.qjs4j.vm;
 
-import com.caoccao.qjs4j.builtins.BigIntConstructor;
-import com.caoccao.qjs4j.builtins.SymbolConstructor;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.error.JSStackFrame;
+import com.caoccao.qjs4j.core.regexp.JSRegExp;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSTerminationException;

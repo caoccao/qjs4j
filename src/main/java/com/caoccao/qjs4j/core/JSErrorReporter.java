@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
+import com.caoccao.qjs4j.core.error.*;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.vm.StackFrame;
 import com.caoccao.qjs4j.vm.VirtualMachine;
@@ -37,11 +38,6 @@ import java.util.Set;
  * {@code context.throwTypeError(...)} call sites in builtins and the VM are untouched.
  */
 final class JSErrorReporter {
-    /**
-     * V8's default {@code Error.stackTraceLimit}.
-     */
-    static final int DEFAULT_STACK_TRACE_LIMIT = 10;
-    static final PropertyKey STACK_TRACE_LIMIT = PropertyKey.fromString("stackTraceLimit");
     private static final Set<String> STATIC_INITIALIZER_NAMES = Set.of("<static initializer>",
             "<static field initializer>");
     private final JSContext context;
@@ -230,9 +226,9 @@ final class JSErrorReporter {
     private long getStackTraceLimit() {
         JSObject errorConstructor = context.getCachedErrorConstructor();
         if (errorConstructor == null) {
-            return DEFAULT_STACK_TRACE_LIMIT;
+            return JSError.DEFAULT_STACK_TRACE_LIMIT;
         }
-        if (!(errorConstructor.getOwnDataPropertyForDiagnostics(STACK_TRACE_LIMIT) instanceof JSNumber limit)) {
+        if (!(errorConstructor.getOwnDataPropertyForDiagnostics(JSError.STACK_TRACE_LIMIT) instanceof JSNumber limit)) {
             return -1;
         }
         double value = limit.value();

@@ -19,7 +19,7 @@ package com.caoccao.qjs4j.compilation.ast;
 import com.caoccao.qjs4j.BaseTest;
 import com.caoccao.qjs4j.core.JSBytecodeFunction;
 import com.caoccao.qjs4j.core.JSNumber;
-import com.caoccao.qjs4j.core.JSPromise;
+import com.caoccao.qjs4j.core.promise.JSPromise;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

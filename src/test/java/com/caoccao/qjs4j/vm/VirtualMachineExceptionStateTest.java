@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.vm;
 
 import com.caoccao.qjs4j.BaseTest;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.error.JSError;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

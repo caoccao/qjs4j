@@ -16,6 +16,9 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.module.ModuleSourceScan;
+import com.caoccao.qjs4j.core.module.ModuleSourceText;
+import com.caoccao.qjs4j.core.promise.JSPromise;
 import com.caoccao.qjs4j.exceptions.JSException;
 
 import java.util.*;

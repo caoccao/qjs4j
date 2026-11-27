@@ -16,7 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.builtins.NumberPrototype;
+import com.caoccao.qjs4j.builtins.number.NumberPrototype;
+import com.caoccao.qjs4j.core.regexp.JSRegExp;
 import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 
 /**

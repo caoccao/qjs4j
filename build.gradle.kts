@@ -394,8 +394,6 @@ val packageCoverageFloors = mapOf(
     // locked half is only reached through its package-private entry points. Neither run covers
     // both; the union across the matrix does.
     "com/caoccao/qjs4j/utils" to ("0.60" to "0.41"),
-    "com/caoccao/qjs4j/core" to ("0.68" to "0.53"),
-    "com/caoccao/qjs4j/builtins" to ("0.60" to "0.53"),
 )
 
 // The classes an embedder's safety actually rests on: lifecycle, resource limits, the diagnostic
@@ -417,10 +415,10 @@ val criticalClassLineFloors = mapOf(
     "com/caoccao/qjs4j/exceptions/JSVirtualMachineException" to "0.80",
     "com/caoccao/qjs4j/cli/REPL" to "0.80",
     "com/caoccao/qjs4j/cli/QuickJSInterpreter" to "0.85",
-    "com/caoccao/qjs4j/core/JSWeakSet" to "0.75",
+    "com/caoccao/qjs4j/core/collection/JSWeakSet" to "0.75",
     "com/caoccao/qjs4j/core/JSObject" to "0.75",
-    "com/caoccao/qjs4j/core/JSWeakMap" to "0.70",
-    "com/caoccao/qjs4j/core/JSArrayBuffer" to "0.70",
+    "com/caoccao/qjs4j/core/collection/JSWeakMap" to "0.70",
+    "com/caoccao/qjs4j/core/buffer/JSArrayBuffer" to "0.70",
     "com/caoccao/qjs4j/utils/ByteArrayAtomics" to "0.65",
     "com/caoccao/qjs4j/utils/DynamicBuffer" to "0.70",
     // The realm collaborators JSContext was decomposed into. A package floor cannot protect any of
@@ -468,7 +466,36 @@ val criticalClassBranchFloors = mapOf(
     "com/caoccao/qjs4j/core/RealmIntrinsics" to "0.55",
 )
 
+// Keep the original core and built-in coverage floors across their new subpackages.
+// Temporal already had separate packages and was outside both original measurements.
+val subsystemCoverageChecks = mapOf(
+    "core" to ("0.68" to "0.53"),
+    "builtins" to ("0.60" to "0.53"),
+).map { (subsystem, floors) ->
+    tasks.register<JacocoCoverageVerification>("jacoco${subsystem.replaceFirstChar { it.uppercase() }}CoverageVerification") {
+        dependsOn(tasks.named("jacocoTestReport"))
+        executionData(tasks.test.get())
+        classDirectories.setFrom(sourceSets.main.get().output.asFileTree.matching {
+            include("com/caoccao/qjs4j/$subsystem/**")
+            exclude("com/caoccao/qjs4j/$subsystem/temporal/**")
+        })
+        violationRules {
+            rule {
+                limit {
+                    counter = "LINE"
+                    minimum = floors.first.toBigDecimal()
+                }
+                limit {
+                    counter = "BRANCH"
+                    minimum = floors.second.toBigDecimal()
+                }
+            }
+        }
+    }
+}
+
 tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
+    dependsOn(subsystemCoverageChecks)
     dependsOn(tasks.named("test"))
     // The report is the diagnostic for this task's failure: it is what says which package or class
     // crossed a floor. The two were siblings, and a command line naming both imposes no order on

@@ -16,6 +16,11 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.buffer.IJSArrayBuffer;
+import com.caoccao.qjs4j.core.buffer.JSArrayBuffer;
+import com.caoccao.qjs4j.core.buffer.JSDataView;
+import com.caoccao.qjs4j.core.buffer.JSSharedArrayBuffer;
+import com.caoccao.qjs4j.core.regexp.JSRegExp;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.exceptions.JSException;
 

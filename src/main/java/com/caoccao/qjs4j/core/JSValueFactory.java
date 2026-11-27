@@ -16,6 +16,17 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.buffer.*;
+import com.caoccao.qjs4j.core.collection.JSMap;
+import com.caoccao.qjs4j.core.collection.JSSet;
+import com.caoccao.qjs4j.core.collection.JSWeakMap;
+import com.caoccao.qjs4j.core.collection.JSWeakSet;
+import com.caoccao.qjs4j.core.date.JSDate;
+import com.caoccao.qjs4j.core.disposable.JSDisposableStack;
+import com.caoccao.qjs4j.core.error.*;
+import com.caoccao.qjs4j.core.promise.JSPromise;
+import com.caoccao.qjs4j.core.regexp.JSRegExp;
+
 /**
  * Allocates the realm's built-in objects with their prototypes already attached.
  * <p>

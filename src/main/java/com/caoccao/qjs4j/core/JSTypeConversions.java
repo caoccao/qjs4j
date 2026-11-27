@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.builtins.NumberPrototype;
+import com.caoccao.qjs4j.builtins.number.NumberPrototype;
 import com.caoccao.qjs4j.exceptions.*;
 
 import java.math.BigDecimal;
@@ -129,7 +129,7 @@ public final class JSTypeConversions {
         return new BigDecimal(bigInt).compareTo(new BigDecimal(number));
     }
 
-    static boolean hasDecimalDigits(String str, int index) {
+    public static boolean hasDecimalDigits(String str, int index) {
         int length = str.length();
         boolean hasIntegerDigits = false;
         while (index < length && isAsciiDigit(str.charAt(index))) {

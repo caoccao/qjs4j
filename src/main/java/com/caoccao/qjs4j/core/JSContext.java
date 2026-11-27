@@ -16,10 +16,18 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
+import com.caoccao.qjs4j.core.buffer.*;
+import com.caoccao.qjs4j.core.collection.*;
+import com.caoccao.qjs4j.core.date.JSDate;
+import com.caoccao.qjs4j.core.disposable.JSDisposableStack;
+import com.caoccao.qjs4j.core.error.*;
+import com.caoccao.qjs4j.core.promise.IJSPromiseRejectCallback;
+import com.caoccao.qjs4j.core.promise.JSPromise;
+import com.caoccao.qjs4j.core.regexp.JSRegExp;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.exceptions.JSException;
+import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import com.caoccao.qjs4j.unicode.UnicodePropertyResolver;
 import com.caoccao.qjs4j.vm.VirtualMachine;
 
@@ -185,7 +193,7 @@ public final class JSContext implements AutoCloseable {
         errorReporter.captureStackTrace(error);
     }
 
-    boolean captureStackTrace(JSObject target, JSObject skipFunction) {
+    public boolean captureStackTrace(JSObject target, JSObject skipFunction) {
         return errorReporter.captureStackTrace(target, skipFunction);
     }
 

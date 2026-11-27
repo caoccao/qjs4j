@@ -16,6 +16,11 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.buffer.JSDataView;
+import com.caoccao.qjs4j.core.buffer.JSTypedArray;
+import com.caoccao.qjs4j.core.date.JSDate;
+import com.caoccao.qjs4j.core.error.JSError;
+import com.caoccao.qjs4j.core.regexp.JSRegExp;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import com.caoccao.qjs4j.vm.StackFrame;
@@ -666,15 +671,12 @@ public non-sealed class JSObject implements JSValue {
      * Own data properties only. This runs while an error is already being constructed, so a {@code constructor} or
      * {@code name} getter must not execute re-entrantly at an already-failing moment — it could itself throw and
      * overwrite the exception being reported.
-     * <p>
-     * Package-private so {@link JSArray} can name the receiver the same way when it reports a blocked length
-     * truncation.
      *
      * @param forDelete
      *            true for a delete error, which uses a different message shape
      * @return a description built without running any script
      */
-    String getObjectDescriptionForError(boolean forDelete) {
+    protected final String getObjectDescriptionForError(boolean forDelete) {
         // A function is named by its source text: `function 'src'` in an assignment error, bare in a delete error
         // (V8's "Cannot delete property 'prototype' of function f(){}").
         if (this instanceof JSFunction func) {

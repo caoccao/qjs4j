@@ -17,7 +17,7 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 import com.caoccao.qjs4j.BaseJavetTest;
-import com.caoccao.qjs4j.core.PromiseRejectEvent;
+import com.caoccao.qjs4j.core.promise.PromiseRejectEvent;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

@@ -20,6 +20,8 @@ import com.caoccao.qjs4j.compilation.lexer.Token;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.core.ModuleLinker.LinkedExportNameRequest;
 import com.caoccao.qjs4j.core.ModuleLinker.LinkedModuleRequest;
+import com.caoccao.qjs4j.core.module.ModuleSourceScan;
+
 import java.util.*;
 
 /** Reads dependency requests and their original source positions before linking a module. */

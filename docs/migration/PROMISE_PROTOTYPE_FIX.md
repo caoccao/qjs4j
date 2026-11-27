@@ -110,7 +110,7 @@ This fix enables:
 
 ## Files Modified
 
-1. **src/main/java/com/caoccao/qjs4j/builtins/PromiseConstructor.java**
+1. **src/main/java/com/caoccao/qjs4j/builtins/promise/PromiseConstructor.java**
    - Added `getPromisePrototype()` helper method
    - Added `createPromise()` helper method
    - Updated 11 instances of `new JSPromise()` to `createPromise(context)`

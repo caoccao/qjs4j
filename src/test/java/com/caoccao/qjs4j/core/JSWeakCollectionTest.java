@@ -17,6 +17,9 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.BaseJavetTest;
+import com.caoccao.qjs4j.core.collection.JSWeakMap;
+import com.caoccao.qjs4j.core.collection.JSWeakSet;
+import com.caoccao.qjs4j.core.error.JSError;
 import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 import org.junit.jupiter.api.Test;
 

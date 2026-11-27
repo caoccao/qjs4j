@@ -19,14 +19,16 @@ package com.caoccao.qjs4j.core;
 import java.util.IdentityHashMap;
 
 /** Storage shared by WeakMap and WeakSet. Each collection owns its entries for immortal well-known symbols. */
-abstract class JSWeakCollection extends JSObject {
+public abstract class JSWeakCollection extends JSObject {
+    /** The value held for a WeakSet membership. */
+    protected static final JSValue PRESENT = JSBoolean.TRUE;
     private IdentityHashMap<JSSymbol, JSValue> wellKnownValues;
 
-    JSWeakCollection(JSContext context) {
+    protected JSWeakCollection(JSContext context) {
         super(context);
     }
 
-    final boolean deleteEntry(JSValue key) {
+    protected final boolean deleteEntry(JSValue key) {
         context.getRuntime().releaseDeadWeakCollectionEntries();
         if (key instanceof JSSymbol symbol && symbol.isWellKnown()) {
             return wellKnownValues != null && wellKnownValues.remove(symbol) != null;
@@ -35,7 +37,7 @@ abstract class JSWeakCollection extends JSObject {
         return entries != null && entries.remove(this);
     }
 
-    final JSValue getEntry(JSValue key) {
+    protected final JSValue getEntry(JSValue key) {
         context.getRuntime().releaseDeadWeakCollectionEntries();
         if (key instanceof JSSymbol symbol && symbol.isWellKnown()) {
             return wellKnownValues == null ? null : wellKnownValues.get(symbol);
@@ -44,7 +46,7 @@ abstract class JSWeakCollection extends JSObject {
         return entries == null ? null : entries.get(this);
     }
 
-    final boolean putEntry(JSValue key, JSValue value) {
+    protected final boolean putEntry(JSValue key, JSValue value) {
         JSRuntime runtime = context.getRuntime();
         runtime.releaseDeadWeakCollectionEntries();
         if (key instanceof JSSymbol symbol && symbol.isWellKnown()) {

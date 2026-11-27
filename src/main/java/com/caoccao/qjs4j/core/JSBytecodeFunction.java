@@ -16,6 +16,10 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.iterator.AsyncGeneratorExecution;
+import com.caoccao.qjs4j.core.iterator.JSGenerator;
+import com.caoccao.qjs4j.core.iterator.JSGeneratorState;
+import com.caoccao.qjs4j.core.promise.JSPromise;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import com.caoccao.qjs4j.vm.Bytecode;
 import com.caoccao.qjs4j.vm.StackFrame;

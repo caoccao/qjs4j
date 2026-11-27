@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.exceptions;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.error.*;
 
 public enum JSErrorType {
     AggregateError(JSAggregateError::createPrototype),

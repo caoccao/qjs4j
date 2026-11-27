@@ -157,9 +157,9 @@ view `VarHandle`s, which `Atomics` depends on.
 
 qjs4j is organized into modular packages:
 
-- **core**: Runtime components (JSValue types, JSContext, JSRuntime)
+- **core** contains the value hierarchy, runtime, context, and realm state. Subpackages group buffers, collections, errors, internationalization, module loading and parsing, and other runtime features.
 - **vm**: Virtual machine with bytecode execution and stack management
-- **builtins**: JavaScript built-in objects and prototype methods
+- **builtins** groups JavaScript constructors, prototypes, and their shared operations by family. For example, `builtins.array` contains the array and typed array operations, and `builtins.iterator` contains iterators and generators.
 - **compiler**: Parser, lexer, bytecode compiler, and AST
 
 Key technical features:

@@ -16,6 +16,11 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.buffer.JSArrayBuffer;
+import com.caoccao.qjs4j.core.module.IJSModuleLoader;
+import com.caoccao.qjs4j.core.module.ModuleSourceScan;
+import com.caoccao.qjs4j.core.module.ModuleSourceText;
+import com.caoccao.qjs4j.core.promise.JSPromise;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;

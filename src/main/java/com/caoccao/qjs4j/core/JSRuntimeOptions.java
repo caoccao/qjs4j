@@ -16,7 +16,9 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.builtins.AtomicsObject;
+import com.caoccao.qjs4j.builtins.buffer.AtomicsObject;
+import com.caoccao.qjs4j.core.module.IJSModuleLoader;
+import com.caoccao.qjs4j.core.module.JSFileSystemModuleLoader;
 
 import java.util.Objects;
 

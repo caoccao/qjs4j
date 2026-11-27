@@ -16,9 +16,12 @@
 
 package com.caoccao.qjs4j.test262;
 
-import com.caoccao.qjs4j.builtins.AtomicsObject;
+import com.caoccao.qjs4j.builtins.buffer.AtomicsObject;
 import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.buffer.JSArrayBuffer;
+import com.caoccao.qjs4j.core.error.JSError;
+import com.caoccao.qjs4j.core.module.JSFileSystemModuleLoader;
 import com.caoccao.qjs4j.exceptions.*;
 import com.caoccao.qjs4j.test262.harness.HarnessLoader;
 

@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.vm;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.error.JSError;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 /** Bytecode operations on indexed, named, private, and super properties. */

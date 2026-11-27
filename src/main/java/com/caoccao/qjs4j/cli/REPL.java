@@ -17,11 +17,11 @@
 package com.caoccao.qjs4j.cli;
 
 import com.caoccao.qjs4j.core.JSContext;
-import com.caoccao.qjs4j.core.JSFileSystemModuleLoader;
 import com.caoccao.qjs4j.core.JSRuntime;
 import com.caoccao.qjs4j.core.JSRuntimeOptions;
 import com.caoccao.qjs4j.core.JSUndefined;
 import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.module.JSFileSystemModuleLoader;
 import com.caoccao.qjs4j.exceptions.JSTerminationException;
 
 import java.io.*;

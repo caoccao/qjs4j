@@ -15,7 +15,7 @@
  */
 
 // Generated CLDR data: Copyright © 1991-2025 Unicode, Inc. See LICENSE-UNICODE.
-package com.caoccao.qjs4j.core;
+package com.caoccao.qjs4j.core.intl;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

@@ -17,9 +17,9 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 import com.caoccao.qjs4j.BaseJavetTest;
-import com.caoccao.qjs4j.core.JSPromise;
 import com.caoccao.qjs4j.core.JSTypeConversions;
 import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.promise.JSPromise;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

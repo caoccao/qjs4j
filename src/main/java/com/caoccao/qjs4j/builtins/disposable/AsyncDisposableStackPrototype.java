@@ -1,0 +1,84 @@
+/*
+ * Copyright (c) 2025-2026. caoccao.com Sam Cao
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.caoccao.qjs4j.builtins.disposable;
+
+import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.disposable.JSAsyncDisposableStack;
+import com.caoccao.qjs4j.core.promise.JSPromise;
+
+/**
+ * Implementation of AsyncDisposableStack.prototype methods.
+ */
+public final class AsyncDisposableStackPrototype {
+    private AsyncDisposableStackPrototype() {
+    }
+
+    public static JSValue adopt(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSAsyncDisposableStack stack)) {
+            return context.throwTypeError("AsyncDisposableStack.prototype.adopt called on non-AsyncDisposableStack");
+        }
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
+        JSValue onDispose = JSValue.argumentOrUndefined(args, 1);
+        return stack.adopt(context, value, onDispose);
+    }
+
+    public static JSValue defer(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSAsyncDisposableStack stack)) {
+            return context.throwTypeError("AsyncDisposableStack.prototype.defer called on non-AsyncDisposableStack");
+        }
+        JSValue onDispose = JSValue.argumentOrUndefined(args, 0);
+        return stack.defer(context, onDispose);
+    }
+
+    public static JSValue disposeAsync(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSAsyncDisposableStack stack)) {
+            JSPromise rejectedPromise = context.createJSPromise();
+            JSValue error = context
+                    .throwTypeError("AsyncDisposableStack.prototype.disposeAsync called on non-AsyncDisposableStack");
+            if (context.hasPendingException()) {
+                context.clearPendingException();
+            }
+            rejectedPromise.reject(error);
+            return rejectedPromise;
+        }
+        JSValue completionError = args.length > 0 && !args[0].isUndefined() ? args[0] : null;
+        return stack.disposeAsync(context, completionError);
+    }
+
+    public static JSValue getDisposed(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSAsyncDisposableStack stack)) {
+            return context
+                    .throwTypeError("get AsyncDisposableStack.prototype.disposed called on non-AsyncDisposableStack");
+        }
+        return JSBoolean.valueOf(stack.isDisposed());
+    }
+
+    public static JSValue move(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSAsyncDisposableStack stack)) {
+            return context.throwTypeError("AsyncDisposableStack.prototype.move called on non-AsyncDisposableStack");
+        }
+        return stack.move(context);
+    }
+
+    public static JSValue use(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSAsyncDisposableStack stack)) {
+            return context.throwTypeError("AsyncDisposableStack.prototype.use called on non-AsyncDisposableStack");
+        }
+        JSValue value = JSValue.argumentOrUndefined(args, 0);
+        return stack.use(context, value);
+    }
+}

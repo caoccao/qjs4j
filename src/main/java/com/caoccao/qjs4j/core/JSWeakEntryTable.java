@@ -49,10 +49,6 @@ import java.util.List;
  * reachable from a {@link JSContext} — free of any synchronisation and free of a background thread reaching into it.
  */
 final class JSWeakEntryTable {
-    /**
-     * The value stored for a {@code WeakSet} membership, which has no value of its own.
-     */
-    static final JSValue PRESENT = JSBoolean.TRUE;
 
     // Most keys belong to a single collection. Allocate a list only when a second live owner uses the same key.
     private Entry first;
@@ -102,7 +98,7 @@ final class JSWeakEntryTable {
      * @param owner
      *            the owning {@code WeakMap} or {@code WeakSet}
      * @param value
-     *            the value to store; {@link #PRESENT} for a set
+     *            the value to store; {@link JSWeakCollection#PRESENT} for a set
      * @param deadOwners
      *            the runtime's queue, which the new entry registers itself with
      */

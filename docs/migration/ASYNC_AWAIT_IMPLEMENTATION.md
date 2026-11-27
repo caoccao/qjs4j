@@ -195,7 +195,7 @@ These features will be addressed in Phase 16.3.
 10. `src/main/java/com/caoccao/qjs4j/core/JSFunction.java`
 11. `src/main/java/com/caoccao/qjs4j/core/JSObject.java` (StackOverflow fix)
 12. `src/main/java/com/caoccao/qjs4j/core/JSTypeConversions.java` (StackOverflow fix)
-13. `src/main/java/com/caoccao/qjs4j/builtins/FunctionPrototype.java` (toString fix)
+13. `src/main/java/com/caoccao/qjs4j/builtins/object/FunctionPrototype.java` (toString fix)
 14. `docs/migration/MIGRATION_STATUS.md`
 
 ## Files Deleted

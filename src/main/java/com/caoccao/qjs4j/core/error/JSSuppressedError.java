@@ -1,0 +1,106 @@
+/*
+ * Copyright (c) 2025-2026. caoccao.com Sam Cao
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.caoccao.qjs4j.core.error;
+
+import com.caoccao.qjs4j.compilation.ast.SourceLocation;
+import com.caoccao.qjs4j.core.*;
+
+/**
+ * Represents a JavaScript SuppressedError object. SuppressedError is used when an error is suppressed in favor of
+ * another error, typically in cleanup/dispose operations.
+ */
+public final class JSSuppressedError extends JSError {
+
+    public static final String NAME = "SuppressedError";
+
+    /**
+     * Create a SuppressedError with a message.
+     */
+    public JSSuppressedError(JSContext context, String message) {
+        super(context, message);
+    }
+
+    public JSSuppressedError(JSContext context, String message, SourceLocation sourceLocation) {
+        super(context, message, sourceLocation);
+    }
+
+    /**
+     * Get the main error.
+     */
+    public JSValue getError() {
+        return get(PropertyKey.ERROR);
+    }
+
+    @Override
+    public String getErrorName() {
+        return NAME;
+    }
+
+    /**
+     * Get the suppressed error.
+     */
+    public JSValue getSuppressed() {
+        return get(PropertyKey.SUPPRESSED);
+    }
+
+    public static JSValue create(JSContext context, JSValue... args) {
+        // SuppressedError(error, suppressed, message)
+        // Step 3: If message is not undefined, convert to string and create "message" property
+        boolean hasMessage = args.length > 2 && !(args[2] instanceof JSUndefined);
+        String messageStr = null;
+        if (hasMessage) {
+            messageStr = JSTypeConversions.toString(context, args[2]).value();
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        // Create the error object without message (we'll add it manually in the right order)
+        JSSuppressedError jsSuppressedError = context.createJSSuppressedError("");
+
+        // Per spec: property creation order is message, error, suppressed
+        // Step 3b: CreateNonEnumerableDataPropertyOrThrow(O, "message", messageString)
+        if (hasMessage) {
+            jsSuppressedError.defineProperty(PropertyKey.MESSAGE, PropertyDescriptor
+                    .dataDescriptor(new JSString(messageStr), PropertyDescriptor.DataState.ConfigurableWritable));
+        }
+
+        // Step 4: CreateNonEnumerableDataPropertyOrThrow(O, "error", error)
+        JSValue error = JSValue.argumentOrUndefined(args, 0);
+        jsSuppressedError.defineProperty(PropertyKey.ERROR,
+                PropertyDescriptor.dataDescriptor(error, PropertyDescriptor.DataState.ConfigurableWritable));
+
+        // Step 5: CreateNonEnumerableDataPropertyOrThrow(O, "suppressed", suppressed)
+        JSValue suppressed = JSValue.argumentOrUndefined(args, 1);
+        jsSuppressedError.defineProperty(PropertyKey.SUPPRESSED,
+                PropertyDescriptor.dataDescriptor(suppressed, PropertyDescriptor.DataState.ConfigurableWritable));
+
+        // InstallErrorCause(O, options)
+        if (args.length > 3) {
+            if (!JSError.installErrorCause(context, jsSuppressedError, args[3])) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        JSError.captureStackTraceBelowNewTarget(context, jsSuppressedError);
+        return jsSuppressedError;
+    }
+
+    public static JSObject createPrototype(JSContext context, JSValue... args) {
+        return createNativeErrorPrototype(context, NAME, 3, (ctx, receiver, arguments) -> create(ctx, arguments));
+    }
+}

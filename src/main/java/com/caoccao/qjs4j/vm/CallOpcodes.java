@@ -16,9 +16,11 @@
 
 package com.caoccao.qjs4j.vm;
 
+import com.caoccao.qjs4j.builtins.number.BigIntConstructor;
+import com.caoccao.qjs4j.builtins.object.SymbolConstructor;
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.builtins.BigIntConstructor;
-import com.caoccao.qjs4j.builtins.SymbolConstructor;
+import com.caoccao.qjs4j.core.iterator.JSAsyncIterator;
+import com.caoccao.qjs4j.core.promise.JSPromise;
 import com.caoccao.qjs4j.exceptions.*;
 
 /** Function, constructor and direct eval calls, including tail-call frame replacement. */

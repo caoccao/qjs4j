@@ -17,6 +17,8 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.BaseTest;
+import com.caoccao.qjs4j.core.error.JSError;
+import com.caoccao.qjs4j.core.promise.JSPromise;
 import com.caoccao.qjs4j.exceptions.JSTerminationException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import org.junit.jupiter.api.Test;

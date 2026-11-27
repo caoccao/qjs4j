@@ -17,7 +17,10 @@
 package com.caoccao.qjs4j.vm;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.error.JSError;
+import com.caoccao.qjs4j.core.promise.JSPromise;
 import com.caoccao.qjs4j.exceptions.*;
+
 import static com.caoccao.qjs4j.vm.VirtualMachine.GENERATOR_RETURN_SIGNAL;
 import com.caoccao.qjs4j.vm.VirtualMachine.PendingExceptionAction;
 

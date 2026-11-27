@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.exceptions;
 
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.error.JSError;
 
 /**
  * Exception thrown when JavaScript code throws an error. Wraps the JavaScript error value and its source location for

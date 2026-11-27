@@ -27,4 +27,4 @@ for group in tree.findall('.//pluralRanges'):
     rules = [r.attrib['start'] + ':' + r.attrib['end'] + ':' + r.attrib['result'] for r in group.findall('pluralRange')]
     lines.append('        addRanges(' + quote(group.attrib['locales']) + ', ' + ', '.join(map(quote, rules)) + ');')
 template = (ROOT / 'scripts/python/plural_rules_data.java.template').read_text()
-(ROOT / 'src/main/java/com/caoccao/qjs4j/core/PluralRulesData.java').write_text(template.replace('@@DATA@@', '\n'.join(lines)))
+(ROOT / 'src/main/java/com/caoccao/qjs4j/core/intl/PluralRulesData.java').write_text(template.replace('@@DATA@@', '\n'.join(lines)))

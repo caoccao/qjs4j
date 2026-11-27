@@ -16,6 +16,11 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.collection.JSMap;
+import com.caoccao.qjs4j.core.collection.JSSet;
+import com.caoccao.qjs4j.core.date.JSDate;
+import com.caoccao.qjs4j.core.regexp.JSRegExp;
+
 import java.util.*;
 
 /**

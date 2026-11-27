@@ -1,7 +1,8 @@
 package com.caoccao.qjs4j.examples;
 
-import com.caoccao.qjs4j.builtins.StringPrototype;
+import com.caoccao.qjs4j.builtins.text.StringPrototype;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.regexp.JSRegExp;
 
 /**
  * Demonstration of String.prototype RegExp methods. Shows how match(), matchAll(), replace(), replaceAll(), search(),

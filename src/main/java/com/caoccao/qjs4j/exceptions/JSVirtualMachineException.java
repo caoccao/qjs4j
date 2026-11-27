@@ -16,10 +16,10 @@
 
 package com.caoccao.qjs4j.exceptions;
 
-import com.caoccao.qjs4j.core.JSError;
 import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.core.PropertyKey;
+import com.caoccao.qjs4j.core.error.JSError;
 
 /**
  * VM exception for runtime errors.

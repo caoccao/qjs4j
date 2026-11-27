@@ -65,7 +65,7 @@ qjs4j has strong foundation for AsyncDisposableStack:
 
 **Files to modify:**
 - `src/main/java/com/caoccao/qjs4j/core/JSSymbol.java`
-- `src/main/java/com/caoccao/qjs4j/builtins/SymbolConstructor.java`
+- `src/main/java/com/caoccao/qjs4j/builtins/object/SymbolConstructor.java`
 
 **Changes:**
 
@@ -103,7 +103,7 @@ symbolConstructor.defineProperty(PropertyKey.fromString("asyncDispose"),
 ### Phase 2: Core Class Implementation
 
 **File to create:**
-- `src/main/java/com/caoccao/qjs4j/core/JSAsyncDisposableStack.java`
+- `src/main/java/com/caoccao/qjs4j/core/disposable/JSAsyncDisposableStack.java`
 
 **Class structure:**
 ```java
@@ -202,8 +202,8 @@ return JSPromise.resolve(JSUndefined.INSTANCE);
 ### Phase 3: Built-in Constructor and Prototype
 
 **Files to create:**
-- `src/main/java/com/caoccao/qjs4j/builtins/AsyncDisposableStackConstructor.java`
-- `src/main/java/com/caoccao/qjs4j/builtins/AsyncDisposableStackPrototype.java`
+- `src/main/java/com/caoccao/qjs4j/builtins/disposable/AsyncDisposableStackConstructor.java`
+- `src/main/java/com/caoccao/qjs4j/builtins/disposable/AsyncDisposableStackPrototype.java`
 
 **AsyncDisposableStackConstructor.java:**
 
@@ -377,7 +377,7 @@ private void handleCallConstructor(int argCount) {
 ### Phase 5: Testing
 
 **File to create:**
-- `src/test/java/com/caoccao/qjs4j/builtins/AsyncDisposableStackTest.java`
+- `src/test/java/com/caoccao/qjs4j/builtins/disposable/AsyncDisposableStackTest.java`
 
 **Test coverage:**
 

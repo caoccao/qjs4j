@@ -17,7 +17,11 @@
 package com.caoccao.qjs4j;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.module.JSFileSystemModuleLoader;
+import com.caoccao.qjs4j.core.promise.IJSPromiseRejectCallback;
+import com.caoccao.qjs4j.core.promise.JSPromise;
 import com.caoccao.qjs4j.exceptions.JSException;
+
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.apache.commons.io.IOUtils;
 import org.junit.jupiter.api.AfterEach;

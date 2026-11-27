@@ -15,6 +15,8 @@
  */
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.error.JSError;
+
 /**
  * The stack trace captured for an error, or for an object {@code Error.captureStackTrace} was applied to.
  * <p>
@@ -23,7 +25,7 @@ package com.caoccao.qjs4j.core;
  * after {@code super()} reads as {@code MyError: message} rather than {@code Error: message}, while a message changed
  * after construction does not show. A script assigning to {@code stack} replaces the value for good.
  */
-final class JSStackTrace {
+public final class JSStackTrace {
     private final String frames;
     private final JSValue message;
     private JSValue value;

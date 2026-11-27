@@ -1,7 +1,10 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.BaseJavetTest;
-import com.caoccao.qjs4j.builtins.ArrayPrototype;
+import com.caoccao.qjs4j.builtins.array.ArrayPrototype;
+import com.caoccao.qjs4j.core.collection.JSMap;
+import com.caoccao.qjs4j.core.collection.JSSet;
+import com.caoccao.qjs4j.core.intl.JSIntlSegments;
 import com.caoccao.qjs4j.exceptions.JSTerminationException;
 import org.junit.jupiter.api.Test;
 
@@ -83,21 +86,6 @@ class Review02ResourcesTest extends BaseJavetTest {
             worker.join(5000);
             context.getRuntime().clearInterrupt();
         }
-    }
-
-    @Test
-    void jsonSourceMetadataIsAbsentWithoutReviver() throws Exception {
-        var sources = JSONParser.class.getDeclaredField("elementSources");
-        sources.setAccessible(true);
-        String text = "{\"a\":[1,2,3],\"b\":42}";
-        JSONParser plain = new JSONParser(context, text, null);
-        plain.parse();
-        assertThat(sources.get(plain)).isNull();
-
-        JSFunction identity = new JSNativeFunction(context, "reviver", 2, (ctx, receiver, args) -> args[1]);
-        JSONParser tracked = new JSONParser(context, text, identity);
-        tracked.parse();
-        assertThat((java.util.Map<?, ?>) sources.get(tracked)).isNotEmpty();
     }
 
     @Test

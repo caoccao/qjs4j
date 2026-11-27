@@ -1,0 +1,423 @@
+/*
+ * Copyright (c) 2025-2026. caoccao.com Sam Cao
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.caoccao.qjs4j.core.iterator;
+
+import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.promise.JSPromise;
+
+import java.util.ArrayDeque;
+import java.util.Queue;
+
+/**
+ * Represents an async generator object in JavaScript. Based on ES2018 async generator specification.
+ * <p>
+ * Async generators combine generator functions with async iteration: - Defined with async function* syntax - yield
+ * produces promises - Can await within the generator body - Implements async iterator protocol (Symbol.asyncIterator) -
+ * Methods return promises: next(), return(), throw()
+ */
+public final class JSAsyncGenerator extends JSObject {
+    public static final String NAME = "AsyncGenerator";
+    private final JSContext context;
+    private boolean drainScheduled;
+    private final AsyncGeneratorFunction generatorFunction;
+    private JSPromise pendingRequestPromise;
+    private final Queue<AsyncGeneratorRequest> requestQueue;
+    private JSValue returnValue;
+    private AsyncGeneratorState state;
+    private JSValue thrownValue;
+
+    /**
+     * Create a new async generator.
+     *
+     * @param generatorFunction
+     *            The generator implementation
+     * @param context
+     *            The execution context
+     */
+    public JSAsyncGenerator(AsyncGeneratorFunction generatorFunction, JSContext context) {
+        super(context);
+        this.state = AsyncGeneratorState.SUSPENDED_START;
+        this.context = context;
+        this.generatorFunction = generatorFunction;
+        this.requestQueue = new ArrayDeque<>();
+        this.drainScheduled = false;
+        this.returnValue = JSUndefined.INSTANCE;
+        this.thrownValue = null;
+
+        setPrototype(context.getAsyncGeneratorPrototype());
+    }
+
+    /**
+     * Directly complete the current pending request with a result, bypassing the intermediate promise layer. Used by
+     * the async generator's await-resume handler to avoid extra microtask ticks. Per QuickJS, resolving the request's
+     * promise is synchronous within the reaction callback.
+     */
+    public void completeCurrentRequest(JSValue result) {
+        if (pendingRequestPromise != null) {
+            JSPromise reqPromise = pendingRequestPromise;
+            pendingRequestPromise = null;
+            processResult(result);
+            reqPromise.fulfill(result);
+            // Yield's AWAIT already supplied its microtask boundary. Process queued requests
+            // immediately in this reaction, and leave an empty queue ready for the next host call.
+            drainRequestQueue();
+        }
+    }
+
+    private JSPromise createIteratorResultFromResult(JSValue result) {
+        JSPromise promise = context.createJSPromise();
+        promise.fulfill(result);
+        return promise;
+    }
+
+    private JSObject createIteratorResultObject(JSValue value, boolean done) {
+        JSObject result = JSIteratorHelper.createResult(context, value, done);
+        return result;
+    }
+
+    /**
+     * Create an iterator result promise.
+     *
+     * @param value
+     *            The iterator value
+     * @param done
+     *            Whether iteration is complete
+     * @return A promise that resolves to {value, done}
+     */
+    private JSPromise createIteratorResultPromise(JSValue value, boolean done) {
+        JSPromise promise = context.createJSPromise();
+        JSObject result = JSIteratorHelper.createResult(context, value, done);
+        promise.fulfill(result);
+        return promise;
+    }
+
+    private void drainRequestQueue() {
+        if (state == AsyncGeneratorState.EXECUTING) {
+            return;
+        }
+        AsyncGeneratorRequest request = requestQueue.poll();
+        if (request == null) {
+            return;
+        }
+        try {
+            executeRequest(request);
+        } catch (RuntimeException e) {
+            state = AsyncGeneratorState.COMPLETED;
+            if (context.hasPendingException()) {
+                JSValue error = context.getPendingException();
+                context.clearAllPendingExceptions();
+                request.promise().reject(error);
+            } else {
+                request.promise().reject(new JSString(e.getMessage() != null ? e.getMessage() : e.toString()));
+            }
+            scheduleDrainRequestQueue();
+        }
+    }
+
+    private JSPromise enqueueRequest(AsyncGeneratorRequestKind kind, JSValue value) {
+        JSPromise promise = context.createJSPromise();
+        requestQueue.offer(new AsyncGeneratorRequest(kind, value, promise));
+        if (state == AsyncGeneratorState.COMPLETED) {
+            drainRequestQueue();
+        } else if (!drainScheduled) {
+            drainRequestQueue();
+        }
+        if (context.hasPendingException()) {
+            context.clearAllPendingExceptions();
+        }
+        return promise;
+    }
+
+    private void executeRequest(AsyncGeneratorRequest request) {
+        switch (request.kind()) {
+            case NEXT, THROW, RETURN -> executeRequestWithGeneratorFunction(request);
+        }
+    }
+
+    private void executeRequestWithGeneratorFunction(AsyncGeneratorRequest request) {
+        boolean isThrow = request.kind() == AsyncGeneratorRequestKind.THROW;
+        if (state == AsyncGeneratorState.COMPLETED) {
+            if (isThrow) {
+                request.promise().reject(request.value());
+            } else {
+                JSValue completedValue = request.kind() == AsyncGeneratorRequestKind.NEXT
+                        ? JSUndefined.INSTANCE
+                        : request.value();
+                if (request.kind() == AsyncGeneratorRequestKind.RETURN) {
+                    JSPromise completionPromise = JSAsyncIterator.createAsyncFromSyncResultPromise(context,
+                            completedValue, true);
+                    if (completionPromise.getState() == JSPromise.PromiseState.FULFILLED) {
+                        JSValue completionResult = completionPromise.getResult();
+                        context.enqueueMicrotask(() -> request.promise().fulfill(completionResult));
+                    } else if (completionPromise.getState() == JSPromise.PromiseState.REJECTED) {
+                        // Consumed directly rather than through a reaction, so record that it is handled.
+                        completionPromise.markHandled();
+                        JSValue completionError = completionPromise.getResult();
+                        context.enqueueMicrotask(() -> request.promise().reject(completionError));
+                    } else {
+                        completionPromise.observe(context,
+                                new JSNativeFunction(context, "onReturnResolve", 1, (childContext, thisArg, args) -> {
+                                    JSValue result = JSValue.argumentOrUndefined(args, 0);
+                                    request.promise().fulfill(result);
+                                    return JSUndefined.INSTANCE;
+                                }),
+                                new JSNativeFunction(context, "onReturnReject", 1, (childContext, thisArg, args) -> {
+                                    JSValue error = JSValue.argumentOrUndefined(args, 0);
+                                    request.promise().reject(error);
+                                    return JSUndefined.INSTANCE;
+                                }));
+                    }
+                } else {
+                    request.promise().fulfill(createIteratorResultObject(completedValue, true));
+                }
+            }
+            scheduleDrainRequestQueue();
+            return;
+        }
+
+        state = AsyncGeneratorState.EXECUTING;
+        if (request.kind() == AsyncGeneratorRequestKind.THROW) {
+            thrownValue = request.value();
+        }
+
+        try {
+            // Store the request promise so the lambda's await handler can fulfill it directly,
+            // bypassing the intermediate promise layer to avoid extra microtask ticks.
+            pendingRequestPromise = request.promise();
+            JSPromise resultPromise = generatorFunction.executeNext(request.value(), request.kind());
+            if (resultPromise.getState() == JSPromise.PromiseState.FULFILLED) {
+                pendingRequestPromise = null;
+                JSValue result = resultPromise.getResult();
+                processResult(result);
+                if (state == AsyncGeneratorState.COMPLETED) {
+                    // Generator completed — per spec, no extra Await tick for completion.
+                    // Resolve the request promise synchronously.
+                    request.promise().fulfill(result);
+                    scheduleDrainRequestQueue();
+                } else {
+                    // Generator yielded — per AsyncGeneratorYield step 5, the yielded value
+                    // goes through Await which takes 1 microtask tick. Prevent immediate
+                    // draining so that requests enqueued before this tick (e.g., .return())
+                    // are processed AFTER the yield's Await resolves, matching QuickJS behavior.
+                    drainScheduled = true;
+                    context.enqueueMicrotask(() -> {
+                        request.promise().fulfill(result);
+                        drainScheduled = false;
+                        drainRequestQueue();
+                    });
+                }
+                return;
+            }
+            if (resultPromise.getState() == JSPromise.PromiseState.REJECTED) {
+                // Consumed directly rather than through a reaction, so record that it is handled.
+                resultPromise.markHandled();
+                pendingRequestPromise = null;
+                state = AsyncGeneratorState.COMPLETED;
+                request.promise().reject(resultPromise.getResult());
+                scheduleDrainRequestQueue();
+                return;
+            }
+            // Result is PENDING (e.g., await suspension, yield* delegation, thenable yield value).
+            // Add fallback reactions that guard against double-fulfillment since the lambda's
+            // await handler may directly fulfill request.promise() via completeCurrentRequest.
+            resultPromise.observe(context,
+                    new JSNativeFunction(context, "onFulfilled", 1, (childContext, thisArg, args) -> {
+                        if (request.promise().getState() != JSPromise.PromiseState.PENDING) {
+                            return JSUndefined.INSTANCE;
+                        }
+                        JSValue result = JSValue.argumentOrUndefined(args, 0);
+                        processResult(result);
+                        request.promise().fulfill(result);
+                        scheduleDrainRequestQueue();
+                        return JSUndefined.INSTANCE;
+                    }), new JSNativeFunction(context, "onRejected", 1, (childContext, thisArg, args) -> {
+                        if (request.promise().getState() != JSPromise.PromiseState.PENDING) {
+                            return JSUndefined.INSTANCE;
+                        }
+                        state = AsyncGeneratorState.COMPLETED;
+                        JSValue error = JSValue.argumentOrUndefined(args, 0);
+                        request.promise().reject(error);
+                        scheduleDrainRequestQueue();
+                        return JSUndefined.INSTANCE;
+                    }));
+        } catch (Exception e) {
+            state = AsyncGeneratorState.COMPLETED;
+            if (context.hasPendingException()) {
+                JSValue error = context.getPendingException();
+                context.clearAllPendingExceptions();
+                request.promise().reject(error);
+            } else if (isThrow) {
+                request.promise().reject(request.value());
+            } else {
+                String message = e.getMessage();
+                request.promise()
+                        .reject(new JSString("Async generator error: " + (message != null ? message : e.toString())));
+            }
+            scheduleDrainRequestQueue();
+        }
+    }
+
+    /**
+     * Get the current state of the async generator.
+     */
+    public AsyncGeneratorState getState() {
+        return state;
+    }
+
+    /**
+     * Get the next value from the async generator. ES2018 AsyncGenerator.prototype.next()
+     *
+     * @param value
+     *            Value to send into the generator
+     * @return A promise that resolves to {value, done}
+     */
+    public JSPromise next(JSValue value) {
+        return enqueueRequest(AsyncGeneratorRequestKind.NEXT, value);
+    }
+
+    private void processResult(JSValue result) {
+        if (result instanceof JSObject resultObj) {
+            JSValue doneValue = resultObj.get("done");
+            boolean done = doneValue instanceof JSBoolean && ((JSBoolean) doneValue).value();
+            if (done) {
+                state = AsyncGeneratorState.COMPLETED;
+                returnValue = resultObj.get(PropertyKey.VALUE);
+            } else {
+                state = AsyncGeneratorState.SUSPENDED_YIELD;
+            }
+        }
+    }
+
+    /**
+     * Return a value from the async generator and close it. ES2018 AsyncGenerator.prototype.return()
+     *
+     * @param value
+     *            The return value
+     * @return A promise that resolves to {value, done: true}
+     */
+    public JSPromise return_(JSValue value) {
+        return enqueueRequest(AsyncGeneratorRequestKind.RETURN, value);
+    }
+
+    private void scheduleDrainRequestQueue() {
+        if (drainScheduled) {
+            return;
+        }
+        drainScheduled = true;
+        context.enqueueMicrotask(() -> {
+            drainScheduled = false;
+            drainRequestQueue();
+        });
+    }
+
+    /**
+     * Throw an exception into the async generator. ES2018 AsyncGenerator.prototype.throw()
+     *
+     * @param exception
+     *            The exception to throw
+     * @return A promise that resolves to the next value or rejects
+     */
+    public JSPromise throw_(JSValue exception) {
+        return enqueueRequest(AsyncGeneratorRequestKind.THROW, exception);
+    }
+
+    @Override
+    public String toString() {
+        return "[object AsyncGenerator]";
+    }
+
+    /**
+     * Create a simple async generator from a function that yields promises.
+     *
+     * @param yielder
+     *            Function that returns promise values in sequence
+     * @param context
+     *            The execution context
+     * @return An async generator
+     */
+    public static JSAsyncGenerator create(AsyncYieldFunction yielder, JSContext context) {
+        return new JSAsyncGenerator((inputValue, requestKind) -> {
+            if (requestKind == AsyncGeneratorRequestKind.THROW) {
+                // If throwing, reject the promise
+                JSPromise promise = context.createJSPromise();
+                promise.reject(inputValue);
+                return promise;
+            }
+            if (requestKind == AsyncGeneratorRequestKind.RETURN) {
+                return JSAsyncIterator.createIteratorResultPromise(context, inputValue, true);
+            }
+            return yielder.yieldNext(inputValue);
+        }, context);
+    }
+
+    /**
+     * Functional interface for async generator implementation.
+     */
+    @FunctionalInterface
+    public interface AsyncGeneratorFunction {
+        /**
+         * Execute the next step of the generator.
+         *
+         * @param inputValue
+         *            Value passed to next()/return()/throw()
+         * @param requestKind
+         *            The async generator request kind
+         * @return A promise that resolves to {value, done}
+         */
+        JSPromise executeNext(JSValue inputValue, AsyncGeneratorRequestKind requestKind);
+    }
+
+    private record AsyncGeneratorRequest(AsyncGeneratorRequestKind kind, JSValue value, JSPromise promise) {
+    }
+
+    public enum AsyncGeneratorRequestKind {
+        NEXT,
+        RETURN,
+        THROW
+    }
+
+    /**
+     * Async generator states based on ES2018.
+     */
+    public enum AsyncGeneratorState {
+        /** Awaiting a return value */
+        AWAITING_RETURN,
+        /** Generator has completed */
+        COMPLETED,
+        /** Currently executing */
+        EXECUTING,
+        /** Created but not started */
+        SUSPENDED_START,
+        /** Suspended at a yield point */
+        SUSPENDED_YIELD
+    }
+
+    /**
+     * Functional interface for simple async yield functions.
+     */
+    @FunctionalInterface
+    public interface AsyncYieldFunction {
+        /**
+         * Yield the next value.
+         *
+         * @param inputValue
+         *            Value passed to next()
+         * @return A promise that resolves to {value, done}
+         */
+        JSPromise yieldNext(JSValue inputValue);
+    }
+}

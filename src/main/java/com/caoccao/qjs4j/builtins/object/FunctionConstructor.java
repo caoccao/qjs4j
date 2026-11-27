@@ -1,0 +1,187 @@
+/*
+ * Copyright (c) 2025-2026. caoccao.com Sam Cao
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.caoccao.qjs4j.builtins.object;
+
+import com.caoccao.qjs4j.compilation.compiler.Compiler;
+import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSCompilerException;
+import com.caoccao.qjs4j.exceptions.JSErrorException;
+import com.caoccao.qjs4j.exceptions.JSException;
+import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Implementation of the Function constructor. This is a placeholder implementation - creating functions dynamically
+ * from strings would require the compiler.
+ */
+public final class FunctionConstructor {
+
+    private FunctionConstructor() {
+        // Private constructor to prevent instantiation
+    }
+
+    /**
+     * Function constructor call. new Function(arg1, arg2, ..., argN, functionBody)
+     * <p>
+     * Creates a new function from the given parameter names and function body. All arguments except the last are
+     * treated as parameter names. The last argument is the function body.
+     * <p>
+     * Examples: - new Function('a', 'b', 'return a + b') - new Function('x', 'console.log(x)') - new Function('return
+     * 42')
+     */
+    public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
+        return callWithWrapper(context, args, "(function(", "function anonymous(", "\n) {\n", "\n})", "<Function>",
+                "Failed to create function: ", JSFunction.NAME);
+    }
+
+    public static JSValue callAsync(JSContext context, JSValue thisArg, JSValue[] args) {
+        return callWithWrapper(context, args, "(async function(", "async function anonymous(", "\n) {\n", "\n})",
+                "<AsyncFunction>", "Failed to create async function: ", "AsyncFunction");
+    }
+
+    public static JSValue callAsyncGenerator(JSContext context, JSValue thisArg, JSValue[] args) {
+        return callWithWrapper(context, args, "(async function*(", "async function* anonymous(", "\n) {\n", "\n})",
+                "<AsyncGeneratorFunction>", "Failed to create async generator function: ", "AsyncGeneratorFunction");
+    }
+
+    public static JSValue callGenerator(JSContext context, JSValue thisArg, JSValue[] args) {
+        return callWithWrapper(context, args, "(function*(", "function* anonymous(", "\n) {\n", "\n})",
+                "<GeneratorFunction>", "Failed to create generator function: ", "GeneratorFunction");
+    }
+
+    private static JSValue callWithWrapper(JSContext context, JSValue[] args, String sourcePrefix,
+            String toStringSourcePrefix, String parameterSuffix, String bodySuffix, String filename, String errorPrefix,
+            String intrinsicDefaultPrototypeName) {
+        // Extract parameter names and function body
+        List<String> paramNames = new ArrayList<>();
+        String body = "";
+
+        if (args.length == 0) {
+            // No arguments: function () {}
+            body = "";
+        } else if (args.length == 1) {
+            // Only body provided: function () { body }
+            body = toSourceString(context, args[0]);
+            if (body == null) {
+                return context.getPendingException();
+            }
+        } else {
+            // Parameters + body: function (p1, p2, ...) { body }
+            for (int i = 0; i < args.length - 1; i++) {
+                String paramName = toSourceString(context, args[i]);
+                if (paramName == null) {
+                    return context.getPendingException();
+                }
+                paramNames.add(paramName);
+            }
+            body = toSourceString(context, args[args.length - 1]);
+            if (body == null) {
+                return context.getPendingException();
+            }
+        }
+
+        // Build the function source code
+        String paramsSource = String.join(",", paramNames);
+
+        StringBuilder functionSource = new StringBuilder(sourcePrefix);
+        if (!paramsSource.isEmpty()) {
+            functionSource.append(paramsSource);
+        }
+        functionSource.append(parameterSuffix);
+        functionSource.append(body);
+        functionSource.append(bodySuffix);
+
+        StringBuilder toStringSource = new StringBuilder(toStringSourcePrefix);
+        if (!paramsSource.isEmpty()) {
+            toStringSource.append(paramsSource);
+        }
+        toStringSource.append(parameterSuffix);
+        toStringSource.append(body);
+        toStringSource.append("\n}");
+
+        StringBuilder parameterValidationSource = new StringBuilder(toStringSourcePrefix);
+        if (!paramsSource.isEmpty()) {
+            parameterValidationSource.append(paramsSource);
+        }
+        parameterValidationSource.append(parameterSuffix);
+        parameterValidationSource.append("\n}");
+
+        try {
+            // Validate parameter list in isolation so comment/string bridging from body
+            // cannot make malformed parameters parse successfully.
+            new Compiler(parameterValidationSource.toString(), filename).setContext(context).parse(false);
+
+            // Compile the function
+            JSBytecodeFunction func = new Compiler(functionSource.toString(), filename).setContext(context)
+                    .compile(false).function();
+
+            // Initialize the function's prototype chain
+            func.initializePrototypeChain(context);
+
+            // Execute the compiled code to get the function object
+            JSValue result = context.getVirtualMachine().execute(func, context.getGlobalObject(), JSValue.NO_ARGS);
+            if (result instanceof JSObject resultObject) {
+                if (resultObject instanceof JSBytecodeFunction bytecodeFunction) {
+                    bytecodeFunction.setSourceCode(toStringSource.toString());
+                }
+                if (resultObject instanceof JSFunction) {
+                    resultObject.defineProperty(PropertyKey.NAME, PropertyDescriptor
+                            .dataDescriptor(new JSString("anonymous"), PropertyDescriptor.DataState.Configurable));
+                }
+                JSValue constructorNewTarget = context.getNativeConstructorNewTarget();
+                if (constructorNewTarget instanceof JSObject newTargetObject) {
+                    JSObject resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject,
+                            intrinsicDefaultPrototypeName);
+                    if (context.hasPendingException()) {
+                        return context.getPendingException();
+                    }
+                    if (resolvedPrototype != null) {
+                        resultObject.setPrototype(resolvedPrototype);
+                    }
+                } else {
+                    context.transferPrototype(resultObject, intrinsicDefaultPrototypeName);
+                }
+            }
+            return result;
+        } catch (JSCompilerException e) {
+            return context.throwSyntaxError(e.getMessage(), e.getSourceLocation());
+        } catch (JSSyntaxErrorException e) {
+            return context.throwSyntaxError(e.getMessage(), e.getSourceLocation());
+        } catch (JSException e) {
+            return e.getErrorValue();
+        } catch (JSErrorException e) {
+            // A body nested too deeply to compile is a RangeError, not a generic creation failure.
+            return context.throwError(e);
+        } catch (Exception e) {
+            return context.throwError(errorPrefix + e.getMessage());
+        }
+    }
+
+    private static String toSourceString(JSContext context, JSValue value) {
+        try {
+            String result = JSTypeConversions.toString(context, value).value();
+            if (context.hasPendingException()) {
+                return null;
+            }
+            return result;
+        } catch (JSException e) {
+            return null;
+        }
+    }
+}
