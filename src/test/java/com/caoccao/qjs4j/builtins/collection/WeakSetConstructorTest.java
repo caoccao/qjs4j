@@ -27,9 +27,7 @@ public class WeakSetConstructorTest extends BaseJavetTest {
 
         assertIntegerWithJavet("WeakSet.length");
 
-        assertStringWithJavet("WeakSet.name");
-
-        assertStringWithJavet("new WeakSet().toString()");
+        assertStringWithJavet("WeakSet.name", "new WeakSet().toString()");
 
         assertErrorWithJavet("WeakSet()");
     }

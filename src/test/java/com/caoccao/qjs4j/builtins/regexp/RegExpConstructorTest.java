@@ -31,13 +31,11 @@ public class RegExpConstructorTest extends BaseJavetTest {
     @Test
     void testCaptureGroups() {
         // Single capture group
-        assertStringWithJavet("/(\\d+)/.exec('abc123')[1]");
-
-        // Multiple capture groups
-        assertStringWithJavet("/(\\d+)-(\\d+)/.exec('2024-01-07')[1]", "/(\\d+)-(\\d+)/.exec('2024-01-07')[2]");
-
-        // Nested capture groups
-        assertStringWithJavet("/((\\d+)-(\\d+))/.exec('2024-01-07')[1]", "/((\\d+)-(\\d+))/.exec('2024-01-07')[2]",
+        assertStringWithJavet("/(\\d+)/.exec('abc123')[1]",
+                // Multiple capture groups
+                "/(\\d+)-(\\d+)/.exec('2024-01-07')[1]", "/(\\d+)-(\\d+)/.exec('2024-01-07')[2]",
+                // Nested capture groups
+                "/((\\d+)-(\\d+))/.exec('2024-01-07')[1]", "/((\\d+)-(\\d+))/.exec('2024-01-07')[2]",
                 "/((\\d+)-(\\d+))/.exec('2024-01-07')[3]");
     }
 
@@ -45,43 +43,35 @@ public class RegExpConstructorTest extends BaseJavetTest {
     void testCaseInsensitiveNonAscii() {
         // Turkish dotless-i (U+0131) should NOT match [a-z] in non-Unicode mode
         // Per ES spec, if ch >= 128 and toUpperCase(ch) < 128, ch is not canonicalized
-        assertBooleanWithJavet("!/^[a-z]+$/i.test('\\u0131d')", "!/^[a-z]$/i.test('\\u0131')");
-
-        // But regular ASCII case-insensitive still works
-        assertBooleanWithJavet("/^[a-z]+$/i.test('Hello')", "/^[a-z]+$/i.test('ABC')");
-
-        // Kelvin sign (U+212A) should NOT match [a-z] in non-Unicode mode either
-        assertBooleanWithJavet("!/^[a-z]$/i.test('\\u212A')");
-
-        // Long s (U+017F) should NOT match [a-z] in non-Unicode mode
-        assertBooleanWithJavet("!/^[a-z]$/i.test('\\u017F')");
-
-        // In Unicode mode, case folding applies differently
-        assertBooleanWithJavet("/^[a-z]$/iu.test('\\u212A')");
+        assertBooleanWithJavet("!/^[a-z]+$/i.test('\\u0131d')", "!/^[a-z]$/i.test('\\u0131')",
+                // But regular ASCII case-insensitive still works
+                "/^[a-z]+$/i.test('Hello')", "/^[a-z]+$/i.test('ABC')",
+                // Kelvin sign (U+212A) should NOT match [a-z] in non-Unicode mode either
+                "!/^[a-z]$/i.test('\\u212A')",
+                // Long s (U+017F) should NOT match [a-z] in non-Unicode mode
+                "!/^[a-z]$/i.test('\\u017F')",
+                // In Unicode mode, case folding applies differently
+                "/^[a-z]$/iu.test('\\u212A')");
     }
 
     @Test
     void testComplexPatterns() {
         // Email-like pattern
-        assertBooleanWithJavet("/^[a-z]+@[a-z]+\\.[a-z]+$/.test('test@example.com')");
-
-        // URL-like pattern
-        assertBooleanWithJavet("/^https?:\\/\\//.test('https://example.com')");
-
-        // Phone number pattern
-        assertBooleanWithJavet("/^\\d{3}-\\d{3}-\\d{4}$/.test('123-456-7890')");
-
-        // Date pattern
-        assertBooleanWithJavet("/^\\d{4}-\\d{2}-\\d{2}$/.test('2024-01-07')");
+        assertBooleanWithJavet("/^[a-z]+@[a-z]+\\.[a-z]+$/.test('test@example.com')",
+                // URL-like pattern
+                "/^https?:\\/\\//.test('https://example.com')",
+                // Phone number pattern
+                "/^\\d{3}-\\d{3}-\\d{4}$/.test('123-456-7890')",
+                // Date pattern
+                "/^\\d{4}-\\d{2}-\\d{2}$/.test('2024-01-07')");
     }
 
     @Test
     void testConstructorEdgeCases() {
         // Empty pattern - source should be empty string, toString shows (?:)
-        assertStringWithJavet("new RegExp().toString()", "new RegExp('').toString()", "RegExp().toString()");
-
-        // Empty flags
-        assertStringWithJavet("new RegExp('test').flags", "new RegExp('test', '').flags");
+        assertStringWithJavet("new RegExp().toString()", "new RegExp('').toString()", "RegExp().toString()",
+                // Empty flags
+                "new RegExp('test').flags", "new RegExp('test', '').flags");
     }
 
     @Test
@@ -97,45 +87,39 @@ public class RegExpConstructorTest extends BaseJavetTest {
     void testConstructorWithoutNew() {
         // Calling RegExp as a function (without new)
         assertStringWithJavet("RegExp('test').source", "RegExp('test', 'gi').flags");
-        assertBooleanWithJavet("RegExp('test', 'g').global");
-
-        // Both should create equivalent RegExp objects
-        assertBooleanWithJavet("RegExp('test').source === new RegExp('test').source");
+        assertBooleanWithJavet("RegExp('test', 'g').global",
+                // Both should create equivalent RegExp objects
+                "RegExp('test').source === new RegExp('test').source");
         assertStringWithJavet("RegExp('test', 'gi').toString()", "new RegExp('test', 'gi').toString()");
     }
 
     @Test
     void testConstructorWithRegExpArgument() {
         // Copying existing RegExp
-        assertStringWithJavet("new RegExp(/test/gi).source", "new RegExp(/test/gi).flags", "RegExp(/test/gi).source");
-
-        // Overriding flags when copying
-        assertStringWithJavet("new RegExp(/test/gi, 'm').flags");
+        assertStringWithJavet("new RegExp(/test/gi).source", "new RegExp(/test/gi).flags", "RegExp(/test/gi).source",
+                // Overriding flags when copying
+                "new RegExp(/test/gi, 'm').flags");
         assertBooleanWithJavet("new RegExp(/test/gi, 'm').multiline", "!new RegExp(/test/gi, 'm').global");
     }
 
     @Test
     void testDotAllFlagBehavior() {
         // . without dotAll doesn't match newline
-        assertBooleanWithJavet("!/a.b/.test('a\\nb')");
-
-        // . with dotAll matches newline
-        assertBooleanWithJavet("/a.b/s.test('a\\nb')");
+        assertBooleanWithJavet("!/a.b/.test('a\\nb')",
+                // . with dotAll matches newline
+                "/a.b/s.test('a\\nb')");
     }
 
     @Test
     void testEdgeCasePatterns() {
         // Empty alternation
-        assertBooleanWithJavet("/a|/.test('')", "/|b/.test('')");
-
-        // Optional groups
-        assertBooleanWithJavet("/(test)?/.test('')", "/(test)?/.test('test')");
-
-        // Anchors
-        assertBooleanWithJavet("/^test$/.test('test')", "!/^test$/.test('test2')");
-
-        // Zero-width assertions
-        assertBooleanWithJavet("/test(?=ing)/.test('testing')");
+        assertBooleanWithJavet("/a|/.test('')", "/|b/.test('')",
+                // Optional groups
+                "/(test)?/.test('')", "/(test)?/.test('test')",
+                // Anchors
+                "/^test$/.test('test')", "!/^test$/.test('test2')",
+                // Zero-width assertions
+                "/test(?=ing)/.test('testing')");
         assertStringWithJavet("/test(?=ing)/.exec('testing')[0]");
     }
 
@@ -145,7 +129,7 @@ public class RegExpConstructorTest extends BaseJavetTest {
 
         // Normal case: match
         var exec = builtin(RegExpPrototype::exec, regexp);
-        JSValue result = exec.call(stringArgs("hello world"));
+        JSValue result = exec.call("hello world");
         assertThat(result).isInstanceOfSatisfying(JSArray.class, arr -> {
             assertThat(arr.getLength()).isEqualTo(1); // Just the matched string, no captures
             assertStringValue(arr.get(0), "hello");
@@ -158,11 +142,11 @@ public class RegExpConstructorTest extends BaseJavetTest {
         });
 
         // Normal case: no match
-        result = exec.call(stringArgs("goodbye"));
+        result = exec.call("goodbye");
         assertThat(result.isNull()).isTrue();
 
         // Edge case: called on non-RegExp
-        assertPendingTypeError(context, RegExpPrototype.exec(context, new JSObject(context), stringArgs("test")));
+        assertPendingTypeError(context, callBuiltin(RegExpPrototype::exec, new JSObject(context), "test"));
     }
 
     @Test
@@ -186,20 +170,20 @@ public class RegExpConstructorTest extends BaseJavetTest {
 
         // First exec
         var execMethod = builtin(RegExpPrototype::exec, regexp);
-        JSValue result = execMethod.call(stringArgs("foo bar"));
+        JSValue result = execMethod.call("foo bar");
         assertThat(result).isInstanceOfSatisfying(JSArray.class, arr -> {
             assertStringValue(arr.get(0), "o");
         });
         assertThat(regexp.getLastIndex() > 0).isTrue();
 
         // Second exec (should get next match)
-        result = execMethod.call(stringArgs("foo bar"));
+        result = execMethod.call("foo bar");
         assertThat(result).isInstanceOfSatisfying(JSArray.class, arr -> {
             assertStringValue(arr.get(0), "o");
         });
 
         // Third exec (no more matches, should return null and reset lastIndex)
-        result = execMethod.call(stringArgs("foo bar"));
+        result = execMethod.call("foo bar");
         assertThat(result.isNull()).isTrue();
         assertThat(regexp.getLastIndex()).isEqualTo(0);
     }
@@ -215,60 +199,60 @@ public class RegExpConstructorTest extends BaseJavetTest {
     public void testGetFlags() {
         JSRegExp regexp = new JSRegExp(context, "test", "gimsuy");
 
-        JSValue result = RegExpPrototype.getFlags(context, regexp, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(RegExpPrototype::getFlags, regexp);
         assertStringValue(result, "gimsuy");
 
         // Edge case: no flags
         JSRegExp regexp2 = new JSRegExp(context, "test", "");
-        result = RegExpPrototype.getFlags(context, regexp2, JSValue.NO_ARGS);
+        result = callBuiltin(RegExpPrototype::getFlags, regexp2);
         assertStringValue(result, "");
 
         // Edge case: called on non-RegExp
-        assertPendingTypeError(context, RegExpPrototype.getFlags(context, new JSArray(context), JSValue.NO_ARGS));
+        assertPendingTypeError(context, callBuiltin(RegExpPrototype::getFlags, new JSArray(context)));
     }
 
     @Test
     public void testGetGlobal() {
         JSRegExp regexp1 = new JSRegExp(context, "test", "g");
-        JSValue result = RegExpPrototype.getGlobal(context, regexp1, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(RegExpPrototype::getGlobal, regexp1);
         assertThat(result.isBooleanTrue()).isTrue();
 
         JSRegExp regexp2 = new JSRegExp(context, "test", "i");
-        result = RegExpPrototype.getGlobal(context, regexp2, JSValue.NO_ARGS);
+        result = callBuiltin(RegExpPrototype::getGlobal, regexp2);
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Edge case: called on non-RegExp (should return undefined)
-        result = RegExpPrototype.getGlobal(context, new JSString("not regexp"), JSValue.NO_ARGS);
+        result = callBuiltin(RegExpPrototype::getGlobal, new JSString("not regexp"));
         assertThat(result.isUndefined()).isTrue();
     }
 
     @Test
     public void testGetIgnoreCase() {
         JSRegExp regexp1 = new JSRegExp(context, "test", "i");
-        JSValue result = RegExpPrototype.getIgnoreCase(context, regexp1, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(RegExpPrototype::getIgnoreCase, regexp1);
         assertThat(result.isBooleanTrue()).isTrue();
 
         JSRegExp regexp2 = new JSRegExp(context, "test", "g");
-        result = RegExpPrototype.getIgnoreCase(context, regexp2, JSValue.NO_ARGS);
+        result = callBuiltin(RegExpPrototype::getIgnoreCase, regexp2);
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Edge case: called on non-RegExp (should return undefined)
-        result = RegExpPrototype.getIgnoreCase(context, JSNull.INSTANCE, JSValue.NO_ARGS);
+        result = callBuiltin(RegExpPrototype::getIgnoreCase, JSNull.INSTANCE);
         assertThat(result.isUndefined()).isTrue();
     }
 
     @Test
     public void testGetMultiline() {
         JSRegExp regexp1 = new JSRegExp(context, "test", "m");
-        JSValue result = RegExpPrototype.getMultiline(context, regexp1, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(RegExpPrototype::getMultiline, regexp1);
         assertThat(result.isBooleanTrue()).isTrue();
 
         JSRegExp regexp2 = new JSRegExp(context, "test", "");
-        result = RegExpPrototype.getMultiline(context, regexp2, JSValue.NO_ARGS);
+        result = callBuiltin(RegExpPrototype::getMultiline, regexp2);
         assertThat(result.isBooleanFalse()).isTrue();
 
         // Edge case: called on non-RegExp (should return undefined)
-        result = RegExpPrototype.getMultiline(context, JSBoolean.TRUE, JSValue.NO_ARGS);
+        result = callBuiltin(RegExpPrototype::getMultiline, JSBoolean.TRUE);
         assertThat(result.isUndefined()).isTrue();
     }
 
@@ -276,10 +260,10 @@ public class RegExpConstructorTest extends BaseJavetTest {
     public void testGetSource() {
         JSRegExp regexp = new JSRegExp(context, "hello", "");
 
-        assertStringValue(RegExpPrototype.getSource(context, regexp, JSValue.NO_ARGS), "hello");
+        assertStringValue(callBuiltin(RegExpPrototype::getSource, regexp), "hello");
 
         // Edge case: called on non-RegExp
-        assertPendingTypeError(context, RegExpPrototype.getSource(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
+        assertPendingTypeError(context, callBuiltin(RegExpPrototype::getSource, JSUndefined.INSTANCE));
     }
 
     @Test
@@ -290,33 +274,28 @@ public class RegExpConstructorTest extends BaseJavetTest {
 
         // Global flag affects test
         assertBooleanWithJavet("var r = /o/g; r.test('foo')");
-        assertIntegerWithJavet("var r = /o/g; r.test('foo'); r.lastIndex");
-
-        // lastIndex resets on no match
-        assertIntegerWithJavet("var r = /x/g; r.lastIndex = 5; r.test('abc'); r.lastIndex");
+        assertIntegerWithJavet("var r = /o/g; r.test('foo'); r.lastIndex",
+                // lastIndex resets on no match
+                "var r = /x/g; r.lastIndex = 5; r.test('abc'); r.lastIndex");
     }
 
     @Test
     void testInstanceOf() {
         // RegExp instances
         assertBooleanWithJavet("new RegExp('test') instanceof RegExp", "RegExp('test') instanceof RegExp",
-                "/test/ instanceof RegExp");
-
-        // Not a RegExp
-        assertBooleanWithJavet("!('test' instanceof RegExp)", "!(123 instanceof RegExp)");
+                "/test/ instanceof RegExp",
+                // Not a RegExp
+                "!('test' instanceof RegExp)", "!(123 instanceof RegExp)");
     }
 
     @Test
     void testLastIndexProperty() {
         // Initial lastIndex
-        assertIntegerWithJavet("/test/.lastIndex", "new RegExp('test').lastIndex");
-
-        // Setting lastIndex
-        assertIntegerWithJavet("var r = /test/; r.lastIndex = 5; r.lastIndex");
-
-        // lastIndex with global flag
-        assertIntegerWithJavet("var r = /o/g; r.exec('foo'); r.lastIndex",
-                "var r = /o/g; r.exec('foo'); r.exec('foo'); r.lastIndex");
+        assertIntegerWithJavet("/test/.lastIndex", "new RegExp('test').lastIndex",
+                // Setting lastIndex
+                "var r = /test/; r.lastIndex = 5; r.lastIndex",
+                // lastIndex with global flag
+                "var r = /o/g; r.exec('foo'); r.lastIndex", "var r = /o/g; r.exec('foo'); r.exec('foo'); r.lastIndex");
     }
 
     @Test
@@ -327,7 +306,7 @@ public class RegExpConstructorTest extends BaseJavetTest {
         assertThat(regexp.getLastIndex()).isEqualTo(0);
 
         // After successful test, lastIndex should update
-        RegExpPrototype.test(context, regexp, stringArgs("test test"));
+        callBuiltin(RegExpPrototype::test, regexp, "test test");
         assertThat(regexp.getLastIndex() > 0).isTrue();
 
         // Can manually set lastIndex
@@ -338,10 +317,9 @@ public class RegExpConstructorTest extends BaseJavetTest {
     @Test
     void testMultilineFlagBehavior() {
         // ^ and $ without multiline
-        assertBooleanWithJavet("/^test/.test('line1\\ntest')");
-
-        // ^ and $ with multiline
-        assertBooleanWithJavet("/^test/m.test('line1\\ntest')", "/test$/m.test('test\\nline2')");
+        assertBooleanWithJavet("/^test/.test('line1\\ntest')",
+                // ^ and $ with multiline
+                "/^test/m.test('line1\\ntest')", "/test$/m.test('test\\nline2')");
     }
 
     @Test
@@ -351,18 +329,15 @@ public class RegExpConstructorTest extends BaseJavetTest {
         assertBooleanWithJavet("/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-cd')",
                 "/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?(-(ef|gh))?)*$/.test('ab-t-cd')",
                 "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{2}|[0-9]{3}))?)*$/.test('en-t-en')",
-                "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{4}))?(-([a-z]{2}|[0-9]{3}))?)*$/.test('en-t-en')");
-
-        // Should also match with actual extension content
-        assertBooleanWithJavet("/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-cd-ab')",
-                "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{2}|[0-9]{3}))?)*$/.test('en-t-en-us')");
-
-        // Zero iterations of * should still work
-        assertBooleanWithJavet("/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab')",
-                "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{2}|[0-9]{3}))?)*$/.test('en')");
-
-        // Non-match should still return false
-        assertBooleanWithJavet("!/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-123')");
+                "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{4}))?(-([a-z]{2}|[0-9]{3}))?)*$/.test('en-t-en')",
+                // Should also match with actual extension content
+                "/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-cd-ab')",
+                "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{2}|[0-9]{3}))?)*$/.test('en-t-en-us')",
+                // Zero iterations of * should still work
+                "/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab')",
+                "/^([a-z]{2})(-t-([a-z]{2})(-([a-z]{2}|[0-9]{3}))?)*$/.test('en')",
+                // Non-match should still return false
+                "!/^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$/.test('ab-t-123')");
 
         // BCP 47 locale-like pattern: the original motivating case
         assertBooleanWithJavet("""
@@ -390,11 +365,9 @@ public class RegExpConstructorTest extends BaseJavetTest {
     @Test
     void testQuantifiers() {
         // Basic quantifiers
-        assertBooleanWithJavet("/a+/.test('aaa')", "/a*/.test('bbb')", "/a?/.test('b')");
-
-        // Range quantifiers
-        assertBooleanWithJavet("/a{3}/.test('aaa')", "!/a{3}/.test('aa')", "/a{2,4}/.test('aaa')",
-                "/a{2,}/.test('aaaaa')");
+        assertBooleanWithJavet("/a+/.test('aaa')", "/a*/.test('bbb')", "/a?/.test('b')",
+                // Range quantifiers
+                "/a{3}/.test('aaa')", "!/a{3}/.test('aa')", "/a{2,4}/.test('aaa')", "/a{2,}/.test('aaaaa')");
 
         // Greedy vs lazy
         assertStringWithJavet("'<a><b>'.match(/<.*>/)[0]", "'<a><b>'.match(/<.*?>/)[0]");
@@ -489,22 +462,19 @@ public class RegExpConstructorTest extends BaseJavetTest {
     @Test
     void testSourceProperty() {
         // Basic source
-        assertStringWithJavet("/test/.source", "/hello world/.source");
-
-        // Empty source
-        assertStringWithJavet("/(?:)/.source");
-
-        // Special characters in source
-        assertStringWithJavet("/\\d+/.source", "/[a-z]+/.source");
+        assertStringWithJavet("/test/.source", "/hello world/.source",
+                // Empty source
+                "/(?:)/.source",
+                // Special characters in source
+                "/\\d+/.source", "/[a-z]+/.source");
     }
 
     @Test
     void testSpecialPatterns() {
         // Word boundary
-        assertBooleanWithJavet("/\\btest\\b/.test('test')", "!/\\btest\\b/.test('testing')");
-
-        // Character classes
-        assertBooleanWithJavet("/[a-z]+/.test('abc')", "/[0-9]+/.test('123')", "/[^0-9]+/.test('abc')");
+        assertBooleanWithJavet("/\\btest\\b/.test('test')", "!/\\btest\\b/.test('testing')",
+                // Character classes
+                "/[a-z]+/.test('abc')", "/[0-9]+/.test('123')", "/[^0-9]+/.test('abc')");
     }
 
     @Test
@@ -521,34 +491,31 @@ public class RegExpConstructorTest extends BaseJavetTest {
 
         // Normal case: match
         BuiltinAssertions test = builtin(RegExpPrototype::test, regexp);
-        test.expectValue(JSBoolean.TRUE, stringArgs("hello world"));
+        test.expectValue(JSBoolean.TRUE, "hello world");
 
         // Normal case: no match
-        test.expectValue(JSBoolean.FALSE, stringArgs("goodbye world"));
+        test.expectValue(JSBoolean.FALSE, "goodbye world");
 
         // Edge case: empty string
-        test.expectValue(JSBoolean.FALSE, stringArgs(""));
+        test.expectValue(JSBoolean.FALSE, "");
 
         // Edge case: no arguments (should test against "")
         test.expectValue(JSBoolean.FALSE);
 
         // Edge case: called on non-RegExp
-        assertPendingTypeError(context, RegExpPrototype.test(context, new JSString("not regexp"), stringArgs("test")));
+        assertPendingTypeError(context, callBuiltin(RegExpPrototype::test, new JSString("not regexp"), "test"));
     }
 
     @Test
     void testTestMethod() {
         // Basic test
-        assertBooleanWithJavet("/hello/.test('hello world')", "!/hello/.test('goodbye')");
-
-        // Case sensitivity
-        assertBooleanWithJavet("/HELLO/.test('hello') === false", "/HELLO/i.test('hello')");
-
-        // Empty string
-        assertBooleanWithJavet("/^$/.test('')", "!/test/.test('')");
-
-        // Special characters
-        assertBooleanWithJavet("/\\./.test('a.b')", "/\\d/.test('123')", "/\\s/.test(' ')");
+        assertBooleanWithJavet("/hello/.test('hello world')", "!/hello/.test('goodbye')",
+                // Case sensitivity
+                "/HELLO/.test('hello') === false", "/HELLO/i.test('hello')",
+                // Empty string
+                "/^$/.test('')", "!/test/.test('')",
+                // Special characters
+                "/\\./.test('a.b')", "/\\d/.test('123')", "/\\s/.test(' ')");
     }
 
     @Test
@@ -557,14 +524,14 @@ public class RegExpConstructorTest extends BaseJavetTest {
 
         // First test should match and update lastIndex
         BuiltinAssertions test = builtin(RegExpPrototype::test, regexp);
-        test.expectValue(JSBoolean.TRUE, stringArgs("foo bar"));
+        test.expectValue(JSBoolean.TRUE, "foo bar");
         assertThat(regexp.getLastIndex() > 0).isTrue();
 
         // Second test should continue from lastIndex
-        test.expectValue(JSBoolean.TRUE, stringArgs("foo bar"));
+        test.expectValue(JSBoolean.TRUE, "foo bar");
 
         // Third test should fail and reset lastIndex
-        test.expectValue(JSBoolean.FALSE, stringArgs("foo bar"));
+        test.expectValue(JSBoolean.FALSE, "foo bar");
         assertThat(regexp.getLastIndex()).isEqualTo(0);
     }
 
@@ -572,29 +539,26 @@ public class RegExpConstructorTest extends BaseJavetTest {
     public void testToString() {
         JSRegExp regexp = context.createJSRegExp("test", "gi");
 
-        JSValue result = RegExpPrototype.toStringMethod(context, regexp, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(RegExpPrototype::toStringMethod, regexp);
         assertStringValue(result, "/test/gi");
 
         // Edge case: empty pattern (should be /(?:)/ per ES spec)
         JSRegExp regexp2 = context.createJSRegExp("", "");
-        result = RegExpPrototype.toStringMethod(context, regexp2, JSValue.NO_ARGS);
+        result = callBuiltin(RegExpPrototype::toStringMethod, regexp2);
         assertStringValue(result, "/(?:)/");
 
         // Edge case: called on non-RegExp
-        assertPendingTypeError(context,
-                RegExpPrototype.toStringMethod(context, new JSString("not regexp"), JSValue.NO_ARGS));
+        assertPendingTypeError(context, callBuiltin(RegExpPrototype::toStringMethod, new JSString("not regexp")));
     }
 
     @Test
     void testToStringMethod() {
         // Basic toString
-        assertStringWithJavet("/test/.toString()", "/test/gi.toString()");
-
-        // Empty pattern
-        assertStringWithJavet("/(?:)/.toString()", "new RegExp().toString()");
-
-        // All flags
-        assertStringWithJavet("/test/gimsuy.toString()");
+        assertStringWithJavet("/test/.toString()", "/test/gi.toString()",
+                // Empty pattern
+                "/(?:)/.toString()", "new RegExp().toString()",
+                // All flags
+                "/test/gimsuy.toString()");
     }
 
     @Test
@@ -606,9 +570,7 @@ public class RegExpConstructorTest extends BaseJavetTest {
         assertIntegerWithJavet("RegExp.length");
 
         // RegExp.name should be "RegExp"
-        assertStringWithJavet("RegExp.name");
-
-        assertStringWithJavet("new RegExp().toString()", "RegExp().toString()");
+        assertStringWithJavet("RegExp.name", "new RegExp().toString()", "RegExp().toString()");
     }
 
     @Test

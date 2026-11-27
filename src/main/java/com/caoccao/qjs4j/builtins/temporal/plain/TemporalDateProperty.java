@@ -44,6 +44,10 @@ public enum TemporalDateProperty {
         this.key = key;
     }
 
+    public String propertyName() {
+        return key;
+    }
+
     private JSValue read(IsoDate date, TemporalCalendarId calendar) {
         return switch (this) {
             case DAY -> JSNumber.of(calendarDate(date, calendar).day());

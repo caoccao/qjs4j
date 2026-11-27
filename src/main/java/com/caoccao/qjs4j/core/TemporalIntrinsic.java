@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.core.BuiltinFunctionList.Method;
+import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.builtins.temporal.duration.TemporalDurationConstructor;
 import com.caoccao.qjs4j.builtins.temporal.duration.TemporalDurationPrototype;
 import com.caoccao.qjs4j.builtins.temporal.instant.TemporalInstantConstructor;
@@ -81,22 +82,10 @@ enum TemporalIntrinsic {
         constructor.method(Method.COMPARE, TemporalPlainDateConstructor::compare);
         constructor.method(Method.FROM, TemporalPlainDateConstructor::from);
     }, prototype -> {
-        prototype.getter("calendarId", TemporalPlainDatePrototype::calendarId);
-        prototype.getter("day", TemporalPlainDatePrototype::day);
-        prototype.getter("dayOfWeek", TemporalPlainDatePrototype::dayOfWeek);
-        prototype.getter("dayOfYear", TemporalPlainDatePrototype::dayOfYear);
-        prototype.getter("daysInMonth", TemporalPlainDatePrototype::daysInMonth);
-        prototype.getter("daysInWeek", TemporalPlainDatePrototype::daysInWeek);
-        prototype.getter("daysInYear", TemporalPlainDatePrototype::daysInYear);
-        prototype.getter("era", TemporalPlainDatePrototype::era);
-        prototype.getter("eraYear", TemporalPlainDatePrototype::eraYear);
-        prototype.getter("inLeapYear", TemporalPlainDatePrototype::inLeapYear);
-        prototype.getter("month", TemporalPlainDatePrototype::month);
-        prototype.getter("monthCode", TemporalPlainDatePrototype::monthCode);
-        prototype.getter("monthsInYear", TemporalPlainDatePrototype::monthsInYear);
-        prototype.getter("weekOfYear", TemporalPlainDatePrototype::weekOfYear);
-        prototype.getter("year", TemporalPlainDatePrototype::year);
-        prototype.getter("yearOfWeek", TemporalPlainDatePrototype::yearOfWeek);
+        prototype.sortedGetters(getters -> {
+            defineDateGetters(getters, TemporalReceiver.PLAIN_DATE, TemporalDateProperty.values());
+            getters.getter("daysInWeek", TemporalPlainDatePrototype::daysInWeek);
+        });
         prototype.method(Method.ADD, TemporalPlainDatePrototype::add);
         prototype.method(Method.EQUALS, TemporalPlainDatePrototype::equals);
         prototype.method(Method.SINCE, TemporalPlainDatePrototype::since);
@@ -117,28 +106,11 @@ enum TemporalIntrinsic {
         constructor.method(Method.FROM, TemporalPlainDateTimeConstructor::from);
         constructor.method(Method.COMPARE, TemporalPlainDateTimeConstructor::compare);
     }, prototype -> {
-        prototype.getter("calendarId", TemporalPlainDateTimePrototype::calendarId);
-        prototype.getter("day", TemporalPlainDateTimePrototype::day);
-        prototype.getter("dayOfWeek", TemporalPlainDateTimePrototype::dayOfWeek);
-        prototype.getter("dayOfYear", TemporalPlainDateTimePrototype::dayOfYear);
-        prototype.getter("daysInMonth", TemporalPlainDateTimePrototype::daysInMonth);
-        prototype.getter("daysInWeek", TemporalPlainDateTimePrototype::daysInWeek);
-        prototype.getter("daysInYear", TemporalPlainDateTimePrototype::daysInYear);
-        prototype.getter("era", TemporalPlainDateTimePrototype::era);
-        prototype.getter("eraYear", TemporalPlainDateTimePrototype::eraYear);
-        prototype.getter("hour", TemporalPlainDateTimePrototype::hour);
-        prototype.getter("inLeapYear", TemporalPlainDateTimePrototype::inLeapYear);
-        prototype.getter("microsecond", TemporalPlainDateTimePrototype::microsecond);
-        prototype.getter("millisecond", TemporalPlainDateTimePrototype::millisecond);
-        prototype.getter("minute", TemporalPlainDateTimePrototype::minute);
-        prototype.getter("month", TemporalPlainDateTimePrototype::month);
-        prototype.getter("monthCode", TemporalPlainDateTimePrototype::monthCode);
-        prototype.getter("monthsInYear", TemporalPlainDateTimePrototype::monthsInYear);
-        prototype.getter("nanosecond", TemporalPlainDateTimePrototype::nanosecond);
-        prototype.getter("second", TemporalPlainDateTimePrototype::second);
-        prototype.getter("weekOfYear", TemporalPlainDateTimePrototype::weekOfYear);
-        prototype.getter("year", TemporalPlainDateTimePrototype::year);
-        prototype.getter("yearOfWeek", TemporalPlainDateTimePrototype::yearOfWeek);
+        prototype.sortedGetters(getters -> {
+            defineDateGetters(getters, TemporalReceiver.PLAIN_DATE_TIME, TemporalDateProperty.values());
+            defineTimeGetters(getters, TemporalReceiver.PLAIN_DATE_TIME);
+            getters.getter("daysInWeek", TemporalPlainDateTimePrototype::daysInWeek);
+        });
         prototype.method(Method.ADD, TemporalPlainDateTimePrototype::add);
         prototype.method(Method.EQUALS, TemporalPlainDateTimePrototype::equals);
         prototype.method(Method.ROUND, TemporalPlainDateTimePrototype::round);
@@ -159,10 +131,11 @@ enum TemporalIntrinsic {
     PLAIN_MONTH_DAY("PlainMonthDay", 2, TemporalPlainMonthDayConstructor::construct, constructor -> {
         constructor.method(Method.FROM, TemporalPlainMonthDayConstructor::from);
     }, prototype -> {
-        prototype.getter("calendarId", TemporalPlainMonthDayPrototype::calendarId);
-        prototype.getter("day", TemporalPlainMonthDayPrototype::day);
-        prototype.getter("monthCode", TemporalPlainMonthDayPrototype::monthCode);
-        prototype.getter("referenceISOYear", TemporalPlainMonthDayPrototype::referenceISOYear);
+        prototype.sortedGetters(getters -> {
+            defineDateGetters(getters, TemporalReceiver.PLAIN_MONTH_DAY, TemporalDateProperty.DAY,
+                    TemporalDateProperty.MONTH_CODE);
+            getters.getter("referenceISOYear", TemporalPlainMonthDayPrototype::referenceISOYear);
+        });
         prototype.method(Method.EQUALS, TemporalPlainMonthDayPrototype::equals);
         prototype.method("toJSON", 0, TemporalPlainMonthDayPrototype::toJSON);
         prototype.method(Method.TO_LOCALE_STRING, TemporalPlainMonthDayPrototype::toLocaleString);
@@ -175,12 +148,9 @@ enum TemporalIntrinsic {
         constructor.method(Method.COMPARE, TemporalPlainTimeConstructor::compare);
         constructor.method(Method.FROM, TemporalPlainTimeConstructor::from);
     }, prototype -> {
-        prototype.getter("hour", TemporalPlainTimePrototype::hour);
-        prototype.getter("microsecond", TemporalPlainTimePrototype::microsecond);
-        prototype.getter("millisecond", TemporalPlainTimePrototype::millisecond);
-        prototype.getter("minute", TemporalPlainTimePrototype::minute);
-        prototype.getter("nanosecond", TemporalPlainTimePrototype::nanosecond);
-        prototype.getter("second", TemporalPlainTimePrototype::second);
+        prototype.sortedGetters(getters -> {
+            defineTimeGetters(getters, TemporalReceiver.PLAIN_TIME);
+        });
         prototype.method(Method.ADD, TemporalPlainTimePrototype::add);
         prototype.method(Method.EQUALS, TemporalPlainTimePrototype::equals);
         prototype.method(Method.ROUND, TemporalPlainTimePrototype::round);
@@ -197,17 +167,13 @@ enum TemporalIntrinsic {
         constructor.method(Method.COMPARE, TemporalPlainYearMonthConstructor::compare);
         constructor.method(Method.FROM, TemporalPlainYearMonthConstructor::from);
     }, prototype -> {
-        prototype.getter("calendarId", TemporalPlainYearMonthPrototype::calendarId);
-        prototype.getter("daysInMonth", TemporalPlainYearMonthPrototype::daysInMonth);
-        prototype.getter("daysInYear", TemporalPlainYearMonthPrototype::daysInYear);
-        prototype.getter("era", TemporalPlainYearMonthPrototype::era);
-        prototype.getter("eraYear", TemporalPlainYearMonthPrototype::eraYear);
-        prototype.getter("inLeapYear", TemporalPlainYearMonthPrototype::inLeapYear);
-        prototype.getter("month", TemporalPlainYearMonthPrototype::month);
-        prototype.getter("monthCode", TemporalPlainYearMonthPrototype::monthCode);
-        prototype.getter("monthsInYear", TemporalPlainYearMonthPrototype::monthsInYear);
-        prototype.getter("referenceISODay", TemporalPlainYearMonthPrototype::referenceISODay);
-        prototype.getter("year", TemporalPlainYearMonthPrototype::year);
+        prototype.sortedGetters(getters -> {
+            defineDateGetters(getters, TemporalReceiver.PLAIN_YEAR_MONTH, TemporalDateProperty.DAYS_IN_MONTH,
+                    TemporalDateProperty.DAYS_IN_YEAR, TemporalDateProperty.ERA, TemporalDateProperty.ERA_YEAR,
+                    TemporalDateProperty.IN_LEAP_YEAR, TemporalDateProperty.MONTH, TemporalDateProperty.MONTH_CODE,
+                    TemporalDateProperty.MONTHS_IN_YEAR, TemporalDateProperty.YEAR);
+            getters.getter("referenceISODay", TemporalPlainYearMonthPrototype::referenceISODay);
+        });
         prototype.method(Method.ADD, TemporalPlainYearMonthPrototype::add);
         prototype.method(Method.EQUALS, TemporalPlainYearMonthPrototype::equals);
         prototype.method(Method.SINCE, TemporalPlainYearMonthPrototype::since);
@@ -224,35 +190,18 @@ enum TemporalIntrinsic {
         constructor.method(Method.COMPARE, TemporalZonedDateTimeConstructor::compare);
         constructor.method(Method.FROM, TemporalZonedDateTimeConstructor::from);
     }, prototype -> {
-        prototype.getter("calendar", TemporalZonedDateTimePrototype::calendar);
-        prototype.getter("calendarId", TemporalZonedDateTimePrototype::calendarId);
-        prototype.getter("day", TemporalZonedDateTimePrototype::day);
-        prototype.getter("dayOfWeek", TemporalZonedDateTimePrototype::dayOfWeek);
-        prototype.getter("dayOfYear", TemporalZonedDateTimePrototype::dayOfYear);
-        prototype.getter("daysInMonth", TemporalZonedDateTimePrototype::daysInMonth);
-        prototype.getter("daysInWeek", TemporalZonedDateTimePrototype::daysInWeek);
-        prototype.getter("daysInYear", TemporalZonedDateTimePrototype::daysInYear);
-        prototype.getter("epochMilliseconds", TemporalZonedDateTimePrototype::epochMilliseconds);
-        prototype.getter("epochNanoseconds", TemporalZonedDateTimePrototype::epochNanoseconds);
-        prototype.getter("era", TemporalZonedDateTimePrototype::era);
-        prototype.getter("eraYear", TemporalZonedDateTimePrototype::eraYear);
-        prototype.getter("hour", TemporalZonedDateTimePrototype::hour);
-        prototype.getter("hoursInDay", TemporalZonedDateTimePrototype::hoursInDay);
-        prototype.getter("inLeapYear", TemporalZonedDateTimePrototype::inLeapYear);
-        prototype.getter("microsecond", TemporalZonedDateTimePrototype::microsecond);
-        prototype.getter("millisecond", TemporalZonedDateTimePrototype::millisecond);
-        prototype.getter("minute", TemporalZonedDateTimePrototype::minute);
-        prototype.getter("month", TemporalZonedDateTimePrototype::month);
-        prototype.getter("monthCode", TemporalZonedDateTimePrototype::monthCode);
-        prototype.getter("monthsInYear", TemporalZonedDateTimePrototype::monthsInYear);
-        prototype.getter("nanosecond", TemporalZonedDateTimePrototype::nanosecond);
-        prototype.getter("offset", TemporalZonedDateTimePrototype::offset);
-        prototype.getter("offsetNanoseconds", TemporalZonedDateTimePrototype::offsetNanoseconds);
-        prototype.getter("second", TemporalZonedDateTimePrototype::second);
-        prototype.getter("timeZoneId", TemporalZonedDateTimePrototype::timeZoneId);
-        prototype.getter("weekOfYear", TemporalZonedDateTimePrototype::weekOfYear);
-        prototype.getter("year", TemporalZonedDateTimePrototype::year);
-        prototype.getter("yearOfWeek", TemporalZonedDateTimePrototype::yearOfWeek);
+        prototype.sortedGetters(getters -> {
+            defineDateGetters(getters, TemporalReceiver.ZONED_DATE_TIME, TemporalDateProperty.values());
+            defineTimeGetters(getters, TemporalReceiver.ZONED_DATE_TIME);
+            getters.getter("calendar", TemporalZonedDateTimePrototype::calendar);
+            getters.getter("daysInWeek", TemporalZonedDateTimePrototype::daysInWeek);
+            getters.getter("epochMilliseconds", TemporalZonedDateTimePrototype::epochMilliseconds);
+            getters.getter("epochNanoseconds", TemporalZonedDateTimePrototype::epochNanoseconds);
+            getters.getter("hoursInDay", TemporalZonedDateTimePrototype::hoursInDay);
+            getters.getter("offset", TemporalZonedDateTimePrototype::offset);
+            getters.getter("offsetNanoseconds", TemporalZonedDateTimePrototype::offsetNanoseconds);
+            getters.getter("timeZoneId", TemporalZonedDateTimePrototype::timeZoneId);
+        });
         prototype.method(Method.ADD, TemporalZonedDateTimePrototype::add);
         prototype.method(Method.EQUALS, TemporalZonedDateTimePrototype::equals);
         prototype.method("getTimeZoneTransition", 1, TemporalZonedDateTimePrototype::getTimeZoneTransition);
@@ -300,5 +249,20 @@ enum TemporalIntrinsic {
         constructorMethods.install(constructor);
         JSGlobalObject.linkConstructor(constructor, prototype);
         JSGlobalObject.defineBuiltin(temporal, constructorName, constructor);
+    }
+
+    private static <T extends JSObject & JSTemporalDateValue> void defineDateGetters(
+            BuiltinFunctionList.Builder getters, TemporalReceiver<T> receiver, TemporalDateProperty... properties) {
+        getters.getter("calendarId", (context, self, args) -> TemporalDateProperty.calendarId(context, self, receiver));
+        for (TemporalDateProperty property : properties) {
+            getters.getter(property.propertyName(), (context, self, args) -> property.read(context, self, receiver));
+        }
+    }
+
+    private static <T extends JSObject & JSTemporalTimeValue> void defineTimeGetters(
+            BuiltinFunctionList.Builder getters, TemporalReceiver<T> receiver) {
+        for (TemporalTimeProperty property : TemporalTimeProperty.values()) {
+            getters.getter(property.propertyName(), (context, self, args) -> property.read(context, self, receiver));
+        }
     }
 }

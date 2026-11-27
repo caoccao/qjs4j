@@ -70,21 +70,21 @@ public final class ByteArrayAtomics {
         if (LOCK_FREE) {
             return (byte) BYTE_VH.compareAndExchange(array, offset, expected, replacement);
         }
-        return Fallback.compareAndExchangeByte(array, offset, expected, replacement);
+        return (byte) Fallback.BYTE.compareAndExchange(array, offset, expected, replacement);
     }
 
     public static int compareAndExchangeInt(byte[] array, int offset, int expected, int replacement) {
         if (LOCK_FREE) {
             return (int) INT_VH.compareAndExchange(array, offset, expected, replacement);
         }
-        return Fallback.compareAndExchangeInt(array, offset, expected, replacement);
+        return (int) Fallback.INT.compareAndExchange(array, offset, expected, replacement);
     }
 
     public static long compareAndExchangeLong(byte[] array, int offset, long expected, long replacement) {
         if (LOCK_FREE) {
             return (long) LONG_VH.compareAndExchange(array, offset, expected, replacement);
         }
-        return Fallback.compareAndExchangeLong(array, offset, expected, replacement);
+        return Fallback.LONG.compareAndExchange(array, offset, expected, replacement);
     }
 
     private static Object[] createLocks() {
@@ -101,56 +101,56 @@ public final class ByteArrayAtomics {
         if (LOCK_FREE) {
             return (byte) BYTE_VH.getAndAdd(array, offset, delta);
         }
-        return Fallback.getAndAddByte(array, offset, delta);
+        return (byte) Fallback.BYTE.update(array, offset, Update.ADD, delta);
     }
 
     public static int getAndAddInt(byte[] array, int offset, int delta) {
         if (LOCK_FREE) {
             return (int) INT_VH.getAndAdd(array, offset, delta);
         }
-        return Fallback.getAndAddInt(array, offset, delta);
+        return (int) Fallback.INT.update(array, offset, Update.ADD, delta);
     }
 
     public static long getAndAddLong(byte[] array, int offset, long delta) {
         if (LOCK_FREE) {
             return (long) LONG_VH.getAndAdd(array, offset, delta);
         }
-        return Fallback.getAndAddLong(array, offset, delta);
+        return Fallback.LONG.update(array, offset, Update.ADD, delta);
     }
 
     public static byte getAndBitwiseAndByte(byte[] array, int offset, byte operand) {
         if (LOCK_FREE) {
             return (byte) BYTE_VH.getAndBitwiseAnd(array, offset, operand);
         }
-        return Fallback.getAndBitwiseAndByte(array, offset, operand);
+        return (byte) Fallback.BYTE.update(array, offset, Update.AND, operand);
     }
 
     public static int getAndBitwiseAndInt(byte[] array, int offset, int operand) {
         if (LOCK_FREE) {
             return (int) INT_VH.getAndBitwiseAnd(array, offset, operand);
         }
-        return Fallback.getAndBitwiseAndInt(array, offset, operand);
+        return (int) Fallback.INT.update(array, offset, Update.AND, operand);
     }
 
     public static long getAndBitwiseAndLong(byte[] array, int offset, long operand) {
         if (LOCK_FREE) {
             return (long) LONG_VH.getAndBitwiseAnd(array, offset, operand);
         }
-        return Fallback.getAndBitwiseAndLong(array, offset, operand);
+        return Fallback.LONG.update(array, offset, Update.AND, operand);
     }
 
     public static byte getAndBitwiseOrByte(byte[] array, int offset, byte operand) {
         if (LOCK_FREE) {
             return (byte) BYTE_VH.getAndBitwiseOr(array, offset, operand);
         }
-        return Fallback.getAndBitwiseOrByte(array, offset, operand);
+        return (byte) Fallback.BYTE.update(array, offset, Update.OR, operand);
     }
 
     public static int getAndBitwiseOrInt(byte[] array, int offset, int operand) {
         if (LOCK_FREE) {
             return (int) INT_VH.getAndBitwiseOr(array, offset, operand);
         }
-        return Fallback.getAndBitwiseOrInt(array, offset, operand);
+        return (int) Fallback.INT.update(array, offset, Update.OR, operand);
     }
 
     // --- 16-bit ---
@@ -159,14 +159,14 @@ public final class ByteArrayAtomics {
         if (LOCK_FREE) {
             return (long) LONG_VH.getAndBitwiseOr(array, offset, operand);
         }
-        return Fallback.getAndBitwiseOrLong(array, offset, operand);
+        return Fallback.LONG.update(array, offset, Update.OR, operand);
     }
 
     public static byte getAndBitwiseXorByte(byte[] array, int offset, byte operand) {
         if (LOCK_FREE) {
             return (byte) BYTE_VH.getAndBitwiseXor(array, offset, operand);
         }
-        return Fallback.getAndBitwiseXorByte(array, offset, operand);
+        return (byte) Fallback.BYTE.update(array, offset, Update.XOR, operand);
     }
 
     // --- 32-bit ---
@@ -175,56 +175,56 @@ public final class ByteArrayAtomics {
         if (LOCK_FREE) {
             return (int) INT_VH.getAndBitwiseXor(array, offset, operand);
         }
-        return Fallback.getAndBitwiseXorInt(array, offset, operand);
+        return (int) Fallback.INT.update(array, offset, Update.XOR, operand);
     }
 
     public static long getAndBitwiseXorLong(byte[] array, int offset, long operand) {
         if (LOCK_FREE) {
             return (long) LONG_VH.getAndBitwiseXor(array, offset, operand);
         }
-        return Fallback.getAndBitwiseXorLong(array, offset, operand);
+        return Fallback.LONG.update(array, offset, Update.XOR, operand);
     }
 
     public static byte getAndSetByte(byte[] array, int offset, byte value) {
         if (LOCK_FREE) {
             return (byte) BYTE_VH.getAndSet(array, offset, value);
         }
-        return Fallback.getAndSetByte(array, offset, value);
+        return (byte) Fallback.BYTE.update(array, offset, Update.SET, value);
     }
 
     public static int getAndSetInt(byte[] array, int offset, int value) {
         if (LOCK_FREE) {
             return (int) INT_VH.getAndSet(array, offset, value);
         }
-        return Fallback.getAndSetInt(array, offset, value);
+        return (int) Fallback.INT.update(array, offset, Update.SET, value);
     }
 
     public static long getAndSetLong(byte[] array, int offset, long value) {
         if (LOCK_FREE) {
             return (long) LONG_VH.getAndSet(array, offset, value);
         }
-        return Fallback.getAndSetLong(array, offset, value);
+        return Fallback.LONG.update(array, offset, Update.SET, value);
     }
 
     public static byte getVolatileByte(byte[] array, int offset) {
         if (LOCK_FREE) {
             return (byte) BYTE_VH.getVolatile(array, offset);
         }
-        return Fallback.getVolatileByte(array, offset);
+        return (byte) Fallback.BYTE.get(array, offset);
     }
 
     public static int getVolatileInt(byte[] array, int offset) {
         if (LOCK_FREE) {
             return (int) INT_VH.getVolatile(array, offset);
         }
-        return Fallback.getVolatileInt(array, offset);
+        return (int) Fallback.INT.get(array, offset);
     }
 
     public static long getVolatileLong(byte[] array, int offset) {
         if (LOCK_FREE) {
             return (long) LONG_VH.getVolatile(array, offset);
         }
-        return Fallback.getVolatileLong(array, offset);
+        return Fallback.LONG.get(array, offset);
     }
 
     // --- 64-bit ---
@@ -233,7 +233,7 @@ public final class ByteArrayAtomics {
         if (LOCK_FREE) {
             return (short) SHORT_VH.getVolatile(array, offset);
         }
-        return Fallback.getVolatileShort(array, offset);
+        return (short) Fallback.SHORT.get(array, offset);
     }
 
     /**
@@ -301,7 +301,7 @@ public final class ByteArrayAtomics {
             BYTE_VH.setVolatile(array, offset, value);
             return;
         }
-        Fallback.setVolatileByte(array, offset, value);
+        Fallback.BYTE.set(array, offset, value);
     }
 
     public static void setVolatileInt(byte[] array, int offset, int value) {
@@ -309,7 +309,7 @@ public final class ByteArrayAtomics {
             INT_VH.setVolatile(array, offset, value);
             return;
         }
-        Fallback.setVolatileInt(array, offset, value);
+        Fallback.INT.set(array, offset, value);
     }
 
     // --- little-endian plain accessors used by the fallback ---
@@ -319,7 +319,7 @@ public final class ByteArrayAtomics {
             LONG_VH.setVolatile(array, offset, value);
             return;
         }
-        Fallback.setVolatileLong(array, offset, value);
+        Fallback.LONG.set(array, offset, value);
     }
 
     public static void setVolatileShort(byte[] array, int offset, short value) {
@@ -327,7 +327,7 @@ public final class ByteArrayAtomics {
             SHORT_VH.setVolatile(array, offset, value);
             return;
         }
-        Fallback.setVolatileShort(array, offset, value);
+        Fallback.SHORT.set(array, offset, value);
     }
 
     private static boolean supportsAtomicAccessModes() {
@@ -382,188 +382,76 @@ public final class ByteArrayAtomics {
      * the suite happens to run on. Every method here must be called with the array's monitor free; each takes it
      * itself.
      */
-    static final class Fallback {
-        private Fallback() {
-        }
+    enum Fallback {
+        BYTE,
+        INT,
+        LONG,
+        SHORT;
 
-        static byte compareAndExchangeByte(byte[] array, int offset, byte expected, byte replacement) {
+        long compareAndExchange(byte[] array, int offset, long expected, long replacement) {
             synchronized (lockFor(array)) {
-                byte current = array[offset];
+                long current = read(array, offset);
                 if (current == expected) {
-                    array[offset] = replacement;
+                    write(array, offset, replacement);
                 }
                 return current;
             }
         }
 
-        static int compareAndExchangeInt(byte[] array, int offset, int expected, int replacement) {
+        long get(byte[] array, int offset) {
             synchronized (lockFor(array)) {
-                int current = readInt(array, offset);
-                if (current == expected) {
-                    writeInt(array, offset, replacement);
-                }
+                return read(array, offset);
+            }
+        }
+
+        private long read(byte[] array, int offset) {
+            return switch (this) {
+                case BYTE -> array[offset];
+                case SHORT -> readShort(array, offset);
+                case INT -> readInt(array, offset);
+                case LONG -> readLong(array, offset);
+            };
+        }
+
+        void set(byte[] array, int offset, long value) {
+            synchronized (lockFor(array)) {
+                write(array, offset, value);
+            }
+        }
+
+        long update(byte[] array, int offset, Update operation, long operand) {
+            synchronized (lockFor(array)) {
+                long current = read(array, offset);
+                write(array, offset, operation.apply(current, operand));
                 return current;
             }
         }
 
-        static long compareAndExchangeLong(byte[] array, int offset, long expected, long replacement) {
-            synchronized (lockFor(array)) {
-                long current = readLong(array, offset);
-                if (current == expected) {
-                    writeLong(array, offset, replacement);
-                }
-                return current;
+        private void write(byte[] array, int offset, long value) {
+            switch (this) {
+                case BYTE -> array[offset] = (byte) value;
+                case SHORT -> writeShort(array, offset, (short) value);
+                case INT -> writeInt(array, offset, (int) value);
+                case LONG -> writeLong(array, offset, value);
             }
         }
+    }
 
-        static byte getAndAddByte(byte[] array, int offset, byte delta) {
-            return updateByte(array, offset, delta, Update.ADD);
-        }
+    enum Update {
+        ADD,
+        AND,
+        OR,
+        SET,
+        XOR;
 
-        static int getAndAddInt(byte[] array, int offset, int delta) {
-            return updateInt(array, offset, delta, Update.ADD);
-        }
-
-        static long getAndAddLong(byte[] array, int offset, long delta) {
-            return updateLong(array, offset, delta, Update.ADD);
-        }
-
-        static byte getAndBitwiseAndByte(byte[] array, int offset, byte operand) {
-            return updateByte(array, offset, operand, Update.AND);
-        }
-
-        static int getAndBitwiseAndInt(byte[] array, int offset, int operand) {
-            return updateInt(array, offset, operand, Update.AND);
-        }
-
-        static long getAndBitwiseAndLong(byte[] array, int offset, long operand) {
-            return updateLong(array, offset, operand, Update.AND);
-        }
-
-        static byte getAndBitwiseOrByte(byte[] array, int offset, byte operand) {
-            return updateByte(array, offset, operand, Update.OR);
-        }
-
-        static int getAndBitwiseOrInt(byte[] array, int offset, int operand) {
-            return updateInt(array, offset, operand, Update.OR);
-        }
-
-        static long getAndBitwiseOrLong(byte[] array, int offset, long operand) {
-            return updateLong(array, offset, operand, Update.OR);
-        }
-
-        static byte getAndBitwiseXorByte(byte[] array, int offset, byte operand) {
-            return updateByte(array, offset, operand, Update.XOR);
-        }
-
-        static int getAndBitwiseXorInt(byte[] array, int offset, int operand) {
-            return updateInt(array, offset, operand, Update.XOR);
-        }
-
-        static long getAndBitwiseXorLong(byte[] array, int offset, long operand) {
-            return updateLong(array, offset, operand, Update.XOR);
-        }
-
-        static byte getAndSetByte(byte[] array, int offset, byte value) {
-            return updateByte(array, offset, value, Update.SET);
-        }
-
-        static int getAndSetInt(byte[] array, int offset, int value) {
-            return updateInt(array, offset, value, Update.SET);
-        }
-
-        static long getAndSetLong(byte[] array, int offset, long value) {
-            return updateLong(array, offset, value, Update.SET);
-        }
-
-        static byte getVolatileByte(byte[] array, int offset) {
-            synchronized (lockFor(array)) {
-                return array[offset];
-            }
-        }
-
-        static int getVolatileInt(byte[] array, int offset) {
-            synchronized (lockFor(array)) {
-                return readInt(array, offset);
-            }
-        }
-
-        static long getVolatileLong(byte[] array, int offset) {
-            synchronized (lockFor(array)) {
-                return readLong(array, offset);
-            }
-        }
-
-        static short getVolatileShort(byte[] array, int offset) {
-            synchronized (lockFor(array)) {
-                return readShort(array, offset);
-            }
-        }
-
-        static void setVolatileByte(byte[] array, int offset, byte value) {
-            synchronized (lockFor(array)) {
-                array[offset] = value;
-            }
-        }
-
-        static void setVolatileInt(byte[] array, int offset, int value) {
-            synchronized (lockFor(array)) {
-                writeInt(array, offset, value);
-            }
-        }
-
-        static void setVolatileLong(byte[] array, int offset, long value) {
-            synchronized (lockFor(array)) {
-                writeLong(array, offset, value);
-            }
-        }
-
-        static void setVolatileShort(byte[] array, int offset, short value) {
-            synchronized (lockFor(array)) {
-                writeShort(array, offset, value);
-            }
-        }
-
-        private static byte updateByte(byte[] array, int offset, byte operand, Update operation) {
-            synchronized (lockFor(array)) {
-                byte current = array[offset];
-                array[offset] = (byte) operation.apply(current, operand);
-                return current;
-            }
-        }
-
-        private static int updateInt(byte[] array, int offset, int operand, Update operation) {
-            synchronized (lockFor(array)) {
-                int current = readInt(array, offset);
-                writeInt(array, offset, (int) operation.apply(current, operand));
-                return current;
-            }
-        }
-
-        private static long updateLong(byte[] array, int offset, long operand, Update operation) {
-            synchronized (lockFor(array)) {
-                long current = readLong(array, offset);
-                writeLong(array, offset, operation.apply(current, operand));
-                return current;
-            }
-        }
-
-        private enum Update {
-            ADD,
-            AND,
-            OR,
-            SET,
-            XOR;
-
-            long apply(long current, long operand) {
-                return switch (this) {
-                    case ADD -> current + operand;
-                    case AND -> current & operand;
-                    case OR -> current | operand;
-                    case XOR -> current ^ operand;
-                    case SET -> operand;
-                };
-            }
+        long apply(long current, long operand) {
+            return switch (this) {
+                case ADD -> current + operand;
+                case AND -> current & operand;
+                case OR -> current | operand;
+                case XOR -> current ^ operand;
+                case SET -> operand;
+            };
         }
     }
 }

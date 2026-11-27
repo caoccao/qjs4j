@@ -317,231 +317,434 @@ public final class JSContext implements AutoCloseable {
     }
 
     public JSAggregateError createJSAggregateError(String message) {
-        return valueFactory.createJSAggregateError(message);
+        return valueFactory.initializeError(new JSAggregateError(this, message));
     }
 
+    /**
+     * Create a new JSArray with proper prototype chain. Sets the array's prototype to Array.prototype from the global
+     * object.
+     *
+     * @return A new JSArray instance with prototype set
+     */
     public JSArray createJSArray() {
         return valueFactory.createJSArray();
     }
 
+    /**
+     * Create a new JSArray with specified values and proper prototype chain. Sets the array's prototype to
+     * Array.prototype from the global object.
+     *
+     * @param values
+     *            Initial values of the array
+     * @return A new JSArray instance with prototype set
+     */
     public JSArray createJSArray(JSValue... values) {
-        return valueFactory.createJSArray(values);
+        return valueFactory.initializePrototype(new JSArray(this, values), JSArray.NAME);
     }
 
+    /**
+     * Create a new JSArray taking ownership of a freshly allocated values array. Internal fast path to avoid an extra
+     * defensive copy in hot built-in paths.
+     */
     public JSArray createJSArray(JSValue[] values, boolean takeOwnership) {
-        return valueFactory.createJSArray(values, takeOwnership);
+        return valueFactory.initializePrototype(new JSArray(this, values, takeOwnership), JSArray.NAME);
     }
 
+    /**
+     * Create a new JSArray with specified length and proper prototype chain. Sets the array's prototype to
+     * Array.prototype from the global object.
+     *
+     * @param length
+     *            Initial length of the array; must be in {@code [0, 2^32 - 1]}
+     * @return A new JSArray instance with prototype set
+     * @throws com.caoccao.qjs4j.exceptions.JSRangeErrorException
+     *             when {@code length} is not a valid ECMAScript array length
+     */
     public JSArray createJSArray(long length) {
         return valueFactory.createJSArray(length);
     }
 
+    /**
+     * Create a new JSArray with specified length, capacity, and proper prototype chain. Sets the array's prototype to
+     * Array.prototype from the global object.
+     *
+     * @param length
+     *            Initial length of the array; must be in {@code [0, 2^32 - 1]}
+     * @param capacity
+     *            Initial capacity of the array
+     * @return A new JSArray instance with prototype set
+     * @throws com.caoccao.qjs4j.exceptions.JSRangeErrorException
+     *             when {@code length} is not a valid ECMAScript array length
+     */
     public JSArray createJSArray(long length, int capacity) {
-        return valueFactory.createJSArray(length, capacity);
+        return valueFactory.initializePrototype(new JSArray(this, length, capacity), JSArray.NAME);
     }
 
+    /**
+     * Create a new JSArrayBuffer with proper prototype chain.
+     *
+     * @param byteLength
+     *            The length in bytes
+     * @return A new JSArrayBuffer instance with prototype set
+     */
     public JSArrayBuffer createJSArrayBuffer(long byteLength) {
-        return valueFactory.createJSArrayBuffer(byteLength);
+        return valueFactory.initializePrototype(new JSArrayBuffer(this, byteLength), JSArrayBuffer.NAME);
     }
 
+    /**
+     * Create a new resizable JSArrayBuffer with proper prototype chain.
+     *
+     * @param byteLength
+     *            The initial length in bytes
+     * @param maxByteLength
+     *            The maximum length in bytes, or -1 for non-resizable
+     * @return A new JSArrayBuffer instance with prototype set
+     */
     public JSArrayBuffer createJSArrayBuffer(long byteLength, long maxByteLength) {
-        return valueFactory.createJSArrayBuffer(byteLength, maxByteLength);
+        return valueFactory.initializePrototype(new JSArrayBuffer(this, byteLength, maxByteLength), JSArrayBuffer.NAME);
     }
 
+    /**
+     * ES2024 7.3.34 ArraySpeciesCreate(originalArray, length). Following QuickJS JS_ArraySpeciesCreate.
+     *
+     * @return the new array-like object, or null if an exception was set on context
+     */
     public JSValue createJSArraySpecies(JSObject originalArray, long length) {
         return valueFactory.createJSArraySpecies(originalArray, length);
     }
 
     public JSBigInt64Array createJSBigInt64Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return valueFactory.createJSBigInt64Array(buffer, byteOffset, length);
+        return valueFactory.initializeTypedArray(new JSBigInt64Array(this, buffer, byteOffset, length));
     }
 
+    /**
+     * Create a new JSBigInt64Array with proper prototype chain.
+     *
+     * @param length
+     *            The length of the array
+     * @return A new JSBigInt64Array instance with prototype set
+     */
     public JSBigInt64Array createJSBigInt64Array(long length) {
-        return valueFactory.createJSBigInt64Array(length);
+        return valueFactory.initializeTypedArray(new JSBigInt64Array(this, length));
     }
 
     public JSBigIntObject createJSBigIntObject(JSBigInt value) {
-        return valueFactory.createJSBigIntObject(value);
+        return valueFactory.initializePrototype(new JSBigIntObject(this, value), JSBigIntObject.NAME);
     }
 
     public JSBigUint64Array createJSBigUint64Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return valueFactory.createJSBigUint64Array(buffer, byteOffset, length);
+        return valueFactory.initializeTypedArray(new JSBigUint64Array(this, buffer, byteOffset, length));
     }
 
+    /**
+     * Create a new JSBigUint64Array with proper prototype chain.
+     *
+     * @param length
+     *            The length of the array
+     * @return A new JSBigUint64Array instance with prototype set
+     */
     public JSBigUint64Array createJSBigUint64Array(long length) {
-        return valueFactory.createJSBigUint64Array(length);
+        return valueFactory.initializeTypedArray(new JSBigUint64Array(this, length));
     }
 
     public JSBooleanObject createJSBooleanObject(JSBoolean value) {
-        return valueFactory.createJSBooleanObject(value);
+        return valueFactory.initializePrototype(new JSBooleanObject(this, value), JSBooleanObject.NAME);
     }
 
+    /**
+     * Create a new JSDataView with proper prototype chain.
+     *
+     * @param buffer
+     *            The ArrayBuffer to view
+     * @param byteOffset
+     *            The offset in bytes
+     * @param byteLength
+     *            The length in bytes
+     * @return A new JSDataView instance with prototype set
+     */
     public JSDataView createJSDataView(IJSArrayBuffer buffer, long byteOffset, long byteLength) {
-        return valueFactory.createJSDataView(buffer, byteOffset, byteLength);
+        return valueFactory.initializePrototype(new JSDataView(this, buffer, byteOffset, byteLength), JSDataView.NAME);
     }
 
+    /**
+     * Create a new JSDate with proper prototype chain.
+     *
+     * @param timeValue
+     *            The time value in milliseconds
+     * @return A new JSDate instance with prototype set
+     */
     public JSDate createJSDate(double timeValue) {
         return valueFactory.createJSDate(timeValue);
     }
 
     public JSDisposableStack createJSDisposableStack() {
-        return valueFactory.createJSDisposableStack();
+        return valueFactory.initializePrototype(new JSDisposableStack(this), JSDisposableStack.NAME);
     }
 
     public JSError createJSError(String message) {
-        return valueFactory.createJSError(message);
+        return valueFactory.initializeError(new JSError(this, message));
     }
 
     public JSEvalError createJSEvalError(String message) {
-        return valueFactory.createJSEvalError(message);
+        return valueFactory.initializeError(new JSEvalError(this, message));
     }
 
     public JSFloat16Array createJSFloat16Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return valueFactory.createJSFloat16Array(buffer, byteOffset, length);
+        return valueFactory.initializeTypedArray(new JSFloat16Array(this, buffer, byteOffset, length));
     }
 
+    /**
+     * Create a new JSFloat16Array with proper prototype chain.
+     *
+     * @param length
+     *            The length of the array
+     * @return A new JSFloat16Array instance with prototype set
+     */
     public JSFloat16Array createJSFloat16Array(long length) {
-        return valueFactory.createJSFloat16Array(length);
+        return valueFactory.initializeTypedArray(new JSFloat16Array(this, length));
     }
 
     public JSFloat32Array createJSFloat32Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return valueFactory.createJSFloat32Array(buffer, byteOffset, length);
+        return valueFactory.initializeTypedArray(new JSFloat32Array(this, buffer, byteOffset, length));
     }
 
+    /**
+     * Create a new JSFloat32Array with proper prototype chain.
+     *
+     * @param length
+     *            The length of the array
+     * @return A new JSFloat32Array instance with prototype set
+     */
     public JSFloat32Array createJSFloat32Array(long length) {
-        return valueFactory.createJSFloat32Array(length);
+        return valueFactory.initializeTypedArray(new JSFloat32Array(this, length));
     }
 
     public JSFloat64Array createJSFloat64Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return valueFactory.createJSFloat64Array(buffer, byteOffset, length);
+        return valueFactory.initializeTypedArray(new JSFloat64Array(this, buffer, byteOffset, length));
     }
 
+    /**
+     * Create a new JSFloat64Array with proper prototype chain.
+     *
+     * @param length
+     *            The length of the array
+     * @return A new JSFloat64Array instance with prototype set
+     */
     public JSFloat64Array createJSFloat64Array(long length) {
-        return valueFactory.createJSFloat64Array(length);
+        return valueFactory.initializeTypedArray(new JSFloat64Array(this, length));
     }
 
     public JSInt16Array createJSInt16Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return valueFactory.createJSInt16Array(buffer, byteOffset, length);
+        return valueFactory.initializeTypedArray(new JSInt16Array(this, buffer, byteOffset, length));
     }
 
+    /**
+     * Create a new JSInt16Array with proper prototype chain.
+     *
+     * @param length
+     *            The length of the array
+     * @return A new JSInt16Array instance with prototype set
+     */
     public JSInt16Array createJSInt16Array(long length) {
-        return valueFactory.createJSInt16Array(length);
+        return valueFactory.initializeTypedArray(new JSInt16Array(this, length));
     }
 
     public JSInt32Array createJSInt32Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return valueFactory.createJSInt32Array(buffer, byteOffset, length);
+        return valueFactory.initializeTypedArray(new JSInt32Array(this, buffer, byteOffset, length));
     }
 
+    /**
+     * Create a new JSInt32Array with proper prototype chain.
+     *
+     * @param length
+     *            The length of the array
+     * @return A new JSInt32Array instance with prototype set
+     */
     public JSInt32Array createJSInt32Array(long length) {
-        return valueFactory.createJSInt32Array(length);
+        return valueFactory.initializeTypedArray(new JSInt32Array(this, length));
     }
 
     public JSInt8Array createJSInt8Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return valueFactory.createJSInt8Array(buffer, byteOffset, length);
+        return valueFactory.initializeTypedArray(new JSInt8Array(this, buffer, byteOffset, length));
     }
 
+    /**
+     * Create a new JSInt8Array with proper prototype chain.
+     *
+     * @param length
+     *            The length of the array
+     * @return A new JSInt8Array instance with prototype set
+     */
     public JSInt8Array createJSInt8Array(long length) {
-        return valueFactory.createJSInt8Array(length);
+        return valueFactory.initializeTypedArray(new JSInt8Array(this, length));
     }
 
+    /**
+     * Create a new JSMap with proper prototype chain.
+     *
+     * @return A new JSMap instance with prototype set
+     */
     public JSMap createJSMap() {
-        return valueFactory.createJSMap();
+        return valueFactory.initializePrototype(new JSMap(this), JSMap.NAME);
     }
 
     public JSNumberObject createJSNumberObject(JSNumber value) {
-        return valueFactory.createJSNumberObject(value);
+        return valueFactory.initializePrototype(new JSNumberObject(this, value), JSNumberObject.NAME);
     }
 
+    /**
+     * Create a new JSObject with proper prototype chain. Sets the object's prototype to Object.prototype from the
+     * global object.
+     *
+     * @return A new JSObject instance with prototype set
+     */
     public JSObject createJSObject() {
         return valueFactory.createJSObject();
     }
 
+    /**
+     * Create a new JSPromise with proper prototype chain.
+     *
+     * @return A new JSPromise instance with prototype set
+     */
     public JSPromise createJSPromise() {
         return valueFactory.createJSPromise();
     }
 
     public JSRangeError createJSRangeError(String message) {
-        return valueFactory.createJSRangeError(message);
+        return valueFactory.initializeError(new JSRangeError(this, message));
     }
 
     public JSReferenceError createJSReferenceError(String message) {
-        return valueFactory.createJSReferenceError(message);
+        return valueFactory.initializeError(new JSReferenceError(this, message));
     }
 
+    /**
+     * Create a new JSRegExp with proper prototype chain.
+     *
+     * @param pattern
+     *            The regular expression pattern
+     * @param flags
+     *            The regular expression flags
+     * @return A new JSRegExp instance with prototype set
+     */
     public JSRegExp createJSRegExp(String pattern, String flags) {
         return valueFactory.createJSRegExp(pattern, flags);
     }
 
+    /**
+     * Create a new JSSet with proper prototype chain.
+     *
+     * @return A new JSSet instance with prototype set
+     */
     public JSSet createJSSet() {
-        return valueFactory.createJSSet();
+        return valueFactory.initializePrototype(new JSSet(this), JSSet.NAME);
     }
 
     public JSStringObject createJSStringObject() {
-        return valueFactory.createJSStringObject();
+        return valueFactory.initializePrototype(new JSStringObject(this), JSStringObject.NAME);
     }
 
     public JSStringObject createJSStringObject(JSString value) {
-        return valueFactory.createJSStringObject(value);
+        return valueFactory.initializePrototype(new JSStringObject(this, value), JSStringObject.NAME);
     }
 
     public JSSuppressedError createJSSuppressedError(String message) {
-        return valueFactory.createJSSuppressedError(message);
+        return valueFactory.initializeError(new JSSuppressedError(this, message));
     }
 
     public JSSymbolObject createJSSymbolObject(JSSymbol value) {
-        return valueFactory.createJSSymbolObject(value);
+        return valueFactory.initializePrototype(new JSSymbolObject(this, value), JSSymbolObject.NAME);
     }
 
     public JSSyntaxError createJSSyntaxError(String message) {
-        return valueFactory.createJSSyntaxError(message);
+        return valueFactory.initializeError(new JSSyntaxError(this, message));
     }
 
     public JSTypeError createJSTypeError(String message) {
-        return valueFactory.createJSTypeError(message);
+        return valueFactory.initializeError(new JSTypeError(this, message));
     }
 
     public JSUint16Array createJSUint16Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return valueFactory.createJSUint16Array(buffer, byteOffset, length);
+        return valueFactory.initializeTypedArray(new JSUint16Array(this, buffer, byteOffset, length));
     }
 
+    /**
+     * Create a new JSUint16Array with proper prototype chain.
+     *
+     * @param length
+     *            The length of the array
+     * @return A new JSUint16Array instance with prototype set
+     */
     public JSUint16Array createJSUint16Array(long length) {
-        return valueFactory.createJSUint16Array(length);
+        return valueFactory.initializeTypedArray(new JSUint16Array(this, length));
     }
 
     public JSUint32Array createJSUint32Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return valueFactory.createJSUint32Array(buffer, byteOffset, length);
+        return valueFactory.initializeTypedArray(new JSUint32Array(this, buffer, byteOffset, length));
     }
 
+    /**
+     * Create a new JSUint32Array with proper prototype chain.
+     *
+     * @param length
+     *            The length of the array
+     * @return A new JSUint32Array instance with prototype set
+     */
     public JSUint32Array createJSUint32Array(long length) {
-        return valueFactory.createJSUint32Array(length);
+        return valueFactory.initializeTypedArray(new JSUint32Array(this, length));
     }
 
     public JSUint8Array createJSUint8Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return valueFactory.createJSUint8Array(buffer, byteOffset, length);
+        return valueFactory.initializeTypedArray(new JSUint8Array(this, buffer, byteOffset, length));
     }
 
+    /**
+     * Create a new JSUint8Array with proper prototype chain.
+     *
+     * @param length
+     *            The length of the array
+     * @return A new JSUint8Array instance with prototype set
+     */
     public JSUint8Array createJSUint8Array(long length) {
-        return valueFactory.createJSUint8Array(length);
+        return valueFactory.initializeTypedArray(new JSUint8Array(this, length));
     }
 
     public JSUint8ClampedArray createJSUint8ClampedArray(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return valueFactory.createJSUint8ClampedArray(buffer, byteOffset, length);
+        return valueFactory.initializeTypedArray(new JSUint8ClampedArray(this, buffer, byteOffset, length));
     }
 
+    /**
+     * Create a new JSUint8ClampedArray with proper prototype chain.
+     *
+     * @param length
+     *            The length of the array
+     * @return A new JSUint8ClampedArray instance with prototype set
+     */
     public JSUint8ClampedArray createJSUint8ClampedArray(long length) {
-        return valueFactory.createJSUint8ClampedArray(length);
+        return valueFactory.initializeTypedArray(new JSUint8ClampedArray(this, length));
     }
 
     public JSURIError createJSURIError(String message) {
-        return valueFactory.createJSURIError(message);
+        return valueFactory.initializeError(new JSURIError(this, message));
     }
 
+    /**
+     * Create a new JSWeakMap with proper prototype chain.
+     *
+     * @return A new JSWeakMap instance with prototype set
+     */
     public JSWeakMap createJSWeakMap() {
-        return valueFactory.createJSWeakMap();
+        return valueFactory.initializePrototype(new JSWeakMap(this), JSWeakMap.NAME);
     }
 
+    /**
+     * Create a new JSWeakSet with proper prototype chain.
+     *
+     * @return A new JSWeakSet instance with prototype set
+     */
     public JSWeakSet createJSWeakSet() {
-        return valueFactory.createJSWeakSet();
+        return valueFactory.initializePrototype(new JSWeakSet(this), JSWeakSet.NAME);
     }
 
     /**

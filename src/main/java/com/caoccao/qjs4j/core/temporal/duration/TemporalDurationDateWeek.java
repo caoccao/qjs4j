@@ -27,12 +27,12 @@ public record TemporalDurationDateWeek(long years, long months, long weeks, long
 
     public static TemporalDurationDateWeek calendarDateUntil(JSContext context, IsoDate firstDate, IsoDate secondDate,
             TemporalCalendarId calendarId, TemporalUnit largestUnit) {
-        if (calendarId == TemporalCalendarId.ISO8601) {
-            return calendarDateUntilIso(firstDate, secondDate, largestUnit);
-        }
         int sign = -Integer.signum(firstDate.compareTo(secondDate));
         if (sign == 0) {
             return ZERO;
+        }
+        if (calendarId == TemporalCalendarId.ISO8601) {
+            return calendarDateUntilIso(firstDate, secondDate, largestUnit, sign);
         }
 
         long years = 0;
@@ -52,22 +52,11 @@ public record TemporalDurationDateWeek(long years, long months, long weeks, long
         if (context.hasPendingException() || constrainedDate == null) {
             return null;
         }
-        long dayDifference = secondDate.toEpochDay() - constrainedDate.toEpochDay();
-        long weeks = 0;
-        if (largestUnit == TemporalUnit.WEEK) {
-            weeks = dayDifference / 7;
-            dayDifference = dayDifference % 7;
-        }
-        return new TemporalDurationDateWeek(years, months, weeks, dayDifference);
+        return withRemainingDays(years, months, secondDate.toEpochDay() - constrainedDate.toEpochDay(), largestUnit);
     }
 
     private static TemporalDurationDateWeek calendarDateUntilIso(IsoDate firstDate, IsoDate secondDate,
-            TemporalUnit largestUnit) {
-        int sign = -Integer.signum(firstDate.compareTo(secondDate));
-        if (sign == 0) {
-            return ZERO;
-        }
-
+            TemporalUnit largestUnit, int sign) {
         long years = 0;
         long months = 0;
         if (largestUnit == TemporalUnit.YEAR || largestUnit == TemporalUnit.MONTH) {
@@ -102,7 +91,11 @@ public record TemporalDurationDateWeek(long years, long months, long weeks, long
                 firstDate.month() + months);
         IsoDate constrainedDate = IsoDate.createConstrained(intermediateYearMonth.year(), intermediateYearMonth.month(),
                 firstDate.day());
-        long dayDifference = secondDate.toEpochDay() - constrainedDate.toEpochDay();
+        return withRemainingDays(years, months, secondDate.toEpochDay() - constrainedDate.toEpochDay(), largestUnit);
+    }
+
+    private static TemporalDurationDateWeek withRemainingDays(long years, long months, long dayDifference,
+            TemporalUnit largestUnit) {
         long weeks = 0;
         if (largestUnit == TemporalUnit.WEEK) {
             weeks = dayDifference / 7;

@@ -42,9 +42,8 @@ package com.caoccao.qjs4j.core;
  * @see JSProxy
  * @see JSNumber
  */
-public final class JSNumberObject extends JSObject {
+public final class JSNumberObject extends JSPrimitiveObject<JSNumber> {
     public static final String NAME = "Number";
-    private final JSNumber value;
 
     /**
      * Create a Number object wrapping the given number value.
@@ -63,9 +62,7 @@ public final class JSNumberObject extends JSObject {
      *            the JSNumber value to wrap
      */
     public JSNumberObject(JSContext context, JSNumber value) {
-        super(context);
-        this.value = value;
-        this.setPrimitiveValue(value);
+        super(context, value);
     }
 
     /**
@@ -75,11 +72,6 @@ public final class JSNumberObject extends JSObject {
      */
     public JSNumber getValue() {
         return value;
-    }
-
-    @Override
-    public Object toJavaObject() {
-        return value.value();
     }
 
     @Override

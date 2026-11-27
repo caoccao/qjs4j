@@ -347,7 +347,7 @@ public class JSModuleLoaderHookTest extends ModuleFileTest {
             JSFunction importValue = (JSFunction) realmContext.eval("ShadowRealm.prototype.importValue");
             JSValue realm = realmContext.eval("new ShadowRealm()");
             JSPromise promise = (JSPromise) importValue.call(realmContext, realm,
-                    new JSValue[]{new JSString(module.toString()), new JSString("answer")});
+                    nativeArguments(new JSString(module.toString()), "answer"));
             realmContext.processMicrotasks();
             assertThat(promise.getResult().toString()).isEqualTo("42");
         }

@@ -130,10 +130,10 @@ public final class TemporalPlainYearMonthPrototype {
         IsoCalendarDate calendarDateFields = plainYearMonth.getIsoDate()
                 .toIsoCalendarDate(plainYearMonth.getCalendarId());
         JSObject mergedFields = context.createJSObject();
-        mergedFields.set(PropertyKey.fromString("calendar"), new JSString(plainYearMonth.getCalendarId().identifier()));
-        mergedFields.set(PropertyKey.fromString("year"), JSNumber.of(calendarDateFields.year()));
-        mergedFields.set(PropertyKey.fromString("monthCode"), new JSString(calendarDateFields.monthCode()));
-        mergedFields.set(PropertyKey.fromString("day"), JSNumber.of(dayOfMonth));
+        mergedFields.set(PropertyKey.CALENDAR, new JSString(plainYearMonth.getCalendarId().identifier()));
+        mergedFields.set(PropertyKey.YEAR, JSNumber.of(calendarDateFields.year()));
+        mergedFields.set(PropertyKey.MONTH_CODE, new JSString(calendarDateFields.monthCode()));
+        mergedFields.set(PropertyKey.DAY, JSNumber.of(dayOfMonth));
         return TemporalCalendarFields.dateFromFields(context, mergedFields, JSUndefined.INSTANCE);
     }
 
@@ -161,9 +161,9 @@ public final class TemporalPlainYearMonthPrototype {
         }
 
         TemporalPropertyBag bag = new TemporalPropertyBag(context, fields);
-        Integer month = bag.integer("month");
-        String monthCode = bag.string("monthCode");
-        Integer year = bag.integer("year");
+        Integer month = bag.integerByKey(PropertyKey.MONTH);
+        String monthCode = bag.stringByKey(PropertyKey.MONTH_CODE);
+        Integer year = bag.integerByKey(PropertyKey.YEAR);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -186,12 +186,12 @@ public final class TemporalPlainYearMonthPrototype {
             }
             hasEraYear = eraYear != null;
         } else if (calendarId != TemporalCalendarId.ISO8601) {
-            JSValue eraValue = bag.value("era");
+            JSValue eraValue = bag.valueByKey(PropertyKey.ERA);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
             hasEra = !(eraValue instanceof JSUndefined) && eraValue != null;
-            JSValue eraYearValue = bag.value("eraYear");
+            JSValue eraYearValue = bag.valueByKey(PropertyKey.ERA_YEAR);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }

@@ -167,7 +167,7 @@ public final class TemporalZonedDateTimePrototype {
         }
 
         if (directionParam instanceof JSObject directionObject) {
-            JSValue directionValue = directionObject.get(PropertyKey.fromString("direction"));
+            JSValue directionValue = directionObject.get(PropertyKey.DIRECTION);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -482,10 +482,10 @@ public final class TemporalZonedDateTimePrototype {
 
         TemporalCalendarId calendarId = zonedDateTime.getCalendarId();
         TemporalTimeFields bag = new TemporalTimeFields(context, fieldsObject);
-        Integer dayField = bag.integer("day");
+        Integer dayField = bag.integerByKey(PropertyKey.DAY);
         bag.readThroughMinute();
-        Integer monthField = bag.integer("month");
-        String monthCodeField = bag.string("monthCode");
+        Integer monthField = bag.integerByKey(PropertyKey.MONTH);
+        String monthCodeField = bag.stringByKey(PropertyKey.MONTH_CODE);
         bag.readNanosecond();
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;

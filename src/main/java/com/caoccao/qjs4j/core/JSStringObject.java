@@ -46,9 +46,8 @@ import java.util.List;
  * @see JSProxy
  * @see JSString
  */
-public final class JSStringObject extends JSObject {
+public final class JSStringObject extends JSPrimitiveObject<JSString> {
     public static final String NAME = "String";
-    private final JSString value;
 
     public JSStringObject(JSContext context) {
         this(context, JSString.EMPTY);
@@ -61,9 +60,7 @@ public final class JSStringObject extends JSObject {
      *            the JSString value to wrap
      */
     public JSStringObject(JSContext context, JSString value) {
-        super(context);
-        this.value = value;
-        this.setPrimitiveValue(value);
+        super(context, value);
         // String objects have a non-writable, non-enumerable, non-configurable length property
         defineProperty(PropertyKey.LENGTH,
                 PropertyDescriptor.dataDescriptor(JSNumber.of(value.length()), PropertyDescriptor.DataState.None));
@@ -232,11 +229,6 @@ public final class JSStringObject extends JSObject {
             return false;
         }
         return super.setWithResult(key, value);
-    }
-
-    @Override
-    public Object toJavaObject() {
-        return value.value();
     }
 
     @Override

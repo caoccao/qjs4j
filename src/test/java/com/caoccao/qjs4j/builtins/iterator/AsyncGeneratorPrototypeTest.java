@@ -107,7 +107,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
         JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(context, values);
 
         // Test next() method
-        JSValue result = AsyncGeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(AsyncGeneratorPrototype::next, generator);
         JSPromise promise = result.asPromise().orElseThrow();
         assertThat(awaitPromise(promise)).isTrue();
 
@@ -118,7 +118,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testNextOnNonAsyncGenerator() {
         // Test next() called on non-async generator
-        JSValue result = AsyncGeneratorPrototype.next(context, new JSString("not a generator"), JSValue.NO_ARGS);
+        JSValue result = callBuiltin(AsyncGeneratorPrototype::next, new JSString("not a generator"));
         assertInvalidReceiverRejection(result);
     }
 
@@ -143,7 +143,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
         JSAsyncGenerator generator = AsyncGeneratorPrototype.createFromValues(context, values);
 
         // Test next() with a value parameter
-        JSValue result = AsyncGeneratorPrototype.next(context, generator, stringArgs("ignored"));
+        JSValue result = callBuiltin(AsyncGeneratorPrototype::next, generator, "ignored");
 
         JSPromise promise = result.asPromise().orElseThrow();
         assertThat(awaitPromise(promise)).isTrue();
@@ -160,7 +160,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
 
         // Test return() method
         JSValue returnValue = new JSString("early return");
-        JSValue result = AsyncGeneratorPrototype.return_(context, generator, new JSValue[]{returnValue});
+        JSValue result = callBuiltin(AsyncGeneratorPrototype::return_, generator, returnValue);
 
         JSPromise promise = result.asPromise().orElseThrow();
         assertThat(awaitPromise(promise)).isTrue();
@@ -172,7 +172,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testReturnOnNonAsyncGenerator() {
         // Test return() called on non-async generator
-        JSValue result = AsyncGeneratorPrototype.return_(context, new JSNumber(123), stringArgs("value"));
+        JSValue result = callBuiltin(AsyncGeneratorPrototype::return_, new JSNumber(123), "value");
         assertInvalidReceiverRejection(result);
     }
 
@@ -198,7 +198,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
 
         // Test throw() method
         JSValue exception = new JSString("test exception");
-        JSValue result = AsyncGeneratorPrototype.throw_(context, generator, new JSValue[]{exception});
+        JSValue result = callBuiltin(AsyncGeneratorPrototype::throw_, generator, exception);
 
         JSPromise promise = result.asPromise().orElseThrow();
         assertThat(awaitPromise(promise)).isTrue();
@@ -211,7 +211,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testThrowOnNonAsyncGenerator() {
         // Test throw() called on non-async generator
-        JSValue result = AsyncGeneratorPrototype.throw_(context, new JSObject(context), stringArgs("error"));
+        JSValue result = callBuiltin(AsyncGeneratorPrototype::throw_, new JSObject(context), "error");
         assertInvalidReceiverRejection(result);
     }
 

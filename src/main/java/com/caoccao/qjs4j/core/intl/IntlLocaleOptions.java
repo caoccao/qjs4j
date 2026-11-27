@@ -32,10 +32,10 @@ record IntlLocaleOptions(String language, String script, String region, String v
     private static final Set<String> HOUR_CYCLES = Set.of("h11", "h12", "h23", "h24");
 
     static IntlLocaleOptions read(JSContext context, JSValue options) {
-        String language = readStringOption(context, options, "language");
-        String script = readStringOption(context, options, "script");
-        String region = readStringOption(context, options, "region");
-        String variants = readStringOption(context, options, "variants");
+        String language = readStringOption(context, options, PropertyKey.LANGUAGE);
+        String script = readStringOption(context, options, PropertyKey.SCRIPT);
+        String region = readStringOption(context, options, PropertyKey.REGION);
+        String variants = readStringOption(context, options, PropertyKey.VARIANTS);
         if (context.hasPendingException()) {
             return null;
         }
@@ -51,16 +51,16 @@ record IntlLocaleOptions(String language, String script, String region, String v
         if (variants != null && !IntlLocaleTag.isValidVariantsSubtag(variants)) {
             throw invalid("variants", variants);
         }
-        String calendar = readStringOption(context, options, "calendar");
-        String collation = readStringOption(context, options, "collation");
-        String hourCycle = readStringOption(context, options, "hourCycle");
-        String caseFirst = readStringOption(context, options, "caseFirst");
+        String calendar = readStringOption(context, options, PropertyKey.CALENDAR);
+        String collation = readStringOption(context, options, PropertyKey.COLLATION);
+        String hourCycle = readStringOption(context, options, PropertyKey.HOUR_CYCLE);
+        String caseFirst = readStringOption(context, options, PropertyKey.CASE_FIRST);
         if (context.hasPendingException()) {
             return null;
         }
         Boolean numeric = null;
         if (options instanceof JSObject object) {
-            JSValue value = object.get(PropertyKey.fromString("numeric"));
+            JSValue value = object.get(PropertyKey.NUMERIC);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -68,8 +68,8 @@ record IntlLocaleOptions(String language, String script, String region, String v
                 numeric = JSTypeConversions.toBoolean(value) == JSBoolean.TRUE;
             }
         }
-        String numberingSystem = readStringOption(context, options, "numberingSystem");
-        String firstDay = readStringOption(context, options, "firstDayOfWeek");
+        String numberingSystem = readStringOption(context, options, PropertyKey.NUMBERING_SYSTEM);
+        String firstDay = readStringOption(context, options, PropertyKey.FIRST_DAY_OF_WEEK);
         if (context.hasPendingException()) {
             return null;
         }

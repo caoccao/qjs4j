@@ -99,7 +99,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertPendingTypeError(context, createMethod.call());
 
         // Edge case: invalid prototype
-        assertPendingTypeError(context, createMethod.call(stringArgs("not valid")));
+        assertPendingTypeError(context, createMethod.call("not valid"));
 
         context.eval("var proto = {x: 10}");
         result = context.eval("var newObj = Object.create(proto); newObj.x");
@@ -178,10 +178,10 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
         // Normal case: freeze primitive (returns primitive)
         BuiltinAssertions freeze = builtin(ObjectPrototype::freeze, JSUndefined.INSTANCE);
-        freeze.expectString("string", stringArgs("string"));
+        freeze.expectString("string", "string");
 
         // Edge case: freeze number primitive
-        freeze.expectNumber(42.0, numberArgs(42));
+        freeze.expectNumber(42.0, 42);
 
         // Edge case: freeze boolean primitive
         freeze.expectValue(JSBoolean.TRUE, JSBoolean.TRUE);
@@ -355,7 +355,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertPendingTypeError(context, fromEntriesMethod.call());
 
         // Edge case: non-iterable argument
-        assertPendingTypeError(context, fromEntriesMethod.call(numberArgs(42)));
+        assertPendingTypeError(context, fromEntriesMethod.call(42));
 
         // Test with string keys and various value types - use manual creation
         JSArray mixedEntries = new JSArray(context);
@@ -388,7 +388,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
         // Normal case: existing property
         var getOwnPropertyDescriptor = builtin(ObjectConstructor::getOwnPropertyDescriptor, JSUndefined.INSTANCE);
-        JSValue result = getOwnPropertyDescriptor.call(obj, new JSString("testProp"));
+        JSValue result = getOwnPropertyDescriptor.call(obj, "testProp");
         assertThat(result).isInstanceOfSatisfying(JSObject.class, desc -> {
             assertStringValue(desc.get("value"), "testValue");
             assertThat(desc.get("writable").asBoolean().map(JSBoolean::isBooleanTrue).orElseThrow()).isTrue();
@@ -397,7 +397,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         });
 
         // Normal case: non-existing property
-        result = getOwnPropertyDescriptor.call(obj, new JSString("nonexistent"));
+        result = getOwnPropertyDescriptor.call(obj, "nonexistent");
         assertThat(result.isUndefined()).isTrue();
 
         // Edge case: insufficient arguments
@@ -405,7 +405,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result.isUndefined()).isTrue();
 
         // Edge case: primitive (ToObject wraps it, then property lookup returns undefined)
-        result = getOwnPropertyDescriptor.call(stringArgs("not object", "prop"));
+        result = getOwnPropertyDescriptor.call("not object", "prop");
         assertThat(result.isUndefined()).isTrue();
     }
 
@@ -444,7 +444,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertPendingTypeError(context, getOwnPropertyNames.call());
 
         // Edge case: non-object primitive (should ToObject - strings have own properties)
-        result = getOwnPropertyNames.call(stringArgs("ab"));
+        result = getOwnPropertyNames.call("ab");
         assertThat(result).isInstanceOf(JSArray.class);
 
         assertObjectWithJavet("var obj = {first: 'John', last: 'Doe'}; Object.getOwnPropertyNames(obj)",
@@ -482,7 +482,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertPendingTypeError(context, getOwnPropertySymbols.call());
 
         // Edge case: non-object primitive (should ToObject, then return empty symbol array)
-        result = getOwnPropertySymbols.call(stringArgs("not object"));
+        result = getOwnPropertySymbols.call("not object");
         assertThat(result).isInstanceOfSatisfying(JSArray.class,
                 symbols -> assertThat(symbols.getLength()).isEqualTo(0));
     }
@@ -508,7 +508,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertPendingTypeError(context, getPrototypeOf.call());
 
         // Edge case: non-object primitive (should ToObject per spec)
-        result = getPrototypeOf.call(stringArgs("test"));
+        result = getPrototypeOf.call("test");
         assertThat(result).isInstanceOf(JSObject.class);
 
         assertBooleanWithJavet("""
@@ -529,19 +529,19 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
         // Normal case: existing property
         BuiltinAssertions hasOwn = builtin(ObjectConstructor::hasOwn, JSUndefined.INSTANCE);
-        hasOwn.expectValue(JSBoolean.TRUE, obj, new JSString("existingProp"));
+        hasOwn.expectValue(JSBoolean.TRUE, obj, "existingProp");
 
         // Normal case: non-existing property
-        hasOwn.expectValue(JSBoolean.FALSE, obj, new JSString("nonexistent"));
+        hasOwn.expectValue(JSBoolean.FALSE, obj, "nonexistent");
 
         // Edge case: insufficient arguments (should return false, not throw)
         hasOwn.expectValue(JSBoolean.FALSE, obj);
 
         // Edge case: no arguments
-        assertPendingTypeError(context, ObjectConstructor.hasOwn(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
+        assertPendingTypeError(context, callBuiltin(ObjectConstructor::hasOwn, JSUndefined.INSTANCE));
 
         // Edge case: non-object primitive (should ToObject per spec)
-        hasOwn.expectValue(JSBoolean.TRUE, stringArgs("test", "length"));
+        hasOwn.expectValue(JSBoolean.TRUE, "test", "length");
     }
 
     @Test
@@ -552,17 +552,17 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
         // Normal case: property exists
         BuiltinAssertions hasOwnProperty = builtin(ObjectConstructor::hasOwnProperty, obj);
-        hasOwnProperty.expectValue(JSBoolean.TRUE, stringArgs("a"));
+        hasOwnProperty.expectValue(JSBoolean.TRUE, "a");
 
         // Property doesn't exist
-        hasOwnProperty.expectValue(JSBoolean.FALSE, stringArgs("z"));
+        hasOwnProperty.expectValue(JSBoolean.FALSE, "z");
 
         // Edge case: no arguments
         hasOwnProperty.expectValue(JSBoolean.FALSE);
 
         // Edge case: called on non-object
         assertPendingTypeError(context,
-                ObjectConstructor.hasOwnProperty(context, new JSString("not object"), stringArgs("a")));
+                callBuiltin(ObjectConstructor::hasOwnProperty, new JSString("not object"), "a"));
     }
 
     @Test
@@ -592,7 +592,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result.isBooleanFalse()).isTrue();
 
         // After freezing via ObjectConstructor.freeze (which sets property descriptors)
-        ObjectConstructor.freeze(context, JSUndefined.INSTANCE, new JSValue[]{obj});
+        callBuiltin(ObjectConstructor::freeze, JSUndefined.INSTANCE, obj);
         result = isFrozen.call(obj);
         assertThat(result.isBooleanTrue()).isTrue();
 
@@ -611,7 +611,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result.isBooleanFalse()).isTrue();
 
         // After sealing via ObjectConstructor.seal (which sets property descriptors)
-        ObjectConstructor.seal(context, JSUndefined.INSTANCE, new JSValue[]{obj});
+        callBuiltin(ObjectConstructor::seal, JSUndefined.INSTANCE, obj);
         result = isSealed.call(obj);
         assertThat(result.isBooleanTrue()).isTrue();
 
@@ -748,7 +748,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result).isSameAs(primitiveTarget);
 
         // Edge case: invalid prototype
-        assertPendingTypeError(context, setPrototypeOf.call(obj, new JSString("invalid")));
+        assertPendingTypeError(context, setPrototypeOf.call(obj, "invalid"));
     }
 
     @Test

@@ -110,6 +110,12 @@ public abstract class BaseTest {
         assertThat(entry.get("done")).isEqualTo(JSBoolean.valueOf(done));
     }
 
+    protected void assertNumberElements(JSArray array, int start, double... expected) {
+        for (int i = 0; i < expected.length; i++) {
+            assertNumberValue(array.get(start + i), expected[i]);
+        }
+    }
+
     protected void assertNumberValue(JSValue value, double expected) {
         assertThat(value).isInstanceOfSatisfying(JSNumber.class,
                 number -> assertThat(number.value()).isEqualTo(expected));
@@ -144,6 +150,12 @@ public abstract class BaseTest {
         assertError(value, "RangeError", null);
     }
 
+    protected void assertStringElements(JSArray array, int start, String... expected) {
+        for (int i = 0; i < expected.length; i++) {
+            assertStringValue(array.get(start + i), expected[i]);
+        }
+    }
+
     protected void assertStringValue(JSValue value, String expected) {
         assertThat(value).isInstanceOfSatisfying(JSString.class,
                 string -> assertThat(string.value()).isEqualTo(expected));
@@ -173,6 +185,10 @@ public abstract class BaseTest {
         return new BuiltinAssertions(callback, receiver);
     }
 
+    protected JSValue callBuiltin(JSNativeCallback callback, JSValue receiver, Object... arguments) {
+        return callback.call(context, receiver, nativeArguments(arguments));
+    }
+
     protected JSRuntime createRuntime() {
         return new JSRuntime(
                 new JSRuntimeOptions().setModuleLoader(new JSFileSystemModuleLoader()).setTemporalEnabled(true));
@@ -184,6 +200,10 @@ public abstract class BaseTest {
 
     protected String loadCode(String path) throws IOException {
         return IOUtils.resourceToString(path, StandardCharsets.UTF_8, getClass().getClassLoader());
+    }
+
+    protected JSArray nativeArray(Object... elements) {
+        return new JSArray(context, nativeArguments(elements));
     }
 
     protected JSContext resetContext() {
@@ -202,6 +222,28 @@ public abstract class BaseTest {
     @AfterEach
     public void tearDown() throws Exception {
         context.getRuntime().close();
+    }
+
+    /** Box Java literals used by native builtin cases, preserving explicit JavaScript values and arrays. */
+    protected static JSValue[] nativeArguments(Object... inputs) {
+        if (inputs instanceof JSValue[] values) {
+            return values;
+        }
+        if (inputs.length == 0) {
+            return JSValue.NO_ARGS;
+        }
+        JSValue[] values = new JSValue[inputs.length];
+        for (int i = 0; i < inputs.length; i++) {
+            Object input = inputs[i];
+            if (input instanceof String string) {
+                values[i] = new JSString(string);
+            } else if (input instanceof Number number) {
+                values[i] = new JSNumber(number.doubleValue());
+            } else {
+                values[i] = (JSValue) input;
+            }
+        }
+        return values;
     }
 
     protected static JSValue[] numberArgs(double... values) {
@@ -229,24 +271,28 @@ public abstract class BaseTest {
             this.receiver = receiver;
         }
 
-        public JSValue call(JSValue... arguments) {
+        public JSValue call(JSValue[] arguments) {
             return callback.call(context, receiver, arguments);
         }
 
-        public void expectNaN(JSValue... arguments) {
+        public JSValue call(Object... arguments) {
+            return callBuiltin(callback, receiver, arguments);
+        }
+
+        public void expectNaN(Object... arguments) {
             assertThat(call(arguments)).isInstanceOfSatisfying(JSNumber.class,
                     number -> assertThat(number.value()).isNaN());
         }
 
-        public void expectNumber(double expected, JSValue... arguments) {
+        public void expectNumber(double expected, Object... arguments) {
             assertNumberValue(call(arguments), expected);
         }
 
-        public void expectString(String expected, JSValue... arguments) {
+        public void expectString(String expected, Object... arguments) {
             assertStringValue(call(arguments), expected);
         }
 
-        public void expectValue(JSValue expected, JSValue... arguments) {
+        public void expectValue(JSValue expected, Object... arguments) {
             assertThat(call(arguments)).isEqualTo(expected);
         }
     }

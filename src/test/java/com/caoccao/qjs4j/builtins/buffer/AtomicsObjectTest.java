@@ -51,17 +51,17 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
     private void assertWaitArgumentErrors(JSNativeCallback waitOperation, JSInt32Array arr) {
         // Test 3: Invalid arguments
-        JSValue error = waitOperation.call(context, null, new JSValue[]{arr, new JSNumber(0)});
+        JSValue error = waitOperation.call(context, null, nativeArguments(arr, 0));
         assertTypeError(error);
         context.clearPendingException();
 
         // Test 4: Non-TypedArray argument
-        error = waitOperation.call(context, null, numberArgs(1, 0, 0));
+        error = waitOperation.call(context, null, nativeArguments(1, 0, 0));
         assertTypeError(error);
         context.clearPendingException();
 
         // Test 5: Out of bounds index
-        error = waitOperation.call(context, null, new JSValue[]{arr, new JSNumber(10), new JSNumber(0)});
+        error = waitOperation.call(context, null, nativeArguments(arr, 10, 0));
         assertRangeError(error);
         context.clearPendingException();
     }
@@ -95,13 +95,13 @@ public class AtomicsObjectTest extends BaseJavetTest {
         assertTypeError(error);
         context.clearPendingException();
 
-        error = atomics().add(context, null, numberArgs(1, 0, 5)); // not
-                                                                   // typed
-                                                                   // array
+        error = atomics().add(context, null, nativeArguments(1, 0, 5)); // not
+        // typed
+        // array
         assertTypeError(error);
         context.clearPendingException();
 
-        error = atomics().add(context, null, new JSValue[]{arr, new JSNumber(10), new JSNumber(5)}); // out of bounds
+        error = atomics().add(context, null, nativeArguments(arr, 10, 5)); // out of bounds
         assertRangeError(error);
         context.clearPendingException();
     }
@@ -165,20 +165,20 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testIsLockFree() {
         // Test various sizes
-        JSValue result = atomics().isLockFree(context, null, numberArgs(1));
+        JSValue result = atomics().isLockFree(context, null, nativeArguments(1));
         assertThat(result.isBoolean()).isTrue(); // Implementation dependent
 
-        result = atomics().isLockFree(context, null, numberArgs(2));
+        result = atomics().isLockFree(context, null, nativeArguments(2));
         assertThat(result.isBoolean()).isTrue();
 
-        result = atomics().isLockFree(context, null, numberArgs(4));
+        result = atomics().isLockFree(context, null, nativeArguments(4));
         assertThat(result.isBoolean()).isTrue();
 
-        result = atomics().isLockFree(context, null, numberArgs(8));
+        result = atomics().isLockFree(context, null, nativeArguments(8));
         assertThat(result.isBoolean()).isTrue();
 
         // Test invalid size
-        result = atomics().isLockFree(context, null, numberArgs(3));
+        result = atomics().isLockFree(context, null, nativeArguments(3));
         assertThat(result.isBooleanFalse()).isTrue(); // Should be false for unsupported sizes
     }
 
@@ -212,10 +212,10 @@ public class AtomicsObjectTest extends BaseJavetTest {
         JSInt32Array arr = sharedInts(2, 111, 222);
 
         // Test load
-        JSValue result = atomics().load(context, null, new JSValue[]{arr, new JSNumber(0)});
+        JSValue result = atomics().load(context, null, nativeArguments(arr, 0));
         assertNumberValue(result, 111.0);
 
-        result = atomics().load(context, null, new JSValue[]{arr, new JSNumber(1)});
+        result = atomics().load(context, null, nativeArguments(arr, 1));
         assertNumberValue(result, 222.0);
     }
 
@@ -224,7 +224,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         JSInt32Array arr = sharedInts(1, 0);
 
         // Test 1: Notify with non-shared buffer - should still return 0
-        JSValue result = atomics().notify(context, null, new JSValue[]{arr, new JSNumber(0)});
+        JSValue result = atomics().notify(context, null, nativeArguments(arr, 0));
         assertThat(result.isNumber()).isTrue();
         assertNumberValue(result, 0.0);
 
@@ -234,18 +234,17 @@ public class AtomicsObjectTest extends BaseJavetTest {
         context.clearPendingException();
 
         // Test 3: Non-TypedArray argument
-        error = atomics().notify(context, null, numberArgs(1));
+        error = atomics().notify(context, null, nativeArguments(1));
         assertTypeError(error);
         context.clearPendingException();
 
         // Test 4: Out of bounds index
-        error = atomics().notify(context, null, new JSValue[]{arr, new JSNumber(10)});
+        error = atomics().notify(context, null, nativeArguments(arr, 10));
         assertRangeError(error);
         context.clearPendingException();
 
         // Test 5: Negative count is clamped to 0; non-shared buffers still return 0
-        JSValue negativeCountResult = atomics().notify(context, null,
-                new JSValue[]{arr, new JSNumber(0), new JSNumber(-1)});
+        JSValue negativeCountResult = atomics().notify(context, null, nativeArguments(arr, 0, -1));
         assertThat(negativeCountResult.isNumber()).isTrue();
         assertNumberValue(negativeCountResult, 0.0);
     }
@@ -266,7 +265,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
                 JSContext waiterCtx = sharedRuntime.createContext();
                 allWaitersStarted.countDown();
                 JSValue result = sharedRuntime.getAtomicsObject().wait(waiterCtx, null,
-                        new JSValue[]{arr, new JSNumber(0), new JSNumber(200), new JSNumber(5000)});
+                        nativeArguments(arr, 0, 200, 5000));
 
                 if (result instanceof JSString && "ok".equals(((JSString) result).value())) {
                     successCount.incrementAndGet();
@@ -284,8 +283,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         Thread.sleep(100);
 
         // Notify all waiters
-        JSValue notifyResult = atomics().notify(context, null,
-                new JSValue[]{arr, new JSNumber(0), new JSNumber(waiterCount)});
+        JSValue notifyResult = atomics().notify(context, null, nativeArguments(arr, 0, new JSNumber(waiterCount)));
 
         assertThat(notifyResult.isNumber()).isTrue();
         assertThat(notifyResult.asNumber().map(JSNumber::value).orElseThrow().intValue()).isEqualTo(waiterCount);
@@ -306,8 +304,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         Thread waiter = new Thread(() -> {
             JSContext waiterCtx = sharedRuntime.createContext();
             waiterStarted.countDown();
-            sharedRuntime.getAtomicsObject().wait(waiterCtx, null,
-                    new JSValue[]{arr, new JSNumber(0), new JSNumber(300), new JSNumber(5000)});
+            sharedRuntime.getAtomicsObject().wait(waiterCtx, null, nativeArguments(arr, 0, 300, 5000));
             waiterFinished.countDown();
             waiterCtx.close();
         });
@@ -378,13 +375,12 @@ public class AtomicsObjectTest extends BaseJavetTest {
         JSInt32Array arr = sharedInts(1, 42);
 
         // Test 1: Wait with non-matching value - should return "not-equal"
-        JSValue result = atomics().wait(context, null,
-                new JSValue[]{arr, new JSNumber(0), new JSNumber(0), new JSNumber(0)});
+        JSValue result = atomics().wait(context, null, nativeArguments(arr, 0, 0, 0));
         assertThat(result.isString()).isTrue();
         assertStringValue(result, "not-equal");
 
         // Test 2: Wait with matching value and immediate timeout - should return "timed-out"
-        result = atomics().wait(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(42), new JSNumber(0)});
+        result = atomics().wait(context, null, nativeArguments(arr, 0, 42, 0));
         assertThat(result.isString()).isTrue();
         assertStringValue(result, "timed-out");
 
@@ -424,7 +420,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         Thread.sleep(100);
 
         // Thread 2: Notify
-        JSValue notifyResult = atomics().notify(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(1)});
+        JSValue notifyResult = atomics().notify(context, null, nativeArguments(arr, 0, 1));
 
         // Should notify 1 waiter
         assertThat(notifyResult.isNumber()).isTrue();
@@ -440,15 +436,14 @@ public class AtomicsObjectTest extends BaseJavetTest {
         JSInt32Array arr = sharedInts(1, 42);
 
         // Test 1: waitAsync with non-matching value - should return {async: false, value: "not-equal"}
-        JSValue result = atomics().waitAsync(context, null, new JSValue[]{arr, new JSNumber(0), new JSNumber(0)});
+        JSValue result = atomics().waitAsync(context, null, nativeArguments(arr, 0, 0));
         JSObject resultObj = result.asObject().orElseThrow();
         assertThat(resultObj.get("async").isBoolean()).isTrue();
         assertThat(resultObj.get("async").asBoolean().map(JSBoolean::value).orElseThrow()).isFalse();
         assertThat(((JSString) resultObj.get("value")).value()).isEqualTo("not-equal");
 
         // Test 2: waitAsync with matching value and positive timeout - should return {async: true, value: Promise}
-        result = atomics().waitAsync(context, null,
-                new JSValue[]{arr, new JSNumber(0), new JSNumber(42), new JSNumber(1)});
+        result = atomics().waitAsync(context, null, nativeArguments(arr, 0, 42, 1));
         resultObj = result.asObject().orElseThrow();
         assertThat(resultObj.get("async").isBoolean()).isTrue();
         assertThat(resultObj.get("async").asBoolean().map(JSBoolean::value).orElseThrow()).isTrue();

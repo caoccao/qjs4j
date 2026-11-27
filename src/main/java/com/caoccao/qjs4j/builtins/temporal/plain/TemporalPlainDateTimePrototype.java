@@ -296,7 +296,7 @@ public final class TemporalPlainDateTimePrototype {
         Integer day = bag.positiveDateField("day");
         bag.readThroughMinute();
         Integer month = bag.positiveDateField("month");
-        String monthCode = bag.string("monthCode");
+        String monthCode = bag.stringByKey(PropertyKey.MONTH_CODE);
         bag.readNanosecond();
         bag.readSecond();
         TemporalPartialDate dateFields = bag.readYearAndEra(calendarId, day, month, monthCode);

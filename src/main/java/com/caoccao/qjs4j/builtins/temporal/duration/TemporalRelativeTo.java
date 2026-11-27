@@ -87,7 +87,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
     }
 
     private static TemporalRelativeTo parseRelativeToPropertyBag(JSContext context, JSObject relativeToObject) {
-        JSValue calendarValue = relativeToObject.get(PropertyKey.fromString("calendar"));
+        JSValue calendarValue = relativeToObject.get(PropertyKey.CALENDAR);
         if (context.hasPendingException()) {
             return null;
         }
@@ -99,10 +99,10 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
         }
 
         if (!(relativeToObject instanceof JSProxy)) {
-            boolean hasOwnDateField = relativeToObject.hasOwnProperty(PropertyKey.fromString("year"))
-                    || relativeToObject.hasOwnProperty(PropertyKey.fromString("month"))
-                    || relativeToObject.hasOwnProperty(PropertyKey.fromString("monthCode"))
-                    || relativeToObject.hasOwnProperty(PropertyKey.fromString("day"));
+            boolean hasOwnDateField = relativeToObject.hasOwnProperty(PropertyKey.YEAR)
+                    || relativeToObject.hasOwnProperty(PropertyKey.MONTH)
+                    || relativeToObject.hasOwnProperty(PropertyKey.MONTH_CODE)
+                    || relativeToObject.hasOwnProperty(PropertyKey.DAY);
             if (!hasOwnDateField) {
                 return TemporalError.INVALID_RELATIVE_TO.reject(context);
             }
@@ -112,14 +112,14 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
         }
 
         TemporalPropertyBag bag = new TemporalPropertyBag(context, relativeToObject);
-        Long dayOfMonth = toRequiredIntegralLong(context, bag.value("day"));
-        Long hour = toOptionalIntegralLong(context, bag.value("hour"), 0L);
-        Long microsecond = toOptionalIntegralLong(context, bag.value("microsecond"), 0L);
-        Long millisecond = toOptionalIntegralLong(context, bag.value("millisecond"), 0L);
-        Long minute = toOptionalIntegralLong(context, bag.value("minute"), 0L);
-        Long month = toOptionalIntegralLong(context, bag.value("month"), null);
-        String monthCode = bag.string("monthCode");
-        Long nanosecond = toOptionalIntegralLong(context, bag.value("nanosecond"), 0L);
+        Long dayOfMonth = toRequiredIntegralLong(context, bag.valueByKey(PropertyKey.DAY));
+        Long hour = toOptionalIntegralLong(context, bag.valueByKey(PropertyKey.HOUR), 0L);
+        Long microsecond = toOptionalIntegralLong(context, bag.valueByKey(PropertyKey.MICROSECOND), 0L);
+        Long millisecond = toOptionalIntegralLong(context, bag.valueByKey(PropertyKey.MILLISECOND), 0L);
+        Long minute = toOptionalIntegralLong(context, bag.valueByKey(PropertyKey.MINUTE), 0L);
+        Long month = toOptionalIntegralLong(context, bag.valueByKey(PropertyKey.MONTH), null);
+        String monthCode = bag.stringByKey(PropertyKey.MONTH_CODE);
+        Long nanosecond = toOptionalIntegralLong(context, bag.valueByKey(PropertyKey.NANOSECOND), 0L);
         String offsetText = bag.offset();
         if (context.hasPendingException()) {
             return null;
@@ -127,11 +127,11 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
         if (offsetText != null && !TemporalTimeZone.isValidOffsetString(offsetText)) {
             return TemporalError.INVALID_OFFSET_STRING.reject(context);
         }
-        Long second = toOptionalIntegralLong(context, bag.value("second"), 0L);
-        JSValue timeZoneValue = bag.value("timeZone");
-        JSValue yearValue = bag.value("year");
+        Long second = toOptionalIntegralLong(context, bag.valueByKey(PropertyKey.SECOND), 0L);
+        JSValue timeZoneValue = bag.valueByKey(PropertyKey.TIME_ZONE);
+        JSValue yearValue = bag.valueByKey(PropertyKey.YEAR);
         if (JSTypeChecking.isUndefinedOrMissing(yearValue)) {
-            toOptionalIntegralLong(context, bag.value("eraYear"), null);
+            toOptionalIntegralLong(context, bag.valueByKey(PropertyKey.ERA_YEAR), null);
         }
         Long year = toRequiredIntegralLong(context, yearValue);
         if (context.hasPendingException()) {

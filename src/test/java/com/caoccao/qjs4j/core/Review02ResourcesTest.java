@@ -69,7 +69,7 @@ class Review02ResourcesTest extends BaseJavetTest {
         };
         Thread worker = new Thread(() -> {
             try {
-                ArrayPrototype.includes(context, receiver, new JSValue[]{JSNumber.of(1)});
+                callBuiltin(ArrayPrototype::includes, receiver, JSNumber.of(1));
             } catch (Throwable error) {
                 failure.set(error);
             }
@@ -111,7 +111,7 @@ class Review02ResourcesTest extends BaseJavetTest {
         JSObject receiver = context.createJSObject();
         receiver.set("length", JSNumber.of(100_000_000));
         context.getVirtualMachine().setExecutionDeadline(System.currentTimeMillis() - 1);
-        assertThatThrownBy(() -> ArrayPrototype.includes(context, receiver, new JSValue[]{JSNumber.of(1)}))
+        assertThatThrownBy(() -> callBuiltin(ArrayPrototype::includes, receiver, JSNumber.of(1)))
                 .isInstanceOf(JSTerminationException.class);
     }
 
@@ -120,7 +120,7 @@ class Review02ResourcesTest extends BaseJavetTest {
         context.getRuntime().requestInterrupt();
         JSObject receiver = context.createJSObject();
         receiver.set("length", JSNumber.of(100_000_000));
-        assertThatThrownBy(() -> ArrayPrototype.indexOf(context, receiver, new JSValue[]{JSNumber.of(1)}))
+        assertThatThrownBy(() -> callBuiltin(ArrayPrototype::indexOf, receiver, JSNumber.of(1)))
                 .isInstanceOf(JSTerminationException.class);
         context.getRuntime().clearInterrupt();
     }

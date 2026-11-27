@@ -47,14 +47,14 @@ final class IntlListFormatBuiltins {
             }
 
             String type = IntlFormatOptions.normalizeOption(
-                    IntlFormatOptions.readStringOption(context, optionsObj, "type"), "conjunction", "conjunction",
-                    "disjunction", "unit");
+                    IntlFormatOptions.readStringOption(context, optionsObj, PropertyKey.TYPE), "conjunction",
+                    "conjunction", "disjunction", "unit");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
 
             String style = IntlFormatOptions.normalizeOption(
-                    IntlFormatOptions.readStringOption(context, optionsObj, "style"), "long", "long", "short",
+                    IntlFormatOptions.readStringOption(context, optionsObj, PropertyKey.STYLE), "long", "long", "short",
                     "narrow");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -110,9 +110,9 @@ final class IntlListFormatBuiltins {
         JSObject resolvedOptions = context.createJSObject();
         // Use CreateDataProperty (defineProperty) instead of [[Set]] to avoid
         // triggering getter-only accessors on Object.prototype (per spec §9.1.6.3)
-        createDataProperty(resolvedOptions, "locale", new JSString(listFormat.getLocale().toLanguageTag()));
-        createDataProperty(resolvedOptions, "type", new JSString(listFormat.getType()));
-        createDataProperty(resolvedOptions, "style", new JSString(listFormat.getStyle()));
+        createDataProperty(resolvedOptions, PropertyKey.LOCALE, new JSString(listFormat.getLocale().toLanguageTag()));
+        createDataProperty(resolvedOptions, PropertyKey.TYPE, new JSString(listFormat.getType()));
+        createDataProperty(resolvedOptions, PropertyKey.STYLE, new JSString(listFormat.getStyle()));
         return resolvedOptions;
     }
 

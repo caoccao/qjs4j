@@ -199,7 +199,11 @@ public final class TemporalUtils {
     }
 
     public static Integer getOptionalIntegerField(JSContext context, JSObject fields, String name) {
-        JSValue value = fields.get(PropertyKey.fromString(name));
+        return getOptionalIntegerFieldByKey(context, fields, PropertyKey.fromString(name));
+    }
+
+    public static Integer getOptionalIntegerFieldByKey(JSContext context, JSObject fields, PropertyKey name) {
+        JSValue value = fields.get(name);
         if (context.hasPendingException() || JSTypeChecking.isUndefinedOrMissing(value)) {
             return null;
         }
@@ -231,7 +235,12 @@ public final class TemporalUtils {
      * Gets a string option from an options object.
      */
     public static String getStringOption(JSContext context, JSObject options, String optionKey, String defaultValue) {
-        JSValue value = options.get(PropertyKey.fromString(optionKey));
+        return getStringOptionByKey(context, options, PropertyKey.fromString(optionKey), defaultValue);
+    }
+
+    public static String getStringOptionByKey(JSContext context, JSObject options, PropertyKey optionKey,
+            String defaultValue) {
+        JSValue value = options.get(optionKey);
         if (context.hasPendingException()) {
             return null;
         }
@@ -456,7 +465,7 @@ public final class TemporalUtils {
 
     /** Coerce roundingIncrement, leaving the unit-specific bounds check to the caller. */
     public static long readRoundingIncrement(JSContext context, JSObject optionsObject, String invalidOptionMessage) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString("roundingIncrement"));
+        JSValue optionValue = optionsObject.get(PropertyKey.ROUNDING_INCREMENT);
         if (context.hasPendingException()) {
             return Long.MIN_VALUE;
         }
@@ -500,14 +509,14 @@ public final class TemporalUtils {
                 || fields instanceof JSTemporalPlainYearMonth || fields instanceof JSTemporalZonedDateTime) {
             return context.rejectTypeError(errorMessage);
         }
-        JSValue calendar = fields.get(PropertyKey.fromString("calendar"));
+        JSValue calendar = fields.get(PropertyKey.CALENDAR);
         if (context.hasPendingException()) {
             return null;
         }
         if (calendar != null && !(calendar instanceof JSUndefined)) {
             return context.rejectTypeError(errorMessage);
         }
-        JSValue timeZone = fields.get(PropertyKey.fromString("timeZone"));
+        JSValue timeZone = fields.get(PropertyKey.TIME_ZONE);
         if (context.hasPendingException()) {
             return null;
         }

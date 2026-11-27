@@ -47,9 +47,8 @@ import java.math.BigInteger;
  * @see JSProxy
  * @see JSBigInt
  */
-public final class JSBigIntObject extends JSObject {
+public final class JSBigIntObject extends JSPrimitiveObject<JSBigInt> {
     public static final String NAME = "BigInt";
-    private final JSBigInt value;
 
     /**
      * Create a BigInt object wrapping the given BigInteger value.
@@ -68,9 +67,7 @@ public final class JSBigIntObject extends JSObject {
      *            the JSBigInt value to wrap
      */
     public JSBigIntObject(JSContext context, JSBigInt value) {
-        super(context);
-        this.value = value;
-        this.setPrimitiveValue(value);
+        super(context, value);
     }
 
     /**
@@ -80,11 +77,6 @@ public final class JSBigIntObject extends JSObject {
      */
     public JSBigInt getValue() {
         return value;
-    }
-
-    @Override
-    public Object toJavaObject() {
-        return value.value();
     }
 
     @Override

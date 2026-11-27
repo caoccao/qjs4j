@@ -135,18 +135,14 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
             // Similar to parseClassElement logic
             if (!isAsync && !isGenerator && parserContext.match(TokenType.IDENTIFIER)) {
                 String name = parserContext.currentToken.value();
-                if ((JSKeyword.GET.equals(name) || JSKeyword.SET.equals(name)) && parserContext.currentToken.escaped()
+                if ((JSKeyword.GET.equals(name) || JSKeyword.SET.equals(name))
                         && parserContext.nextToken.type() != TokenType.COLON
                         && parserContext.nextToken.type() != TokenType.COMMA
                         && parserContext.nextToken.type() != TokenType.LPAREN
                         && parserContext.nextToken.type() != TokenType.RBRACE) {
-                    throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
-                }
-                if ((JSKeyword.GET.equals(name) || JSKeyword.SET.equals(name)) && !parserContext.currentToken.escaped()
-                        && parserContext.nextToken.type() != TokenType.COLON
-                        && parserContext.nextToken.type() != TokenType.COMMA
-                        && parserContext.nextToken.type() != TokenType.LPAREN
-                        && parserContext.nextToken.type() != TokenType.RBRACE) {
+                    if (parserContext.currentToken.escaped()) {
+                        throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
+                    }
                     String kind = name;
                     parserContext.advance(); // consume 'get' or 'set'
 

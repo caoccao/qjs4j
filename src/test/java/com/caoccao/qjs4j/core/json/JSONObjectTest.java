@@ -111,8 +111,7 @@ public class JSONObjectTest extends BaseJavetTest {
 
         JSArray tags1 = user1.get("tags").asArray().orElseThrow();
         assertThat(tags1.getLength()).isEqualTo(2);
-        assertStringValue(tags1.get(0), "developer");
-        assertStringValue(tags1.get(1), "admin");
+        assertStringElements(tags1, 0, "developer", "admin");
 
         // Check metadata
         JSObject metadata = root.get("metadata").asObject().orElseThrow();
@@ -161,7 +160,7 @@ public class JSONObjectTest extends BaseJavetTest {
         assertPendingSyntaxError(context, parse("{invalid}"));
         assertPendingSyntaxError(context, parse("\"unterminated"));
         assertPendingSyntaxError(context, parse());
-        assertNumberValue(parse(numberArgs(123)), 123.0);
+        assertNumberValue(parse(nativeArguments(123)), 123.0);
     }
 
     @Test
@@ -290,8 +289,7 @@ public class JSONObjectTest extends BaseJavetTest {
         JSValue result = parse(new JSString(json), reviver);
         JSArray arr = result.asArray().orElseThrow();
 
-        assertNumberValue(arr.get(0), 2.0);
-        assertNumberValue(arr.get(1), 4.0);
+        assertNumberElements(arr, 0, 2.0, 4.0);
     }
 
     @Test
@@ -732,10 +730,10 @@ public class JSONObjectTest extends BaseJavetTest {
         assertStringValue(stringify(JSNull.INSTANCE), "null");
         assertStringValue(stringify(JSBoolean.TRUE), "true");
         assertStringValue(stringify(JSBoolean.FALSE), "false");
-        assertStringValue(stringify(numberArgs(42)), "42");
-        assertStringValue(stringify(numberArgs(-123.45)), "-123.45");
-        assertStringValue(stringify(stringArgs("hello world")), "\"hello world\"");
-        assertStringValue(stringify(stringArgs("hello\nworld")), "\"hello\\nworld\"");
+        assertStringValue(stringify(nativeArguments(42)), "42");
+        assertStringValue(stringify(nativeArguments(-123.45)), "-123.45");
+        assertStringValue(stringify(nativeArguments("hello world")), "\"hello world\"");
+        assertStringValue(stringify(nativeArguments("hello\nworld")), "\"hello\\nworld\"");
     }
 
     @Test
@@ -922,7 +920,7 @@ public class JSONObjectTest extends BaseJavetTest {
         obj.set("2", new JSString("two"));
 
         // Replacer array with numbers
-        JSArray replacer = new JSArray(context, numberArgs(0, 2));
+        JSArray replacer = nativeArray(0, 2);
 
         JSValue result = stringify(obj, replacer);
         String jsonStr = result.asString().map(JSString::value).orElseThrow();

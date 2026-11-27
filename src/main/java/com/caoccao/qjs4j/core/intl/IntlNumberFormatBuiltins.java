@@ -49,7 +49,7 @@ final class IntlNumberFormatBuiltins {
             if (!(partValue instanceof JSObject partObject)) {
                 continue;
             }
-            JSValue typeValue = partObject.get(PropertyKey.fromString("type"));
+            JSValue typeValue = partObject.get(PropertyKey.TYPE);
             JSValue valueValue = partObject.get(PropertyKey.VALUE);
             if (!(typeValue instanceof JSString typeString) || !(valueValue instanceof JSString valueString)) {
                 continue;
@@ -104,7 +104,7 @@ final class IntlNumberFormatBuiltins {
             }
 
             String numberingSystemOption = IntlFormatOptions.readStringOption(context, optionsObject,
-                    "numberingSystem");
+                    PropertyKey.NUMBERING_SYSTEM);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -115,9 +115,9 @@ final class IntlNumberFormatBuiltins {
                 numberingSystemOption = numberingSystemOption.toLowerCase(Locale.ROOT);
             }
 
-            String style = IntlFormatOptions.normalizedStringOption(context, optionsObject, "style", "decimal",
-                    NUMBER_STYLE_VALUES);
-            String currency = IntlFormatOptions.readStringOption(context, optionsObject, "currency");
+            String style = IntlFormatOptions.normalizedStringOption(context, optionsObject, PropertyKey.STYLE,
+                    "decimal", NUMBER_STYLE_VALUES);
+            String currency = IntlFormatOptions.readStringOption(context, optionsObject, PropertyKey.CURRENCY);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -128,13 +128,13 @@ final class IntlNumberFormatBuiltins {
                 currency = currency.toUpperCase(Locale.ROOT);
             }
 
-            String currencyDisplay = IntlFormatOptions.normalizedStringOption(context, optionsObject, "currencyDisplay",
-                    "symbol", CURRENCY_DISPLAY_VALUES);
-            String currencySign = IntlFormatOptions.normalizedStringOption(context, optionsObject, "currencySign",
-                    "standard", CURRENCY_SIGN_VALUES);
-            String unit = IntlFormatOptions.readStringOption(context, optionsObject, "unit");
-            String unitDisplay = IntlFormatOptions.normalizedStringOption(context, optionsObject, "unitDisplay",
-                    "short", UNIT_DISPLAY_VALUES);
+            String currencyDisplay = IntlFormatOptions.normalizedStringOption(context, optionsObject,
+                    PropertyKey.CURRENCY_DISPLAY, "symbol", CURRENCY_DISPLAY_VALUES);
+            String currencySign = IntlFormatOptions.normalizedStringOption(context, optionsObject,
+                    PropertyKey.CURRENCY_SIGN, "standard", CURRENCY_SIGN_VALUES);
+            String unit = IntlFormatOptions.readStringOption(context, optionsObject, PropertyKey.UNIT);
+            String unitDisplay = IntlFormatOptions.normalizedStringOption(context, optionsObject,
+                    PropertyKey.UNIT_DISPLAY, "short", UNIT_DISPLAY_VALUES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -169,19 +169,19 @@ final class IntlNumberFormatBuiltins {
                 return JSUndefined.INSTANCE;
             }
 
-            String compactDisplay = IntlFormatOptions.normalizedStringOption(context, optionsObject, "compactDisplay",
-                    "short", COMPACT_DISPLAY_VALUES);
+            String compactDisplay = IntlFormatOptions.normalizedStringOption(context, optionsObject,
+                    PropertyKey.COMPACT_DISPLAY, "short", COMPACT_DISPLAY_VALUES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
 
-            JSValue useGroupingValue = optionsObject.get(PropertyKey.fromString("useGrouping"));
+            JSValue useGroupingValue = optionsObject.get(PropertyKey.USE_GROUPING);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
             String useGroupingMode = parseUseGroupingOption(context, useGroupingValue, notation);
-            String signDisplay = IntlFormatOptions.normalizedStringOption(context, optionsObject, "signDisplay", "auto",
-                    SIGN_DISPLAY_VALUES);
+            String signDisplay = IntlFormatOptions.normalizedStringOption(context, optionsObject,
+                    PropertyKey.SIGN_DISPLAY, "auto", SIGN_DISPLAY_VALUES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -464,24 +464,25 @@ final class IntlNumberFormatBuiltins {
                     .throwTypeError("Intl.NumberFormat.prototype.resolvedOptions called on incompatible receiver");
         }
         JSObject resolvedOptions = context.createJSObject();
-        IntlBuiltins.createDataProperty(resolvedOptions, "locale",
+        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.LOCALE,
                 new JSString(numberFormat.getLocale().toLanguageTag()));
-        IntlBuiltins.createDataProperty(resolvedOptions, "numberingSystem",
+        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.NUMBERING_SYSTEM,
                 new JSString(numberFormat.getNumberingSystem()));
-        IntlBuiltins.createDataProperty(resolvedOptions, "style", new JSString(numberFormat.getStyle()));
+        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.STYLE, new JSString(numberFormat.getStyle()));
         if ("currency".equals(numberFormat.getStyle()) && numberFormat.getCurrency() != null) {
-            IntlBuiltins.createDataProperty(resolvedOptions, "currency", new JSString(numberFormat.getCurrency()));
-            IntlBuiltins.createDataProperty(resolvedOptions, "currencyDisplay",
+            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.CURRENCY,
+                    new JSString(numberFormat.getCurrency()));
+            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.CURRENCY_DISPLAY,
                     new JSString(numberFormat.getCurrencyDisplay()));
-            IntlBuiltins.createDataProperty(resolvedOptions, "currencySign",
+            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.CURRENCY_SIGN,
                     new JSString(numberFormat.getCurrencySign()));
         }
         if ("unit".equals(numberFormat.getStyle()) && numberFormat.getUnit() != null) {
-            IntlBuiltins.createDataProperty(resolvedOptions, "unit", new JSString(numberFormat.getUnit()));
-            IntlBuiltins.createDataProperty(resolvedOptions, "unitDisplay",
+            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.UNIT, new JSString(numberFormat.getUnit()));
+            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.UNIT_DISPLAY,
                     new JSString(numberFormat.getUnitDisplay()));
         }
-        IntlBuiltins.createDataProperty(resolvedOptions, "minimumIntegerDigits",
+        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.MINIMUM_INTEGER_DIGITS,
                 JSNumber.of(numberFormat.getMinimumIntegerDigits()));
         if (numberFormat.getUseSignificantDigits()) {
             defineDigitRange(resolvedOptions, true, numberFormat.getMinimumSignificantDigits(),
@@ -491,23 +492,26 @@ final class IntlNumberFormatBuiltins {
                     numberFormat.getMaximumFractionDigits());
         }
         if ("false".equals(numberFormat.getUseGroupingMode())) {
-            IntlBuiltins.createDataProperty(resolvedOptions, "useGrouping", JSBoolean.FALSE);
+            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.USE_GROUPING, JSBoolean.FALSE);
         } else {
-            IntlBuiltins.createDataProperty(resolvedOptions, "useGrouping",
+            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.USE_GROUPING,
                     new JSString(numberFormat.getUseGroupingMode()));
         }
-        IntlBuiltins.createDataProperty(resolvedOptions, "notation", new JSString(numberFormat.getNotation()));
+        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.NOTATION,
+                new JSString(numberFormat.getNotation()));
         if ("compact".equals(numberFormat.getNotation()) && numberFormat.getCompactDisplay() != null) {
-            IntlBuiltins.createDataProperty(resolvedOptions, "compactDisplay",
+            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.COMPACT_DISPLAY,
                     new JSString(numberFormat.getCompactDisplay()));
         }
-        IntlBuiltins.createDataProperty(resolvedOptions, "signDisplay", new JSString(numberFormat.getSignDisplay()));
-        IntlBuiltins.createDataProperty(resolvedOptions, "roundingIncrement",
+        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.SIGN_DISPLAY,
+                new JSString(numberFormat.getSignDisplay()));
+        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.ROUNDING_INCREMENT,
                 JSNumber.of(numberFormat.getRoundingIncrement()));
-        IntlBuiltins.createDataProperty(resolvedOptions, "roundingMode", new JSString(numberFormat.getRoundingMode()));
-        IntlBuiltins.createDataProperty(resolvedOptions, "roundingPriority",
+        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.ROUNDING_MODE,
+                new JSString(numberFormat.getRoundingMode()));
+        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.ROUNDING_PRIORITY,
                 new JSString(numberFormat.getRoundingPriority()));
-        IntlBuiltins.createDataProperty(resolvedOptions, "trailingZeroDisplay",
+        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.TRAILING_ZERO_DISPLAY,
                 new JSString(numberFormat.getTrailingZeroDisplay()));
         return resolvedOptions;
     }

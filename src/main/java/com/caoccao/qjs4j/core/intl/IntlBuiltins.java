@@ -115,8 +115,8 @@ public abstract class IntlBuiltins {
      * CreateDataProperty(O, P, V) — creates an own data property directly, bypassing [[Set]] so prototype chain
      * accessors are not triggered. Per ECMA-402 resolvedOptions() steps which use CreateDataPropertyOrThrow.
      */
-    static void createDataProperty(JSObject obj, String key, JSValue value) {
-        obj.defineProperty(PropertyKey.fromString(key), value, PropertyDescriptor.DataState.All);
+    static void createDataProperty(JSObject obj, PropertyKey key, JSValue value) {
+        obj.defineProperty(key, value, PropertyDescriptor.DataState.All);
     }
 
     /**
@@ -167,7 +167,7 @@ public abstract class IntlBuiltins {
         }
 
         // style (default: "long")
-        String style = IntlFormatOptions.readStringOption(context, options, "style");
+        String style = IntlFormatOptions.readStringOption(context, options, PropertyKey.STYLE);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -178,7 +178,7 @@ public abstract class IntlBuiltins {
         }
 
         // type (required — TypeError if undefined)
-        String type = IntlFormatOptions.readStringOption(context, options, "type");
+        String type = IntlFormatOptions.readStringOption(context, options, PropertyKey.TYPE);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -192,7 +192,7 @@ public abstract class IntlBuiltins {
         }
 
         // fallback (default: "code")
-        String fallback = IntlFormatOptions.readStringOption(context, options, "fallback");
+        String fallback = IntlFormatOptions.readStringOption(context, options, PropertyKey.FALLBACK);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -203,7 +203,7 @@ public abstract class IntlBuiltins {
         }
 
         // languageDisplay (default: "dialect")
-        String languageDisplay = IntlFormatOptions.readStringOption(context, options, "languageDisplay");
+        String languageDisplay = IntlFormatOptions.readStringOption(context, options, PropertyKey.LANGUAGE_DISPLAY);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -291,8 +291,8 @@ public abstract class IntlBuiltins {
                 return options;
             }
 
-            String granularity = IntlFormatOptions.normalizedStringOption(context, optionsObject, "granularity",
-                    "grapheme", "grapheme", "word", "sentence");
+            String granularity = IntlFormatOptions.normalizedStringOption(context, optionsObject,
+                    PropertyKey.GRANULARITY, "grapheme", "grapheme", "word", "sentence");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -345,7 +345,7 @@ public abstract class IntlBuiltins {
 
     static void defineStringOption(JSObject options, String key, String value) {
         if (value != null) {
-            createDataProperty(options, key, new JSString(value));
+            createDataProperty(options, PropertyKey.fromString(key), new JSString(value));
         }
     }
 
@@ -644,7 +644,8 @@ public abstract class IntlBuiltins {
 
     private static JSValue relativeTimeFormat(JSContext context, IntlFormatOptions.ConstructorLocale constructor,
             JSObject optionsObject) {
-        String numberingSystemOption = IntlFormatOptions.readStringOption(context, optionsObject, "numberingSystem");
+        String numberingSystemOption = IntlFormatOptions.readStringOption(context, optionsObject,
+                PropertyKey.NUMBERING_SYSTEM);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -655,10 +656,10 @@ public abstract class IntlBuiltins {
             }
         }
 
-        String style = IntlFormatOptions.normalizedStringOption(context, optionsObject, "style", "long", "long",
-                "short", "narrow");
-        String numeric = IntlFormatOptions.normalizedStringOption(context, optionsObject, "numeric", "always", "always",
-                "auto");
+        String style = IntlFormatOptions.normalizedStringOption(context, optionsObject, PropertyKey.STYLE, "long",
+                "long", "short", "narrow");
+        String numeric = IntlFormatOptions.normalizedStringOption(context, optionsObject, PropertyKey.NUMERIC, "always",
+                "always", "auto");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -684,10 +685,12 @@ public abstract class IntlBuiltins {
                     "Intl.RelativeTimeFormat.prototype.resolvedOptions called on incompatible receiver");
         }
         JSObject resolvedOptions = context.createJSObject();
-        createDataProperty(resolvedOptions, "locale", new JSString(relativeTimeFormat.getLocale().toLanguageTag()));
-        createDataProperty(resolvedOptions, "style", new JSString(relativeTimeFormat.getStyle()));
-        createDataProperty(resolvedOptions, "numeric", new JSString(relativeTimeFormat.getNumeric()));
-        createDataProperty(resolvedOptions, "numberingSystem", new JSString(relativeTimeFormat.getNumberingSystem()));
+        createDataProperty(resolvedOptions, PropertyKey.LOCALE,
+                new JSString(relativeTimeFormat.getLocale().toLanguageTag()));
+        createDataProperty(resolvedOptions, PropertyKey.STYLE, new JSString(relativeTimeFormat.getStyle()));
+        createDataProperty(resolvedOptions, PropertyKey.NUMERIC, new JSString(relativeTimeFormat.getNumeric()));
+        createDataProperty(resolvedOptions, PropertyKey.NUMBERING_SYSTEM,
+                new JSString(relativeTimeFormat.getNumberingSystem()));
         return resolvedOptions;
     }
 
@@ -700,8 +703,8 @@ public abstract class IntlBuiltins {
             return context.throwTypeError("Intl.Segmenter.prototype.resolvedOptions called on incompatible receiver");
         }
         JSObject resolvedOptions = context.createJSObject();
-        createDataProperty(resolvedOptions, "locale", new JSString(segmenter.getLocale().toLanguageTag()));
-        createDataProperty(resolvedOptions, "granularity", new JSString(segmenter.getGranularity()));
+        createDataProperty(resolvedOptions, PropertyKey.LOCALE, new JSString(segmenter.getLocale().toLanguageTag()));
+        createDataProperty(resolvedOptions, PropertyKey.GRANULARITY, new JSString(segmenter.getGranularity()));
         return resolvedOptions;
     }
 

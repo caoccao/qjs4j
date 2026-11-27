@@ -60,14 +60,14 @@ public class ArrayConstructorTest extends BaseJavetTest {
 
     @Test
     public void testFrom() {
-        JSArray source = new JSArray(context, numberArgs(1, 2, 3));
-        assertElements(from(source), numberArgs(1, 2, 3));
-        assertElements(from(new JSString("abc")), stringArgs("a", "b", "c"));
-        assertElements(from(new JSArray(context, numberArgs(1, 2)), doubleNumbers()), numberArgs(2, 4));
+        JSArray source = nativeArray(1, 2, 3);
+        assertElements(from(source), nativeArguments(1, 2, 3));
+        assertElements(from(new JSString("abc")), nativeArguments("a", "b", "c"));
+        assertElements(from(nativeArray(1, 2), doubleNumbers()), nativeArguments(2, 4));
 
         JSFunction upper = new JSNativeFunction(context, "upper", 1, (ctx, receiver,
                 args) -> args[0] instanceof JSString str ? new JSString(str.value().toUpperCase()) : args[0]);
-        assertElements(from(new JSString("hello"), upper), stringArgs("H", "E", "L", "L", "O"));
+        assertElements(from(new JSString("hello"), upper), nativeArguments("H", "E", "L", "L", "O"));
         assertElements(from(new JSArray(context)));
         assertElements(from(new JSString("")));
         assertPendingTypeError(context, from());
@@ -77,11 +77,11 @@ public class ArrayConstructorTest extends BaseJavetTest {
 
     @Test
     public void testFromAsync() {
-        JSArray source = new JSArray(context, numberArgs(1, 2, 3));
-        assertElements(fulfilledFromAsync(JSAsyncIterator.fromArray(source, context)), numberArgs(1, 2, 3));
-        assertElements(fulfilledFromAsync(new JSArray(context, numberArgs(10, 20))), numberArgs(10, 20));
-        assertElements(fulfilledFromAsync(new JSArray(context, numberArgs(1, 2)), doubleNumbers()), numberArgs(2, 4));
-        assertElements(fulfilledFromAsync(new JSString("abc")), stringArgs("a", "b", "c"));
+        JSArray source = nativeArray(1, 2, 3);
+        assertElements(fulfilledFromAsync(JSAsyncIterator.fromArray(source, context)), nativeArguments(1, 2, 3));
+        assertElements(fulfilledFromAsync(nativeArray(10, 20)), nativeArguments(10, 20));
+        assertElements(fulfilledFromAsync(nativeArray(1, 2), doubleNumbers()), nativeArguments(2, 4));
+        assertElements(fulfilledFromAsync(new JSString("abc")), nativeArguments("a", "b", "c"));
         assertElements(fulfilledFromAsync(new JSArray(context)));
         assertThat(awaitFromAsync().getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
         assertElements(fulfilledFromAsync(JSNumber.of(123)));
@@ -141,16 +141,16 @@ public class ArrayConstructorTest extends BaseJavetTest {
     public void testGetSpecies() {
         // Normal case: returns thisArg
         JSObject arrayConstructor = new JSObject(context);
-        JSValue result = ArrayConstructor.getSpecies(context, arrayConstructor, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(ArrayConstructor::getSpecies, arrayConstructor);
         assertThat(result).isEqualTo(arrayConstructor);
 
         // Normal case: with different thisArg
         JSObject customConstructor = new JSObject(context);
-        result = ArrayConstructor.getSpecies(context, customConstructor, JSValue.NO_ARGS);
+        result = callBuiltin(ArrayConstructor::getSpecies, customConstructor);
         assertThat(result).isEqualTo(customConstructor);
 
         // Edge case: undefined thisArg
-        result = ArrayConstructor.getSpecies(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+        result = callBuiltin(ArrayConstructor::getSpecies, JSUndefined.INSTANCE);
         assertThat(result.isUndefined()).isTrue();
     }
 
@@ -179,7 +179,7 @@ public class ArrayConstructorTest extends BaseJavetTest {
         isArray.expectValue(JSBoolean.TRUE, arr);
 
         // Normal case: not array
-        isArray.expectValue(JSBoolean.FALSE, stringArgs("not array"));
+        isArray.expectValue(JSBoolean.FALSE, "not array");
 
         isArray.expectValue(JSBoolean.FALSE, new JSObject(context));
 
@@ -192,9 +192,9 @@ public class ArrayConstructorTest extends BaseJavetTest {
     @Test
     public void testOf() {
         var of = builtin(ArrayConstructor::of, JSUndefined.INSTANCE);
-        assertElements(of.call(numberArgs(1, 2, 3)), numberArgs(1, 2, 3));
+        assertElements(of.call(1, 2, 3), nativeArguments(1, 2, 3));
         assertElements(of.call());
-        assertElements(of.call(stringArgs("hello")), new JSString("hello"));
+        assertElements(of.call("hello"), new JSString("hello"));
 
         JSValue[] mixed = {JSNumber.of(1), new JSString("two"), JSBoolean.TRUE};
         assertElements(of.call(mixed), mixed);

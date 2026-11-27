@@ -91,7 +91,8 @@ final class IntlDateTimeFormatBuiltins {
             // triggering getters and propagating exceptions.
 
             // 1. localeMatcher
-            String localeMatcher = IntlFormatOptions.readStringOption(context, optionsObject, "localeMatcher");
+            String localeMatcher = IntlFormatOptions.readStringOption(context, optionsObject,
+                    PropertyKey.LOCALE_MATCHER);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -100,7 +101,7 @@ final class IntlDateTimeFormatBuiltins {
             }
 
             // 2. calendar
-            String calendar = IntlFormatOptions.readStringOption(context, optionsObject, "calendar");
+            String calendar = IntlFormatOptions.readStringOption(context, optionsObject, PropertyKey.CALENDAR);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -112,7 +113,8 @@ final class IntlDateTimeFormatBuiltins {
             }
 
             // 3. numberingSystem
-            String numberingSystem = IntlFormatOptions.readStringOption(context, optionsObject, "numberingSystem");
+            String numberingSystem = IntlFormatOptions.readStringOption(context, optionsObject,
+                    PropertyKey.NUMBERING_SYSTEM);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -121,13 +123,13 @@ final class IntlDateTimeFormatBuiltins {
             }
 
             // 4. hour12
-            JSValue hour12Value = optionsObject.get(PropertyKey.fromString("hour12"));
+            JSValue hour12Value = optionsObject.get(PropertyKey.HOUR12);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
 
             // 5. hourCycle
-            String hourCycle = IntlFormatOptions.readStringOption(context, optionsObject, "hourCycle");
+            String hourCycle = IntlFormatOptions.readStringOption(context, optionsObject, PropertyKey.HOUR_CYCLE);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -137,7 +139,7 @@ final class IntlDateTimeFormatBuiltins {
             }
 
             // 6. timeZone
-            String timeZone = IntlFormatOptions.readStringOption(context, optionsObject, "timeZone");
+            String timeZone = IntlFormatOptions.readStringOption(context, optionsObject, PropertyKey.TIME_ZONE);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -159,7 +161,7 @@ final class IntlDateTimeFormatBuiltins {
 
             // 16. fractionalSecondDigits (GetNumberOption: ToNumber, range check, then floor)
             Integer fractionalSecondDigits = null;
-            JSValue fsdValue = optionsObject.get(PropertyKey.fromString("fractionalSecondDigits"));
+            JSValue fsdValue = optionsObject.get(PropertyKey.FRACTIONAL_SECOND_DIGITS);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -173,14 +175,16 @@ final class IntlDateTimeFormatBuiltins {
             }
 
             // 17. timeZoneName
-            String timeZoneNameOption = IntlFormatOptions.readValidatedOption(context, optionsObject, "timeZoneName",
-                    "long", "short", "longOffset", "shortOffset", "longGeneric", "shortGeneric");
+            String timeZoneNameOption = IntlFormatOptions.readValidatedOption(context, optionsObject,
+                    PropertyKey.TIME_ZONE_NAME, "long", "short", "longOffset", "shortOffset", "longGeneric",
+                    "shortGeneric");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
 
             // 18. formatMatcher
-            String formatMatcher = IntlFormatOptions.readStringOption(context, optionsObject, "formatMatcher");
+            String formatMatcher = IntlFormatOptions.readStringOption(context, optionsObject,
+                    PropertyKey.FORMAT_MATCHER);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -189,9 +193,9 @@ final class IntlDateTimeFormatBuiltins {
             }
 
             // 19-20. dateStyle and timeStyle
-            String dateStyleStr = IntlFormatOptions.readValidatedOption(context, optionsObject, "dateStyle",
+            String dateStyleStr = IntlFormatOptions.readValidatedOption(context, optionsObject, PropertyKey.DATE_STYLE,
                     FORMAT_STYLE_VALUES);
-            String timeStyleStr = IntlFormatOptions.readValidatedOption(context, optionsObject, "timeStyle",
+            String timeStyleStr = IntlFormatOptions.readValidatedOption(context, optionsObject, PropertyKey.TIME_STYLE,
                     FORMAT_STYLE_VALUES);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -450,24 +454,25 @@ final class IntlDateTimeFormatBuiltins {
         // Property order per ECMA-402: locale, calendar, numberingSystem, timeZone,
         // hourCycle, hour12, weekday, era, year, month, day, dayPeriod,
         // hour, minute, second, fractionalSecondDigits, timeZoneName, dateStyle, timeStyle
-        IntlBuiltins.createDataProperty(resolvedOptions, "locale",
+        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.LOCALE,
                 new JSString(dateTimeFormat.getLocale().toLanguageTag()));
         IntlBuiltins.defineStringOption(resolvedOptions, "calendar", dateTimeFormat.getCalendar());
         if (dateTimeFormat.getNumberingSystem() != null) {
-            IntlBuiltins.createDataProperty(resolvedOptions, "numberingSystem",
+            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.NUMBERING_SYSTEM,
                     new JSString(dateTimeFormat.getNumberingSystem()));
         } else {
-            IntlBuiltins.createDataProperty(resolvedOptions, "numberingSystem", new JSString("latn"));
+            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.NUMBERING_SYSTEM, new JSString("latn"));
         }
-        IntlBuiltins.createDataProperty(resolvedOptions, "timeZone", new JSString(
+        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.TIME_ZONE, new JSString(
                 dateTimeFormat.getTimeZone() != null ? dateTimeFormat.getTimeZone() : ZoneId.systemDefault().getId()));
 
         // hourCycle and hour12: only present when hour component is in use
         String hourCycle = dateTimeFormat.getHourCycle();
         if (hourCycle != null) {
-            IntlBuiltins.createDataProperty(resolvedOptions, "hourCycle", new JSString(hourCycle));
+            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.HOUR_CYCLE, new JSString(hourCycle));
             boolean isHour12 = "h11".equals(hourCycle) || "h12".equals(hourCycle);
-            IntlBuiltins.createDataProperty(resolvedOptions, "hour12", isHour12 ? JSBoolean.TRUE : JSBoolean.FALSE);
+            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.HOUR12,
+                    isHour12 ? JSBoolean.TRUE : JSBoolean.FALSE);
         }
 
         // When dateStyle or timeStyle is set, individual component options are NOT reported
@@ -479,17 +484,17 @@ final class IntlDateTimeFormatBuiltins {
             dateTimeFormat.dateFields().defineOptions(resolvedOptions);
             dateTimeFormat.timeFields().defineOptions(resolvedOptions);
             if (dateTimeFormat.getFractionalSecondDigits() != null) {
-                IntlBuiltins.createDataProperty(resolvedOptions, "fractionalSecondDigits",
+                IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.FRACTIONAL_SECOND_DIGITS,
                         JSNumber.of(dateTimeFormat.getFractionalSecondDigits()));
             }
             IntlBuiltins.defineStringOption(resolvedOptions, "timeZoneName", dateTimeFormat.getTimeZoneNameOption());
         }
         if (hasDateStyle) {
-            IntlBuiltins.createDataProperty(resolvedOptions, "dateStyle",
+            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.DATE_STYLE,
                     new JSString(dateTimeFormat.getDateStyle().name().toLowerCase(Locale.ROOT)));
         }
         if (hasTimeStyle) {
-            IntlBuiltins.createDataProperty(resolvedOptions, "timeStyle",
+            IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.TIME_STYLE,
                     new JSString(dateTimeFormat.getTimeStyle().name().toLowerCase(Locale.ROOT)));
         }
         return resolvedOptions;

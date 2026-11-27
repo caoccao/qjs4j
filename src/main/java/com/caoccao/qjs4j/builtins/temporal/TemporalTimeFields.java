@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.builtins.temporal;
 
+import com.caoccao.qjs4j.core.PropertyKey;
+
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSObject;
 import com.caoccao.qjs4j.core.temporal.iso.IsoTime;
@@ -40,18 +42,18 @@ public final class TemporalTimeFields extends TemporalPropertyBag {
     }
 
     public void readNanosecond() {
-        nanosecond = integer("nanosecond");
+        nanosecond = integerByKey(PropertyKey.NANOSECOND);
     }
 
     public void readSecond() {
-        second = integer("second");
+        second = integerByKey(PropertyKey.SECOND);
     }
 
     public void readThroughMinute() {
-        hour = integer("hour");
-        microsecond = integer("microsecond");
-        millisecond = integer("millisecond");
-        minute = integer("minute");
+        hour = integerByKey(PropertyKey.HOUR);
+        microsecond = integerByKey(PropertyKey.MICROSECOND);
+        millisecond = integerByKey(PropertyKey.MILLISECOND);
+        minute = integerByKey(PropertyKey.MINUTE);
     }
 
     public IsoTime regulate(IsoTime defaults, String overflow, String error) {

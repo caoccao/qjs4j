@@ -23,6 +23,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class RealmIntrinsicsTest extends BaseTest {
     @Test
+    void defaultArraySpeciesChecksTheUint32LengthLimit() {
+        JSArray array = context.createJSArray();
+        array.set(PropertyKey.CONSTRUCTOR, JSUndefined.INSTANCE);
+        for (JSObject original : new JSObject[]{array, context.createJSObject()}) {
+            JSArray largest = context.createJSArraySpecies(original, 0xFFFFFFFFL).asArray().orElseThrow();
+            assertThat(largest.getLength()).isEqualTo(0xFFFFFFFFL);
+            assertPendingRangeError(context, context.createJSArraySpecies(original, 0x1_0000_0000L));
+        }
+    }
+
+    @Test
     void defaultPrototypeComesFromTheConstructorsRealm() {
         try (JSContext foreign = context.getRuntime().createContext()) {
             JSFunction constructor = (JSFunction) foreign.eval("(function replacement() {})");
@@ -49,6 +60,17 @@ class RealmIntrinsicsTest extends BaseTest {
         assertThat(context.getIntrinsicDefaultPrototypeName(function)).isEqualTo("Object");
         function.setConstructorType(JSConstructorType.TYPED_ARRAY_BIGINT64);
         assertThat(context.getIntrinsicDefaultPrototypeName(function)).isEqualTo("BigInt64Array");
+    }
+
+    @Test
+    void foreignIntrinsicArraySpeciesUsesTheRequestingRealm() {
+        try (JSContext foreign = context.getRuntime().createContext()) {
+            JSArray original = foreign.createJSArray();
+            JSArray result = context.createJSArraySpecies(original, 3).asArray().orElseThrow();
+            assertThat(result.getLength()).isEqualTo(3);
+            assertThat(result.getPrototype()).isSameAs(context.createJSArray().getPrototype());
+            assertThat(result.getPrototype()).isNotSameAs(original.getPrototype());
+        }
     }
 
     @Test

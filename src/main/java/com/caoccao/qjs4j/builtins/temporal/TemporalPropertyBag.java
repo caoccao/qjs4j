@@ -37,12 +37,16 @@ public class TemporalPropertyBag {
     }
 
     public TemporalCalendarId calendar() {
-        JSValue calendar = value("calendar");
+        JSValue calendar = valueByKey(PropertyKey.CALENDAR);
         return context.hasPendingException() ? null : TemporalCalendarId.createFromCalendarValue(context, calendar);
     }
 
     public boolean hasDefined(String name) {
-        JSValue field = value(name);
+        return hasDefinedByKey(PropertyKey.fromString(name));
+    }
+
+    public boolean hasDefinedByKey(PropertyKey name) {
+        JSValue field = valueByKey(name);
         return field != null && !(field instanceof JSUndefined);
     }
 
@@ -51,14 +55,22 @@ public class TemporalPropertyBag {
     }
 
     public Integer integer(String name) {
-        return context.hasPendingException() ? null : TemporalUtils.getOptionalIntegerField(context, fields, name);
+        return integerByKey(PropertyKey.fromString(name));
+    }
+
+    public Integer integerByKey(PropertyKey name) {
+        return context.hasPendingException() ? null : TemporalUtils.getOptionalIntegerFieldByKey(context, fields, name);
     }
 
     public Integer integral(String name) {
+        return integralByKey(PropertyKey.fromString(name));
+    }
+
+    public Integer integralByKey(PropertyKey name) {
         if (context.hasPendingException()) {
             return null;
         }
-        JSValue value = fields.get(PropertyKey.fromString(name));
+        JSValue value = fields.get(name);
         if (context.hasPendingException() || JSTypeChecking.isUndefinedOrMissing(value)) {
             return null;
         }
@@ -67,7 +79,11 @@ public class TemporalPropertyBag {
     }
 
     public int integralOrZero(String name) {
-        Integer value = integral(name);
+        return integralOrZeroByKey(PropertyKey.fromString(name));
+    }
+
+    public int integralOrZeroByKey(PropertyKey name) {
+        Integer value = integralByKey(name);
         return value == null ? 0 : value;
     }
 
@@ -75,12 +91,12 @@ public class TemporalPropertyBag {
         if (context.hasPendingException()) {
             return null;
         }
-        JSValue value = fields.get(PropertyKey.fromString("monthCode"));
+        JSValue value = fields.get(PropertyKey.MONTH_CODE);
         return context.hasPendingException() ? null : IsoMonth.fromField(context, value);
     }
 
     public String offset() {
-        JSValue value = value("offset");
+        JSValue value = valueByKey(PropertyKey.OFFSET);
         if (context.hasPendingException() || JSTypeChecking.isUndefinedOrMissing(value)) {
             return null;
         }
@@ -103,25 +119,33 @@ public class TemporalPropertyBag {
 
     public TemporalPartialDate readYearAndEra(TemporalCalendarId calendar, Integer day, Integer month,
             String monthCode) {
-        Integer year = integer("year");
-        String era = calendar.hasEra() ? string("era") : null;
-        Integer eraYear = calendar.hasEra() ? integer("eraYear") : null;
+        Integer year = integerByKey(PropertyKey.YEAR);
+        String era = calendar.hasEra() ? stringByKey(PropertyKey.ERA) : null;
+        Integer eraYear = calendar.hasEra() ? integerByKey(PropertyKey.ERA_YEAR) : null;
         return new TemporalPartialDate(day, month, monthCode, year, era, eraYear);
     }
 
     public Integer resolvedYear(TemporalCalendarId calendar, String missingEraMessage) {
-        Integer year = integer("year");
+        Integer year = integerByKey(PropertyKey.YEAR);
         return context.hasPendingException()
                 ? null
                 : TemporalUtils.resolveEraYear(context, fields, calendar, year, missingEraMessage);
     }
 
     public String string(String name) {
-        return context.hasPendingException() ? null : TemporalUtils.getStringOption(context, fields, name, null);
+        return stringByKey(PropertyKey.fromString(name));
+    }
+
+    public String stringByKey(PropertyKey name) {
+        return context.hasPendingException() ? null : TemporalUtils.getStringOptionByKey(context, fields, name, null);
     }
 
     public int time(String name, int fallback) {
-        Integer value = integer(name);
+        return timeByKey(PropertyKey.fromString(name), fallback);
+    }
+
+    public int timeByKey(PropertyKey name, int fallback) {
+        Integer value = integerByKey(name);
         if (value == null) {
             return fallback;
         }
@@ -130,6 +154,10 @@ public class TemporalPropertyBag {
     }
 
     public JSValue value(String name) {
-        return context.hasPendingException() ? null : fields.get(PropertyKey.fromString(name));
+        return valueByKey(PropertyKey.fromString(name));
+    }
+
+    public JSValue valueByKey(PropertyKey name) {
+        return context.hasPendingException() ? null : fields.get(name);
     }
 }

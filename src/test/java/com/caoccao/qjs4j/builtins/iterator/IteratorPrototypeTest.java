@@ -81,22 +81,21 @@ public class IteratorPrototypeTest extends BaseJavetTest {
         assertStringWithJavet(
                 "(() => { var it = Array.prototype.entries.call({0: 'a', 1: 'b', length: 2}); var r = it.next(); return r.value[0] + ':' + r.value[1]; })()",
                 "(() => { var it = Array.prototype.entries.call({0: 'a', 1: 'b', length: 2}); it.next(); var r = it.next(); return r.value[0] + ':' + r.value[1]; })()",
-                "(() => { var it = Array.prototype.entries.call({0: 'a', 1: 'b', length: 2}); it.next(); it.next(); return String(it.next().done); })()");
-        // Generic: called on string (ToObject wraps to String object)
-        assertStringWithJavet(
+                "(() => { var it = Array.prototype.entries.call({0: 'a', 1: 'b', length: 2}); it.next(); it.next(); return String(it.next().done); })()",
+                // Generic: called on string (ToObject wraps to String object)
                 "(() => { var it = Array.prototype.entries.call('ab'); var r = it.next(); return r.value[0] + ':' + r.value[1]; })()",
                 "(() => { var it = Array.prototype.entries.call('ab'); it.next(); var r = it.next(); return r.value[0] + ':' + r.value[1]; })()");
         // Generic: empty object (no length → 0)
-        assertBooleanWithJavet("Array.prototype.entries.call({}).next().done");
-        // Generic: boolean primitive (no length → 0)
-        assertBooleanWithJavet("Array.prototype.entries.call(true).next().done");
+        assertBooleanWithJavet("Array.prototype.entries.call({}).next().done",
+                // Generic: boolean primitive (no length → 0)
+                "Array.prototype.entries.call(true).next().done");
         // Error: null/undefined throws TypeError
         assertErrorWithJavet("Array.prototype.entries.call(null)", "Array.prototype.entries.call(undefined)");
     }
 
     @Test
     public void testArrayKeys() {
-        JSArray array = new JSArray(context, numberArgs(10, 20));
+        JSArray array = nativeArray(10, 20);
         JSIterator iterator = iterator(IteratorPrototype::arrayKeys, array);
         assertValues(iterator, JSNumber.of(0), JSNumber.of(1));
         assertValues(iterator(IteratorPrototype::arrayKeys, new JSObject(context)));
@@ -107,9 +106,8 @@ public class IteratorPrototypeTest extends BaseJavetTest {
         // Generic: called on plain object with length
         assertStringWithJavet(
                 "(() => { var it = Array.prototype.keys.call({length: 3}); return [it.next().value, it.next().value, it.next().value].join(','); })()",
-                "(() => { var it = Array.prototype.keys.call({length: 3}); it.next(); it.next(); it.next(); return String(it.next().done); })()");
-        // Generic: called on string
-        assertStringWithJavet(
+                "(() => { var it = Array.prototype.keys.call({length: 3}); it.next(); it.next(); it.next(); return String(it.next().done); })()",
+                // Generic: called on string
                 "(() => { var it = Array.prototype.keys.call('hi'); return [it.next().value, it.next().value].join(','); })()");
         // Generic: empty object
         assertBooleanWithJavet("Array.prototype.keys.call({}).next().done");
@@ -131,12 +129,10 @@ public class IteratorPrototypeTest extends BaseJavetTest {
         // Generic: called on plain object with length
         assertStringWithJavet(
                 "(() => { var it = Array.prototype.values.call({0: 'x', 1: 'y', length: 2}); return [it.next().value, it.next().value].join(','); })()",
-                "(() => { var it = Array.prototype.values.call({0: 'x', 1: 'y', length: 2}); it.next(); it.next(); return String(it.next().done); })()");
-        // Generic: called on string (iterates characters)
-        assertStringWithJavet(
-                "(() => { var it = Array.prototype.values.call('ab'); return [it.next().value, it.next().value].join(','); })()");
-        // Generic: missing indices return undefined
-        assertStringWithJavet(
+                "(() => { var it = Array.prototype.values.call({0: 'x', 1: 'y', length: 2}); it.next(); it.next(); return String(it.next().done); })()",
+                // Generic: called on string (iterates characters)
+                "(() => { var it = Array.prototype.values.call('ab'); return [it.next().value, it.next().value].join(','); })()",
+                // Generic: missing indices return undefined
                 "(() => { var it = Array.prototype.values.call({length: 2}); return String(it.next().value); })()");
         // Generic: number primitive (no length → 0)
         assertBooleanWithJavet("Array.prototype.values.call(42).next().done");
@@ -218,7 +214,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testNext() {
         // Create an array iterator
-        JSArray array = new JSArray(context, numberArgs(1, 2));
+        JSArray array = nativeArray(1, 2);
         JSIterator iterator = JSIterator.arrayIterator(context, array);
 
         // Normal case: next() on iterator
@@ -235,7 +231,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
         assertIteratorResult(result, JSUndefined.INSTANCE, true);
 
         // Edge case: called on non-iterator
-        result = IteratorPrototype.next(context, new JSString("not an iterator"), JSValue.NO_ARGS);
+        result = callBuiltin(IteratorPrototype::next, new JSString("not an iterator"));
         assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
     }
@@ -260,15 +256,15 @@ public class IteratorPrototypeTest extends BaseJavetTest {
         set.setAdd(new JSNumber(5));
 
         // Normal case: keys() should be same as values() for Set
-        JSValue result = IteratorPrototype.setKeysIterator(context, set, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(IteratorPrototype::setKeysIterator, set);
         result.asIterator().orElseThrow();
 
         // Should behave identically to values iterator
-        JSValue valuesResult = IteratorPrototype.setValuesIterator(context, set, JSValue.NO_ARGS);
+        JSValue valuesResult = callBuiltin(IteratorPrototype::setValuesIterator, set);
         // Note: In a full test, we'd verify they produce the same results
 
         // Edge case: called on non-set (should delegate to setValuesIterator)
-        result = IteratorPrototype.setKeysIterator(context, new JSArray(context), JSValue.NO_ARGS);
+        result = callBuiltin(IteratorPrototype::setKeysIterator, new JSArray(context));
         assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
     }

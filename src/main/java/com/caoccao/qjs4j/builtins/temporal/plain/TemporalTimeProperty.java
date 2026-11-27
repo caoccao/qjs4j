@@ -39,6 +39,10 @@ public enum TemporalTimeProperty {
         this.field = field;
     }
 
+    public String propertyName() {
+        return key;
+    }
+
     public <T extends JSObject & JSTemporalTimeValue> JSValue read(JSContext context, JSValue thisArg,
             TemporalReceiver<T> receiver) {
         T value = receiver.require(context, thisArg, key);

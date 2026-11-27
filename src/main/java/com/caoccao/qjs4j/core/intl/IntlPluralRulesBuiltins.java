@@ -25,8 +25,8 @@ final class IntlPluralRulesBuiltins {
     }
 
     static JSValue create(JSContext context, IntlFormatOptions.ConstructorLocale constructor, JSObject optionsObject) {
-        String type = IntlFormatOptions.normalizedStringOption(context, optionsObject, "type", "cardinal", "cardinal",
-                "ordinal");
+        String type = IntlFormatOptions.normalizedStringOption(context, optionsObject, PropertyKey.TYPE, "cardinal",
+                "cardinal", "ordinal");
         DigitOptions digits = DigitOptions.read(context, optionsObject);
         if (digits == null) {
             return JSUndefined.INSTANCE;
@@ -62,11 +62,11 @@ final class IntlPluralRulesBuiltins {
             return context.throwTypeError("Intl.PluralRules.prototype.resolvedOptions called on incompatible receiver");
         }
         JSObject resolvedOptions = context.createJSObject();
-        IntlBuiltins.createDataProperty(resolvedOptions, "locale",
+        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.LOCALE,
                 new JSString(pluralRules.getLocale().toLanguageTag()));
-        IntlBuiltins.createDataProperty(resolvedOptions, "type", new JSString(pluralRules.getType()));
-        IntlBuiltins.createDataProperty(resolvedOptions, "notation", new JSString(pluralRules.getNotation()));
-        IntlBuiltins.createDataProperty(resolvedOptions, "minimumIntegerDigits",
+        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.TYPE, new JSString(pluralRules.getType()));
+        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.NOTATION, new JSString(pluralRules.getNotation()));
+        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.MINIMUM_INTEGER_DIGITS,
                 JSNumber.of(pluralRules.getMinimumIntegerDigits()));
         if (pluralRules.getMinimumSignificantDigits() != null) {
             defineDigitRange(resolvedOptions, true, pluralRules.getMinimumSignificantDigits(),
@@ -79,7 +79,7 @@ final class IntlPluralRulesBuiltins {
         for (String category : pluralRules.getPluralCategories()) {
             categories.push(new JSString(category));
         }
-        IntlBuiltins.createDataProperty(resolvedOptions, "pluralCategories", categories);
+        IntlBuiltins.createDataProperty(resolvedOptions, PropertyKey.PLURAL_CATEGORIES, categories);
         return resolvedOptions;
     }
 

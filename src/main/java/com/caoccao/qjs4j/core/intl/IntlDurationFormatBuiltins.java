@@ -52,7 +52,8 @@ final class IntlDurationFormatBuiltins {
         }
 
         // Read numberingSystem from options
-        String numberingSystemOption = IntlFormatOptions.readStringOption(context, options, "numberingSystem");
+        String numberingSystemOption = IntlFormatOptions.readStringOption(context, options,
+                PropertyKey.NUMBERING_SYSTEM);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -64,7 +65,7 @@ final class IntlDurationFormatBuiltins {
                 numberingSystemOption);
 
         // Read style (default "short")
-        String style = IntlFormatOptions.readStringOption(context, options, "style");
+        String style = IntlFormatOptions.readStringOption(context, options, PropertyKey.STYLE);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -85,7 +86,7 @@ final class IntlDurationFormatBuiltins {
             String unitName = JSIntlDurationFormat.UNIT_NAMES[i];
 
             // Read unit style from options
-            String unitStyle = IntlFormatOptions.readStringOption(context, options, unitName);
+            String unitStyle = IntlFormatOptions.readStringOption(context, options, PropertyKey.fromString(unitName));
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -120,7 +121,8 @@ final class IntlDurationFormatBuiltins {
             if (fractional) {
                 displayDefault = "auto";
             }
-            String display = IntlFormatOptions.readStringOption(context, options, unitName + "Display");
+            String display = IntlFormatOptions.readStringOption(context, options,
+                    PropertyKey.fromString(unitName + "Display"));
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -236,7 +238,7 @@ final class IntlDurationFormatBuiltins {
     private static Integer getFractionalDigits(JSContext context, JSObject options) {
         return options == null
                 ? null
-                : IntlFormatOptions.getOptionIntegerOrUndefined(context, options, "fractionalDigits", 0, 9,
+                : IntlFormatOptions.getOptionIntegerOrUndefined(context, options, PropertyKey.FRACTIONAL_DIGITS, 0, 9,
                         "fractionalDigits value is out of range");
     }
 }

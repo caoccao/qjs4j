@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core.intl;
 
+import com.caoccao.qjs4j.core.PropertyKey;
+
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSObject;
 
@@ -25,12 +27,12 @@ import java.time.format.FormatStyle;
 record IntlDateFields(String weekday, String era, String year, String month, String day) {
 
     static IntlDateFields read(JSContext context, JSObject options) {
-        return new IntlDateFields(IntlFormatOptions.readTextWidth(context, options, "weekday"),
-                IntlFormatOptions.readTextWidth(context, options, "era"),
-                IntlFormatOptions.readNumericWidth(context, options, "year"),
-                IntlFormatOptions.readValidatedOption(context, options, "month", "numeric", "2-digit", "long", "short",
-                        "narrow"),
-                IntlFormatOptions.readNumericWidth(context, options, "day"));
+        return new IntlDateFields(IntlFormatOptions.readTextWidth(context, options, PropertyKey.WEEKDAY),
+                IntlFormatOptions.readTextWidth(context, options, PropertyKey.ERA),
+                IntlFormatOptions.readNumericWidth(context, options, PropertyKey.YEAR),
+                IntlFormatOptions.readValidatedOption(context, options, PropertyKey.MONTH, "numeric", "2-digit", "long",
+                        "short", "narrow"),
+                IntlFormatOptions.readNumericWidth(context, options, PropertyKey.DAY));
     }
 
     boolean specified() {

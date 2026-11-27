@@ -17,12 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.core.buffer.*;
-import com.caoccao.qjs4j.core.collection.JSMap;
-import com.caoccao.qjs4j.core.collection.JSSet;
-import com.caoccao.qjs4j.core.collection.JSWeakMap;
-import com.caoccao.qjs4j.core.collection.JSWeakSet;
 import com.caoccao.qjs4j.core.date.JSDate;
-import com.caoccao.qjs4j.core.disposable.JSDisposableStack;
 import com.caoccao.qjs4j.core.error.*;
 import com.caoccao.qjs4j.core.promise.JSPromise;
 import com.caoccao.qjs4j.core.regexp.JSRegExp;
@@ -30,9 +25,8 @@ import com.caoccao.qjs4j.core.regexp.JSRegExp;
 /**
  * Allocates the realm's built-in objects with their prototypes already attached.
  * <p>
- * Every {@code createJSXxx} here is reached through the {@link JSContext} method of the same name, which delegates.
- * Those wrappers are the stable surface — roughly two thousand call sites in builtins, the VM and the tests use them —
- * so they are permanent delegations rather than deprecations, and this class stays package-private behind them.
+ * The public factories on {@link JSContext} use the shared initializers here for prototype installation and stack-trace
+ * capture. Allocations that depend on cached intrinsics or run JavaScript use the realm directly.
  * <p>
  * The realm state it needs is read back through {@code context}: the cached {@code Object}, {@code Date},
  * {@code Promise} and {@code RegExp} prototypes for the hot paths, and {@code transferPrototype} for everything else.
@@ -44,103 +38,25 @@ final class JSValueFactory {
         this.context = context;
     }
 
-    JSAggregateError createJSAggregateError(String message) {
-        return initializeError(new JSAggregateError(context, message));
+    private JSValue createDefaultSpeciesArray(long length) {
+        if (length > 0xFFFFFFFFL) {
+            return context.throwRangeError("Invalid array length");
+        }
+        return context.createJSArray(length, 0);
     }
 
-    /**
-     * Create a new JSArray with proper prototype chain. Sets the array's prototype to Array.prototype from the global
-     * object.
-     *
-     * @return A new JSArray instance with prototype set
-     */
     JSArray createJSArray() {
         return createJSArray(0);
     }
 
-    /**
-     * Create a new JSArray with specified values and proper prototype chain. Sets the array's prototype to
-     * Array.prototype from the global object.
-     *
-     * @param values
-     *            Initial values of the array
-     * @return A new JSArray instance with prototype set
-     */
-    JSArray createJSArray(JSValue... values) {
-        return initializePrototype(new JSArray(context, values), JSArray.NAME);
-    }
-
-    /**
-     * Create a new JSArray taking ownership of a freshly allocated values array. Internal fast path to avoid an extra
-     * defensive copy in hot built-in paths.
-     */
-    JSArray createJSArray(JSValue[] values, boolean takeOwnership) {
-        return initializePrototype(new JSArray(context, values, takeOwnership), JSArray.NAME);
-    }
-
-    /**
-     * Create a new JSArray with specified length and proper prototype chain. Sets the array's prototype to
-     * Array.prototype from the global object.
-     *
-     * @param length
-     *            Initial length of the array; must be in {@code [0, 2^32 - 1]}
-     * @return A new JSArray instance with prototype set
-     * @throws com.caoccao.qjs4j.exceptions.JSRangeErrorException
-     *             when {@code length} is not a valid ECMAScript array length
-     */
     JSArray createJSArray(long length) {
         // A JavaScript array length is a uint32, so narrowing it to int for the capacity hint can
         // produce a negative value (4294967295L narrows to -1) and a NegativeArraySizeException.
         // Clamp instead: the hint is only a dense-storage sizing suggestion. The length itself is
         // validated by the JSArray constructor, which rejects anything outside [0, 2^32 - 1].
-        return createJSArray(length, (int) Math.min(Math.max(length, 0), JSArray.MAX_DENSE_SIZE));
+        return context.createJSArray(length, (int) Math.min(Math.max(length, 0), JSArray.MAX_DENSE_SIZE));
     }
 
-    /**
-     * Create a new JSArray with specified length, capacity, and proper prototype chain. Sets the array's prototype to
-     * Array.prototype from the global object.
-     *
-     * @param length
-     *            Initial length of the array; must be in {@code [0, 2^32 - 1]}
-     * @param capacity
-     *            Initial capacity of the array
-     * @return A new JSArray instance with prototype set
-     * @throws com.caoccao.qjs4j.exceptions.JSRangeErrorException
-     *             when {@code length} is not a valid ECMAScript array length
-     */
-    JSArray createJSArray(long length, int capacity) {
-        return initializePrototype(new JSArray(context, length, capacity), JSArray.NAME);
-    }
-
-    /**
-     * Create a new JSArrayBuffer with proper prototype chain.
-     *
-     * @param byteLength
-     *            The length in bytes
-     * @return A new JSArrayBuffer instance with prototype set
-     */
-    JSArrayBuffer createJSArrayBuffer(long byteLength) {
-        return initializePrototype(new JSArrayBuffer(context, byteLength), JSArrayBuffer.NAME);
-    }
-
-    /**
-     * Create a new resizable JSArrayBuffer with proper prototype chain.
-     *
-     * @param byteLength
-     *            The initial length in bytes
-     * @param maxByteLength
-     *            The maximum length in bytes, or -1 for non-resizable
-     * @return A new JSArrayBuffer instance with prototype set
-     */
-    JSArrayBuffer createJSArrayBuffer(long byteLength, long maxByteLength) {
-        return initializePrototype(new JSArrayBuffer(context, byteLength, maxByteLength), JSArrayBuffer.NAME);
-    }
-
-    /**
-     * ES2024 7.3.34 ArraySpeciesCreate(originalArray, length). Following QuickJS JS_ArraySpeciesCreate.
-     *
-     * @return the new array-like object, or null if an exception was set on context
-     */
     JSValue createJSArraySpecies(JSObject originalArray, long length) {
         // Step 3: If IsArray(originalArray) is false, return ArrayCreate(length)
         int isArr = JSTypeChecking.isArray(context, originalArray);
@@ -148,11 +64,7 @@ final class JSValueFactory {
             return null;
         }
         if (isArr == 0) {
-            // ArrayCreate(length): throw RangeError if length > 2^32 - 1
-            if (length > 0xFFFFFFFFL) {
-                return context.throwRangeError("Invalid array length");
-            }
-            return createJSArray(length, 0);
+            return createDefaultSpeciesArray(length);
         }
 
         // Step 4: Let C be ? Get(originalArray, "constructor")
@@ -191,11 +103,7 @@ final class JSValueFactory {
 
         // Step 7: If C is undefined, return ArrayCreate(length)
         if (ctor instanceof JSUndefined) {
-            // ArrayCreate(length): throw RangeError if length > 2^32 - 1
-            if (length > 0xFFFFFFFFL) {
-                return context.throwRangeError("Invalid array length");
-            }
-            return createJSArray(length, 0);
+            return createDefaultSpeciesArray(length);
         }
 
         // Step 8: If IsConstructor(C) is false, throw a TypeError exception
@@ -211,66 +119,6 @@ final class JSValueFactory {
         return result;
     }
 
-    JSBigInt64Array createJSBigInt64Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return initializeTypedArray(new JSBigInt64Array(context, buffer, byteOffset, length));
-    }
-
-    /**
-     * Create a new JSBigInt64Array with proper prototype chain.
-     *
-     * @param length
-     *            The length of the array
-     * @return A new JSBigInt64Array instance with prototype set
-     */
-    JSBigInt64Array createJSBigInt64Array(long length) {
-        return initializeTypedArray(new JSBigInt64Array(context, length));
-    }
-
-    JSBigIntObject createJSBigIntObject(JSBigInt value) {
-        return initializePrototype(new JSBigIntObject(context, value), JSBigIntObject.NAME);
-    }
-
-    JSBigUint64Array createJSBigUint64Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return initializeTypedArray(new JSBigUint64Array(context, buffer, byteOffset, length));
-    }
-
-    /**
-     * Create a new JSBigUint64Array with proper prototype chain.
-     *
-     * @param length
-     *            The length of the array
-     * @return A new JSBigUint64Array instance with prototype set
-     */
-    JSBigUint64Array createJSBigUint64Array(long length) {
-        return initializeTypedArray(new JSBigUint64Array(context, length));
-    }
-
-    JSBooleanObject createJSBooleanObject(JSBoolean value) {
-        return initializePrototype(new JSBooleanObject(context, value), JSBooleanObject.NAME);
-    }
-
-    /**
-     * Create a new JSDataView with proper prototype chain.
-     *
-     * @param buffer
-     *            The ArrayBuffer to view
-     * @param byteOffset
-     *            The offset in bytes
-     * @param byteLength
-     *            The length in bytes
-     * @return A new JSDataView instance with prototype set
-     */
-    JSDataView createJSDataView(IJSArrayBuffer buffer, long byteOffset, long byteLength) {
-        return initializePrototype(new JSDataView(context, buffer, byteOffset, byteLength), JSDataView.NAME);
-    }
-
-    /**
-     * Create a new JSDate with proper prototype chain.
-     *
-     * @param timeValue
-     *            The time value in milliseconds
-     * @return A new JSDate instance with prototype set
-     */
     JSDate createJSDate(double timeValue) {
         JSDate jsDate = new JSDate(context, timeValue);
         if (context.getCachedDatePrototype() != null) {
@@ -281,127 +129,6 @@ final class JSValueFactory {
         return jsDate;
     }
 
-    JSDisposableStack createJSDisposableStack() {
-        return initializePrototype(new JSDisposableStack(context), JSDisposableStack.NAME);
-    }
-
-    JSError createJSError(String message) {
-        return initializeError(new JSError(context, message));
-    }
-
-    JSEvalError createJSEvalError(String message) {
-        return initializeError(new JSEvalError(context, message));
-    }
-
-    JSFloat16Array createJSFloat16Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return initializeTypedArray(new JSFloat16Array(context, buffer, byteOffset, length));
-    }
-
-    /**
-     * Create a new JSFloat16Array with proper prototype chain.
-     *
-     * @param length
-     *            The length of the array
-     * @return A new JSFloat16Array instance with prototype set
-     */
-    JSFloat16Array createJSFloat16Array(long length) {
-        return initializeTypedArray(new JSFloat16Array(context, length));
-    }
-
-    JSFloat32Array createJSFloat32Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return initializeTypedArray(new JSFloat32Array(context, buffer, byteOffset, length));
-    }
-
-    /**
-     * Create a new JSFloat32Array with proper prototype chain.
-     *
-     * @param length
-     *            The length of the array
-     * @return A new JSFloat32Array instance with prototype set
-     */
-    JSFloat32Array createJSFloat32Array(long length) {
-        return initializeTypedArray(new JSFloat32Array(context, length));
-    }
-
-    JSFloat64Array createJSFloat64Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return initializeTypedArray(new JSFloat64Array(context, buffer, byteOffset, length));
-    }
-
-    /**
-     * Create a new JSFloat64Array with proper prototype chain.
-     *
-     * @param length
-     *            The length of the array
-     * @return A new JSFloat64Array instance with prototype set
-     */
-    JSFloat64Array createJSFloat64Array(long length) {
-        return initializeTypedArray(new JSFloat64Array(context, length));
-    }
-
-    JSInt16Array createJSInt16Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return initializeTypedArray(new JSInt16Array(context, buffer, byteOffset, length));
-    }
-
-    /**
-     * Create a new JSInt16Array with proper prototype chain.
-     *
-     * @param length
-     *            The length of the array
-     * @return A new JSInt16Array instance with prototype set
-     */
-    JSInt16Array createJSInt16Array(long length) {
-        return initializeTypedArray(new JSInt16Array(context, length));
-    }
-
-    JSInt32Array createJSInt32Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return initializeTypedArray(new JSInt32Array(context, buffer, byteOffset, length));
-    }
-
-    /**
-     * Create a new JSInt32Array with proper prototype chain.
-     *
-     * @param length
-     *            The length of the array
-     * @return A new JSInt32Array instance with prototype set
-     */
-    JSInt32Array createJSInt32Array(long length) {
-        return initializeTypedArray(new JSInt32Array(context, length));
-    }
-
-    JSInt8Array createJSInt8Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return initializeTypedArray(new JSInt8Array(context, buffer, byteOffset, length));
-    }
-
-    /**
-     * Create a new JSInt8Array with proper prototype chain.
-     *
-     * @param length
-     *            The length of the array
-     * @return A new JSInt8Array instance with prototype set
-     */
-    JSInt8Array createJSInt8Array(long length) {
-        return initializeTypedArray(new JSInt8Array(context, length));
-    }
-
-    /**
-     * Create a new JSMap with proper prototype chain.
-     *
-     * @return A new JSMap instance with prototype set
-     */
-    JSMap createJSMap() {
-        return initializePrototype(new JSMap(context), JSMap.NAME);
-    }
-
-    JSNumberObject createJSNumberObject(JSNumber value) {
-        return initializePrototype(new JSNumberObject(context, value), JSNumberObject.NAME);
-    }
-
-    /**
-     * Create a new JSObject with proper prototype chain. Sets the object's prototype to Object.prototype from the
-     * global object.
-     *
-     * @return A new JSObject instance with prototype set
-     */
     JSObject createJSObject() {
         JSObject jsObject = new JSObject(context);
         if (context.getObjectPrototype() != null) {
@@ -412,11 +139,6 @@ final class JSValueFactory {
         return jsObject;
     }
 
-    /**
-     * Create a new JSPromise with proper prototype chain.
-     *
-     * @return A new JSPromise instance with prototype set
-     */
     JSPromise createJSPromise() {
         JSPromise jsPromise = new JSPromise(context);
         if (context.getCachedPromisePrototype() != null) {
@@ -427,23 +149,6 @@ final class JSValueFactory {
         return jsPromise;
     }
 
-    JSRangeError createJSRangeError(String message) {
-        return initializeError(new JSRangeError(context, message));
-    }
-
-    JSReferenceError createJSReferenceError(String message) {
-        return initializeError(new JSReferenceError(context, message));
-    }
-
-    /**
-     * Create a new JSRegExp with proper prototype chain.
-     *
-     * @param pattern
-     *            The regular expression pattern
-     * @param flags
-     *            The regular expression flags
-     * @return A new JSRegExp instance with prototype set
-     */
     JSRegExp createJSRegExp(String pattern, String flags) {
         JSRegExp jsRegExp = new JSRegExp(context, pattern, flags);
         if (context.getCachedRegExpPrototype() != null) {
@@ -454,133 +159,18 @@ final class JSValueFactory {
         return jsRegExp;
     }
 
-    /**
-     * Create a new JSSet with proper prototype chain.
-     *
-     * @return A new JSSet instance with prototype set
-     */
-    JSSet createJSSet() {
-        return initializePrototype(new JSSet(context), JSSet.NAME);
-    }
-
-    JSStringObject createJSStringObject() {
-        return initializePrototype(new JSStringObject(context), JSStringObject.NAME);
-    }
-
-    JSStringObject createJSStringObject(JSString value) {
-        return initializePrototype(new JSStringObject(context, value), JSStringObject.NAME);
-    }
-
-    JSSuppressedError createJSSuppressedError(String message) {
-        return initializeError(new JSSuppressedError(context, message));
-    }
-
-    JSSymbolObject createJSSymbolObject(JSSymbol value) {
-        return initializePrototype(new JSSymbolObject(context, value), JSSymbolObject.NAME);
-    }
-
-    JSSyntaxError createJSSyntaxError(String message) {
-        return initializeError(new JSSyntaxError(context, message));
-    }
-
-    JSTypeError createJSTypeError(String message) {
-        return initializeError(new JSTypeError(context, message));
-    }
-
-    JSUint16Array createJSUint16Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return initializeTypedArray(new JSUint16Array(context, buffer, byteOffset, length));
-    }
-
-    /**
-     * Create a new JSUint16Array with proper prototype chain.
-     *
-     * @param length
-     *            The length of the array
-     * @return A new JSUint16Array instance with prototype set
-     */
-    JSUint16Array createJSUint16Array(long length) {
-        return initializeTypedArray(new JSUint16Array(context, length));
-    }
-
-    JSUint32Array createJSUint32Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return initializeTypedArray(new JSUint32Array(context, buffer, byteOffset, length));
-    }
-
-    /**
-     * Create a new JSUint32Array with proper prototype chain.
-     *
-     * @param length
-     *            The length of the array
-     * @return A new JSUint32Array instance with prototype set
-     */
-    JSUint32Array createJSUint32Array(long length) {
-        return initializeTypedArray(new JSUint32Array(context, length));
-    }
-
-    JSUint8Array createJSUint8Array(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return initializeTypedArray(new JSUint8Array(context, buffer, byteOffset, length));
-    }
-
-    /**
-     * Create a new JSUint8Array with proper prototype chain.
-     *
-     * @param length
-     *            The length of the array
-     * @return A new JSUint8Array instance with prototype set
-     */
-    JSUint8Array createJSUint8Array(long length) {
-        return initializeTypedArray(new JSUint8Array(context, length));
-    }
-
-    JSUint8ClampedArray createJSUint8ClampedArray(IJSArrayBuffer buffer, long byteOffset, long length) {
-        return initializeTypedArray(new JSUint8ClampedArray(context, buffer, byteOffset, length));
-    }
-
-    /**
-     * Create a new JSUint8ClampedArray with proper prototype chain.
-     *
-     * @param length
-     *            The length of the array
-     * @return A new JSUint8ClampedArray instance with prototype set
-     */
-    JSUint8ClampedArray createJSUint8ClampedArray(long length) {
-        return initializeTypedArray(new JSUint8ClampedArray(context, length));
-    }
-
-    JSURIError createJSURIError(String message) {
-        return initializeError(new JSURIError(context, message));
-    }
-
-    /**
-     * Create a new JSWeakMap with proper prototype chain.
-     *
-     * @return A new JSWeakMap instance with prototype set
-     */
-    JSWeakMap createJSWeakMap() {
-        return initializePrototype(new JSWeakMap(context), JSWeakMap.NAME);
-    }
-
-    /**
-     * Create a new JSWeakSet with proper prototype chain.
-     *
-     * @return A new JSWeakSet instance with prototype set
-     */
-    JSWeakSet createJSWeakSet() {
-        return initializePrototype(new JSWeakSet(context), JSWeakSet.NAME);
-    }
-
-    private <T extends JSError> T initializeError(T error) {
+    <T extends JSError> T initializeError(T error) {
         context.transferPrototype(error, error.getErrorName());
         context.captureStackTrace(error);
         return error;
     }
 
-    private <T extends JSObject> T initializePrototype(T value, String constructorName) {
+    <T extends JSObject> T initializePrototype(T value, String constructorName) {
         context.transferPrototype(value, constructorName);
         return value;
     }
 
-    private <T extends JSTypedArray> T initializeTypedArray(T typedArray) {
+    <T extends JSTypedArray> T initializeTypedArray(T typedArray) {
         context.transferPrototype(typedArray, typedArray.getTypedArrayName());
         var buffer = typedArray.getBuffer();
         if (buffer instanceof JSObject jsObject && jsObject.getPrototype() == null) {

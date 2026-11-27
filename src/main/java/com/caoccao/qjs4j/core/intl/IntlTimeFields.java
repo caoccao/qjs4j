@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core.intl;
 
+import com.caoccao.qjs4j.core.PropertyKey;
+
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSObject;
 
@@ -23,10 +25,10 @@ import com.caoccao.qjs4j.core.JSObject;
 record IntlTimeFields(String dayPeriod, String hour, String minute, String second) {
 
     static IntlTimeFields read(JSContext context, JSObject options) {
-        return new IntlTimeFields(IntlFormatOptions.readTextWidth(context, options, "dayPeriod"),
-                IntlFormatOptions.readNumericWidth(context, options, "hour"),
-                IntlFormatOptions.readNumericWidth(context, options, "minute"),
-                IntlFormatOptions.readNumericWidth(context, options, "second"));
+        return new IntlTimeFields(IntlFormatOptions.readTextWidth(context, options, PropertyKey.DAY_PERIOD),
+                IntlFormatOptions.readNumericWidth(context, options, PropertyKey.HOUR),
+                IntlFormatOptions.readNumericWidth(context, options, PropertyKey.MINUTE),
+                IntlFormatOptions.readNumericWidth(context, options, PropertyKey.SECOND));
     }
 
     boolean specified() {

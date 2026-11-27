@@ -35,7 +35,7 @@ class GroupByTest extends BaseTest {
     @ParameterizedTest
     @EnumSource(GroupBy.class)
     void testGroupBy(GroupBy groupBy) {
-        JSArray items = context.createJSArray(numberArgs(1, 2, 3, 4));
+        JSArray items = context.createJSArray(nativeArguments(1, 2, 3, 4));
         JSFunction callback = new JSNativeFunction(context, "parity", 3, (child, receiver, args) -> {
             double number = args[0].asNumber().orElseThrow().value();
             return new JSString(number % 2 == 0 ? "even" : "odd");

@@ -72,12 +72,12 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         JSGenerator generator = JSGenerator.fromArray(context, emptyArray);
 
         // Normal case: next() on empty generator
-        JSValue result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(GeneratorPrototype::next, generator);
         assertIteratorResult(result, JSUndefined.INSTANCE, true);
 
         // Normal case: return on empty generator
         JSGenerator generator2 = JSGenerator.fromArray(context, emptyArray);
-        result = GeneratorPrototype.returnMethod(context, generator2, stringArgs("done"));
+        result = callBuiltin(GeneratorPrototype::returnMethod, generator2, "done");
         assertIteratorResult(result, new JSString("done"), true);
     }
 
@@ -122,7 +122,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testNext() {
         // Create a simple generator from array
-        JSArray array = new JSArray(context, numberArgs(1, 2, 3));
+        JSArray array = nativeArray(1, 2, 3);
         JSGenerator generator = JSGenerator.fromArray(context, array);
 
         // Normal case: first next() call
@@ -147,16 +147,16 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         assertIteratorResult(result, JSUndefined.INSTANCE, true);
 
         // Normal case: next() with value argument (ignored in this simple implementation)
-        result = next.call(stringArgs("ignored"));
+        result = next.call("ignored");
         assertIteratorResult(result, JSUndefined.INSTANCE, true);
 
         // Edge case: called on non-generator
-        result = GeneratorPrototype.next(context, new JSString("not a generator"), JSValue.NO_ARGS);
+        result = callBuiltin(GeneratorPrototype::next, new JSString("not a generator"));
         assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
 
         // Edge case: called on null
-        result = GeneratorPrototype.next(context, JSNull.INSTANCE, JSValue.NO_ARGS);
+        result = callBuiltin(GeneratorPrototype::next, JSNull.INSTANCE);
         assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
     }
@@ -175,30 +175,30 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testReturn() {
         // Create a generator
-        JSArray array = new JSArray(context, numberArgs(1, 2, 3));
+        JSArray array = nativeArray(1, 2, 3);
         JSGenerator generator = JSGenerator.fromArray(context, array);
 
         // Normal case: return with value
-        JSValue result = GeneratorPrototype.returnMethod(context, generator, stringArgs("returned"));
+        JSValue result = callBuiltin(GeneratorPrototype::returnMethod, generator, "returned");
         assertIteratorResult(result, new JSString("returned"), true);
 
         // Normal case: subsequent next() calls after return
         // QuickJS: completed generator's next() returns {value: undefined, done: true}
-        result = GeneratorPrototype.next(context, generator, JSValue.NO_ARGS);
+        result = callBuiltin(GeneratorPrototype::next, generator);
         assertIteratorResult(result, JSUndefined.INSTANCE, true);
 
         // Normal case: return without value (undefined)
         JSGenerator generator2 = JSGenerator.fromArray(context, array);
-        result = GeneratorPrototype.returnMethod(context, generator2, JSValue.NO_ARGS);
+        result = callBuiltin(GeneratorPrototype::returnMethod, generator2);
         assertIteratorResult(result, JSUndefined.INSTANCE, true);
 
         // Edge case: called on non-generator
-        result = GeneratorPrototype.returnMethod(context, new JSObject(context), numberArgs(42));
+        result = callBuiltin(GeneratorPrototype::returnMethod, new JSObject(context), 42);
         assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
 
         // Edge case: called on undefined
-        result = GeneratorPrototype.returnMethod(context, JSUndefined.INSTANCE, numberArgs(42));
+        result = callBuiltin(GeneratorPrototype::returnMethod, JSUndefined.INSTANCE, 42);
         assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
     }
@@ -233,11 +233,11 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testThrow() {
         // Create a generator
-        JSArray array = new JSArray(context, numberArgs(1, 2));
+        JSArray array = nativeArray(1, 2);
         JSGenerator generator = JSGenerator.fromArray(context, array);
 
         // Normal case: throw with exception
-        JSValue result = GeneratorPrototype.throwMethod(context, generator, stringArgs("test exception"));
+        JSValue result = callBuiltin(GeneratorPrototype::throwMethod, generator, "test exception");
         // In this simplified implementation, throw completes the generator and returns an error
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
             assertThat(error.get("name")).isNotNull();
@@ -247,7 +247,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
 
         // Normal case: throw without exception (undefined)
         JSGenerator generator2 = JSGenerator.fromArray(context, array);
-        result = GeneratorPrototype.throwMethod(context, generator2, JSValue.NO_ARGS);
+        result = callBuiltin(GeneratorPrototype::throwMethod, generator2);
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
             assertThat(error.get("name")).isNotNull();
             assertThat(error.get("message")).isNotNull();
@@ -255,12 +255,12 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         assertThat(context.getPendingException()).isNotNull();
 
         // Edge case: called on non-generator
-        result = GeneratorPrototype.throwMethod(context, new JSNumber(123), stringArgs("error"));
+        result = callBuiltin(GeneratorPrototype::throwMethod, new JSNumber(123), "error");
         assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
 
         // Edge case: called on null
-        result = GeneratorPrototype.throwMethod(context, JSNull.INSTANCE, stringArgs("error"));
+        result = callBuiltin(GeneratorPrototype::throwMethod, JSNull.INSTANCE, "error");
         assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
     }

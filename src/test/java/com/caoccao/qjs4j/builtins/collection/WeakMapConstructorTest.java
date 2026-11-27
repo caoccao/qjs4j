@@ -27,9 +27,7 @@ public class WeakMapConstructorTest extends BaseJavetTest {
 
         assertIntegerWithJavet("WeakMap.length");
 
-        assertStringWithJavet("WeakMap.name");
-
-        assertStringWithJavet("new WeakMap().toString()");
+        assertStringWithJavet("WeakMap.name", "new WeakMap().toString()");
 
         assertErrorWithJavet("WeakMap()");
     }

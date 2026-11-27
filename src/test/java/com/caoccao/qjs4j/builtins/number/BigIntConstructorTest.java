@@ -33,44 +33,44 @@ public class BigIntConstructorTest extends BaseJavetTest {
     public void testAsIntN() {
         // Normal case: positive value within range
         var asIntN = builtin(BigIntConstructor::asIntN, JSUndefined.INSTANCE);
-        JSValue result = asIntN.call(new JSNumber(8), new JSBigInt(BigInteger.valueOf(127)));
+        JSValue result = asIntN.call(8, new JSBigInt(BigInteger.valueOf(127)));
         JSBigInt bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.valueOf(127));
 
         // Normal case: negative value
-        result = asIntN.call(new JSNumber(8), new JSBigInt(BigInteger.valueOf(-1)));
+        result = asIntN.call(8, new JSBigInt(BigInteger.valueOf(-1)));
         bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.valueOf(-1));
 
         // Normal case: wrap around positive
-        result = asIntN.call(new JSNumber(8), new JSBigInt(BigInteger.valueOf(128)));
+        result = asIntN.call(8, new JSBigInt(BigInteger.valueOf(128)));
         bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.valueOf(-128));
 
         // Normal case: wrap around negative
-        result = asIntN.call(new JSNumber(8), new JSBigInt(BigInteger.valueOf(-129)));
+        result = asIntN.call(8, new JSBigInt(BigInteger.valueOf(-129)));
         bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.valueOf(127));
 
         // Edge case: insufficient arguments
-        result = asIntN.call(numberArgs(8));
+        result = asIntN.call(8);
         assertPendingTypeError(context, result);
 
         // Edge case: first argument is coerced via ToIndex
-        result = asIntN.call(new JSString("8"), new JSBigInt(BigInteger.ONE));
+        result = asIntN.call("8", new JSBigInt(BigInteger.ONE));
         bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.ONE);
 
         // Edge case: second argument not a BigInt
-        result = asIntN.call(numberArgs(8, 123));
+        result = asIntN.call(8, 123);
         assertPendingTypeError(context, result);
 
         // Edge case: negative bits
-        result = asIntN.call(new JSNumber(-1), new JSBigInt(BigInteger.ONE));
+        result = asIntN.call(-1, new JSBigInt(BigInteger.ONE));
         assertPendingRangeError(context, result);
 
         // Edge case: bits larger than Integer.MAX_VALUE are still valid (ToIndex)
-        result = asIntN.call(new JSNumber(2147483648L), new JSBigInt(BigInteger.ONE));
+        result = asIntN.call(2147483648L, new JSBigInt(BigInteger.ONE));
         bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.ONE);
     }
@@ -79,35 +79,35 @@ public class BigIntConstructorTest extends BaseJavetTest {
     public void testAsUintN() {
         // Normal case: positive value within range
         var asUintN = builtin(BigIntConstructor::asUintN, JSUndefined.INSTANCE);
-        JSValue result = asUintN.call(new JSNumber(8), new JSBigInt(BigInteger.valueOf(255)));
+        JSValue result = asUintN.call(8, new JSBigInt(BigInteger.valueOf(255)));
         JSBigInt bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.valueOf(255));
 
         // Normal case: wrap around
-        result = asUintN.call(new JSNumber(8), new JSBigInt(BigInteger.valueOf(256)));
+        result = asUintN.call(8, new JSBigInt(BigInteger.valueOf(256)));
         bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.ZERO);
 
         // Normal case: negative value becomes positive
-        result = asUintN.call(new JSNumber(8), new JSBigInt(BigInteger.valueOf(-1)));
+        result = asUintN.call(8, new JSBigInt(BigInteger.valueOf(-1)));
         bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.valueOf(255));
 
         // Edge case: insufficient arguments
-        result = asUintN.call(numberArgs(8));
+        result = asUintN.call(8);
         assertPendingTypeError(context, result);
 
         // Edge case: first argument is coerced via ToIndex
-        result = asUintN.call(new JSString("8"), new JSBigInt(BigInteger.ONE));
+        result = asUintN.call("8", new JSBigInt(BigInteger.ONE));
         bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.ONE);
 
         // Edge case: second argument not a BigInt
-        result = asUintN.call(numberArgs(8, 123));
+        result = asUintN.call(8, 123);
         assertPendingTypeError(context, result);
 
         // Edge case: negative bits
-        result = asUintN.call(new JSNumber(-1), new JSBigInt(BigInteger.ONE));
+        result = asUintN.call(-1, new JSBigInt(BigInteger.ONE));
         assertPendingRangeError(context, result);
 
         // Edge case: bits too large
@@ -178,7 +178,7 @@ public class BigIntConstructorTest extends BaseJavetTest {
     public void testCall() {
         // Normal case: from number
         var bigIntConstructor = builtin(BigIntConstructor::call, JSUndefined.INSTANCE);
-        JSValue result = bigIntConstructor.call(numberArgs(123));
+        JSValue result = bigIntConstructor.call(123);
         JSBigInt bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.valueOf(123));
 
@@ -188,22 +188,22 @@ public class BigIntConstructorTest extends BaseJavetTest {
         assertThat(result).isEqualTo(bigInt);
 
         // Normal case: from string (decimal)
-        result = bigIntConstructor.call(stringArgs("789"));
+        result = bigIntConstructor.call("789");
         bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.valueOf(789));
 
         // Normal case: from string (hex)
-        result = bigIntConstructor.call(stringArgs("0xFF"));
+        result = bigIntConstructor.call("0xFF");
         bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.valueOf(255));
 
         // Normal case: from string (octal)
-        result = bigIntConstructor.call(stringArgs("0o77"));
+        result = bigIntConstructor.call("0o77");
         bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.valueOf(63));
 
         // Normal case: from string (binary)
-        result = bigIntConstructor.call(stringArgs("0b101"));
+        result = bigIntConstructor.call("0b101");
         bigInt = result.asBigInt().orElseThrow();
         assertThat(bigInt.value()).isEqualTo(BigInteger.valueOf(5));
 
@@ -222,19 +222,19 @@ public class BigIntConstructorTest extends BaseJavetTest {
         assertPendingTypeError(context, result);
 
         // Edge case: non-integer number
-        result = bigIntConstructor.call(numberArgs(1.5));
+        result = bigIntConstructor.call(1.5);
         assertPendingRangeError(context, result);
 
         // Edge case: Infinity
-        result = bigIntConstructor.call(numberArgs(Double.POSITIVE_INFINITY));
+        result = bigIntConstructor.call(Double.POSITIVE_INFINITY);
         assertPendingRangeError(context, result);
 
         // Edge case: NaN
-        result = bigIntConstructor.call(numberArgs(Double.NaN));
+        result = bigIntConstructor.call(Double.NaN);
         assertPendingRangeError(context, result);
 
         // Edge case: invalid string
-        result = bigIntConstructor.call(stringArgs("not a number"));
+        result = bigIntConstructor.call("not a number");
         assertPendingSyntaxError(context, result);
 
         // Edge case: unsupported type

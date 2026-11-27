@@ -447,7 +447,7 @@ public final class TemporalDurationPrototype {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            JSValue unitValue = optionsObject.get(PropertyKey.fromString("unit"));
+            JSValue unitValue = optionsObject.get(PropertyKey.UNIT);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }

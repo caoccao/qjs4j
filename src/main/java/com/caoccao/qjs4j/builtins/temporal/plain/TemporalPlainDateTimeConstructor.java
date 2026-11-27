@@ -88,19 +88,19 @@ public final class TemporalPlainDateTimeConstructor {
     }
 
     static JSValue dateTimeFromFields(JSContext context, JSObject fields, JSValue options) {
-        JSValue calendarValue = fields.get(PropertyKey.fromString("calendar"));
+        JSValue calendarValue = fields.get(PropertyKey.CALENDAR);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
 
         TemporalTimeFields bag = new TemporalTimeFields(context, fields);
-        Integer dayOfMonth = bag.integer("day");
+        Integer dayOfMonth = bag.integerByKey(PropertyKey.DAY);
         bag.readThroughMinute();
-        Integer month = bag.integer("month");
+        Integer month = bag.integerByKey(PropertyKey.MONTH);
         IsoMonth parsedMonthCode = bag.monthCode();
         bag.readNanosecond();
         bag.readSecond();
-        Integer year = bag.integer("year");
+        Integer year = bag.integerByKey(PropertyKey.YEAR);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

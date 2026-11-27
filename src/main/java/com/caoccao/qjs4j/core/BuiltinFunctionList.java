@@ -58,6 +58,13 @@ final class BuiltinFunctionList {
         void method(String name, int length, JSNativeCallback callback) {
             entries.add(new Entry(PropertyKey.fromString(name), name, length, callback, false));
         }
+
+        /** Merge getter groups into the lexicographic order specified for Temporal prototypes. */
+        void sortedGetters(Consumer<Builder> define) {
+            int first = entries.size();
+            define.accept(this);
+            entries.subList(first, entries.size()).sort(java.util.Comparator.comparing(entry -> entry.key.asString()));
+        }
     }
 
     private record Entry(PropertyKey key, String name, int length, JSNativeCallback callback, boolean getter) {

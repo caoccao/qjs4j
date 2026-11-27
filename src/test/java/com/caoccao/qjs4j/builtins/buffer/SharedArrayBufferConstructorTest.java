@@ -71,9 +71,8 @@ public class SharedArrayBufferConstructorTest extends BaseJavetTest {
 
         assertIntegerWithJavet("SharedArrayBuffer.length");
 
-        assertStringWithJavet("SharedArrayBuffer.name");
-
-        assertStringWithJavet("new SharedArrayBuffer().toString()", "new SharedArrayBuffer(10).toString()");
+        assertStringWithJavet("SharedArrayBuffer.name", "new SharedArrayBuffer().toString()",
+                "new SharedArrayBuffer(10).toString()");
 
         assertErrorWithJavet("SharedArrayBuffer()");
 

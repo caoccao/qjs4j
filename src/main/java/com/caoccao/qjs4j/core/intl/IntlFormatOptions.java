@@ -65,7 +65,7 @@ final class IntlFormatOptions {
         if (context.hasPendingException()) {
             return options;
         }
-        String matcher = readStringOption(context, options, "localeMatcher");
+        String matcher = readStringOption(context, options, PropertyKey.LOCALE_MATCHER);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -98,14 +98,14 @@ final class IntlFormatOptions {
         return empty;
     }
 
-    static Integer getOptionIntegerOrUndefined(JSContext context, JSObject optionsObject, String key, int minimum,
+    static Integer getOptionIntegerOrUndefined(JSContext context, JSObject optionsObject, PropertyKey key, int minimum,
             int maximum) {
         return getOptionIntegerOrUndefined(context, optionsObject, key, minimum, maximum, null);
     }
 
-    static Integer getOptionIntegerOrUndefined(JSContext context, JSObject optionsObject, String key, int minimum,
+    static Integer getOptionIntegerOrUndefined(JSContext context, JSObject optionsObject, PropertyKey key, int minimum,
             int maximum, String rangeError) {
-        JSValue rawValue = optionsObject.get(PropertyKey.fromString(key));
+        JSValue rawValue = optionsObject.get(key);
         if (context.hasPendingException()) {
             return null;
         }
@@ -119,7 +119,8 @@ final class IntlFormatOptions {
         if (numberValue < minimum || numberValue > maximum || numberValue != (int) numberValue) {
             return context.rejectRangeError(rangeError != null
                     ? rangeError
-                    : "Value " + numberValue + " out of range for Intl.NumberFormat options property " + key);
+                    : "Value " + numberValue + " out of range for Intl.NumberFormat options property "
+                            + key.asString());
         }
         return (int) numberValue;
     }
@@ -149,7 +150,7 @@ final class IntlFormatOptions {
     }
 
     static JSValue localeMatcherError(JSContext context, JSValue options, String operation) {
-        String matcher = readStringOption(context, options, "localeMatcher");
+        String matcher = readStringOption(context, options, PropertyKey.LOCALE_MATCHER);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -163,7 +164,7 @@ final class IntlFormatOptions {
         return null;
     }
 
-    static String normalizedStringOption(JSContext context, JSValue options, String key, String fallback,
+    static String normalizedStringOption(JSContext context, JSValue options, PropertyKey key, String fallback,
             String... allowed) {
         String value = readStringOption(context, options, key);
         return context.hasPendingException() ? null : normalizeOption(value, fallback, allowed);
@@ -181,18 +182,18 @@ final class IntlFormatOptions {
         throw new IllegalArgumentException("Invalid option value: " + rawValue);
     }
 
-    static String readNumericWidth(JSContext context, JSObject options, String key) {
+    static String readNumericWidth(JSContext context, JSObject options, PropertyKey key) {
         return readValidatedOption(context, options, key, NUMERIC_WIDTHS);
     }
 
     /**
      * Read a string option from options object. Returns null if option is undefined.
      */
-    static String readStringOption(JSContext context, JSValue options, String key) {
+    static String readStringOption(JSContext context, JSValue options, PropertyKey key) {
         if (!(options instanceof JSObject optionsObject) || context.hasPendingException()) {
             return null;
         }
-        JSValue rawValue = optionsObject.get(PropertyKey.fromString(key));
+        JSValue rawValue = optionsObject.get(key);
         if (context.hasPendingException()) {
             return null;
         }
@@ -202,7 +203,7 @@ final class IntlFormatOptions {
         return JSTypeConversions.toString(context, rawValue).value();
     }
 
-    static String readTextWidth(JSContext context, JSObject options, String key) {
+    static String readTextWidth(JSContext context, JSObject options, PropertyKey key) {
         return readValidatedOption(context, options, key, TEXT_WIDTHS);
     }
 
@@ -210,7 +211,8 @@ final class IntlFormatOptions {
      * Read a string option from options object, validate against allowed values. Returns null if option is undefined.
      * Throws RangeError for invalid values.
      */
-    static String readValidatedOption(JSContext context, JSObject optionsObject, String key, String... allowedValues) {
+    static String readValidatedOption(JSContext context, JSObject optionsObject, PropertyKey key,
+            String... allowedValues) {
         String stringValue = readStringOption(context, optionsObject, key);
         if (stringValue == null || context.hasPendingException()) {
             return null;
@@ -220,7 +222,7 @@ final class IntlFormatOptions {
                 return stringValue;
             }
         }
-        return context.rejectRangeError("Value " + stringValue + " out of range for property " + key);
+        return context.rejectRangeError("Value " + stringValue + " out of range for property " + key.asString());
     }
 
     /**

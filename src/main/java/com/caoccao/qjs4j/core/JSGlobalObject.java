@@ -27,9 +27,7 @@ import com.caoccao.qjs4j.builtins.iterator.AsyncIteratorPrototype;
 import com.caoccao.qjs4j.builtins.iterator.IteratorConstructor;
 import com.caoccao.qjs4j.builtins.iterator.IteratorPrototype;
 import com.caoccao.qjs4j.builtins.number.BigIntConstructor;
-import com.caoccao.qjs4j.builtins.number.MathObject;
 import com.caoccao.qjs4j.builtins.number.NumberConstructor;
-import com.caoccao.qjs4j.builtins.number.NumberPrototype;
 import com.caoccao.qjs4j.builtins.object.*;
 import com.caoccao.qjs4j.builtins.promise.PromiseConstructor;
 import com.caoccao.qjs4j.builtins.regexp.RegExpConstructor;
@@ -843,21 +841,7 @@ public final class JSGlobalObject {
         JSObject math = context.createJSObject();
 
         // Math constants
-        math.defineProperty(PropertyKey.fromString("E"), JSNumber.of(MathObject.E), PropertyDescriptor.DataState.None);
-        math.defineProperty(PropertyKey.fromString("LN10"), JSNumber.of(MathObject.LN10),
-                PropertyDescriptor.DataState.None);
-        math.defineProperty(PropertyKey.fromString("LN2"), JSNumber.of(MathObject.LN2),
-                PropertyDescriptor.DataState.None);
-        math.defineProperty(PropertyKey.fromString("LOG10E"), JSNumber.of(MathObject.LOG10E),
-                PropertyDescriptor.DataState.None);
-        math.defineProperty(PropertyKey.fromString("LOG2E"), JSNumber.of(MathObject.LOG2E),
-                PropertyDescriptor.DataState.None);
-        math.defineProperty(PropertyKey.fromString("PI"), JSNumber.of(MathObject.PI),
-                PropertyDescriptor.DataState.None);
-        math.defineProperty(PropertyKey.fromString("SQRT1_2"), JSNumber.of(MathObject.SQRT1_2),
-                PropertyDescriptor.DataState.None);
-        math.defineProperty(PropertyKey.fromString("SQRT2"), JSNumber.of(MathObject.SQRT2),
-                PropertyDescriptor.DataState.None);
+        IntrinsicConstant.install(math, IntrinsicConstant.MATH);
 
         // Math methods
         IntrinsicFunctions.MATH.install(math);
@@ -906,22 +890,7 @@ public final class JSGlobalObject {
         // QuickJS compatibility: Number.parseInt/parseFloat are aliases of global parseInt/parseFloat.
         JSValue globalParseInt = globalObject.get("parseInt");
         JSValue globalParseFloat = globalObject.get("parseFloat");
-        numberConstructor.defineProperty(PropertyKey.fromString("EPSILON"), JSNumber.of(Math.ulp(1.0)),
-                PropertyDescriptor.DataState.None);
-        numberConstructor.defineProperty(PropertyKey.fromString("MAX_SAFE_INTEGER"),
-                JSNumber.of((double) NumberPrototype.MAX_SAFE_INTEGER), PropertyDescriptor.DataState.None);
-        numberConstructor.defineProperty(PropertyKey.fromString("MAX_VALUE"), JSNumber.of(Double.MAX_VALUE),
-                PropertyDescriptor.DataState.None);
-        numberConstructor.defineProperty(PropertyKey.fromString("MIN_SAFE_INTEGER"),
-                JSNumber.of((double) -NumberPrototype.MAX_SAFE_INTEGER), PropertyDescriptor.DataState.None);
-        numberConstructor.defineProperty(PropertyKey.fromString("MIN_VALUE"), JSNumber.of(Double.MIN_VALUE),
-                PropertyDescriptor.DataState.None);
-        numberConstructor.defineProperty(PropertyKey.fromString("NEGATIVE_INFINITY"),
-                JSNumber.of(Double.NEGATIVE_INFINITY), PropertyDescriptor.DataState.None);
-        numberConstructor.defineProperty(PropertyKey.fromString("NaN"), JSNumber.of(Double.NaN),
-                PropertyDescriptor.DataState.None);
-        numberConstructor.defineProperty(PropertyKey.fromString("POSITIVE_INFINITY"),
-                JSNumber.of(Double.POSITIVE_INFINITY), PropertyDescriptor.DataState.None);
+        IntrinsicConstant.install(numberConstructor, IntrinsicConstant.NUMBER);
         defineBuiltin(numberConstructor, "parseFloat", globalParseFloat);
         defineBuiltin(numberConstructor, "parseInt", globalParseInt);
 
@@ -1194,36 +1163,7 @@ public final class JSGlobalObject {
         defineMethod(symbolConstructor, "keyFor", 1, SymbolConstructor::keyFor);
 
         // Well-known symbols (ES2015+)
-        symbolConstructor.defineProperty(PropertyKey.ITERATOR, JSSymbol.ITERATOR, PropertyDescriptor.DataState.None);
-        symbolConstructor.defineProperty(PropertyKey.fromString("asyncIterator"), JSSymbol.ASYNC_ITERATOR,
-                PropertyDescriptor.DataState.None);
-        symbolConstructor.defineProperty(PropertyKey.fromString("toStringTag"), JSSymbol.TO_STRING_TAG,
-                PropertyDescriptor.DataState.None);
-        symbolConstructor.defineProperty(PropertyKey.fromString("hasInstance"), JSSymbol.HAS_INSTANCE,
-                PropertyDescriptor.DataState.None);
-        symbolConstructor.defineProperty(PropertyKey.fromString("isConcatSpreadable"), JSSymbol.IS_CONCAT_SPREADABLE,
-                PropertyDescriptor.DataState.None);
-        symbolConstructor.defineProperty(PropertyKey.fromString("toPrimitive"), JSSymbol.TO_PRIMITIVE,
-                PropertyDescriptor.DataState.None);
-        symbolConstructor.defineProperty(PropertyKey.fromString("match"), JSSymbol.MATCH,
-                PropertyDescriptor.DataState.None);
-        symbolConstructor.defineProperty(PropertyKey.fromString("matchAll"), JSSymbol.MATCH_ALL,
-                PropertyDescriptor.DataState.None);
-        symbolConstructor.defineProperty(PropertyKey.fromString("replace"), JSSymbol.REPLACE,
-                PropertyDescriptor.DataState.None);
-        symbolConstructor.defineProperty(PropertyKey.fromString("search"), JSSymbol.SEARCH,
-                PropertyDescriptor.DataState.None);
-        symbolConstructor.defineProperty(PropertyKey.fromString("split"), JSSymbol.SPLIT,
-                PropertyDescriptor.DataState.None);
-        symbolConstructor.defineProperty(PropertyKey.fromString("species"), JSSymbol.SPECIES,
-                PropertyDescriptor.DataState.None);
-        symbolConstructor.defineProperty(PropertyKey.fromString("unscopables"), JSSymbol.UNSCOPABLES,
-                PropertyDescriptor.DataState.None);
-        // ES2024 additions kept intentionally even though not in upstream QuickJS.
-        symbolConstructor.defineProperty(PropertyKey.fromString("dispose"), JSSymbol.DISPOSE,
-                PropertyDescriptor.DataState.None);
-        symbolConstructor.defineProperty(PropertyKey.fromString("asyncDispose"), JSSymbol.ASYNC_DISPOSE,
-                PropertyDescriptor.DataState.None);
+        IntrinsicConstant.install(symbolConstructor, IntrinsicConstant.SYMBOL);
 
         defineBuiltin(globalObject, JSSymbol.NAME, symbolConstructor);
     }

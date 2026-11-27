@@ -101,7 +101,7 @@ public class DatePrototypeTest extends BaseJavetTest {
         // We can't hardcode the exact output, but we can verify the format
         JSDate date = new JSDate(context, 0); // Unix epoch
 
-        JSValue result = DatePrototype.toStringMethod(context, date, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(DatePrototype::toStringMethod, date);
         String str = ((JSString) result).value();
 
         // Should contain 1970 (epoch year)
@@ -119,7 +119,7 @@ public class DatePrototypeTest extends BaseJavetTest {
         // Test with specific timestamp: 2025-01-01 00:00:00 UTC
         JSDate date = new JSDate(context, 1735689600000L);
 
-        JSValue result = DatePrototype.toStringMethod(context, date, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(DatePrototype::toStringMethod, date);
         assertThat(result).isInstanceOf(JSString.class);
 
         String str = ((JSString) result).value();
@@ -151,8 +151,7 @@ public class DatePrototypeTest extends BaseJavetTest {
     @Test
     public void testDateToStringOnNonDate() {
         // Calling toString on non-Date should throw TypeError
-        assertThat(DatePrototype.toStringMethod(context, new JSString("not a date"), JSValue.NO_ARGS))
-                .isInstanceOf(JSError.class);
+        assertThat(callBuiltin(DatePrototype::toStringMethod, new JSString("not a date"))).isInstanceOf(JSError.class);
         assertThat(context.hasPendingException()).isTrue();
 
         assertThat(context.getPendingException()).isInstanceOf(JSError.class);
@@ -176,7 +175,7 @@ public class DatePrototypeTest extends BaseJavetTest {
         // This test documents the difference between V8 and RFC 1123 formats
         JSDate date = new JSDate(context, 1735689600000L);
 
-        JSValue result = DatePrototype.toStringMethod(context, date, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(DatePrototype::toStringMethod, date);
         String v8Format = ((JSString) result).value();
 
         // V8 format should NOT have a comma after day name
@@ -210,13 +209,13 @@ public class DatePrototypeTest extends BaseJavetTest {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(context, 1704067200000L);
 
-        JSValue result = DatePrototype.getDay(context, date, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(DatePrototype::getDay, date);
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
             assertThat(jsNum.value()).isBetween(0.0, 6.0);
         });
 
         // Edge case: called on non-Date
-        result = DatePrototype.getDay(context, new JSString("not a date"), JSValue.NO_ARGS);
+        result = callBuiltin(DatePrototype::getDay, new JSString("not a date"));
         assertPendingTypeError(context, result);
     }
 
@@ -225,13 +224,13 @@ public class DatePrototypeTest extends BaseJavetTest {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(context, 1704067200000L);
 
-        JSValue result = DatePrototype.getHours(context, date, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(DatePrototype::getHours, date);
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
             assertThat(jsNum.value()).isBetween(0.0, 23.0);
         });
 
         // Edge case: called on non-Date
-        result = DatePrototype.getHours(context, new JSString("not a date"), JSValue.NO_ARGS);
+        result = callBuiltin(DatePrototype::getHours, new JSString("not a date"));
         assertPendingTypeError(context, result);
     }
 
@@ -241,14 +240,14 @@ public class DatePrototypeTest extends BaseJavetTest {
         assertDoubleWithJavet("new Date(1704067200000).getTime();");
 
         // Edge case: called on non-Date
-        JSValue result = DatePrototype.getTime(context, new JSString("not a date"), JSValue.NO_ARGS);
+        JSValue result = callBuiltin(DatePrototype::getTime, new JSString("not a date"));
         assertPendingTypeError(context, result);
     }
 
     @Test
     public void testGetYearWithJavet() {
         assertIntegerWithJavet("new Date(946684800000).getYear();");
-        assertPendingTypeError(context, DatePrototype.getYear(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
+        assertPendingTypeError(context, callBuiltin(DatePrototype::getYear, JSUndefined.INSTANCE));
     }
 
     @Test
@@ -262,13 +261,13 @@ public class DatePrototypeTest extends BaseJavetTest {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(context, 1704067200000L);
 
-        JSValue result = DatePrototype.toISOString(context, date, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(DatePrototype::toISOString, date);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> {
             assertThat(jsStr.value()).startsWith("2024-01-01T00:00:00");
         });
 
         // Edge case: called on non-Date
-        result = DatePrototype.toISOString(context, new JSString("not a date"), JSValue.NO_ARGS);
+        result = callBuiltin(DatePrototype::toISOString, new JSString("not a date"));
         assertPendingTypeError(context, result);
     }
 
@@ -277,13 +276,13 @@ public class DatePrototypeTest extends BaseJavetTest {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(context, 1704067200000L);
 
-        JSValue result = DatePrototype.toJSON(context, date, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(DatePrototype::toJSON, date);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> {
             assertThat(jsStr.value()).startsWith("2024-01-01T00:00:00");
         });
 
         // Edge case: called on non-Date
-        result = DatePrototype.toJSON(context, new JSString("not a date"), JSValue.NO_ARGS);
+        result = callBuiltin(DatePrototype::toJSON, new JSString("not a date"));
         assertPendingTypeError(context, result);
     }
 
@@ -303,14 +302,12 @@ public class DatePrototypeTest extends BaseJavetTest {
     public void testToString() {
         JSDate date = new JSDate(context, 1735689600000L);
 
-        assertThat(DatePrototype.toStringMethod(context, date, JSValue.NO_ARGS)).isInstanceOfSatisfying(JSString.class,
-                jsStr -> {
-                    assertThat(jsStr.value()).isNotEmpty();
-                });
+        assertThat(callBuiltin(DatePrototype::toStringMethod, date)).isInstanceOfSatisfying(JSString.class, jsStr -> {
+            assertThat(jsStr.value()).isNotEmpty();
+        });
 
         // Edge case: called on non-Date
-        assertPendingTypeError(context,
-                DatePrototype.toStringMethod(context, new JSString("not date"), JSValue.NO_ARGS));
+        assertPendingTypeError(context, callBuiltin(DatePrototype::toStringMethod, new JSString("not date")));
 
         // Skip Javet comparison on Windows due to timezone format differences
         assumeFalse(isWindows(), "Skipping on Windows - timezone format differences with V8");
@@ -321,8 +318,7 @@ public class DatePrototypeTest extends BaseJavetTest {
     @Test
     public void testToStringForNonFiniteJavaDates() {
         for (double value : new double[]{Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY, Double.NaN}) {
-            assertStringValue(DatePrototype.toStringMethod(context, new JSDate(context, value), JSValue.NO_ARGS),
-                    "Invalid Date");
+            assertStringValue(callBuiltin(DatePrototype::toStringMethod, new JSDate(context, value)), "Invalid Date");
         }
     }
 
@@ -339,7 +335,7 @@ public class DatePrototypeTest extends BaseJavetTest {
         assertDoubleWithJavet("new Date(1704067200000).valueOf();");
 
         // Edge case: called on non-Date
-        JSValue result = DatePrototype.valueOf(context, new JSString("not a date"), JSValue.NO_ARGS);
+        JSValue result = callBuiltin(DatePrototype::valueOf, new JSString("not a date"));
         assertPendingTypeError(context, result);
     }
 

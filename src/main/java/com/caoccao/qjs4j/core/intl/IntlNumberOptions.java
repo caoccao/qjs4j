@@ -37,20 +37,23 @@ final class IntlNumberOptions {
     }
 
     static void defineDigitRange(JSObject options, boolean significant, int minimum, int maximum) {
-        IntlBuiltins.createDataProperty(options, significant ? "minimumSignificantDigits" : "minimumFractionDigits",
+        IntlBuiltins.createDataProperty(options,
+                PropertyKey.fromString(significant ? "minimumSignificantDigits" : "minimumFractionDigits"),
                 JSNumber.of(minimum));
-        IntlBuiltins.createDataProperty(options, significant ? "maximumSignificantDigits" : "maximumFractionDigits",
+        IntlBuiltins.createDataProperty(options,
+                PropertyKey.fromString(significant ? "maximumSignificantDigits" : "maximumFractionDigits"),
                 JSNumber.of(maximum));
     }
 
     private static int readMinimumIntegerDigits(JSContext context, JSObject options) {
-        Integer digits = IntlFormatOptions.getOptionIntegerOrUndefined(context, options, "minimumIntegerDigits", 1, 21);
+        Integer digits = IntlFormatOptions.getOptionIntegerOrUndefined(context, options,
+                PropertyKey.MINIMUM_INTEGER_DIGITS, 1, 21);
         return digits == null ? 1 : digits;
     }
 
     static RoundingOptions readRoundingOptions(JSContext context, JSObject optionsObject, boolean validateIncrement) {
-        Integer increment = IntlFormatOptions.getOptionIntegerOrUndefined(context, optionsObject, "roundingIncrement",
-                1, 5000);
+        Integer increment = IntlFormatOptions.getOptionIntegerOrUndefined(context, optionsObject,
+                PropertyKey.ROUNDING_INCREMENT, 1, 5000);
         if (context.hasPendingException()) {
             return null;
         }
@@ -58,12 +61,12 @@ final class IntlNumberOptions {
         if (validateIncrement && !VALID_ROUNDING_INCREMENTS.contains(roundingIncrement)) {
             return context.rejectRangeError("Invalid roundingIncrement value: " + roundingIncrement);
         }
-        String mode = IntlFormatOptions.normalizedStringOption(context, optionsObject, "roundingMode", "halfExpand",
-                ROUNDING_MODE_VALUES);
-        String priority = IntlFormatOptions.normalizedStringOption(context, optionsObject, "roundingPriority", "auto",
-                ROUNDING_PRIORITY_VALUES);
-        String trailingZero = IntlFormatOptions.normalizedStringOption(context, optionsObject, "trailingZeroDisplay",
-                "auto", TRAILING_ZERO_DISPLAY_VALUES);
+        String mode = IntlFormatOptions.normalizedStringOption(context, optionsObject, PropertyKey.ROUNDING_MODE,
+                "halfExpand", ROUNDING_MODE_VALUES);
+        String priority = IntlFormatOptions.normalizedStringOption(context, optionsObject,
+                PropertyKey.ROUNDING_PRIORITY, "auto", ROUNDING_PRIORITY_VALUES);
+        String trailingZero = IntlFormatOptions.normalizedStringOption(context, optionsObject,
+                PropertyKey.TRAILING_ZERO_DISPLAY, "auto", TRAILING_ZERO_DISPLAY_VALUES);
         return context.hasPendingException()
                 ? null
                 : new RoundingOptions(roundingIncrement, mode, priority, trailingZero);
@@ -71,8 +74,8 @@ final class IntlNumberOptions {
 
     record DigitOptions(String notation, int minimumIntegerDigits, DigitRange fractionDigits) {
         static DigitOptions read(JSContext context, JSObject optionsObject) {
-            String notation = IntlFormatOptions.normalizedStringOption(context, optionsObject, "notation", "standard",
-                    NOTATION_VALUES);
+            String notation = IntlFormatOptions.normalizedStringOption(context, optionsObject, PropertyKey.NOTATION,
+                    "standard", NOTATION_VALUES);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -95,11 +98,13 @@ final class IntlNumberOptions {
         }
 
         static DigitRange read(JSContext context, JSObject options, String minKey, String maxKey, int low, int high) {
-            Integer min = IntlFormatOptions.getOptionIntegerOrUndefined(context, options, minKey, low, high);
+            Integer min = IntlFormatOptions.getOptionIntegerOrUndefined(context, options,
+                    PropertyKey.fromString(minKey), low, high);
             if (context.hasPendingException()) {
                 return null;
             }
-            Integer max = IntlFormatOptions.getOptionIntegerOrUndefined(context, options, maxKey, low, high);
+            Integer max = IntlFormatOptions.getOptionIntegerOrUndefined(context, options,
+                    PropertyKey.fromString(maxKey), low, high);
             return context.hasPendingException() ? null : new DigitRange(min, max);
         }
 

@@ -207,7 +207,16 @@ public final class JSBytecodeFunction extends JSFunction {
         return executionContext.getVirtualMachine().execute(this, thisArg, args, argCount, JSUndefined.INSTANCE);
     }
 
-    private void copyClosureStateTo(JSBytecodeFunction target) {
+    public JSBytecodeFunction copyTemplateWithRemappedPrivateSymbols(IdentityHashMap<JSSymbol, JSSymbol> symbolRemap) {
+        if (symbolRemap == null || symbolRemap.isEmpty()) {
+            return this;
+        }
+        return internalCopyTemplateWithRemappedPrivateSymbols(symbolRemap, new IdentityHashMap<>());
+    }
+
+    private JSBytecodeFunction copyWithBytecode(Bytecode code, JSValue[] captures) {
+        JSBytecodeFunction target = new JSBytecodeFunction(context, code, name, length, captures, prototype,
+                isConstructor, isAsync, isGenerator, isArrow, strict, sourceCode, selfCaptureIndex);
         target.hasParameterExpressions = hasParameterExpressions;
         target.hasArgumentsParameterBinding = hasArgumentsParameterBinding;
         target.selfLocalIndex = selfLocalIndex;
@@ -225,20 +234,11 @@ public final class JSBytecodeFunction extends JSFunction {
         target.displaysAsArgumentsObjectInToString = displaysAsArgumentsObjectInToString;
         target.evalDynamicScopeFrame = evalDynamicScopeFrame;
         target.evalDynamicScopeLookupEnabled = evalDynamicScopeLookupEnabled;
-    }
-
-    public JSBytecodeFunction copyTemplateWithRemappedPrivateSymbols(IdentityHashMap<JSSymbol, JSSymbol> symbolRemap) {
-        if (symbolRemap == null || symbolRemap.isEmpty()) {
-            return this;
-        }
-        return internalCopyTemplateWithRemappedPrivateSymbols(symbolRemap, new IdentityHashMap<>());
+        return target;
     }
 
     public JSBytecodeFunction copyWithClosureVars(JSValue[] capturedClosureVars) {
-        JSBytecodeFunction copiedFunction = new JSBytecodeFunction(context, bytecode, name, length, capturedClosureVars,
-                prototype, isConstructor, isAsync, isGenerator, isArrow, strict, sourceCode, selfCaptureIndex);
-        copyClosureStateTo(copiedFunction);
-        return copiedFunction;
+        return copyWithBytecode(bytecode, capturedClosureVars);
     }
 
     /**
@@ -246,10 +246,8 @@ public final class JSBytecodeFunction extends JSFunction {
      * closures with reference-based capture.
      */
     public JSBytecodeFunction copyWithVarRefs(VarRef[] capturedVarRefs) {
-        JSBytecodeFunction copiedFunction = new JSBytecodeFunction(context, bytecode, name, length, JSValue.NO_ARGS,
-                prototype, isConstructor, isAsync, isGenerator, isArrow, strict, sourceCode, selfCaptureIndex);
+        JSBytecodeFunction copiedFunction = copyWithBytecode(bytecode, JSValue.NO_ARGS);
         copiedFunction.varRefs = capturedVarRefs;
-        copyClosureStateTo(copiedFunction);
         return copiedFunction;
     }
 
@@ -504,11 +502,9 @@ public final class JSBytecodeFunction extends JSFunction {
             return memoizedFunction;
         }
         Bytecode remappedBytecode = internalCopyBytecodeWithRemappedPrivateSymbols(symbolRemap, functionMemo);
-        JSBytecodeFunction copiedFunction = new JSBytecodeFunction(context, remappedBytecode, name, length, closureVars,
-                prototype, isConstructor, isAsync, isGenerator, isArrow, strict, sourceCode, selfCaptureIndex);
+        JSBytecodeFunction copiedFunction = copyWithBytecode(remappedBytecode, closureVars);
         functionMemo.put(this, copiedFunction);
         copiedFunction.captureSourceInfos = captureSourceInfos;
-        copyClosureStateTo(copiedFunction);
         copiedFunction.classConstructor = classConstructor;
         copiedFunction.derivedConstructor = derivedConstructor;
         copiedFunction.varRefs = varRefs;
@@ -802,26 +798,26 @@ public final class JSBytecodeFunction extends JSFunction {
         return JSValueType.FUNCTION;
     }
 
+    private static JSNativeFunction awaitContinuation(JSContext context, JSGeneratorState state, JSPromise outerPromise,
+            JSGeneratorState.ResumeKind kind) {
+        String name = kind == JSGeneratorState.ResumeKind.NEXT ? "onAwaitResolve" : "onAwaitReject";
+        return new JSNativeFunction(context, name, 1, (childContext, receiver, arguments) -> {
+            state.setPendingResumeRecord(kind, JSValue.argumentOrUndefined(arguments, 0));
+            resumeAsyncFunctionExecution(context, state, outerPromise);
+            return JSUndefined.INSTANCE;
+        });
+    }
+
     private static void resumeAsyncFunctionExecution(JSContext context, JSGeneratorState asyncFunctionState,
             JSPromise outerPromise) {
         try {
             JSValue result = context.getVirtualMachine().executeAsyncFunction(asyncFunctionState, context);
             JSPromise awaitedPromise = context.getVirtualMachine().consumeAwaitSuspensionPromise();
             if (awaitedPromise != null) {
-                awaitedPromise.observe(context, new JSNativeFunction(context, "onAwaitResolve", 1,
-                        (childContext, callbackThisArg, callbackArgs) -> {
-                            JSValue resolvedValue = JSValue.argumentOrUndefined(callbackArgs, 0);
-                            asyncFunctionState.setPendingResumeRecord(JSGeneratorState.ResumeKind.NEXT, resolvedValue);
-                            resumeAsyncFunctionExecution(context, asyncFunctionState, outerPromise);
-                            return JSUndefined.INSTANCE;
-                        }), new JSNativeFunction(context, "onAwaitReject", 1,
-                                (childContext, callbackThisArg, callbackArgs) -> {
-                                    JSValue rejectionValue = JSValue.argumentOrUndefined(callbackArgs, 0);
-                                    asyncFunctionState.setPendingResumeRecord(JSGeneratorState.ResumeKind.THROW,
-                                            rejectionValue);
-                                    resumeAsyncFunctionExecution(context, asyncFunctionState, outerPromise);
-                                    return JSUndefined.INSTANCE;
-                                }));
+                awaitedPromise.observe(context,
+                        awaitContinuation(context, asyncFunctionState, outerPromise, JSGeneratorState.ResumeKind.NEXT),
+                        awaitContinuation(context, asyncFunctionState, outerPromise,
+                                JSGeneratorState.ResumeKind.THROW));
                 return;
             }
             asyncFunctionState.clearSuspendedExecutionState();
@@ -830,20 +826,18 @@ public final class JSBytecodeFunction extends JSFunction {
                 return;
             }
             outerPromise.resolve(context, result);
-        } catch (JSVirtualMachineException e) {
-            if (context.hasPendingException()) {
-                outerPromise.reject(context.takeExecutionException());
-            } else if (e.getJsValue() != null) {
-                outerPromise.reject(e.getJsValue());
-            } else if (e.getJsError() != null) {
-                outerPromise.reject(e.getJsError());
-            } else {
-                String errorMessage = e.getMessage() != null ? e.getMessage() : e.toString();
-                JSObject errorObj = context.createJSObject();
-                errorObj.set(PropertyKey.MESSAGE, new JSString(errorMessage));
-                outerPromise.reject(errorObj);
-            }
         } catch (Exception e) {
+            if (e instanceof JSVirtualMachineException vmException) {
+                if (context.hasPendingException()) {
+                    outerPromise.reject(context.takeExecutionException());
+                    return;
+                }
+                JSValue reason = vmException.getJsValue() != null ? vmException.getJsValue() : vmException.getJsError();
+                if (reason != null) {
+                    outerPromise.reject(reason);
+                    return;
+                }
+            }
             String errorMessage = e.getMessage() != null ? e.getMessage() : e.toString();
             JSObject errorObj = context.createJSObject();
             errorObj.set(PropertyKey.MESSAGE, new JSString(errorMessage));

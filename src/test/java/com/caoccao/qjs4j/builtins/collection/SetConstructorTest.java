@@ -135,9 +135,7 @@ public class SetConstructorTest extends BaseJavetTest {
         assertIntegerWithJavet("Set.length");
 
         // Set.name should be "Set"
-        assertStringWithJavet("Set.name");
-
-        assertStringWithJavet("new Set().toString()");
+        assertStringWithJavet("Set.name", "new Set().toString()");
 
         assertErrorWithJavet("Set()");
     }

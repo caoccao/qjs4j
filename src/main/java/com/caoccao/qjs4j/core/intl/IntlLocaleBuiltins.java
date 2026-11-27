@@ -336,7 +336,7 @@ final class IntlLocaleBuiltins {
                 || "ps".equals(lang) || "sd".equals(lang) || "ckb".equals(lang)) {
             direction = "rtl";
         }
-        createDataProperty(result, "direction", new JSString(direction));
+        createDataProperty(result, PropertyKey.DIRECTION, new JSString(direction));
         return result;
     }
 
@@ -367,13 +367,13 @@ final class IntlLocaleBuiltins {
         if (firstDay < 1) {
             firstDay = getLocaleDefaultFirstDay(intlLocale.getLocale());
         }
-        createDataProperty(result, "firstDay", JSNumber.of(firstDay));
+        createDataProperty(result, PropertyKey.FIRST_DAY, JSNumber.of(firstDay));
 
         // Weekend days: default Sat-Sun (6, 7) for most locales
         JSArray weekend = context.createJSArray();
         weekend.push(JSNumber.of(6));
         weekend.push(JSNumber.of(7));
-        createDataProperty(result, "weekend", weekend);
+        createDataProperty(result, PropertyKey.WEEKEND, weekend);
 
         return result;
     }

@@ -50,9 +50,8 @@ package com.caoccao.qjs4j.core;
  * @see JSProxy
  * @see JSSymbol
  */
-public final class JSSymbolObject extends JSObject {
+public final class JSSymbolObject extends JSPrimitiveObject<JSSymbol> {
     public static final String NAME = "Symbol";
-    private final JSSymbol value;
 
     /**
      * Create a Symbol object wrapping the given JSSymbol value.
@@ -61,9 +60,7 @@ public final class JSSymbolObject extends JSObject {
      *            the JSSymbol value to wrap
      */
     public JSSymbolObject(JSContext context, JSSymbol value) {
-        super(context);
-        this.value = value;
-        this.setPrimitiveValue(value);
+        super(context, value);
     }
 
     /**
@@ -83,11 +80,6 @@ public final class JSSymbolObject extends JSObject {
      */
     public JSSymbol getValue() {
         return value;
-    }
-
-    @Override
-    public Object toJavaObject() {
-        return value.toJavaObject();
     }
 
     @Override

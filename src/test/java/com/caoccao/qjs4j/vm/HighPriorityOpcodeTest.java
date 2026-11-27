@@ -27,9 +27,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class HighPriorityOpcodeTest extends OpcodeTest {
-    private JSValue execute(BytecodeEmitter emitter, int localCount, JSValue[] closureVars, JSValue thisArg,
-            JSValue... args) {
-        return executeWithStrict(false, emitter, localCount, closureVars, thisArg, args);
+    @Override
+    protected boolean strict() {
+        return false;
     }
 
     @Test
@@ -50,14 +50,12 @@ public class HighPriorityOpcodeTest extends OpcodeTest {
     @Test
     public void testInitCtor() {
         BytecodeEmitter emitter = new BytecodeEmitter();
-        emitter.emitOpcode(Opcode.INIT_CTOR);
-        emitter.emitOpcode(Opcode.RETURN);
+        emitOpcodes(emitter, Opcode.INIT_CTOR, Opcode.RETURN);
 
         JSObject instance = context.createJSObject();
         assertThat(execute(emitter, 0, JSValue.NO_ARGS, instance)).isSameAs(instance);
 
-        assertThatThrownBy(() -> execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE))
-                .isInstanceOf(JSVirtualMachineException.class)
+        assertThatThrownBy(() -> execute(emitter, 0)).isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("class constructors must be invoked with 'new'");
     }
 
@@ -78,11 +76,9 @@ public class HighPriorityOpcodeTest extends OpcodeTest {
         closeEmitter.emitPushConstant(iteratorWithReturn);
         closeEmitter.emitPushConstant(JSUndefined.INSTANCE);
         closeEmitter.emitIntOperand(Opcode.PUSH_I32, 0);
-        closeEmitter.emitOpcode(Opcode.ITERATOR_CLOSE);
-        closeEmitter.emitOpcode(Opcode.PUSH_TRUE);
-        closeEmitter.emitOpcode(Opcode.RETURN);
+        emitOpcodes(closeEmitter, Opcode.ITERATOR_CLOSE, Opcode.PUSH_TRUE, Opcode.RETURN);
 
-        assertThat(execute(closeEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE)).isSameAs(JSBoolean.TRUE);
+        assertThat(execute(closeEmitter, 0)).isSameAs(JSBoolean.TRUE);
         assertThat(closeCount.get()).isEqualTo(1);
 
         JSObject iteratorWithoutThrow = context.createJSObject();
@@ -94,7 +90,7 @@ public class HighPriorityOpcodeTest extends OpcodeTest {
         callEmitter.emitIntOperand(Opcode.ITERATOR_CALL, 1);
         callEmitter.emitOpcode(Opcode.RETURN);
 
-        assertThat(execute(callEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE)).isSameAs(JSBoolean.TRUE);
+        assertThat(execute(callEmitter, 0)).isSameAs(JSBoolean.TRUE);
     }
 
     @Test
@@ -113,13 +109,10 @@ public class HighPriorityOpcodeTest extends OpcodeTest {
         emitter.emitPushConstant(nextMethod);
         emitter.emitIntOperand(Opcode.PUSH_I32, 0);
         emitter.emitIntOperand(Opcode.PUSH_I32, 9);
-        emitter.emitOpcode(Opcode.ITERATOR_NEXT);
-        emitter.emitOpcode(Opcode.ITERATOR_CHECK_OBJECT);
-        emitter.emitOpcode(Opcode.ITERATOR_GET_VALUE_DONE);
-        emitter.emitOpcode(Opcode.DROP);
-        emitter.emitOpcode(Opcode.RETURN);
+        emitOpcodes(emitter, Opcode.ITERATOR_NEXT, Opcode.ITERATOR_CHECK_OBJECT, Opcode.ITERATOR_GET_VALUE_DONE,
+                Opcode.DROP, Opcode.RETURN);
 
-        assertNumberValue(execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE), 9);
+        assertNumberValue(execute(emitter, 0), 9);
     }
 
     @Test
@@ -130,11 +123,9 @@ public class HighPriorityOpcodeTest extends OpcodeTest {
         emitter.emitOpcode(Opcode.DROP);
         emitter.emitGetLocal(0);
         emitter.emitIntOperand(Opcode.PUSH_I32, 3);
-        emitter.emitOpcode(Opcode.POW);
-        emitter.emitOpcode(Opcode.LNOT);
-        emitter.emitOpcode(Opcode.RETURN);
+        emitOpcodes(emitter, Opcode.POW, Opcode.LNOT, Opcode.RETURN);
 
-        assertThat(execute(emitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE)).isEqualTo(JSBoolean.FALSE);
+        assertThat(execute(emitter, 1)).isEqualTo(JSBoolean.FALSE);
     }
 
     @Test
@@ -160,7 +151,7 @@ public class HighPriorityOpcodeTest extends OpcodeTest {
         setProtoEmitter.emitOpcodeAtom(Opcode.GET_FIELD, "marker");
         setProtoEmitter.emitOpcode(Opcode.RETURN);
 
-        assertStringValue(execute(setProtoEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE), "ok");
+        assertStringValue(execute(setProtoEmitter, 0), "ok");
 
         JSObject homeObject = context.createJSObject();
         JSNativeFunction method = new JSNativeFunction(context, "m", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
@@ -168,11 +159,9 @@ public class HighPriorityOpcodeTest extends OpcodeTest {
         BytecodeEmitter homeObjectEmitter = new BytecodeEmitter();
         homeObjectEmitter.emitPushConstant(homeObject);
         homeObjectEmitter.emitPushConstant(method);
-        homeObjectEmitter.emitOpcode(Opcode.SET_HOME_OBJECT);
-        homeObjectEmitter.emitOpcode(Opcode.NIP);
-        homeObjectEmitter.emitOpcode(Opcode.RETURN);
+        emitOpcodes(homeObjectEmitter, Opcode.SET_HOME_OBJECT, Opcode.NIP, Opcode.RETURN);
 
-        execute(homeObjectEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
+        execute(homeObjectEmitter, 0);
         assertThat(method.getHomeObject()).isSameAs(homeObject);
     }
 

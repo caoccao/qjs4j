@@ -42,9 +42,8 @@ package com.caoccao.qjs4j.core;
  * @see JSProxy
  * @see JSBoolean
  */
-public final class JSBooleanObject extends JSObject {
+public final class JSBooleanObject extends JSPrimitiveObject<JSBoolean> {
     public static final String NAME = "Boolean";
-    private final JSBoolean value;
 
     /**
      * Create a Boolean object wrapping the given boolean value.
@@ -63,9 +62,7 @@ public final class JSBooleanObject extends JSObject {
      *            the JSBoolean value to wrap
      */
     public JSBooleanObject(JSContext context, JSBoolean value) {
-        super(context);
-        this.value = value;
-        this.setPrimitiveValue(value);
+        super(context, value);
     }
 
     /**
@@ -75,11 +72,6 @@ public final class JSBooleanObject extends JSObject {
      */
     public JSBoolean getValue() {
         return value;
-    }
-
-    @Override
-    public Object toJavaObject() {
-        return value.value();
     }
 
     @Override

@@ -214,22 +214,17 @@ public class JSIntlObjectTest extends BaseJavetTest {
     public void testTransformExtensionCanonicalization() {
         // Script in t-extension should be lowercased (not title-cased like main locale)
         assertStringWithJavet("Intl.getCanonicalLocales('und-Latn-t-und-Hani-m0-prprname')[0]",
-                "Intl.getCanonicalLocales('en-t-en-Latn')[0]");
-
-        // Language in t-extension should be lowercased and aliased
-        assertStringWithJavet("Intl.getCanonicalLocales('en-t-iw')[0]");
-
-        // Region in t-extension should be lowercased
-        assertStringWithJavet("Intl.getCanonicalLocales('en-t-en-US')[0]");
-
-        // Tfield keys sorted, values lowercased
-        assertStringWithJavet("Intl.getCanonicalLocales('DE-T-M0-DIN-K0-QWERTZ')[0]");
-
-        // Variant subtags in tlang sorted alphabetically
-        assertStringWithJavet("Intl.getCanonicalLocales('sl-t-sl-rozaj-biske-1994')[0]");
-
-        // Valid t-extension tags should be accepted unchanged when already canonical
-        assertStringWithJavet("Intl.getCanonicalLocales('en-t-en')[0]", "Intl.getCanonicalLocales('en-t-en-latn')[0]",
+                "Intl.getCanonicalLocales('en-t-en-Latn')[0]",
+                // Language in t-extension should be lowercased and aliased
+                "Intl.getCanonicalLocales('en-t-iw')[0]",
+                // Region in t-extension should be lowercased
+                "Intl.getCanonicalLocales('en-t-en-US')[0]",
+                // Tfield keys sorted, values lowercased
+                "Intl.getCanonicalLocales('DE-T-M0-DIN-K0-QWERTZ')[0]",
+                // Variant subtags in tlang sorted alphabetically
+                "Intl.getCanonicalLocales('sl-t-sl-rozaj-biske-1994')[0]",
+                // Valid t-extension tags should be accepted unchanged when already canonical
+                "Intl.getCanonicalLocales('en-t-en')[0]", "Intl.getCanonicalLocales('en-t-en-latn')[0]",
                 "Intl.getCanonicalLocales('en-t-d0-ascii')[0]", "Intl.getCanonicalLocales('en-t-m0-true')[0]");
     }
 

@@ -9,9 +9,9 @@ class SortOperationsTest extends BaseJavetTest {
         JSNativeFunction comparator = new JSNativeFunction(context, "compare", 2,
                 (ctx, receiver, args) -> ctx.throwTypeError("native failure"));
         JSArray array = (JSArray) context.eval("[3,2,1]");
-        ArrayPrototype.sort(context, array, new JSValue[]{comparator});
+        callBuiltin(ArrayPrototype::sort, array, comparator);
         assertThat(context.hasPendingException()).isTrue();
         context.clearPendingException();
-        assertThat(ArrayPrototype.join(context, array, JSValue.NO_ARGS).toString()).isEqualTo("3,2,1");
+        assertThat(callBuiltin(ArrayPrototype::join, array).toString()).isEqualTo("3,2,1");
     }
 }

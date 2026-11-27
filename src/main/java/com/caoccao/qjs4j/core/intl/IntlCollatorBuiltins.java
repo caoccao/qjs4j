@@ -84,13 +84,14 @@ final class IntlCollatorBuiltins {
             return context.throwTypeError("Intl.Collator.prototype.resolvedOptions called on incompatible receiver");
         }
         JSObject resolvedOptions = context.createJSObject();
-        createDataProperty(resolvedOptions, "locale", new JSString(collator.getResolvedLocaleTag()));
-        createDataProperty(resolvedOptions, "usage", new JSString(collator.getUsage()));
-        createDataProperty(resolvedOptions, "sensitivity", new JSString(collator.getSensitivity()));
-        createDataProperty(resolvedOptions, "ignorePunctuation", JSBoolean.valueOf(collator.getIgnorePunctuation()));
-        createDataProperty(resolvedOptions, "collation", new JSString(collator.getCollation()));
-        createDataProperty(resolvedOptions, "numeric", JSBoolean.valueOf(collator.getNumeric()));
-        createDataProperty(resolvedOptions, "caseFirst", new JSString(collator.getCaseFirst()));
+        createDataProperty(resolvedOptions, PropertyKey.LOCALE, new JSString(collator.getResolvedLocaleTag()));
+        createDataProperty(resolvedOptions, PropertyKey.USAGE, new JSString(collator.getUsage()));
+        createDataProperty(resolvedOptions, PropertyKey.SENSITIVITY, new JSString(collator.getSensitivity()));
+        createDataProperty(resolvedOptions, PropertyKey.IGNORE_PUNCTUATION,
+                JSBoolean.valueOf(collator.getIgnorePunctuation()));
+        createDataProperty(resolvedOptions, PropertyKey.COLLATION, new JSString(collator.getCollation()));
+        createDataProperty(resolvedOptions, PropertyKey.NUMERIC, JSBoolean.valueOf(collator.getNumeric()));
+        createDataProperty(resolvedOptions, PropertyKey.CASE_FIRST, new JSString(collator.getCaseFirst()));
         return resolvedOptions;
     }
 
@@ -108,14 +109,15 @@ final class IntlCollatorBuiltins {
             // Read options in ECMA-402 spec order
 
             // 1. usage
-            String usage = IntlFormatOptions.normalizedStringOption(context, optionsValue, "usage", "sort", "sort",
-                    "search");
+            String usage = IntlFormatOptions.normalizedStringOption(context, optionsValue, PropertyKey.USAGE, "sort",
+                    "sort", "search");
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
 
             // 2. localeMatcher
-            String localeMatcher = IntlFormatOptions.readStringOption(context, optionsValue, "localeMatcher");
+            String localeMatcher = IntlFormatOptions.readStringOption(context, optionsValue,
+                    PropertyKey.LOCALE_MATCHER);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -124,7 +126,7 @@ final class IntlCollatorBuiltins {
             }
 
             // 3. collation: resolve from option and/or extension per ECMA-402
-            String optionCollation = IntlFormatOptions.readStringOption(context, optionsValue, "collation");
+            String optionCollation = IntlFormatOptions.readStringOption(context, optionsValue, PropertyKey.COLLATION);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -138,7 +140,7 @@ final class IntlCollatorBuiltins {
             boolean numericSet = false;
             boolean numeric = false;
             if (optionsValue instanceof JSObject optionsObject) {
-                JSValue numericValue = optionsObject.get(PropertyKey.fromString("numeric"));
+                JSValue numericValue = optionsObject.get(PropertyKey.NUMERIC);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -153,7 +155,7 @@ final class IntlCollatorBuiltins {
             }
 
             // 5. caseFirst: option overrides extension key "kf"
-            String caseFirst = IntlFormatOptions.readStringOption(context, optionsValue, "caseFirst");
+            String caseFirst = IntlFormatOptions.readStringOption(context, optionsValue, PropertyKey.CASE_FIRST);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -173,7 +175,7 @@ final class IntlCollatorBuiltins {
             }
 
             // 6. sensitivity - default depends on usage per ECMA-402 Table 4
-            String sensitivity = IntlFormatOptions.readStringOption(context, optionsValue, "sensitivity");
+            String sensitivity = IntlFormatOptions.readStringOption(context, optionsValue, PropertyKey.SENSITIVITY);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -184,7 +186,7 @@ final class IntlCollatorBuiltins {
             // 7. ignorePunctuation - Thai locale defaults to true per ECMA-402
             boolean ignorePunctuation = "th".equals(locale.getLanguage());
             if (optionsValue instanceof JSObject optionsObject2) {
-                JSValue ipValue = optionsObject2.get(PropertyKey.fromString("ignorePunctuation"));
+                JSValue ipValue = optionsObject2.get(PropertyKey.IGNORE_PUNCTUATION);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }

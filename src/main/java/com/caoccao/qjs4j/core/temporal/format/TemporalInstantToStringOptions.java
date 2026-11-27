@@ -44,7 +44,7 @@ public record TemporalInstantToStringOptions(TemporalFractionalSecondDigitsOptio
         if (options == null) {
             return null;
         }
-        JSValue timeZoneValue = optionsObject.get(PropertyKey.fromString("timeZone"));
+        JSValue timeZoneValue = optionsObject.get(PropertyKey.TIME_ZONE);
         if (context.hasPendingException()) {
             return null;
         }

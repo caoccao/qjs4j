@@ -48,8 +48,8 @@ final class TemporalCalendarFields {
             return JSUndefined.INSTANCE;
         }
 
-        Integer dayOfMonth = bag.integer("day");
-        Integer month = bag.integer("month");
+        Integer dayOfMonth = bag.integerByKey(PropertyKey.DAY);
+        Integer month = bag.integerByKey(PropertyKey.MONTH);
         IsoMonth parsedMonthCode = bag.monthCode();
         Integer year = bag.resolvedYear(calendarId, TemporalError.INVALID_DATE_ARGUMENT.message());
         if (context.hasPendingException()) {
@@ -75,9 +75,9 @@ final class TemporalCalendarFields {
             return JSUndefined.INSTANCE;
         }
 
-        Integer dayOfMonth = bag.integer("day");
-        Integer month = bag.integer("month");
-        String monthCode = bag.string("monthCode");
+        Integer dayOfMonth = bag.integerByKey(PropertyKey.DAY);
+        Integer month = bag.integerByKey(PropertyKey.MONTH);
+        String monthCode = bag.stringByKey(PropertyKey.MONTH_CODE);
         IsoMonth parsedMonthCode = monthCode == null
                 ? null
                 : IsoMonth.parseByMonthCode(context, monthCode, TemporalError.INVALID_ISO_DATE.message());
@@ -221,7 +221,7 @@ final class TemporalCalendarFields {
             return JSUndefined.INSTANCE;
         }
 
-        Integer monthFromProperty = bag.integer("month");
+        Integer monthFromProperty = bag.integerByKey(PropertyKey.MONTH);
         IsoMonth parsedMonthCode = bag.monthCode();
         Integer year = bag.resolvedYear(calendarId, TemporalError.INVALID_YEAR_ARGUMENT.message());
         if (context.hasPendingException()) {

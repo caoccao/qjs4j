@@ -75,95 +75,59 @@ public final class AtomTable {
     public static final int ATOM_WHILE = 15;
     public static final int ATOM_WITH = 28;
     public static final int ATOM_YIELD = 38;
-    private final List<String> atomToString;
-    private final Map<String, Integer> stringToAtom;
+    private static final Map<String, Integer> KEYWORD_ATOMS = Map.ofEntries(Map.entry(JSKeyword.NULL, ATOM_NULL),
+            Map.entry(JSKeyword.FALSE, ATOM_FALSE), Map.entry(JSKeyword.TRUE, ATOM_TRUE),
+            Map.entry(JSKeyword.IF, ATOM_IF), Map.entry(JSKeyword.ELSE, ATOM_ELSE),
+            Map.entry(JSKeyword.RETURN, ATOM_RETURN), Map.entry(JSKeyword.VAR, ATOM_VAR),
+            Map.entry(JSKeyword.THIS, ATOM_THIS), Map.entry(JSKeyword.DELETE, ATOM_DELETE),
+            Map.entry(JSKeyword.VOID, ATOM_VOID), Map.entry(JSKeyword.TYPEOF, ATOM_TYPEOF),
+            Map.entry(JSKeyword.NEW, ATOM_NEW), Map.entry(JSKeyword.IN, ATOM_IN),
+            Map.entry(JSKeyword.INSTANCEOF, ATOM_INSTANCEOF), Map.entry(JSKeyword.DO, ATOM_DO),
+            Map.entry(JSKeyword.WHILE, ATOM_WHILE), Map.entry(JSKeyword.FOR, ATOM_FOR),
+            Map.entry(JSKeyword.BREAK, ATOM_BREAK), Map.entry(JSKeyword.CONTINUE, ATOM_CONTINUE),
+            Map.entry(JSKeyword.SWITCH, ATOM_SWITCH), Map.entry(JSKeyword.CASE, ATOM_CASE),
+            Map.entry(JSKeyword.DEFAULT, ATOM_DEFAULT), Map.entry(JSKeyword.THROW, ATOM_THROW),
+            Map.entry(JSKeyword.TRY, ATOM_TRY), Map.entry(JSKeyword.CATCH, ATOM_CATCH),
+            Map.entry(JSKeyword.FINALLY, ATOM_FINALLY), Map.entry(JSKeyword.FUNCTION, ATOM_FUNCTION),
+            Map.entry(JSKeyword.DEBUGGER, ATOM_DEBUGGER), Map.entry(JSKeyword.WITH, ATOM_WITH),
+            Map.entry(JSKeyword.CLASS, ATOM_CLASS), Map.entry(JSKeyword.CONST, ATOM_CONST),
+            Map.entry(JSKeyword.ENUM, ATOM_ENUM), Map.entry(JSKeyword.EXPORT, ATOM_EXPORT),
+            Map.entry(JSKeyword.EXTENDS, ATOM_EXTENDS), Map.entry(JSKeyword.IMPORT, ATOM_IMPORT),
+            Map.entry(JSKeyword.SUPER, ATOM_SUPER), Map.entry(JSKeyword.LET, ATOM_LET),
+            Map.entry(JSKeyword.STATIC, ATOM_STATIC), Map.entry(JSKeyword.YIELD, ATOM_YIELD),
+            Map.entry(JSKeyword.AWAIT, ATOM_AWAIT), Map.entry(JSKeyword.ASYNC, ATOM_ASYNC));
+    private static final String[] KEYWORD_NAMES = new String[ATOM_RESERVED_COUNT];
 
-    public AtomTable() {
-        this.stringToAtom = new HashMap<>();
-        this.atomToString = new ArrayList<>();
-
-        // Pre-allocate well-known atoms
-        initializeWellKnownAtoms();
+    static {
+        KEYWORD_ATOMS.forEach((name, atom) -> KEYWORD_NAMES[atom] = name);
     }
+
+    private Map<String, Integer> atoms = KEYWORD_ATOMS;
+    private final List<String> userNames = new ArrayList<>();
 
     /**
      * Clear all atoms (except well-known atoms).
      */
     public void clear() {
-        stringToAtom.clear();
-        atomToString.clear();
-        initializeWellKnownAtoms();
+        atoms = KEYWORD_ATOMS;
+        userNames.clear();
     }
 
     /**
      * Get the atom index for a string without interning it. Returns -1 if the string is not interned.
      */
     public int getAtom(String str) {
-        Integer atom = stringToAtom.get(str);
-        return atom != null ? atom : -1;
+        return str == null ? -1 : atoms.getOrDefault(str, -1);
     }
 
     /**
      * Get the string for a given atom index.
      */
     public String getString(int atom) {
-        if (atom < 0 || atom >= atomToString.size()) {
+        if (atom < 0 || atom >= size()) {
             return null;
         }
-        return atomToString.get(atom);
-    }
-
-    /**
-     * Initialize well-known atoms (JavaScript keywords and common identifiers).
-     */
-    private void initializeWellKnownAtoms() {
-        // Reserve space for well-known atoms
-        for (int i = 0; i < ATOM_RESERVED_COUNT; i++) {
-            atomToString.add(null);
-        }
-
-        // Initialize the well-known atoms
-        setWellKnownAtom(ATOM_NULL, JSKeyword.NULL);
-        setWellKnownAtom(ATOM_FALSE, JSKeyword.FALSE);
-        setWellKnownAtom(ATOM_TRUE, JSKeyword.TRUE);
-        setWellKnownAtom(ATOM_IF, JSKeyword.IF);
-        setWellKnownAtom(ATOM_ELSE, JSKeyword.ELSE);
-        setWellKnownAtom(ATOM_RETURN, JSKeyword.RETURN);
-        setWellKnownAtom(ATOM_VAR, JSKeyword.VAR);
-        setWellKnownAtom(ATOM_THIS, JSKeyword.THIS);
-        setWellKnownAtom(ATOM_DELETE, JSKeyword.DELETE);
-        setWellKnownAtom(ATOM_VOID, JSKeyword.VOID);
-        setWellKnownAtom(ATOM_TYPEOF, JSKeyword.TYPEOF);
-        setWellKnownAtom(ATOM_NEW, JSKeyword.NEW);
-        setWellKnownAtom(ATOM_IN, JSKeyword.IN);
-        setWellKnownAtom(ATOM_INSTANCEOF, JSKeyword.INSTANCEOF);
-        setWellKnownAtom(ATOM_DO, JSKeyword.DO);
-        setWellKnownAtom(ATOM_WHILE, JSKeyword.WHILE);
-        setWellKnownAtom(ATOM_FOR, JSKeyword.FOR);
-        setWellKnownAtom(ATOM_BREAK, JSKeyword.BREAK);
-        setWellKnownAtom(ATOM_CONTINUE, JSKeyword.CONTINUE);
-        setWellKnownAtom(ATOM_SWITCH, JSKeyword.SWITCH);
-        setWellKnownAtom(ATOM_CASE, JSKeyword.CASE);
-        setWellKnownAtom(ATOM_DEFAULT, JSKeyword.DEFAULT);
-        setWellKnownAtom(ATOM_THROW, JSKeyword.THROW);
-        setWellKnownAtom(ATOM_TRY, JSKeyword.TRY);
-        setWellKnownAtom(ATOM_CATCH, JSKeyword.CATCH);
-        setWellKnownAtom(ATOM_FINALLY, JSKeyword.FINALLY);
-        setWellKnownAtom(ATOM_FUNCTION, JSKeyword.FUNCTION);
-        setWellKnownAtom(ATOM_DEBUGGER, JSKeyword.DEBUGGER);
-        setWellKnownAtom(ATOM_WITH, JSKeyword.WITH);
-        setWellKnownAtom(ATOM_CLASS, JSKeyword.CLASS);
-        setWellKnownAtom(ATOM_CONST, JSKeyword.CONST);
-        setWellKnownAtom(ATOM_ENUM, JSKeyword.ENUM);
-        setWellKnownAtom(ATOM_EXPORT, JSKeyword.EXPORT);
-        setWellKnownAtom(ATOM_EXTENDS, JSKeyword.EXTENDS);
-        setWellKnownAtom(ATOM_IMPORT, JSKeyword.IMPORT);
-        setWellKnownAtom(ATOM_SUPER, JSKeyword.SUPER);
-        setWellKnownAtom(ATOM_LET, JSKeyword.LET);
-        setWellKnownAtom(ATOM_STATIC, JSKeyword.STATIC);
-        setWellKnownAtom(ATOM_YIELD, JSKeyword.YIELD);
-        setWellKnownAtom(ATOM_AWAIT, JSKeyword.AWAIT);
-        setWellKnownAtom(ATOM_ASYNC, JSKeyword.ASYNC);
+        return atom < ATOM_RESERVED_COUNT ? KEYWORD_NAMES[atom] : userNames.get(atom - ATOM_RESERVED_COUNT);
     }
 
     /**
@@ -174,14 +138,17 @@ public final class AtomTable {
             return -1;
         }
 
-        Integer atom = stringToAtom.get(str);
+        Integer atom = atoms.get(str);
         if (atom != null) {
             return atom;
         }
 
-        int newAtom = atomToString.size();
-        atomToString.add(str);
-        stringToAtom.put(str, newAtom);
+        if (atoms == KEYWORD_ATOMS) {
+            atoms = new HashMap<>(KEYWORD_ATOMS);
+        }
+        int newAtom = size();
+        userNames.add(str);
+        atoms.put(str, newAtom);
         return newAtom;
     }
 
@@ -189,19 +156,14 @@ public final class AtomTable {
      * Check if an atom index is valid.
      */
     public boolean isValidAtom(int atom) {
-        return atom >= 0 && atom < atomToString.size() && atomToString.get(atom) != null;
-    }
-
-    private void setWellKnownAtom(int index, String str) {
-        atomToString.set(index, str);
-        stringToAtom.put(str, index);
+        return getString(atom) != null;
     }
 
     /**
      * Get the number of interned strings.
      */
     public int size() {
-        return atomToString.size();
+        return ATOM_RESERVED_COUNT + userNames.size();
     }
 
     @Override

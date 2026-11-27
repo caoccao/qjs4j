@@ -69,9 +69,9 @@ public final class TemporalPlainMonthDayPrototype {
         IsoCalendarDate calendarDateFields = plainMonthDay.getIsoDate()
                 .toIsoCalendarDate(plainMonthDay.getCalendarId());
         JSObject mergedFields = context.createJSObject();
-        mergedFields.set(PropertyKey.fromString("calendar"), new JSString(plainMonthDay.getCalendarId().identifier()));
-        mergedFields.set(PropertyKey.fromString("monthCode"), new JSString(calendarDateFields.monthCode()));
-        mergedFields.set(PropertyKey.fromString("day"), JSNumber.of(calendarDateFields.day()));
+        mergedFields.set(PropertyKey.CALENDAR, new JSString(plainMonthDay.getCalendarId().identifier()));
+        mergedFields.set(PropertyKey.MONTH_CODE, new JSString(calendarDateFields.monthCode()));
+        mergedFields.set(PropertyKey.DAY, JSNumber.of(calendarDateFields.day()));
         return mergedFields;
     }
 
@@ -101,12 +101,12 @@ public final class TemporalPlainMonthDayPrototype {
             return TemporalError.INVALID_YEAR_ARGUMENT.undefined(context);
         }
         JSObject mergedFields = monthDayFields(context, plainMonthDay);
-        JSValue yearValue = fields.get(PropertyKey.fromString("year"));
+        JSValue yearValue = fields.get(PropertyKey.YEAR);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
         if (!(yearValue instanceof JSUndefined) && yearValue != null) {
-            mergedFields.set(PropertyKey.fromString("year"), yearValue);
+            mergedFields.set(PropertyKey.YEAR, yearValue);
         } else {
             copyFieldIfPresent(context, fields, mergedFields, "era");
             if (context.hasPendingException()) {
@@ -146,10 +146,10 @@ public final class TemporalPlainMonthDayPrototype {
         IsoDate originalDate = plainMonthDay.getIsoDate();
 
         TemporalPropertyBag bag = new TemporalPropertyBag(context, fields);
-        Integer dayField = bag.integer("day");
-        Integer monthField = bag.integer("month");
-        String monthCode = bag.string("monthCode");
-        Integer yearField = bag.integer("year");
+        Integer dayField = bag.integerByKey(PropertyKey.DAY);
+        Integer monthField = bag.integerByKey(PropertyKey.MONTH);
+        String monthCode = bag.stringByKey(PropertyKey.MONTH_CODE);
+        Integer yearField = bag.integerByKey(PropertyKey.YEAR);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -200,18 +200,18 @@ public final class TemporalPlainMonthDayPrototype {
     private static JSValue withNonIsoCalendar(JSContext context, JSTemporalPlainMonthDay plainMonthDay, JSObject fields,
             JSValue options) {
         TemporalPropertyBag bag = new TemporalPropertyBag(context, fields);
-        boolean hasDay = bag.hasDefined("day");
-        boolean hasMonthCode = bag.hasDefined("monthCode");
-        boolean hasMonth = bag.hasDefined("month");
+        boolean hasDay = bag.hasDefinedByKey(PropertyKey.DAY);
+        boolean hasMonthCode = bag.hasDefinedByKey(PropertyKey.MONTH_CODE);
+        boolean hasMonth = bag.hasDefinedByKey(PropertyKey.MONTH);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
         if (hasMonth) {
             return TemporalError.MISSING_PARTIAL_FIELDS.undefined(context);
         }
-        boolean hasYear = bag.hasDefined("year");
-        boolean hasEra = bag.hasDefined("era");
-        boolean hasEraYear = bag.hasDefined("eraYear");
+        boolean hasYear = bag.hasDefinedByKey(PropertyKey.YEAR);
+        boolean hasEra = bag.hasDefinedByKey(PropertyKey.ERA);
+        boolean hasEraYear = bag.hasDefinedByKey(PropertyKey.ERA_YEAR);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

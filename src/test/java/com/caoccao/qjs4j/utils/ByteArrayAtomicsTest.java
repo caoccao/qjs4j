@@ -58,16 +58,20 @@ public class ByteArrayAtomicsTest {
     @Test
     public void testFallbackByteOperationsMatchTheLockFreeOnes() {
         byte[] array = block();
-        assertThat(ByteArrayAtomics.Fallback.getAndAddByte(array, 0, (byte) 5)).isZero();
-        assertThat(ByteArrayAtomics.Fallback.getVolatileByte(array, 0)).isEqualTo((byte) 5);
-        assertThat(ByteArrayAtomics.Fallback.getAndSetByte(array, 0, (byte) 9)).isEqualTo((byte) 5);
-        assertThat(ByteArrayAtomics.Fallback.compareAndExchangeByte(array, 0, (byte) 9, (byte) 1)).isEqualTo((byte) 9);
-        assertThat(ByteArrayAtomics.Fallback.compareAndExchangeByte(array, 0, (byte) 9, (byte) 7)).isEqualTo((byte) 1);
-        assertThat(ByteArrayAtomics.Fallback.getAndBitwiseOrByte(array, 0, (byte) 6)).isEqualTo((byte) 1);
-        assertThat(ByteArrayAtomics.Fallback.getAndBitwiseAndByte(array, 0, (byte) 3)).isEqualTo((byte) 7);
-        assertThat(ByteArrayAtomics.Fallback.getAndBitwiseXorByte(array, 0, (byte) 1)).isEqualTo((byte) 3);
-        ByteArrayAtomics.Fallback.setVolatileByte(array, 0, (byte) 42);
-        assertThat(ByteArrayAtomics.Fallback.getVolatileByte(array, 0)).isEqualTo((byte) 42);
+        assertThat(ByteArrayAtomics.Fallback.BYTE.update(array, 0, ByteArrayAtomics.Update.ADD, (byte) 5)).isZero();
+        assertThat(ByteArrayAtomics.Fallback.BYTE.get(array, 0)).isEqualTo((byte) 5);
+        assertThat(ByteArrayAtomics.Fallback.BYTE.update(array, 0, ByteArrayAtomics.Update.SET, (byte) 9))
+                .isEqualTo((byte) 5);
+        assertThat(ByteArrayAtomics.Fallback.BYTE.compareAndExchange(array, 0, (byte) 9, (byte) 1)).isEqualTo((byte) 9);
+        assertThat(ByteArrayAtomics.Fallback.BYTE.compareAndExchange(array, 0, (byte) 9, (byte) 7)).isEqualTo((byte) 1);
+        assertThat(ByteArrayAtomics.Fallback.BYTE.update(array, 0, ByteArrayAtomics.Update.OR, (byte) 6))
+                .isEqualTo((byte) 1);
+        assertThat(ByteArrayAtomics.Fallback.BYTE.update(array, 0, ByteArrayAtomics.Update.AND, (byte) 3))
+                .isEqualTo((byte) 7);
+        assertThat(ByteArrayAtomics.Fallback.BYTE.update(array, 0, ByteArrayAtomics.Update.XOR, (byte) 1))
+                .isEqualTo((byte) 3);
+        ByteArrayAtomics.Fallback.BYTE.set(array, 0, (byte) 42);
+        assertThat(ByteArrayAtomics.Fallback.BYTE.get(array, 0)).isEqualTo((byte) 42);
     }
 
     @Test
@@ -75,22 +79,22 @@ public class ByteArrayAtomicsTest {
         byte[] lockFree = block();
         byte[] locked = block();
         for (int step = 1; step <= 4; step++) {
-            assertThat(ByteArrayAtomics.Fallback.getAndAddInt(locked, 4, step * 7))
+            assertThat(ByteArrayAtomics.Fallback.INT.update(locked, 4, ByteArrayAtomics.Update.ADD, step * 7))
                     .isEqualTo(ByteArrayAtomics.getAndAddInt(lockFree, 4, step * 7));
-            assertThat(ByteArrayAtomics.Fallback.getAndBitwiseOrInt(locked, 4, step))
+            assertThat(ByteArrayAtomics.Fallback.INT.update(locked, 4, ByteArrayAtomics.Update.OR, step))
                     .isEqualTo(ByteArrayAtomics.getAndBitwiseOrInt(lockFree, 4, step));
-            assertThat(ByteArrayAtomics.Fallback.getAndBitwiseXorInt(locked, 4, step * 3))
+            assertThat(ByteArrayAtomics.Fallback.INT.update(locked, 4, ByteArrayAtomics.Update.XOR, step * 3))
                     .isEqualTo(ByteArrayAtomics.getAndBitwiseXorInt(lockFree, 4, step * 3));
-            assertThat(ByteArrayAtomics.Fallback.getAndBitwiseAndInt(locked, 4, ~step))
+            assertThat(ByteArrayAtomics.Fallback.INT.update(locked, 4, ByteArrayAtomics.Update.AND, ~step))
                     .isEqualTo(ByteArrayAtomics.getAndBitwiseAndInt(lockFree, 4, ~step));
         }
-        assertThat(ByteArrayAtomics.Fallback.getVolatileInt(locked, 4))
+        assertThat(ByteArrayAtomics.Fallback.INT.get(locked, 4))
                 .isEqualTo(ByteArrayAtomics.getVolatileInt(lockFree, 4));
-        assertThat(ByteArrayAtomics.Fallback.getAndSetInt(locked, 4, -1))
+        assertThat(ByteArrayAtomics.Fallback.INT.update(locked, 4, ByteArrayAtomics.Update.SET, -1))
                 .isEqualTo(ByteArrayAtomics.getAndSetInt(lockFree, 4, -1));
-        assertThat(ByteArrayAtomics.Fallback.compareAndExchangeInt(locked, 4, -1, 12345))
+        assertThat(ByteArrayAtomics.Fallback.INT.compareAndExchange(locked, 4, -1, 12345))
                 .isEqualTo(ByteArrayAtomics.compareAndExchangeInt(lockFree, 4, -1, 12345));
-        ByteArrayAtomics.Fallback.setVolatileInt(locked, 4, 0x0BADF00D);
+        ByteArrayAtomics.Fallback.INT.set(locked, 4, 0x0BADF00D);
         ByteArrayAtomics.setVolatileInt(lockFree, 4, 0x0BADF00D);
         assertThat(locked).isEqualTo(lockFree);
     }
@@ -101,22 +105,22 @@ public class ByteArrayAtomicsTest {
         byte[] locked = block();
         long[] operands = {1L, -1L, Long.MIN_VALUE, 0x0123456789ABCDEFL};
         for (long operand : operands) {
-            assertThat(ByteArrayAtomics.Fallback.getAndAddLong(locked, 8, operand))
+            assertThat(ByteArrayAtomics.Fallback.LONG.update(locked, 8, ByteArrayAtomics.Update.ADD, operand))
                     .isEqualTo(ByteArrayAtomics.getAndAddLong(lockFree, 8, operand));
-            assertThat(ByteArrayAtomics.Fallback.getAndBitwiseOrLong(locked, 8, operand))
+            assertThat(ByteArrayAtomics.Fallback.LONG.update(locked, 8, ByteArrayAtomics.Update.OR, operand))
                     .isEqualTo(ByteArrayAtomics.getAndBitwiseOrLong(lockFree, 8, operand));
-            assertThat(ByteArrayAtomics.Fallback.getAndBitwiseXorLong(locked, 8, operand))
+            assertThat(ByteArrayAtomics.Fallback.LONG.update(locked, 8, ByteArrayAtomics.Update.XOR, operand))
                     .isEqualTo(ByteArrayAtomics.getAndBitwiseXorLong(lockFree, 8, operand));
-            assertThat(ByteArrayAtomics.Fallback.getAndBitwiseAndLong(locked, 8, operand))
+            assertThat(ByteArrayAtomics.Fallback.LONG.update(locked, 8, ByteArrayAtomics.Update.AND, operand))
                     .isEqualTo(ByteArrayAtomics.getAndBitwiseAndLong(lockFree, 8, operand));
         }
-        assertThat(ByteArrayAtomics.Fallback.getVolatileLong(locked, 8))
+        assertThat(ByteArrayAtomics.Fallback.LONG.get(locked, 8))
                 .isEqualTo(ByteArrayAtomics.getVolatileLong(lockFree, 8));
-        assertThat(ByteArrayAtomics.Fallback.getAndSetLong(locked, 8, 77L))
+        assertThat(ByteArrayAtomics.Fallback.LONG.update(locked, 8, ByteArrayAtomics.Update.SET, 77L))
                 .isEqualTo(ByteArrayAtomics.getAndSetLong(lockFree, 8, 77L));
-        assertThat(ByteArrayAtomics.Fallback.compareAndExchangeLong(locked, 8, 77L, -5L))
+        assertThat(ByteArrayAtomics.Fallback.LONG.compareAndExchange(locked, 8, 77L, -5L))
                 .isEqualTo(ByteArrayAtomics.compareAndExchangeLong(lockFree, 8, 77L, -5L));
-        ByteArrayAtomics.Fallback.setVolatileLong(locked, 8, Long.MAX_VALUE);
+        ByteArrayAtomics.Fallback.LONG.set(locked, 8, Long.MAX_VALUE);
         ByteArrayAtomics.setVolatileLong(lockFree, 8, Long.MAX_VALUE);
         assertThat(locked).isEqualTo(lockFree);
     }
@@ -126,9 +130,9 @@ public class ByteArrayAtomicsTest {
         byte[] lockFree = block();
         byte[] locked = block();
         for (short value : new short[]{0, 1, -1, Short.MIN_VALUE, Short.MAX_VALUE, 0x1234}) {
-            ByteArrayAtomics.Fallback.setVolatileShort(locked, 2, value);
+            ByteArrayAtomics.Fallback.SHORT.set(locked, 2, value);
             ByteArrayAtomics.setVolatileShort(lockFree, 2, value);
-            assertThat(ByteArrayAtomics.Fallback.getVolatileShort(locked, 2))
+            assertThat(ByteArrayAtomics.Fallback.SHORT.get(locked, 2))
                     .isEqualTo(ByteArrayAtomics.getVolatileShort(lockFree, 2)).isEqualTo(value);
             assertThat(locked).isEqualTo(lockFree);
         }
@@ -144,7 +148,7 @@ public class ByteArrayAtomicsTest {
         assertThat(array[3]).isEqualTo((byte) 4);
 
         byte[] locked = block();
-        ByteArrayAtomics.Fallback.setVolatileLong(locked, 0, 0x0807060504030201L);
+        ByteArrayAtomics.Fallback.LONG.set(locked, 0, 0x0807060504030201L);
         for (int index = 0; index < 8; index++) {
             assertThat(locked[index]).as("byte " + index).isEqualTo((byte) (index + 1));
         }
@@ -166,7 +170,7 @@ public class ByteArrayAtomicsTest {
                     try {
                         start.await();
                         for (int i = 0; i < incrementsPerThread; i++) {
-                            ByteArrayAtomics.Fallback.getAndAddInt(array, 0, 1);
+                            ByteArrayAtomics.Fallback.INT.update(array, 0, ByteArrayAtomics.Update.ADD, 1);
                         }
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
@@ -180,7 +184,7 @@ public class ByteArrayAtomicsTest {
         } finally {
             executor.shutdownNow();
         }
-        assertThat(ByteArrayAtomics.Fallback.getVolatileInt(array, 0)).isEqualTo(threadCount * incrementsPerThread);
+        assertThat(ByteArrayAtomics.Fallback.INT.get(array, 0)).isEqualTo(threadCount * incrementsPerThread);
     }
 
     @Test
@@ -188,11 +192,11 @@ public class ByteArrayAtomicsTest {
         // Correctness of the fallback depends on the stripe being a function of the array's
         // identity alone, so every width and every offset within a block agree.
         byte[] array = block();
-        ByteArrayAtomics.Fallback.setVolatileInt(array, 0, 1);
-        ByteArrayAtomics.Fallback.setVolatileInt(array, 4, 2);
-        assertThat(ByteArrayAtomics.Fallback.getVolatileInt(array, 0)).isEqualTo(1);
-        assertThat(ByteArrayAtomics.Fallback.getVolatileInt(array, 4)).isEqualTo(2);
-        assertThat(ByteArrayAtomics.Fallback.getVolatileLong(array, 0)).isEqualTo(0x0000000200000001L);
+        ByteArrayAtomics.Fallback.INT.set(array, 0, 1);
+        ByteArrayAtomics.Fallback.INT.set(array, 4, 2);
+        assertThat(ByteArrayAtomics.Fallback.INT.get(array, 0)).isEqualTo(1);
+        assertThat(ByteArrayAtomics.Fallback.INT.get(array, 4)).isEqualTo(2);
+        assertThat(ByteArrayAtomics.Fallback.LONG.get(array, 0)).isEqualTo(0x0000000200000001L);
     }
 
     @Test

@@ -186,7 +186,7 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
         for (int index = 0; index < numberParts.getLength(); index++) {
             JSValue numberPartValue = numberParts.get(index);
             if (numberPartValue instanceof JSObject numberPartObject) {
-                IntlBuiltins.createDataProperty(numberPartObject, "unit", new JSString(normalizedUnit));
+                IntlBuiltins.createDataProperty(numberPartObject, PropertyKey.UNIT, new JSString(normalizedUnit));
                 result.push(numberPartObject);
             }
         }
@@ -244,8 +244,8 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
 
     private static JSObject createRelativeTimeLiteralPart(JSContext context, String value) {
         JSObject part = context.createJSObject();
-        IntlBuiltins.createDataProperty(part, "type", new JSString("literal"));
-        IntlBuiltins.createDataProperty(part, "value", new JSString(value));
+        IntlBuiltins.createDataProperty(part, PropertyKey.TYPE, new JSString("literal"));
+        IntlBuiltins.createDataProperty(part, PropertyKey.VALUE, new JSString(value));
         return part;
     }
 

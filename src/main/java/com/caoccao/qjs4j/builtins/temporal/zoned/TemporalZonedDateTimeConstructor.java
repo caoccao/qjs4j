@@ -214,7 +214,7 @@ public final class TemporalZonedDateTimeConstructor {
     private static TemporalZonedDateTimePropertyBagData parseZonedDateTimePropertyBag(JSContext context,
             JSObject itemObject) {
         TemporalCalendarId calendarId = TemporalCalendarId.ISO8601;
-        JSValue calendarValue = itemObject.get(PropertyKey.fromString("calendar"));
+        JSValue calendarValue = itemObject.get(PropertyKey.CALENDAR);
         if (context.hasPendingException()) {
             return null;
         }
@@ -225,7 +225,7 @@ public final class TemporalZonedDateTimeConstructor {
             }
         }
 
-        JSValue dayValue = itemObject.get(PropertyKey.fromString("day"));
+        JSValue dayValue = itemObject.get(PropertyKey.DAY);
         if (context.hasPendingException()) {
             return null;
         }
@@ -235,13 +235,13 @@ public final class TemporalZonedDateTimeConstructor {
         }
 
         TemporalPropertyBag bag = new TemporalPropertyBag(context, itemObject);
-        int hour = bag.integralOrZero("hour");
-        int microsecond = bag.integralOrZero("microsecond");
-        int millisecond = bag.integralOrZero("millisecond");
-        int minute = bag.integralOrZero("minute");
-        Integer month = bag.integral("month");
+        int hour = bag.integralOrZeroByKey(PropertyKey.HOUR);
+        int microsecond = bag.integralOrZeroByKey(PropertyKey.MICROSECOND);
+        int millisecond = bag.integralOrZeroByKey(PropertyKey.MILLISECOND);
+        int minute = bag.integralOrZeroByKey(PropertyKey.MINUTE);
+        Integer month = bag.integralByKey(PropertyKey.MONTH);
         IsoMonth parsedMonthCode = bag.monthCode();
-        int nanosecond = bag.integralOrZero("nanosecond");
+        int nanosecond = bag.integralOrZeroByKey(PropertyKey.NANOSECOND);
         if (context.hasPendingException()) {
             return null;
         }
@@ -258,12 +258,12 @@ public final class TemporalZonedDateTimeConstructor {
             }
         }
 
-        int second = bag.integralOrZero("second");
+        int second = bag.integralOrZeroByKey(PropertyKey.SECOND);
         if (context.hasPendingException()) {
             return null;
         }
 
-        JSValue timeZoneValue = itemObject.get(PropertyKey.fromString("timeZone"));
+        JSValue timeZoneValue = itemObject.get(PropertyKey.TIME_ZONE);
         if (context.hasPendingException()) {
             return null;
         }
@@ -272,10 +272,10 @@ public final class TemporalZonedDateTimeConstructor {
             return null;
         }
 
-        Integer year = bag.integral("year");
+        Integer year = bag.integralByKey(PropertyKey.YEAR);
         if (calendarId.hasEra()) {
-            String era = bag.string("era");
-            Integer eraYear = bag.integral("eraYear");
+            String era = bag.stringByKey(PropertyKey.ERA);
+            Integer eraYear = bag.integralByKey(PropertyKey.ERA_YEAR);
             if (!context.hasPendingException()) {
                 year = TemporalUtils.resolveEraYear(context, calendarId, year, era, eraYear,
                         TemporalError.INVALID_DATE_TIME_ARGUMENT.message());

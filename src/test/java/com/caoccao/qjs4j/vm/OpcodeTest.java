@@ -22,10 +22,29 @@ import com.caoccao.qjs4j.core.*;
 
 /** Runs a hand-assembled opcode sequence in the test context. */
 abstract class OpcodeTest extends BaseTest {
+    protected JSValue execute(BytecodeEmitter emitter, int localCount) {
+        return execute(emitter, localCount, JSValue.NO_ARGS, JSUndefined.INSTANCE);
+    }
+
+    protected JSValue execute(BytecodeEmitter emitter, int localCount, JSValue[] closureVars, JSValue thisArg,
+            JSValue... args) {
+        return executeWithStrict(strict(), emitter, localCount, closureVars, thisArg, args);
+    }
+
     protected JSValue executeWithStrict(boolean strict, BytecodeEmitter emitter, int localCount, JSValue[] closureVars,
             JSValue thisArg, JSValue... args) {
         JSBytecodeFunction function = new JSBytecodeFunction(context, emitter.build(localCount), "test", args.length,
                 closureVars, null, true, false, false, false, strict, "function test() { [bytecode] }");
         return context.getVirtualMachine().execute(function, thisArg, args);
+    }
+
+    protected boolean strict() {
+        return true;
+    }
+
+    protected static void emitOpcodes(BytecodeEmitter emitter, Opcode... opcodes) {
+        for (Opcode opcode : opcodes) {
+            emitter.emitOpcode(opcode);
+        }
     }
 }

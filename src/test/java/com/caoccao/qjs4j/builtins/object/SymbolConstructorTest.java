@@ -31,12 +31,12 @@ public class SymbolConstructorTest extends BaseJavetTest {
     public void testCall() {
         // Normal case: with description
         var symbolConstructor = builtin(SymbolConstructor::call, JSUndefined.INSTANCE);
-        JSValue result = symbolConstructor.call(stringArgs("test"));
+        JSValue result = symbolConstructor.call("test");
         JSSymbol symbol = result.asSymbol().orElseThrow();
         assertThat(symbol.getDescription()).isEqualTo("test");
 
         // Normal case: with numeric description
-        result = symbolConstructor.call(numberArgs(42));
+        result = symbolConstructor.call(42);
         symbol = result.asSymbol().orElseThrow();
         assertThat(symbol.getDescription()).isEqualTo("42");
 
@@ -51,8 +51,8 @@ public class SymbolConstructorTest extends BaseJavetTest {
         assertThat(symbol.getDescription()).isNull();
 
         // Normal case: symbols are unique
-        JSSymbol symbol1 = symbolConstructor.call(stringArgs("same")).asSymbol().orElseThrow();
-        JSSymbol symbol2 = symbolConstructor.call(stringArgs("same")).asSymbol().orElseThrow();
+        JSSymbol symbol1 = symbolConstructor.call("same").asSymbol().orElseThrow();
+        JSSymbol symbol2 = symbolConstructor.call("same").asSymbol().orElseThrow();
         assertThat(symbol1).isNotEqualTo(symbol2);
         assertThat(symbol1.getDescription()).isEqualTo("same");
         assertThat(symbol2.getDescription()).isEqualTo("same");
@@ -60,57 +60,57 @@ public class SymbolConstructorTest extends BaseJavetTest {
 
     @Test
     public void testGetAsyncDispose() {
-        JSValue result = SymbolConstructor.getAsyncDispose(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(SymbolConstructor::getAsyncDispose, JSUndefined.INSTANCE);
         assertThat(result.asSymbol().orElseThrow()).isEqualTo(JSSymbol.ASYNC_DISPOSE);
     }
 
     @Test
     public void testGetDispose() {
-        JSValue result = SymbolConstructor.getDispose(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(SymbolConstructor::getDispose, JSUndefined.INSTANCE);
         assertThat(result.asSymbol().orElseThrow()).isEqualTo(JSSymbol.DISPOSE);
     }
 
     @Test
     public void testGetHasInstance() {
-        JSValue result = SymbolConstructor.getHasInstance(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(SymbolConstructor::getHasInstance, JSUndefined.INSTANCE);
         assertThat(result.asSymbol().orElseThrow()).isEqualTo(JSSymbol.HAS_INSTANCE);
     }
 
     @Test
     public void testGetIsConcatSpreadable() {
-        JSValue result = SymbolConstructor.getIsConcatSpreadable(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(SymbolConstructor::getIsConcatSpreadable, JSUndefined.INSTANCE);
         assertThat(result.asSymbol().orElseThrow()).isEqualTo(JSSymbol.IS_CONCAT_SPREADABLE);
     }
 
     @Test
     public void testGetIterator() {
-        JSValue result = SymbolConstructor.getIterator(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(SymbolConstructor::getIterator, JSUndefined.INSTANCE);
         assertThat(result.asSymbol().orElseThrow()).isEqualTo(JSSymbol.ITERATOR);
     }
 
     @Test
     public void testGetToPrimitive() {
-        JSValue result = SymbolConstructor.getToPrimitive(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(SymbolConstructor::getToPrimitive, JSUndefined.INSTANCE);
         assertThat(result.asSymbol().orElseThrow()).isEqualTo(JSSymbol.TO_PRIMITIVE);
     }
 
     @Test
     public void testGetToStringTag() {
-        JSValue result = SymbolConstructor.getToStringTag(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+        JSValue result = callBuiltin(SymbolConstructor::getToStringTag, JSUndefined.INSTANCE);
         assertThat(result.asSymbol().orElseThrow()).isEqualTo(JSSymbol.TO_STRING_TAG);
     }
 
     @Test
     public void testKeyFor() {
         // Normal case: symbol from registry
-        JSSymbol symbol = SymbolConstructor.symbolFor(context, JSUndefined.INSTANCE, stringArgs("registryKey"))
-                .asSymbol().orElseThrow();
+        JSSymbol symbol = callBuiltin(SymbolConstructor::symbolFor, JSUndefined.INSTANCE, "registryKey").asSymbol()
+                .orElseThrow();
         var keyFor = builtin(SymbolConstructor::keyFor, JSUndefined.INSTANCE);
         JSValue result = keyFor.call(symbol);
         assertStringValue(result, "registryKey");
 
         // Normal case: symbol not in registry
-        JSSymbol unregisteredSymbol = SymbolConstructor.call(context, JSUndefined.INSTANCE, stringArgs("unregistered"))
+        JSSymbol unregisteredSymbol = callBuiltin(SymbolConstructor::call, JSUndefined.INSTANCE, "unregistered")
                 .asSymbol().orElseThrow();
         result = keyFor.call(unregisteredSymbol);
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
@@ -120,7 +120,7 @@ public class SymbolConstructorTest extends BaseJavetTest {
         assertPendingTypeError(context, result);
 
         // Edge case: non-symbol argument
-        result = keyFor.call(stringArgs("not a symbol"));
+        result = keyFor.call("not a symbol");
         assertPendingTypeError(context, result);
 
         // Edge case: null
@@ -136,22 +136,22 @@ public class SymbolConstructorTest extends BaseJavetTest {
     public void testSymbolFor() {
         // Normal case: create new symbol in registry
         var symbolFor = builtin(SymbolConstructor::symbolFor, JSUndefined.INSTANCE);
-        JSValue result = symbolFor.call(stringArgs("test"));
+        JSValue result = symbolFor.call("test");
         JSSymbol symbol1 = result.asSymbol().orElseThrow();
         assertThat(symbol1.getDescription()).isEqualTo("test");
 
         // Normal case: get existing symbol from registry
-        result = symbolFor.call(stringArgs("test"));
+        result = symbolFor.call("test");
         assertThat(result.asSymbol().orElseThrow()).isEqualTo(symbol1); // Same symbol instance
 
         // Normal case: different keys create different symbols
-        result = symbolFor.call(stringArgs("other"));
+        result = symbolFor.call("other");
         JSSymbol symbol3 = result.asSymbol().orElseThrow();
         assertThat(symbol3).isNotEqualTo(symbol1);
         assertThat(symbol3.getDescription()).isEqualTo("other");
 
         // Normal case: numeric key
-        result = symbolFor.call(numberArgs(123));
+        result = symbolFor.call(123);
         assertThat(result.asSymbol().orElseThrow().getDescription()).isEqualTo("123");
 
         // Edge case: no arguments coerces undefined to "undefined" key
@@ -205,9 +205,9 @@ public class SymbolConstructorTest extends BaseJavetTest {
                 JSContext context1 = runtime1.createContext();
                 JSRuntime runtime2 = new JSRuntime();
                 JSContext context2 = runtime2.createContext()) {
-            JSSymbol symbol1 = SymbolConstructor.symbolFor(context1, JSUndefined.INSTANCE, stringArgs("sameKey"))
+            JSSymbol symbol1 = SymbolConstructor.symbolFor(context1, JSUndefined.INSTANCE, nativeArguments("sameKey"))
                     .asSymbol().orElseThrow();
-            JSSymbol symbol2 = SymbolConstructor.symbolFor(context2, JSUndefined.INSTANCE, stringArgs("sameKey"))
+            JSSymbol symbol2 = SymbolConstructor.symbolFor(context2, JSUndefined.INSTANCE, nativeArguments("sameKey"))
                     .asSymbol().orElseThrow();
 
             assertThat(symbol1).isNotEqualTo(symbol2);

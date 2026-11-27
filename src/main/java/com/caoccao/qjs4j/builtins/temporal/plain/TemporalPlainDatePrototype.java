@@ -185,7 +185,7 @@ public final class TemporalPlainDatePrototype {
         JSValue timeZoneLike = item;
         JSValue plainTimeLike = JSUndefined.INSTANCE;
         if (item instanceof JSObject itemObject) {
-            JSValue maybeTimeZone = itemObject.get(PropertyKey.fromString("timeZone"));
+            JSValue maybeTimeZone = itemObject.get(PropertyKey.TIME_ZONE);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -262,7 +262,7 @@ public final class TemporalPlainDatePrototype {
         TemporalPropertyBag bag = new TemporalPropertyBag(context, fields);
         Integer day = bag.positiveDateField("day");
         Integer month = bag.positiveDateField("month");
-        String monthCode = bag.string("monthCode");
+        String monthCode = bag.stringByKey(PropertyKey.MONTH_CODE);
         TemporalPartialDate dateFields = bag.readYearAndEra(calendarId, day, month, monthCode);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;

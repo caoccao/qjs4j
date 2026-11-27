@@ -57,7 +57,7 @@ public final class TemporalLocaleFormat {
                 return null;
             }
 
-            JSValue timeZoneOption = optionsObject.get(PropertyKey.fromString("timeZone"));
+            JSValue timeZoneOption = optionsObject.get(PropertyKey.TIME_ZONE);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -84,7 +84,7 @@ public final class TemporalLocaleFormat {
             return null;
         }
         if (shouldApplyDefaultComponents) {
-            JSValue timeZoneNameOption = dateTimeFormatOptions.get(PropertyKey.fromString("timeZoneName"));
+            JSValue timeZoneNameOption = dateTimeFormatOptions.get(PropertyKey.TIME_ZONE_NAME);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -92,12 +92,11 @@ public final class TemporalLocaleFormat {
                 String defaultTimeZoneNameOption = TemporalUtils.isOffsetTimeZoneIdentifier(timeZoneId)
                         ? "shortOffset"
                         : "short";
-                dateTimeFormatOptions.set(PropertyKey.fromString("timeZoneName"),
-                        new JSString(defaultTimeZoneNameOption));
+                dateTimeFormatOptions.set(PropertyKey.TIME_ZONE_NAME, new JSString(defaultTimeZoneNameOption));
             }
         }
 
-        dateTimeFormatOptions.set(PropertyKey.fromString("timeZone"), new JSString(timeZoneId));
+        dateTimeFormatOptions.set(PropertyKey.TIME_ZONE, new JSString(timeZoneId));
         return dateTimeFormatOptions;
     }
 
@@ -168,7 +167,7 @@ public final class TemporalLocaleFormat {
             return false;
         }
         if (options instanceof JSObject object) {
-            JSValue value = object.get(PropertyKey.fromString("calendar"));
+            JSValue value = object.get(PropertyKey.CALENDAR);
             if (context.hasPendingException()) {
                 return false;
             }

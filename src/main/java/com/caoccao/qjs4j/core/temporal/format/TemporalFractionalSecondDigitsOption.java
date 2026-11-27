@@ -81,7 +81,7 @@ public record TemporalFractionalSecondDigitsOption(boolean auto, int digits) {
     }
 
     public static TemporalFractionalSecondDigitsOption read(JSContext context, JSObject options) {
-        JSValue value = options.get(PropertyKey.fromString("fractionalSecondDigits"));
+        JSValue value = options.get(PropertyKey.FRACTIONAL_SECOND_DIGITS);
         return context.hasPendingException()
                 ? null
                 : parse(context, value, "Temporal error: Invalid fractionalSecondDigits.");
