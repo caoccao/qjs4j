@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core.error;
 
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
+import com.caoccao.qjs4j.exceptions.JSErrorType;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.iterator.JSIteratorHelper;
 
@@ -88,11 +89,6 @@ public final class JSAggregateError extends JSError {
     }
 
     public static JSObject createPrototype(JSContext context, JSValue... args) {
-        JSObject constructor = createNativeErrorPrototype(context, NAME, 2,
-                (ctx, receiver, arguments) -> create(ctx, arguments));
-        if (context.getGlobalObject().get(JSError.NAME) instanceof JSObject parentConstructor) {
-            constructor.setPrototype(parentConstructor);
-        }
-        return constructor;
+        return JSErrorType.AggregateError.createPrototype(context);
     }
 }

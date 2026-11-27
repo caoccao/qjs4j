@@ -120,8 +120,7 @@ public final class TemporalPlainMonthDayConstructor {
 
     public static JSValue toTemporalMonthDay(JSContext context, JSValue item, JSValue options) {
         if (item instanceof JSTemporalPlainMonthDay plainMonthDay) {
-            TemporalUtils.getOverflowOption(context, options);
-            if (context.hasPendingException()) {
+            if (!TemporalUtils.validateOverflow(context, options)) {
                 return JSUndefined.INSTANCE;
             }
             return JSTemporalPlainMonthDay.create(context, plainMonthDay.getIsoDate(), plainMonthDay.getCalendarId());
@@ -135,15 +134,7 @@ public final class TemporalPlainMonthDayConstructor {
             return TemporalCalendarFields.monthDayFromFields(context, itemObj, options);
         }
         if (item instanceof JSString itemStr) {
-            JSValue result = monthDayFromString(context, itemStr.value());
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            TemporalUtils.getOverflowOption(context, options);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            return result;
+            return TemporalUtils.finishStringConversion(context, monthDayFromString(context, itemStr.value()), options);
         }
         context.throwTypeError("Temporal error: MonthDay argument must be object or string.");
         return JSUndefined.INSTANCE;

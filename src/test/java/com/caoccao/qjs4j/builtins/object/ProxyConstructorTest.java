@@ -25,6 +25,9 @@ import org.junit.jupiter.params.provider.ValueSource;
  * Unit tests for Proxy.revocable with working revoke function.
  */
 public class ProxyConstructorTest extends BaseJavetTest {
+    private static final String ADD = "function(a, b) { return a + b; }";
+    private static final String DOUBLE_RESULT = """
+            { apply(target, thisArg, args) { return target.apply(thisArg, args) * 2; } }""";
 
     @ParameterizedTest
     @ValueSource(strings = {"Object(BigInt(42))", "new Boolean(true)", "new Number(42)", "new String('hello')",
@@ -38,6 +41,25 @@ public class ProxyConstructorTest extends BaseJavetTest {
             "Object(Symbol('test'))"})
     public void testBoxedPrimitiveToStringThroughProxy(String target) {
         assertErrorWithJavet(forwardingProxyScript(target, "proxy.toString()"));
+    }
+
+    @Test
+    public void testCallableProxyTrapPreservesReceiverAndArguments() {
+        assertStringWithJavet("""
+                const handler = {};
+                const log = [];
+                handler.apply = new Proxy(function (target, receiver, args) {
+                  log.push(this === handler, receiver.tag, args.join(','));
+                  return target(...args);
+                }, {
+                  apply(fn, receiver, args) {
+                    log.push(receiver === handler);
+                    return Reflect.apply(fn, receiver, args);
+                  }
+                });
+                const proxy = new Proxy((a, b) => a + b, handler);
+                log.push(proxy.call({ tag: 'receiver' }, 2, 3));
+                log.join('|');""");
     }
 
     @Test
@@ -97,7 +119,7 @@ public class ProxyConstructorTest extends BaseJavetTest {
     @Test
     public void testNestedFunctionApply() {
         // Simulate what the apply trap does manually
-        assertIntegerWithJavet(proxyScript("function(a, b) { return a + b; }", """
+        assertIntegerWithJavet(proxyScript(ADD, """
                 {
                   apply: function(t, thisArg, args) {
                     // Just call t directly
@@ -107,18 +129,23 @@ public class ProxyConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testOwnKeysReadsPastADuplicateBeforeRejecting() {
+        assertStringWithJavet("""
+                const log = [];
+                const result = { 0: 'x', 1: 'x', get 2() { log.push('last'); return 'y'; }, length: 3 };
+                const proxy = new Proxy({}, { ownKeys() { return result; } });
+                try { Reflect.ownKeys(proxy); } catch (error) { log.push(error.name); }
+                log.join('|');""");
+    }
+
+    @Test
     public void testProxyApplyBasic() {
-        assertIntegerWithJavet(proxyScript("function(a, b) { return a + b; }", """
-                {
-                  apply: function(target, thisArg, args) {
-                    return target.apply(thisArg, args) * 2;
-                  }
-                }""", "proxy(1, 2)"));
+        assertIntegerWithJavet(proxyScript(ADD, DOUBLE_RESULT, "proxy(1, 2)"));
     }
 
     @Test
     public void testProxyApplyForward() {
-        assertIntegerWithJavet(forwardingProxyScript("function(a, b) { return a + b; }", "proxy(1, 2)"));
+        assertIntegerWithJavet(forwardingProxyScript(ADD, "proxy(1, 2)"));
     }
 
     @Test
@@ -134,19 +161,13 @@ public class ProxyConstructorTest extends BaseJavetTest {
 
     @Test
     public void testProxyApplyWithDirectCall() {
-        // The actual failing test
-        assertIntegerWithJavet(proxyScript("function(a, b) { return a + b; }", """
-                {
-                  apply: function(target, thisArg, args) {
-                    return target.apply(thisArg, args) * 2;
-                  }
-                }""", "proxy(1, 2)"));
+        assertIntegerWithJavet(proxyScript(ADD, DOUBLE_RESULT, "proxy(1, 2)"));
     }
 
     @Test
     public void testProxyApplyWithExplicitLog() {
         // Test with logging to understand what's happening
-        assertIntegerWithJavet(proxyScript("function(a, b) { return a + b; }", """
+        assertIntegerWithJavet(proxyScript(ADD, """
                 {
                   apply: function(t, thisArg, args) {
                     // Log to understand what t is
@@ -1056,36 +1077,12 @@ public class ProxyConstructorTest extends BaseJavetTest {
 
     @Test
     public void testProxyTrapAccessesTargetApply() {
-        // Test proxy trap accessing target.apply
-        assertBooleanWithJavet("""
-                var target = function(a, b) { return a + b; };
-                var result;
-                var handler = {
-                  apply: function(t, thisArg, args) {
-                    result = typeof t.apply;
-                    return 42;
-                  }
-                };
-                var proxy = new Proxy(target, handler);
-                proxy(1, 2);
-                result === 'function'""");
+        assertBooleanWithJavet(inspectApplyTarget("t.apply"));
     }
 
     @Test
     public void testProxyTrapChecksTargetType() {
-        // Check if t is a function in the trap
-        assertBooleanWithJavet("""
-                var target = function(a, b) { return a + b; };
-                var result;
-                var handler = {
-                  apply: function(t, thisArg, args) {
-                    result = typeof t;
-                    return 42;
-                  }
-                };
-                var proxy = new Proxy(target, handler);
-                proxy(1, 2);
-                result === 'function'""");
+        assertBooleanWithJavet(inspectApplyTarget("t"));
     }
 
     @Test
@@ -1218,7 +1215,7 @@ public class ProxyConstructorTest extends BaseJavetTest {
     @Test
     public void testProxyWithSimpleTrap() {
         // Test proxy with simple trap that doesn't use apply
-        assertIntegerWithJavet(proxyScript("function(a, b) { return a + b; }", """
+        assertIntegerWithJavet(proxyScript(ADD, """
                 {
                   apply: function(t, thisArg, args) {
                     // Just return a constant
@@ -1328,7 +1325,7 @@ public class ProxyConstructorTest extends BaseJavetTest {
     @Test
     public void testSimpleProxyApply() {
         // Simplest case - just call target directly without using apply
-        assertIntegerWithJavet(proxyScript("function(a, b) { return a + b; }", """
+        assertIntegerWithJavet(proxyScript(ADD, """
                 {
                   apply: function(target, thisArg, args) {
                     // Call target directly instead of using target.apply
@@ -1424,6 +1421,12 @@ public class ProxyConstructorTest extends BaseJavetTest {
 
     private static String forwardingProxyScript(String target, String operation) {
         return proxyScript(target, "{}", operation);
+    }
+
+    private static String inspectApplyTarget(String expression) {
+        return proxyScript(ADD, "var result;", """
+                { apply(t, thisArg, args) { result = typeof %s; return 42; } }""".formatted(expression),
+                "proxy(1, 2); result === 'function'");
     }
 
     private static String interceptGet(String target, String key, String result, String operation) {

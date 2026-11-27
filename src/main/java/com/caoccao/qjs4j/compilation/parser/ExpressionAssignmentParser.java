@@ -17,216 +17,39 @@
 package com.caoccao.qjs4j.compilation.parser;
 
 import com.caoccao.qjs4j.compilation.ast.*;
-import com.caoccao.qjs4j.compilation.lexer.LexerState;
-import com.caoccao.qjs4j.compilation.lexer.Token;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 final class ExpressionAssignmentParser {
 
     private final ParserDelegates delegates;
     private final ExpressionParser expressions;
     private final ParserContext parserContext;
+    private final AssignmentPatterns patterns;
 
     ExpressionAssignmentParser(ParserContext parserContext, ParserDelegates delegates, ExpressionParser expressions) {
         this.parserContext = parserContext;
         this.delegates = delegates;
+        this.patterns = new AssignmentPatterns(parserContext);
         this.expressions = expressions;
-    }
-
-    private ArrayPattern convertArrowArrayExpressionToPattern(ArrayExpression arrayExpression) {
-        List<Pattern> elements = new ArrayList<>();
-        for (int elementIndex = 0; elementIndex < arrayExpression.getElements().size(); elementIndex++) {
-            Expression elementExpression = arrayExpression.getElements().get(elementIndex);
-            if (elementExpression == null) {
-                elements.add(null);
-            } else if (elementExpression instanceof SpreadElement spreadElement) {
-                if (elementIndex != arrayExpression.getElements().size() - 1) {
-                    throw new JSSyntaxErrorException("Rest element must be last element");
-                }
-                if (spreadElement.getArgument() instanceof AssignmentExpression) {
-                    throw new JSSyntaxErrorException("Rest element cannot have a default initializer");
-                }
-                Pattern restArgumentPattern = convertArrowExpressionToPattern(spreadElement.getArgument());
-                elements.add(new RestElement(restArgumentPattern, spreadElement.getLocation()));
-            } else {
-                elements.add(convertArrowExpressionToPattern(elementExpression));
-            }
-        }
-        return new ArrayPattern(elements, arrayExpression.getLocation());
-    }
-
-    private Pattern convertArrowExpressionToPattern(Expression expression) {
-        if (expression instanceof Identifier identifier) {
-            validateBindingIdentifier(identifier.getName());
-            return identifier;
-        }
-        if (expression instanceof ObjectExpression objectExpression) {
-            return convertArrowObjectExpressionToPattern(objectExpression);
-        }
-        if (expression instanceof ArrayExpression arrayExpression) {
-            return convertArrowArrayExpressionToPattern(arrayExpression);
-        }
-        if (expression instanceof AssignmentExpression assignmentExpression
-                && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
-            Pattern leftPattern = convertArrowExpressionToPattern(assignmentExpression.getLeft());
-            return new AssignmentPattern(leftPattern, assignmentExpression.getRight(),
-                    assignmentExpression.getLocation());
-        }
-        throw new JSSyntaxErrorException("Invalid arrow function parameter at line " + parserContext.currentToken.line()
-                + ", column " + parserContext.currentToken.column());
-    }
-
-    private ObjectPattern convertArrowObjectExpressionToPattern(ObjectExpression objectExpression) {
-        List<ObjectPatternProperty> properties = new ArrayList<>();
-        RestElement restElement = null;
-        List<ObjectExpressionProperty> objProperties = objectExpression.getProperties();
-        for (int i = 0; i < objProperties.size(); i++) {
-            ObjectExpressionProperty property = objProperties.get(i);
-            if ("spread".equals(property.getKind())) {
-                if (i != objProperties.size() - 1) {
-                    throw new JSSyntaxErrorException("Rest element must be last element");
-                }
-                if (property.getValue() instanceof AssignmentExpression) {
-                    throw new JSSyntaxErrorException("Rest element cannot have a default initializer");
-                }
-                Pattern restArgumentPattern = convertArrowExpressionToPattern(property.getValue());
-                restElement = new RestElement(restArgumentPattern, property.getValue().getLocation());
-                continue;
-            }
-            if (!"init".equals(property.getKind())) {
-                throw new JSSyntaxErrorException("Invalid arrow function parameter at line "
-                        + parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
-            }
-            Expression propertyKey = property.getKey();
-            boolean validNonComputedKey = propertyKey instanceof Identifier
-                    || (propertyKey instanceof Literal literal && (literal.getValue() instanceof String
-                            || literal.getValue() instanceof Integer || literal.getValue() instanceof Long
-                            || literal.getValue() instanceof Double || literal.getValue() instanceof Float));
-            if (!property.isComputed() && !validNonComputedKey) {
-                throw new JSSyntaxErrorException("Invalid arrow function parameter at line "
-                        + parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
-            }
-            Pattern valuePattern = convertArrowExpressionToPattern(property.getValue());
-            properties.add(new ObjectPatternProperty(propertyKey, valuePattern, property.isComputed(),
-                    property.isShorthand()));
-        }
-        return new ObjectPattern(properties, restElement, objectExpression.getLocation());
-    }
-
-    private void enterArrowFunctionContext(boolean asyncFunction) {
-        parserContext.functionNesting++;
-        if (asyncFunction) {
-            parserContext.asyncFunctionNesting++;
-        }
-    }
-
-    private void exitArrowFunctionContext(boolean asyncFunction) {
-        exitFunctionContext(asyncFunction);
-    }
-
-    private void exitFunctionContext(boolean asyncFunction) {
-        if (asyncFunction) {
-            parserContext.asyncFunctionNesting--;
-        }
-        parserContext.functionNesting--;
-    }
-
-    private Expression extractAssignmentTarget(Expression expression) {
-        if (expression instanceof AssignmentExpression assignmentExpression
-                && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
-            return assignmentExpression.getLeft();
-        }
-        return expression;
     }
 
     private ArrowFunctionExpression finishArrow(FunctionParams params, ASTNode body, boolean async,
             SourceLocation location) {
-        validateArrowParameters(params, body);
+        ParameterEarlyErrors.validateArrow(parserContext, params, body);
         if (body instanceof BlockStatement block) {
-            validateFormalsBodyDuplicate(params.params(), params.restParameter(), block.getBody());
+            ParameterEarlyErrors.validateFormalsBodyDuplicate(params, block.getBody());
         }
         return new ArrowFunctionExpression(params, body, async,
                 location.withEndOffset(parserContext.previousTokenEndOffset));
     }
 
-    private boolean hasTrailingCommaAfterRestElement(ArrayExpression arrayExpression, int assignmentOperatorOffset) {
-        String source = parserContext.lexer.getSource();
-        int startOffset = arrayExpression.getLocation().offset();
-        if (startOffset < 0 || startOffset >= source.length() || startOffset >= assignmentOperatorOffset) {
-            return false;
-        }
-
-        int bracketDepth = 0;
-        boolean inString = false;
-        char stringDelimiter = '\0';
-        boolean escaped = false;
-        int closingBracketOffset = -1;
-
-        for (int index = startOffset; index < source.length() && index < assignmentOperatorOffset; index++) {
-            char currentChar = source.charAt(index);
-            if (inString) {
-                if (escaped) {
-                    escaped = false;
-                    continue;
-                }
-                if (currentChar == '\\') {
-                    escaped = true;
-                    continue;
-                }
-                if (currentChar == stringDelimiter) {
-                    inString = false;
-                }
-                continue;
-            }
-            if (currentChar == '\'' || currentChar == '"') {
-                inString = true;
-                stringDelimiter = currentChar;
-                continue;
-            }
-            if (currentChar == '[') {
-                bracketDepth++;
-                continue;
-            }
-            if (currentChar == ']') {
-                bracketDepth--;
-                if (bracketDepth == 0) {
-                    closingBracketOffset = index;
-                    break;
-                }
-            }
-        }
-
-        if (closingBracketOffset <= startOffset) {
-            return false;
-        }
-        int previousOffset = closingBracketOffset - 1;
-        while (previousOffset >= startOffset && Character.isWhitespace(source.charAt(previousOffset))) {
-            previousOffset--;
-        }
-        return previousOffset >= startOffset && source.charAt(previousOffset) == ',';
-    }
-
-    private boolean isArrowDestructuringParameterExpression(Expression expression) {
-        if (expression instanceof ObjectExpression || expression instanceof ArrayExpression) {
-            return true;
-        }
-        if (expression instanceof AssignmentExpression assignmentExpression
-                && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
-            return assignmentExpression.getLeft() instanceof ObjectExpression
-                    || assignmentExpression.getLeft() instanceof ArrayExpression;
-        }
-        return false;
-    }
-
     private ArrowFunctionExpression parseArrowBody(FunctionParams params, boolean async, SourceLocation location) {
-        enterArrowFunctionContext(async);
+        parserContext.enterLexicalFunction(async);
         boolean enclosingStaticInit = parserContext.inClassStaticInit;
         parserContext.inClassStaticInit = false;
         ASTNode body;
@@ -234,30 +57,9 @@ final class ExpressionAssignmentParser {
             body = readArrowBody();
         } finally {
             parserContext.inClassStaticInit = enclosingStaticInit;
-            exitArrowFunctionContext(async);
+            parserContext.exitLexicalFunction(async);
         }
         return finishArrow(params, body, async, location);
-    }
-
-    private void parseArrowParameterExpression(Expression expression, List<Pattern> params, List<Expression> defaults) {
-        if (expression instanceof Identifier identifier) {
-            params.add(identifier);
-            defaults.add(null);
-            return;
-        }
-        if (expression instanceof AssignmentExpression assignmentExpression
-                && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN
-                && assignmentExpression.getLeft() instanceof Identifier parameterIdentifier) {
-            params.add(parameterIdentifier);
-            defaults.add(assignmentExpression.getRight());
-            return;
-        }
-        if (isArrowDestructuringParameterExpression(expression)) {
-            parseDestructuringArrowParameter(expression, params, defaults);
-            return;
-        }
-        throw new JSSyntaxErrorException("Invalid arrow function parameter at line " + parserContext.currentToken.line()
-                + ", column " + parserContext.currentToken.column());
     }
 
     Expression parseAssignmentExpression() {
@@ -279,10 +81,7 @@ final class ExpressionAssignmentParser {
         }
         if (parserContext.match(TokenType.ASYNC)) {
             SourceLocation asyncLocation = location;
-            Token savedCurrent = parserContext.currentToken;
-            Token savedNext = parserContext.nextToken;
-            int savedPrevLine = parserContext.previousTokenLine;
-            LexerState savedLexer = parserContext.lexer.saveState();
+            ParserContext.TokenPosition start = parserContext.saveTokenPosition();
 
             parserContext.advance();
 
@@ -295,7 +94,7 @@ final class ExpressionAssignmentParser {
                 if (parserContext.currentToken.type().isIdentifierCandidate()
                         && parserContext.nextToken.type() == TokenType.ARROW) {
                     Identifier param = parserContext.parseIdentifier();
-                    validateBindingIdentifier(param.getName(), true);
+                    parserContext.validateBindingIdentifier(param.getName(), true);
                     if (parserContext.hasNewlineBefore()) {
                         // ArrowParameters [no LineTerminator here] =>
                         throw new JSSyntaxErrorException("Unexpected token '=>'");
@@ -306,7 +105,7 @@ final class ExpressionAssignmentParser {
                 }
 
                 if (parserContext.match(TokenType.LPAREN) && peekPastParensIsArrow()) {
-                    enterArrowFunctionContext(true);
+                    parserContext.enterLexicalFunction(true);
                     boolean savedInClassStaticInit = parserContext.inClassStaticInit;
                     parserContext.inClassStaticInit = false;
                     try {
@@ -317,15 +116,12 @@ final class ExpressionAssignmentParser {
                         return finishArrow(funcParams, readArrowBody(), true, location);
                     } finally {
                         parserContext.inClassStaticInit = savedInClassStaticInit;
-                        exitArrowFunctionContext(true);
+                        parserContext.exitLexicalFunction(true);
                     }
                 }
             }
 
-            parserContext.currentToken = savedCurrent;
-            parserContext.nextToken = savedNext;
-            parserContext.previousTokenLine = savedPrevLine;
-            parserContext.lexer.restoreState(savedLexer);
+            parserContext.restoreTokenPosition(start);
         }
 
         // YieldExpression is at AssignmentExpression level per ES2024 spec (14.4)
@@ -371,7 +167,7 @@ final class ExpressionAssignmentParser {
             RestParameter restParameter = null;
 
             if (left instanceof Identifier identifier) {
-                validateBindingIdentifier(identifier.getName());
+                parserContext.validateBindingIdentifier(identifier.getName());
                 params.add(identifier);
                 defaults.add(null);
             } else if (left instanceof AssignmentExpression assignExpr
@@ -383,19 +179,19 @@ final class ExpressionAssignmentParser {
                     && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN
                     && (assignmentExpression.getLeft() instanceof ObjectExpression
                             || assignmentExpression.getLeft() instanceof ArrayExpression))) {
-                parseDestructuringArrowParameter(left, params, defaults);
+                patterns.parseDestructuringArrowParameter(left, params, defaults);
             } else if (left instanceof SequenceExpression seqExpr) {
                 for (Expression expr : seqExpr.getExpressions()) {
                     if (parserContext.isParenthesizedExpression(expr)) {
                         // ((a), b) => 1: a parameter cannot be parenthesized.
                         throw new JSSyntaxErrorException("Invalid destructuring assignment target");
                     }
-                    parseArrowParameterExpression(expr, params, defaults);
+                    patterns.parseArrowParameterExpression(expr, params, defaults);
                 }
             } else if (left instanceof ArrayExpression arrayExpr) {
                 boolean isParenthesizedParameterList = arrayExpr.getLocation().offset() == location.offset();
                 if (!isParenthesizedParameterList) {
-                    parseDestructuringArrowParameter(left, params, defaults);
+                    patterns.parseDestructuringArrowParameter(left, params, defaults);
                 } else if (!arrayExpr.getElements().isEmpty()) {
                     for (int i = 0; i < arrayExpr.getElements().size(); i++) {
                         Expression expr = arrayExpr.getElements().get(i);
@@ -404,10 +200,10 @@ final class ExpressionAssignmentParser {
                             if (i != arrayExpr.getElements().size() - 1) {
                                 throw new JSSyntaxErrorException("Rest parameter must be last formal parameter");
                             }
-                            Pattern restArgPattern = convertArrowExpressionToPattern(spreadElem.getArgument());
+                            Pattern restArgPattern = patterns.convertArrowExpressionToPattern(spreadElem.getArgument());
                             restParameter = new RestParameter(restArgPattern, spreadElem.getLocation());
                         } else {
-                            parseArrowParameterExpression(expr, params, defaults);
+                            patterns.parseArrowParameterExpression(expr, params, defaults);
                         }
                     }
                 }
@@ -466,7 +262,7 @@ final class ExpressionAssignmentParser {
 
             if (operator == AssignmentOperator.ASSIGN
                     && (left instanceof ArrayExpression || left instanceof ObjectExpression)) {
-                validateAssignmentPatternTarget(left, assignmentOperatorOffset);
+                patterns.validateAssignmentPatternTarget(left, assignmentOperatorOffset);
             }
 
             boolean isIdentifierRef = lhsStartsWithIdentifier && left instanceof Identifier;
@@ -474,21 +270,6 @@ final class ExpressionAssignmentParser {
         }
 
         return left;
-    }
-
-    private void parseDestructuringArrowParameter(Expression expression, List<Pattern> params,
-            List<Expression> defaults) {
-        Pattern parameterPattern;
-        Expression defaultExpression = null;
-        if (expression instanceof AssignmentExpression assignmentExpression
-                && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
-            parameterPattern = convertArrowExpressionToPattern(assignmentExpression.getLeft());
-            defaultExpression = assignmentExpression.getRight();
-        } else {
-            parameterPattern = convertArrowExpressionToPattern(expression);
-        }
-        params.add(parameterPattern);
-        defaults.add(defaultExpression);
     }
 
     Expression parseExpression() {
@@ -509,11 +290,7 @@ final class ExpressionAssignmentParser {
     }
 
     private boolean peekPastParensIsArrow() {
-        Token savedCurrent = parserContext.currentToken;
-        Token savedNext = parserContext.nextToken;
-        int savedPrevLine = parserContext.previousTokenLine;
-        int savedPrevEndOffset = parserContext.previousTokenEndOffset;
-        LexerState savedLexer = parserContext.lexer.saveState();
+        ParserContext.TokenPosition start = parserContext.saveTokenPosition();
         try {
             parserContext.advance();
             int depth = 1;
@@ -534,11 +311,7 @@ final class ExpressionAssignmentParser {
             }
             return false;
         } finally {
-            parserContext.currentToken = savedCurrent;
-            parserContext.nextToken = savedNext;
-            parserContext.previousTokenLine = savedPrevLine;
-            parserContext.previousTokenEndOffset = savedPrevEndOffset;
-            parserContext.lexer.restoreState(savedLexer);
+            parserContext.restoreTokenPosition(start);
         }
     }
 
@@ -548,211 +321,7 @@ final class ExpressionAssignmentParser {
                 : parseAssignmentExpression();
     }
 
-    private void validateArrayAssignmentPatternTarget(ArrayExpression arrayExpression, int assignmentOperatorOffset) {
-        List<Expression> elements = arrayExpression.getElements();
-        boolean seenRestElement = false;
-        for (int elementIndex = 0; elementIndex < elements.size(); elementIndex++) {
-            Expression elementExpression = elements.get(elementIndex);
-            if (elementExpression == null) {
-                if (seenRestElement) {
-                    throw new JSSyntaxErrorException("Rest element must be last element");
-                }
-                continue;
-            }
-            if (elementExpression instanceof SpreadElement spreadElement) {
-                if (seenRestElement || elementIndex != elements.size() - 1) {
-                    throw new JSSyntaxErrorException("Rest element must be last element");
-                }
-                if (spreadElement.getArgument() instanceof AssignmentExpression assignmentExpression
-                        && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
-                    throw new JSSyntaxErrorException("Rest element cannot have a default initializer");
-                }
-                validateAssignmentPatternTarget(spreadElement.getArgument(), assignmentOperatorOffset);
-                seenRestElement = true;
-                continue;
-            }
-            if (seenRestElement) {
-                throw new JSSyntaxErrorException("Rest element must be last element");
-            }
-            if (parserContext.isParenthesizedExpression(elementExpression)
-                    && elementExpression instanceof AssignmentExpression assignmentExpression
-                    && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
-                throw new JSSyntaxErrorException("Invalid destructuring assignment target");
-            }
-            validateAssignmentPatternTarget(extractAssignmentTarget(elementExpression), assignmentOperatorOffset);
-        }
-        if (seenRestElement && !elements.isEmpty() && elements.get(elements.size() - 1) instanceof SpreadElement
-                && hasTrailingCommaAfterRestElement(arrayExpression, assignmentOperatorOffset)) {
-            throw new JSSyntaxErrorException("Rest element must be last element");
-        }
-    }
-
-    private void validateArrowParameters(FunctionParams functionParams, ASTNode body) {
-        List<Expression> defaults = functionParams.defaults();
-        // ES2024 14.2.1 Static Semantics: Early Errors
-        // ArrowFunction : ArrowParameters => ConciseBody
-        // It is a Syntax Error if ArrowParameters Contains YieldExpression is true.
-        // It is a Syntax Error if ArrowParameters Contains AwaitExpression is true.
-        if (defaults != null) {
-            for (Expression defaultExpression : defaults) {
-                if (defaultExpression != null && defaultExpression.containsYield()) {
-                    throw new JSSyntaxErrorException("Yield expression not allowed in arrow function parameters");
-                }
-                if (defaultExpression != null && defaultExpression.containsAwait()) {
-                    throw new JSSyntaxErrorException("Await expression not allowed in arrow function parameters");
-                }
-            }
-        }
-        boolean bodyHasUseStrict = body instanceof BlockStatement blockBody && blockBody.hasUseStrictDirective();
-        boolean strictParameters = parserContext.strictMode || bodyHasUseStrict;
-        Set<String> seen = new HashSet<>();
-        for (Pattern pattern : functionParams.params()) {
-            for (String parameterName : pattern.getBoundNames()) {
-                if (!seen.add(parameterName)) {
-                    throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
-                }
-                if (strictParameters
-                        && (JSKeyword.EVAL.equals(parameterName) || JSKeyword.ARGUMENTS.equals(parameterName))) {
-                    throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
-                }
-            }
-        }
-        RestParameter restParameter = functionParams.restParameter();
-        if (restParameter != null) {
-            for (String restName : restParameter.getArgument().getBoundNames()) {
-                if (!seen.add(restName)) {
-                    throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
-                }
-                if (strictParameters && (JSKeyword.EVAL.equals(restName) || JSKeyword.ARGUMENTS.equals(restName))) {
-                    throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
-                }
-            }
-        }
-        if (bodyHasUseStrict && functionParams.hasNonSimpleParameters()) {
-            throw new JSSyntaxErrorException(
-                    "Illegal 'use strict' directive in function with non-simple parameter list");
-        }
-    }
-
-    private void validateAssignmentPatternTarget(Expression expression, int assignmentOperatorOffset) {
-        if (parserContext.isParenthesizedExpression(expression)) {
-            if (expression instanceof ArrayExpression || expression instanceof ObjectExpression) {
-                throw new JSSyntaxErrorException("Invalid destructuring assignment target");
-            }
-        }
-        if (expression instanceof Identifier identifier) {
-            if ("import.meta".equals(identifier.getName()) || "new.target".equals(identifier.getName())
-                    || JSKeyword.THIS.equals(identifier.getName())) {
-                throw new JSSyntaxErrorException("Invalid destructuring assignment target");
-            }
-            // Per spec: IdentifierReference cannot be a ReservedWord.
-            // This catches shorthand properties like { break } or { def\u0061ult } in destructuring.
-            validateBindingIdentifier(identifier.getName());
-            if (parserContext.strictMode && (JSKeyword.EVAL.equals(identifier.getName())
-                    || JSKeyword.ARGUMENTS.equals(identifier.getName()))) {
-                throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
-            }
-            return;
-        }
-        if (expression instanceof MemberExpression memberExpression) {
-            if (memberExpression.isOptional()) {
-                throw new JSSyntaxErrorException("Invalid destructuring assignment target");
-            }
-            return;
-        }
-        if (expression instanceof ArrayExpression arrayExpression) {
-            validateArrayAssignmentPatternTarget(arrayExpression, assignmentOperatorOffset);
-            return;
-        }
-        if (expression instanceof ObjectExpression objectExpression) {
-            validateObjectAssignmentPatternTarget(objectExpression, assignmentOperatorOffset);
-            return;
-        }
-        throw new JSSyntaxErrorException("Invalid destructuring assignment target");
-    }
-
-    private void validateBindingIdentifier(String name) {
-        validateBindingIdentifier(name, false);
-    }
-
-    private void validateBindingIdentifier(String name, boolean isAsyncContext) {
-        if (parserContext.inClassStaticInit && JSKeyword.AWAIT.equals(name)) {
-            throw new JSSyntaxErrorException("Unexpected 'await' keyword");
-        }
-        if (isAsyncContext && JSKeyword.AWAIT.equals(name)) {
-            throw new JSSyntaxErrorException("'await' is not a valid identifier name in an async function");
-        }
-        if (ParserContext.isAlwaysReservedIdentifierName(name)) {
-            throw new JSSyntaxErrorException("Unexpected reserved word");
-        }
-        if (parserContext.strictMode && ParserContext.isStrictReservedIdentifierName(name)) {
-            throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
-        }
-    }
-
     void validateForInOfAssignmentTarget(Expression expression, int assignmentBoundaryOffset) {
-        if (expression instanceof CallExpression) {
-            if (parserContext.strictMode) {
-                throw new JSSyntaxErrorException("Invalid left-hand side in for-loop");
-            }
-            return;
-        }
-        validateAssignmentPatternTarget(expression, assignmentBoundaryOffset);
-    }
-
-    private void validateObjectAssignmentPatternTarget(ObjectExpression objectExpression,
-            int assignmentOperatorOffset) {
-        List<ObjectExpressionProperty> properties = objectExpression.getProperties();
-        boolean seenRestElement = false;
-        for (int propertyIndex = 0; propertyIndex < properties.size(); propertyIndex++) {
-            ObjectExpressionProperty property = properties.get(propertyIndex);
-            if ("spread".equals(property.getKind())) {
-                if (seenRestElement || propertyIndex != properties.size() - 1) {
-                    throw new JSSyntaxErrorException("Rest element must be last element");
-                }
-                if (property.getValue() instanceof AssignmentExpression assignmentExpression
-                        && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
-                    throw new JSSyntaxErrorException("Rest element cannot have a default initializer");
-                }
-                validateAssignmentPatternTarget(property.getValue(), assignmentOperatorOffset);
-                seenRestElement = true;
-                continue;
-            }
-            if (!"init".equals(property.getKind())) {
-                throw new JSSyntaxErrorException("Invalid destructuring assignment target");
-            }
-            if (seenRestElement) {
-                throw new JSSyntaxErrorException("Rest element must be last element");
-            }
-            Expression propertyValue = property.getValue();
-            if (parserContext.isParenthesizedExpression(propertyValue)
-                    && propertyValue instanceof AssignmentExpression assignmentExpression
-                    && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
-                throw new JSSyntaxErrorException("Invalid destructuring assignment target");
-            }
-            validateAssignmentPatternTarget(extractAssignmentTarget(propertyValue), assignmentOperatorOffset);
-        }
-    }
-
-    /**
-     * Check that parameter BoundNames do not also appear in the LexicallyDeclaredNames of the body. Per spec: "It is a
-     * Syntax Error if BoundNames of FormalParameters also occurs in the LexicallyDeclaredNames of AsyncFunctionBody /
-     * ConciseBody."
-     */
-    static void validateFormalsBodyDuplicate(List<Pattern> params, RestParameter restParameter, List<Statement> body) {
-        Set<String> paramNames = new HashSet<>();
-        for (Pattern pattern : params) {
-            paramNames.addAll(pattern.getBoundNames());
-        }
-        if (restParameter != null) {
-            paramNames.addAll(restParameter.getArgument().getBoundNames());
-        }
-        // Every lexical declaration counts — class and using as well as let and const — and the message is
-        // V8's.
-        for (String declaredName : DeclarationEarlyErrors.collectFunctionBodyLexicalNames(body)) {
-            if (paramNames.contains(declaredName)) {
-                throw new JSSyntaxErrorException("Identifier '" + declaredName + "' has already been declared");
-            }
-        }
+        patterns.validateForInOfAssignmentTarget(expression, assignmentBoundaryOffset);
     }
 }

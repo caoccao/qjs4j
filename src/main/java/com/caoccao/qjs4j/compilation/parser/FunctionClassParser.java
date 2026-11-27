@@ -50,98 +50,6 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
     }
 
     /**
-     * Check for duplicate parameter names. Following QuickJS js_parse_function_check_names: duplicates are rejected
-     * when strict mode, non-simple parameter list, arrow function, or method.
-     *
-     * @param funcParams
-     *            The function parameters to validate
-     */
-    private void checkDuplicateParameters(FunctionParams funcParams) {
-        Set<String> seen = new HashSet<>();
-        for (Pattern param : funcParams.params()) {
-            List<String> boundNames = param.getBoundNames();
-            for (String paramName : boundNames) {
-                if (!seen.add(paramName)) {
-                    throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
-                }
-            }
-        }
-        if (funcParams.restParameter() != null) {
-            List<String> restBoundNames = funcParams.restParameter().getArgument().getBoundNames();
-            for (String restName : restBoundNames) {
-                if (!seen.add(restName)) {
-                    throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
-                }
-            }
-        }
-    }
-
-    /**
-     * Validate function parameters for strict mode rules. Following QuickJS js_parse_function_check_names: - No
-     * parameter named 'eval' or 'arguments' - No duplicate parameter names
-     *
-     * @param funcParams
-     *            The function parameters to validate
-     * @param funcName
-     *            The function name (or null for anonymous)
-     */
-    private void checkStrictModeParameters(FunctionParams funcParams, Identifier funcName) {
-        if (funcName != null) {
-            checkStrictBindingName(funcName.getName());
-        }
-        for (Pattern param : funcParams.params()) {
-            for (String name : param.getBoundNames()) {
-                checkStrictBindingName(name);
-            }
-        }
-        if (funcParams.restParameter() != null) {
-            for (String name : funcParams.restParameter().getArgument().getBoundNames()) {
-                checkStrictBindingName(name);
-            }
-        }
-        checkDuplicateParameters(funcParams);
-    }
-
-    private void enterFunctionContext(boolean asyncFunction) {
-        parserContext.functionNesting++;
-        if (asyncFunction) {
-            parserContext.asyncFunctionNesting++;
-        }
-    }
-
-    private void enterFunctionContext(boolean asyncFunction, boolean generatorFunction) {
-        parserContext.savedFunctionNestingStack
-                .push(new int[]{parserContext.generatorFunctionNesting, parserContext.asyncFunctionNesting,
-                        parserContext.newTargetNesting, parserContext.inClassFieldInitializer ? 1 : 0,
-                        parserContext.inClassStaticInit ? 1 : 0, parserContext.needsArguments ? 1 : 0});
-        parserContext.functionNesting++;
-        parserContext.generatorFunctionNesting = generatorFunction ? 1 : 0;
-        parserContext.asyncFunctionNesting = asyncFunction ? 1 : 0;
-        parserContext.newTargetNesting = 1;
-        parserContext.inClassFieldInitializer = false;
-        parserContext.inClassStaticInit = false;
-        parserContext.needsArguments = false;
-    }
-
-    private void exitFunctionContext(boolean asyncFunction) {
-        if (asyncFunction) {
-            parserContext.asyncFunctionNesting--;
-        }
-        parserContext.functionNesting--;
-    }
-
-    private void exitFunctionContext(boolean asyncFunction, boolean generatorFunction) {
-        int[] saved = parserContext.savedFunctionNestingStack.pop();
-        parserContext.generatorFunctionNesting = saved[0];
-        parserContext.asyncFunctionNesting = saved[1];
-        parserContext.newTargetNesting = saved[2];
-        parserContext.inClassFieldInitializer = saved[3] != 0;
-        parserContext.inClassStaticInit = saved[4] != 0;
-        parserContext.needsArguments = saved[5] != 0;
-        parserContext.functionNesting--;
-    }
-
-    /**
      * A class's name binds in strict mode code, so it cannot be {@code eval} or {@code arguments}.
      */
     private static void validateClassBindingName(Identifier id) {
@@ -296,11 +204,11 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             int savedAsyncFunctionNesting = parserContext.asyncFunctionNesting;
             parserContext.generatorFunctionNesting = 0;
             parserContext.asyncFunctionNesting = 0;
-            enterFunctionContext(false);
+            parserContext.enterLexicalFunction(false);
             try {
                 value = delegates.expressions.parseAssignmentExpression();
             } finally {
-                exitFunctionContext(false);
+                parserContext.exitLexicalFunction(false);
                 parserContext.asyncFunctionNesting = savedAsyncFunctionNesting;
                 parserContext.generatorFunctionNesting = savedGeneratorFunctionNesting;
                 parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
@@ -423,13 +331,13 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
         // Validate parameters when in strict mode (either from outer context or "use strict" directive)
         if (hasUseStrict || savedStrictMode) {
-            checkStrictModeParameters(funcParams, funcName);
+            ParameterEarlyErrors.validateStrict(parserContext, funcParams, funcName);
         } else if (funcParams.hasNonSimpleParameters()) {
             // Per ES2024 15.2.1: It is a Syntax Error if IsSimpleParameterList is false
             // and BoundNames contains any duplicate elements.
             // Following QuickJS js_parse_function_check_names: duplicates are always
             // rejected for non-simple parameter lists regardless of strict mode.
-            checkDuplicateParameters(funcParams);
+            ParameterEarlyErrors.rejectDuplicates(funcParams);
         }
 
         // Non-simple parameter list with "use strict" directive is always an error (spec 15.2.1)
@@ -455,7 +363,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         // Check that parameter names don't conflict with lexical declarations in body
         // Per spec: "It is a Syntax Error if BoundNames of FormalParameters also occurs
         // in the LexicallyDeclaredNames of FunctionBody"
-        validateFormalsBodyDuplicate(funcParams, body);
+        ParameterEarlyErrors.validateFormalsBodyDuplicate(funcParams, body);
 
         // Restore outer strict mode
         parserContext.strictMode = savedStrictMode;
@@ -590,7 +498,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
      */
     FunctionExpression parseMethod(String kind, SourceLocation methodStartLocation, boolean isAsync,
             boolean isGenerator) {
-        enterFunctionContext(isAsync, isGenerator);
+        parserContext.enterFunctionContext(isAsync, isGenerator);
         boolean savedInFunctionBody = parserContext.inFunctionBody;
         boolean savedInClassStaticInit = parserContext.inClassStaticInit;
         parserContext.inClassStaticInit = false;
@@ -621,13 +529,13 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             parserContext.inFunctionBody = true;
 
             // Per QuickJS js_parse_function_check_names: methods always reject duplicate parameters
-            checkDuplicateParameters(funcParams);
+            ParameterEarlyErrors.rejectDuplicates(funcParams);
             body = parseFunctionBody(funcParams, null);
             needsArguments = parserContext.needsArguments;
         } finally {
             parserContext.inFunctionBody = savedInFunctionBody;
             parserContext.inClassStaticInit = savedInClassStaticInit;
-            exitFunctionContext(isAsync, isGenerator);
+            parserContext.exitFunctionContext();
         }
 
         // Per ES2024 15.2.1: "use strict" in method body with non-simple parameters
@@ -755,10 +663,6 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         }
     }
 
-    private void validateFormalsBodyDuplicate(FunctionParams funcParams, List<Statement> body) {
-        ExpressionAssignmentParser.validateFormalsBodyDuplicate(funcParams.params(), funcParams.restParameter(), body);
-    }
-
     private <T extends ASTNode> T parseClass(ClassFactory<T> factory) {
         SourceLocation startLocation = parserContext.getLocation();
         int startOffset = parserContext.currentToken.offset();
@@ -827,18 +731,9 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         T create(Identifier id, Expression superClass, List<ClassElement> body, SourceLocation location);
     }
 
-    private void checkStrictBindingName(String name) {
-        if (JSKeyword.EVAL.equals(name) || JSKeyword.ARGUMENTS.equals(name)) {
-            throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
-        }
-        if (parserContext.isStrictReservedIdentifier(name)) {
-            throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
-        }
-    }
-
     private <T extends ASTNode> T parseFunctionDefinition(Identifier id, SourceLocation location, boolean isAsync,
             boolean isGenerator, FunctionFactory<T> factory) {
-        enterFunctionContext(isAsync, isGenerator);
+        parserContext.enterFunctionContext(isAsync, isGenerator);
         boolean savedInClassStaticInit = parserContext.inClassStaticInit;
         parserContext.inClassStaticInit = false;
         boolean savedInFunctionBody = parserContext.inFunctionBody;
@@ -870,7 +765,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         } finally {
             parserContext.inFunctionBody = savedInFunctionBody;
             parserContext.inClassStaticInit = savedInClassStaticInit;
-            exitFunctionContext(isAsync, isGenerator);
+            parserContext.exitFunctionContext();
         }
     }
 

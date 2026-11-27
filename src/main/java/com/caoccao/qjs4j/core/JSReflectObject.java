@@ -237,20 +237,15 @@ public final class JSReflectObject {
      * Reflect.defineProperty(target, propertyKey, attributes) ES2020 26.1.3
      */
     public static JSValue defineProperty(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return context.throwTypeError("Reflect.defineProperty called on non-object");
-        }
+        return ReflectTarget.property(context, "defineProperty", args, JSReflectObject::definePropertyOnTarget);
+    }
 
-        PropertyKey key = PropertyKey.fromValue(context, args[1]);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
+    private static JSValue definePropertyOnTarget(JSContext context, JSObject target, PropertyKey key, JSValue[] args) {
         if (args.length < 3 || !(args[2] instanceof JSObject attributes)) {
             return context.throwTypeError("Property description must be an object");
         }
 
-        PropertyDescriptor descriptor = toPropertyDescriptor(context, attributes);
+        PropertyDescriptor descriptor = PropertyDescriptor.readDefinition(context, attributes, true);
         if (descriptor == null) {
             return context.getPendingException();
         }
@@ -266,10 +261,10 @@ public final class JSReflectObject {
      * operator).
      */
     public static JSValue deleteProperty(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return context.throwTypeError("Reflect.deleteProperty called on non-object");
-        }
+        return ReflectTarget.apply(context, "deleteProperty", args, JSReflectObject::deletePropertyOnTarget);
+    }
 
+    private static JSValue deletePropertyOnTarget(JSContext context, JSObject target, JSValue[] args) {
         if (args.length < 2) {
             return JSBoolean.TRUE;
         }
@@ -295,15 +290,10 @@ public final class JSReflectObject {
      * Reflect.get(target, propertyKey, receiver) ES2020 26.1.6 Gets the value of a property on an object.
      */
     public static JSValue get(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return context.throwTypeError("Reflect.get called on non-object");
-        }
+        return ReflectTarget.property(context, "get", args, JSReflectObject::getOnTarget);
+    }
 
-        JSValue keyArg = JSValue.argumentOrUndefined(args, 1);
-        PropertyKey key = PropertyKey.fromValue(context, keyArg);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
+    private static JSValue getOnTarget(JSContext context, JSObject target, PropertyKey key, JSValue[] args) {
         JSValue receiver = args.length > 2 ? args[2] : target;
         JSValue result = target.get(key, receiver);
         // Cross-realm: if the getter moved the exception to the receiver's context,
@@ -321,12 +311,12 @@ public final class JSReflectObject {
      * Reflect.getOwnPropertyDescriptor(target, propertyKey) ES2020 26.1.7
      */
     public static JSValue getOwnPropertyDescriptor(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return context.throwTypeError("Reflect.getOwnPropertyDescriptor called on non-object");
-        }
+        return ReflectTarget.property(context, "getOwnPropertyDescriptor", args,
+                JSReflectObject::getOwnPropertyDescriptorOnTarget);
+    }
 
-        JSValue keyValue = JSValue.argumentOrUndefined(args, 1);
-        PropertyKey key = PropertyKey.fromValue(context, keyValue);
+    private static JSValue getOwnPropertyDescriptorOnTarget(JSContext context, JSObject target, PropertyKey key,
+            JSValue[] args) {
         PropertyDescriptor descriptor = target.getOwnPropertyDescriptor(key);
         if (descriptor == null) {
             return JSUndefined.INSTANCE;
@@ -338,10 +328,10 @@ public final class JSReflectObject {
      * Reflect.getPrototypeOf(target) ES2020 26.1.8 Gets the prototype of an object.
      */
     public static JSValue getPrototypeOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return context.throwTypeError("Reflect.getPrototypeOf called on non-object");
-        }
+        return ReflectTarget.apply(context, "getPrototypeOf", args, JSReflectObject::getPrototypeOfOnTarget);
+    }
 
+    private static JSValue getPrototypeOfOnTarget(JSContext context, JSObject target, JSValue[] args) {
         JSObject prototype = target.getPrototype();
         return prototype != null ? prototype : JSNull.INSTANCE;
     }
@@ -350,16 +340,8 @@ public final class JSReflectObject {
      * Reflect.has(target, propertyKey) ES2020 26.1.9 Checks if an object has a property (like the 'in' operator).
      */
     public static JSValue has(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return context.throwTypeError("Reflect.has called on non-object");
-        }
-
-        JSValue keyArg = JSValue.argumentOrUndefined(args, 1);
-        PropertyKey key = PropertyKey.fromValue(context, keyArg);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-        return JSBoolean.valueOf(target.has(key));
+        return ReflectTarget.property(context, "has", args,
+                (ctx, target, key, arguments) -> JSBoolean.valueOf(target.has(key)));
     }
 
     private static boolean isDynamicFunctionConstructor(JSNativeFunction function) {
@@ -372,11 +354,8 @@ public final class JSReflectObject {
      * Reflect.isExtensible(target) ES2020 26.1.10 Checks if an object is extensible.
      */
     public static JSValue isExtensible(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return context.throwTypeError("Reflect.isExtensible called on non-object");
-        }
-
-        return JSBoolean.valueOf(target.isExtensible());
+        return ReflectTarget.apply(context, "isExtensible", args,
+                (ctx, target, arguments) -> JSBoolean.valueOf(target.isExtensible()));
     }
 
     private static JSObject newTargetPrototype(JSContext context, JSFunction function, JSValue newTarget) {
@@ -389,10 +368,10 @@ public final class JSReflectObject {
      * Reflect.ownKeys(target) ES2020 26.1.11 Returns an array of the target object's own property keys.
      */
     public static JSValue ownKeys(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return context.throwTypeError("Reflect.ownKeys called on non-object");
-        }
+        return ReflectTarget.apply(context, "ownKeys", args, JSReflectObject::ownKeysOnTarget);
+    }
 
+    private static JSValue ownKeysOnTarget(JSContext context, JSObject target, JSValue[] args) {
         JSArray result = context.createJSArray();
         for (PropertyKey key : target.ownPropertyKeys()) {
             if (key.isSymbol()) {
@@ -408,25 +387,18 @@ public final class JSReflectObject {
      * Reflect.preventExtensions(target) ES2020 26.1.12 Prevents new properties from being added to an object.
      */
     public static JSValue preventExtensions(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return context.throwTypeError("Reflect.preventExtensions called on non-object");
-        }
-        return JSBoolean.valueOf(target.preventExtensionsWithResult());
+        return ReflectTarget.apply(context, "preventExtensions", args,
+                (ctx, target, arguments) -> JSBoolean.valueOf(target.preventExtensionsWithResult()));
     }
 
     /**
      * Reflect.set(target, propertyKey, value, receiver) ES2020 26.1.13 Sets the value of a property on an object.
      */
     public static JSValue set(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return context.throwTypeError("Reflect.set called on non-object");
-        }
+        return ReflectTarget.property(context, "set", args, JSReflectObject::setOnTarget);
+    }
 
-        JSValue keyArg = JSValue.argumentOrUndefined(args, 1);
-        PropertyKey key = PropertyKey.fromValue(context, keyArg);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
+    private static JSValue setOnTarget(JSContext context, JSObject target, PropertyKey key, JSValue[] args) {
         JSValue value = JSValue.argumentOrUndefined(args, 2);
         JSValue receiver = args.length > 3 ? args[3] : target;
 
@@ -443,10 +415,10 @@ public final class JSReflectObject {
      * Reflect.setPrototypeOf(target, prototype) ES2020 26.1.14 Sets the prototype of an object.
      */
     public static JSValue setPrototypeOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0 || !(args[0] instanceof JSObject target)) {
-            return context.throwTypeError("Reflect.setPrototypeOf called on non-object");
-        }
+        return ReflectTarget.apply(context, "setPrototypeOf", args, JSReflectObject::setPrototypeOfOnTarget);
+    }
 
+    private static JSValue setPrototypeOfOnTarget(JSContext context, JSObject target, JSValue[] args) {
         JSValue prototypeArg = JSValue.argumentOrUndefined(args, 1);
         JSObject proto;
         if (prototypeArg instanceof JSNull) {
@@ -464,58 +436,5 @@ public final class JSReflectObject {
         // Following QuickJS: Reflect.setPrototypeOf uses throw_flag=FALSE (returns boolean)
         JSObject.SetPrototypeResult result = target.setPrototypeChecked(proto);
         return JSBoolean.valueOf(result == JSObject.SetPrototypeResult.SUCCESS);
-    }
-
-    private static PropertyDescriptor toPropertyDescriptor(JSContext context, JSObject descriptorObject) {
-        PropertyDescriptor descriptor = new PropertyDescriptor();
-
-        // Following QuickJS js_obj_to_desc: use HasProperty to check field existence.
-        // {value: undefined} is a valid descriptor with an explicit value field.
-
-        if (descriptorObject.has(PropertyKey.ENUMERABLE)) {
-            JSValue enumerable = descriptorObject.get(PropertyKey.ENUMERABLE);
-            descriptor.setEnumerable(JSTypeConversions.toBoolean(enumerable) == JSBoolean.TRUE);
-        }
-
-        if (descriptorObject.has(PropertyKey.CONFIGURABLE)) {
-            JSValue configurable = descriptorObject.get(PropertyKey.CONFIGURABLE);
-            descriptor.setConfigurable(JSTypeConversions.toBoolean(configurable) == JSBoolean.TRUE);
-        }
-
-        if (descriptorObject.has(PropertyKey.VALUE)) {
-            JSValue value = descriptorObject.get(PropertyKey.VALUE);
-            descriptor.setValue(value);
-        }
-
-        if (descriptorObject.has(PropertyKey.WRITABLE)) {
-            JSValue writable = descriptorObject.get(PropertyKey.WRITABLE);
-            descriptor.setWritable(JSTypeConversions.toBoolean(writable) == JSBoolean.TRUE);
-        }
-
-        if (descriptorObject.has(PropertyKey.GET)) {
-            JSValue get = descriptorObject.get(PropertyKey.GET);
-            if (!(get instanceof JSUndefined) && !(get instanceof JSFunction)) {
-                context.throwTypeError("invalid getter");
-                return null;
-            }
-            descriptor.setGetter(get instanceof JSFunction getter ? getter : null);
-        }
-
-        if (descriptorObject.has(PropertyKey.SET)) {
-            JSValue set = descriptorObject.get(PropertyKey.SET);
-            if (!(set instanceof JSUndefined) && !(set instanceof JSFunction)) {
-                context.throwTypeError("invalid setter");
-                return null;
-            }
-            descriptor.setSetter(set instanceof JSFunction setter ? setter : null);
-        }
-
-        if (descriptor.isAccessorDescriptor() && descriptor.isDataDescriptor()) {
-            context.throwTypeError(
-                    "Invalid property descriptor. Cannot both specify accessors and a value or writable attribute");
-            return null;
-        }
-
-        return descriptor;
     }
 }

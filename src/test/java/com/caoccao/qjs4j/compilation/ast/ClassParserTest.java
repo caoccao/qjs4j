@@ -16,8 +16,6 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
-import com.caoccao.qjs4j.compilation.lexer.Lexer;
-import com.caoccao.qjs4j.compilation.parser.Parser;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,7 +28,7 @@ public class ClassParserTest {
     @Test
     public void testClassWithExtends() {
         String source = "class Child extends Parent { }";
-        ClassDeclaration classDecl = parseClass(source);
+        ClassDeclaration classDecl = ParsedScript.statement(source, ClassDeclaration.class);
         assertThat(classDecl.getId().getName()).isEqualTo("Child");
         assertThat(classDecl.getSuperClass()).isNotNull();
         assertThat(classDecl.getSuperClass()).isInstanceOf(Identifier.class);
@@ -41,7 +39,7 @@ public class ClassParserTest {
     @Test
     public void testClassWithMethod() {
         String source = "class Counter { increment() { this.count++; } }";
-        ClassDeclaration classDecl = parseClass(source);
+        ClassDeclaration classDecl = ParsedScript.statement(source, ClassDeclaration.class);
         MethodDefinition method = onlyElement(classDecl, MethodDefinition.class);
         assertThat(method.getKey()).isInstanceOf(Identifier.class);
         assertThat(((Identifier) method.getKey()).getName()).isEqualTo("increment");
@@ -68,7 +66,7 @@ public class ClassParserTest {
                     }
                 }
                 """;
-        ClassDeclaration classDecl = parseClass(source);
+        ClassDeclaration classDecl = ParsedScript.statement(source, ClassDeclaration.class);
         assertThat(classDecl.getBody()).hasSize(7);
 
         // Verify types
@@ -84,7 +82,7 @@ public class ClassParserTest {
     @Test
     public void testClassWithPrivateField() {
         String source = "class Counter { #count = 0; }";
-        ClassDeclaration classDecl = parseClass(source);
+        ClassDeclaration classDecl = ParsedScript.statement(source, ClassDeclaration.class);
         PropertyDefinition field = onlyElement(classDecl, PropertyDefinition.class);
         assertThat(field.getKey()).isInstanceOf(PrivateIdentifier.class);
         assertThat(((PrivateIdentifier) field.getKey()).getName()).isEqualTo("count");
@@ -96,7 +94,7 @@ public class ClassParserTest {
     @Test
     public void testClassWithPrivateInOperator() {
         String source = "class Counter { #count = 0; has(obj) { return #count in obj; } }";
-        ClassDeclaration classDecl = parseClass(source);
+        ClassDeclaration classDecl = ParsedScript.statement(source, ClassDeclaration.class);
         assertThat(classDecl.getBody()).hasSize(2);
 
         MethodDefinition method = (MethodDefinition) classDecl.getBody().get(1);
@@ -113,7 +111,7 @@ public class ClassParserTest {
     @Test
     public void testClassWithPrivateMethods() {
         String source = "class Counter { #inc() { return 1; } static #version() { return 2; } }";
-        ClassDeclaration classDecl = parseClass(source);
+        ClassDeclaration classDecl = ParsedScript.statement(source, ClassDeclaration.class);
         assertThat(classDecl.getBody()).hasSize(2);
 
         MethodDefinition instanceMethod = (MethodDefinition) classDecl.getBody().get(0);
@@ -132,7 +130,7 @@ public class ClassParserTest {
     @Test
     public void testClassWithPublicField() {
         String source = "class Example { count = 0; }";
-        ClassDeclaration classDecl = parseClass(source);
+        ClassDeclaration classDecl = ParsedScript.statement(source, ClassDeclaration.class);
         PropertyDefinition field = onlyElement(classDecl, PropertyDefinition.class);
         assertThat(field.getKey()).isInstanceOf(Identifier.class);
         assertThat(((Identifier) field.getKey()).getName()).isEqualTo("count");
@@ -144,7 +142,7 @@ public class ClassParserTest {
     @Test
     public void testClassWithStaticBlock() {
         String source = "class Config { static { console.log('init'); } }";
-        ClassDeclaration classDecl = parseClass(source);
+        ClassDeclaration classDecl = ParsedScript.statement(source, ClassDeclaration.class);
         StaticBlock staticBlock = onlyElement(classDecl, StaticBlock.class);
         assertThat(staticBlock.getBody()).isNotEmpty();
     }
@@ -152,7 +150,7 @@ public class ClassParserTest {
     @Test
     public void testClassWithStaticField() {
         String source = "class Example { static version = 1; }";
-        ClassDeclaration classDecl = parseClass(source);
+        ClassDeclaration classDecl = ParsedScript.statement(source, ClassDeclaration.class);
         assertThat(classDecl.getBody()).hasSize(1);
 
         PropertyDefinition field = (PropertyDefinition) classDecl.getBody().get(0);
@@ -163,7 +161,7 @@ public class ClassParserTest {
     @Test
     public void testSimpleClassDeclaration() {
         String source = "class Point { }";
-        ClassDeclaration classDecl = parseClass(source);
+        ClassDeclaration classDecl = ParsedScript.statement(source, ClassDeclaration.class);
         assertThat(classDecl.getId()).isNotNull();
         assertThat(classDecl.getId().getName()).isEqualTo("Point");
         assertThat(classDecl.getSuperClass()).isNull();
@@ -177,10 +175,4 @@ public class ClassParserTest {
         return type.cast(element);
     }
 
-    private static ClassDeclaration parseClass(String source) {
-        Program program = new Parser(new Lexer(source)).parse();
-        assertThat(program.getBody()).hasSize(1);
-        assertThat(program.getBody().get(0)).isInstanceOf(ClassDeclaration.class);
-        return (ClassDeclaration) program.getBody().get(0);
-    }
 }

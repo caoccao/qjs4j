@@ -45,6 +45,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 public class JSErrorPathPurityTest extends BaseJavetTest {
 
+    @Override
+    protected JSRuntime createRuntime() {
+        return new JSRuntime();
+    }
+
     @Test
     public void testDeleteErrorMessageDoesNotInvokeAConstructorGetter() {
         assertStringWithJavet("""
@@ -136,12 +141,10 @@ public class JSErrorPathPurityTest extends BaseJavetTest {
     public void testOrdinaryErrorMessageIsStillReported() {
         // A purity fix can pass trivially by reporting nothing, so this pins the other side:
         // an ordinary Error must still report its name and message in full.
-        try (JSRuntime runtime = new JSRuntime(); JSContext isolated = runtime.createContext()) {
-            assertThatThrownBy(() -> isolated.eval("throw new TypeError('plain failure')"))
-                    .isInstanceOf(JSException.class).hasMessage("TypeError: plain failure");
-            assertThatThrownBy(() -> isolated.eval("throw { name: 'Custom', message: 'plain data' }"))
-                    .isInstanceOf(JSException.class).hasMessage("Custom: plain data");
-        }
+        assertThatThrownBy(() -> context.eval("throw new TypeError('plain failure')")).isInstanceOf(JSException.class)
+                .hasMessage("TypeError: plain failure");
+        assertThatThrownBy(() -> context.eval("throw { name: 'Custom', message: 'plain data' }"))
+                .isInstanceOf(JSException.class).hasMessage("Custom: plain data");
     }
 
     @Test
@@ -176,61 +179,50 @@ public class JSErrorPathPurityTest extends BaseJavetTest {
 
     @Test
     public void testThrownObjectWithAccessorNameFallsBackInsteadOfRunningIt() {
-        try (JSRuntime runtime = new JSRuntime(); JSContext isolated = runtime.createContext()) {
-            assertThatThrownBy(() -> isolated.eval("""
-                    globalThis.nameGetterRan = false;
-                    throw Object.defineProperty({ message: 'm' }, 'name', {
-                      get() { nameGetterRan = true; return 'Spoofed' },
-                    });""")).isInstanceOf(JSException.class).hasMessage("Error: m");
-            assertThat(isolated.eval("String(nameGetterRan)").toString()).isEqualTo("false");
-        }
+        assertThatThrownBy(() -> context.eval("""
+                globalThis.nameGetterRan = false;
+                throw Object.defineProperty({ message: 'm' }, 'name', {
+                  get() { nameGetterRan = true; return 'Spoofed' },
+                });""")).isInstanceOf(JSException.class).hasMessage("Error: m");
+        assertThat(context.eval("String(nameGetterRan)").toString()).isEqualTo("false");
     }
 
     @Test
     public void testThrownObjectWithNoMessageReportsItsNameAlone() {
-        try (JSRuntime runtime = new JSRuntime(); JSContext isolated = runtime.createContext()) {
-            assertThatThrownBy(() -> isolated.eval("throw { name: 'Bare' }")).isInstanceOf(JSException.class)
-                    .hasMessage("Bare");
-            assertThatThrownBy(() -> isolated.eval("throw new RangeError()")).isInstanceOf(JSException.class)
-                    .hasMessage("RangeError");
-        }
+        assertThatThrownBy(() -> context.eval("throw { name: 'Bare' }")).isInstanceOf(JSException.class)
+                .hasMessage("Bare");
+        assertThatThrownBy(() -> context.eval("throw new RangeError()")).isInstanceOf(JSException.class)
+                .hasMessage("RangeError");
     }
 
     @Test
     public void testThrownPrimitivesAreDescribedWithoutPropertyReads() {
-        try (JSRuntime runtime = new JSRuntime(); JSContext isolated = runtime.createContext()) {
-            assertThatThrownBy(() -> isolated.eval("throw 'a bare string'")).isInstanceOf(JSException.class)
-                    .hasMessageContaining("a bare string");
-            assertThatThrownBy(() -> isolated.eval("throw 42")).isInstanceOf(JSException.class)
-                    .hasMessageContaining("42");
-            assertThatThrownBy(() -> isolated.eval("throw null")).isInstanceOf(JSException.class);
-        }
+        assertThatThrownBy(() -> context.eval("throw 'a bare string'")).isInstanceOf(JSException.class)
+                .hasMessageContaining("a bare string");
+        assertThatThrownBy(() -> context.eval("throw 42")).isInstanceOf(JSException.class).hasMessageContaining("42");
+        assertThatThrownBy(() -> context.eval("throw null")).isInstanceOf(JSException.class);
     }
 
     @Test
     public void testThrownProxyDoesNotRunItsDescriptorTrap() {
-        try (JSRuntime runtime = new JSRuntime(); JSContext isolated = runtime.createContext()) {
-            assertThatThrownBy(() -> isolated.eval("""
-                    globalThis.trapCalls = 0;
-                    globalThis.thrownProxy = new Proxy({}, {
-                      getOwnPropertyDescriptor() { trapCalls++; return undefined },
-                      get() { trapCalls++; return undefined },
-                      has() { trapCalls++; return false },
-                    });
-                    throw thrownProxy;""")).isInstanceOf(JSException.class);
-            assertThat(isolated.eval("trapCalls").toString())
-                    .as("formatting the exception must not re-enter guest code").isEqualTo("0");
-        }
+        assertThatThrownBy(() -> context.eval("""
+                globalThis.trapCalls = 0;
+                globalThis.thrownProxy = new Proxy({}, {
+                  getOwnPropertyDescriptor() { trapCalls++; return undefined },
+                  get() { trapCalls++; return undefined },
+                  has() { trapCalls++; return false },
+                });
+                throw thrownProxy;""")).isInstanceOf(JSException.class);
+        assertThat(context.eval("trapCalls").toString()).as("formatting the exception must not re-enter guest code")
+                .isEqualTo("0");
     }
 
     @Test
     public void testThrownProxyStillProducesAUsableMessage() {
         // The same guard for a Proxy: refusing to run its traps must not leave the report
         // empty or misleading.
-        try (JSRuntime runtime = new JSRuntime(); JSContext isolated = runtime.createContext()) {
-            assertThatThrownBy(() -> isolated.eval("throw new Proxy({}, {})")).isInstanceOf(JSException.class)
-                    .hasMessageContaining("Error");
-        }
+        assertThatThrownBy(() -> context.eval("throw new Proxy({}, {})")).isInstanceOf(JSException.class)
+                .hasMessageContaining("Error");
     }
 
     @Test

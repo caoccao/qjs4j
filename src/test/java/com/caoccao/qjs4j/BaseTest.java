@@ -31,6 +31,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import com.caoccao.qjs4j.exceptions.JSTerminationException;
 
 public abstract class BaseTest {
     protected JSContext context;
@@ -59,6 +61,24 @@ public abstract class BaseTest {
     protected void assertEvalThrows(String source, String expectedMessage) {
         assertThatThrownBy(() -> context.eval(source)).as(source).isInstanceOf(JSException.class)
                 .hasMessageContaining(expectedMessage);
+    }
+
+    protected void assertHostInterrupt(JSContext interruptedContext, String script) throws InterruptedException {
+        Thread interrupter = new Thread(() -> {
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            interruptedContext.getRuntime().requestInterrupt();
+        });
+        interrupter.start();
+        try {
+            assertThatThrownBy(() -> interruptedContext.eval(script)).isInstanceOf(JSTerminationException.class)
+                    .hasMessage("execution interrupted");
+        } finally {
+            interrupter.join();
+        }
     }
 
     protected void assertIteratorResult(JSValue result, JSValue expectedValue, boolean done) {
@@ -145,8 +165,7 @@ public abstract class BaseTest {
 
     protected JSContext resetContext() {
         IJSPromiseRejectCallback jsPromiseRejectCallback = context.getPromiseRejectCallback();
-        context.getRuntime().gc();
-        context.close();
+        context.getRuntime().close();
         context = createRuntime().createContext();
         context.setPromiseRejectCallback(jsPromiseRejectCallback);
         return context;
@@ -159,8 +178,7 @@ public abstract class BaseTest {
 
     @AfterEach
     public void tearDown() throws Exception {
-        context.getRuntime().gc();
-        context.close();
+        context.getRuntime().close();
     }
 
     protected static JSValue[] numberArgs(double... values) {

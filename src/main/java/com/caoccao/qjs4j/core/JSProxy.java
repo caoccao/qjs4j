@@ -17,9 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Represents a JavaScript Proxy object. Proxies wrap a target object and intercept operations on it via handler traps.
@@ -52,8 +50,7 @@ public final class JSProxy extends JSObject {
      */
     public JSValue apply(JSContext context, JSValue thisArg, JSValue[] args) {
         JSContext executionContext = resolveExecutionContext(context);
-        if (revoked) {
-            executionContext.throwTypeError("Cannot perform 'apply' on a proxy that has been revoked");
+        if (rejectRevoked(executionContext, "apply")) {
             return null;
         }
 
@@ -62,7 +59,7 @@ public final class JSProxy extends JSObject {
             return null;
         }
 
-        JSFunction trapFunc = getTrapFunction("apply", executionContext);
+        JSValue trapFunc = getCallableTrap("apply", executionContext);
         if (executionContext.hasPendingException()) {
             return null;
         }
@@ -82,7 +79,53 @@ public final class JSProxy extends JSObject {
 
         // Call trap: handler.apply(target, thisArg, argumentsList)
         JSValue[] trapArgs = new JSValue[]{target, thisArg, argArray};
-        return trapFunc.call(executionContext, handler, trapArgs);
+        return callCallableTrap(executionContext, executionContext, trapFunc, trapArgs);
+    }
+
+    private JSValue callCallableTrap(JSContext caller, JSContext trapContext, JSValue trap, JSValue[] args) {
+        if (trap instanceof JSProxy proxy) {
+            // Keep the native trap's interrupt and cross-realm exception boundary without allocating a JS function.
+            return JSNativeFunction.callInRealm(caller, trapContext, proxy::apply, handler, args);
+        }
+        return ((JSFunction) trap).call(caller, handler, args);
+    }
+
+    private boolean checkExtensibility(boolean prevent) {
+        JSContext executionContext = resolveExecutionContext(null);
+        String operation = prevent ? "preventExtensions" : "isExtensible";
+        if (rejectRevoked(executionContext, operation)) {
+            return false;
+        }
+        JSObject object = (JSObject) target;
+        JSValue trap = getTrapMethod(operation, executionContext);
+        if (executionContext.hasPendingException()) {
+            return false;
+        }
+        if (trap instanceof JSUndefined) {
+            if (prevent) {
+                object.preventExtensions();
+                return true;
+            }
+            return object.isExtensible();
+        }
+        if (!(trap instanceof JSFunction function)) {
+            executionContext.throwTypeError(operation + " trap must be a function");
+            return false;
+        }
+        JSValue result = function.call(executionContext, handler, new JSValue[]{target});
+        boolean reported = JSTypeConversions.toBoolean(result) == JSBoolean.TRUE;
+        if (prevent) {
+            if (reported && object.isExtensible()) {
+                executionContext.throwTypeError(
+                        "'preventExtensions' on proxy: trap returned truish but the proxy target is extensible");
+                return false;
+            }
+        } else if (reported != object.isExtensible()) {
+            executionContext.throwTypeError(
+                    "'isExtensible' on proxy: trap result does not reflect extensibility of proxy target (which is 'true')");
+            return false;
+        }
+        return reported;
     }
 
     /**
@@ -90,8 +133,7 @@ public final class JSProxy extends JSObject {
      */
     public JSValue construct(JSContext context, JSValue[] args, JSValue newTarget) {
         JSContext executionContext = resolveExecutionContext(context);
-        if (revoked) {
-            executionContext.throwTypeError("Cannot perform 'construct' on a proxy that has been revoked");
+        if (rejectRevoked(executionContext, "construct")) {
             return null;
         }
 
@@ -100,7 +142,7 @@ public final class JSProxy extends JSObject {
             return null;
         }
 
-        JSFunction trapFunc = getTrapFunction("construct", executionContext);
+        JSValue trapFunc = getCallableTrap("construct", executionContext);
         if (executionContext.hasPendingException()) {
             return null;
         }
@@ -116,7 +158,7 @@ public final class JSProxy extends JSObject {
 
         // Call trap: handler.construct(target, argumentsList, newTarget)
         JSValue[] trapArgs = new JSValue[]{target, argArray, newTarget};
-        JSValue result = trapFunc.call(executionContext, handler, trapArgs);
+        JSValue result = callCallableTrap(executionContext, executionContext, trapFunc, trapArgs);
 
         // Result must be an object
         if (!(result instanceof JSObject)) {
@@ -147,8 +189,7 @@ public final class JSProxy extends JSObject {
 
     public boolean definePropertyWithResult(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
         JSContext executionContext = context != null ? context : this.context;
-        if (revoked) {
-            executionContext.throwTypeError("Cannot perform 'defineProperty' on a proxy that has been revoked");
+        if (rejectRevoked(executionContext, "defineProperty")) {
             return false;
         }
         // Since JSFunction extends JSObject, target is always a JSObject
@@ -171,7 +212,7 @@ public final class JSProxy extends JSObject {
         }
 
         // Convert descriptor to object
-        JSObject descObj = fromPropertyDescriptor(executionContext, descriptor);
+        JSObject descObj = descriptor.toPartialDescriptorObject(executionContext);
 
         // Call trap: handler.defineProperty(target, property, descriptor)
         JSValue[] args = new JSValue[]{target, toKeyValue(key), descObj};
@@ -185,38 +226,9 @@ public final class JSProxy extends JSObject {
             return false;
         }
 
-        // Validate invariants
-        PropertyDescriptor targetDesc = targetObj.getOwnPropertyDescriptor(key);
-        boolean targetExtensible = targetObj.isExtensible();
-
-        boolean settingConfigFalse = descriptor.hasConfigurable() && !descriptor.isConfigurable();
-
-        if (targetDesc == null) {
-            // Property doesn't exist on target
-            if (!targetExtensible || settingConfigFalse) {
-                executionContext.throwTypeError("'defineProperty' on proxy: trap returned truish for adding property '"
-                        + key.toPropertyString() + "'  to the non-extensible proxy target");
-                return false;
-            }
-        } else {
-            // Property exists on target
-            if (!isCompatiblePropertyDescriptor(targetExtensible, descriptor, targetDesc)) {
-                executionContext.throwTypeError(
-                        "'defineProperty' on proxy: trap returned truish for adding property '" + key.toPropertyString()
-                                + "'  that is incompatible with the existing property in the proxy target");
-                return false;
-            }
-            if (targetDesc.isConfigurable() && settingConfigFalse) {
-                executionContext.throwTypeError("proxy: inconsistent defineProperty");
-                return false;
-            }
-            if (targetDesc.isDataDescriptor() && !targetDesc.isConfigurable() && targetDesc.isWritable()
-                    && descriptor.hasWritable() && !descriptor.isWritable()) {
-                executionContext.throwTypeError("proxy: inconsistent defineProperty");
-                return false;
-            }
-        }
-        return true;
+        PropertyDescriptor current = targetObj.getOwnPropertyDescriptor(key);
+        return ProxyDescriptorInvariants.validateDefinition(executionContext, key, descriptor, current,
+                targetObj.isExtensible());
     }
 
     public boolean definePropertyWithResult(PropertyKey key, PropertyDescriptor descriptor) {
@@ -230,19 +242,18 @@ public final class JSProxy extends JSObject {
     public boolean delete(PropertyKey key, boolean throwOnFailure) {
         JSContext executionContext = resolveExecutionContext(null);
         boolean strictMode = throwOnFailure;
-        if (revoked) {
-            executionContext.throwTypeError("Cannot perform 'delete' on a proxy that has been revoked");
+        if (rejectRevoked(executionContext, "delete")) {
             return false;
         }
 
         JSObject targetObj = (JSObject) target;
-        JSFunction deleteTrapFunc = getTrapFunction("deleteProperty", executionContext);
+        JSValue deleteTrapFunc = getCallableTrap("deleteProperty", executionContext);
         if (executionContext.hasPendingException()) {
             return false;
         }
         if (deleteTrapFunc != null) {
             JSValue[] args = new JSValue[]{target, toKeyValue(key)};
-            JSValue result = deleteTrapFunc.call(executionContext, handler, args);
+            JSValue result = callCallableTrap(executionContext, executionContext, deleteTrapFunc, args);
             boolean success = JSTypeConversions.toBoolean(result) == JSBoolean.TRUE;
 
             if (success) {
@@ -287,39 +298,6 @@ public final class JSProxy extends JSObject {
     }
 
     /**
-     * Helper to convert PropertyDescriptor to JSObject.
-     */
-    private JSObject fromPropertyDescriptor(JSContext context, PropertyDescriptor desc) {
-        JSObject obj = context.createJSObject();
-
-        if (desc.hasValue()) {
-            obj.set(PropertyKey.VALUE, desc.getValue());
-        }
-
-        if (desc.hasWritable()) {
-            obj.set(PropertyKey.WRITABLE, desc.isWritable() ? JSBoolean.TRUE : JSBoolean.FALSE);
-        }
-
-        if (desc.hasGetter()) {
-            obj.set(PropertyKey.GET, desc.getGetter());
-        }
-
-        if (desc.hasSetter()) {
-            obj.set(PropertyKey.SET, desc.getSetter());
-        }
-
-        if (desc.hasEnumerable()) {
-            obj.set(PropertyKey.ENUMERABLE, desc.isEnumerable() ? JSBoolean.TRUE : JSBoolean.FALSE);
-        }
-
-        if (desc.hasConfigurable()) {
-            obj.set(PropertyKey.CONFIGURABLE, desc.isConfigurable() ? JSBoolean.TRUE : JSBoolean.FALSE);
-        }
-
-        return obj;
-    }
-
-    /**
      * Override get to intercept property access by index.
      */
     @Override
@@ -344,6 +322,20 @@ public final class JSProxy extends JSObject {
         return get(PropertyKey.fromString(propertyName));
     }
 
+    private JSValue getCallableTrap(String trapName, JSContext executionContext) {
+        JSValue trap = getTrapMethod(trapName, executionContext);
+        if (trap == null || trap instanceof JSUndefined) {
+            return null;
+        }
+        if (JSTypeChecking.isCallable(trap)) {
+            return trap;
+        }
+        String trapValue = JSTypeConversions.toString(executionContext, trap).value();
+        executionContext.throwTypeError(
+                "'" + trapValue + "' returned for property '" + trapName + "' of object '#<Object>' is not a function");
+        return null;
+    }
+
     public JSObject getHandler() {
         return handler;
     }
@@ -353,8 +345,7 @@ public final class JSProxy extends JSObject {
      */
     private JSValue getInternal(PropertyKey key, JSContext context, JSValue receiver) {
         JSContext executionContext = resolveExecutionContext(context);
-        if (revoked) {
-            executionContext.throwTypeError("Cannot perform 'get' on a proxy that has been revoked");
+        if (rejectRevoked(executionContext, "get")) {
             return null;
         }
 
@@ -362,22 +353,7 @@ public final class JSProxy extends JSObject {
         JSValue getTrap = handler.get(PropertyKey.GET);
         if (getTrap != null && !(getTrap instanceof JSUndefined) && !(getTrap instanceof JSNull)) {
             if (JSTypeChecking.isCallable(getTrap)) {
-                // Call the trap: handler.get(property, receiver)
-                // Convert PropertyKey to JSValue for the trap
-                JSValue keyValue;
-                if (key.isString()) {
-                    keyValue = new JSString(key.asString());
-                } else if (key.isIndex()) {
-                    // Convert index to string as JavaScript does
-                    keyValue = new JSString(String.valueOf(key.getValue()));
-                } else {
-                    // Symbol
-                    keyValue = key.asSymbol();
-                }
-
-                JSValue[] args = new JSValue[]{target, keyValue, receiver // Use the receiver parameter instead of
-                                                                          // 'this'
-                };
+                JSValue[] args = new JSValue[]{target, toKeyValue(key), receiver};
                 JSValue trapResult = callTrapValue(executionContext, getTrap, handler, args);
                 if (executionContext.hasPendingException()) {
                     return null;
@@ -443,9 +419,7 @@ public final class JSProxy extends JSObject {
     @Override
     protected PropertyDescriptor getOwnPropertyDescriptorRaw(PropertyKey key) {
         JSContext executionContext = resolveExecutionContext(null);
-        if (revoked) {
-            executionContext
-                    .throwTypeError("Cannot perform 'getOwnPropertyDescriptor' on a proxy that has been revoked");
+        if (rejectRevoked(executionContext, "getOwnPropertyDescriptor")) {
             return null;
         }
 
@@ -499,38 +473,10 @@ public final class JSProxy extends JSObject {
             return null;
         }
 
-        // Validate against target descriptor
-        if (targetDesc != null) {
-            if (!isCompatiblePropertyDescriptor(targetExtensible, resultDesc, targetDesc)) {
-                executionContext.throwTypeError("proxy: inconsistent getOwnPropertyDescriptor");
-                return null;
-            }
-            // Invariant: cannot return configurable for non-configurable property
-            if (!targetDesc.isConfigurable() && resultDesc.isConfigurable()) {
-                executionContext.throwTypeError("proxy: inconsistent getOwnPropertyDescriptor");
-                return null;
-            }
-            if (resultDesc.hasConfigurable() && !resultDesc.isConfigurable() && targetDesc.isConfigurable()) {
-                executionContext.throwTypeError("proxy: inconsistent getOwnPropertyDescriptor");
-                return null;
-            }
-            if (targetDesc.isDataDescriptor() && !targetDesc.isConfigurable() && targetDesc.isWritable()
-                    && resultDesc.hasWritable() && !resultDesc.isWritable()) {
-                executionContext.throwTypeError("proxy: inconsistent getOwnPropertyDescriptor");
-                return null;
-            }
-        } else {
-            // Invariant: cannot return non-configurable if property doesn't exist on non-extensible target
-            if (!targetExtensible) {
-                executionContext.throwTypeError("proxy: inconsistent getOwnPropertyDescriptor");
-                return null;
-            }
-            if (resultDesc.hasConfigurable() && !resultDesc.isConfigurable()) {
-                executionContext.throwTypeError("proxy: inconsistent getOwnPropertyDescriptor");
-                return null;
-            }
+        if (!ProxyDescriptorInvariants.canReport(resultDesc, targetDesc, targetExtensible)) {
+            executionContext.throwTypeError("proxy: inconsistent getOwnPropertyDescriptor");
+            return null;
         }
-
         return resultDesc;
     }
 
@@ -546,108 +492,19 @@ public final class JSProxy extends JSObject {
     @Override
     public List<PropertyKey> getOwnPropertyKeys() {
         JSContext executionContext = resolveExecutionContext(null);
-        if (revoked) {
-            executionContext.throwTypeError("Cannot perform 'getOwnPropertyKeys' on a proxy that has been revoked");
+        if (rejectRevoked(executionContext, "getOwnPropertyKeys")) {
             return new ArrayList<>();
         }
 
-        JSFunction ownKeysTrapFunc = getTrapFunction("ownKeys", executionContext);
+        JSValue ownKeysTrapFunc = getCallableTrap("ownKeys", executionContext);
         if (executionContext.hasPendingException()) {
             return new ArrayList<>();
         }
         if (ownKeysTrapFunc != null) {
-            JSValue result = ownKeysTrapFunc.call(executionContext, handler, new JSValue[]{target});
+            JSValue result = callCallableTrap(executionContext, executionContext, ownKeysTrapFunc,
+                    new JSValue[]{target});
 
-            // Result must be array-like
-            if (!(result instanceof JSObject resultObj)) {
-                executionContext.throwTypeError("ownKeys trap result must be an object");
-                return new ArrayList<>();
-            }
-
-            // Get the length property
-            JSValue lengthValue = resultObj.get(PropertyKey.LENGTH);
-            long lengthLong = JSTypeConversions.toLength(executionContext, lengthValue);
-            if (executionContext.hasPendingException()) {
-                return new ArrayList<>();
-            }
-            if (lengthLong > Integer.MAX_VALUE) {
-                executionContext.throwTypeError("ownKeys trap result is too large");
-                return new ArrayList<>();
-            }
-            int length = (int) lengthLong;
-            List<PropertyKey> keys = new ArrayList<>(length);
-
-            // Convert result to PropertyKey list - CreateListFromArrayLike
-            for (int i = 0; i < length; i++) {
-                JSValue keyValue = resultObj.get(PropertyKey.fromIndex(i));
-                if (keyValue instanceof JSString str) {
-                    keys.add(PropertyKey.fromString(str.value()));
-                } else if (keyValue instanceof JSSymbol sym) {
-                    keys.add(PropertyKey.fromSymbol(sym));
-                } else {
-                    executionContext.throwTypeError("ownKeys trap result must contain only strings or symbols");
-                    return new ArrayList<>();
-                }
-            }
-
-            // Check for duplicate properties
-            Set<PropertyKey> propertyKeySet = new HashSet<>();
-            for (PropertyKey key : keys) {
-                if (!propertyKeySet.add(key)) {
-                    executionContext.throwTypeError("'ownKeys' on proxy: trap returned duplicate entries");
-                    return new ArrayList<>();
-                }
-            }
-
-            // Validate invariants per ES2024 10.5.11
-            JSObject targetObj = (JSObject) target;
-            List<PropertyKey> targetKeys = targetObj.getOwnPropertyKeys();
-            boolean targetExtensible = targetObj.isExtensible();
-
-            // Step 16: Classify target keys as configurable or non-configurable
-            List<PropertyKey> targetNonconfigurableKeys = new ArrayList<>();
-            List<PropertyKey> targetConfigurableKeys = new ArrayList<>();
-            for (PropertyKey targetKey : targetKeys) {
-                PropertyDescriptor desc = targetObj.getOwnPropertyDescriptor(targetKey);
-                if (desc != null && !desc.isConfigurable()) {
-                    targetNonconfigurableKeys.add(targetKey);
-                } else {
-                    targetConfigurableKeys.add(targetKey);
-                }
-            }
-
-            // Step 18: uncheckedResultKeys = copy of trapResult
-            Set<PropertyKey> uncheckedResultKeys = new HashSet<>(keys);
-
-            // Step 19: For each non-configurable key, must be in trap result
-            for (PropertyKey nonconfigurableKey : targetNonconfigurableKeys) {
-                if (!uncheckedResultKeys.remove(nonconfigurableKey)) {
-                    executionContext.throwTypeError("'ownKeys' on proxy: trap result did not include '"
-                            + nonconfigurableKey.toPropertyString() + "'");
-                    return new ArrayList<>();
-                }
-            }
-
-            // Step 20: If target is extensible, return trapResult
-            if (!targetExtensible) {
-                // Step 21: For each configurable key, must also be in trap result
-                for (PropertyKey configurableKey : targetConfigurableKeys) {
-                    if (!uncheckedResultKeys.remove(configurableKey)) {
-                        executionContext.throwTypeError("'ownKeys' on proxy: trap result did not include '"
-                                + configurableKey.toPropertyString() + "'");
-                        return new ArrayList<>();
-                    }
-                }
-
-                // Step 22: If uncheckedResultKeys is not empty, throw TypeError
-                if (!uncheckedResultKeys.isEmpty()) {
-                    executionContext.throwTypeError(
-                            "'ownKeys' on proxy: trap returned extra keys but proxy target is non-extensible");
-                    return new ArrayList<>();
-                }
-            }
-
-            return keys;
+            return ProxyOwnKeys.read(executionContext, (JSObject) target, result);
         }
 
         // No trap, forward to target
@@ -660,8 +517,7 @@ public final class JSProxy extends JSObject {
     @Override
     public JSObject getPrototype() {
         JSContext executionContext = resolveExecutionContext(null);
-        if (revoked) {
-            executionContext.throwTypeError("Cannot perform 'getPrototype' on a proxy that has been revoked");
+        if (rejectRevoked(executionContext, "getPrototype")) {
             return null;
         }
 
@@ -682,13 +538,7 @@ public final class JSProxy extends JSObject {
 
         // Call trap: handler.getPrototypeOf(target)
         JSValue[] args = new JSValue[]{target};
-        JSValue result;
-        if (trap instanceof JSProxy proxyTrap) {
-            result = proxyTrap.apply(executionContext, handler, args);
-        } else {
-            JSFunction trapFunction = (JSFunction) trap;
-            result = trapFunction.call(executionContext, handler, args);
-        }
+        JSValue result = callTrapValue(executionContext, trap, handler, args);
 
         // Validate result is null or object
         if (!(result instanceof JSNull) && !(result instanceof JSObject)) {
@@ -718,44 +568,13 @@ public final class JSProxy extends JSObject {
         return target;
     }
 
-    private JSFunction getTrapFunction(String trapName) {
-        return getTrapFunction(trapName, resolveExecutionContext(null));
-    }
-
-    private JSFunction getTrapFunction(String trapName, JSContext executionContext) {
-        JSValue trap = getTrapMethod(trapName, executionContext);
-        if (trap == null) {
-            // getTrapMethod returned null due to error (e.g. revoked proxy)
-            return null;
-        }
-        if (trap instanceof JSUndefined) {
-            return null;
-        }
-        if (trap instanceof JSFunction trapFunc) {
-            return trapFunc;
-        }
-        // A Proxy wrapping a callable target is also callable (ES2024 10.5.12/13)
-        if (trap instanceof JSProxy trapProxy && JSTypeChecking.isCallable(trapProxy)) {
-            return new JSNativeFunction(executionContext, trapName, 0,
-                    (callContext, thisArg, callArgs) -> trapProxy.apply(callContext, thisArg, callArgs));
-        }
-        String trapValue = JSTypeConversions.toString(executionContext, trap).value();
-        executionContext.throwTypeError(
-                "'" + trapValue + "' returned for property '" + trapName + "' of object '#<Object>' is not a function");
-        return null;
-    }
-
     /**
      * Helper to get a trap method from the handler. Returns null if handler is null/undefined. Following QuickJS
      * get_proxy_method().
      */
-    private JSValue getTrapMethod(String trapName) {
-        return getTrapMethod(trapName, resolveExecutionContext(null));
-    }
 
     private JSValue getTrapMethod(String trapName, JSContext executionContext) {
-        if (revoked) {
-            executionContext.throwTypeError("Cannot perform 'getTrapMethod' on a proxy that has been revoked");
+        if (rejectRevoked(executionContext, "getTrapMethod")) {
             return null;
         }
 
@@ -781,16 +600,15 @@ public final class JSProxy extends JSObject {
     @Override
     protected boolean has(PropertyKey key, int depth) {
         JSContext executionContext = resolveExecutionContext(null);
-        if (revoked) {
-            executionContext.throwTypeError("Cannot perform 'has' on a proxy that has been revoked");
+        if (rejectRevoked(executionContext, "has")) {
             return false;
         }
 
         JSObject targetObj = (JSObject) target;
-        JSFunction hasTrapFunc = getTrapFunction("has", executionContext);
+        JSValue hasTrapFunc = getCallableTrap("has", executionContext);
         if (hasTrapFunc != null) {
             JSValue[] args = new JSValue[]{target, toKeyValue(key)};
-            JSValue result = hasTrapFunc.call(executionContext, handler, args);
+            JSValue result = callCallableTrap(executionContext, executionContext, hasTrapFunc, args);
             boolean trapResult = JSTypeConversions.toBoolean(result) == JSBoolean.TRUE;
 
             if (!trapResult) {
@@ -840,108 +658,11 @@ public final class JSProxy extends JSObject {
     }
 
     /**
-     * Check if two descriptors are compatible. Following ES2020 ValidateAndApplyPropertyDescriptor logic.
-     */
-    private boolean isCompatiblePropertyDescriptor(boolean extensible, PropertyDescriptor desc,
-            PropertyDescriptor current) {
-        // If current is undefined, check extensibility
-        if (current == null) {
-            return extensible;
-        }
-
-        // If desc is empty, it's compatible
-        if (!desc.hasValue() && !desc.hasWritable() && !desc.hasGetter() && !desc.hasSetter() && !desc.hasEnumerable()
-                && !desc.hasConfigurable()) {
-            return true;
-        }
-
-        // If current is not configurable
-        if (!current.isConfigurable()) {
-            if (desc.hasConfigurable() && desc.isConfigurable()) {
-                return false;
-            }
-            if (desc.hasEnumerable() && desc.isEnumerable() != current.isEnumerable()) {
-                return false;
-            }
-        }
-
-        // Step 5: If desc is a generic descriptor (no [[Value]], [[Writable]], [[Get]], [[Set]]),
-        // no further validation is required per ES2024 10.1.6.3.
-        boolean descIsData = desc.hasValue() || desc.hasWritable();
-        boolean descIsAccessor = desc.hasGetter() || desc.hasSetter();
-        if (!descIsData && !descIsAccessor) {
-            return true;
-        }
-
-        // Step 6: Check if converting between data and accessor
-        boolean currentIsAccessor = current.hasGetter() || current.hasSetter();
-
-        if (descIsAccessor != currentIsAccessor) {
-            return current.isConfigurable();
-        }
-
-        // Both are data descriptors
-        if (!descIsAccessor) {
-            if (!current.isConfigurable() && !current.isWritable()) {
-                if (desc.hasWritable() && desc.isWritable()) {
-                    return false;
-                }
-                return !desc.hasValue() || sameValue(desc.getValue(), current.getValue());
-            }
-        } else {
-            // Both are accessor descriptors
-            if (!current.isConfigurable()) {
-                if (desc.hasGetter() && !sameValue(desc.getGetter(), current.getGetter())) {
-                    return false;
-                }
-                return !desc.hasSetter() || sameValue(desc.getSetter(), current.getSetter());
-            }
-        }
-
-        return true;
-    }
-
-    /**
      * Override isExtensible to intercept Object.isExtensible(). ES2020 9.5.3 [[IsExtensible]]
      */
     @Override
     public boolean isExtensible() {
-        JSContext executionContext = resolveExecutionContext(null);
-        if (revoked) {
-            executionContext.throwTypeError("Cannot perform 'isExtensible' on a proxy that has been revoked");
-            return false;
-        }
-
-        JSObject targetObj = (JSObject) target;
-
-        JSValue trap = getTrapMethod("isExtensible", executionContext);
-        if (executionContext.hasPendingException()) {
-            return false;
-        }
-        if (trap instanceof JSUndefined) {
-            return targetObj.isExtensible();
-        }
-
-        if (!(trap instanceof JSFunction trapFunc)) {
-            executionContext.throwTypeError("isExtensible trap must be a function");
-            return false;
-        }
-
-        // Call trap: handler.isExtensible(target)
-        JSValue[] args = new JSValue[]{target};
-        JSValue result = trapFunc.call(executionContext, handler, args);
-
-        boolean boolResult = JSTypeConversions.toBoolean(result) == JSBoolean.TRUE;
-        boolean targetExtensible = targetObj.isExtensible();
-
-        // Invariant: result must match target's extensibility
-        if (boolResult != targetExtensible) {
-            executionContext.throwTypeError(
-                    "'isExtensible' on proxy: trap result does not reflect extensibility of proxy target (which is 'true')");
-            return false;
-        }
-
-        return boolResult;
+        return checkExtensibility(false);
     }
 
     /**
@@ -978,42 +699,7 @@ public final class JSProxy extends JSObject {
     }
 
     public boolean preventExtensionsWithResult() {
-        JSContext executionContext = resolveExecutionContext(null);
-        if (revoked) {
-            executionContext.throwTypeError("Cannot perform 'preventExtensions' on a proxy that has been revoked");
-            return false;
-        }
-
-        JSObject targetObj = (JSObject) target;
-
-        JSValue trap = getTrapMethod("preventExtensions", executionContext);
-        if (executionContext.hasPendingException()) {
-            return false;
-        }
-        if (trap instanceof JSUndefined) {
-            targetObj.preventExtensions();
-            return true;
-        }
-
-        if (!(trap instanceof JSFunction trapFunc)) {
-            executionContext.throwTypeError("preventExtensions trap must be a function");
-            return false;
-        }
-
-        // Call trap: handler.preventExtensions(target)
-        JSValue[] args = new JSValue[]{target};
-        JSValue result = trapFunc.call(executionContext, handler, args);
-
-        boolean boolResult = JSTypeConversions.toBoolean(result) == JSBoolean.TRUE;
-        if (boolResult) {
-            // Invariant: if trap returns true, target must be non-extensible
-            if (targetObj.isExtensible()) {
-                executionContext.throwTypeError(
-                        "'preventExtensions' on proxy: trap returned truish but the proxy target is extensible");
-                return false;
-            }
-        }
-        return boolResult;
+        return checkExtensibility(true);
     }
 
     /**
@@ -1031,19 +717,19 @@ public final class JSProxy extends JSObject {
     private boolean proxySetInternal(JSContext executionContext, PropertyKey key, JSValue value, JSValue receiver,
             boolean throwOnFailure) {
         JSContext effectiveContext = resolveExecutionContext(executionContext);
-        if (revoked) {
-            effectiveContext.throwTypeError("Cannot perform 'set' on a proxy that has been revoked");
+        if (rejectRevoked(effectiveContext, "set")) {
             return false;
         }
 
         JSObject targetObj = (JSObject) target;
-        JSFunction setTrapFunc = getTrapFunction("set");
+        JSContext trapContext = resolveExecutionContext(null);
+        JSValue setTrapFunc = getCallableTrap("set", trapContext);
         if (effectiveContext.hasPendingException()) {
             return false;
         }
         if (setTrapFunc != null) {
             JSValue[] args = new JSValue[]{target, toKeyValue(key), value, receiver};
-            JSValue result = setTrapFunc.call(effectiveContext, handler, args);
+            JSValue result = callCallableTrap(effectiveContext, trapContext, setTrapFunc, args);
             boolean trapResult = JSTypeConversions.toBoolean(result) == JSBoolean.TRUE;
 
             if (!trapResult) {
@@ -1084,6 +770,13 @@ public final class JSProxy extends JSObject {
 
     public boolean proxySetWithReceiver(PropertyKey key, JSValue value, JSValue receiver) {
         return proxySetInternal(resolveExecutionContext(null), key, value, receiver, false);
+    }
+
+    private boolean rejectRevoked(JSContext executionContext, String operation) {
+        if (revoked) {
+            executionContext.throwTypeError("Cannot perform '" + operation + "' on a proxy that has been revoked");
+        }
+        return revoked;
     }
 
     private JSContext resolveExecutionContext(JSContext explicitContext) {
@@ -1150,14 +843,13 @@ public final class JSProxy extends JSObject {
 
     public boolean setPrototypeWithResult(JSObject proto) {
         JSContext executionContext = resolveExecutionContext(null);
-        if (revoked) {
-            executionContext.throwTypeError("Cannot perform 'setPrototype' on a proxy that has been revoked");
+        if (rejectRevoked(executionContext, "setPrototype")) {
             return false;
         }
 
         JSObject targetObj = (JSObject) target;
 
-        JSFunction trapFunc = getTrapFunction("setPrototypeOf", executionContext);
+        JSValue trapFunc = getCallableTrap("setPrototypeOf", executionContext);
         if (executionContext.hasPendingException()) {
             return false;
         }
@@ -1172,7 +864,7 @@ public final class JSProxy extends JSObject {
 
         // Call trap: handler.setPrototypeOf(target, proto)
         JSValue[] args = new JSValue[]{target, proto == null ? JSNull.INSTANCE : proto};
-        JSValue result = trapFunc.call(executionContext, handler, args);
+        JSValue result = callCallableTrap(executionContext, executionContext, trapFunc, args);
 
         // Convert to boolean
         boolean boolResult = JSTypeConversions.toBoolean(result).isBooleanTrue();

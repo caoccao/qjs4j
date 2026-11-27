@@ -47,72 +47,69 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * were attached to.
  */
 public class JSWeakCollectionTest extends BaseJavetTest {
+    @Override
+    protected JSRuntime createRuntime() {
+        return new JSRuntime();
+    }
+
     @Test
     public void testDeadCollectionDoesNotPinItsEntriesOnALiveKey() {
-        try (JSRuntime runtime = new JSRuntime()) {
-            JSContext context = runtime.createContext();
-            JSObject key = context.createJSObject();
-            JSWeakMap weakMap = context.createJSWeakMap();
-            weakMap.weakMapSet(key, context.createJSObject());
+        JSObject key = context.createJSObject();
+        JSWeakMap weakMap = context.createJSWeakMap();
+        weakMap.weakMapSet(key, context.createJSObject());
 
-            WeakReference<JSWeakMap> mapReference = new WeakReference<>(weakMap);
-            weakMap = null;
-            assertThat(awaitCleared(mapReference)).as("a key must hold its collection weakly").isTrue();
-            // Touching the table prunes the dead entry rather than leaving it forever.
-            assertThat(new JSWeakMap(context).weakMapHas(key)).isFalse();
-        }
+        WeakReference<JSWeakMap> mapReference = new WeakReference<>(weakMap);
+        weakMap = null;
+        assertThat(awaitCleared(mapReference)).as("a key must hold its collection weakly").isTrue();
+        // Touching the table prunes the dead entry rather than leaving it forever.
+        assertThat(new JSWeakMap(context).weakMapHas(key)).isFalse();
     }
 
     @Test
     public void testDeadCollectionReleasesItsValueOnAnUnrelatedWeakOperation() {
         // The queue belongs to the runtime, so one dead collection's values are released by work on
         // a completely different collection and a completely different key.
-        try (JSRuntime runtime = new JSRuntime()) {
-            JSContext context = runtime.createContext();
-            JSObject key = context.createJSObject();
-            JSWeakMap weakMap = context.createJSWeakMap();
-            JSObject value = context.createJSObject();
-            weakMap.weakMapSet(key, value);
+        JSObject key = context.createJSObject();
+        JSWeakMap weakMap = context.createJSWeakMap();
+        JSObject value = context.createJSObject();
+        weakMap.weakMapSet(key, value);
 
-            JSWeakSet unrelatedSet = context.createJSWeakSet();
-            JSObject unrelatedKey = context.createJSObject();
+        JSWeakSet unrelatedSet = context.createJSWeakSet();
+        JSObject unrelatedKey = context.createJSObject();
 
-            WeakReference<JSWeakMap> mapReference = new WeakReference<>(weakMap);
-            WeakReference<JSObject> valueReference = new WeakReference<>(value);
-            weakMap = null;
-            value = null;
+        WeakReference<JSWeakMap> mapReference = new WeakReference<>(weakMap);
+        WeakReference<JSObject> valueReference = new WeakReference<>(value);
+        weakMap = null;
+        value = null;
 
-            assertThat(awaitCleared(mapReference)).isTrue();
-            assertThat(awaitClearedWhile(valueReference, () -> unrelatedSet.weakSetHas(unrelatedKey)))
-                    .as("an operation on any weak collection releases every dead collection's values").isTrue();
-            assertThat(key).isNotNull();
-        }
+        assertThat(awaitCleared(mapReference)).isTrue();
+        assertThat(awaitClearedWhile(valueReference, () -> unrelatedSet.weakSetHas(unrelatedKey)))
+                .as("an operation on any weak collection releases every dead collection's values").isTrue();
+        assertThat(key).isNotNull();
     }
 
     @Test
     public void testDeadCollectionReleasesItsValueWhenTheRuntimeIsPolled() {
-        try (JSRuntime runtime = new JSRuntime()) {
-            JSContext context = runtime.createContext();
-            // The key deliberately stays live for the whole test and its own table is never touched
-            // again, which is the case pruning on access could not reach.
-            JSObject key = context.createJSObject();
-            JSWeakMap weakMap = context.createJSWeakMap();
-            JSObject value = context.createJSObject();
-            weakMap.weakMapSet(key, value);
-            assertThat(weakMap.weakMapGet(key)).isSameAs(value);
+        JSRuntime runtime = context.getRuntime();
+        // The key deliberately stays live for the whole test and its own table is never touched
+        // again, which is the case pruning on access could not reach.
+        JSObject key = context.createJSObject();
+        JSWeakMap weakMap = context.createJSWeakMap();
+        JSObject value = context.createJSObject();
+        weakMap.weakMapSet(key, value);
+        assertThat(weakMap.weakMapGet(key)).isSameAs(value);
 
-            WeakReference<JSWeakMap> mapReference = new WeakReference<>(weakMap);
-            WeakReference<JSObject> valueReference = new WeakReference<>(value);
-            weakMap = null;
-            value = null;
+        WeakReference<JSWeakMap> mapReference = new WeakReference<>(weakMap);
+        WeakReference<JSObject> valueReference = new WeakReference<>(value);
+        weakMap = null;
+        value = null;
 
-            assertThat(awaitCleared(mapReference)).as("a key must hold its collection weakly").isTrue();
-            // gc() is the engine's documented "drain what the collector has already taken" poll,
-            // and it reclaims on the calling thread rather than on a thread of its own.
-            assertThat(awaitClearedWhile(valueReference, runtime::gc))
-                    .as("a value must not outlive the collection that held it").isTrue();
-            assertThat(key).isNotNull();
-        }
+        assertThat(awaitCleared(mapReference)).as("a key must hold its collection weakly").isTrue();
+        // gc() is the engine's documented "drain what the collector has already taken" poll,
+        // and it reclaims on the calling thread rather than on a thread of its own.
+        assertThat(awaitClearedWhile(valueReference, runtime::gc))
+                .as("a value must not outlive the collection that held it").isTrue();
+        assertThat(key).isNotNull();
     }
 
     @Test
@@ -185,27 +182,25 @@ public class JSWeakCollectionTest extends BaseJavetTest {
                 }
                 results.join(',');""");
 
-        try (JSRuntime runtime = new JSRuntime()) {
-            JSContext context = runtime.createContext();
-            JSSymbol registered = runtime.getOrCreateGlobalSymbol("registered");
-            JSWeakMap weakMap = context.createJSWeakMap();
-            JSWeakSet weakSet = context.createJSWeakSet();
+        JSRuntime runtime = context.getRuntime();
+        JSSymbol registered = runtime.getOrCreateGlobalSymbol("registered");
+        JSWeakMap weakMap = context.createJSWeakMap();
+        JSWeakSet weakSet = context.createJSWeakSet();
 
-            assertThatThrownBy(() -> weakMap.weakMapSet(registered, JSNumber.of(1)))
-                    .isInstanceOf(JSTypeErrorException.class);
-            assertThatThrownBy(() -> weakSet.weakSetAdd(registered)).isInstanceOf(JSTypeErrorException.class);
-            assertThat(weakMap.weakMapHas(registered)).isFalse();
-            assertThat(weakMap.weakMapDelete(registered)).isFalse();
-            assertThat(weakSet.weakSetHas(registered)).isFalse();
-            assertThat(weakSet.weakSetDelete(registered)).isFalse();
+        assertThatThrownBy(() -> weakMap.weakMapSet(registered, JSNumber.of(1)))
+                .isInstanceOf(JSTypeErrorException.class);
+        assertThatThrownBy(() -> weakSet.weakSetAdd(registered)).isInstanceOf(JSTypeErrorException.class);
+        assertThat(weakMap.weakMapHas(registered)).isFalse();
+        assertThat(weakMap.weakMapDelete(registered)).isFalse();
+        assertThat(weakSet.weakSetHas(registered)).isFalse();
+        assertThat(weakSet.weakSetDelete(registered)).isFalse();
 
-            // An unregistered symbol is still a legal key through the same API.
-            JSSymbol unregistered = new JSSymbol("unregistered");
-            weakMap.weakMapSet(unregistered, JSNumber.of(7));
-            weakSet.weakSetAdd(unregistered);
-            assertThat(weakMap.weakMapGet(unregistered)).isEqualTo(JSNumber.of(7));
-            assertThat(weakSet.weakSetHas(unregistered)).isTrue();
-        }
+        // An unregistered symbol is still a legal key through the same API.
+        JSSymbol unregistered = new JSSymbol("unregistered");
+        weakMap.weakMapSet(unregistered, JSNumber.of(7));
+        weakSet.weakSetAdd(unregistered);
+        assertThat(weakMap.weakMapGet(unregistered)).isEqualTo(JSNumber.of(7));
+        assertThat(weakSet.weakSetHas(unregistered)).isTrue();
     }
 
     @Test
@@ -225,27 +220,24 @@ public class JSWeakCollectionTest extends BaseJavetTest {
 
     @Test
     public void testSharedKeyPrunesDeadOwnersAndReusesTheFirstEntry() {
-        try (JSRuntime runtime = new JSRuntime()) {
-            JSContext context = runtime.createContext();
-            JSWeakMap first = context.createJSWeakMap();
-            JSWeakMap second = context.createJSWeakMap();
-            JSObject key = context.createJSObject();
-            first.weakMapSet(key, JSBoolean.TRUE);
-            second.weakMapSet(key, JSBoolean.FALSE);
-            JSWeakEntryTable entries = key.weakEntries(false);
-            assertThat(entries.size()).isEqualTo(2);
+        JSWeakMap first = context.createJSWeakMap();
+        JSWeakMap second = context.createJSWeakMap();
+        JSObject key = context.createJSObject();
+        first.weakMapSet(key, JSBoolean.TRUE);
+        second.weakMapSet(key, JSBoolean.FALSE);
+        JSWeakEntryTable entries = key.weakEntries(false);
+        assertThat(entries.size()).isEqualTo(2);
 
-            WeakReference<JSWeakMap> reference = new WeakReference<>(first);
-            first = null;
-            assertThat(awaitCleared(reference)).isTrue();
-            assertThat(entries.size()).isOne();
-            JSWeakSet set = context.createJSWeakSet();
-            set.weakSetAdd(key);
-            assertThat(second.weakMapGet(key)).isSameAs(JSBoolean.FALSE);
-            assertThat(second.weakMapDelete(key)).isTrue();
-            assertThat(set.weakSetHas(key)).isTrue();
-            assertThat(entries.size()).isOne();
-        }
+        WeakReference<JSWeakMap> reference = new WeakReference<>(first);
+        first = null;
+        assertThat(awaitCleared(reference)).isTrue();
+        assertThat(entries.size()).isOne();
+        JSWeakSet set = context.createJSWeakSet();
+        set.weakSetAdd(key);
+        assertThat(second.weakMapGet(key)).isSameAs(JSBoolean.FALSE);
+        assertThat(second.weakMapDelete(key)).isTrue();
+        assertThat(set.weakSetHas(key)).isTrue();
+        assertThat(entries.size()).isOne();
     }
 
     @Test
@@ -271,52 +263,44 @@ public class JSWeakCollectionTest extends BaseJavetTest {
     public void testValueReferringToItsKeyDoesNotKeepTheKeyAlive() {
         // The ephemeron case. Built through the Java API so nothing else in the realm holds the
         // key: with a WeakHashMap the path map -> value -> key kept it reachable forever.
-        try (JSRuntime runtime = new JSRuntime()) {
-            JSContext context = runtime.createContext();
-            JSWeakMap weakMap = context.createJSWeakMap();
-            JSObject key = context.createJSObject();
-            JSObject value = context.createJSObject();
-            value.set(PropertyKey.fromString("backReference"), key);
-            weakMap.weakMapSet(key, value);
-            assertThat(weakMap.weakMapHas(key)).isTrue();
+        JSWeakMap weakMap = context.createJSWeakMap();
+        JSObject key = context.createJSObject();
+        JSObject value = context.createJSObject();
+        value.set(PropertyKey.fromString("backReference"), key);
+        weakMap.weakMapSet(key, value);
+        assertThat(weakMap.weakMapHas(key)).isTrue();
 
-            WeakReference<JSObject> keyReference = new WeakReference<>(key);
-            WeakReference<JSObject> valueReference = new WeakReference<>(value);
-            key = null;
-            value = null;
-            assertThat(awaitCleared(keyReference))
-                    .as("a value's back-reference to its own key must not keep the key alive").isTrue();
-            assertThat(valueReference.get()).as("the value dies with its key").isNull();
-            assertThat(weakMap).isNotNull();
-        }
+        WeakReference<JSObject> keyReference = new WeakReference<>(key);
+        WeakReference<JSObject> valueReference = new WeakReference<>(value);
+        key = null;
+        value = null;
+        assertThat(awaitCleared(keyReference)).as("a value's back-reference to its own key must not keep the key alive")
+                .isTrue();
+        assertThat(valueReference.get()).as("the value dies with its key").isNull();
+        assertThat(weakMap).isNotNull();
     }
 
     @Test
     public void testWeakCollectionDoesNotKeepAnUnrelatedKeyAlive() {
-        try (JSRuntime runtime = new JSRuntime()) {
-            JSContext context = runtime.createContext();
-            JSWeakSet weakSet = context.createJSWeakSet();
-            JSObject member = context.createJSObject();
-            weakSet.weakSetAdd(member);
-            assertThat(weakSet.weakSetHas(member)).isTrue();
+        JSWeakSet weakSet = context.createJSWeakSet();
+        JSObject member = context.createJSObject();
+        weakSet.weakSetAdd(member);
+        assertThat(weakSet.weakSetHas(member)).isTrue();
 
-            WeakReference<JSObject> memberReference = new WeakReference<>(member);
-            member = null;
-            assertThat(awaitCleared(memberReference)).isTrue();
-            assertThat(weakSet).isNotNull();
-        }
+        WeakReference<JSObject> memberReference = new WeakReference<>(member);
+        member = null;
+        assertThat(awaitCleared(memberReference)).isTrue();
+        assertThat(weakSet).isNotNull();
     }
 
     @Test
     public void testWellKnownSymbolDoesNotKeepItsWeakMapAliveThroughItsValue() {
-        try (JSRuntime runtime = new JSRuntime()) {
-            JSWeakMap map = runtime.createContext().createJSWeakMap();
-            map.weakMapSet(JSSymbol.HAS_INSTANCE, map);
-            assertThat(map.weakMapGet(JSSymbol.HAS_INSTANCE)).isSameAs(map);
-            WeakReference<JSWeakMap> reference = new WeakReference<>(map);
-            map = null;
-            assertThat(awaitCleared(reference)).isTrue();
-        }
+        JSWeakMap map = context.createJSWeakMap();
+        map.weakMapSet(JSSymbol.HAS_INSTANCE, map);
+        assertThat(map.weakMapGet(JSSymbol.HAS_INSTANCE)).isSameAs(map);
+        WeakReference<JSWeakMap> reference = new WeakReference<>(map);
+        map = null;
+        assertThat(awaitCleared(reference)).isTrue();
     }
 
     /**

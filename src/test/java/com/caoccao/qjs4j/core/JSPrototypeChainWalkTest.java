@@ -47,6 +47,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 public class JSPrototypeChainWalkTest extends BaseJavetTest {
 
+    private void assertDeepChain(String link, String result) {
+        assertStringWithJavet("""
+                let o = { x: 'found' };
+                for (let i = 0; i < 1002; i++) {
+                  const link = %s;
+                  Object.setPrototypeOf(link, o);
+                  o = link;
+                }
+                %s""".formatted(link, result));
+    }
+
     private JSObject buildChain(int depth) {
         JSObject object = context.createJSObject();
         for (int index = 0; index < depth; index++) {
@@ -55,6 +66,14 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
             object = child;
         }
         return object;
+    }
+
+    private JSObject cyclicPrototype() {
+        JSObject first = context.createJSObject();
+        JSObject second = context.createJSObject();
+        first.setPrototype(second);
+        second.setPrototype(first);
+        return first;
     }
 
     @Test
@@ -68,10 +87,7 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
     @Test
     @Timeout(60)
     public void testCyclicPrototypeChainRaisesRangeErrorForGet() {
-        JSObject first = context.createJSObject();
-        JSObject second = context.createJSObject();
-        first.setPrototype(second);
-        second.setPrototype(first);
+        JSObject first = cyclicPrototype();
 
         assertThatThrownBy(() -> first.get(PropertyKey.fromString("missing"))).isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("Cyclic prototype chain");
@@ -82,10 +98,7 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
     public void testCyclicPrototypeChainRaisesRangeErrorForHas() {
         // setPrototype is the raw embedder API and does not run the cycle check, so a cycle is
         // reachable. It used to recurse until the Java stack was exhausted.
-        JSObject first = context.createJSObject();
-        JSObject second = context.createJSObject();
-        first.setPrototype(second);
-        second.setPrototype(first);
+        JSObject first = cyclicPrototype();
 
         assertThatThrownBy(() -> first.has(PropertyKey.fromString("missing"))).isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("Cyclic prototype chain");
@@ -94,14 +107,7 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
     @Test
     @Timeout(120)
     public void testDeepChainOfAlternatingObjectsAndArrays() {
-        assertStringWithJavet("""
-                let o = { x: 'found' };
-                for (let i = 0; i < 1002; i++) {
-                  const link = i % 2 === 0 ? [] : {};
-                  Object.setPrototypeOf(link, o);
-                  o = link;
-                }
-                [o.x, 'x' in o, 'absent' in o, String(o.absent)].join(',');""");
+        assertDeepChain("i % 2 === 0 ? [] : {}", "[o.x, 'x' in o, 'absent' in o, String(o.absent)].join(',');");
     }
 
     @Test
@@ -109,40 +115,19 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
     public void testDeepChainOfArrays() {
         // The review's reproducer. Every link is a JSArray, which used to mean one Java frame and
         // one unit of the thousand-link budget each.
-        assertStringWithJavet("""
-                let o = { x: 'found' };
-                for (let i = 0; i < 1002; i++) {
-                  const link = [];
-                  Object.setPrototypeOf(link, o);
-                  o = link;
-                }
-                [o.x, 'x' in o, 'absent' in o].join(',');""");
+        assertDeepChain("[]", "[o.x, 'x' in o, 'absent' in o].join(',');");
     }
 
     @Test
     @Timeout(120)
     public void testDeepChainOfFunctions() {
-        assertStringWithJavet("""
-                let o = { x: 'found' };
-                for (let i = 0; i < 1002; i++) {
-                  const link = function () {};
-                  Object.setPrototypeOf(link, o);
-                  o = link;
-                }
-                [o.x, 'x' in o, 'absent' in o].join(',');""");
+        assertDeepChain("function () {}", "[o.x, 'x' in o, 'absent' in o].join(',');");
     }
 
     @Test
     @Timeout(120)
     public void testDeepChainOfTypedArrays() {
-        assertStringWithJavet("""
-                let o = { x: 'found' };
-                for (let i = 0; i < 1002; i++) {
-                  const link = new Uint8Array(0);
-                  Object.setPrototypeOf(link, o);
-                  o = link;
-                }
-                [o.x, 'x' in o, 'absent' in o].join(',');""");
+        assertDeepChain("new Uint8Array(0)", "[o.x, 'x' in o, 'absent' in o].join(',');");
     }
 
     @Test

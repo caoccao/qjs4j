@@ -17,8 +17,6 @@
 package com.caoccao.qjs4j.core.module;
 
 import com.caoccao.qjs4j.BaseTest;
-import com.caoccao.qjs4j.core.JSContext;
-import com.caoccao.qjs4j.core.JSRuntime;
 import com.caoccao.qjs4j.exceptions.JSException;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,19 +35,14 @@ public abstract class ModuleFileTest extends BaseTest {
     JSException assertModuleFailsBeforeEvaluation(String entryName, String entrySource, String expectedMessagePart)
             throws IOException {
         Path entry = writeModule(entryName, entrySource);
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            JSException failure = catchThrowableOfType(JSException.class,
-                    () -> context.eval(entrySource, entry.toString(), true));
-            assertThat(failure).as("the graph must fail").isNotNull();
-            assertThat(failure).hasMessageContaining(expectedMessagePart);
-            assertThat(context.eval("String(globalThis.dependencyBodyRan)", "probe.js", false).toString())
-                    .as("the dependency named before the bad one must not have run").isEqualTo("undefined");
-            assertThat(context.eval("String(globalThis.rootBodyRan)", "probe.js", false).toString())
-                    .as("nor the entry module's own body").isEqualTo("undefined");
-            assertThat(context.getModuleBodyEvaluationCount()).as("the engine agrees that nothing was evaluated")
-                    .isZero();
-            return failure;
-        }
+        JSException failure = moduleFailure(entry, entrySource);
+        assertThat(failure).hasMessageContaining(expectedMessagePart);
+        assertThat(context.eval("String(globalThis.dependencyBodyRan)", "probe.js", false).toString())
+                .as("the dependency named before the bad one must not have run").isEqualTo("undefined");
+        assertThat(context.eval("String(globalThis.rootBodyRan)", "probe.js", false).toString())
+                .as("nor the entry module's own body").isEqualTo("undefined");
+        assertThat(context.getModuleBodyEvaluationCount()).as("the engine agrees that nothing was evaluated").isZero();
+        return failure;
     }
 
     String evaluateModuleResult(String name, String source) throws IOException {
@@ -58,10 +51,15 @@ public abstract class ModuleFileTest extends BaseTest {
 
     String evaluateModuleResult(String name, String source, String probe) throws IOException {
         Path path = writeModule(name, source);
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            context.eval(source, path.toString(), true);
-            return context.eval(probe, "probe.js", false).toString();
-        }
+        context.eval(source, path.toString(), true);
+        return context.eval(probe, "probe.js", false).toString();
+    }
+
+    JSException moduleFailure(Path entry, String source) {
+        JSException failure = catchThrowableOfType(JSException.class,
+                () -> context.eval(source, entry.toString(), true));
+        assertThat(failure).as("module %s must fail", entry).isNotNull();
+        return failure;
     }
 
     Path writeModule(String name, String source) throws IOException {

@@ -18,8 +18,6 @@ package com.caoccao.qjs4j.core.module;
 
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.compilation.compiler.Compiler;
-import com.caoccao.qjs4j.core.JSContext;
-import com.caoccao.qjs4j.core.JSRuntime;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.exceptions.JSException;
@@ -85,14 +83,12 @@ public class JSModuleSourceLocationTest extends ModuleFileTest {
      * @return the reported location
      */
     private SourceLocation moduleErrorLocation(String source, String filename) {
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            try {
-                context.eval(source, filename, true);
-            } catch (JSException jsException) {
-                return jsException.getSourceLocation();
-            }
-            return fail("Expected " + filename + " to fail to compile");
+        try {
+            context.eval(source, filename, true);
+        } catch (JSException jsException) {
+            return jsException.getSourceLocation();
         }
+        return fail("Expected " + filename + " to fail to compile");
     }
 
     @Test
@@ -128,10 +124,8 @@ public class JSModuleSourceLocationTest extends ModuleFileTest {
     public void testAValidModuleStillEvaluates() {
         // Compiling the source before rewriting it must not reject anything that was fine, and the
         // second compilation must not have side effects the first one would trip over.
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            context.eval("export const v = 'ok'; globalThis.result = v;", "valid.js", true);
-            assertThat(context.eval("globalThis.result", "check.js", false).toString()).isEqualTo("ok");
-        }
+        context.eval("export const v = 'ok'; globalThis.result = v;", "valid.js", true);
+        assertThat(context.eval("globalThis.result", "check.js", false).toString()).isEqualTo("ok");
     }
 
     @Test
@@ -186,17 +180,15 @@ public class JSModuleSourceLocationTest extends ModuleFileTest {
      * @return the reported location
      */
     private SourceLocation untouchedCompilationLocation(String source) {
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            try {
-                new Compiler(source, "untouched.js").setContext(context).compile(true);
-            } catch (JSException jsException) {
-                return jsException.getSourceLocation();
-            } catch (JSErrorException errorException) {
-                return errorException.getSourceLocation();
-            } catch (JSCompilerException compilerException) {
-                return compilerException.getSourceLocation();
-            }
-            return fail("Expected the untouched source to fail to compile");
+        try {
+            new Compiler(source, "untouched.js").setContext(context).compile(true);
+        } catch (JSException jsException) {
+            return jsException.getSourceLocation();
+        } catch (JSErrorException errorException) {
+            return errorException.getSourceLocation();
+        } catch (JSCompilerException compilerException) {
+            return compilerException.getSourceLocation();
         }
+        return fail("Expected the untouched source to fail to compile");
     }
 }

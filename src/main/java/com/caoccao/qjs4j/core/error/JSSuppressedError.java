@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core.error;
 
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
+import com.caoccao.qjs4j.exceptions.JSErrorType;
 import com.caoccao.qjs4j.core.*;
 
 /**
@@ -101,6 +102,6 @@ public final class JSSuppressedError extends JSError {
     }
 
     public static JSObject createPrototype(JSContext context, JSValue... args) {
-        return createNativeErrorPrototype(context, NAME, 3, (ctx, receiver, arguments) -> create(ctx, arguments));
+        return JSErrorType.SuppressedError.createPrototype(context);
     }
 }

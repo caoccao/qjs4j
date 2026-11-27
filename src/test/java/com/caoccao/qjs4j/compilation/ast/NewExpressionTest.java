@@ -17,8 +17,6 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 import com.caoccao.qjs4j.BaseJavetTest;
-import com.caoccao.qjs4j.compilation.lexer.Lexer;
-import com.caoccao.qjs4j.compilation.parser.Parser;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -80,14 +78,7 @@ public class NewExpressionTest extends BaseJavetTest {
 
     @Test
     public void testParserParsesSpreadInNewExpression() {
-        Program program = new Parser(new Lexer("new Foo(...args, 1,);")).parse();
-        assertThat(program.getBody()).hasSize(1);
-        assertThat(program.getBody().get(0)).isInstanceOf(ExpressionStatement.class);
-
-        Expression expression = ((ExpressionStatement) program.getBody().get(0)).getExpression();
-        assertThat(expression).isInstanceOf(NewExpression.class);
-
-        NewExpression newExpression = (NewExpression) expression;
+        NewExpression newExpression = ParsedScript.expression("new Foo(...args, 1,);", NewExpression.class);
         assertThat(newExpression.getArguments()).hasSize(2);
         assertThat(newExpression.getArguments().get(0)).isInstanceOf(SpreadElement.class);
         assertThat(newExpression.getArguments().get(1)).isInstanceOf(Literal.class);

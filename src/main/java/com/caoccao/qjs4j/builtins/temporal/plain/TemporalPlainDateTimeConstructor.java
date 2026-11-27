@@ -182,24 +182,21 @@ public final class TemporalPlainDateTimeConstructor {
      */
     public static JSValue toTemporalDateTime(JSContext context, JSValue item, JSValue options) {
         if (item instanceof JSTemporalPlainDateTime plainDateTime) {
-            TemporalUtils.getOverflowOption(context, options);
-            if (context.hasPendingException()) {
+            if (!TemporalUtils.validateOverflow(context, options)) {
                 return JSUndefined.INSTANCE;
             }
             return JSTemporalPlainDateTime.create(context, plainDateTime.getIsoDateTime(),
                     plainDateTime.getCalendarId());
         }
         if (item instanceof JSTemporalPlainDate plainDate) {
-            TemporalUtils.getOverflowOption(context, options);
-            if (context.hasPendingException()) {
+            if (!TemporalUtils.validateOverflow(context, options)) {
                 return JSUndefined.INSTANCE;
             }
             return JSTemporalPlainDateTime.create(context, plainDate.getIsoDate().atMidnight(),
                     plainDate.getCalendarId());
         }
         if (item instanceof JSTemporalZonedDateTime zonedDateTime) {
-            TemporalUtils.getOverflowOption(context, options);
-            if (context.hasPendingException()) {
+            if (!TemporalUtils.validateOverflow(context, options)) {
                 return JSUndefined.INSTANCE;
             }
             IsoDateTime localDateTime = zonedDateTime.toLocalDateTime();
@@ -212,15 +209,7 @@ public final class TemporalPlainDateTimeConstructor {
             return dateTimeFromFields(context, itemObj, options);
         }
         if (item instanceof JSString itemStr) {
-            JSValue parsed = dateTimeFromString(context, itemStr.value());
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            TemporalUtils.getOverflowOption(context, options);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            return parsed;
+            return TemporalUtils.finishStringConversion(context, dateTimeFromString(context, itemStr.value()), options);
         }
         return TemporalError.INVALID_DATE_TIME_ARGUMENT.undefined(context);
     }

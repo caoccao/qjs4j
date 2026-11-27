@@ -113,21 +113,7 @@ public class JSResourceLimitTest extends BaseJavetTest {
     @Timeout(60)
     public void testHostInterruptTerminatesAnInfiniteLoop() throws InterruptedException {
         try (JSRuntime runtime = new JSRuntime(); JSContext interruptedContext = runtime.createContext()) {
-            Thread interrupter = new Thread(() -> {
-                try {
-                    Thread.sleep(200);
-                } catch (InterruptedException ignored) {
-                    Thread.currentThread().interrupt();
-                }
-                runtime.requestInterrupt();
-            });
-            interrupter.start();
-            try {
-                assertThatThrownBy(() -> interruptedContext.eval("try { while (true) {} } catch (e) { 'SWALLOWED' }"))
-                        .isInstanceOf(JSTerminationException.class).hasMessage("execution interrupted");
-            } finally {
-                interrupter.join();
-            }
+            assertHostInterrupt(interruptedContext, "try { while (true) {} } catch (e) { 'SWALLOWED' }");
         }
     }
 

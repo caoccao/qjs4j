@@ -41,16 +41,6 @@ public final class MapConstructor {
         return JSMap.create(context, args);
     }
 
-    private static void closeIterator(JSContext context, JSValue iterator) {
-        if (!(iterator instanceof JSObject iteratorObject)) {
-            return;
-        }
-        JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN);
-        if (returnMethod instanceof JSFunction returnFunction) {
-            returnFunction.call(context, iterator, JSValue.NO_ARGS);
-        }
-    }
-
     public static JSValue getSpecies(JSContext context, JSValue thisArg, JSValue[] args) {
         return thisArg;
     }
@@ -75,17 +65,17 @@ public final class MapConstructor {
         long index = 0;
         while (true) {
             if (index >= NumberPrototype.MAX_SAFE_INTEGER) {
-                closeIterator(context, iterator);
+                JSIteratorHelper.closeIterator(context, iterator);
                 return context.throwTypeError("too many elements");
             }
 
             JSObject nextResult = JSIteratorHelper.iteratorNext(iterator, context);
             if (context.hasPendingException()) {
-                closeIterator(context, iterator);
+                JSIteratorHelper.closeIterator(context, iterator);
                 return JSUndefined.INSTANCE;
             }
             if (nextResult == null) {
-                closeIterator(context, iterator);
+                JSIteratorHelper.closeIterator(context, iterator);
                 return context.throwTypeError("Iterator result must be an object");
             }
 
@@ -98,7 +88,7 @@ public final class MapConstructor {
             JSValue key = JSCall.call(context, callback, JSUndefined.INSTANCE,
                     new JSValue[]{value, JSNumber.of(index)});
             if (context.hasPendingException()) {
-                closeIterator(context, iterator);
+                JSIteratorHelper.closeIterator(context, iterator);
                 return JSUndefined.INSTANCE;
             }
 

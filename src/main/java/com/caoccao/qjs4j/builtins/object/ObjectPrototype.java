@@ -308,57 +308,9 @@ public final class ObjectPrototype {
             return context.throwTypeError("Property descriptor must be an object");
         }
 
-        PropertyDescriptor desc = new PropertyDescriptor();
-
-        // Following QuickJS js_obj_to_desc: use HasProperty to check field existence,
-        // not whether the value is undefined. {value: undefined} is a valid descriptor.
-
-        // Check for enumerable
-        if (descObj.has(PropertyKey.ENUMERABLE)) {
-            JSValue enumerable = descObj.get(PropertyKey.ENUMERABLE);
-            desc.setEnumerable(JSTypeChecking.isTruthy(enumerable));
-        }
-
-        // Check for configurable
-        if (descObj.has(PropertyKey.CONFIGURABLE)) {
-            JSValue configurable = descObj.get(PropertyKey.CONFIGURABLE);
-            desc.setConfigurable(JSTypeChecking.isTruthy(configurable));
-        }
-
-        // Check for value
-        if (descObj.has(PropertyKey.VALUE)) {
-            JSValue value = descObj.get(PropertyKey.VALUE);
-            desc.setValue(value);
-        }
-
-        // Check for writable
-        if (descObj.has(PropertyKey.WRITABLE)) {
-            JSValue writable = descObj.get(PropertyKey.WRITABLE);
-            desc.setWritable(JSTypeChecking.isTruthy(writable));
-        }
-
-        // Check for getter
-        if (descObj.has(PropertyKey.GET)) {
-            JSValue getter = descObj.get(PropertyKey.GET);
-            if (!(getter instanceof JSUndefined) && !(getter instanceof JSFunction)) {
-                return context.throwTypeError("Getter must be a function");
-            }
-            desc.setGetter(getter instanceof JSFunction ? (JSFunction) getter : null);
-        }
-
-        // Check for setter
-        if (descObj.has(PropertyKey.SET)) {
-            JSValue setter = descObj.get(PropertyKey.SET);
-            if (!(setter instanceof JSUndefined) && !(setter instanceof JSFunction)) {
-                return context.throwTypeError("Setter must be a function");
-            }
-            desc.setSetter(setter instanceof JSFunction ? (JSFunction) setter : null);
-        }
-
-        // ToPropertyDescriptor step 10: accessor + data conflict check
-        if (desc.isAccessorDescriptor() && desc.isDataDescriptor()) {
-            return context.throwTypeError(
-                    "Invalid property descriptor. Cannot both specify accessors and a value or writable attribute, #<Object>");
+        PropertyDescriptor desc = PropertyDescriptor.readDefinition(context, descObj, false);
+        if (desc == null) {
+            return context.getPendingException();
         }
 
         if (!obj.defineProperty(key, desc)) {

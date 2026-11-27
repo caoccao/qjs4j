@@ -1,7 +1,6 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 import com.caoccao.qjs4j.BaseJavetTest;
-import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSRuntime;
 import com.caoccao.qjs4j.core.JSValue;
 import org.junit.jupiter.api.Test;
@@ -12,6 +11,30 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Simplest possible for-of test.
  */
 public class ForOfStatementTest extends BaseJavetTest {
+    private static final String CLOSABLE_GENERATOR = """
+            var closed = false;
+            function* g() {
+              try {
+                yield 1;
+                yield 2;
+              } finally {
+                closed = true;
+              }
+            }
+            """;
+    private static final String DESTRUCTURING_LOOP = """
+            var result = '';
+            for (var [k, v] of [[1, 'a'], [2, 'b']]) result += k + v;
+            result""";
+    private static final String GLOBAL_LOOP = """
+            var result = '';
+            for (var x of ['a', 'b', 'c']) result += x;
+            result""";
+    @Override
+    protected JSRuntime createRuntime() {
+        return new JSRuntime();
+    }
+
     @Test
     void testArrayForOf() {
         // Compare with array
@@ -24,53 +47,31 @@ public class ForOfStatementTest extends BaseJavetTest {
 
     @Test
     void testArrayOfArraysWithDestructuring() {
-        // for-of with array destructuring over an array of arrays
-        assertStringWithJavet("""
-                var result = '';
-                for (var [k, v] of [[1, 'a'], [2, 'b']]) result += k + v;
-                result""");
+        assertStringWithJavet(DESTRUCTURING_LOOP);
     }
 
     @Test
     void testForOfArrayDestructuring() {
-        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
-            String code = """
-                    var result = '';
-                    for (var [k, v] of [[1, 'a'], [2, 'b']]) result += k + v;
-                    result""";
-            JSValue value = context.eval(code);
-            String result = value.toString();
-            assertThat(result).isEqualTo("1a2b");
-        }
+        assertThat(context.eval(DESTRUCTURING_LOOP).toString()).isEqualTo("1a2b");
     }
 
     @Test
     void testForOfInFunction() {
-        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
-            String code = """
-                    function test() {
-                      var result = '';
-                      for (var x of ['a', 'b', 'c']) result += x;
-                      return result;
-                    }
-                    test()""";
-            JSValue value = context.eval(code);
-            String result = value.toString();
-            assertThat(result).isEqualTo("abc");
-        }
+        String code = """
+                function test() {
+                  var result = '';
+                  for (var x of ['a', 'b', 'c']) result += x;
+                  return result;
+                }
+                test()""";
+        JSValue value = context.eval(code);
+        String result = value.toString();
+        assertThat(result).isEqualTo("abc");
     }
 
     @Test
     void testForOfInGlobalScope() {
-        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
-            String code = """
-                    var result = '';
-                    for (var x of ['a', 'b', 'c']) result += x;
-                    result""";
-            JSValue value = context.eval(code);
-            String result = value.toString();
-            assertThat(result).isEqualTo("abc");
-        }
+        assertThat(context.eval(GLOBAL_LOOP).toString()).isEqualTo("abc");
     }
 
     @Test
@@ -85,29 +86,12 @@ public class ForOfStatementTest extends BaseJavetTest {
 
     @Test
     void testForOfSimpleArray() {
-        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
-            String code = """
-                    var result = '';
-                    for (var x of ['a', 'b', 'c']) result += x;
-                    result""";
-            JSValue value = context.eval(code);
-            String result = value.toString();
-            assertThat(result).isEqualTo("abc");
-        }
+        assertThat(context.eval(GLOBAL_LOOP).toString()).isEqualTo("abc");
     }
 
     @Test
     void testIteratorCloseOnBreak() {
-        assertBooleanWithJavet("""
-                var closed = false;
-                function* g() {
-                  try {
-                    yield 1;
-                    yield 2;
-                  } finally {
-                    closed = true;
-                  }
-                }
+        assertBooleanWithJavet(CLOSABLE_GENERATOR + """
                 for (const x of g()) {
                   break;
                 }
@@ -116,16 +100,7 @@ public class ForOfStatementTest extends BaseJavetTest {
 
     @Test
     void testIteratorCloseOnReturn() {
-        assertBooleanWithJavet("""
-                var closed = false;
-                function* g() {
-                  try {
-                    yield 1;
-                    yield 2;
-                  } finally {
-                    closed = true;
-                  }
-                }
+        assertBooleanWithJavet(CLOSABLE_GENERATOR + """
                 (function () {
                   for (const x of g()) {
                     return;
@@ -136,16 +111,7 @@ public class ForOfStatementTest extends BaseJavetTest {
 
     @Test
     void testIteratorCloseOnThrow() {
-        assertBooleanWithJavet("""
-                var closed = false;
-                function* g() {
-                  try {
-                    yield 1;
-                    yield 2;
-                  } finally {
-                    closed = true;
-                  }
-                }
+        assertBooleanWithJavet(CLOSABLE_GENERATOR + """
                 try {
                   for (const x of g()) {
                     throw new Error('x');

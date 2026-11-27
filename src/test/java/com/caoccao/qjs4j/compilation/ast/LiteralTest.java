@@ -20,7 +20,6 @@ import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.compilation.lexer.Lexer;
 import com.caoccao.qjs4j.compilation.lexer.Token;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
-import com.caoccao.qjs4j.compilation.parser.Parser;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
@@ -28,6 +27,12 @@ import java.math.BigInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class LiteralTest extends BaseJavetTest {
+    private void assertBigIntToken(String source, String expected) {
+        Token token = new Lexer(source).nextToken();
+        assertThat(token.type()).isEqualTo(TokenType.BIGINT);
+        assertThat(token.value()).isEqualTo(expected);
+    }
+
     @Test
     public void testBinaryNumbers() {
         assertIntegerWithJavet("0b0", "0b1", "0b10", "0b1111", "0B0", "0B1010");
@@ -82,40 +87,28 @@ public class LiteralTest extends BaseJavetTest {
 
     @Test
     public void testLexerBigInt() {
-        Lexer lexer = new Lexer("123n");
-        Token token = lexer.nextToken();
-        assertThat(token.type()).isEqualTo(TokenType.BIGINT);
-        assertThat(token.value()).isEqualTo("123");
+        assertBigIntToken("123n", "123");
 
         assertLongWithJavet("123n", "123.456n", "1abcn", "1en", "1e3n");
     }
 
     @Test
     public void testLexerBinaryBigInt() {
-        Lexer lexer = new Lexer("0b1111n");
-        Token token = lexer.nextToken();
-        assertThat(token.type()).isEqualTo(TokenType.BIGINT);
-        assertThat(token.value()).isEqualTo("0b1111");
+        assertBigIntToken("0b1111n", "0b1111");
 
         assertLongWithJavet("0b1010n", "0b123n", "0b1.0n", "0babcn", "0b1e1n");
     }
 
     @Test
     public void testLexerHexBigInt() {
-        Lexer lexer = new Lexer("0xFFn");
-        Token token = lexer.nextToken();
-        assertThat(token.type()).isEqualTo(TokenType.BIGINT);
-        assertThat(token.value()).isEqualTo("0xFF");
+        assertBigIntToken("0xFFn", "0xFF");
 
         assertLongWithJavet("0x1234n", "0x123n", "0x1.0n", "0xabcn", "0xABCn", "0xxyxn", "0x1e1n");
     }
 
     @Test
     public void testLexerOctalBigInt() {
-        Lexer lexer = new Lexer("0o77n");
-        Token token = lexer.nextToken();
-        assertThat(token.type()).isEqualTo(TokenType.BIGINT);
-        assertThat(token.value()).isEqualTo("0o77");
+        assertBigIntToken("0o77n", "0o77");
 
         assertLongWithJavet("0o1234n", "0o123n", "0o1.0n", "0oabcn", "0oABCn", "0oxyxn", "0o1e1n");
     }
@@ -143,30 +136,14 @@ public class LiteralTest extends BaseJavetTest {
 
     @Test
     public void testParseBigIntLiteral() {
-        Lexer lexer = new Lexer("123n");
-        Parser parser = new Parser(lexer);
-        Program program = parser.parse();
-
-        assertThat(program.getBody()).hasSize(1);
-        assertThat(program.getBody().get(0)).isInstanceOfSatisfying(ExpressionStatement.class, exprStmt -> {
-            assertThat(exprStmt.getExpression()).isInstanceOfSatisfying(Literal.class, literal -> {
-                assertThat(literal.getValue()).isInstanceOf(BigInteger.class);
-                assertThat(literal.getValue()).isEqualTo(BigInteger.valueOf(123));
-            });
-        });
+        Literal literal = ParsedScript.expression("123n", Literal.class);
+        assertThat(literal.getValue()).isEqualTo(BigInteger.valueOf(123));
     }
 
     @Test
     public void testParseHexBigIntLiteral() {
-        Lexer lexer = new Lexer("0xFFn");
-        Parser parser = new Parser(lexer);
-        Program program = parser.parse();
-
-        assertThat(program.getBody()).hasSize(1);
-        assertThat(program.getBody().get(0)).isInstanceOfSatisfying(ExpressionStatement.class, exprStmt -> {
-            assertThat(exprStmt.getExpression()).isInstanceOfSatisfying(Literal.class,
-                    literal -> assertThat(literal.getValue()).isEqualTo(BigInteger.valueOf(255)));
-        });
+        Literal literal = ParsedScript.expression("0xFFn", Literal.class);
+        assertThat(literal.getValue()).isEqualTo(BigInteger.valueOf(255));
     }
 
     @Test

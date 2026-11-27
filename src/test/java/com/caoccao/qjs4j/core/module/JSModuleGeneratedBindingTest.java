@@ -17,8 +17,6 @@
 package com.caoccao.qjs4j.core.module;
 
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
-import com.caoccao.qjs4j.core.JSContext;
-import com.caoccao.qjs4j.core.JSRuntime;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +24,6 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
  * Module semantics are still implemented by rewriting module source into ordinary JavaScript, and the rewrite declares
@@ -195,17 +192,13 @@ public class JSModuleGeneratedBindingTest extends ModuleFileTest {
         // module — names no character of what was passed in.
         String entrySource = "export default (\n  1 +\n);\nglobalThis.result = 'ok';\n";
         Path entry = writeModule("default-invalid.mjs", entrySource);
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            JSException failure = catchThrowableOfType(JSException.class,
-                    () -> context.eval(entrySource, entry.toString(), true));
-            assertThat(failure).isNotNull();
-            assertThat(failure.getMessage()).startsWith("SyntaxError");
-            SourceLocation location = failure.getSourceLocation();
-            assertThat(location).isNotNull();
-            assertThat(location.offset()).as("the offset is a position in the source the caller passed").isBetween(0,
-                    entrySource.length());
-            assertThat(location.line()).isBetween(1, 4);
-        }
+        JSException failure = moduleFailure(entry, entrySource);
+        assertThat(failure.getMessage()).startsWith("SyntaxError");
+        SourceLocation location = failure.getSourceLocation();
+        assertThat(location).isNotNull();
+        assertThat(location.offset()).as("the offset is a position in the source the caller passed").isBetween(0,
+                entrySource.length());
+        assertThat(location.line()).isBetween(1, 4);
     }
 
     @Test

@@ -92,6 +92,11 @@ public final class TemporalUtils {
         return parts[1].signum() < 0 ? milliseconds - 1 : milliseconds;
     }
 
+    /** String conversions parse the input before consulting the overflow option. */
+    public static JSValue finishStringConversion(JSContext context, JSValue parsed, JSValue options) {
+        return !context.hasPendingException() && validateOverflow(context, options) ? parsed : JSUndefined.INSTANCE;
+    }
+
     public static String firstCalendarAnnotation(String text) {
         int annotationStart = text.indexOf('[');
         while (annotationStart >= 0) {
@@ -688,5 +693,11 @@ public final class TemporalUtils {
             context.throwTypeError(invalidTypeMessage);
             return null;
         }
+    }
+
+    /** Reading overflow is observable even when there is nothing to constrain. */
+    public static boolean validateOverflow(JSContext context, JSValue options) {
+        getOverflowOption(context, options);
+        return !context.hasPendingException();
     }
 }

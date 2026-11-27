@@ -74,22 +74,8 @@ public class RegExpInterruptAndCaptureLimitTest extends BaseJavetTest {
     @Timeout(60)
     public void testHostInterruptStopsAMatch() throws InterruptedException {
         try (JSRuntime runtime = createUnboundedRuntime(); JSContext interruptedContext = runtime.createContext()) {
-            Thread interrupter = new Thread(() -> {
-                try {
-                    Thread.sleep(200);
-                } catch (InterruptedException ignored) {
-                    Thread.currentThread().interrupt();
-                }
-                runtime.requestInterrupt();
-            });
-            interrupter.start();
-            try {
-                // Through split, which drives the matcher itself rather than through exec.
-                assertThatThrownBy(() -> interruptedContext.eval("'a'.repeat(40).split(/(a+)+$b/)"))
-                        .isInstanceOf(JSTerminationException.class).hasMessage("execution interrupted");
-            } finally {
-                interrupter.join();
-            }
+            // Through split, which drives the matcher itself rather than through exec.
+            assertHostInterrupt(interruptedContext, "'a'.repeat(40).split(/(a+)+$b/)");
         }
     }
 

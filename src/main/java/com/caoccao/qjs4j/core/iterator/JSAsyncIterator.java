@@ -18,8 +18,6 @@ package com.caoccao.qjs4j.core.iterator;
 
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.promise.JSPromise;
-import com.caoccao.qjs4j.exceptions.JSException;
-import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 import java.util.Iterator;
 
@@ -75,18 +73,14 @@ public class JSAsyncIterator extends JSObject {
         }
         JSValue returnMethod = iter.get(PropertyKey.RETURN);
         if (context.hasPendingException()) {
-            JSPromise rejected = context.createJSPromise();
-            rejected.reject(context.takeExecutionException());
-            return rejected;
+            return rejectPendingException(context);
         }
         if (!(returnMethod instanceof JSFunction returnFunc)) {
             return null;
         }
         JSValue result = returnFunc.call(context, iter, JSValue.NO_ARGS);
         if (context.hasPendingException()) {
-            JSPromise rejected = context.createJSPromise();
-            rejected.reject(context.takeExecutionException());
-            return rejected;
+            return rejectPendingException(context);
         }
         if (result instanceof JSPromise promise) {
             return promise;
@@ -117,109 +111,6 @@ public class JSAsyncIterator extends JSObject {
         return "[object AsyncIterator]";
     }
 
-    private static JSPromise asyncFromSyncNext(JSContext context, JSObject iterator, JSValue next) {
-        JSValue result;
-        try {
-            result = JSCall.call(context, next, iterator, JSValue.NO_ARGS);
-        } catch (JSException e) {
-            if (context.hasPendingException()) {
-                context.clearAllPendingExceptions();
-            }
-            return createRejectedPromise(context, e.getErrorValue());
-        } catch (Exception e) {
-            JSValue reason = context.hasPendingException()
-                    ? context.takeExecutionException()
-                    : new JSString(e.getMessage() != null ? e.getMessage() : e.toString());
-            return createRejectedPromise(context, reason);
-        }
-        if (context.hasPendingException()) {
-            return createRejectedPromise(context, context.takeExecutionException());
-        }
-        if (!(result instanceof JSObject object)) {
-            JSValue error = context.throwTypeError("iterator result must be an object");
-            context.clearPendingException();
-            return createRejectedPromise(context, error);
-        }
-        JSValue value = object.get(PropertyKey.VALUE);
-        if (context.hasPendingException()) {
-            return createRejectedPromise(context, context.takeExecutionException());
-        }
-        JSValue done = object.get(PropertyKey.DONE);
-        if (context.hasPendingException()) {
-            return createRejectedPromise(context, context.takeExecutionException());
-        }
-        return createAsyncFromSyncResultPromise(context, value, JSTypeConversions.toBoolean(done).value(), iterator);
-    }
-
-    /**
-     * %AsyncFromSyncIteratorPrototype%.return ( [ value ] ) ES2024 27.1.6.2.2, as AsyncIteratorClose calls it: with no
-     * value. Every abrupt step rejects the returned promise rather than throwing.
-     */
-    private static JSPromise asyncFromSyncReturn(JSContext context, JSObject syncIterator) {
-        JSValue result;
-        try {
-            JSValue returnMethod = syncIterator.get(PropertyKey.RETURN);
-            if (context.hasPendingException()) {
-                return createRejectedPromise(context, context.takeExecutionException());
-            }
-            if (returnMethod.isNullOrUndefined()) {
-                // Step 7: no return method — resolve with { value: undefined, done: true }.
-                JSObject iteratorResult = JSIteratorHelper.createResult(context, JSUndefined.INSTANCE, true);
-                JSPromise promise = context.createJSPromise();
-                promise.resolve(context, iteratorResult);
-                return promise;
-            }
-            if (!(returnMethod instanceof JSFunction returnFunction)) {
-                JSValue error = context.throwTypeError("iterator return is not a function");
-                context.clearPendingException();
-                return createRejectedPromise(context, error);
-            }
-            result = returnFunction.call(context, syncIterator, JSValue.NO_ARGS);
-        } catch (JSException e) {
-            context.clearPendingException();
-            return createRejectedPromise(context, e.getErrorValue());
-        } catch (JSVirtualMachineException e) {
-            JSValue error = context.hasPendingException() ? context.takeExecutionException() : e.getJsValue();
-            return createRejectedPromise(context, error != null ? error : context.throwError(e.getMessage()));
-        }
-        if (context.hasPendingException()) {
-            return createRejectedPromise(context, context.takeExecutionException());
-        }
-        if (!(result instanceof JSObject resultObject)) {
-            JSValue error = context
-                    .throwTypeError("Iterator result " + describeIteratorResult(result) + " is not an object");
-            context.clearPendingException();
-            return createRejectedPromise(context, error);
-        }
-        JSValue done = resultObject.get(PropertyKey.DONE);
-        if (context.hasPendingException()) {
-            return createRejectedPromise(context, context.takeExecutionException());
-        }
-        JSValue resultValue = resultObject.get(PropertyKey.VALUE);
-        if (context.hasPendingException()) {
-            return createRejectedPromise(context, context.takeExecutionException());
-        }
-        // AsyncFromSyncIteratorContinuation: awaits the value, then resolves { value, done }.
-        return createAsyncFromSyncResultPromise(context, resultValue,
-                JSTypeConversions.toBoolean(done) == JSBoolean.TRUE);
-    }
-
-    private static void closeSyncIteratorAfterRejection(JSContext context, JSObject iterator) {
-        if (iterator == null) {
-            return;
-        }
-        try {
-            JSValue method = iterator.get(PropertyKey.RETURN);
-            if (!context.hasPendingException() && !method.isNullOrUndefined()) {
-                JSCall.call(context, method, iterator, JSValue.NO_ARGS);
-            }
-        } catch (JSException | JSVirtualMachineException ignored) {
-            // IteratorClose with a throw completion preserves the original rejection.
-        } finally {
-            context.clearAllPendingExceptions();
-        }
-    }
-
     /**
      * The iterator a {@code for await} loop over a sync iterable keeps, for closing: an object whose {@code return} is
      * %AsyncFromSyncIteratorPrototype%.return, so a {@code break} or {@code return} awaits a promise exactly as it
@@ -235,14 +126,14 @@ public class JSAsyncIterator extends JSObject {
     public static JSObject createAsyncFromSyncIteratorForClose(JSContext context, JSObject syncIterator) {
         JSObject wrapper = context.createJSObject();
         wrapper.set(PropertyKey.RETURN, new JSNativeFunction(context, "return", 1,
-                (childContext, thisArg, args) -> asyncFromSyncReturn(childContext, syncIterator)));
+                (childContext, thisArg, args) -> AsyncFromSyncIterator.close(childContext, syncIterator)));
         return wrapper;
     }
 
     /** The cached next method used by a for-await loop over a synchronous iterator. */
     public static JSNativeFunction createAsyncFromSyncNextMethod(JSContext context, JSObject iterator, JSValue next) {
         return new JSNativeFunction(context, "next", 0,
-                (child, receiver, args) -> asyncFromSyncNext(child, iterator, next));
+                (child, receiver, args) -> AsyncFromSyncIterator.next(child, iterator, next));
     }
 
     /**
@@ -265,46 +156,7 @@ public class JSAsyncIterator extends JSObject {
     /** The next() continuation closes a non-completed sync iterator if awaiting its value rejects. */
     public static JSPromise createAsyncFromSyncResultPromise(JSContext context, JSValue value, boolean done,
             JSObject syncIterator) {
-        JSPromise valueWrapperPromise;
-        if (value instanceof JSPromise promiseValue) {
-            // PromiseResolve(%Promise%, value) performs observable constructor access.
-            promiseValue.get(PropertyKey.CONSTRUCTOR);
-            if (context.hasPendingException()) {
-                JSValue reason = context.takeExecutionException();
-                if (!done) {
-                    closeSyncIteratorAfterRejection(context, syncIterator);
-                }
-                return createRejectedPromise(context, reason);
-            }
-            valueWrapperPromise = promiseValue;
-        } else {
-            valueWrapperPromise = context.createJSPromise();
-            valueWrapperPromise.resolve(context, value);
-            if (context.hasPendingException()) {
-                JSValue reason = context.takeExecutionException();
-                if (!done) {
-                    closeSyncIteratorAfterRejection(context, syncIterator);
-                }
-                return createRejectedPromise(context, reason);
-            }
-        }
-
-        JSPromise resultPromise = context.createJSPromise();
-        valueWrapperPromise.observe(context,
-                new JSNativeFunction(context, "onResolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
-                    JSValue resolved = JSValue.argumentOrUndefined(callbackArgs, 0);
-                    JSObject result = JSIteratorHelper.createResult(context, resolved, done);
-                    resultPromise.fulfill(result);
-                    return JSUndefined.INSTANCE;
-                }), new JSNativeFunction(context, "onReject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
-                    JSValue reason = JSValue.argumentOrUndefined(callbackArgs, 0);
-                    if (!done) {
-                        closeSyncIteratorAfterRejection(context, syncIterator);
-                    }
-                    resultPromise.reject(reason);
-                    return JSUndefined.INSTANCE;
-                }));
-        return resultPromise;
+        return AsyncFromSyncIterator.continueWith(context, value, done, syncIterator);
     }
 
     /**
@@ -450,7 +302,7 @@ public class JSAsyncIterator extends JSObject {
                 return createRejectedPromise(context, context.takeRejectionReason(e));
             }
             if (context.hasPendingException()) {
-                return createRejectedPromise(context, context.takeExecutionException());
+                return rejectPendingException(context);
             }
             JSValue value = result.get(PropertyKey.VALUE);
             JSValue doneValue = result.get("done");
@@ -491,12 +343,7 @@ public class JSAsyncIterator extends JSObject {
                             resultPromise.fulfill(result);
                             return JSUndefined.INSTANCE;
                         }), resultPromise, context), new JSPromise.ReactionRecord(
-                                new JSNativeFunction(context, "onRejected", 1, (childContext, thisArg, args) -> {
-                                    // If promise rejects, propagate the rejection
-                                    JSValue reason = JSValue.argumentOrUndefined(args, 0);
-                                    resultPromise.reject(reason);
-                                    return JSUndefined.INSTANCE;
-                                }), resultPromise, context));
+                                resultPromise.rejectHandler(context, "onRejected"), resultPromise, context));
                 return resultPromise;
             }
         }, context);
@@ -613,13 +460,7 @@ public class JSAsyncIterator extends JSObject {
                                 // Continue iteration
                                 iterateNext(iterator, callback, childContext, completionPromise);
                                 return JSUndefined.INSTANCE;
-                            }), new JSNativeFunction(context, "onProcessError", 1,
-                                    (innerContext, innerThisArg, innerArgs) -> {
-                                        // If processing fails, reject completion promise
-                                        JSValue error = innerArgs.length > 0 ? innerArgs[0] : JSUndefined.INSTANCE;
-                                        completionPromise.reject(error);
-                                        return JSUndefined.INSTANCE;
-                                    }));
+                            }), completionPromise.rejectHandler(context, "onProcessError"));
 
                     return JSUndefined.INSTANCE;
                 }), new JSNativeFunction(context, "onNextRejected", 1, (childContext, thisArg, args) -> {
@@ -724,23 +565,10 @@ public class JSAsyncIterator extends JSObject {
                 return createRejectedPromise(context, context.takeRejectionReason(e));
             }
             if (context.hasPendingException()) {
-                return createRejectedPromise(context, context.takeExecutionException());
+                return rejectPendingException(context);
             }
             if (result instanceof JSObject resultObj) {
-                JSValue value = resultObj.get(PropertyKey.VALUE);
-                if (context.hasPendingException()) {
-                    return createRejectedPromise(context, context.takeExecutionException());
-                }
-                JSValue doneValue = resultObj.get(PropertyKey.DONE);
-                if (context.hasPendingException()) {
-                    return createRejectedPromise(context, context.takeExecutionException());
-                }
-                boolean done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
-                if (context.hasPendingException()) {
-                    return createRejectedPromise(context, context.takeExecutionException());
-                }
-                // Per ES spec CreateAsyncFromSyncIterator: resolve promise values
-                return createAsyncFromSyncResultPromise(context, value, done);
+                return AsyncFromSyncIterator.continueNext(context, resultObj, null);
             }
             return createRejectedPromise(context, new JSString("Iterator result is not an object"));
         }, context);

@@ -19,45 +19,46 @@ package com.caoccao.qjs4j.exceptions;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.error.*;
 
-public enum JSErrorType {
-    AggregateError(JSAggregateError::createPrototype),
-    Error(JSError::createPrototype),
-    EvalError(JSEvalError::createPrototype),
-    RangeError(JSRangeError::createPrototype),
-    ReferenceError(JSReferenceError::createPrototype),
-    SuppressedError(JSSuppressedError::createPrototype),
-    SyntaxError(JSSyntaxError::createPrototype),
-    TypeError(JSTypeError::createPrototype),
-    URIError(JSURIError::createPrototype),;
+public enum JSErrorType implements JSNativeCallback {
+    AggregateError(JSConstructorType.AGGREGATE_ERROR, 2),
+    Error(JSConstructorType.ERROR, 1),
+    EvalError(JSConstructorType.EVAL_ERROR, 1),
+    RangeError(JSConstructorType.RANGE_ERROR, 1),
+    ReferenceError(JSConstructorType.REFERENCE_ERROR, 1),
+    SuppressedError(JSConstructorType.SUPPRESSED_ERROR, 3),
+    SyntaxError(JSConstructorType.SYNTAX_ERROR, 1),
+    TypeError(JSConstructorType.TYPE_ERROR, 1),
+    URIError(JSConstructorType.URI_ERROR, 1);
 
-    private final IJSConstructor prototypeConstructor;
+    private final JSConstructorType constructorType;
+    private final int length;
 
-    JSErrorType(IJSConstructor prototypeConstructor) {
-        this.prototypeConstructor = prototypeConstructor;
+    JSErrorType(JSConstructorType constructorType, int length) {
+        this.constructorType = constructorType;
+        this.length = length;
+    }
+
+    @Override
+    public JSValue call(JSContext context, JSValue receiver, JSValue[] args) {
+        return constructorType.create(context, args);
     }
 
     public JSValue create(JSContext context, JSValue... args) {
-        if (prototypeConstructor == null) {
-            throw new JSException(context.throwTypeError("Constructor for " + this.name() + " is not implemented"));
+        JSObject constructor = createPrototype(context);
+        if (constructor instanceof JSNativeFunction nativeFunction) {
+            nativeFunction.setConstructorType(constructorType);
         }
-        JSValue constructorObject = prototypeConstructor.construct(context, args);
-        if (constructorObject instanceof JSNativeFunction nativeFunction) {
-            nativeFunction.setConstructorType(toConstructorType());
-        }
-        return constructorObject;
+        return constructor;
     }
 
-    private JSConstructorType toConstructorType() {
-        return switch (this) {
-            case Error -> JSConstructorType.ERROR;
-            case AggregateError -> JSConstructorType.AGGREGATE_ERROR;
-            case EvalError -> JSConstructorType.EVAL_ERROR;
-            case RangeError -> JSConstructorType.RANGE_ERROR;
-            case ReferenceError -> JSConstructorType.REFERENCE_ERROR;
-            case SuppressedError -> JSConstructorType.SUPPRESSED_ERROR;
-            case SyntaxError -> JSConstructorType.SYNTAX_ERROR;
-            case TypeError -> JSConstructorType.TYPE_ERROR;
-            case URIError -> JSConstructorType.URI_ERROR;
-        };
+    public JSObject createPrototype(JSContext context) {
+        if (this == Error) {
+            return JSError.createPrototype(context);
+        }
+        JSObject constructor = JSError.createNativeErrorPrototype(context, name(), length, this);
+        if (this == AggregateError && context.getGlobalObject().get(JSError.NAME) instanceof JSObject parent) {
+            constructor.setPrototype(parent);
+        }
+        return constructor;
     }
 }

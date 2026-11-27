@@ -205,6 +205,11 @@ public sealed class JSError extends JSObject permits JSAggregateError, JSRangeEr
 
     static JSValue createNativeError(JSContext context, JSValue[] args,
             BiFunction<JSContext, String, JSError> factory) {
+        return createNativeError(context, args, factory, null);
+    }
+
+    static JSValue createNativeError(JSContext context, JSValue[] args, BiFunction<JSContext, String, JSError> factory,
+            String prototypeToRefresh) {
         String message = "";
         if (args.length > 0 && !args[0].isUndefined()) {
             message = JSTypeConversions.toString(context, args[0]).value();
@@ -216,6 +221,9 @@ public sealed class JSError extends JSObject permits JSAggregateError, JSRangeEr
         if (args.length > 0 && !args[0].isUndefined()) {
             defineEmptyMessage(jsError, message);
         }
+        if (prototypeToRefresh != null) {
+            context.transferPrototype(jsError, prototypeToRefresh);
+        }
         if (args.length > 1 && !installErrorCause(context, jsError, args[1])) {
             return JSUndefined.INSTANCE;
         }
@@ -223,7 +231,7 @@ public sealed class JSError extends JSObject permits JSAggregateError, JSRangeEr
         return jsError;
     }
 
-    static JSObject createNativeErrorPrototype(JSContext context, String name, int length,
+    public static JSObject createNativeErrorPrototype(JSContext context, String name, int length,
             JSNativeCallback constructor) {
         JSObject errorPrototype = newErrorPrototype(context, name, NAME);
         JSNativeFunction errorConstructor = new JSNativeFunction(context, name, length, constructor, true);

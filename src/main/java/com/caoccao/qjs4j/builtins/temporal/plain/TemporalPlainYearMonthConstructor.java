@@ -113,15 +113,8 @@ public final class TemporalPlainYearMonthConstructor {
             return TemporalCalendarFields.yearMonthFromFields(context, itemObj, options);
         }
         if (item instanceof JSString itemStr) {
-            JSValue result = yearMonthFromString(context, itemStr.value());
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            String overflow = TemporalUtils.getOverflowOption(context, options);
-            if (context.hasPendingException() || overflow == null) {
-                return JSUndefined.INSTANCE;
-            }
-            return result;
+            return TemporalUtils.finishStringConversion(context, yearMonthFromString(context, itemStr.value()),
+                    options);
         }
         return TemporalError.INVALID_YEAR_ARGUMENT.undefined(context);
     }

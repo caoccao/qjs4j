@@ -69,22 +69,7 @@ public final class JSNativeFunction extends JSFunction {
             }
             return context.throwTypeError(errorMessage);
         }
-        context.getVirtualMachine().checkExecutionInterrupt();
-        JSContext callbackContext = getRealmContext();
-        try {
-            JSValue result = callback.call(callbackContext, thisArg, args);
-            if (callbackContext != context && callbackContext.hasPendingException()) {
-                context.setPendingException(callbackContext.getPendingException());
-                callbackContext.clearPendingException();
-            }
-            return result;
-        } catch (JSException | JSVirtualMachineException exception) {
-            if (callbackContext != context && callbackContext.hasPendingException()) {
-                context.setPendingException(callbackContext.getPendingException());
-                callbackContext.clearPendingException();
-            }
-            throw exception;
-        }
+        return callInRealm(context, getRealmContext(), callback, thisArg, args);
     }
 
     @Override
@@ -117,4 +102,22 @@ public final class JSNativeFunction extends JSFunction {
         return JSValueType.FUNCTION;
     }
 
+    static JSValue callInRealm(JSContext context, JSContext callbackContext, JSNativeCallback callback, JSValue thisArg,
+            JSValue[] args) {
+        context.getVirtualMachine().checkExecutionInterrupt();
+        try {
+            JSValue result = callback.call(callbackContext, thisArg, args);
+            if (callbackContext != context && callbackContext.hasPendingException()) {
+                context.setPendingException(callbackContext.getPendingException());
+                callbackContext.clearPendingException();
+            }
+            return result;
+        } catch (JSException | JSVirtualMachineException exception) {
+            if (callbackContext != context && callbackContext.hasPendingException()) {
+                context.setPendingException(callbackContext.getPendingException());
+                callbackContext.clearPendingException();
+            }
+            throw exception;
+        }
+    }
 }

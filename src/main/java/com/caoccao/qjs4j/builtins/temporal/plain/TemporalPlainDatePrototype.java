@@ -21,6 +21,7 @@ import com.caoccao.qjs4j.builtins.temporal.TemporalPropertyBag;
 import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.builtins.temporal.duration.TemporalCalendarDifference;
 import com.caoccao.qjs4j.builtins.temporal.duration.TemporalDateAddition;
+import com.caoccao.qjs4j.builtins.temporal.duration.TemporalDateArithmetic;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalUnit;
@@ -38,17 +39,17 @@ import java.time.DateTimeException;
  * Implementation of Temporal.PlainDate prototype methods.
  */
 public final class TemporalPlainDatePrototype {
+    private static final TemporalDateArithmetic<JSTemporalPlainDate> ARITHMETIC = new TemporalDateArithmetic<>(
+            TemporalReceiver.PLAIN_DATE, TemporalDateAddition::apply,
+            (ctx, left, right, options, sinceOperation) -> TemporalCalendarDifference.between(ctx, left, right, options,
+                    sinceOperation, TemporalUnit.DAY));
     private static final TemporalReceiver<JSTemporalPlainDate> RECEIVER = TemporalReceiver.PLAIN_DATE;
 
     private TemporalPlainDatePrototype() {
     }
 
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
-        return addOrSubtract(context, thisArg, args, 1);
-    }
-
-    private static JSValue addOrSubtract(JSContext context, JSValue thisArg, JSValue[] args, int sign) {
-        return TemporalDateAddition.apply(context, thisArg, args, sign, RECEIVER, TemporalDateAddition::apply);
+        return ARITHMETIC.shift(context, thisArg, args, 1);
     }
 
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -80,12 +81,6 @@ public final class TemporalPlainDatePrototype {
         return TemporalDateProperty.DAYS_IN_YEAR.read(context, thisArg, RECEIVER);
     }
 
-    private static JSValue difference(JSContext context, JSValue thisArg, JSValue[] args, boolean since) {
-        return RECEIVER.difference(context, thisArg, args, since,
-                (ctx, left, right, options, sinceOperation) -> TemporalCalendarDifference.between(ctx, left, right,
-                        options, sinceOperation, TemporalUnit.DAY));
-    }
-
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
         return RECEIVER.equalTo(context, thisArg, args, JSTemporalCalendarDate::sameDate);
     }
@@ -115,11 +110,11 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue since(JSContext context, JSValue thisArg, JSValue[] args) {
-        return difference(context, thisArg, args, true);
+        return ARITHMETIC.between(context, thisArg, args, true);
     }
 
     public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
-        return addOrSubtract(context, thisArg, args, -1);
+        return ARITHMETIC.shift(context, thisArg, args, -1);
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -242,7 +237,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue until(JSContext context, JSValue thisArg, JSValue[] args) {
-        return difference(context, thisArg, args, false);
+        return ARITHMETIC.between(context, thisArg, args, false);
     }
 
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -263,9 +263,27 @@ public final class PropertyDescriptor {
             descriptorObject.set(PropertyKey.SET, getSetter() != null ? getSetter() : JSUndefined.INSTANCE);
         }
 
-        descriptorObject.set(PropertyKey.ENUMERABLE, JSBoolean.valueOf(isEnumerable()));
-        descriptorObject.set(PropertyKey.CONFIGURABLE, JSBoolean.valueOf(isConfigurable()));
+        writeAttributes(descriptorObject, false);
         return descriptorObject;
+    }
+
+    /** FromPropertyDescriptor keeps absent fields absent in the descriptor passed to a proxy trap. */
+    JSObject toPartialDescriptorObject(JSContext context) {
+        JSObject result = context.createJSObject();
+        if (hasValue()) {
+            result.set(PropertyKey.VALUE, getValue());
+        }
+        if (hasWritable()) {
+            result.set(PropertyKey.WRITABLE, JSBoolean.valueOf(isWritable()));
+        }
+        if (hasGetter()) {
+            result.set(PropertyKey.GET, getGetter());
+        }
+        if (hasSetter()) {
+            result.set(PropertyKey.SET, getSetter());
+        }
+        writeAttributes(result, true);
+        return result;
     }
 
     @Override
@@ -294,6 +312,15 @@ public final class PropertyDescriptor {
         } // Remove trailing ", "
         sb.append("}");
         return sb.toString();
+    }
+
+    private void writeAttributes(JSObject object, boolean partial) {
+        if (!partial || hasEnumerable()) {
+            object.set(PropertyKey.ENUMERABLE, JSBoolean.valueOf(isEnumerable()));
+        }
+        if (!partial || hasConfigurable()) {
+            object.set(PropertyKey.CONFIGURABLE, JSBoolean.valueOf(isConfigurable()));
+        }
     }
 
     /**
@@ -419,6 +446,59 @@ public final class PropertyDescriptor {
             descriptor.setSetter(function);
         }
         return true;
+    }
+
+    public static PropertyDescriptor readDefinition(JSContext context, JSObject descriptorObject, boolean reflect) {
+        PropertyDescriptor descriptor = new PropertyDescriptor();
+
+        // Following QuickJS js_obj_to_desc: use HasProperty to check field existence.
+        // {value: undefined} is a valid descriptor with an explicit value field.
+
+        if (descriptorObject.has(PropertyKey.ENUMERABLE)) {
+            JSValue enumerable = descriptorObject.get(PropertyKey.ENUMERABLE);
+            descriptor.setEnumerable(JSTypeConversions.toBoolean(enumerable) == JSBoolean.TRUE);
+        }
+
+        if (descriptorObject.has(PropertyKey.CONFIGURABLE)) {
+            JSValue configurable = descriptorObject.get(PropertyKey.CONFIGURABLE);
+            descriptor.setConfigurable(JSTypeConversions.toBoolean(configurable) == JSBoolean.TRUE);
+        }
+
+        if (descriptorObject.has(PropertyKey.VALUE)) {
+            JSValue value = descriptorObject.get(PropertyKey.VALUE);
+            descriptor.setValue(value);
+        }
+
+        if (descriptorObject.has(PropertyKey.WRITABLE)) {
+            JSValue writable = descriptorObject.get(PropertyKey.WRITABLE);
+            descriptor.setWritable(JSTypeConversions.toBoolean(writable) == JSBoolean.TRUE);
+        }
+
+        if (descriptorObject.has(PropertyKey.GET)) {
+            JSValue get = descriptorObject.get(PropertyKey.GET);
+            if (!(get instanceof JSUndefined) && !(get instanceof JSFunction)) {
+                context.throwTypeError(reflect ? "invalid getter" : "Getter must be a function");
+                return null;
+            }
+            descriptor.setGetter(get instanceof JSFunction getter ? getter : null);
+        }
+
+        if (descriptorObject.has(PropertyKey.SET)) {
+            JSValue set = descriptorObject.get(PropertyKey.SET);
+            if (!(set instanceof JSUndefined) && !(set instanceof JSFunction)) {
+                context.throwTypeError(reflect ? "invalid setter" : "Setter must be a function");
+                return null;
+            }
+            descriptor.setSetter(set instanceof JSFunction setter ? setter : null);
+        }
+
+        if (descriptor.isAccessorDescriptor() && descriptor.isDataDescriptor()) {
+            String message = "Invalid property descriptor. Cannot both specify accessors and a value or writable attribute";
+            context.throwTypeError(reflect ? message : message + ", #<Object>");
+            return null;
+        }
+
+        return descriptor;
     }
 
     public enum AccessorState {

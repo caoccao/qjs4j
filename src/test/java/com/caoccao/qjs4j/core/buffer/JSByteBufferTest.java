@@ -15,27 +15,15 @@ class JSByteBufferTest {
         buffer.putLong(index, first);
         byte[] page = buffer.arrayAt(index);
         int offset = buffer.arrayOffsetAt(index);
-        var started = new java.util.concurrent.CountDownLatch(1);
-        var running = new java.util.concurrent.atomic.AtomicBoolean(true);
-        Thread writer = new Thread(() -> {
-            started.countDown();
-            while (running.get()) {
-                com.caoccao.qjs4j.utils.ByteArrayAtomics.setVolatileLong(page, offset, first);
-                buffer.putLong(index, second);
-            }
-        });
-        writer.start();
-        try {
-            assertThat(started.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        whileWriting(() -> {
+            com.caoccao.qjs4j.utils.ByteArrayAtomics.setVolatileLong(page, offset, first);
+            buffer.putLong(index, second);
+        }, () -> {
             for (int i = 0; i < 100000; i++) {
                 assertThat(buffer.getLong(index)).isIn(first, second);
                 assertThat(com.caoccao.qjs4j.utils.ByteArrayAtomics.getVolatileLong(page, offset)).isIn(first, second);
             }
-        } finally {
-            running.set(false);
-            writer.join(5000);
-        }
-        assertThat(writer.isAlive()).isFalse();
+        });
     }
 
     @Test
@@ -218,22 +206,30 @@ class JSByteBufferTest {
             source.position(offset).put(ones, 0, count);
             target.position(offset).put(ones, 0, count);
         }
-        var started = new java.util.concurrent.CountDownLatch(1);
-        var running = new java.util.concurrent.atomic.AtomicBoolean(true);
-        Thread writer = new Thread(() -> {
-            started.countDown();
-            while (running.get()) {
-                source.copyTo(target, 0, 0, size);
-            }
-        });
-        writer.start();
-        try {
-            assertThat(started.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        whileWriting(() -> {
+            source.copyTo(target, 0, 0, size);
+        }, () -> {
             long[] probes = {0, JSByteBuffer.PAGE_SIZE - 1, JSByteBuffer.PAGE_SIZE, JSByteBuffer.PAGE_SIZE + 7,
                     size - 1};
             for (int i = 0; i < 200000; i++) {
                 assertThat(target.get(probes[i % probes.length])).isEqualTo((byte) 1);
             }
+        });
+    }
+
+    private static void whileWriting(Runnable write, Runnable assertions) throws InterruptedException {
+        var started = new java.util.concurrent.CountDownLatch(1);
+        var running = new java.util.concurrent.atomic.AtomicBoolean(true);
+        Thread writer = new Thread(() -> {
+            started.countDown();
+            while (running.get()) {
+                write.run();
+            }
+        });
+        writer.start();
+        try {
+            assertThat(started.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertions.run();
         } finally {
             running.set(false);
             writer.join(5000);

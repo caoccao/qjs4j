@@ -23,6 +23,14 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 public class RegExpEngineTest extends BaseJavetTest {
+    private RegExpEngine.MatchResult assertMatch(RegExpEngine engine, String input, int start, String expected) {
+        RegExpEngine.MatchResult result = engine.exec(input, start);
+        assertThat(result).isNotNull();
+        assertThat(result.matched()).isTrue();
+        assertThat(result.getMatch()).isEqualTo(expected);
+        return result;
+    }
+
     private RegExpEngine compilePattern(String pattern, String flags) {
         RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
         return new RegExpEngine(compiler.compile(pattern, flags));
@@ -37,24 +45,15 @@ public class RegExpEngineTest extends BaseJavetTest {
     @Test
     public void testCaseInsensitiveMatching() {
         RegExpEngine engine = compilePattern("abc", "i");
-        RegExpEngine.MatchResult result = engine.exec("ABC", 0);
-        assertThat(result).isNotNull();
-        assertThat(result.matched()).isTrue();
-        assertThat(result.getMatch()).isEqualTo("ABC");
+        assertMatch(engine, "ABC", 0, "ABC");
 
-        result = engine.exec("aBc", 0);
-        assertThat(result).isNotNull();
-        assertThat(result.matched()).isTrue();
-        assertThat(result.getMatch()).isEqualTo("aBc");
+        assertMatch(engine, "aBc", 0, "aBc");
     }
 
     @Test
     public void testDotAllMode() {
         RegExpEngine engine = compilePattern("a.b", "s");
-        RegExpEngine.MatchResult result = engine.exec("a\nb", 0);
-        assertThat(result).isNotNull();
-        assertThat(result.matched()).isTrue();
-        assertThat(result.getMatch()).isEqualTo("a\nb");
+        assertMatch(engine, "a\nb", 0, "a\nb");
     }
 
     @Test
@@ -68,13 +67,10 @@ public class RegExpEngineTest extends BaseJavetTest {
     public void testEdgeCases() {
         // Empty pattern matches at every position
         RegExpEngine engine = compilePattern("", "");
-        RegExpEngine.MatchResult result = engine.exec("", 0);
-        assertThat(result).isNotNull();
-        assertThat(result.matched()).isTrue();
-        assertThat(result.getMatch()).isEqualTo("");
+        assertMatch(engine, "", 0, "");
 
         // Start index out of bounds
-        result = engine.exec("abc", -1);
+        RegExpEngine.MatchResult result = engine.exec("abc", -1);
         assertThat(result).isNull();
         result = engine.exec("abc", 4);
         assertThat(result).isNull();
@@ -83,16 +79,10 @@ public class RegExpEngineTest extends BaseJavetTest {
     @Test
     public void testEscapedCharacters() {
         RegExpEngine engine = compilePattern("a\\nb", "");
-        RegExpEngine.MatchResult result = engine.exec("a\nb", 0);
-        assertThat(result).isNotNull();
-        assertThat(result.matched()).isTrue();
-        assertThat(result.getMatch()).isEqualTo("a\nb");
+        assertMatch(engine, "a\nb", 0, "a\nb");
 
         engine = compilePattern("a\\tb", "");
-        result = engine.exec("a\tb", 0);
-        assertThat(result).isNotNull();
-        assertThat(result.matched()).isTrue();
-        assertThat(result.getMatch()).isEqualTo("a\tb");
+        assertMatch(engine, "a\tb", 0, "a\tb");
     }
 
     @Test
@@ -105,10 +95,7 @@ public class RegExpEngineTest extends BaseJavetTest {
     @Test
     public void testExecSimpleMatch() {
         RegExpEngine engine = compilePattern("abc", "");
-        RegExpEngine.MatchResult result = engine.exec("xxabcxx", 0);
-        assertThat(result).isNotNull();
-        assertThat(result.matched()).isTrue();
-        assertThat(result.getMatch()).isEqualTo("abc");
+        RegExpEngine.MatchResult result = assertMatch(engine, "xxabcxx", 0, "abc");
         assertThat(result.startIndex()).isEqualTo(2);
         assertThat(result.endIndex()).isEqualTo(5);
     }
@@ -116,20 +103,14 @@ public class RegExpEngineTest extends BaseJavetTest {
     @Test
     public void testExecWithGroups() {
         RegExpEngine engine = compilePattern("a(bc)d", "");
-        RegExpEngine.MatchResult result = engine.exec("xabcd", 0);
-        assertThat(result).isNotNull();
-        assertThat(result.matched()).isTrue();
-        assertThat(result.getMatch()).isEqualTo("abcd");
+        RegExpEngine.MatchResult result = assertMatch(engine, "xabcd", 0, "abcd");
         assertThat(result.getCapture(1)).isEqualTo("bc");
     }
 
     @Test
     public void testFlagsCombination() {
         RegExpEngine engine = compilePattern("a.b", "is");
-        RegExpEngine.MatchResult result = engine.exec("A\nB", 0);
-        assertThat(result).isNotNull();
-        assertThat(result.matched()).isTrue();
-        assertThat(result.getMatch()).isEqualTo("A\nB");
+        assertMatch(engine, "A\nB", 0, "A\nB");
     }
 
     @Test
@@ -163,10 +144,7 @@ public class RegExpEngineTest extends BaseJavetTest {
     @Test
     public void testLookbehindAssertionsCaptures() {
         RegExpEngine engine = compilePattern("(?<=(a))b", "");
-        RegExpEngine.MatchResult result = engine.exec("ab", 0);
-        assertThat(result).isNotNull();
-        assertThat(result.matched()).isTrue();
-        assertThat(result.getMatch()).isEqualTo("b");
+        RegExpEngine.MatchResult result = assertMatch(engine, "ab", 0, "b");
         assertThat(result.getCapture(1)).isEqualTo("a");
 
         assertThat(matches("(?<=(a))\\1", "", "aa")).isTrue();
@@ -197,29 +175,20 @@ public class RegExpEngineTest extends BaseJavetTest {
     @Test
     public void testMultilineMode() {
         RegExpEngine engine = compilePattern("^abc$", "m");
-        RegExpEngine.MatchResult result = engine.exec("abc\ndef", 0);
-        assertThat(result).isNotNull();
-        assertThat(result.matched()).isTrue();
-        assertThat(result.getMatch()).isEqualTo("abc");
+        assertMatch(engine, "abc\ndef", 0, "abc");
 
-        result = engine.exec("abc\ndef", 4);
+        RegExpEngine.MatchResult result = engine.exec("abc\ndef", 4);
         assertThat(result).isNull(); // Should not match "def" with "^abc$"
 
         // Test ^ matching at line start
         engine = compilePattern("^def", "m");
-        result = engine.exec("abc\ndef", 4);
-        assertThat(result).isNotNull();
-        assertThat(result.matched()).isTrue();
-        assertThat(result.getMatch()).isEqualTo("def");
+        assertMatch(engine, "abc\ndef", 4, "def");
     }
 
     @Test
     public void testMultipleCaptureGroups() {
         RegExpEngine engine = compilePattern("(a)(b)(c)", "");
-        RegExpEngine.MatchResult result = engine.exec("abc", 0);
-        assertThat(result).isNotNull();
-        assertThat(result.matched()).isTrue();
-        assertThat(result.getMatch()).isEqualTo("abc");
+        RegExpEngine.MatchResult result = assertMatch(engine, "abc", 0, "abc");
         assertThat(result.getCapture(1)).isEqualTo("a");
         assertThat(result.getCapture(2)).isEqualTo("b");
         assertThat(result.getCapture(3)).isEqualTo("c");
@@ -303,10 +272,7 @@ public class RegExpEngineTest extends BaseJavetTest {
     @Test
     public void testNestedCaptureGroups() {
         RegExpEngine engine = compilePattern("((a)b)", "");
-        RegExpEngine.MatchResult result = engine.exec("ab", 0);
-        assertThat(result).isNotNull();
-        assertThat(result.matched()).isTrue();
-        assertThat(result.getMatch()).isEqualTo("ab");
+        RegExpEngine.MatchResult result = assertMatch(engine, "ab", 0, "ab");
         assertThat(result.getCapture(1)).isEqualTo("ab");
         assertThat(result.getCapture(2)).isEqualTo("a");
     }
@@ -359,10 +325,7 @@ public class RegExpEngineTest extends BaseJavetTest {
     @Test
     public void testStartIndexInMiddle() {
         RegExpEngine engine = compilePattern("abc", "");
-        RegExpEngine.MatchResult result = engine.exec("xxxabc", 3);
-        assertThat(result).isNotNull();
-        assertThat(result.matched()).isTrue();
-        assertThat(result.getMatch()).isEqualTo("abc");
+        RegExpEngine.MatchResult result = assertMatch(engine, "xxxabc", 3, "abc");
         assertThat(result.startIndex()).isEqualTo(3);
         assertThat(result.endIndex()).isEqualTo(6);
     }
@@ -370,10 +333,7 @@ public class RegExpEngineTest extends BaseJavetTest {
     @Test
     public void testUnicodeCharacters() {
         RegExpEngine engine = compilePattern("😀🌟🚀", "");
-        RegExpEngine.MatchResult result = engine.exec("😀🌟🚀", 0);
-        assertThat(result).isNotNull();
-        assertThat(result.matched()).isTrue();
-        assertThat(result.getMatch()).isEqualTo("😀🌟🚀");
+        assertMatch(engine, "😀🌟🚀", 0, "😀🌟🚀");
         assertThat(engine.test("😀🌟🚀")).isTrue();
     }
 

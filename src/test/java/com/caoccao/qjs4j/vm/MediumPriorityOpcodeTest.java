@@ -16,7 +16,6 @@
 
 package com.caoccao.qjs4j.vm;
 
-import com.caoccao.qjs4j.BaseTest;
 import com.caoccao.qjs4j.compilation.compiler.BytecodeEmitter;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
@@ -25,17 +24,10 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-public class MediumPriorityOpcodeTest extends BaseTest {
+public class MediumPriorityOpcodeTest extends OpcodeTest {
     private JSValue execute(BytecodeEmitter emitter, int localCount, JSValue[] closureVars, JSValue thisArg,
             JSValue... args) {
         return executeWithStrict(true, emitter, localCount, closureVars, thisArg, args);
-    }
-
-    private JSValue executeWithStrict(boolean strict, BytecodeEmitter emitter, int localCount, JSValue[] closureVars,
-            JSValue thisArg, JSValue... args) {
-        JSBytecodeFunction function = new JSBytecodeFunction(context, emitter.build(localCount), "test", args.length,
-                closureVars, null, true, false, false, false, strict, "function test() { [bytecode] }");
-        return context.getVirtualMachine().execute(function, thisArg, args);
     }
 
     @Test

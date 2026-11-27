@@ -38,13 +38,12 @@ public class UsingDeclarationTest {
 
     @Test
     public void testAwaitUsingInAsyncFunction() {
-        Program program = new Parser(new Lexer("""
+        FunctionDeclaration functionDeclaration = ParsedScript.statement("""
                 async function f() {
                     for (await using item of items) {
                         item;
                     }
-                }""")).parse();
-        FunctionDeclaration functionDeclaration = (FunctionDeclaration) program.getBody().get(0);
+                }""", FunctionDeclaration.class);
         ForOfStatement forOfStatement = (ForOfStatement) functionDeclaration.getBody().getBody().get(0);
         assertThat(((VariableDeclaration) forOfStatement.getLeft()).getKind()).isEqualTo(VariableKind.AWAIT_USING);
         assertThat(forOfStatement.isAsync()).isFalse();
@@ -58,12 +57,10 @@ public class UsingDeclarationTest {
 
     @Test
     public void testForOfUsingDeclaration() {
-        Program program = new Parser(new Lexer("""
+        ForOfStatement forOfStatement = ParsedScript.statement("""
                 for (using item of items) {
                     item;
-                }""")).parse();
-        assertThat(program.getBody()).hasSize(1);
-        ForOfStatement forOfStatement = (ForOfStatement) program.getBody().get(0);
+                }""", ForOfStatement.class);
         VariableDeclaration leftDecl = (VariableDeclaration) forOfStatement.getLeft();
         assertThat(leftDecl.getKind()).isEqualTo(VariableKind.USING);
         assertThat(leftDecl.getDeclarations()).hasSize(1);
@@ -75,9 +72,8 @@ public class UsingDeclarationTest {
     public void testUsingDeclarationRejectsPatterns() {
         assertThatThrownBy(() -> new Parser(new Lexer("using { x } = obj;")).parse())
                 .isInstanceOf(JSSyntaxErrorException.class);
-        Program program = new Parser(new Lexer("using [ y ] = arr;")).parse();
-        assertThat(program.getBody()).hasSize(1);
-        ExpressionStatement expressionStatement = (ExpressionStatement) program.getBody().get(0);
+        ExpressionStatement expressionStatement = ParsedScript.statement("using [ y ] = arr;",
+                ExpressionStatement.class);
         assertThat(expressionStatement.getExpression()).isInstanceOf(AssignmentExpression.class);
         AssignmentExpression assignmentExpression = (AssignmentExpression) expressionStatement.getExpression();
         assertThat(assignmentExpression.getLeft()).isInstanceOf(MemberExpression.class);
@@ -87,9 +83,7 @@ public class UsingDeclarationTest {
 
     @Test
     public void testUsingDeclarationWithSimpleBinding() {
-        Program program = new Parser(new Lexer("using value = resource;")).parse();
-        assertThat(program.getBody()).hasSize(1);
-        VariableDeclaration declaration = (VariableDeclaration) program.getBody().get(0);
+        VariableDeclaration declaration = ParsedScript.statement("using value = resource;", VariableDeclaration.class);
         assertThat(declaration.getKind()).isEqualTo(VariableKind.USING);
         assertThat(declaration.getDeclarations()).hasSize(1);
         assertThat(declaration.getDeclarations().get(0).getId()).isInstanceOf(Identifier.class);
@@ -99,9 +93,7 @@ public class UsingDeclarationTest {
 
     @Test
     public void testUsingIdentifierExpressionIsNotDeclaration() {
-        Program program = new Parser(new Lexer("using = 1;")).parse();
-        assertThat(program.getBody()).hasSize(1);
-        ExpressionStatement expressionStatement = (ExpressionStatement) program.getBody().get(0);
+        ExpressionStatement expressionStatement = ParsedScript.statement("using = 1;", ExpressionStatement.class);
         assertThat(expressionStatement.getExpression()).isInstanceOf(AssignmentExpression.class);
         AssignmentExpression assignmentExpression = (AssignmentExpression) expressionStatement.getExpression();
         assertThat(assignmentExpression.getLeft()).isInstanceOf(Identifier.class);

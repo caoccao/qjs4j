@@ -34,6 +34,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 class JSExceptionTest extends BaseTest {
+    private JSException assertEvalFailure(String source, String fileName, boolean module, String message,
+            SourceLocation location) {
+        JSException error = catchThrowableOfType(JSException.class, () -> context.eval(source, fileName, module));
+        assertThat(error).isNotNull();
+        assertThat(error.getMessage()).isEqualTo(message);
+        assertThat(error.getSourceLocation()).isEqualTo(location);
+        assertThat(context.hasPendingException()).isFalse();
+        return error;
+    }
+
     @Override
     protected JSRuntime createRuntime() {
         return new JSRuntime(new JSRuntimeOptions().setShadowRealmEnabled(true).setTemporalEnabled(true));
@@ -70,33 +80,23 @@ class JSExceptionTest extends BaseTest {
 
     @Test
     void testEvalCompilerSyntaxExceptionCarriesSourceLocation() {
-        JSException evalException = catchThrowableOfType(JSException.class,
-                () -> context.eval("'use strict'; with ({}) {}", "script.js", false));
+        assertEvalFailure("'use strict'; with ({}) {}", "script.js", false,
+                "SyntaxError: Strict mode code may not include a with statement", new SourceLocation(1, 15, 14, 14));
 
-        assertThat(evalException.getMessage())
-                .isEqualTo("SyntaxError: Strict mode code may not include a with statement");
-        assertThat(evalException.getSourceLocation()).isEqualTo(new SourceLocation(1, 15, 14, 14));
-        assertThat(context.hasPendingException()).isFalse();
     }
 
     @Test
     void testEvalLexerExceptionCarriesSourceLocation() {
-        JSException evalException = catchThrowableOfType(JSException.class,
-                () -> context.eval("'\\xG1'", "script.js", false));
+        assertEvalFailure("'\\xG1'", "script.js", false, "SyntaxError: Invalid or unexpected token",
+                new SourceLocation(1, 4, 3, 3));
 
-        assertThat(evalException.getMessage()).isEqualTo("SyntaxError: Invalid or unexpected token");
-        assertThat(evalException.getSourceLocation()).isEqualTo(new SourceLocation(1, 4, 3, 3));
-        assertThat(context.hasPendingException()).isFalse();
     }
 
     @Test
     void testEvalModuleParserExceptionCarriesSourceLocation() {
-        JSException evalException = catchThrowableOfType(JSException.class,
-                () -> context.eval("export const value = ;", "module.js", true));
+        assertEvalFailure("export const value = ;", "module.js", true, "SyntaxError: Unexpected token ';'",
+                new SourceLocation(1, 22, 21, 21));
 
-        assertThat(evalException.getMessage()).isEqualTo("SyntaxError: Unexpected token ';'");
-        assertThat(evalException.getSourceLocation()).isEqualTo(new SourceLocation(1, 22, 21, 21));
-        assertThat(context.hasPendingException()).isFalse();
         assertThat(context.eval("1 + 1", "after-module-error.js", false).toJavaObject()).isEqualTo(2.0);
     }
 
@@ -105,38 +105,29 @@ class JSExceptionTest extends BaseTest {
         String source = "function build() {\n" + "  return {\n" + "    __proto__: null,\n" + "    __proto__: {}\n"
                 + "  };\n" + "}";
 
-        JSException evalException = catchThrowableOfType(JSException.class,
-                () -> context.eval(source, "nested.js", false));
+        JSException evalException = assertEvalFailure(source, "nested.js", false,
+                "SyntaxError: Duplicate __proto__ fields are not allowed in object literals",
+                new SourceLocation(4, 5, 55, 55));
 
-        assertThat(evalException.getMessage())
-                .isEqualTo("SyntaxError: Duplicate __proto__ fields are not allowed in object literals");
         assertThat(evalException.getCause()).isNull();
-        assertThat(evalException.getSourceLocation()).isEqualTo(new SourceLocation(4, 5, 55, 55));
-        assertThat(context.hasPendingException()).isFalse();
     }
 
     @Test
     void testEvalParserExceptionCarriesSourceLocation() {
-        JSException evalException = catchThrowableOfType(JSException.class,
-                () -> context.eval("const value = ;", "script.js", false));
+        assertEvalFailure("const value = ;", "script.js", false, "SyntaxError: Unexpected token ';'",
+                new SourceLocation(1, 15, 14, 14));
 
-        assertThat(evalException.getMessage()).isEqualTo("SyntaxError: Unexpected token ';'");
-        assertThat(evalException.getSourceLocation()).isEqualTo(new SourceLocation(1, 15, 14, 14));
-        assertThat(context.hasPendingException()).isFalse();
     }
 
     @Test
     void testEvalScriptExceptionCarriesSourceLocation() {
         String source = "const value = {\n" + "  first: 1,\n" + "  __proto__: null,\n" + "  __proto__: {}\n" + "};";
 
-        JSException evalException = catchThrowableOfType(JSException.class,
-                () -> context.eval(source, "script.js", false));
+        JSException evalException = assertEvalFailure(source, "script.js", false,
+                "SyntaxError: Duplicate __proto__ fields are not allowed in object literals",
+                new SourceLocation(4, 3, 49, 49));
 
-        assertThat(evalException.getMessage())
-                .isEqualTo("SyntaxError: Duplicate __proto__ fields are not allowed in object literals");
         assertThat(evalException.getCause()).isNull();
-        assertThat(evalException.getSourceLocation()).isEqualTo(new SourceLocation(4, 3, 49, 49));
-        assertThat(context.hasPendingException()).isFalse();
     }
 
     @Test
@@ -158,23 +149,17 @@ class JSExceptionTest extends BaseTest {
 
     @Test
     void testFunctionConstructorExceptionCarriesSourceLocation() {
-        JSException evalException = catchThrowableOfType(JSException.class,
-                () -> context.eval("new Function('return ({__proto__: null, __proto__: {}});');", "script.js", false));
+        assertEvalFailure("new Function('return ({__proto__: null, __proto__: {}});');", "script.js", false,
+                "SyntaxError: Duplicate __proto__ fields are not allowed in object literals",
+                new SourceLocation(3, 27, 41, 41));
 
-        assertThat(evalException.getMessage())
-                .isEqualTo("SyntaxError: Duplicate __proto__ fields are not allowed in object literals");
-        assertThat(evalException.getSourceLocation()).isEqualTo(new SourceLocation(3, 27, 41, 41));
-        assertThat(context.hasPendingException()).isFalse();
     }
 
     @Test
     void testFunctionConstructorParserExceptionCarriesSourceLocation() {
-        JSException evalException = catchThrowableOfType(JSException.class,
-                () -> context.eval("new Function('const value = ;');", "script.js", false));
+        assertEvalFailure("new Function('const value = ;');", "script.js", false, "SyntaxError: Unexpected token ';'",
+                new SourceLocation(3, 15, 29, 29));
 
-        assertThat(evalException.getMessage()).isEqualTo("SyntaxError: Unexpected token ';'");
-        assertThat(evalException.getSourceLocation()).isEqualTo(new SourceLocation(3, 15, 29, 29));
-        assertThat(context.hasPendingException()).isFalse();
     }
 
     @Test
@@ -193,23 +178,17 @@ class JSExceptionTest extends BaseTest {
         String nestedSource = "const value = {\n" + "  first: 1,\n" + "  __proto__: null,\n" + "  __proto__: {}\n"
                 + "};";
 
-        JSException evalException = catchThrowableOfType(JSException.class,
-                () -> context.eval("eval(`" + nestedSource + "`);", "outer.js", false));
+        assertEvalFailure("eval(`" + nestedSource + "`);", "outer.js", false,
+                "SyntaxError: Duplicate __proto__ fields are not allowed in object literals",
+                new SourceLocation(4, 3, 49, 49));
 
-        assertThat(evalException.getMessage())
-                .isEqualTo("SyntaxError: Duplicate __proto__ fields are not allowed in object literals");
-        assertThat(evalException.getSourceLocation()).isEqualTo(new SourceLocation(4, 3, 49, 49));
-        assertThat(context.hasPendingException()).isFalse();
     }
 
     @Test
     void testNestedEvalParserExceptionCarriesSourceLocation() {
-        JSException evalException = catchThrowableOfType(JSException.class,
-                () -> context.eval("eval(`const value = ;`);", "outer.js", false));
+        assertEvalFailure("eval(`const value = ;`);", "outer.js", false, "SyntaxError: Unexpected token ';'",
+                new SourceLocation(1, 15, 14, 14));
 
-        assertThat(evalException.getMessage()).isEqualTo("SyntaxError: Unexpected token ';'");
-        assertThat(evalException.getSourceLocation()).isEqualTo(new SourceLocation(1, 15, 14, 14));
-        assertThat(context.hasPendingException()).isFalse();
     }
 
     @Test
@@ -229,23 +208,17 @@ class JSExceptionTest extends BaseTest {
 
     @Test
     void testShadowRealmCompilerExceptionCarriesSourceLocation() {
-        JSException evalException = catchThrowableOfType(JSException.class, () -> context
-                .eval("new ShadowRealm().evaluate('({__proto__: null, __proto__: {}})');", "script.js", false));
+        assertEvalFailure("new ShadowRealm().evaluate('({__proto__: null, __proto__: {}})');", "script.js", false,
+                "SyntaxError: Duplicate __proto__ fields are not allowed in object literals",
+                new SourceLocation(1, 20, 19, 19));
 
-        assertThat(evalException.getMessage())
-                .isEqualTo("SyntaxError: Duplicate __proto__ fields are not allowed in object literals");
-        assertThat(evalException.getSourceLocation()).isEqualTo(new SourceLocation(1, 20, 19, 19));
-        assertThat(context.hasPendingException()).isFalse();
     }
 
     @Test
     void testShadowRealmParserExceptionCarriesSourceLocation() {
-        JSException evalException = catchThrowableOfType(JSException.class,
-                () -> context.eval("new ShadowRealm().evaluate('const value = ;');", "script.js", false));
+        assertEvalFailure("new ShadowRealm().evaluate('const value = ;');", "script.js", false,
+                "SyntaxError: Unexpected token ';'", new SourceLocation(1, 15, 14, 14));
 
-        assertThat(evalException.getMessage()).isEqualTo("SyntaxError: Unexpected token ';'");
-        assertThat(evalException.getSourceLocation()).isEqualTo(new SourceLocation(1, 15, 14, 14));
-        assertThat(context.hasPendingException()).isFalse();
     }
 
     @Test

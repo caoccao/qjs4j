@@ -17,8 +17,6 @@
 package com.caoccao.qjs4j.core.module;
 
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
-import com.caoccao.qjs4j.core.JSContext;
-import com.caoccao.qjs4j.core.JSRuntime;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
@@ -123,13 +121,11 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
         writeModule("throwing.mjs",
                 "globalThis.dependencyBodyRan = true;\nthrow new TypeError('dependency body ran');\n");
         Path entry = writeModule("main-throwing.mjs", "import './throwing.mjs';\nglobalThis.rootBodyRan = true;\n");
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            assertThatThrownBy(() -> context.eval(Files.readString(entry), entry.toString(), true))
-                    .isInstanceOf(JSException.class).hasMessageContaining("dependency body ran");
-            assertThat(context.eval("String(globalThis.dependencyBodyRan)", "probe.js", false).toString())
-                    .as("the dependency did run — that is what a runtime failure means").isEqualTo("true");
-            assertThat(context.getModuleBodyEvaluationCount()).isPositive();
-        }
+        assertThatThrownBy(() -> context.eval(Files.readString(entry), entry.toString(), true))
+                .isInstanceOf(JSException.class).hasMessageContaining("dependency body ran");
+        assertThat(context.eval("String(globalThis.dependencyBodyRan)", "probe.js", false).toString())
+                .as("the dependency did run — that is what a runtime failure means").isEqualTo("true");
+        assertThat(context.getModuleBodyEvaluationCount()).isPositive();
     }
 
     @Test
@@ -144,23 +140,19 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
                 "import { missing } from './dep-transitive.mjs';\nexport const m = 1;\n");
         String entrySource = "import { m } from './mid-transitive.mjs';\n";
         Path entry = writeModule("main-transitive.mjs", entrySource);
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            JSException failure = catchThrowableOfType(JSException.class,
-                    () -> context.eval(entrySource, entry.toString(), true));
-            assertThat(failure).isNotNull();
-            assertThat(failure.getMessage()).contains(
-                    "The requested module './dep-transitive.mjs' " + "does not provide an export named 'missing'")
-                    .contains("mid-transitive.mjs:1:10");
-            assertThat(failure.getSourceName()).as("the offsets index the dependency, and the diagnostic says so")
-                    .isEqualTo(mid.toString());
-            SourceLocation location = failure.getSourceLocation();
-            assertThat(location).isNotNull();
-            assertThat(location.line()).isEqualTo(1);
-            assertThat(location.column()).isEqualTo(10);
-            String dependencySource = Files.readString(mid);
-            assertThat(dependencySource.substring(location.offset(), location.endOffset()))
-                    .as("the offsets select the imported name in the dependency's own source").isEqualTo("missing");
-        }
+        JSException failure = moduleFailure(entry, entrySource);
+        assertThat(failure.getMessage())
+                .contains("The requested module './dep-transitive.mjs' " + "does not provide an export named 'missing'")
+                .contains("mid-transitive.mjs:1:10");
+        assertThat(failure.getSourceName()).as("the offsets index the dependency, and the diagnostic says so")
+                .isEqualTo(mid.toString());
+        SourceLocation location = failure.getSourceLocation();
+        assertThat(location).isNotNull();
+        assertThat(location.line()).isEqualTo(1);
+        assertThat(location.column()).isEqualTo(10);
+        String dependencySource = Files.readString(mid);
+        assertThat(dependencySource.substring(location.offset(), location.endOffset()))
+                .as("the offsets select the imported name in the dependency's own source").isEqualTo("missing");
     }
 
     @Test
@@ -171,20 +163,16 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
         writeModule("dep-located.mjs", "export const other = 1;\n");
         String entrySource = "const before = 1;\nimport { missing as here } from './dep-located.mjs';\n";
         Path entry = writeModule("main-located.mjs", entrySource);
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            JSException failure = catchThrowableOfType(JSException.class,
-                    () -> context.eval(entrySource, entry.toString(), true));
-            assertThat(failure).isNotNull();
-            assertThat(failure.getMessage()).as("the message names the module that was asked, as Node's does")
-                    .isEqualTo("SyntaxError: The requested module './dep-located.mjs' "
-                            + "does not provide an export named 'missing'");
-            SourceLocation location = failure.getSourceLocation();
-            assertThat(location).isNotNull();
-            assertThat(location.line()).isEqualTo(2);
-            assertThat(location.column()).isEqualTo(10);
-            assertThat(entrySource.substring(location.offset(), location.endOffset()))
-                    .as("the span covers the name that was asked for, in the caller's own source").isEqualTo("missing");
-        }
+        JSException failure = moduleFailure(entry, entrySource);
+        assertThat(failure.getMessage()).as("the message names the module that was asked, as Node's does")
+                .isEqualTo("SyntaxError: The requested module './dep-located.mjs' "
+                        + "does not provide an export named 'missing'");
+        SourceLocation location = failure.getSourceLocation();
+        assertThat(location).isNotNull();
+        assertThat(location.line()).isEqualTo(2);
+        assertThat(location.column()).isEqualTo(10);
+        assertThat(entrySource.substring(location.offset(), location.endOffset()))
+                .as("the span covers the name that was asked for, in the caller's own source").isEqualTo("missing");
     }
 
     @Test
@@ -306,10 +294,8 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
         // exactly what evaluation produces.
         Path entry = writeModule("main-absent.mjs",
                 "import { anything } from './not-here.mjs';\nglobalThis.rootBodyRan = true;\n");
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            assertThatThrownBy(() -> context.eval(Files.readString(entry), entry.toString(), true))
-                    .isInstanceOf(JSException.class).hasMessageContaining("Cannot find module");
-        }
+        assertThatThrownBy(() -> context.eval(Files.readString(entry), entry.toString(), true))
+                .isInstanceOf(JSException.class).hasMessageContaining("Cannot find module");
     }
 
     @Test
@@ -327,14 +313,10 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
         writeModule("dep-root-named.mjs", "export const other = 1;\n");
         String entrySource = "import { missing } from './dep-root-named.mjs';\n";
         Path entry = writeModule("main-root-named.mjs", entrySource);
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            JSException failure = catchThrowableOfType(JSException.class,
-                    () -> context.eval(entrySource, entry.toString(), true));
-            assertThat(failure).isNotNull();
-            assertThat(failure.getMessage()).doesNotContain("imported by");
-            assertThat(failure.getSourceName()).isEqualTo(entry.toString());
-            assertThat(failure.getSourceLocation()).isNotNull();
-        }
+        JSException failure = moduleFailure(entry, entrySource);
+        assertThat(failure.getMessage()).doesNotContain("imported by");
+        assertThat(failure.getSourceName()).isEqualTo(entry.toString());
+        assertThat(failure.getSourceLocation()).isNotNull();
     }
 
     @Test
@@ -380,12 +362,10 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
                         + "export const middle = leaf + 1;\n");
         Path entry = writeModule("main-count.mjs", "import { middle } from './count-middle.mjs';\n"
                 + "globalThis.order = (globalThis.order || []).concat('entry');\n" + "globalThis.result = middle;\n");
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            context.eval(Files.readString(entry), entry.toString(), true);
-            assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString()).isEqualTo("2");
-            assertThat(context.eval("globalThis.order.join(',')", "probe.js", false).toString())
-                    .as("dependencies still evaluate before their importers, once").isEqualTo("leaf,middle,entry");
-        }
+        context.eval(Files.readString(entry), entry.toString(), true);
+        assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString()).isEqualTo("2");
+        assertThat(context.eval("globalThis.order.join(',')", "probe.js", false).toString())
+                .as("dependencies still evaluate before their importers, once").isEqualTo("leaf,middle,entry");
     }
 
 }

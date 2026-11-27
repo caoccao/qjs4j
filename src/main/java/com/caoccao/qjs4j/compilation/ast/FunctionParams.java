@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Holds function parameters: regular params, default values, and optional rest parameter.
@@ -64,5 +65,15 @@ public record FunctionParams(List<Pattern> params, List<Expression> defaults, Re
             }
         }
         return restParameter != null && restParameter.getArgument().getBoundNames().contains(name);
+    }
+
+    /** Visit bound names in source order, including destructuring and rest parameters. */
+    public void forEachBoundName(Consumer<String> visitor) {
+        for (Pattern param : params) {
+            param.getBoundNames().forEach(visitor);
+        }
+        if (restParameter != null) {
+            restParameter.getArgument().getBoundNames().forEach(visitor);
+        }
     }
 }

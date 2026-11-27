@@ -17,8 +17,6 @@
 package com.caoccao.qjs4j.core.module;
 
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
-import com.caoccao.qjs4j.core.JSContext;
-import com.caoccao.qjs4j.core.JSRuntime;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
@@ -205,12 +203,10 @@ public class JSModuleGraphLoadOrderTest extends ModuleFileTest {
                 "import './side-effect.mjs';\n" + "import text from './payload-ok.txt' with { type: 'text' };\n"
                         + "import data from './payload-ok.json' with { type: 'json' };\n"
                         + "globalThis.result = text + ':' + data.a;\n");
-        try (JSRuntime runtime = createRuntime(); JSContext context = runtime.createContext()) {
-            context.eval(Files.readString(entry), entry.toString(), true);
-            assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString()).isEqualTo("payload:1");
-            assertThat(context.eval("String(globalThis.dependencyBodyRan)", "probe.js", false).toString())
-                    .as("a graph that links must evaluate exactly as before").isEqualTo("true");
-        }
+        context.eval(Files.readString(entry), entry.toString(), true);
+        assertThat(context.eval("String(globalThis.result)", "probe.js", false).toString()).isEqualTo("payload:1");
+        assertThat(context.eval("String(globalThis.dependencyBodyRan)", "probe.js", false).toString())
+                .as("a graph that links must evaluate exactly as before").isEqualTo("true");
     }
 
 }

@@ -21,6 +21,7 @@ import com.caoccao.qjs4j.builtins.temporal.TemporalTimeFields;
 import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.builtins.temporal.duration.TemporalCalendarDifference;
 import com.caoccao.qjs4j.builtins.temporal.duration.TemporalDateAddition;
+import com.caoccao.qjs4j.builtins.temporal.duration.TemporalDateArithmetic;
 import com.caoccao.qjs4j.builtins.temporal.plain.TemporalDateProperty;
 import com.caoccao.qjs4j.builtins.temporal.plain.TemporalPartialDate;
 import com.caoccao.qjs4j.builtins.temporal.plain.TemporalPlainTimeConstructor;
@@ -46,6 +47,8 @@ import java.time.DateTimeException;
  * Implementation of Temporal.ZonedDateTime prototype methods.
  */
 public final class TemporalZonedDateTimePrototype {
+    private static final TemporalDateArithmetic<JSTemporalZonedDateTime> ARITHMETIC = new TemporalDateArithmetic<>(
+            TemporalReceiver.ZONED_DATE_TIME, TemporalDateAddition::apply, TemporalCalendarDifference::between);
     private static final BigInteger NS_PER_HOUR = TemporalConstants.BI_HOUR_NANOSECONDS;
     private static final TemporalReceiver<JSTemporalZonedDateTime> RECEIVER = TemporalReceiver.ZONED_DATE_TIME;
 
@@ -53,11 +56,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
-        return addOrSubtract(context, thisArg, args, 1);
-    }
-
-    private static JSValue addOrSubtract(JSContext context, JSValue thisArg, JSValue[] args, int sign) {
-        return TemporalDateAddition.apply(context, thisArg, args, sign, RECEIVER, TemporalDateAddition::apply);
+        return ARITHMETIC.shift(context, thisArg, args, 1);
     }
 
     public static JSValue calendar(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -93,10 +92,6 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue daysInYear(JSContext context, JSValue thisArg, JSValue[] args) {
         return TemporalDateProperty.DAYS_IN_YEAR.read(context, thisArg, RECEIVER);
-    }
-
-    private static JSValue difference(JSContext context, JSValue thisArg, JSValue[] args, boolean since) {
-        return RECEIVER.difference(context, thisArg, args, since, TemporalCalendarDifference::between);
     }
 
     public static JSValue epochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -354,7 +349,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue since(JSContext context, JSValue thisArg, JSValue[] args) {
-        return difference(context, thisArg, args, true);
+        return ARITHMETIC.between(context, thisArg, args, true);
     }
 
     public static JSValue startOfDay(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -382,7 +377,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
-        return addOrSubtract(context, thisArg, args, -1);
+        return ARITHMETIC.shift(context, thisArg, args, -1);
     }
 
     public static JSValue timeZoneId(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -474,7 +469,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue until(JSContext context, JSValue thisArg, JSValue[] args) {
-        return difference(context, thisArg, args, false);
+        return ARITHMETIC.between(context, thisArg, args, false);
     }
 
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {

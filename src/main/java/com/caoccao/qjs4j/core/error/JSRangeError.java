@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core.error;
 
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
+import com.caoccao.qjs4j.exceptions.JSErrorType;
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSObject;
 import com.caoccao.qjs4j.core.JSValue;
@@ -49,7 +50,6 @@ public final class JSRangeError extends JSError {
     }
 
     public static JSObject createPrototype(JSContext context, JSValue... args) {
-        return createNativeErrorPrototype(context, NAME, 1,
-                (childContext, thisObj, childArgs) -> create(childContext, childArgs));
+        return JSErrorType.RangeError.createPrototype(context);
     }
 }

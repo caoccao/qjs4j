@@ -28,9 +28,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 public class TemplateLiteralEnhancementTest extends BaseJavetTest {
     @Test
     public void testParseTaggedTemplateInvalidEscape() {
-        Program program = new Parser(new Lexer("tag`bad\\u{110000}`;")).parse();
-        TaggedTemplateExpression taggedTemplateExpression = (TaggedTemplateExpression) ((ExpressionStatement) program
-                .getBody().get(0)).getExpression();
+        TaggedTemplateExpression taggedTemplateExpression = ParsedScript.expression("tag`bad\\u{110000}`;",
+                TaggedTemplateExpression.class);
         TemplateLiteral templateLiteral = taggedTemplateExpression.getQuasi();
         assertThat(templateLiteral.getRawQuasis()).containsExactly("bad\\u{110000}");
         assertThat(templateLiteral.getQuasis()).containsExactly((String) null);
@@ -38,9 +37,8 @@ public class TemplateLiteralEnhancementTest extends BaseJavetTest {
 
     @Test
     public void testParseTaggedTemplateLiteral() {
-        Program program = new Parser(new Lexer("tag`a${x}b`;")).parse();
-        TaggedTemplateExpression taggedTemplateExpression = (TaggedTemplateExpression) ((ExpressionStatement) program
-                .getBody().get(0)).getExpression();
+        TaggedTemplateExpression taggedTemplateExpression = ParsedScript.expression("tag`a${x}b`;",
+                TaggedTemplateExpression.class);
         TemplateLiteral templateLiteral = taggedTemplateExpression.getQuasi();
         assertThat(templateLiteral.getRawQuasis()).containsExactly("a", "b");
         assertThat(templateLiteral.getQuasis()).containsExactly("a", "b");
@@ -51,9 +49,8 @@ public class TemplateLiteralEnhancementTest extends BaseJavetTest {
 
     @Test
     public void testParseTaggedTemplateLiteralEscapes() {
-        Program program = new Parser(new Lexer("tag`line\\n${x}\\u{41}`;")).parse();
-        TaggedTemplateExpression taggedTemplateExpression = (TaggedTemplateExpression) ((ExpressionStatement) program
-                .getBody().get(0)).getExpression();
+        TaggedTemplateExpression taggedTemplateExpression = ParsedScript.expression("tag`line\\n${x}\\u{41}`;",
+                TaggedTemplateExpression.class);
         TemplateLiteral templateLiteral = taggedTemplateExpression.getQuasi();
         assertThat(templateLiteral.getRawQuasis()).containsExactly("line\\n", "\\u{41}");
         assertThat(templateLiteral.getQuasis()).containsExactly("line\n", "A");

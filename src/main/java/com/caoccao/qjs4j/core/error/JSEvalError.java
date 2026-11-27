@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core.error;
 
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
+import com.caoccao.qjs4j.exceptions.JSErrorType;
 import com.caoccao.qjs4j.core.*;
 
 /**
@@ -43,29 +44,10 @@ public final class JSEvalError extends JSError {
     }
 
     public static JSValue create(JSContext context, JSValue... args) {
-        String message = "";
-        if (args.length > 0 && !args[0].isUndefined()) {
-            message = JSTypeConversions.toString(context, args[0]).value();
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        JSEvalError jsEvalError = context.createJSEvalError(message);
-        if (args.length > 0 && !args[0].isUndefined()) {
-            JSError.defineEmptyMessage(jsEvalError, message);
-        }
-        context.transferPrototype(jsEvalError, NAME);
-        if (args.length > 1) {
-            if (!JSError.installErrorCause(context, jsEvalError, args[1])) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-        JSError.captureStackTraceBelowNewTarget(context, jsEvalError);
-        return jsEvalError;
+        return createNativeError(context, args, JSContext::createJSEvalError, NAME);
     }
 
     public static JSObject createPrototype(JSContext context, JSValue... args) {
-        return createNativeErrorPrototype(context, NAME, 1,
-                (childContext, thisObj, childArgs) -> create(childContext, childArgs));
+        return JSErrorType.EvalError.createPrototype(context);
     }
 }

@@ -139,22 +139,19 @@ public final class TemporalPlainTimeConstructor {
      */
     public static JSValue toTemporalTime(JSContext context, JSValue item, JSValue options) {
         if (item instanceof JSTemporalPlainTime plainTime) {
-            TemporalUtils.getOverflowOption(context, options);
-            if (context.hasPendingException()) {
+            if (!TemporalUtils.validateOverflow(context, options)) {
                 return JSUndefined.INSTANCE;
             }
             return JSTemporalPlainTime.create(context, plainTime.getIsoTime());
         }
         if (item instanceof JSTemporalPlainDateTime plainDateTime) {
-            TemporalUtils.getOverflowOption(context, options);
-            if (context.hasPendingException()) {
+            if (!TemporalUtils.validateOverflow(context, options)) {
                 return JSUndefined.INSTANCE;
             }
             return JSTemporalPlainTime.create(context, plainDateTime.getIsoDateTime().time());
         }
         if (item instanceof JSTemporalZonedDateTime zonedDateTime) {
-            TemporalUtils.getOverflowOption(context, options);
-            if (context.hasPendingException()) {
+            if (!TemporalUtils.validateOverflow(context, options)) {
                 return JSUndefined.INSTANCE;
             }
             return JSTemporalPlainTime.create(context, IsoDateTime
@@ -165,15 +162,7 @@ public final class TemporalPlainTimeConstructor {
             return timeFromFields(context, itemObj, options);
         }
         if (item instanceof JSString itemStr) {
-            JSValue result = timeFromString(context, itemStr.value());
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            TemporalUtils.getOverflowOption(context, options);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            return result;
+            return TemporalUtils.finishStringConversion(context, timeFromString(context, itemStr.value()), options);
         }
         context.throwTypeError("Temporal error: Time-like argument must be object or string");
         return JSUndefined.INSTANCE;

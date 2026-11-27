@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.compilation.parser;
 
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.compilation.lexer.Lexer;
+import com.caoccao.qjs4j.compilation.lexer.LexerState;
 import com.caoccao.qjs4j.compilation.lexer.Token;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.core.JSKeyword;
@@ -198,6 +199,18 @@ final class ParserContext {
         return "Unexpected identifier '" + name + "'";
     }
 
+    void enterFunctionContext(boolean asyncFunction, boolean generatorFunction) {
+        savedFunctionNestingStack.push(new int[]{generatorFunctionNesting, asyncFunctionNesting, newTargetNesting,
+                inClassFieldInitializer ? 1 : 0, inClassStaticInit ? 1 : 0, needsArguments ? 1 : 0});
+        functionNesting++;
+        generatorFunctionNesting = generatorFunction ? 1 : 0;
+        asyncFunctionNesting = asyncFunction ? 1 : 0;
+        newTargetNesting = 1;
+        inClassFieldInitializer = false;
+        inClassStaticInit = false;
+        needsArguments = false;
+    }
+
     /**
      * Start a function body with no labels in scope. Labels are per function (ES2024 14.13.1 ContainsDuplicateLabels
      * does not look into nested functions), so {@code foo: { function f() { foo: {} } }} is legal.
@@ -210,8 +223,33 @@ final class ParserContext {
         return enclosingLabels;
     }
 
+    void enterLexicalFunction(boolean asyncFunction) {
+        functionNesting++;
+        if (asyncFunction) {
+            asyncFunctionNesting++;
+        }
+    }
+
+    void exitFunctionContext() {
+        int[] saved = savedFunctionNestingStack.pop();
+        generatorFunctionNesting = saved[0];
+        asyncFunctionNesting = saved[1];
+        newTargetNesting = saved[2];
+        inClassFieldInitializer = saved[3] != 0;
+        inClassStaticInit = saved[4] != 0;
+        needsArguments = saved[5] != 0;
+        functionNesting--;
+    }
+
     void exitFunctionLabelScope(Deque<Set<String>> enclosingLabels) {
         labelStack = enclosingLabels;
+    }
+
+    void exitLexicalFunction(boolean asyncFunction) {
+        if (asyncFunction) {
+            asyncFunctionNesting--;
+        }
+        functionNesting--;
     }
 
     Token expect(TokenType type) {
@@ -497,6 +535,37 @@ final class ParserContext {
         return nextToken;
     }
 
+    void restoreTokenPosition(TokenPosition position) {
+        currentToken = position.current();
+        nextToken = position.next();
+        previousTokenLine = position.previousLine();
+        previousTokenEndOffset = position.previousEnd();
+        lexer.restoreState(position.lexerState());
+    }
+
+    TokenPosition saveTokenPosition() {
+        return new TokenPosition(currentToken, nextToken, previousTokenLine, previousTokenEndOffset, lexer.saveState());
+    }
+
+    void validateBindingIdentifier(String name) {
+        validateBindingIdentifier(name, false);
+    }
+
+    void validateBindingIdentifier(String name, boolean isAsyncContext) {
+        if (inClassStaticInit && JSKeyword.AWAIT.equals(name)) {
+            throw new JSSyntaxErrorException("Unexpected 'await' keyword");
+        }
+        if (isAsyncContext && JSKeyword.AWAIT.equals(name)) {
+            throw new JSSyntaxErrorException("'await' is not a valid identifier name in an async function");
+        }
+        if (ParserContext.isAlwaysReservedIdentifierName(name)) {
+            throw new JSSyntaxErrorException("Unexpected reserved word");
+        }
+        if (strictMode && ParserContext.isStrictReservedIdentifierName(name)) {
+            throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
+        }
+    }
+
     private void validateIdentifierName(String name) {
         if (isAlwaysReservedIdentifierName(name)) {
             // ES2024 12.7.1: Escaped keywords are tokenized as IDENTIFIER but
@@ -606,5 +675,8 @@ final class ParserContext {
                 true;
             default -> false;
         };
+    }
+
+    record TokenPosition(Token current, Token next, int previousLine, int previousEnd, LexerState lexerState) {
     }
 }
