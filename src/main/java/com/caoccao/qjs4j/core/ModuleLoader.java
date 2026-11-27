@@ -57,7 +57,7 @@ final class ModuleLoader {
     }
 
     private JSDynamicImportModule cachedDependency(JSDynamicImportModule module, Matcher matcher) {
-        String specifier = transformer.decodeModuleStringLiteralValue(matcher.group(1));
+        String specifier = ModuleSourceText.decodeModuleStringLiteralValue(matcher.group(1));
         try {
             String resolved = resolveDynamicImportSpecifier(specifier, module.resolvedSpecifier(), specifier);
             return dynamicImportModuleCache.get(resolved);
@@ -186,14 +186,14 @@ final class ModuleLoader {
         if (!visitedSpecifiers.add(resolvedSpecifier)) {
             return;
         }
-        String scanSourceCode = transformer.maskModuleComments(sourceCode);
+        String scanSourceCode = ModuleSourceScan.maskModuleComments(sourceCode);
         if (ModuleSourceTransformer.MODULE_TOP_LEVEL_AWAIT_PATTERN.matcher(scanSourceCode).find()) {
             asyncDependencySpecifiers.add(resolvedSpecifier);
             return;
         }
         Matcher matcher = ModuleSourceTransformer.MODULE_STATIC_IMPORT_PATTERN.matcher(scanSourceCode);
         while (matcher.find()) {
-            String childSpecifier = transformer.decodeModuleStringLiteralValue(matcher.group(1));
+            String childSpecifier = ModuleSourceText.decodeModuleStringLiteralValue(matcher.group(1));
             String resolvedChildSpecifier = resolveDynamicImportSpecifier(childSpecifier, resolvedSpecifier,
                     childSpecifier);
             String childSourceCode;
@@ -732,7 +732,7 @@ final class ModuleLoader {
 
     void preloadStaticImports(JSDynamicImportModule moduleRecord, Set<String> importResolutionStack,
             Map<String, String> importAttributes) {
-        String scanSource = transformer.maskModuleComments(moduleRecord.rawSource());
+        String scanSource = ModuleSourceScan.maskModuleComments(moduleRecord.rawSource());
         Matcher matcher = ModuleSourceTransformer.MODULE_STATIC_IMPORT_PATTERN.matcher(scanSource);
         while (matcher.find()) {
             // Skip import defer statements — deferred modules must not be eagerly evaluated
@@ -743,7 +743,7 @@ final class ModuleLoader {
                     continue;
                 }
             }
-            String specifier = transformer.decodeModuleStringLiteralValue(matcher.group(1));
+            String specifier = ModuleSourceText.decodeModuleStringLiteralValue(matcher.group(1));
             try {
                 String resolved = resolveDynamicImportSpecifier(specifier, moduleRecord.resolvedSpecifier(), specifier);
                 JSDynamicImportModule depRecord = dynamicImportModuleCache.get(resolved);
@@ -824,13 +824,13 @@ final class ModuleLoader {
                 return true;
             }
         }
-        String scanSourceCode = transformer.maskModuleComments(sourceCode);
+        String scanSourceCode = ModuleSourceScan.maskModuleComments(sourceCode);
         if (ModuleSourceTransformer.MODULE_TOP_LEVEL_AWAIT_PATTERN.matcher(scanSourceCode).find()) {
             return false;
         }
         Matcher matcher = ModuleSourceTransformer.MODULE_STATIC_IMPORT_PATTERN.matcher(scanSourceCode);
         while (matcher.find()) {
-            String childSpecifier = transformer.decodeModuleStringLiteralValue(matcher.group(1));
+            String childSpecifier = ModuleSourceText.decodeModuleStringLiteralValue(matcher.group(1));
             String resolvedChildSpecifier;
             try {
                 resolvedChildSpecifier = resolveDynamicImportSpecifier(childSpecifier, resolvedSpecifier,
@@ -947,7 +947,7 @@ final class ModuleLoader {
 
     private Matcher staticImports(JSDynamicImportModule module) {
         return ModuleSourceTransformer.MODULE_STATIC_IMPORT_PATTERN
-                .matcher(transformer.maskModuleComments(module.rawSource()));
+                .matcher(ModuleSourceScan.maskModuleComments(module.rawSource()));
     }
 
     void triggerPendingDependents(JSDynamicImportModule moduleRecord) {

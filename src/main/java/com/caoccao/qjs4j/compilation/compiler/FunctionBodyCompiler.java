@@ -64,9 +64,9 @@ enum FunctionBodyCompiler {
         }
         if (usingCatch >= 0) {
             int end = context.emitter.emitJump(Opcode.GOTO);
-            context.emitter.patchJump(usingCatch, context.emitter.currentOffset());
+            context.emitter.patchJumpToHere(usingCatch);
             context.emitHelpers.emitScopeUsingDisposalWithException(context.scopeManager.currentScope());
-            context.emitter.patchJump(end, context.emitter.currentOffset());
+            context.emitter.patchJumpToHere(end);
         }
     }
 

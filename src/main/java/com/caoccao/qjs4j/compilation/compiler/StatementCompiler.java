@@ -120,9 +120,7 @@ final class StatementCompiler extends AstNodeCompiler<Statement> {
     void predeclareLexicalBindings(List<Statement> statements, boolean includeFunctions) {
         for (Statement statement : statements) {
             if (statement instanceof VariableDeclaration declaration && declaration.getKind() != VariableKind.VAR) {
-                boolean immutable = declaration.getKind() == VariableKind.CONST
-                        || declaration.getKind() == VariableKind.USING
-                        || declaration.getKind() == VariableKind.AWAIT_USING;
+                boolean immutable = declaration.getKind().isImmutable();
                 for (VariableDeclarator declarator : declaration.getDeclarations()) {
                     if (declarator.getId() instanceof Identifier identifier) {
                         initializeLexicalBinding(identifier.getName(), immutable);

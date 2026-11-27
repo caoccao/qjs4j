@@ -16,14 +16,10 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
 /**
  * Represents a function declaration.
  */
-public final class FunctionDeclaration extends Declaration implements FunctionNode {
+public final class FunctionDeclaration extends Declaration implements OrdinaryFunctionNode {
     private final BlockStatement body;
     private final FunctionParams functionParams;
     private final Identifier id;
@@ -42,6 +38,7 @@ public final class FunctionDeclaration extends Declaration implements FunctionNo
         this.needsArguments = needsArguments;
     }
 
+    @Override
     public BlockStatement getBody() {
         return body;
     }
@@ -51,6 +48,7 @@ public final class FunctionDeclaration extends Declaration implements FunctionNo
         return functionParams;
     }
 
+    @Override
     public Identifier getId() {
         return id;
     }
@@ -59,14 +57,17 @@ public final class FunctionDeclaration extends Declaration implements FunctionNo
         return !isAsync && !isGenerator;
     }
 
+    @Override
     public boolean isAsync() {
         return isAsync;
     }
 
+    @Override
     public boolean isGenerator() {
         return isGenerator;
     }
 
+    @Override
     public boolean needsArguments() {
         return needsArguments;
     }

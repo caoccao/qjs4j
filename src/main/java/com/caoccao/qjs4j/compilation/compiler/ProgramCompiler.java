@@ -66,22 +66,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
                                 hoistedVarNames);
                     }
                 } else {
-                    Set<String> lexicalNames = new HashSet<>();
-                    for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                        compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(), lexicalNames);
-                    }
-                    for (String lexicalName : lexicalNames) {
-                        if (compilerContext.scopeManager.currentScope().getLocal(lexicalName) == null) {
-                            int localIndex = compilerContext.scopeManager.currentScope().declareLocal(lexicalName);
-                            compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
-                        }
-                        if (variableDeclaration.getKind() == VariableKind.CONST
-                                || variableDeclaration.getKind() == VariableKind.USING
-                                || variableDeclaration.getKind() == VariableKind.AWAIT_USING) {
-                            compilerContext.scopeManager.currentScope().markConstLocal(lexicalName);
-                        }
-                        compilerContext.tdzLocals.add(lexicalName);
-                    }
+                    declareLexicals(variableDeclaration, true);
                 }
                 continue;
             }
@@ -132,16 +117,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
 
-        int programResultLocalIndex = compilerContext.scopeManager.currentScope()
-                .declareLocal("#program_result_" + compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, programResultLocalIndex);
-        compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, programResultLocalIndex);
-        compilerContext.emitter.emitOpcode(Opcode.RETURN);
-
-        int localCount = compilerContext.scopeManager.currentScope().getLocalCount();
-        compilerContext.scopeManager.updateMaxLocalCount(localCount);
-        compilerContext.inGlobalScope = false;
+        finishProgram();
     }
 
     private void compileScript(Program program) {
@@ -168,20 +144,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
             } else if (stmt instanceof VariableDeclaration variableDeclaration) {
                 if (compilerContext.predeclareProgramLexicalsAsLocals
                         && variableDeclaration.getKind() != VariableKind.VAR) {
-                    Set<String> lexicalNames = new HashSet<>();
-                    for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                        compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(), lexicalNames);
-                    }
-                    for (String lexicalName : lexicalNames) {
-                        int localIndex = compilerContext.scopeManager.currentScope().declareLocal(lexicalName);
-                        if (variableDeclaration.getKind() == VariableKind.CONST
-                                || variableDeclaration.getKind() == VariableKind.USING
-                                || variableDeclaration.getKind() == VariableKind.AWAIT_USING) {
-                            compilerContext.scopeManager.currentScope().markConstLocal(lexicalName);
-                        }
-                        compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
-                        compilerContext.tdzLocals.add(lexicalName);
-                    }
+                    declareLexicals(variableDeclaration, false);
                 }
                 // Script/global var bindings are non-deletable. Direct eval var/function
                 // bindings are handled dynamically in JSGlobalObject.eval().
@@ -272,14 +235,33 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
             compilerContext.evalReturnLocalIndex = -1;
 
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, evalRetLocalIndex);
-            int programResultLocalIndex = compilerContext.scopeManager.currentScope()
-                    .declareLocal("#program_result_" + compilerContext.emitter.currentOffset());
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, programResultLocalIndex);
-            compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, programResultLocalIndex);
         }
+        finishProgram();
+    }
 
-        // Return the value on top of stack
+    private void declareLexicals(VariableDeclaration declaration, boolean onlyInitializeNew) {
+        CompilerScope scope = compilerContext.scopeManager.currentScope();
+        Set<String> names = new HashSet<>();
+        for (VariableDeclarator declarator : declaration.getDeclarations()) {
+            compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(), names);
+        }
+        for (String name : names) {
+            if (!onlyInitializeNew || scope.getLocal(name) == null) {
+                compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, scope.declareLocal(name));
+            }
+            if (declaration.getKind().isImmutable()) {
+                scope.markConstLocal(name);
+            }
+            compilerContext.tdzLocals.add(name);
+        }
+    }
+
+    private void finishProgram() {
+        int programResultLocalIndex = compilerContext.scopeManager.currentScope()
+                .declareLocal("#program_result_" + compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, programResultLocalIndex);
+        compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, programResultLocalIndex);
         compilerContext.emitter.emitOpcode(Opcode.RETURN);
 
         int localCount = compilerContext.scopeManager.currentScope().getLocalCount();

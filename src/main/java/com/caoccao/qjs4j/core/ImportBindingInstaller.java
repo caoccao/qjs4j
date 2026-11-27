@@ -20,8 +20,6 @@ import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 /** Installs live, immutable imports in a persistent module environment and exports in its namespace. */
 final class ImportBindingInstaller {
@@ -75,7 +73,7 @@ final class ImportBindingInstaller {
         // The environment key is the decoded name, because that is what module code writes to reach
         // this binding: `import { x as \\u0079 }` binds `y`, and a key spelled `\\u0079` is a
         // property nothing in the module can name.
-        String bindingName = transformer.decodeIdentifierEscapes(localName.trim());
+        String bindingName = ModuleSourceText.decodeIdentifierEscapes(localName.trim());
         if (bindingName.isEmpty()) {
             return;
         }
@@ -111,7 +109,7 @@ final class ImportBindingInstaller {
         // The environment key is the decoded name, because that is what module code writes to reach
         // this binding: `import { x as \\u0079 }` binds `y`, and a key spelled `\\u0079` is a
         // property nothing in the module can name.
-        String bindingName = transformer.decodeIdentifierEscapes(localName.trim());
+        String bindingName = ModuleSourceText.decodeIdentifierEscapes(localName.trim());
         if (bindingName.isEmpty()) {
             return;
         }
@@ -194,7 +192,7 @@ final class ImportBindingInstaller {
             if (bindingIndex > 0) {
                 sourceBuilder.append(", ");
             }
-            sourceBuilder.append("\"").append(transformer.escapeJavaScriptString(hoistedBinding.localName()))
+            sourceBuilder.append("\"").append(ModuleSourceText.escapeJavaScriptString(hoistedBinding.localName()))
                     .append("\": ")
                     .append(transformer.requireGeneratedIdentifier(hoistedBinding.localName(),
                             "hoisted function export '" + hoistedBinding.localName() + "'",

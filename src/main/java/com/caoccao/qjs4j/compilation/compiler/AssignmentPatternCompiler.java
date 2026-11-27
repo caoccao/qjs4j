@@ -43,7 +43,7 @@ final class AssignmentPatternCompiler {
             compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
         }
         // Patch jump target
-        compilerContext.emitter.patchJump(jumpNotUndefined, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(jumpNotUndefined);
         // Now the stack has the resolved value; assign to the inner pattern
         compilerContext.patternCompiler.compile(assignPattern.getLeft());
     }

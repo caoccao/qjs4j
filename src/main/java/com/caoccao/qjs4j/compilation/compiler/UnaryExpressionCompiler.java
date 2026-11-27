@@ -118,69 +118,10 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
             boolean isPrefix = unaryExpr.isPrefix();
 
             if (operand instanceof Identifier id) {
-                if (compilerContext.withObjectManager.hasActiveWithObject()
-                        || !compilerContext.withObjectManager.getInheritedBindingNames().isEmpty()) {
-                    // Use reference semantics so with-scope resolution happens before local/captured fallback.
-                    compilerContext.assignmentExpressionCompiler.emitIdentifierReference(id.getName());
-                    compilerContext.emitter.emitOpcode(Opcode.GET_REF_VALUE);
-                    compilerContext.emitter.emitOpcode(
-                            isPrefix ? (isInc ? Opcode.INC : Opcode.DEC) : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
-                    if (isPrefix) {
-                        // obj prop new -> new obj prop new -> store -> new
-                        compilerContext.emitter.emitOpcode(Opcode.INSERT3);
-                        compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
-                    } else {
-                        // obj prop old new -> old obj prop new -> store -> old
-                        compilerContext.emitter.emitOpcode(Opcode.PERM4);
-                        compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
-                    }
-                    return;
-                }
-
-                Integer localIndex = compilerContext.scopeManager.findLocalInScopes(id.getName());
-                if (localIndex != null) {
-                    // Local binding.
-                    compilerContext.expressionCompiler.compile(operand);
-                    compilerContext.emitter.emitOpcode(
-                            isPrefix ? (isInc ? Opcode.INC : Opcode.DEC) : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
-                    if (compilerContext.scopeManager.isLocalBindingConst(id.getName())) {
-                        compilerContext.emitHelpers.emitConstAssignmentErrorForLocal(id.getName(), localIndex);
-                    } else {
-                        compilerContext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_LOC : Opcode.PUT_LOC, localIndex);
-                    }
-                    return;
-                }
-
-                Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(id.getName());
-                if (capturedIndex != null) {
-                    // Captured binding.
-                    compilerContext.expressionCompiler.compile(operand);
-                    compilerContext.emitter.emitOpcode(
-                            isPrefix ? (isInc ? Opcode.INC : Opcode.DEC) : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
-                    if (compilerContext.captureResolver.isCapturedBindingImmutable(id.getName())) {
-                        compilerContext.emitHelpers.emitConstAssignmentErrorForCaptured(id.getName(), capturedIndex);
-                    } else {
-                        compilerContext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_VAR_REF : Opcode.PUT_VAR_REF,
-                                capturedIndex);
-                    }
-                    return;
-                }
-
-                // Unresolved identifier: use reference semantics so strict errors and with-scopes are handled
-                // correctly.
-                compilerContext.assignmentExpressionCompiler.emitIdentifierReference(id.getName());
-                compilerContext.emitter.emitOpcode(Opcode.GET_REF_VALUE);
-                compilerContext.emitter.emitOpcode(
-                        isPrefix ? (isInc ? Opcode.INC : Opcode.DEC) : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
-                if (isPrefix) {
-                    // obj prop new -> new obj prop new -> store -> new
-                    compilerContext.emitter.emitOpcode(Opcode.INSERT3);
-                    compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
-                } else {
-                    // obj prop old new -> old obj prop new -> store -> old
-                    compilerContext.emitter.emitOpcode(Opcode.PERM4);
-                    compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
-                }
+                Opcode update = isPrefix
+                        ? (isInc ? Opcode.INC : Opcode.DEC)
+                        : (isInc ? Opcode.POST_INC : Opcode.POST_DEC);
+                updateIdentifier(id, update, isPrefix);
             } else if (operand instanceof MemberExpression memberExpr) {
                 if (memberExpr.getObject().isSuperIdentifier()) {
                     // Super property update follows super-reference semantics:
@@ -365,4 +306,41 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
         });
     }
 
+    private void updateIdentifier(Identifier id, Opcode update, boolean isPrefix) {
+        if (!compilerContext.withObjectManager.hasActiveWithObject()
+                && compilerContext.withObjectManager.getInheritedBindingNames().isEmpty()) {
+            Integer localIndex = compilerContext.scopeManager.findLocalInScopes(id.getName());
+            if (localIndex != null) {
+                // Local binding.
+                compilerContext.expressionCompiler.compile(id);
+                compilerContext.emitter.emitOpcode(update);
+                if (compilerContext.scopeManager.isLocalBindingConst(id.getName())) {
+                    compilerContext.emitHelpers.emitConstAssignmentErrorForLocal(id.getName(), localIndex);
+                } else {
+                    compilerContext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_LOC : Opcode.PUT_LOC, localIndex);
+                }
+                return;
+            }
+
+            Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(id.getName());
+            if (capturedIndex != null) {
+                // Captured binding.
+                compilerContext.expressionCompiler.compile(id);
+                compilerContext.emitter.emitOpcode(update);
+                if (compilerContext.captureResolver.isCapturedBindingImmutable(id.getName())) {
+                    compilerContext.emitHelpers.emitConstAssignmentErrorForCaptured(id.getName(), capturedIndex);
+                } else {
+                    compilerContext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_VAR_REF : Opcode.PUT_VAR_REF,
+                            capturedIndex);
+                }
+                return;
+            }
+        }
+        // The reference determines the receiver before either reading or updating its value.
+        compilerContext.assignmentExpressionCompiler.emitIdentifierReference(id.getName());
+        compilerContext.emitter.emitOpcode(Opcode.GET_REF_VALUE);
+        compilerContext.emitter.emitOpcode(update);
+        compilerContext.emitter.emitOpcode(isPrefix ? Opcode.INSERT3 : Opcode.PERM4);
+        compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
+    }
 }

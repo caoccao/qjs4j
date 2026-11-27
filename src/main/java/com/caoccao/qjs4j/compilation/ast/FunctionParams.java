@@ -56,4 +56,13 @@ public record FunctionParams(List<Pattern> params, List<Expression> defaults, Re
         }
         return false;
     }
+
+    public boolean bindsName(String name) {
+        for (Pattern param : params) {
+            if (param.getBoundNames().contains(name)) {
+                return true;
+            }
+        }
+        return restParameter != null && restParameter.getArgument().getBoundNames().contains(name);
+    }
 }

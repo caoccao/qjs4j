@@ -179,21 +179,14 @@ final class ClassExpressionCompiler {
             for (MethodDefinition method : methods) {
                 if (method.isStatic()) {
                     compilerContext.emitter.emitOpcode(Opcode.SWAP);
-
-                    JSBytecodeFunction methodFunc = compilerContext.classDeclarationCompiler.compileMethodAsFunction(
-                            method, method.getSimpleName(), false, List.of(), privateSymbols, computedFieldSymbols,
-                            autoAccessorBackingSymbols, List.of(), false);
-
-                    String methodName = method.getSimpleName();
-                    compilerContext.emitHelpers.emitClassMethodDefinition(method, methodFunc, methodName);
+                }
+                String methodName = method.getSimpleName();
+                JSBytecodeFunction methodFunc = compilerContext.classDeclarationCompiler.compileMethodAsFunction(method,
+                        methodName, false, List.of(), privateSymbols, computedFieldSymbols, autoAccessorBackingSymbols,
+                        List.of(), false);
+                compilerContext.emitHelpers.emitClassMethodDefinition(method, methodFunc, methodName);
+                if (method.isStatic()) {
                     compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                } else {
-                    JSBytecodeFunction methodFunc = compilerContext.classDeclarationCompiler.compileMethodAsFunction(
-                            method, method.getSimpleName(), false, List.of(), privateSymbols, computedFieldSymbols,
-                            autoAccessorBackingSymbols, List.of(), false);
-
-                    String methodName = method.getSimpleName();
-                    compilerContext.emitHelpers.emitClassMethodDefinition(method, methodFunc, methodName);
                 }
             }
 

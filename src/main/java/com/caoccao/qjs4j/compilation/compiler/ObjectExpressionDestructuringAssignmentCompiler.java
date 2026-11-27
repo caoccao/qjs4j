@@ -17,10 +17,8 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
-import com.caoccao.qjs4j.core.JSNumber;
 import com.caoccao.qjs4j.vm.Opcode;
 
-import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -88,32 +86,8 @@ final class ObjectExpressionDestructuringAssignmentCompiler {
             int targetDepth = compilerContext.expressionCompiler.preEvaluateAssignmentTarget(property.getValue());
 
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, sourceLocalIndex);
-            if (property.isComputed()) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, propertyKeyLocalIndex);
-                compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-            } else if (property.getKey() instanceof Identifier identifier) {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, identifier.getName());
-            } else if (property.getKey() instanceof Literal literal
-                    && literal.getValue() instanceof String propertyName) {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propertyName);
-            } else if (property.getKey() instanceof Literal literal
-                    && (literal.getValue() instanceof Integer || literal.getValue() instanceof Long)) {
-                long propertyIndex = ((Number) literal.getValue()).longValue();
-                if (propertyIndex >= Integer.MIN_VALUE && propertyIndex <= Integer.MAX_VALUE) {
-                    compilerContext.emitter.emitOpcode(Opcode.PUSH_I32);
-                    compilerContext.emitter.emitI32((int) propertyIndex);
-                } else {
-                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(propertyIndex));
-                }
-                compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-            } else if (property.getKey() instanceof Literal literal
-                    && literal.getValue() instanceof BigInteger bigIntegerValue) {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, bigIntegerValue.toString());
-            } else {
-                compilerContext.expressionCompiler.compile(property.getKey());
-                compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
-                compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-            }
+            String atom = ObjectDestructuringCompiler.prepareRead(compilerContext, property, propertyKeyLocalIndex);
+            ObjectDestructuringCompiler.read(compilerContext.emitter, atom);
 
             compilerContext.expressionDestructuringAssignmentCompiler.compileFromPreEvaluated(property.getValue(),
                     targetDepth);
@@ -131,18 +105,9 @@ final class ObjectExpressionDestructuringAssignmentCompiler {
                     // Non-computed: use DEFINE_FIELD with atom name.
                     compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, excludeListLocalIndex);
                     compilerContext.emitter.emitOpcode(Opcode.NULL);
-                    if (property.getKey() instanceof Identifier identifier) {
-                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, identifier.getName());
-                    } else if (property.getKey() instanceof Literal literal
-                            && literal.getValue() instanceof String propertyName) {
-                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, propertyName);
-                    } else if (property.getKey() instanceof Literal literal
-                            && (literal.getValue() instanceof Integer || literal.getValue() instanceof Long)) {
-                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD,
-                                String.valueOf(((Number) literal.getValue()).longValue()));
-                    } else if (property.getKey() instanceof Literal literal
-                            && literal.getValue() instanceof BigInteger bigIntegerValue) {
-                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, bigIntegerValue.toString());
+                    String name = ObjectDestructuringCompiler.staticKey(property);
+                    if (name != null) {
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, name);
                     }
                     compilerContext.emitter.emitOpcode(Opcode.DROP); // drop excludeList
                 }
@@ -150,27 +115,14 @@ final class ObjectExpressionDestructuringAssignmentCompiler {
         }
 
         if (restTarget != null) {
-            if (regularProperties.isEmpty()) {
-                // No exclude list — copy all properties from source to a new object.
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, sourceLocalIndex);
-                compilerContext.emitter.emitOpcode(Opcode.OBJECT);
-                compilerContext.emitter.emitOpcode(Opcode.DUP);
-                compilerContext.emitter.emitOpcode(Opcode.ROT3L);
-                compilerContext.emitter.emitOpcode(Opcode.NULL);
-                compilerContext.emitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 7);
-                compilerContext.emitter.emitOpcode(Opcode.DROP); // null
-                compilerContext.emitter.emitOpcode(Opcode.DROP); // source
-                compilerContext.expressionDestructuringAssignmentCompiler.compile(restTarget);
-                compilerContext.emitter.emitOpcode(Opcode.DROP); // drop extra target
-            } else {
+            boolean hasExclusions = excludeListLocalIndex >= 0;
+            if (hasExclusions) {
                 compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, excludeListLocalIndex);
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, sourceLocalIndex);
-                compilerContext.emitter.emitOpcode(Opcode.OBJECT);
-                compilerContext.emitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 68);
-                compilerContext.expressionDestructuringAssignmentCompiler.compile(restTarget);
-                compilerContext.emitter.emitOpcode(Opcode.DROP); // source
-                compilerContext.emitter.emitOpcode(Opcode.DROP); // excludeList
             }
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, sourceLocalIndex);
+            ObjectDestructuringCompiler.copyRest(compilerContext.emitter, hasExclusions);
+            compilerContext.expressionDestructuringAssignmentCompiler.compile(restTarget);
+            ObjectDestructuringCompiler.finishRest(compilerContext.emitter, hasExclusions);
         }
     }
 }

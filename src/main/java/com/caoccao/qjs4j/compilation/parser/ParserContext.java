@@ -100,6 +100,13 @@ final class ParserContext {
         nextToken = lexer.nextToken();
     }
 
+    Identifier consumeIdentifierName() {
+        SourceLocation location = getLocation();
+        String name = currentToken.value();
+        advance();
+        return new Identifier(name, location);
+    }
+
     boolean consumeIf(TokenType type) {
         if (!match(type)) {
             return false;
@@ -107,6 +114,23 @@ final class ParserContext {
         advance();
         return true;
     }
+
+    SourceLocation consumeLocation() {
+        SourceLocation location = getLocation();
+        advance();
+        return location;
+    }
+
+    PrivateIdentifier consumePrivateName() {
+        SourceLocation location = getLocation();
+        String fieldName = currentToken.value().substring(1);
+        if (!isPrivateNameAccessible(fieldName)) {
+            throw new JSSyntaxErrorException("undefined private field '#" + fieldName + "'");
+        }
+        advance();
+        return new PrivateIdentifier(fieldName, location);
+    }
+
     void consumeSemicolon() {
         if (consumeIf(TokenType.SEMICOLON)) {
             return;

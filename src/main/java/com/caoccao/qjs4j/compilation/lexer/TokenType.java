@@ -20,21 +20,67 @@ package com.caoccao.qjs4j.compilation.lexer;
  * Enumeration of all JavaScript token types.
  */
 public enum TokenType {
-    // Operators
-    AND_ASSIGN, ARROW,
-    // Keywords
-    AS, ASSIGN, ASYNC,
-    // Punctuation
-    AT, AWAIT,
+    AND_ASSIGN, ARROW, AS(true), ASSIGN, ASYNC(true), AT, AWAIT(true),
 
-    BIGINT, BIT_AND, BIT_NOT, BIT_OR, BIT_XOR, BREAK, CASE, CATCH, CLASS, COLON, COMMA, CONST, CONTINUE, DEC, DEFAULT, DELETE, DIV, DIV_ASSIGN, DO, DOT, ELLIPSIS, ELSE, EOF, EQ, EXP, EXP_ASSIGN, EXPORT, EXTENDS, FALSE, FINALLY, FOR, FROM, FUNCTION, GE, GT, HASH, IDENTIFIER, IF, IMPORT, IN,
+    BIGINT, BIT_AND, BIT_NOT, BIT_OR, BIT_XOR, BREAK(true),
 
-    INC, INSTANCEOF, LBRACE, LBRACKET, LE, LET, LOGICAL_AND, LOGICAL_AND_ASSIGN, LOGICAL_OR, LOGICAL_OR_ASSIGN, LPAREN, LSHIFT, LSHIFT_ASSIGN, LT, MINUS, MINUS_ASSIGN, MOD, MOD_ASSIGN, MUL, MUL_ASSIGN, NE, NEW, NOT, NULL, NULLISH_ASSIGN, NULLISH_COALESCING, NUMBER, OF, OPTIONAL_CHAINING, OR_ASSIGN, PLUS, PLUS_ASSIGN,
-    // Special
+    CASE(true), CATCH(true), CLASS(true), COLON, COMMA, CONST(true), CONTINUE(true),
+
+    DEC, DEFAULT(true), DELETE(true), DIV, DIV_ASSIGN, DO(true), DOT,
+
+    ELLIPSIS, ELSE(true), EOF, EQ, EXP, EXP_ASSIGN, EXPORT(true), EXTENDS(true),
+
+    FALSE(true), FINALLY(true), FOR(true), FROM(true), FUNCTION(true),
+
+    GE, GT,
+
+    HASH,
+
+    IDENTIFIER(true), IF(true), IMPORT(true), IN(true), INC, INSTANCEOF(true),
+
+    LBRACE, LBRACKET, LE, LET(true), LOGICAL_AND, LOGICAL_AND_ASSIGN, LOGICAL_OR, LOGICAL_OR_ASSIGN, LPAREN, LSHIFT,
+
+    LSHIFT_ASSIGN, LT,
+
+    MINUS, MINUS_ASSIGN, MOD, MOD_ASSIGN, MUL, MUL_ASSIGN,
+
+    NE, NEW(true), NOT, NULL(true), NULLISH_ASSIGN, NULLISH_COALESCING, NUMBER,
+
+    OF(true), OPTIONAL_CHAINING, OR_ASSIGN,
+
+    PLUS, PLUS_ASSIGN,
     /** #identifier for private class fields */
-    PRIVATE_NAME, QUESTION, RBRACE, RBRACKET, REGEX, RETURN, RPAREN, RSHIFT, RSHIFT_ASSIGN, SEMICOLON, STRICT_EQ,
+    PRIVATE_NAME,
 
-    STRICT_NE, STRING, SUPER, SWITCH, TEMPLATE, THIS, THROW, TRUE, TRY, TYPEOF, URSHIFT, URSHIFT_ASSIGN, VAR, VOID, WHILE, XOR_ASSIGN,
+    QUESTION,
 
-    YIELD,
+    RBRACE, RBRACKET, REGEX, RETURN(true), RPAREN, RSHIFT, RSHIFT_ASSIGN,
+
+    SEMICOLON, STRICT_EQ, STRICT_NE, STRING, SUPER(true), SWITCH(true),
+
+    TEMPLATE, THIS(true), THROW(true), TRUE(true), TRY(true), TYPEOF(true),
+
+    URSHIFT, URSHIFT_ASSIGN,
+
+    VAR(true), VOID(true),
+
+    WHILE(true),
+
+    XOR_ASSIGN,
+
+    YIELD(true);
+
+    private final boolean identifierName;
+
+    TokenType() {
+        this(false);
+    }
+
+    TokenType(boolean identifierName) {
+        this.identifierName = identifierName;
+    }
+
+    public boolean isIdentifierName() {
+        return identifierName;
+    }
 }

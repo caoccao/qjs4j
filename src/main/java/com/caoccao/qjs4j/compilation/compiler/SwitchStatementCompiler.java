@@ -80,7 +80,7 @@ final class SwitchStatementCompiler {
                 int jumpToBody = compilerContext.emitter.emitJump(Opcode.GOTO);
                 caseJumps.add(jumpToBody);
                 // Patch IF_FALSE to continue with next test
-                compilerContext.emitter.patchJump(jumpToNextTest, compilerContext.emitter.currentOffset());
+                compilerContext.emitter.patchJumpToHere(jumpToNextTest);
             }
         }
 
@@ -135,9 +135,7 @@ final class SwitchStatementCompiler {
         }
 
         // Patch break statements
-        for (int breakPos : loop.breakPositions) {
-            compilerContext.emitter.patchJump(breakPos, switchEnd);
-        }
+        compilerContext.emitter.patchJumps(loop.breakPositions, switchEnd);
 
         compilerContext.loopManager.popLoop();
 

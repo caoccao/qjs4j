@@ -110,6 +110,12 @@ public final class Lexer {
         return c;
     }
 
+    private boolean atIdentifierStart() {
+        char c = peek();
+        return isIdentifierStart(c)
+                || (Character.isHighSurrogate(c) && UnicodeData.isIdentifierStart(source.codePointAt(position)));
+    }
+
     /**
      * Determine if the current context expects a regex literal. Regex can appear after operators, keywords, or at the
      * start of an expression.
@@ -172,19 +178,11 @@ public final class Lexer {
         return Character.digit(c, radix) >= 0;
     }
 
-    private boolean isIdentifierPartCodePoint(int codePoint) {
-        return UnicodeData.isIdentifierPart(codePoint);
-    }
-
-    private boolean isIdentifierStartCodePoint(int codePoint) {
-        return UnicodeData.isIdentifierStart(codePoint);
-    }
+    // Core scanning logic
 
     private Token makeToken(TokenType type, String value) {
         return new Token(type, value, line, column, position);
     }
-
-    // Core scanning logic
 
     private boolean match(char expected) {
         if (isAtEnd()) {
@@ -195,6 +193,10 @@ public final class Lexer {
         }
         advance();
         return true;
+    }
+
+    private TokenType matchEquals(TokenType plain, TokenType withEquals) {
+        return match('=') ? withEquals : plain;
     }
 
     /**
@@ -315,6 +317,8 @@ public final class Lexer {
         defaultFollowsPropertyAccess = false;
     }
 
+    // Character utilities
+
     public void restoreState(LexerState state) {
         this.position = state.position();
         this.line = state.line();
@@ -328,14 +332,6 @@ public final class Lexer {
     public LexerState saveState() {
         return new LexerState(position, line, column, lastTokenType, defaultFollowsPropertyAccess, lookahead,
                 strictMode);
-    }
-
-    // Character utilities
-
-    private Token scanBinaryNumber(int startPos, int startLine, int startColumn) {
-        scanDigitsWithNumericSeparators(2, false, false);
-        validateNoRadixLiteralContinuation(2);
-        return finalizeNumberOrBigIntToken(startPos, startLine, startColumn);
     }
 
     private void scanDigitsWithNumericSeparators(int radix, boolean firstDigitAlreadyConsumed,
@@ -373,92 +369,90 @@ public final class Lexer {
         }
     }
 
-    private Token scanHexNumber(int startPos, int startLine, int startColumn) {
-        scanDigitsWithNumericSeparators(16, false, false);
-        validateNoRadixLiteralContinuation(16);
-        return finalizeNumberOrBigIntToken(startPos, startLine, startColumn);
+    private boolean scanExponent() {
+        if (!isAtEnd() && (peek() == 'e' || peek() == 'E')) {
+            advance(); // consume e/E
+            if (!isAtEnd() && (peek() == '+' || peek() == '-')) {
+                advance();
+            }
+            if (isAtEnd() || !Character.isDigit(peek())) {
+                throw new JSSyntaxErrorException("Invalid or unexpected token");
+            }
+            scanDigitsWithNumericSeparators(10, false, false);
+            return true;
+        }
+        return false;
     }
 
-    private Token scanIdentifier(int startPos, int startLine, int startColumn, int firstCodePoint,
-            boolean startsWithEscape) {
-        boolean hasEscape = startsWithEscape;
-        StringBuilder valueBuilder = new StringBuilder();
-        valueBuilder.appendCodePoint(firstCodePoint);
-
+    private Token scanIdentifier(int startPos, int startLine, int startColumn, boolean privateName) {
+        StringBuilder decoded = null;
+        boolean hasEscape = false;
+        int segmentStart = startPos;
+        int first = privateName ? startPos + 1 : startPos;
         while (!isAtEnd()) {
-            if (peek() == '\\') {
+            char c = peek();
+            if (c == '\\') {
                 hasEscape = true;
-                int currentPos = position;
-                int currentColumn = column;
-                advance(); // consume '\'
+                int escapeStart = position;
+                int escapeColumn = column;
+                advance();
                 int codePoint = parseUnicodeEscapeSequence();
-                if (codePoint < 0) {
-                    position = currentPos;
-                    column = currentColumn;
+                if (codePoint < 0 && escapeStart != first) {
+                    position = escapeStart;
+                    column = escapeColumn;
                     break;
                 }
-                if (!isIdentifierPartCodePoint(codePoint)) {
+                if (codePoint < 0 || !(escapeStart == first
+                        ? UnicodeData.isIdentifierStart(codePoint)
+                        : UnicodeData.isIdentifierPart(codePoint))) {
                     throw new JSSyntaxErrorException("Invalid or unexpected token");
                 }
-                valueBuilder.appendCodePoint(codePoint);
-                continue;
-            }
-
-            char nextChar = peek();
-            if (Character.isHighSurrogate(nextChar) && position + 1 < source.length()
-                    && Character.isLowSurrogate(source.charAt(position + 1))) {
-                int codePoint = Character.toCodePoint(nextChar, source.charAt(position + 1));
-                if (!isIdentifierPartCodePoint(codePoint)) {
+                if (decoded == null) {
+                    decoded = new StringBuilder();
+                }
+                decoded.append(source, segmentStart, escapeStart).appendCodePoint(codePoint);
+                segmentStart = position;
+            } else if (isIdentifierPart(c)) {
+                advance();
+            } else {
+                int codePoint = source.codePointAt(position);
+                if (codePoint == c || !UnicodeData.isIdentifierPart(codePoint)) {
                     break;
                 }
-                advance();
-                advance();
-                valueBuilder.appendCodePoint(codePoint);
-                continue;
+                position += 2;
+                column += 2;
             }
-
-            if (!isIdentifierPart(nextChar)) {
-                break;
-            }
-            valueBuilder.append(advance());
         }
-
-        String value = valueBuilder.toString();
-
-        // ES2024 12.7.1: An IdentifierName containing Unicode escape sequences cannot be
-        // a keyword. Following QuickJS update_token_ident(): when has_escape is true, keep
-        // the token as TOK_IDENT (IDENTIFIER) so the parser never matches it as a keyword.
-        // The escaped flag allows the parser to report errors for escaped reserved words
-        // used as binding identifiers.
-        TokenType type;
-        if (hasEscape) {
-            type = TokenType.IDENTIFIER;
-        } else {
-            type = KEYWORDS.getOrDefault(value, TokenType.IDENTIFIER);
+        String value = decoded == null
+                ? source.substring(startPos, position)
+                : decoded.append(source, segmentStart, position).toString();
+        if (privateName) {
+            return new Token(TokenType.PRIVATE_NAME, value, startLine, startColumn, startPos);
         }
-
+        // Escaped reserved words stay identifiers until the parser checks their context.
+        TokenType type = hasEscape ? TokenType.IDENTIFIER : KEYWORDS.getOrDefault(value, TokenType.IDENTIFIER);
         return new Token(type, value, startLine, startColumn, startPos, hasEscape);
     }
 
     private Token scanNumber(int startPos, int startLine, int startColumn) {
         // Handle special prefixes (0x, 0b, 0o)
         if (source.charAt(startPos) == '0' && position < source.length()) {
-            char next = peek();
-            if (next == 'x' || next == 'X') {
-                advance(); // consume 'x'
-                return scanHexNumber(startPos, startLine, startColumn);
-            } else if (next == 'b' || next == 'B') {
-                advance(); // consume 'b'
-                return scanBinaryNumber(startPos, startLine, startColumn);
-            } else if (next == 'o' || next == 'O') {
-                advance(); // consume 'o'
-                return scanOctalNumber(startPos, startLine, startColumn);
+            int radix = switch (peek()) {
+                case 'x', 'X' -> 16;
+                case 'o', 'O' -> 8;
+                case 'b', 'B' -> 2;
+                default -> 0;
+            };
+            if (radix != 0) {
+                advance();
+                scanDigitsWithNumericSeparators(radix, false, false);
+                validateNoRadixLiteralContinuation();
+                return finalizeNumberOrBigIntToken(startPos, startLine, startColumn);
             }
         }
 
         // Scan decimal number
         boolean hasDecimalPoint = false;
-        boolean hasExponent = false;
         scanDigitsWithNumericSeparators(10, true, source.charAt(startPos) == '0');
 
         // Numeric separators are not allowed in legacy-octal-like or non-octal decimal
@@ -484,18 +478,7 @@ public final class Lexer {
             }
         }
 
-        // Check for exponent
-        if (!isAtEnd() && (peek() == 'e' || peek() == 'E')) {
-            hasExponent = true;
-            advance(); // consume 'e'
-            if (!isAtEnd() && (peek() == '+' || peek() == '-')) {
-                advance(); // consume sign
-            }
-            if (isAtEnd() || !Character.isDigit(peek())) {
-                throw new JSSyntaxErrorException("Invalid or unexpected token");
-            }
-            scanDigitsWithNumericSeparators(10, false, false);
-        }
+        boolean hasExponent = scanExponent();
 
         // Check for invalid identifier characters after number (e.g., '1abc')
         if (!isAtEnd() && isIdentifierStart(peek()) && peek() != 'n') {
@@ -514,16 +497,8 @@ public final class Lexer {
             if (source.charAt(startPos) == '0' && position > startPos + 1) {
                 throw new JSSyntaxErrorException("Invalid or unexpected token");
             }
-            advance(); // consume 'n'
-            if (!isAtEnd() && (isIdentifierStart(peek()) || Character.isDigit(peek()))) {
-                throw new JSSyntaxErrorException("Invalid or unexpected token");
-            }
-            String value = source.substring(startPos, position - 1); // exclude 'n' from value
-            return new Token(TokenType.BIGINT, value, startLine, startColumn, startPos);
         }
-
-        String value = source.substring(startPos, position);
-        return new Token(TokenType.NUMBER, value, startLine, startColumn, startPos);
+        return finalizeNumberOrBigIntToken(startPos, startLine, startColumn);
     }
 
     private Token scanNumberStartingWithDot(int startPos, int startLine, int startColumn) {
@@ -531,16 +506,7 @@ public final class Lexer {
         scanDigitsWithNumericSeparators(10, false, false);
 
         // Optional exponent part
-        if (!isAtEnd() && (peek() == 'e' || peek() == 'E')) {
-            advance(); // consume e/E
-            if (!isAtEnd() && (peek() == '+' || peek() == '-')) {
-                advance();
-            }
-            if (isAtEnd() || !Character.isDigit(peek())) {
-                throw new JSSyntaxErrorException("Invalid or unexpected token");
-            }
-            scanDigitsWithNumericSeparators(10, false, false);
-        }
+        scanExponent();
 
         if (!isAtEnd() && (peek() == 'n' || isIdentifierStart(peek()))) {
             throw new JSSyntaxErrorException("Invalid or unexpected token");
@@ -548,12 +514,6 @@ public final class Lexer {
 
         String value = source.substring(startPos, position);
         return new Token(TokenType.NUMBER, value, startLine, startColumn, startPos);
-    }
-
-    private Token scanOctalNumber(int startPos, int startLine, int startColumn) {
-        scanDigitsWithNumericSeparators(8, false, false);
-        validateNoRadixLiteralContinuation(8);
-        return finalizeNumberOrBigIntToken(startPos, startLine, startColumn);
     }
 
     private Token scanOperatorOrPunctuation(char c, int startPos, int startLine, int startColumn) {
@@ -580,11 +540,7 @@ public final class Lexer {
             case '~' -> TokenType.BIT_NOT;
             case '?' -> {
                 if (match('?')) {
-                    if (match('=')) {
-                        yield TokenType.NULLISH_ASSIGN;
-                    } else {
-                        yield TokenType.NULLISH_COALESCING;
-                    }
+                    yield matchEquals(TokenType.NULLISH_COALESCING, TokenType.NULLISH_ASSIGN);
                 } else if (!isAtEnd() && peek() == '.'
                         && (position + 1 >= source.length() || !Character.isDigit(source.charAt(position + 1)))) {
                     advance(); // consume '.'
@@ -599,91 +555,23 @@ public final class Lexer {
                 }
                 yield TokenType.DOT;
             }
-            case '+' -> {
-                if (match('+')) {
-                    yield TokenType.INC;
-                } else if (match('=')) {
-                    yield TokenType.PLUS_ASSIGN;
-                } else {
-                    yield TokenType.PLUS;
-                }
-            }
-            case '-' -> {
-                if (match('-')) {
-                    yield TokenType.DEC;
-                } else if (match('=')) {
-                    yield TokenType.MINUS_ASSIGN;
-                } else {
-                    yield TokenType.MINUS;
-                }
-            }
-            case '*' -> {
-                if (match('*')) {
-                    if (match('=')) {
-                        yield TokenType.EXP_ASSIGN;
-                    } else {
-                        yield TokenType.EXP;
-                    }
-                } else if (match('=')) {
-                    yield TokenType.MUL_ASSIGN;
-                } else {
-                    yield TokenType.MUL;
-                }
-            }
-            case '/' -> {
-                if (match('=')) {
-                    yield TokenType.DIV_ASSIGN;
-                } else {
-                    yield TokenType.DIV;
-                }
-            }
-            case '%' -> {
-                if (match('=')) {
-                    yield TokenType.MOD_ASSIGN;
-                } else {
-                    yield TokenType.MOD;
-                }
-            }
-            case '&' -> {
-                if (match('&')) {
-                    if (match('=')) {
-                        yield TokenType.LOGICAL_AND_ASSIGN;
-                    } else {
-                        yield TokenType.LOGICAL_AND;
-                    }
-                } else if (match('=')) {
-                    yield TokenType.AND_ASSIGN;
-                } else {
-                    yield TokenType.BIT_AND;
-                }
-            }
-            case '|' -> {
-                if (match('|')) {
-                    if (match('=')) {
-                        yield TokenType.LOGICAL_OR_ASSIGN;
-                    } else {
-                        yield TokenType.LOGICAL_OR;
-                    }
-                } else if (match('=')) {
-                    yield TokenType.OR_ASSIGN;
-                } else {
-                    yield TokenType.BIT_OR;
-                }
-            }
-            case '^' -> {
-                if (match('=')) {
-                    yield TokenType.XOR_ASSIGN;
-                } else {
-                    yield TokenType.BIT_XOR;
-                }
-            }
+            case '+' -> match('+') ? TokenType.INC : matchEquals(TokenType.PLUS, TokenType.PLUS_ASSIGN);
+            case '-' -> match('-') ? TokenType.DEC : matchEquals(TokenType.MINUS, TokenType.MINUS_ASSIGN);
+            case '*' -> match('*')
+                    ? matchEquals(TokenType.EXP, TokenType.EXP_ASSIGN)
+                    : matchEquals(TokenType.MUL, TokenType.MUL_ASSIGN);
+            case '/' -> matchEquals(TokenType.DIV, TokenType.DIV_ASSIGN);
+            case '%' -> matchEquals(TokenType.MOD, TokenType.MOD_ASSIGN);
+            case '&' -> match('&')
+                    ? matchEquals(TokenType.LOGICAL_AND, TokenType.LOGICAL_AND_ASSIGN)
+                    : matchEquals(TokenType.BIT_AND, TokenType.AND_ASSIGN);
+            case '|' -> match('|')
+                    ? matchEquals(TokenType.LOGICAL_OR, TokenType.LOGICAL_OR_ASSIGN)
+                    : matchEquals(TokenType.BIT_OR, TokenType.OR_ASSIGN);
+            case '^' -> matchEquals(TokenType.BIT_XOR, TokenType.XOR_ASSIGN);
             case '=' -> {
                 if (match('=')) {
-                    if (match('=')) {
-                        yield TokenType.STRICT_EQ;
-                    } else {
-                        yield TokenType.EQ;
-                    }
+                    yield matchEquals(TokenType.EQ, TokenType.STRICT_EQ);
                 } else if (match('>')) {
                     yield TokenType.ARROW;
                 } else {
@@ -692,46 +580,21 @@ public final class Lexer {
             }
             case '!' -> {
                 if (match('=')) {
-                    if (match('=')) {
-                        yield TokenType.STRICT_NE;
-                    } else {
-                        yield TokenType.NE;
-                    }
+                    yield matchEquals(TokenType.NE, TokenType.STRICT_NE);
                 } else {
                     yield TokenType.NOT;
                 }
             }
-            case '<' -> {
-                if (match('<')) {
-                    if (match('=')) {
-                        yield TokenType.LSHIFT_ASSIGN;
-                    } else {
-                        yield TokenType.LSHIFT;
-                    }
-                } else if (match('=')) {
-                    yield TokenType.LE;
-                } else {
-                    yield TokenType.LT;
-                }
-            }
+            case '<' -> match('<')
+                    ? matchEquals(TokenType.LSHIFT, TokenType.LSHIFT_ASSIGN)
+                    : matchEquals(TokenType.LT, TokenType.LE);
             case '>' -> {
                 if (match('>')) {
-                    if (match('>')) {
-                        if (match('=')) {
-                            yield TokenType.URSHIFT_ASSIGN;
-                        } else {
-                            yield TokenType.URSHIFT;
-                        }
-                    } else if (match('=')) {
-                        yield TokenType.RSHIFT_ASSIGN;
-                    } else {
-                        yield TokenType.RSHIFT;
-                    }
-                } else if (match('=')) {
-                    yield TokenType.GE;
-                } else {
-                    yield TokenType.GT;
+                    yield match('>')
+                            ? matchEquals(TokenType.URSHIFT, TokenType.URSHIFT_ASSIGN)
+                            : matchEquals(TokenType.RSHIFT, TokenType.RSHIFT_ASSIGN);
                 }
+                yield matchEquals(TokenType.GT, TokenType.GE);
             }
             default -> throw new JSSyntaxErrorException("Invalid or unexpected token");
         };
@@ -922,169 +785,37 @@ public final class Lexer {
 
     private Token scanToken() {
         skipWhitespaceAndComments();
-
         if (isAtEnd()) {
-            Token token = makeToken(TokenType.EOF, "");
             lastTokenType = TokenType.EOF;
-            return token;
+            return makeToken(TokenType.EOF, "");
         }
-
         int startPos = position;
         int startLine = line;
         int startColumn = column;
-
-        char c = advance();
-
-        // Identifiers and keywords
-        if (isIdentifierStart(c)) {
-            Token token = scanIdentifier(startPos, startLine, startColumn, c, false);
-            // `default` is the one keyword that can also be a property name, and the two want
-            // opposite answers for a following '/'. Only meaningful while lastTokenType is DEFAULT,
-            // which nothing but this branch can make it.
-            defaultFollowsPropertyAccess = lastTokenType == TokenType.DOT
-                    || lastTokenType == TokenType.OPTIONAL_CHAINING;
-            lastTokenType = token.type();
-            return token;
-        }
-
-        // Astral Unicode identifier start encoded as a surrogate pair.
-        if (Character.isHighSurrogate(c) && !isAtEnd() && Character.isLowSurrogate(peek())) {
-            char trailingSurrogate = advance();
-            int codePoint = Character.toCodePoint(c, trailingSurrogate);
-            if (isIdentifierStartCodePoint(codePoint)) {
-                Token token = scanIdentifier(startPos, startLine, startColumn, codePoint, false);
-                lastTokenType = token.type();
-                return token;
+        char c = peek();
+        Token token;
+        if (atIdentifierStart() || c == '\\') {
+            if (isIdentifierStart(c)) {
+                defaultFollowsPropertyAccess = lastTokenType == TokenType.DOT
+                        || lastTokenType == TokenType.OPTIONAL_CHAINING;
             }
-            position--;
-            column--;
-        }
-
-        // Identifier with Unicode escape start (\\uXXXX / \\u{...})
-        if (c == '\\' && !isAtEnd() && peek() == 'u') {
-            int codePoint = parseUnicodeEscapeSequence();
-            if (codePoint < 0 || !isIdentifierStartCodePoint(codePoint)) {
-                throw new JSSyntaxErrorException("Invalid or unexpected token");
+            token = scanIdentifier(startPos, startLine, startColumn, false);
+        } else {
+            advance();
+            if (Character.isDigit(c)) {
+                token = scanNumber(startPos, startLine, startColumn);
+            } else {
+                token = switch (c) {
+                    case '"', '\'' -> scanString(c, startPos, startLine, startColumn);
+                    case '`' -> scanTemplate(startPos, startLine, startColumn);
+                    case '@' -> new Token(TokenType.AT, "@", startLine, startColumn, startPos);
+                    case '#' -> atIdentifierStart() || peek() == '\\'
+                            ? scanIdentifier(startPos, startLine, startColumn, true)
+                            : makeToken(TokenType.HASH, "#");
+                    default -> scanOperatorOrPunctuation(c, startPos, startLine, startColumn);
+                };
             }
-            Token token = scanIdentifier(startPos, startLine, startColumn, codePoint, true);
-            lastTokenType = token.type();
-            return token;
         }
-
-        // Numbers
-        if (Character.isDigit(c)) {
-            Token token = scanNumber(startPos, startLine, startColumn);
-            lastTokenType = token.type();
-            return token;
-        }
-
-        // Strings
-        if (c == '"' || c == '\'') {
-            Token token = scanString(c, startPos, startLine, startColumn);
-            lastTokenType = token.type();
-            return token;
-        }
-
-        // Template literals
-        if (c == '`') {
-            Token token = scanTemplate(startPos, startLine, startColumn);
-            lastTokenType = token.type();
-            return token;
-        }
-
-        // Decorator (@)
-        if (c == '@') {
-            Token token = new Token(TokenType.AT, "@", startLine, startColumn, startPos);
-            lastTokenType = token.type();
-            return token;
-        }
-
-        // Private identifiers (#name)
-        if (c == '#') {
-            boolean hasIdentifierStart = false;
-            if (!isAtEnd()) {
-                char nextChar = peek();
-                if (isIdentifierStart(nextChar) || nextChar == '\\') {
-                    hasIdentifierStart = true;
-                } else if (Character.isHighSurrogate(nextChar) && position + 1 < source.length()
-                        && Character.isLowSurrogate(source.charAt(position + 1))) {
-                    int codePoint = Character.toCodePoint(nextChar, source.charAt(position + 1));
-                    hasIdentifierStart = isIdentifierStartCodePoint(codePoint);
-                }
-            }
-            if (hasIdentifierStart) {
-                StringBuilder name = new StringBuilder();
-
-                if (peek() == '\\') {
-                    advance(); // consume '\'
-                    int codePoint = parseUnicodeEscapeSequence();
-                    if (codePoint < 0 || !isIdentifierStartCodePoint(codePoint)) {
-                        throw new JSSyntaxErrorException("Invalid or unexpected token");
-                    }
-                    name.appendCodePoint(codePoint);
-                } else {
-                    char first = advance();
-                    if (Character.isHighSurrogate(first) && !isAtEnd() && Character.isLowSurrogate(peek())) {
-                        char trailingSurrogate = advance();
-                        int codePoint = Character.toCodePoint(first, trailingSurrogate);
-                        if (!isIdentifierStartCodePoint(codePoint)) {
-                            throw new JSSyntaxErrorException("Invalid or unexpected token");
-                        }
-                        name.appendCodePoint(codePoint);
-                    } else if (!isIdentifierStart(first)) {
-                        throw new JSSyntaxErrorException("Invalid or unexpected token");
-                    } else {
-                        name.append(first);
-                    }
-                }
-
-                while (!isAtEnd()) {
-                    if (peek() == '\\') {
-                        int currentPos = position;
-                        int currentColumn = column;
-                        advance(); // consume '\'
-                        int codePoint = parseUnicodeEscapeSequence();
-                        if (codePoint < 0) {
-                            position = currentPos;
-                            column = currentColumn;
-                            break;
-                        }
-                        if (!isIdentifierPartCodePoint(codePoint)) {
-                            throw new JSSyntaxErrorException("Invalid or unexpected token");
-                        }
-                        name.appendCodePoint(codePoint);
-                    } else if (Character.isHighSurrogate(peek()) && position + 1 < source.length()
-                            && Character.isLowSurrogate(source.charAt(position + 1))) {
-                        char highSurrogate = advance();
-                        char lowSurrogate = advance();
-                        int codePoint = Character.toCodePoint(highSurrogate, lowSurrogate);
-                        if (!isIdentifierPartCodePoint(codePoint)) {
-                            position -= 2;
-                            column -= 2;
-                            break;
-                        }
-                        name.appendCodePoint(codePoint);
-                    } else if (isIdentifierPart(peek())) {
-                        name.append(advance());
-                    } else {
-                        break;
-                    }
-                }
-
-                // The value includes the # prefix
-                String value = "#" + name;
-                Token token = new Token(TokenType.PRIVATE_NAME, value, startLine, startColumn, startPos);
-                lastTokenType = token.type();
-                return token;
-            }
-            // Otherwise, it's just a # token (for potential future use)
-            Token token = makeToken(TokenType.HASH, "#");
-            lastTokenType = token.type();
-            return token;
-        }
-
-        // Operators and punctuation
-        Token token = scanOperatorOrPunctuation(c, startPos, startLine, startColumn);
         lastTokenType = token.type();
         return token;
     }
@@ -1105,6 +836,12 @@ public final class Lexer {
         this.strictMode = strictMode;
     }
 
+    private void skipLineComment() {
+        while (!isAtEnd() && !isLineTerminator(peek())) {
+            advance();
+        }
+    }
+
     private void skipWhitespaceAndComments() {
         boolean seenLineTerminator = false;
         while (!isAtEnd()) {
@@ -1112,23 +849,14 @@ public final class Lexer {
 
             // Hashbang comment (#!...) is only valid at the very start of source text.
             if (position == 0 && c == '#' && position + 1 < source.length() && source.charAt(position + 1) == '!') {
-                advance(); // consume '#'
-                advance(); // consume '!'
-                while (!isAtEnd() && !isLineTerminator(peek())) {
-                    advance();
-                }
+                skipLineComment();
                 continue;
             }
 
             // Annex B SingleLineHTMLCloseComment in first line before any token.
             if (lastTokenType == null && line == 1 && c == '-' && position + 2 < source.length()
                     && source.charAt(position + 1) == '-' && source.charAt(position + 2) == '>') {
-                advance(); // consume '-'
-                advance(); // consume '-'
-                advance(); // consume '>'
-                while (!isAtEnd() && !isLineTerminator(peek())) {
-                    advance();
-                }
+                skipLineComment();
                 continue;
             }
 
@@ -1156,11 +884,7 @@ public final class Lexer {
 
                 // Single-line comment
                 if (next == '/') {
-                    advance(); // consume first /
-                    advance(); // consume second /
-                    while (!isAtEnd() && !isLineTerminator(peek())) {
-                        advance();
-                    }
+                    skipLineComment();
                     continue;
                 }
 
@@ -1197,13 +921,7 @@ public final class Lexer {
                 if (moduleMode) {
                     throw new JSSyntaxErrorException("HTML comments are not allowed in modules");
                 }
-                advance(); // <
-                advance(); // !
-                advance(); // -
-                advance(); // -
-                while (!isAtEnd() && !isLineTerminator(peek())) {
-                    advance();
-                }
+                skipLineComment();
                 continue;
             }
 
@@ -1215,12 +933,7 @@ public final class Lexer {
                 if (moduleMode) {
                     throw new JSSyntaxErrorException("HTML comments are not allowed in modules");
                 }
-                advance(); // -
-                advance(); // -
-                advance(); // >
-                while (!isAtEnd() && !isLineTerminator(peek())) {
-                    advance();
-                }
+                skipLineComment();
                 continue;
             }
 
@@ -1228,7 +941,7 @@ public final class Lexer {
         }
     }
 
-    private void validateNoRadixLiteralContinuation(int radix) {
+    private void validateNoRadixLiteralContinuation() {
         if (isAtEnd()) {
             return;
         }
@@ -1259,5 +972,4 @@ public final class Lexer {
     private static boolean isLineTerminator(char c) {
         return c == '\n' || c == '\r' || c == '\u2028' || c == '\u2029';
     }
-
 }

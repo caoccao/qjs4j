@@ -66,12 +66,12 @@ public class ModuleSourceTransformerTest extends BaseTest {
 
     @Test
     public void testDecodeIdentifierEscapesAppliesUnicodeEscapes() {
-        assertThat(transformer().decodeIdentifierEscapes("\\u0078")).isEqualTo("x");
-        assertThat(transformer().decodeIdentifierEscapes("caf\\u00e9")).isEqualTo("café");
-        assertThat(transformer().decodeIdentifierEscapes("\\u{1D4AA}")).isEqualTo("\uD835\uDCAA");
+        assertThat(ModuleSourceText.decodeIdentifierEscapes("\\u0078")).isEqualTo("x");
+        assertThat(ModuleSourceText.decodeIdentifierEscapes("caf\\u00e9")).isEqualTo("café");
+        assertThat(ModuleSourceText.decodeIdentifierEscapes("\\u{1D4AA}")).isEqualTo("\uD835\uDCAA");
         // Nothing to decode: the input is handed back as it stands.
-        assertThat(transformer().decodeIdentifierEscapes("plain$_0")).isEqualTo("plain$_0");
-        assertThat(transformer().decodeIdentifierEscapes("café")).isEqualTo("café");
+        assertThat(ModuleSourceText.decodeIdentifierEscapes("plain$_0")).isEqualTo("plain$_0");
+        assertThat(ModuleSourceText.decodeIdentifierEscapes("café")).isEqualTo("café");
     }
 
     @Test
@@ -80,66 +80,66 @@ public class ModuleSourceTransformerTest extends BaseTest {
         // malformed escape: its text stands. The branch used to append the escape and then rewind
         // the cursor to the backslash, so the loop walked the same characters twice and a
         // three-character unterminated escape decoded to five.
-        assertThat(transformer().decodeIdentifierEscapes("\\u{")).isEqualTo("\\u{");
-        assertThat(transformer().decodeIdentifierEscapes("a\\u{")).isEqualTo("a\\u{");
-        assertThat(transformer().decodeIdentifierEscapes("\\u{12")).isEqualTo("\\u{12");
+        assertThat(ModuleSourceText.decodeIdentifierEscapes("\\u{")).isEqualTo("\\u{");
+        assertThat(ModuleSourceText.decodeIdentifierEscapes("a\\u{")).isEqualTo("a\\u{");
+        assertThat(ModuleSourceText.decodeIdentifierEscapes("\\u{12")).isEqualTo("\\u{12");
         // Only the malformed escape is left alone. Whatever follows it is still decoded, exactly as
         // it is after an escape with non-hexadecimal digits, so one bad escape does not silently
         // stop the scan.
-        assertThat(transformer().decodeIdentifierEscapes("\\u{ \\u0041")).isEqualTo("\\u{ A");
+        assertThat(ModuleSourceText.decodeIdentifierEscapes("\\u{ \\u0041")).isEqualTo("\\u{ A");
     }
 
     @Test
     public void testDecodeIdentifierEscapesLeavesMalformedEscapesAlone() {
         // Not a decodable escape, so the text stands: the compiler rejects it with a real message.
-        assertThat(transformer().decodeIdentifierEscapes("\\uZZZZ")).isEqualTo("\\uZZZZ");
-        assertThat(transformer().decodeIdentifierEscapes("a\\u12")).isEqualTo("a\\u12");
+        assertThat(ModuleSourceText.decodeIdentifierEscapes("\\uZZZZ")).isEqualTo("\\uZZZZ");
+        assertThat(ModuleSourceText.decodeIdentifierEscapes("a\\u12")).isEqualTo("a\\u12");
     }
 
     @Test
     public void testDecodeIdentifierEscapesReadsABracedEscapeThatIsTerminated() {
         // The sibling of the case above: the brace does close, so the escape decodes. Both branches
         // read the same opening prefix, and only the closing brace tells them apart.
-        assertThat(transformer().decodeIdentifierEscapes("\\u{41}")).isEqualTo("A");
+        assertThat(ModuleSourceText.decodeIdentifierEscapes("\\u{41}")).isEqualTo("A");
         // A braced escape whose body is not hexadecimal is malformed too, and stands as written.
-        assertThat(transformer().decodeIdentifierEscapes("\\u{ZZ}b")).isEqualTo("\\u{ZZ}b");
+        assertThat(ModuleSourceText.decodeIdentifierEscapes("\\u{ZZ}b")).isEqualTo("\\u{ZZ}b");
     }
 
     @Test
     public void testDecodeModuleStringLiteralValueAppliesEscapes() {
         // A specifier's meaning is its StringValue, not its spelling: './dep.mjs' either way.
-        assertThat(transformer().decodeModuleStringLiteralValue("./d\\u0065p.mjs")).isEqualTo("./dep.mjs");
-        assertThat(transformer().decodeModuleStringLiteralValue("a\\u002db")).isEqualTo("a-b");
-        assertThat(transformer().decodeModuleStringLiteralValue("\\x41")).isEqualTo("A");
-        assertThat(transformer().decodeModuleStringLiteralValue("a\\nb")).isEqualTo("a\nb");
-        assertThat(transformer().decodeModuleStringLiteralValue("a\\tb")).isEqualTo("a\tb");
-        assertThat(transformer().decodeModuleStringLiteralValue("./a\\'b.mjs")).isEqualTo("./a'b.mjs");
-        assertThat(transformer().decodeModuleStringLiteralValue("\\u{1F600}")).isEqualTo("\uD83D\uDE00");
+        assertThat(ModuleSourceText.decodeModuleStringLiteralValue("./d\\u0065p.mjs")).isEqualTo("./dep.mjs");
+        assertThat(ModuleSourceText.decodeModuleStringLiteralValue("a\\u002db")).isEqualTo("a-b");
+        assertThat(ModuleSourceText.decodeModuleStringLiteralValue("\\x41")).isEqualTo("A");
+        assertThat(ModuleSourceText.decodeModuleStringLiteralValue("a\\nb")).isEqualTo("a\nb");
+        assertThat(ModuleSourceText.decodeModuleStringLiteralValue("a\\tb")).isEqualTo("a\tb");
+        assertThat(ModuleSourceText.decodeModuleStringLiteralValue("./a\\'b.mjs")).isEqualTo("./a'b.mjs");
+        assertThat(ModuleSourceText.decodeModuleStringLiteralValue("\\u{1F600}")).isEqualTo("\uD83D\uDE00");
     }
 
     @Test
     public void testDecodeModuleStringLiteralValueDropsLineContinuations() {
         // A LineContinuation contributes nothing to the value, and CRLF is one line terminator.
-        assertThat(transformer().decodeModuleStringLiteralValue("./de\\\np.mjs")).isEqualTo("./dep.mjs");
-        assertThat(transformer().decodeModuleStringLiteralValue("./de\\\r\np.mjs")).isEqualTo("./dep.mjs");
+        assertThat(ModuleSourceText.decodeModuleStringLiteralValue("./de\\\np.mjs")).isEqualTo("./dep.mjs");
+        assertThat(ModuleSourceText.decodeModuleStringLiteralValue("./de\\\r\np.mjs")).isEqualTo("./dep.mjs");
     }
 
     @Test
     public void testDecodeModuleStringLiteralValueLeavesLegacyOctalAlone() {
         // A legacy octal escape is a SyntaxError in a module, and the source has already been
         // compiled once by the time this runs. Inventing a value for it would be worse.
-        assertThat(transformer().decodeModuleStringLiteralValue("\\01")).isEqualTo("\\01");
+        assertThat(ModuleSourceText.decodeModuleStringLiteralValue("\\01")).isEqualTo("\\01");
         // \0 not followed by a digit is NUL, which is a legal escape.
-        assertThat(transformer().decodeModuleStringLiteralValue("a\\0b")).isEqualTo("a\0b");
+        assertThat(ModuleSourceText.decodeModuleStringLiteralValue("a\\0b")).isEqualTo("a\0b");
     }
 
     @Test
     public void testDefaultExportedDeclarationsHaveNoExpressionExtent() {
         // A default-exported function or class ends at its body, which the transformer finds by
         // matching braces. Only expressions need the parser.
-        assertThat(transformer().defaultExportExtents("export default function f() {}\n")).isEmpty();
-        assertThat(transformer().defaultExportExtents("export default class C {}\n")).isEmpty();
-        assertThat(transformer().defaultExportExtents("export default async function g() {}\n")).isEmpty();
+        assertThat(transformer().scan("export default function f() {}\n").defaultExportExtents()).isEmpty();
+        assertThat(transformer().scan("export default class C {}\n").defaultExportExtents()).isEmpty();
+        assertThat(transformer().scan("export default async function g() {}\n").defaultExportExtents()).isEmpty();
     }
 
     @Test
@@ -147,8 +147,8 @@ public class ModuleSourceTransformerTest extends BaseTest {
         // `export default /\(/;` is balanced only if you know the parenthesis is inside a regular
         // expression literal. Counting delimiters swallowed the statement after it.
         String sourceCode = "export default /\\(/;\nglobalThis.after = 1;\n";
-        Map<Integer, ModuleSourceTransformer.DefaultExportExtent> extents = transformer()
-                .defaultExportExtents(sourceCode);
+        Map<Integer, ModuleSourceScan.DefaultExportExtent> extents = transformer().scan(sourceCode)
+                .defaultExportExtents();
         assertThat(extents).containsKey(0);
         assertThat(extents.get(0).expression()).isEqualTo("/\\(/");
         assertThat(extents.get(0).endLineIndex()).isZero();
@@ -160,8 +160,8 @@ public class ModuleSourceTransformerTest extends BaseTest {
         // Masking turns a comment into whitespace, so the expression must not absorb it — the
         // generated `let X = (0, e);` would otherwise close its parenthesis inside a line comment.
         String sourceCode = "export default 0; // trailing\n";
-        Map<Integer, ModuleSourceTransformer.DefaultExportExtent> extents = transformer()
-                .defaultExportExtents(sourceCode);
+        Map<Integer, ModuleSourceScan.DefaultExportExtent> extents = transformer().scan(sourceCode)
+                .defaultExportExtents();
         assertThat(extents).containsKey(0);
         assertThat(extents.get(0).expression()).isEqualTo("0");
         assertThat(extents.get(0).trailingText()).isEqualTo("// trailing");
@@ -170,8 +170,8 @@ public class ModuleSourceTransformerTest extends BaseTest {
     @Test
     public void testDefaultExportExtentSpansMoreThanItsOwnLine() {
         String sourceCode = "export default 1 +\n    2;\nglobalThis.after = 1;\n";
-        Map<Integer, ModuleSourceTransformer.DefaultExportExtent> extents = transformer()
-                .defaultExportExtents(sourceCode);
+        Map<Integer, ModuleSourceScan.DefaultExportExtent> extents = transformer().scan(sourceCode)
+                .defaultExportExtents();
         assertThat(extents).containsKey(0);
         assertThat(extents.get(0).expression()).isEqualTo("1 +\n    2");
         assertThat(extents.get(0).endLineIndex()).isOne();
@@ -181,23 +181,23 @@ public class ModuleSourceTransformerTest extends BaseTest {
     public void testEscapingAJavaScriptStringCoversEveryLineTerminator() {
         // A line terminator inside an interpolated value would end the generated literal and turn
         // the rest of the value into source text. U+2028 and U+2029 are line terminators too.
-        assertThat(transformer().escapeJavaScriptString("a\"b")).isEqualTo("a\\\"b");
-        assertThat(transformer().escapeJavaScriptString("a\\b")).isEqualTo("a\\\\b");
-        assertThat(transformer().escapeJavaScriptString("a\nb")).isEqualTo("a\\nb");
-        assertThat(transformer().escapeJavaScriptString("a\u2028b")).isEqualTo("a\\u2028b");
-        assertThat(transformer().escapeJavaScriptString("a\u2029b")).isEqualTo("a\\u2029b");
-        assertThat(transformer().escapeJavaScriptString("a\u0001b")).isEqualTo("a\\u0001b");
+        assertThat(ModuleSourceText.escapeJavaScriptString("a\"b")).isEqualTo("a\\\"b");
+        assertThat(ModuleSourceText.escapeJavaScriptString("a\\b")).isEqualTo("a\\\\b");
+        assertThat(ModuleSourceText.escapeJavaScriptString("a\nb")).isEqualTo("a\\nb");
+        assertThat(ModuleSourceText.escapeJavaScriptString("a\u2028b")).isEqualTo("a\\u2028b");
+        assertThat(ModuleSourceText.escapeJavaScriptString("a\u2029b")).isEqualTo("a\\u2029b");
+        assertThat(ModuleSourceText.escapeJavaScriptString("a\u0001b")).isEqualTo("a\\u0001b");
     }
 
     @Test
     public void testGeneratedNamePrefixAvoidsANameTheSourceSpells() {
         // The prefix has to be one the module's own source does not use, or the transformer's
         // bookkeeping binding silently replaces the author's.
-        assertThat(transformer().generatedModuleNamePrefix("const x = 1;")).isEqualTo("__qjs4j");
-        assertThat(transformer().generatedModuleNamePrefix("const __qjs4jDefaultExport$0 = 1;"))
+        assertThat(transformer().scan("const x = 1;").generatedModuleNamePrefix()).isEqualTo("__qjs4j");
+        assertThat(transformer().scan("const __qjs4jDefaultExport$0 = 1;").generatedModuleNamePrefix())
                 .isNotEqualTo("__qjs4j");
         // …including when the source spells it with an escape, which a substring search misses.
-        assertThat(transformer().generatedModuleNamePrefix("const \\u005f\\u005fqjs4jModuleExports = 1;"))
+        assertThat(transformer().scan("const \\u005f\\u005fqjs4jModuleExports = 1;").generatedModuleNamePrefix())
                 .isNotEqualTo("__qjs4j");
     }
 
@@ -205,19 +205,19 @@ public class ModuleSourceTransformerTest extends BaseTest {
     public void testIdentifierNameValidationFollowsUnicodeNotAscii() {
         // `café` and `módulo` are ordinary identifiers; the transformer used to extract binding
         // names with [A-Za-z_$][A-Za-z0-9_$]* and lose them.
-        assertThat(ModuleSourceTransformer.isValidIdentifierName("café")).isTrue();
-        assertThat(ModuleSourceTransformer.isValidIdentifierName("módulo")).isTrue();
-        assertThat(ModuleSourceTransformer.isValidIdentifierName("$_0")).isTrue();
-        assertThat(ModuleSourceTransformer.isValidIdentifierName("0abc")).isFalse();
-        assertThat(ModuleSourceTransformer.isValidIdentifierName("a-b")).isFalse();
-        assertThat(ModuleSourceTransformer.isValidIdentifierName("")).isFalse();
-        assertThat(ModuleSourceTransformer.isValidIdentifierName(null)).isFalse();
+        assertThat(ModuleSourceText.isValidIdentifierName("café")).isTrue();
+        assertThat(ModuleSourceText.isValidIdentifierName("módulo")).isTrue();
+        assertThat(ModuleSourceText.isValidIdentifierName("$_0")).isTrue();
+        assertThat(ModuleSourceText.isValidIdentifierName("0abc")).isFalse();
+        assertThat(ModuleSourceText.isValidIdentifierName("a-b")).isFalse();
+        assertThat(ModuleSourceText.isValidIdentifierName("")).isFalse();
+        assertThat(ModuleSourceText.isValidIdentifierName(null)).isFalse();
     }
 
     @Test
     public void testMaskModuleCommentsBlanksCommentsAndKeepsLineStructure() {
         String sourceCode = "const a = 1; // export const fake = 1;\n/* export */ const b = 2;\n";
-        String masked = transformer().maskModuleComments(sourceCode);
+        String masked = ModuleSourceScan.maskModuleComments(sourceCode);
         assertThat(masked).hasSameSizeAs(sourceCode);
         assertThat(masked).doesNotContain("fake");
         assertThat(masked).contains("const a = 1;");
@@ -233,7 +233,7 @@ public class ModuleSourceTransformerTest extends BaseTest {
         // Masking blanks comments only. String and template bodies are left verbatim, which is why
         // membership in a declaration line is decided by the lexer rather than by this scan.
         String sourceCode = "const s = '// not a comment';\nconst t = `export const fake = 1;`;\n";
-        String masked = transformer().maskModuleComments(sourceCode);
+        String masked = ModuleSourceScan.maskModuleComments(sourceCode);
         assertThat(masked).contains("'// not a comment'");
         assertThat(masked).contains("export const fake = 1;");
     }
@@ -252,10 +252,17 @@ public class ModuleSourceTransformerTest extends BaseTest {
     }
 
     @Test
+    public void testQuotedDelimitersInModuleDeclarations() {
+        assertThat(transformer().stripQuotedSpecifier("'a\\'b' with { type: 'text' }")).isEqualTo("a'b");
+        String body = "{ return 'https://example.org/}'; }";
+        assertThat(ModuleSourceText.findMatchingClosingBrace(body, 0)).isEqualTo(body.length() - 1);
+    }
+
+    @Test
     public void testScanTopLevelModuleDeclarationsIgnoresDeclarationsInsideATemplate() {
         // Comment masking leaves template bodies verbatim, so this used to read as an export.
-        ModuleSourceTransformer.ModuleDeclarationScan scan = transformer()
-                .scanTopLevelModuleDeclarations("const t = `\nexport const fake = 1;\n`;\n");
+        ModuleSourceScan.ModuleDeclarationScan scan = transformer().scan("const t = `\nexport const fake = 1;\n`;\n")
+                .scanTopLevelModuleDeclarations();
         assertThat(scan).isNotNull();
         assertThat(scan.hasExportDeclaration()).isFalse();
         assertThat(scan.hasImportDeclaration()).isFalse();
@@ -263,25 +270,25 @@ public class ModuleSourceTransformerTest extends BaseTest {
 
     @Test
     public void testScanTopLevelModuleDeclarationsSeparatesImportsFromImportExpressions() {
-        ModuleSourceTransformer.ModuleDeclarationScan declarationScan = transformer()
-                .scanTopLevelModuleDeclarations("import { a } from './m.mjs';\n");
+        ModuleSourceScan.ModuleDeclarationScan declarationScan = transformer().scan("import { a } from './m.mjs';\n")
+                .scanTopLevelModuleDeclarations();
         assertThat(declarationScan).isNotNull();
         assertThat(declarationScan.hasImportDeclaration()).isTrue();
         // `import(...)` and `import.meta` are expressions, not declarations.
-        ModuleSourceTransformer.ModuleDeclarationScan expressionScan = transformer()
-                .scanTopLevelModuleDeclarations("const p = import('./m.mjs');\n");
+        ModuleSourceScan.ModuleDeclarationScan expressionScan = transformer().scan("const p = import('./m.mjs');\n")
+                .scanTopLevelModuleDeclarations();
         assertThat(expressionScan).isNotNull();
         assertThat(expressionScan.hasImportDeclaration()).isFalse();
-        ModuleSourceTransformer.ModuleDeclarationScan metaScan = transformer()
-                .scanTopLevelModuleDeclarations("const u = import.meta.url;\n");
+        ModuleSourceScan.ModuleDeclarationScan metaScan = transformer().scan("const u = import.meta.url;\n")
+                .scanTopLevelModuleDeclarations();
         assertThat(metaScan).isNotNull();
         assertThat(metaScan.hasImportDeclaration()).isFalse();
     }
 
     @Test
     public void testSplitOnTopLevelCommasIgnoresCommasInsideQuotes() {
-        assertThat(transformer().splitOnTopLevelCommas("a, b as c")).containsExactly("a", " b as c");
-        assertThat(transformer().splitOnTopLevelCommas("\"a,b\" as c, d")).containsExactly("\"a,b\" as c", " d");
+        assertThat(ModuleSourceText.splitOnTopLevelCommas("a, b as c")).containsExactly("a", " b as c");
+        assertThat(ModuleSourceText.splitOnTopLevelCommas("\"a,b\" as c, d")).containsExactly("\"a,b\" as c", " d");
     }
 
     @Test
@@ -305,7 +312,7 @@ public class ModuleSourceTransformerTest extends BaseTest {
 
     @Test
     public void testTokenizingModuleSourceDropsTheTerminatingEof() {
-        assertThat(ModuleSourceTransformer.tokenizeModuleSource("const a = 1;")).isNotEmpty()
+        assertThat(transformer().scan("const a = 1;").tokens()).isNotEmpty()
                 .noneMatch(token -> token.type().name().equals("EOF"));
     }
 

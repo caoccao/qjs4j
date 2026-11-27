@@ -44,8 +44,7 @@ record PatternParser(ParserContext parserContext, ParserDelegates delegates) {
             if (parserContext.match(TokenType.COMMA)) {
                 elements.add(null);
             } else if (parserContext.match(TokenType.ELLIPSIS)) {
-                SourceLocation restLocation = parserContext.getLocation();
-                parserContext.advance();
+                SourceLocation restLocation = parserContext.consumeLocation();
                 Pattern argument = parsePattern();
                 elements.add(new RestElement(argument, restLocation));
                 if (parserContext.match(TokenType.COMMA)) {
@@ -56,8 +55,7 @@ record PatternParser(ParserContext parserContext, ParserDelegates delegates) {
             } else {
                 Pattern element = parsePattern();
                 if (parserContext.match(TokenType.ASSIGN)) {
-                    SourceLocation assignLoc = parserContext.getLocation();
-                    parserContext.advance();
+                    SourceLocation assignLoc = parserContext.consumeLocation();
                     Expression defaultValue = delegates.expressions.parseAssignmentExpression();
                     element = new AssignmentPattern(element, defaultValue, assignLoc);
                 }
@@ -81,8 +79,7 @@ record PatternParser(ParserContext parserContext, ParserDelegates delegates) {
                 }
             }
             if (parserContext.match(TokenType.ELLIPSIS)) {
-                SourceLocation restLoc = parserContext.getLocation();
-                parserContext.advance();
+                SourceLocation restLoc = parserContext.consumeLocation();
                 Pattern restArgument = parsePattern();
                 restElement = new RestElement(restArgument, restLoc);
                 if (!parserContext.match(TokenType.RBRACE)) {
@@ -98,8 +95,7 @@ record PatternParser(ParserContext parserContext, ParserDelegates delegates) {
             if (parserContext.consumeIf(TokenType.COLON)) {
                 value = parsePattern();
                 if (parserContext.match(TokenType.ASSIGN)) {
-                    SourceLocation assignLoc = parserContext.getLocation();
-                    parserContext.advance();
+                    SourceLocation assignLoc = parserContext.consumeLocation();
                     Expression defaultValue = delegates.expressions.parseAssignmentExpression();
                     value = new AssignmentPattern(value, defaultValue, assignLoc);
                 }
@@ -108,8 +104,7 @@ record PatternParser(ParserContext parserContext, ParserDelegates delegates) {
                 value = keyIdentifier;
                 shorthand = true;
                 if (parserContext.match(TokenType.ASSIGN)) {
-                    SourceLocation assignLoc = parserContext.getLocation();
-                    parserContext.advance();
+                    SourceLocation assignLoc = parserContext.consumeLocation();
                     Expression defaultValue = delegates.expressions.parseAssignmentExpression();
                     value = new AssignmentPattern(value, defaultValue, assignLoc);
                 }

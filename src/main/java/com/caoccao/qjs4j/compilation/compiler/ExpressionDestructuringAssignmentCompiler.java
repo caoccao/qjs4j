@@ -66,7 +66,7 @@ final class ExpressionDestructuringAssignmentCompiler extends AstNodeCompiler<Ex
             if (assignExpr.getLeft() instanceof Identifier targetId && assignExpr.getRight().isAnonymousFunction()) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
             }
-            compilerContext.emitter.patchJump(jumpNotUndefined, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.patchJumpToHere(jumpNotUndefined);
             target = assignExpr.getLeft();
         } else {
             target = element;
@@ -125,7 +125,7 @@ final class ExpressionDestructuringAssignmentCompiler extends AstNodeCompiler<Ex
             if (assignExpr.getLeft() instanceof Identifier targetId && assignExpr.getRight().isAnonymousFunction()) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
             }
-            compilerContext.emitter.patchJump(jumpNotUndefined, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.patchJumpToHere(jumpNotUndefined);
             compile(assignExpr.getLeft());
         } else {
             compile(element);

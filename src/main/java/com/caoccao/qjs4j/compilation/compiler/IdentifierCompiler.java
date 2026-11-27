@@ -20,7 +20,6 @@ import com.caoccao.qjs4j.compilation.ast.Identifier;
 import com.caoccao.qjs4j.core.JSArguments;
 import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.core.JSString;
-import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.vm.Opcode;
 
 import java.util.List;
@@ -147,46 +146,34 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         if (compilerContext.withObjectManager.getInheritedBindingNames().isEmpty()) {
             return false;
         }
-        emitInheritedWithAwareIdentifierLookup(name, compilerContext.withObjectManager.getInheritedBindingNames(), 0);
+        emitInheritedWithAwareIdentifierLookup(name, compilerContext.withObjectManager.getInheritedBindingNames(), 0,
+                false);
         return true;
     }
 
-    private void emitInheritedWithAwareIdentifierLookup(String name, List<String> withBindingNames, int withDepth) {
+    private void emitInheritedWithAwareIdentifierLookup(String name, List<String> withBindingNames, int withDepth,
+            boolean forCall) {
         if (withDepth >= withBindingNames.size()) {
             emitCapturedOrGlobalIdentifierLookup(name, Opcode.GET_VAR);
+            if (forCall) {
+                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            }
             return;
         }
 
         if (!emitInheritedWithObject(withBindingNames.get(withDepth))) {
-            emitInheritedWithAwareIdentifierLookup(name, withBindingNames, withDepth + 1);
+            emitInheritedWithAwareIdentifierLookup(name, withBindingNames, withDepth + 1, forCall);
             return;
         }
 
-        emitWithObjectLookup(name, false,
-                () -> emitInheritedWithAwareIdentifierLookup(name, withBindingNames, withDepth + 1));
-    }
-
-    private void emitInheritedWithAwareIdentifierLookupForCall(String name, List<String> withBindingNames,
-            int withDepth) {
-        if (withDepth >= withBindingNames.size()) {
-            emitCapturedOrGlobalIdentifierLookup(name, Opcode.GET_VAR);
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            return;
-        }
-
-        if (!emitInheritedWithObject(withBindingNames.get(withDepth))) {
-            emitInheritedWithAwareIdentifierLookupForCall(name, withBindingNames, withDepth + 1);
-            return;
-        }
-
-        emitWithObjectLookup(name, true,
-                () -> emitInheritedWithAwareIdentifierLookupForCall(name, withBindingNames, withDepth + 1));
+        emitWithObjectLookup(name, forCall,
+                () -> emitInheritedWithAwareIdentifierLookup(name, withBindingNames, withDepth + 1, forCall));
     }
 
     /**
      * Load a captured with-object, or report that its binding is unavailable.
      */
-    private boolean emitInheritedWithObject(String bindingName) {
+    boolean emitInheritedWithObject(String bindingName) {
         Integer localIndex = compilerContext.scopeManager.findLocalInScopes(bindingName);
         if (localIndex != null) {
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
@@ -230,54 +217,38 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
 
     private void emitWithAwareIdentifierLookup(String name) {
         List<Integer> withObjectLocals = compilerContext.withObjectManager.getActiveLocals();
-        emitWithAwareIdentifierLookup(name, withObjectLocals, 0);
+        emitWithAwareIdentifierLookup(name, withObjectLocals, 0, false);
     }
 
-    private void emitWithAwareIdentifierLookup(String name, List<Integer> withObjectLocals, int withDepth) {
+    private void emitWithAwareIdentifierLookup(String name, List<Integer> withObjectLocals, int withDepth,
+            boolean forCall) {
         if (withDepth >= withObjectLocals.size()) {
             emitIdentifierLookupWithoutWith(name);
+            if (forCall) {
+                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            }
             return;
         }
 
         int withObjectLocalIndex = withObjectLocals.get(withDepth);
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withObjectLocalIndex);
-        emitWithObjectLookup(name, false, () -> emitWithAwareIdentifierLookup(name, withObjectLocals, withDepth + 1));
+        emitWithObjectLookup(name, forCall,
+                () -> emitWithAwareIdentifierLookup(name, withObjectLocals, withDepth + 1, forCall));
     }
 
     void emitWithAwareIdentifierLookupForCall(String name) {
         List<Integer> withObjectLocals = compilerContext.withObjectManager.getActiveLocals();
         if (!withObjectLocals.isEmpty()) {
-            emitWithAwareIdentifierLookupForCall(name, withObjectLocals, 0);
+            emitWithAwareIdentifierLookup(name, withObjectLocals, 0, true);
             return;
         }
         if (!compilerContext.withObjectManager.getInheritedBindingNames().isEmpty()) {
-            emitInheritedWithAwareIdentifierLookupForCall(name,
-                    compilerContext.withObjectManager.getInheritedBindingNames(), 0);
+            emitInheritedWithAwareIdentifierLookup(name, compilerContext.withObjectManager.getInheritedBindingNames(),
+                    0, true);
             return;
         }
         emitIdentifierLookupWithoutWith(name);
         compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-    }
-
-    private void emitWithAwareIdentifierLookupForCall(String name, List<Integer> withObjectLocals, int withDepth) {
-        if (withDepth >= withObjectLocals.size()) {
-            emitIdentifierLookupWithoutWith(name);
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            return;
-        }
-
-        int withObjectLocalIndex = withObjectLocals.get(withDepth);
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withObjectLocalIndex);
-        emitWithObjectLookup(name, true,
-                () -> emitWithAwareIdentifierLookupForCall(name, withObjectLocals, withDepth + 1));
-    }
-
-    private int emitWithHasPropertyAndJumpIfMissing(String name) {
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
-        compilerContext.emitter.emitOpcode(Opcode.ROT3L);
-        compilerContext.emitter.emitOpcode(Opcode.IN);
-        return compilerContext.emitter.emitJump(Opcode.IF_FALSE);
     }
 
     /**
@@ -285,36 +256,13 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
      * with the with-object removed.
      */
     private void emitWithObjectDelete(String name, Runnable emitFallback) {
-        int jumpToFallback = emitWithHasPropertyAndJumpIfMissing(name);
-
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSSymbol.UNSCOPABLES);
-        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-        int[] jumpToDeleteWithoutUnscopables = compilerContext.emitHelpers.emitWithUnscopablesSkipJumps();
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
-        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-        int jumpToFallbackWhenBlocked = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
-
+        var fallback = WithBindingCompiler.emitHasBinding(compilerContext, name);
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
         compilerContext.emitter.emitOpcode(Opcode.DELETE);
-        int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
-
-        int deleteWithoutUnscopablesOffset = compilerContext.emitter.currentOffset();
-        for (int jumpOffset : jumpToDeleteWithoutUnscopables) {
-            compilerContext.emitter.patchJump(jumpOffset, deleteWithoutUnscopablesOffset);
-        }
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
-        compilerContext.emitter.emitOpcode(Opcode.DELETE);
-        int jumpToEndWithoutUnscopables = compilerContext.emitter.emitJump(Opcode.GOTO);
-
-        int fallbackOffset = compilerContext.emitter.currentOffset();
-        compilerContext.emitter.patchJump(jumpToFallback, fallbackOffset);
-        compilerContext.emitter.patchJump(jumpToFallbackWhenBlocked, fallbackOffset);
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        int end = compilerContext.emitter.emitJump(Opcode.GOTO);
+        fallback.begin(compilerContext.emitter);
         emitFallback.run();
-        compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
-        compilerContext.emitter.patchJump(jumpToEndWithoutUnscopables, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(end);
     }
 
     /**
@@ -323,29 +271,12 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
      * traps or getters may have removed the binding in between.
      */
     private void emitWithObjectLookup(String name, boolean forCall, Runnable emitFallback) {
-        int jumpToFallback = emitWithHasPropertyAndJumpIfMissing(name);
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSSymbol.UNSCOPABLES);
-        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-        int[] jumpToResolveWithoutUnscopables = compilerContext.emitHelpers.emitWithUnscopablesSkipJumps();
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
-        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-        int jumpToFallbackWhenBlocked = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
-
-        int jumpToGetBindingValue = compilerContext.emitter.emitJump(Opcode.GOTO);
-
-        int resolveWithoutUnscopablesOffset = compilerContext.emitter.currentOffset();
-        for (int jumpOffset : jumpToResolveWithoutUnscopables) {
-            compilerContext.emitter.patchJump(jumpOffset, resolveWithoutUnscopablesOffset);
-        }
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
-
-        compilerContext.emitter.patchJump(jumpToGetBindingValue, compilerContext.emitter.currentOffset());
-        int jumpToMissingBinding = emitWithHasPropertyAndJumpIfMissing(name);
+        var fallback = WithBindingCompiler.emitHasBinding(compilerContext, name);
+        int jumpToMissingBinding = WithBindingCompiler.emitHasPropertyTest(compilerContext.emitter, name);
         emitWithPropertyLookup(name, forCall);
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
 
-        compilerContext.emitter.patchJump(jumpToMissingBinding, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(jumpToMissingBinding);
         if (forCall && !compilerContext.strictMode) {
             // Stack: withObject -> undefined, withObject (preserve the call receiver).
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
@@ -361,13 +292,10 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         }
         int jumpToEndFromMissing = compilerContext.emitter.emitJump(Opcode.GOTO);
 
-        int fallbackOffset = compilerContext.emitter.currentOffset();
-        compilerContext.emitter.patchJump(jumpToFallback, fallbackOffset);
-        compilerContext.emitter.patchJump(jumpToFallbackWhenBlocked, fallbackOffset);
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        fallback.begin(compilerContext.emitter);
         emitFallback.run();
-        compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
-        compilerContext.emitter.patchJump(jumpToEndFromMissing, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(jumpToEnd);
+        compilerContext.emitter.patchJumpToHere(jumpToEndFromMissing);
     }
 
     private void emitWithPropertyLookup(String name, boolean forCall) {

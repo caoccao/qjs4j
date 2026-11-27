@@ -302,13 +302,13 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         }
 
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
-        compilerContext.emitter.patchJump(jumpToCleanup, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(jumpToCleanup);
 
         for (int i = 0; i < depthLvalue; i++) {
             compilerContext.emitter.emitOpcode(Opcode.NIP);
         }
 
-        compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(jumpToEnd);
     }
 
     private void compileMemberAssignment(MemberExpression member, AssignmentOperator operator, Expression right) {
@@ -445,57 +445,21 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         }
 
         for (String withBindingName : compilerContext.withObjectManager.getInheritedBindingNames()) {
-            Integer withLocalIndex = compilerContext.scopeManager.findLocalInScopes(withBindingName);
-            if (withLocalIndex != null) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withLocalIndex);
-                emitWithCandidateReference(name, jumpToResolvedOffsets);
-                continue;
-            }
-            Integer withCapturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(withBindingName);
-            if (withCapturedIndex != null) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, withCapturedIndex);
+            if (compilerContext.identifierCompiler.emitInheritedWithObject(withBindingName)) {
                 emitWithCandidateReference(name, jumpToResolvedOffsets);
             }
         }
 
         emitDirectIdentifierReference(name);
         int resolveEndOffset = compilerContext.emitter.currentOffset();
-        for (int jumpOffset : jumpToResolvedOffsets) {
-            compilerContext.emitter.patchJump(jumpOffset, resolveEndOffset);
-        }
+        compilerContext.emitter.patchJumps(jumpToResolvedOffsets, resolveEndOffset);
     }
 
-    private void emitWithCandidateReference(String name, List<Integer> jumpToResolvedOffsets) {
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
+    private void emitWithCandidateReference(String name, List<Integer> resolved) {
+        var fallback = WithBindingCompiler.emitHasBinding(compilerContext, name);
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
-        compilerContext.emitter.emitOpcode(Opcode.ROT3L);
-        compilerContext.emitter.emitOpcode(Opcode.IN);
-        int jumpToCandidateFallback = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
-
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSSymbol.UNSCOPABLES);
-        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-        int[] jumpToResolveWithoutUnscopables = compilerContext.emitHelpers.emitWithUnscopablesSkipJumps();
-
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
-        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-        int jumpToCandidateFallbackWhenBlocked = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
-
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
-        jumpToResolvedOffsets.add(compilerContext.emitter.emitJump(Opcode.GOTO));
-
-        int resolveWithoutUnscopablesOffset = compilerContext.emitter.currentOffset();
-        for (int jumpOffset : jumpToResolveWithoutUnscopables) {
-            compilerContext.emitter.patchJump(jumpOffset, resolveWithoutUnscopablesOffset);
-        }
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
-        jumpToResolvedOffsets.add(compilerContext.emitter.emitJump(Opcode.GOTO));
-
-        int candidateFallbackOffset = compilerContext.emitter.currentOffset();
-        compilerContext.emitter.patchJump(jumpToCandidateFallback, candidateFallbackOffset);
-        compilerContext.emitter.patchJump(jumpToCandidateFallbackWhenBlocked, candidateFallbackOffset);
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        resolved.add(compilerContext.emitter.emitJump(Opcode.GOTO));
+        fallback.begin(compilerContext.emitter);
     }
 
     private JSSymbol privateSymbol(PrivateIdentifier id) {

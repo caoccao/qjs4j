@@ -28,6 +28,14 @@ public enum VariableKind {
         this.keyword = keyword;
     }
 
+    public boolean isImmutable() {
+        return this == CONST || isUsing();
+    }
+
+    public boolean isUsing() {
+        return this == USING || this == AWAIT_USING;
+    }
+
     @Override
     public String toString() {
         return keyword;

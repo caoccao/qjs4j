@@ -104,7 +104,7 @@ final class BinaryExpressionCompiler extends AstNodeCompiler<BinaryExpression> {
         };
         compilerContext.emitter.emitOpcode(Opcode.DROP);
         compilerContext.expressionCompiler.compile(binExpr.getRight());
-        compilerContext.emitter.patchJump(jumpEnd, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(jumpEnd);
     }
 
     private static boolean isPrivateIn(BinaryExpression binExpr) {

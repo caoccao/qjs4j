@@ -64,16 +64,16 @@ final class IfStatementCompiler extends AstNodeCompiler<IfStatement> {
             int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
 
             // Patch jump to else
-            compilerContext.emitter.patchJump(jumpToElse, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.patchJumpToHere(jumpToElse);
 
             // Compile alternate — wrap bare function declarations in implicit block scope
             compileImplicitBlockStatement(ifStmt.getAlternate());
 
             // Patch jump to end
-            compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.patchJumpToHere(jumpToEnd);
         } else {
             // Patch jump to end
-            compilerContext.emitter.patchJump(jumpToElse, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.patchJumpToHere(jumpToElse);
         }
     }
 

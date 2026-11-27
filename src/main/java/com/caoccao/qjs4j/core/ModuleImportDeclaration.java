@@ -36,7 +36,7 @@ final class ModuleImportDeclaration {
         start = match.start();
         this.kind = kind;
         this.binding = binding;
-        specifier = transformer.decodeModuleStringLiteralValue(match.group(specifierGroup));
+        specifier = ModuleSourceText.decodeModuleStringLiteralValue(match.group(specifierGroup));
         attributes = transformer.extractImportAttributes(match.group());
         type = attributes == null ? null : attributes.get("type");
     }
@@ -104,7 +104,7 @@ final class ModuleImportDeclaration {
     }
 
     static List<ModuleImportDeclaration> scan(ModuleSourceTransformer transformer, String source) {
-        String text = transformer.maskModuleComments(source);
+        String text = ModuleSourceScan.maskModuleComments(source);
         List<ModuleImportDeclaration> declarations = new ArrayList<>();
         Matcher effect = ModuleSourceTransformer.MODULE_SIDE_EFFECT_IMPORT_PATTERN.matcher(text);
         while (effect.find()) {

@@ -20,9 +20,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Represents a function expression.
- */
 /** Parameter access shared by ordinary and arrow functions. */
 public interface FunctionNode {
     default List<Expression> getDefaults() {

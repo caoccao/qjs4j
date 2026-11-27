@@ -54,8 +54,9 @@ final class CompilerScope {
     }
 
     int declareLocal(String name) {
-        if (locals.containsKey(name)) {
-            return locals.get(name);
+        Integer existing = locals.get(name);
+        if (existing != null) {
+            return existing;
         }
         int index = nextLocalIndex++;
         locals.put(name, index);

@@ -54,6 +54,19 @@ class LexerTest {
     }
 
     @Test
+    void testIdentifierEscapesAndSourceOffsets() {
+        Lexer lexer = new Lexer("name\\u0061𐐀 #\\u0062𐐀 a\\u002Db");
+        Token name = lexer.nextToken();
+        assertThat(name.value()).isEqualTo("namea𐐀");
+        assertThat(name.escaped()).isTrue();
+        Token privateName = lexer.nextToken();
+        assertThat(privateName.value()).isEqualTo("#b𐐀");
+        assertThat(privateName.type()).isEqualTo(TokenType.PRIVATE_NAME);
+        assertThat(privateName.offset()).isEqualTo(13);
+        assertThatThrownBy(lexer::nextToken).isInstanceOf(JSSyntaxErrorException.class);
+    }
+
+    @Test
     void testIdentifierUnicodeEscapes() {
         Token identifierToken = new Lexer("\\u0061").nextToken();
         assertThat(identifierToken.type()).isEqualTo(TokenType.IDENTIFIER);

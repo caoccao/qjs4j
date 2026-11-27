@@ -68,17 +68,7 @@ final class ArrowFunctionExpressionCompiler {
         }
 
         boolean hasNonSimpleParameters = arrowExpr.getFunctionParams().hasNonSimpleParameters();
-        boolean hasArgumentsParameterBinding = false;
-        for (Pattern parameter : arrowExpr.getParams()) {
-            if (parameter.getBoundNames().contains(JSArguments.NAME)) {
-                hasArgumentsParameterBinding = true;
-                break;
-            }
-        }
-        if (!hasArgumentsParameterBinding && arrowExpr.getRestParameter() != null) {
-            hasArgumentsParameterBinding = arrowExpr.getRestParameter().getArgument().getBoundNames()
-                    .contains(JSArguments.NAME);
-        }
+        boolean hasArgumentsParameterBinding = arrowExpr.getFunctionParams().bindsName(JSArguments.NAME);
         boolean hasDirectEvalVarArgumentsInDefaults = arrowExpr.getDefaults() != null && arrowExpr.getDefaults()
                 .stream().filter(Objects::nonNull).anyMatch(Expression::containsDirectEvalVarArguments);
         boolean needsSyntheticEvalArgumentsBinding = hasDirectEvalVarArgumentsInDefaults

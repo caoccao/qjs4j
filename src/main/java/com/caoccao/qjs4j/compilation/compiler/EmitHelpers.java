@@ -39,6 +39,15 @@ final class EmitHelpers {
         this.compilerContext = compilerContext;
     }
 
+    int beginUsingScope(boolean hasUsing) {
+        if (!hasUsing) {
+            return -1;
+        }
+        int handler = compilerContext.emitter.emitJump(Opcode.CATCH);
+        compilerContext.scopeManager.currentScope().setUsingCatchJumpPosition(handler);
+        return handler;
+    }
+
     /**
      * Compile one optional chain, every link of it sharing one exit: QuickJS's {@code optional_chaining_label}.
      * <p>
@@ -64,11 +73,11 @@ final class EmitHelpers {
         }
         int jumpOverShortCircuitTail = shortCircuitTail != null ? compilerContext.emitter.emitJump(Opcode.GOTO) : -1;
         for (int optionalChainJump : optionalChainJumps) {
-            compilerContext.emitter.patchJump(optionalChainJump, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.patchJumpToHere(optionalChainJump);
         }
         if (shortCircuitTail != null) {
             shortCircuitTail.run();
-            compilerContext.emitter.patchJump(jumpOverShortCircuitTail, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.patchJumpToHere(jumpOverShortCircuitTail);
         }
     }
 
@@ -189,7 +198,7 @@ final class EmitHelpers {
         int jumpWithoutReturnMethod = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
         compilerContext.emitter.emitOpcode(Opcode.AWAIT);
         compilerContext.emitter.emitOpcode(Opcode.ITERATOR_CHECK_OBJECT);
-        compilerContext.emitter.patchJump(jumpWithoutReturnMethod, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(jumpWithoutReturnMethod);
         for (int i = 0; i < 4; i++) {
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
@@ -312,7 +321,7 @@ final class EmitHelpers {
         int skipJump = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
         compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, name);
-        compilerContext.emitter.patchJump(skipJump, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(skipJump);
     }
 
     void emitConstAssignmentError(String name) {
@@ -394,7 +403,7 @@ final class EmitHelpers {
                 // PUT_ARG idx - store back into the argument slot
                 functionContext.emitter.emitOpcodeU16(Opcode.PUT_ARG, i);
                 // label: - skip target (value is on stack, either original arg or default)
-                functionContext.emitter.patchJump(skipLabel, functionContext.emitter.currentOffset());
+                functionContext.emitter.patchJumpToHere(skipLabel);
             }
             // PUT_LOCAL idx - store into the local variable slot
             int parameterSlotIndex = parameterSlotIndexes.get(i);
@@ -485,9 +494,9 @@ final class EmitHelpers {
         int exhausted = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
         compilerContext.emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
         int end = compilerContext.emitter.emitJump(Opcode.GOTO);
-        compilerContext.emitter.patchJump(exhausted, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(exhausted);
         emitDropIteratorState();
-        compilerContext.emitter.patchJump(end, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(end);
     }
 
     void emitIteratorRestArray(int targetDepth) {
@@ -503,7 +512,7 @@ final class EmitHelpers {
         compilerContext.emitter.emitOpcode(Opcode.INC);
         compilerContext.emitter.emitOpcode(Opcode.GOTO);
         compilerContext.emitter.emitU32(loopStart - (compilerContext.emitter.currentOffset() + 4));
-        compilerContext.emitter.patchJump(doneJump, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(doneJump);
         compilerContext.emitter.emitOpcode(Opcode.DROP); // final value
         compilerContext.emitter.emitOpcode(Opcode.DROP); // next index
     }
@@ -603,7 +612,7 @@ final class EmitHelpers {
         }
         compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         compilerContext.optionalChainJumps.add(compilerContext.emitter.emitJump(Opcode.GOTO));
-        compilerContext.emitter.patchJump(jumpToNext, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(jumpToNext);
     }
 
     void emitScopeUsingDisposal(CompilerScope scope) {
@@ -670,11 +679,11 @@ final class EmitHelpers {
         int skipRethrowJump = compilerContext.emitter.emitJump(Opcode.GOTO);
 
         // Stack local was uninitialized - just re-throw the original exception
-        compilerContext.emitter.patchJump(skipDisposeJump, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(skipDisposeJump);
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, exceptionLocalIndex);
         compilerContext.emitter.emitOpcode(Opcode.THROW);
 
-        compilerContext.emitter.patchJump(skipRethrowJump, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(skipRethrowJump);
     }
 
     void emitSuperPropertyKey(MemberExpression memberExpr) {
@@ -720,27 +729,6 @@ final class EmitHelpers {
         }
     }
 
-    int[] emitWithUnscopablesSkipJumps() {
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
-        int jumpToResolveWithoutUnscopablesOnNullish = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
-
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcode(Opcode.TYPEOF);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("object"));
-        compilerContext.emitter.emitOpcode(Opcode.STRICT_EQ);
-        int jumpToCheckBlockedWhenObject = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
-
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcode(Opcode.TYPEOF);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("function"));
-        compilerContext.emitter.emitOpcode(Opcode.STRICT_EQ);
-        int jumpToResolveWithoutUnscopablesOnPrimitive = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
-
-        compilerContext.emitter.patchJump(jumpToCheckBlockedWhenObject, compilerContext.emitter.currentOffset());
-        return new int[]{jumpToResolveWithoutUnscopablesOnNullish, jumpToResolveWithoutUnscopablesOnPrimitive};
-    }
-
     int ensureUsingStackLocal(boolean asyncUsingDeclaration, ASTNode ast) {
         CompilerScope scope = compilerContext.scopeManager.currentScope();
         Integer existingLocalIndex = scope.getUsingStackLocalIndex();
@@ -764,6 +752,27 @@ final class EmitHelpers {
         return stackLocalIndex;
     }
 
+    /** Dispose on both normal and abrupt completion, preserving a block result when present. */
+    void finishUsingScope(int handler, boolean hasCompletionValue) {
+        if (handler < 0) {
+            emitCurrentScopeUsingDisposal();
+            return;
+        }
+        BytecodeEmitter emitter = compilerContext.emitter;
+        if (!hasCompletionValue) {
+            emitter.emitOpcode(Opcode.UNDEFINED);
+        }
+        emitter.emitOpcode(Opcode.NIP_CATCH);
+        if (!hasCompletionValue) {
+            emitter.emitOpcode(Opcode.DROP);
+        }
+        emitCurrentScopeUsingDisposal();
+        int end = emitter.emitJump(Opcode.GOTO);
+        emitter.patchJumpToHere(handler);
+        emitScopeUsingDisposalWithException(compilerContext.scopeManager.currentScope());
+        emitter.patchJumpToHere(end);
+    }
+
     int startArrayDestructuring(String doneLocalPrefix, boolean hasRest) {
         compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
         if (hasRest) {
@@ -778,8 +787,7 @@ final class EmitHelpers {
 
     static boolean hasUsingDeclarations(java.util.List<Statement> statements) {
         for (Statement stmt : statements) {
-            if (stmt instanceof VariableDeclaration vd
-                    && (vd.getKind() == VariableKind.USING || vd.getKind() == VariableKind.AWAIT_USING)) {
+            if (stmt instanceof VariableDeclaration vd && vd.getKind().isUsing()) {
                 return true;
             }
         }

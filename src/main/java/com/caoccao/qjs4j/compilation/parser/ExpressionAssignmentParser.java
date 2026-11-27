@@ -157,6 +157,16 @@ final class ExpressionAssignmentParser {
         return expression;
     }
 
+    private ArrowFunctionExpression finishArrow(FunctionParams params, ASTNode body, boolean async,
+            SourceLocation location) {
+        validateArrowParameters(params, body);
+        if (body instanceof BlockStatement block) {
+            validateFormalsBodyDuplicate(params.params(), params.restParameter(), block.getBody());
+        }
+        return new ArrowFunctionExpression(params, body, async,
+                location.withEndOffset(parserContext.previousTokenEndOffset));
+    }
+
     private boolean hasTrailingCommaAfterRestElement(ArrayExpression arrayExpression, int assignmentOperatorOffset) {
         String source = parserContext.lexer.getSource();
         int startOffset = arrayExpression.getLocation().offset();
@@ -232,6 +242,20 @@ final class ExpressionAssignmentParser {
                 || tokenType == TokenType.AS || tokenType == TokenType.LET;
     }
 
+    private ArrowFunctionExpression parseArrowBody(FunctionParams params, boolean async, SourceLocation location) {
+        enterArrowFunctionContext(async);
+        boolean enclosingStaticInit = parserContext.inClassStaticInit;
+        parserContext.inClassStaticInit = false;
+        ASTNode body;
+        try {
+            body = readArrowBody();
+        } finally {
+            parserContext.inClassStaticInit = enclosingStaticInit;
+            exitArrowFunctionContext(async);
+        }
+        return finishArrow(params, body, async, location);
+    }
+
     private void parseArrowParameterExpression(Expression expression, List<Pattern> params, List<Expression> defaults) {
         if (expression instanceof Identifier identifier) {
             params.add(identifier);
@@ -295,32 +319,7 @@ final class ExpressionAssignmentParser {
                     }
                     parserContext.expect(TokenType.ARROW);
 
-                    ASTNode body;
-                    enterArrowFunctionContext(true);
-                    boolean savedInClassStaticInit = parserContext.inClassStaticInit;
-                    parserContext.inClassStaticInit = false;
-                    try {
-                        if (parserContext.match(TokenType.LBRACE)) {
-                            body = delegates.statements.parseBlockStatementAsBody();
-                        } else {
-                            body = parseAssignmentExpression();
-                        }
-                    } finally {
-                        parserContext.inClassStaticInit = savedInClassStaticInit;
-                        exitArrowFunctionContext(true);
-                    }
-
-                    // Async arrows have the same early errors as regular arrows (spec 15.8.1)
-                    List<Expression> singleDefault = new ArrayList<>();
-                    singleDefault.add(null);
-                    validateArrowParameters(new FunctionParams(List.of(param), singleDefault, null), body);
-                    if (body instanceof BlockStatement blockBody) {
-                        validateFormalsBodyDuplicate(List.of(param), null, blockBody.getBody());
-                    }
-
-                    SourceLocation fullLocation = asyncLocation.withEndOffset(parserContext.previousTokenEndOffset);
-                    return new ArrowFunctionExpression(new FunctionParams(List.of(param), null, null), body, true,
-                            fullLocation);
+                    return parseArrowBody(new FunctionParams(List.of(param), null, null), true, asyncLocation);
                 }
 
                 if (parserContext.match(TokenType.LPAREN) && peekPastParensIsArrow()) {
@@ -332,22 +331,7 @@ final class ExpressionAssignmentParser {
                         FunctionParams funcParams = delegates.functions.parseFunctionParameters();
                         parserContext.advance();
 
-                        ASTNode body;
-                        if (parserContext.match(TokenType.LBRACE)) {
-                            body = delegates.statements.parseBlockStatementAsBody();
-                        } else {
-                            body = parseAssignmentExpression();
-                        }
-
-                        // Async arrows have the same early errors as regular arrows (spec 15.8.1)
-                        validateArrowParameters(funcParams, body);
-                        if (body instanceof BlockStatement blockBody) {
-                            validateFormalsBodyDuplicate(funcParams.params(), funcParams.restParameter(),
-                                    blockBody.getBody());
-                        }
-
-                        SourceLocation fullLocation = location.withEndOffset(parserContext.previousTokenEndOffset);
-                        return new ArrowFunctionExpression(funcParams, body, true, fullLocation);
+                        return finishArrow(funcParams, readArrowBody(), true, location);
                     } finally {
                         parserContext.inClassStaticInit = savedInClassStaticInit;
                         exitArrowFunctionContext(true);
@@ -369,8 +353,7 @@ final class ExpressionAssignmentParser {
                     throw new JSSyntaxErrorException(
                             "'yield' expression not allowed in formal parameters of a generator function");
                 }
-                SourceLocation yieldLocation = parserContext.getLocation();
-                parserContext.advance();
+                SourceLocation yieldLocation = parserContext.consumeLocation();
 
                 boolean delegate = false;
                 // Per ES2024 14.4: yield [no LineTerminator here] * AssignmentExpression
@@ -452,30 +435,7 @@ final class ExpressionAssignmentParser {
 
             parserContext.advance();
 
-            ASTNode body;
-            enterArrowFunctionContext(false);
-            boolean savedInClassStaticInit = parserContext.inClassStaticInit;
-            parserContext.inClassStaticInit = false;
-            try {
-                if (parserContext.match(TokenType.LBRACE)) {
-                    body = delegates.statements.parseBlockStatementAsBody();
-                } else {
-                    body = parseAssignmentExpression();
-                }
-            } finally {
-                parserContext.inClassStaticInit = savedInClassStaticInit;
-                exitArrowFunctionContext(false);
-            }
-            validateArrowParameters(new FunctionParams(params, defaults, restParameter), body);
-            // Only the async arrow paths used to check this: `(a) => { let a; }` compiled.
-            if (body instanceof BlockStatement blockBody) {
-                validateFormalsBodyDuplicate(params, restParameter, blockBody.getBody());
-            }
-
-            SourceLocation fullLocation = location.withEndOffset(parserContext.previousTokenEndOffset);
-
-            return new ArrowFunctionExpression(new FunctionParams(params, defaults, restParameter), body, false,
-                    fullLocation);
+            return parseArrowBody(new FunctionParams(params, defaults, restParameter), false, location);
         }
 
         AssignmentOperator operator = ParserContext.assignmentOperator(parserContext.currentToken.type());
@@ -597,6 +557,12 @@ final class ExpressionAssignmentParser {
             parserContext.previousTokenEndOffset = savedPrevEndOffset;
             parserContext.lexer.restoreState(savedLexer);
         }
+    }
+
+    private ASTNode readArrowBody() {
+        return parserContext.match(TokenType.LBRACE)
+                ? delegates.statements.parseBlockStatementAsBody()
+                : parseAssignmentExpression();
     }
 
     private void validateArrayAssignmentPatternTarget(ArrayExpression arrayExpression, int assignmentOperatorOffset) {

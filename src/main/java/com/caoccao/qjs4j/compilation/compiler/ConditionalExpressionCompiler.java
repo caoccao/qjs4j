@@ -31,8 +31,8 @@ final class ConditionalExpressionCompiler {
         int jumpToAlternate = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
         compilerContext.expressionCompiler.compile(condExpr.getConsequent());
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
-        compilerContext.emitter.patchJump(jumpToAlternate, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(jumpToAlternate);
         compilerContext.expressionCompiler.compile(condExpr.getAlternate());
-        compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(jumpToEnd);
     }
 }

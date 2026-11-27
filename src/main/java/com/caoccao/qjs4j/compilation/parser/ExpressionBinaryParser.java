@@ -39,7 +39,7 @@ final class ExpressionBinaryParser {
     private Expression parseBinaryExpression(int minimumPrecedence) {
         Expression left = minimumPrecedence <= Precedence.RELATIONAL.level && parserContext.inOperatorAllowed
                 && parserContext.match(TokenType.PRIVATE_NAME) && parserContext.nextToken.type() == TokenType.IN
-                        ? parsePrivateBrandCheckName()
+                        ? parserContext.consumePrivateName()
                         : parseExponentiationExpression();
         while (true) {
             Infix infix = Infix.BY_TOKEN[parserContext.currentToken.type().ordinal()];
@@ -47,8 +47,7 @@ final class ExpressionBinaryParser {
                     || (infix.operator == BinaryOperator.IN && !parserContext.inOperatorAllowed)) {
                 return left;
             }
-            SourceLocation location = parserContext.getLocation();
-            parserContext.advance();
+            SourceLocation location = parserContext.consumeLocation();
             // Only strictly tighter operators belong to the right operand of a left-associative operator.
             Expression right = parseBinaryExpression(infix.precedence.level + 1);
             left = new BinaryExpression(infix.operator, left, right, location);
@@ -59,8 +58,7 @@ final class ExpressionBinaryParser {
         Expression test = expressions.parseLogicalOrExpression();
 
         if (parserContext.match(TokenType.QUESTION)) {
-            SourceLocation location = parserContext.getLocation();
-            parserContext.advance();
+            SourceLocation location = parserContext.consumeLocation();
             boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
             parserContext.inOperatorAllowed = true;
             Expression consequent = expressions.parseAssignmentExpression();
@@ -83,8 +81,7 @@ final class ExpressionBinaryParser {
                     || (left instanceof AwaitExpression && !parserContext.isParenthesizedExpression(left))) {
                 throw new JSSyntaxErrorException("Unary operator used immediately before exponentiation expression");
             }
-            SourceLocation location = parserContext.getLocation();
-            parserContext.advance();
+            SourceLocation location = parserContext.consumeLocation();
             Expression right = parseExponentiationExpression();
             return new BinaryExpression(BinaryOperator.EXP, left, right, location);
         }
@@ -98,8 +95,7 @@ final class ExpressionBinaryParser {
         boolean hasLogicalAnd = false;
         while (parserContext.match(TokenType.LOGICAL_AND)) {
             hasLogicalAnd = true;
-            SourceLocation location = parserContext.getLocation();
-            parserContext.advance();
+            SourceLocation location = parserContext.consumeLocation();
             Expression right = parseBinaryExpression(Precedence.BIT_OR.level);
             left = new BinaryExpression(BinaryOperator.LOGICAL_AND, left, right, location);
         }
@@ -118,8 +114,7 @@ final class ExpressionBinaryParser {
             // Parse CoalesceExpression: left ?? right ?? ...
             // Cannot mix with || or && (ES2020 spec)
             do {
-                SourceLocation location = parserContext.getLocation();
-                parserContext.advance();
+                SourceLocation location = parserContext.consumeLocation();
                 Expression right = parseBinaryExpression(Precedence.BIT_OR.level);
                 left = new BinaryExpression(BinaryOperator.NULLISH_COALESCING, left, right, location);
             } while (parserContext.match(TokenType.NULLISH_COALESCING));
@@ -132,8 +127,7 @@ final class ExpressionBinaryParser {
         boolean hasLogicalOr = false;
         while (parserContext.match(TokenType.LOGICAL_OR)) {
             hasLogicalOr = true;
-            SourceLocation location = parserContext.getLocation();
-            parserContext.advance();
+            SourceLocation location = parserContext.consumeLocation();
             Expression right = expressions.parseLogicalAndExpression();
             left = new BinaryExpression(BinaryOperator.LOGICAL_OR, left, right, location);
         }
@@ -143,21 +137,6 @@ final class ExpressionBinaryParser {
         }
 
         return left;
-    }
-
-    /**
-     * The private name that begins a brand check, {@code #x in o}: RelationalExpression : PrivateIdentifier in
-     * ShiftExpression. This is the one place a private name can begin an expression, so {@code (#x in o)} is valid and
-     * {@code (#x) in o} or {@code 1 + #x in o} are not; the primary parser rejects a private name anywhere else.
-     */
-    private Expression parsePrivateBrandCheckName() {
-        SourceLocation location = parserContext.getLocation();
-        String fieldName = parserContext.currentToken.value().substring(1);
-        if (!parserContext.isPrivateNameAccessible(fieldName)) {
-            throw new JSSyntaxErrorException("undefined private field '#" + fieldName + "'");
-        }
-        parserContext.advance();
-        return new PrivateIdentifier(fieldName, location);
     }
 
     private record Infix(BinaryOperator operator, Precedence precedence) {

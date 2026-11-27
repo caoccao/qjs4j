@@ -17,17 +17,11 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
-import com.caoccao.qjs4j.compilation.ast.Statement;
 import com.caoccao.qjs4j.compilation.compiler.Compiler;
-import com.caoccao.qjs4j.compilation.lexer.Lexer;
-import com.caoccao.qjs4j.compilation.lexer.Token;
-import com.caoccao.qjs4j.compilation.lexer.TokenType;
-import com.caoccao.qjs4j.compilation.parser.Parser;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
-import com.caoccao.qjs4j.unicode.UnicodeData;
 
 import java.nio.file.Path;
 
@@ -70,9 +64,9 @@ final class ModuleSourceTransformer {
      * when the module body ran.
      * <p>
      * Deliberately a little wider than the real grammar: whatever this matches is decoded by
-     * {@link #decodeIdentifierEscapes(String)} and then checked against the Unicode tables by
-     * {@link #isValidIdentifierName(String)}, which is the authority. Matching slightly too much costs a rejection with
-     * a message; matching too little silently loses a binding.
+     * {@link ModuleSourceText#decodeIdentifierEscapes(String)} and then checked against the Unicode tables by
+     * {@link ModuleSourceText#isValidIdentifierName(String)}, which is the authority. Matching slightly too much costs
+     * a rejection with a message; matching too little silently loses a binding.
      * <p>
      * The repetition is possessive for the reason given on {@link #MODULE_SPECIFIER_BODY_REGEX}.
      */
@@ -174,7 +168,7 @@ final class ModuleSourceTransformer {
         transformedSourceBuilder.append("const ").append(moduleExportsName).append(" = ").append(exportBindingName)
                 .append(";\n");
         for (JSDynamicImportModule.LocalExportBinding localExportBinding : localExportBindings) {
-            String escapedName = escapeJavaScriptString(localExportBinding.exportedName());
+            String escapedName = ModuleSourceText.escapeJavaScriptString(localExportBinding.exportedName());
             // The exported name lands in string position, so escaping is enough. The local name
             // lands in identifier position, where only a real identifier is safe.
             String localName = requireGeneratedIdentifier(localExportBinding.localName(),
@@ -186,44 +180,13 @@ final class ModuleSourceTransformer {
         }
     }
 
-    /**
-     * Append the character a {@code \\uHHHH} or {@code \\u\{H+\}} escape denotes.
-     *
-     * @param text
-     *            the literal body
-     * @param uIndex
-     *            the index of the {@code u}
-     * @param decodedBuilder
-     *            collects the decoded text
-     * @return the index of the escape's last character
-     */
-    int appendModuleUnicodeEscape(String text, int uIndex, StringBuilder decodedBuilder) {
-        if (uIndex + 1 < text.length() && text.charAt(uIndex + 1) == '{') {
-            int braceEnd = text.indexOf('}', uIndex + 2);
-            int codePoint = braceEnd < 0 ? -1 : parseHex(text.substring(uIndex + 2, braceEnd));
-            if (codePoint < 0 || codePoint > Character.MAX_CODE_POINT) {
-                decodedBuilder.append('u');
-                return uIndex;
-            }
-            decodedBuilder.appendCodePoint(codePoint);
-            return braceEnd;
-        }
-        int codeUnit = uIndex + 4 < text.length() ? parseHex(text.substring(uIndex + 1, uIndex + 5)) : -1;
-        if (codeUnit < 0) {
-            decodedBuilder.append('u');
-            return uIndex;
-        }
-        decodedBuilder.append((char) codeUnit);
-        return uIndex + 4;
-    }
-
     void collectImportBindings(String importLine, Set<String> bindingNames,
             Map<String, ImportBinding> importedBindings) {
         Matcher namespaceMatcher = MODULE_NAMESPACE_IMPORT_PATTERN.matcher(importLine);
         if (namespaceMatcher.find()) {
             boolean deferredImport = "defer".equals(namespaceMatcher.group(1));
             String localName = namespaceMatcher.group(2);
-            String sourceSpecifier = decodeModuleStringLiteralValue(namespaceMatcher.group(4));
+            String sourceSpecifier = ModuleSourceText.decodeModuleStringLiteralValue(namespaceMatcher.group(4));
             registerImportedBinding(localName, sourceSpecifier, MODULE_NAMESPACE_EXPORT_NAME, deferredImport,
                     bindingNames, importedBindings);
             return;
@@ -233,7 +196,7 @@ final class ModuleSourceTransformer {
             return;
         }
         String clause = bindingMatcher.group(1).trim();
-        String sourceSpecifier = decodeModuleStringLiteralValue(bindingMatcher.group(3));
+        String sourceSpecifier = ModuleSourceText.decodeModuleStringLiteralValue(bindingMatcher.group(3));
         if (clause.startsWith("*") || clause.startsWith("defer *")) {
             return;
         }
@@ -276,295 +239,16 @@ final class ModuleSourceTransformer {
                 + "$" + context.moduleLoader().moduleCacheSize();
     }
 
-    String decodeIdentifierEscapes(String text) {
-        if (text == null || text.indexOf('\\') < 0) {
-            return text;
-        }
-        StringBuilder decodedTextBuilder = new StringBuilder(text.length());
-        for (int index = 0; index < text.length(); index++) {
-            char ch = text.charAt(index);
-            if (ch != '\\' || index + 1 >= text.length() || text.charAt(index + 1) != 'u') {
-                decodedTextBuilder.append(ch);
-                continue;
-            }
-            int escapeStart = index;
-            index += 2;
-            if (index < text.length() && text.charAt(index) == '{') {
-                int braceEnd = text.indexOf('}', index + 1);
-                if (braceEnd < 0) {
-                    // Nothing closes the brace, so there is no code point to decode and the text
-                    // stands — the same answer every other malformed escape here gets. The cursor
-                    // stays on the brace and the loop's own increment steps past it; it used to be
-                    // rewound to the backslash instead, which made the loop emit the escape text
-                    // and then walk over its last two characters a second time, so a three-
-                    // character unterminated escape decoded to five.
-                    decodedTextBuilder.append(text, escapeStart, index + 1);
-                    continue;
-                }
-                String codePointText = text.substring(index + 1, braceEnd);
-                int codePoint = parseHex(codePointText);
-                if (codePoint >= 0) {
-                    decodedTextBuilder.appendCodePoint(codePoint);
-                    index = braceEnd;
-                } else {
-                    decodedTextBuilder.append(text, escapeStart, braceEnd + 1);
-                    index = braceEnd;
-                }
-                continue;
-            }
-            if (index + 3 >= text.length()) {
-                decodedTextBuilder.append(text, escapeStart, text.length());
-                break;
-            }
-            String hexText = text.substring(index, index + 4);
-            int codePoint = parseHex(hexText);
-            if (codePoint >= 0) {
-                decodedTextBuilder.append((char) codePoint);
-                index += 3;
-            } else {
-                decodedTextBuilder.append(text, escapeStart, index + 4);
-                index += 3;
-            }
-        }
-        return decodedTextBuilder.toString();
-    }
-
-    /**
-     * The {@code StringValue} of a {@code StringLiteral} body — the text between the delimiters, with every escape
-     * sequence applied.
-     * <p>
-     * A module specifier and an arbitrary module export name are {@code StringLiteral}s, and a {@code StringLiteral}'s
-     * meaning is its {@code StringValue}, not its spelling. {@code './d\\u0065p.mjs'} names {@code ./dep.mjs} and
-     * {@code "a\\u002db"} is the export name {@code a-b} — the lexer knows that, and the token-driven link pass
-     * therefore already agreed with it. The evaluation path pulled the same literals out of raw source with
-     * {@code substring} and kept the backslashes, so the two stages disagreed about module identity and about
-     * export-name identity: the link check passed and evaluation then failed to find a module or a name that was there
-     * all along, in one case after a dependency had already run.
-     * <p>
-     * Octal escapes are deliberately not decoded. They are a {@code SyntaxError} in a module, the source has already
-     * been compiled once before this runs, and inventing a value for text the grammar rejects would be worse than
-     * leaving it alone.
-     *
-     * @param literalBody
-     *            the literal's text without its delimiters
-     * @return the decoded value
-     */
-    String decodeModuleStringLiteralValue(String literalBody) {
-        if (literalBody == null || literalBody.indexOf('\\') < 0) {
-            return literalBody;
-        }
-        StringBuilder decodedBuilder = new StringBuilder(literalBody.length());
-        for (int index = 0; index < literalBody.length(); index++) {
-            char ch = literalBody.charAt(index);
-            if (ch != '\\' || index + 1 >= literalBody.length()) {
-                decodedBuilder.append(ch);
-                continue;
-            }
-            char escaped = literalBody.charAt(++index);
-            switch (escaped) {
-                case 'b' -> decodedBuilder.append('\b');
-                case 'f' -> decodedBuilder.append('\f');
-                case 'n' -> decodedBuilder.append('\n');
-                case 'r' -> decodedBuilder.append('\r');
-                case 't' -> decodedBuilder.append('\t');
-                case 'v' -> decodedBuilder.append('\u000B');
-                case 'x' -> {
-                    int value = index + 2 < literalBody.length()
-                            ? parseHex(literalBody.substring(index + 1, index + 3))
-                            : -1;
-                    if (value < 0) {
-                        decodedBuilder.append(escaped);
-                    } else {
-                        decodedBuilder.append((char) value);
-                        index += 2;
-                    }
-                }
-                case 'u' -> index = appendModuleUnicodeEscape(literalBody, index, decodedBuilder);
-                case '0' -> {
-                    if (index + 1 < literalBody.length() && Character.isDigit(literalBody.charAt(index + 1))) {
-                        // A legacy octal escape: left as written, per the note above.
-                        decodedBuilder.append('\\').append(escaped);
-                    } else {
-                        decodedBuilder.append('\0');
-                    }
-                }
-                // A LineContinuation contributes nothing, and CRLF is one line terminator.
-                case '\r' -> {
-                    if (index + 1 < literalBody.length() && literalBody.charAt(index + 1) == '\n') {
-                        index++;
-                    }
-                }
-                case '\n', '\u2028', '\u2029' -> {
-                }
-                // \' \" \\ and every other IdentityEscape stand for the character itself.
-                default -> decodedBuilder.append(escaped);
-            }
-        }
-        return decodedBuilder.toString();
-    }
-
-    /**
-     * The offset just past a default-export expression that begins at {@code start}.
-     *
-     * @param sourceCode
-     *            the module source
-     * @param start
-     *            the offset of the expression's first token
-     * @param boundary
-     *            the offset of the next top-level declaration, or the end of the source
-     * @return the end offset, or -1 when the text does not parse
-     */
-    int defaultExportExpressionEnd(String sourceCode, int start, int boundary) {
-        String expressionText = sourceCode.substring(start, Math.max(start, boundary));
-        List<Statement> statements;
-        try {
-            // The assignment target puts what follows in expression position — without it a leading
-            // `{` opens a block rather than an object literal — and costs a known two characters.
-            statements = new Parser(new Lexer("x=" + expressionText), true).parse().getBody();
-        } catch (RuntimeException notParsable) {
-            context.clearPendingException();
-            return -1;
-        }
-        int end = statements.size() > 1 && statements.get(1) != null
-                ? statements.get(1).getLocation().offset() - "x=".length()
-                : expressionText.length();
-        end = Math.max(0, Math.min(end, expressionText.length()));
-        // Walk back over what is not the expression: the terminating semicolon, whitespace, and
-        // comments, which masking turns into whitespace. Trimming only whitespace drew a trailing
-        // `// comment` into the expression and produced `let X = (0, e;\n// comment);`.
-        String maskedExpressionText = maskModuleComments(expressionText);
-        while (end > 0 && Character.isWhitespace(maskedExpressionText.charAt(end - 1))) {
-            end--;
-        }
-        if (end > 0 && maskedExpressionText.charAt(end - 1) == ';') {
-            end--;
-            while (end > 0 && Character.isWhitespace(maskedExpressionText.charAt(end - 1))) {
-                end--;
-            }
-        }
-        return end == 0 ? -1 : start + end;
-    }
-
-    /**
-     * Where each {@code export default <expression>} in a module really ends, decided by the parser.
-     * <p>
-     * The line-oriented transformer used to answer this by counting brackets, braces and parentheses and taking lines
-     * while they were unbalanced. Balanced delimiters do not mark the end of an AssignmentExpression:
-     * {@code export default 1 +} is balanced and incomplete, so the transform emitted {@code let X = (0, 1 +);} and a
-     * valid module failed to parse at a position in generated text. It also counted delimiters inside
-     * regular-expression literals, which it had no way to recognise, so {@code export default /\(/;} swallowed the
-     * statement after it.
-     * <p>
-     * Where an expression ends is a grammar question — operators, conditionals, member and call continuations, template
-     * substitutions, comments and automatic semicolon insertion all bear on it — and the parser is the only thing here
-     * that knows the grammar. The expression is parsed in expression position (an assignment target is prefixed, so an
-     * opening brace is an object literal rather than a block) and bounded at the next top-level declaration, so nothing
-     * after it can be drawn in.
-     *
-     * @param sourceCode
-     *            the normalised module source
-     * @return the extents, by the zero-based line index of the {@code export} keyword; empty when the source cannot be
-     *         scanned
-     */
-    Map<Integer, DefaultExportExtent> defaultExportExtents(String sourceCode) {
-        if (sourceCode == null || !sourceCode.contains("export")) {
-            return Map.of();
-        }
-        List<Token> tokens;
-        try {
-            tokens = tokenizeModuleSource(sourceCode);
-        } catch (RuntimeException notTokenisable) {
-            context.clearPendingException();
-            return Map.of();
-        }
-        Map<Integer, DefaultExportExtent> extents = new HashMap<>();
-        for (int index = nextModuleDeclaration(tokens, 0); index >= 0; index = nextModuleDeclaration(tokens,
-                index + 1)) {
-            Token token = tokens.get(index);
-            if (token.type() != TokenType.EXPORT || index + 2 >= tokens.size()
-                    || tokens.get(index + 1).type() != TokenType.DEFAULT) {
-                continue;
-            }
-            Token firstExpressionToken = tokens.get(index + 2);
-            if (firstExpressionToken.type() == TokenType.FUNCTION || firstExpressionToken.type() == TokenType.CLASS
-                    || (firstExpressionToken.type() == TokenType.ASYNC && index + 3 < tokens.size()
-                            && tokens.get(index + 3).type() == TokenType.FUNCTION)) {
-                // A default-exported declaration ends at its body, which the transformer finds by
-                // matching braces — that much a delimiter count really can do.
-                continue;
-            }
-            int expressionStart = firstExpressionToken.offset();
-            int nextDeclaration = nextModuleDeclaration(tokens, index + 1);
-            int boundary = nextDeclaration >= 0 ? tokens.get(nextDeclaration).offset() : sourceCode.length();
-            int expressionEnd = defaultExportExpressionEnd(sourceCode, expressionStart, boundary);
-            if (expressionEnd < 0) {
-                continue;
-            }
-            int lineEnd = sourceCode.indexOf('\n', expressionEnd);
-            if (lineEnd < 0) {
-                lineEnd = sourceCode.length();
-            }
-            String trailingText = sourceCode.substring(expressionEnd, lineEnd).strip();
-            if (trailingText.startsWith(";")) {
-                trailingText = trailingText.substring(1).strip();
-            }
-            extents.put(lineIndexOfOffset(sourceCode, token.offset()),
-                    new DefaultExportExtent(sourceCode.substring(expressionStart, expressionEnd),
-                            lineIndexOfOffset(sourceCode, expressionEnd), trailingText));
-        }
-        return extents;
-    }
-
-    /**
-     * Escape a value for interpolation into a double-quoted JavaScript string literal in generated module source.
-     * <p>
-     * Escaping only {@code \} and {@code "} is not enough: a line terminator, a control character or U+2028/U+2029
-     * inside the value terminates the literal and turns the remainder of the value into source text.
-     *
-     * @param text
-     *            the raw value
-     * @return the value with every character that is unsafe inside a string literal escaped
-     */
-    String escapeJavaScriptString(String text) {
-        if (text == null || text.isEmpty()) {
-            return "";
-        }
-        StringBuilder escaped = new StringBuilder(text.length() + 8);
-        for (int characterIndex = 0; characterIndex < text.length(); characterIndex++) {
-            char character = text.charAt(characterIndex);
-            switch (character) {
-                case '\\' -> escaped.append("\\\\");
-                case '"' -> escaped.append("\\\"");
-                case '\'' -> escaped.append("\\'");
-                case '\b' -> escaped.append("\\b");
-                case '\f' -> escaped.append("\\f");
-                case '\n' -> escaped.append("\\n");
-                case '\r' -> escaped.append("\\r");
-                case '\t' -> escaped.append("\\t");
-                default -> {
-                    // Control characters, U+2028 LINE SEPARATOR and U+2029 PARAGRAPH SEPARATOR are
-                    // all line terminators or otherwise unsafe inside a JavaScript string literal.
-                    if (character < 0x20 || character == 0x2028 || character == 0x2029) {
-                        escaped.append(String.format("\\u%04x", (int) character));
-                    } else {
-                        escaped.append(character);
-                    }
-                }
-            }
-        }
-        return escaped.toString();
-    }
-
     private void extractBindingName(String element, List<String> names) {
         if ((element.startsWith("{") && element.endsWith("}")) || (element.startsWith("[") && element.endsWith("]"))) {
             extractDestructuringNames(element.substring(1, element.length() - 1), names);
         } else if (!element.isEmpty()) {
-            names.add(decodeIdentifierEscapes(element));
+            names.add(ModuleSourceText.decodeIdentifierEscapes(element));
         }
     }
 
     void extractDestructuringNames(String innerText, List<String> names) {
-        for (String element : splitOnTopLevelCommas(innerText)) {
+        for (String element : ModuleSourceText.splitOnTopLevelCommas(innerText)) {
             extractSingleDestructuringName(element.trim(), names);
         }
     }
@@ -582,11 +266,11 @@ final class ModuleSourceTransformer {
     String extractExportedFunctionOrClassName(String exportClause) {
         Matcher functionMatcher = DYNAMIC_IMPORT_EXPORT_FUNCTION_NAME_PATTERN.matcher(exportClause);
         if (functionMatcher.find()) {
-            return decodeIdentifierEscapes(functionMatcher.group(1));
+            return ModuleSourceText.decodeIdentifierEscapes(functionMatcher.group(1));
         }
         Matcher classMatcher = DYNAMIC_IMPORT_EXPORT_CLASS_NAME_PATTERN.matcher(exportClause);
         if (classMatcher.find()) {
-            String candidateName = decodeIdentifierEscapes(classMatcher.group(1));
+            String candidateName = ModuleSourceText.decodeIdentifierEscapes(classMatcher.group(1));
             if (JSKeyword.EXTENDS.equals(candidateName)) {
                 return null;
             }
@@ -640,11 +324,11 @@ final class ModuleSourceTransformer {
         if (declaratorsText.isEmpty()) {
             return List.of();
         }
-        List<String> declarators = splitOnTopLevelCommas(declaratorsText);
+        List<String> declarators = ModuleSourceText.splitOnTopLevelCommas(declaratorsText);
         List<String> declarationNames = new ArrayList<>(declarators.size());
         for (String declarator : declarators) {
             String declaratorText = declarator.trim();
-            int assignmentIndex = findTopLevelAssignment(declaratorText);
+            int assignmentIndex = ModuleSourceText.findTopLevelAssignment(declaratorText);
             if (assignmentIndex >= 0) {
                 declaratorText = declaratorText.substring(0, assignmentIndex).trim();
             }
@@ -662,120 +346,32 @@ final class ModuleSourceTransformer {
             element = element.substring(3).trim();
         }
         // Handle rename: key: value
-        int colonIndex = findTopLevelDelimiter(element, 0, ':');
+        int colonIndex = ModuleSourceText.findTopLevelDelimiter(element, 0, ':');
         if (colonIndex >= 0) {
             element = element.substring(colonIndex + 1).trim();
         }
         // Handle default value: name = defaultVal
-        int eqIndex = findTopLevelAssignment(element);
+        int eqIndex = ModuleSourceText.findTopLevelAssignment(element);
         if (eqIndex >= 0) {
             element = element.substring(0, eqIndex).trim();
         }
         extractBindingName(element, names);
     }
 
-    /**
-     * Find the end of a function/class declaration body in the given text. Scans for the first '{' and its matching
-     * '}', returning the index just after the closing brace. Returns -1 if not found.
-     */
-    int findEndOfDeclarationBody(String text) {
-        String trimmedText = text.stripLeading();
-        if (trimmedText.startsWith(JSKeyword.CLASS) && (trimmedText.length() == JSKeyword.CLASS.length()
-                || !Character.isJavaIdentifierPart(trimmedText.charAt(JSKeyword.CLASS.length())))) {
-            int classBodyOpenBraceIndex = findLikelyClassBodyOpenBrace(text);
-            if (classBodyOpenBraceIndex < 0) {
-                return -1;
-            }
-            int classBodyCloseBraceIndex = findMatchingClosingBrace(text, classBodyOpenBraceIndex);
-            if (classBodyCloseBraceIndex < 0) {
-                return -1;
-            }
-            return classBodyCloseBraceIndex + 1;
-        }
-        int close = findBodyClose(text, 0, 0);
-        return close < 0 ? -1 : close + 1;
-    }
-
-    int findLikelyClassBodyOpenBrace(String text) {
-        int openBraceIndex = text.indexOf('{');
-        while (openBraceIndex >= 0) {
-            int closeBraceIndex = findMatchingClosingBrace(text, openBraceIndex);
-            if (closeBraceIndex < 0) {
-                return -1;
-            }
-            int nextTokenIndex = skipWhitespace(text, closeBraceIndex + 1);
-            if (nextTokenIndex >= text.length()) {
-                return openBraceIndex;
-            }
-            if (!isExpressionContinuationCharacter(text.charAt(nextTokenIndex))) {
-                return openBraceIndex;
-            }
-            openBraceIndex = text.indexOf('{', openBraceIndex + 1);
-        }
-        return -1;
-    }
-
-    /**
-     * Find the matching '}' for the '{' at the given position, skipping quoted strings.
-     */
-    int findMatchingCloseBrace(String text, int openBraceIndex) {
-        boolean inSingleQuote = false;
-        boolean inDoubleQuote = false;
-        for (int i = openBraceIndex + 1; i < text.length(); i++) {
-            char ch = text.charAt(i);
-            if (ch == '\'' && !inDoubleQuote) {
-                inSingleQuote = !inSingleQuote;
-            } else if (ch == '"' && !inSingleQuote) {
-                inDoubleQuote = !inDoubleQuote;
-            } else if (ch == '}' && !inSingleQuote && !inDoubleQuote) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    int findMatchingClosingBrace(String text, int openBraceIndex) {
-        if (openBraceIndex < 0 || openBraceIndex >= text.length() || text.charAt(openBraceIndex) != '{') {
-            return -1;
-        }
-        return findBodyClose(text, openBraceIndex + 1, 1);
-    }
-
-    /**
-     * Find the index of " as " keyword at the top level (not inside quotes). Returns the index of 'a' in "as", or -1 if
-     * not found.
-     */
-    int findTopLevelAs(String text) {
-        for (int i = 0; i + 3 < text.length(); i++) {
-            char ch = text.charAt(i);
-            if (ch == '\'' || ch == '"') {
-                i = skipQuotedText(text, i);
-            } else if (Character.isWhitespace(ch) && text.startsWith("as", i + 1)
-                    && Character.isWhitespace(text.charAt(i + 3))) {
-                return i + 1;
-            }
-        }
-        return -1;
-    }
-
-    int findTopLevelAssignment(String text) {
-        return findTopLevelDelimiter(text, 0, '=');
-    }
-
     private void forEachModuleSpecifier(String text, boolean export, BiConsumer<String, String> binding) {
-        for (String entry : splitOnTopLevelCommas(text)) {
+        for (String entry : ModuleSourceText.splitOnTopLevelCommas(text)) {
             String specifier = entry.trim();
             if (specifier.isEmpty()) {
                 continue;
             }
-            int as = findTopLevelAs(specifier);
+            int as = ModuleSourceText.findTopLevelAs(specifier);
             if (as < 0) {
-                String name = parseModuleExportNameValue(specifier);
+                String name = ModuleSourceText.parseModuleExportNameValue(specifier);
                 binding.accept(name, name);
             } else {
                 String alias = specifier.substring(as + 2).trim();
-                binding.accept(parseModuleExportNameValue(specifier.substring(0, as)),
-                        export ? parseModuleExportNameValue(alias) : alias);
+                binding.accept(ModuleSourceText.parseModuleExportNameValue(specifier.substring(0, as)),
+                        export ? ModuleSourceText.parseModuleExportNameValue(alias) : alias);
             }
         }
     }
@@ -787,65 +383,22 @@ final class ModuleSourceTransformer {
         }
     }
 
-    /**
-     * A prefix for this module's generated bindings that the module's own source does not use.
-     * <p>
-     * The transformer declares its bookkeeping bindings in the module's own scope, before EvalRunner hides their
-     * runtime metadata. {@code __qjs4jDefaultExport$0} is a legal identifier, so a module that happened to declare it
-     * had its value replaced by the transformer's — silently, and only for that one name. Choosing a prefix the source
-     * does not contain keeps the generated names out of the author's way whatever the author writes.
-     * <p>
-     * Whether the source uses the prefix is asked of the identifiers the lexer produces, not of the source text. An
-     * identifier may be written with Unicode escapes — {@code __qjs4jDefault
-     * Export$0} is the identifier {@code __qjs4jDefaultExport$0} — and a substring search does not see through those,
-     * so a module that legally declared the name under an escape was rejected with a syntax error in generated source.
-     * The decoded name is the one that has to be avoided, because the decoded name is what the binding is called.
-     * <p>
-     * After compilation, generated local/capture metadata is renamed to non-JavaScript names by EvalRunner. The exports
-     * namespace lives in a private module-environment binding that direct eval does not inherit. This prefix still
-     * prevents collisions while parsing the generated source.
-     *
-     * @param sourceCode
-     *            the module source the generated bindings will sit beside
-     * @return a prefix no identifier in the source begins with
-     */
-    String generatedModuleNamePrefix(String sourceCode) {
-        String prefix = "__qjs4j";
-        if (sourceCode == null || (!sourceCode.contains("qjs4j") && !sourceCode.contains("\\u"))) {
-            // Neither the text nor an escape in it can decode to a name starting with the prefix.
-            return prefix;
-        }
-        // Null when the source does not tokenise, in which case the text search is all there is —
-        // and the compiler is about to reject the source anyway.
-        Set<String> identifierNames = moduleIdentifierNames(sourceCode);
-        for (int salt = -1; salt < Integer.MAX_VALUE; salt++) {
-            String candidate = salt < 0 ? prefix : prefix + salt + "_";
-            boolean taken = identifierNames == null
-                    ? sourceCode.contains(candidate)
-                    : identifierNames.stream().anyMatch(name -> name.startsWith(candidate));
-            if (!taken) {
-                return candidate;
-            }
-        }
-        return prefix;
-    }
-
     boolean hasModuleExportSyntax(String code) {
-        ModuleDeclarationScan scan = scanTopLevelModuleDeclarations(code);
+        var scan = scan(code).scanTopLevelModuleDeclarations();
         return scan == null
-                ? MODULE_EXPORT_SYNTAX_PATTERN.matcher(maskModuleComments(code)).find()
+                ? MODULE_EXPORT_SYNTAX_PATTERN.matcher(ModuleSourceScan.maskModuleComments(code)).find()
                 : scan.hasExportDeclaration();
     }
 
     boolean hasModuleStaticImportSyntax(String code) {
-        ModuleDeclarationScan scan = scanTopLevelModuleDeclarations(code);
+        var scan = scan(code).scanTopLevelModuleDeclarations();
         return scan == null
-                ? MODULE_STATIC_IMPORT_SYNTAX_PATTERN.matcher(maskModuleComments(code)).find()
+                ? MODULE_STATIC_IMPORT_SYNTAX_PATTERN.matcher(ModuleSourceScan.maskModuleComments(code)).find()
                 : scan.hasImportDeclaration();
     }
 
     boolean hasModuleTopLevelAwaitSyntax(String code) {
-        return MODULE_TOP_LEVEL_AWAIT_PATTERN.matcher(maskModuleComments(code)).find();
+        return MODULE_TOP_LEVEL_AWAIT_PATTERN.matcher(ModuleSourceScan.maskModuleComments(code)).find();
     }
 
     /**
@@ -889,7 +442,7 @@ final class ModuleSourceTransformer {
      * @return true when nothing is left open
      */
     boolean isBalancedExpressionText(String expressionText) {
-        String maskedExpressionText = maskModuleComments(expressionText);
+        String maskedExpressionText = ModuleSourceScan.maskModuleComments(expressionText);
         int depth = 0;
         for (int index = 0; index < maskedExpressionText.length(); index++) {
             switch (maskedExpressionText.charAt(index)) {
@@ -919,12 +472,6 @@ final class ModuleSourceTransformer {
     boolean isDynamicImportDefaultDeclarationClause(String defaultClause) {
         return defaultClause.startsWith("function") || defaultClause.startsWith("async function")
                 || defaultClause.startsWith("class");
-    }
-
-    boolean isExpressionContinuationCharacter(char ch) {
-        return ch == ')' || ch == ']' || ch == '}' || ch == ',' || ch == '.' || ch == ':' || ch == '?' || ch == '+'
-                || ch == '-' || ch == '*' || ch == '/' || ch == '%' || ch == '<' || ch == '>' || ch == '=' || ch == '&'
-                || ch == '|' || ch == '^';
     }
 
     boolean isSelfImportBinding(ImportBinding importBinding, String moduleSpecifier) {
@@ -966,155 +513,8 @@ final class ModuleSourceTransformer {
         return !Character.isLetterOrDigit(nextChar) && nextChar != '_' && nextChar != '$';
     }
 
-    /**
-     * The zero-based index of the line an offset falls on.
-     *
-     * @param sourceCode
-     *            the source
-     * @param offset
-     *            the offset
-     * @return the line index
-     */
-    int lineIndexOfOffset(String sourceCode, int offset) {
-        int lineIndex = 0;
-        for (int index = 0; index < offset && index < sourceCode.length(); index++) {
-            if (sourceCode.charAt(index) == '\n') {
-                lineIndex++;
-            }
-        }
-        return lineIndex;
-    }
-
-    String maskModuleComments(String sourceCode) {
-        if (sourceCode == null || sourceCode.isEmpty()) {
-            return "";
-        }
-        char[] masked = null;
-        char quote = 0;
-        int length = sourceCode.length();
-        for (int i = 0; i < length; i++) {
-            char ch = sourceCode.charAt(i);
-            if (quote != 0) {
-                if (ch == '\\') {
-                    i++;
-                } else if (ch == quote) {
-                    quote = 0;
-                }
-            } else if (ch == '\'' || ch == '"' || ch == '`') {
-                quote = ch;
-            } else if (ch == '/' && i + 1 < length) {
-                char next = sourceCode.charAt(i + 1);
-                if (next != '/' && next != '*') {
-                    continue;
-                }
-                if (masked == null) {
-                    masked = sourceCode.toCharArray();
-                }
-                int end = i + 2;
-                if (next == '/') {
-                    while (end < length && sourceCode.charAt(end) != '\n' && sourceCode.charAt(end) != '\r') {
-                        end++;
-                    }
-                } else {
-                    int close = sourceCode.indexOf("*/", end);
-                    end = close < 0 ? length : close + 2;
-                }
-                for (; i < end; i++) {
-                    if (masked[i] != '\n' && masked[i] != '\r') {
-                        masked[i] = ' ';
-                    }
-                }
-                i--;
-            }
-        }
-        return masked == null ? sourceCode : new String(masked);
-    }
-
-    /**
-     * The zero-based indices of the lines that begin a top-level module declaration.
-     * <p>
-     * The line loop in {@link #parseDynamicImportModuleSource(JSDynamicImportModule)} used to decide this by
-     * string-matching {@code import }/{@code export } at the start of a masked line, and
-     * {@link #maskModuleComments(String)} blanks comments but leaves string and template contents verbatim — so a
-     * multi-line template containing a line that reads {@code export const fake = 1;} produced an export. Membership in
-     * this set is decided by the lexer instead, so text that merely looks like a declaration is not one.
-     *
-     * @param sourceCode
-     *            module source that has already been normalised
-     * @return the line indices, or {@code null} when the source cannot be tokenised
-     */
-    Set<Integer> moduleDeclarationLineIndices(String sourceCode) {
-        ModuleDeclarationScan scan = scanTopLevelModuleDeclarations(sourceCode);
-        if (scan == null) {
-            return null;
-        }
-        Set<Integer> lineIndices = new HashSet<>();
-        int lineIndex = 0;
-        int offset = 0;
-        for (int declarationOffset : scan.declarationOffsets()) {
-            while (offset < declarationOffset && offset < sourceCode.length()) {
-                if (sourceCode.charAt(offset) == '\n') {
-                    lineIndex++;
-                }
-                offset++;
-            }
-            lineIndices.add(lineIndex);
-        }
-        return lineIndices;
-    }
-
-    /**
-     * Every identifier name a module's source contains, decoded.
-     *
-     * @param sourceCode
-     *            the module source
-     * @return the names, or null when the source does not tokenise
-     */
-    Set<String> moduleIdentifierNames(String sourceCode) {
-        List<Token> tokens;
-        try {
-            tokens = tokenizeModuleSource(sourceCode);
-        } catch (RuntimeException notTokenisable) {
-            context.clearPendingException();
-            return null;
-        }
-        Set<String> identifierNames = new HashSet<>();
-        for (Token token : tokens) {
-            if (token.type() == TokenType.IDENTIFIER) {
-                identifierNames.add(token.value());
-            }
-        }
-        return identifierNames;
-    }
-
-    /**
-     * The span one token occupies in the source it was read from.
-     * <p>
-     * A {@link Token} records where it starts but not where it ends, and its {@code value} is the decoded text, so it
-     * cannot be measured either — {@code as} is one character long as a value and six in the source. The end is
-     * therefore taken from the next token and walked back over whitespace, which is exact whenever the two are
-     * separated by nothing else.
-     *
-     * @param tokens
-     *            the token list
-     * @param index
-     *            the index of the token
-     * @param sourceCode
-     *            the source the tokens came from
-     * @return the token's location
-     */
-    SourceLocation moduleTokenLocation(List<Token> tokens, int index, String sourceCode) {
-        Token token = tokens.get(index);
-        int endOffset = index + 1 < tokens.size() ? tokens.get(index + 1).offset() : sourceCode.length();
-        endOffset = Math.min(endOffset, sourceCode.length());
-        while (endOffset > token.offset() && Character.isWhitespace(sourceCode.charAt(endOffset - 1))) {
-            endOffset--;
-        }
-        return new SourceLocation(token.line(), token.column(), token.offset(), endOffset);
-    }
-
     private String nameAnonymousDefaultClass(String declarationPart, String defaultLocalName) {
-        int openBrace = findLikelyClassBodyOpenBrace(declarationPart);
+        int openBrace = ModuleSourceText.findLikelyClassBodyOpenBrace(declarationPart);
         if (openBrace >= 0) {
             // ES2024 15.2.3.11: Only set name to "default" if the class
             // doesn't already have a "name" own property (e.g. static name method).
@@ -1167,7 +567,11 @@ final class ModuleSourceTransformer {
      *             when the source as written is not a valid module
      */
     String normalizeModuleDeclarationLines(String sourceCode, boolean validate) {
-        ModuleDeclarationScan scan = scanTopLevelModuleDeclarations(sourceCode);
+        return normalizeModuleDeclarationLines(sourceCode, validate, scan(sourceCode));
+    }
+
+    private String normalizeModuleDeclarationLines(String sourceCode, boolean validate, ModuleSourceScan analysis) {
+        var scan = analysis.scanTopLevelModuleDeclarations();
         if (scan == null || scan.lineBreakOffsets().isEmpty()) {
             return sourceCode;
         }
@@ -1208,7 +612,7 @@ final class ModuleSourceTransformer {
      * <p>
      * <em>Which</em> text it classifies is no longer decided by how the source is formatted.
      * {@link #normalizeModuleDeclarationLines(String)} tokenises the source first and puts every top-level declaration
-     * on its own lines, {@link #defaultExportExtents(String)} asks the parser where an {@code export default}
+     * on its own lines, {@link ModuleSourceScan#defaultExportExtents()} asks the parser where an {@code export default}
      * expression ends, and both binding names and string literals are read as the values the lexer says they are rather
      * than as the characters that spell them. So a declaration sharing a line with other code, a regular expression
      * literal containing a quote, a Unicode or escaped identifier, and a string export name are all handled — those
@@ -1223,8 +627,8 @@ final class ModuleSourceTransformer {
      * Loading and linking are separate from evaluation: see {@link #requireModuleGraphLinks(String, String)}. Every
      * value that reaches identifier position in the generated source is validated by
      * {@link #requireGeneratedIdentifier(String, String, String)}, and every value that reaches string position is
-     * escaped by {@link #escapeJavaScriptString(String)}, so a name the scanner mis-extracts produces a diagnosable
-     * SyntaxError rather than spliced source text.
+     * escaped by {@link ModuleSourceText#escapeJavaScriptString(String)}, so a name the scanner mis-extracts produces a
+     * diagnosable SyntaxError rather than spliced source text.
      *
      * @param moduleRecord
      *            the module whose raw source is to be transformed
@@ -1233,16 +637,22 @@ final class ModuleSourceTransformer {
         // Put every top-level declaration on its own lines before the line-oriented scan below
         // runs, so which text it classifies is decided by the lexer rather than by where the
         // author happened to break lines.
-        String sourceCode = normalizeModuleDeclarationLines(moduleRecord.rawSource());
-        String scanSourceCode = maskModuleComments(sourceCode);
+        String raw = moduleRecord.rawSource();
+        ModuleSourceScan analysis = scan(raw);
+        String sourceCode = normalizeModuleDeclarationLines(raw, true, analysis);
+        if (sourceCode != raw) {
+            // Inserted newlines change token offsets and line numbers.
+            analysis = scan(sourceCode);
+        }
+        String scanSourceCode = ModuleSourceScan.maskModuleComments(sourceCode);
         // Bookkeeping names the module's own source does not use — see generatedModuleNamePrefix.
-        String generatedNamePrefix = generatedModuleNamePrefix(sourceCode);
+        String generatedNamePrefix = analysis.generatedModuleNamePrefix();
         // Which lines really begin a declaration, decided by the lexer rather than by how a line
         // reads. Null when the source did not tokenise, in which case the string match stands.
-        Set<Integer> moduleDeclarationLines = moduleDeclarationLineIndices(sourceCode);
+        Set<Integer> moduleDeclarationLines = analysis.moduleDeclarationLineIndices();
         // Where each `export default <expression>` really ends, decided by the parser rather than
         // by counting delimiters.
-        Map<Integer, DefaultExportExtent> defaultExportExtents = defaultExportExtents(sourceCode);
+        Map<Integer, ModuleSourceScan.DefaultExportExtent> defaultExportExtents = analysis.defaultExportExtents();
         StringBuilder importPreambleBuilder = new StringBuilder();
         StringBuilder transformedSourceBuilder = new StringBuilder(sourceCode.length() + 128);
         List<JSDynamicImportModule.HoistedFunctionExportBinding> hoistedFunctionExportBindings = new ArrayList<>();
@@ -1320,7 +730,7 @@ final class ModuleSourceTransformer {
                     // grammar question rather than a bracket count — see defaultExportExtents.
                     String defaultExpression;
                     String trailingCode = "";
-                    DefaultExportExtent defaultExportExtent = defaultExportExtents.get(lineIndex);
+                    ModuleSourceScan.DefaultExportExtent defaultExportExtent = defaultExportExtents.get(lineIndex);
                     if (defaultExportExtent != null) {
                         defaultExpression = defaultExportExtent.expression();
                         trailingCode = defaultExportExtent.trailingText();
@@ -1335,7 +745,7 @@ final class ModuleSourceTransformer {
                             defaultExpression = defaultExpression + "\n" + continuationLine;
                         }
                         defaultExpression = defaultExpression.trim();
-                        defaultExpression = stripTrailingSemicolons(defaultExpression);
+                        defaultExpression = ModuleSourceText.stripTrailingSemicolons(defaultExpression);
                     }
                     String defaultLocalName = generatedNamePrefix + "DefaultExport$" + defaultExportIndex++;
                     transformedSourceBuilder.append("let ").append(defaultLocalName).append(" = (0, ")
@@ -1384,19 +794,20 @@ final class ModuleSourceTransformer {
 
             if (exportClause.startsWith("{")) {
                 String exportSpecifiersText = exportClause;
-                while (findMatchingCloseBrace(exportSpecifiersText, 0) < 0 && lineIndex + 1 < lines.length) {
+                while (ModuleSourceText.findMatchingCloseBrace(exportSpecifiersText, 0) < 0
+                        && lineIndex + 1 < lines.length) {
                     lineIndex++;
                     String normalizedNextScanLine = scanLines[lineIndex];
                     exportSpecifiersText = exportSpecifiersText + "\n" + normalizedNextScanLine.stripLeading();
                 }
 
-                int closeBraceIndex = findMatchingCloseBrace(exportSpecifiersText, 0);
+                int closeBraceIndex = ModuleSourceText.findMatchingCloseBrace(exportSpecifiersText, 0);
                 if (closeBraceIndex < 0) {
                     throw new JSException(context.throwSyntaxError("Invalid export statement"));
                 }
                 String exportListText = exportSpecifiersText.substring(1, closeBraceIndex).trim();
                 String afterBraceText = exportSpecifiersText.substring(closeBraceIndex + 1).trim();
-                afterBraceText = stripTrailingSemicolons(afterBraceText);
+                afterBraceText = ModuleSourceText.stripTrailingSemicolons(afterBraceText);
                 String sourceSpecifier = null;
                 if (!afterBraceText.isEmpty()) {
                     if (!afterBraceText.startsWith("from ")) {
@@ -1457,7 +868,7 @@ final class ModuleSourceTransformer {
                         throw new JSException(context.throwSyntaxError("Invalid export statement"));
                     }
                     String fromText = remainingAfterName.substring(5).trim();
-                    fromText = stripTrailingSemicolons(fromText);
+                    fromText = ModuleSourceText.stripTrailingSemicolons(fromText);
                     String sourceSpecifier = stripQuotedSpecifier(fromText);
                     reExportBindings.add(new JSDynamicImportModule.ReExportBinding(sourceSpecifier,
                             MODULE_NAMESPACE_EXPORT_NAME, exportedName, false));
@@ -1467,7 +878,7 @@ final class ModuleSourceTransformer {
                 }
                 if (afterStarText.startsWith("from ")) {
                     String fromText = afterStarText.substring("from ".length()).trim();
-                    fromText = stripTrailingSemicolons(fromText);
+                    fromText = ModuleSourceText.stripTrailingSemicolons(fromText);
                     String sourceSpecifier = stripQuotedSpecifier(fromText);
                     reExportBindings.add(new JSDynamicImportModule.ReExportBinding(sourceSpecifier, "*", "*", true));
                     // Add side-effect import for source-order evaluation
@@ -1530,32 +941,21 @@ final class ModuleSourceTransformer {
         }
     }
 
-    /**
-     * Parse a ModuleExportName value: either a quoted string literal or an identifier name. Removes quotes from string
-     * literals, applies identifier escape decoding to identifiers.
-     */
-    String parseModuleExportNameValue(String raw) {
-        String trimmed = raw.trim();
-        if (trimmed.length() >= 2 && ((trimmed.charAt(0) == '"' && trimmed.charAt(trimmed.length() - 1) == '"')
-                || (trimmed.charAt(0) == '\'' && trimmed.charAt(trimmed.length() - 1) == '\''))) {
-            return decodeModuleStringLiteralValue(trimmed.substring(1, trimmed.length() - 1));
-        }
-        return decodeIdentifierEscapes(trimmed);
-    }
-
     private ExportDeclaration readExportDeclaration(String firstLine, String[] lines, int index) {
         String source = firstLine;
-        int end = findEndOfDeclarationBody(source);
+        int end = ModuleSourceText.findEndOfDeclarationBody(source);
         while (end < 0 && index + 1 < lines.length) {
             source += "\n" + lines[++index];
-            end = findEndOfDeclarationBody(source);
+            end = ModuleSourceText.findEndOfDeclarationBody(source);
         }
         return new ExportDeclaration(source, end, index);
     }
 
     void registerImportedBinding(String localName, String sourceSpecifier, String importedName, boolean deferredImport,
             Set<String> bindingNames, Map<String, ImportBinding> importedBindings) {
-        String normalizedLocalName = localName == null ? "" : decodeIdentifierEscapes(localName.trim());
+        String normalizedLocalName = localName == null
+                ? ""
+                : ModuleSourceText.decodeIdentifierEscapes(localName.trim());
         if (normalizedLocalName.isEmpty()) {
             return;
         }
@@ -1630,7 +1030,7 @@ final class ModuleSourceTransformer {
      *             wrapping a SyntaxError when the name is not a valid identifier
      */
     String requireGeneratedIdentifier(String name, String description, String moduleSpecifier) {
-        if (isValidIdentifierName(name)) {
+        if (ModuleSourceText.isValidIdentifierName(name)) {
             return name;
         }
         // No SourceLocation: the transformer works on rewritten text, and offsets into that name
@@ -1671,88 +1071,8 @@ final class ModuleSourceTransformer {
         new Compiler(sourceCode, "<module>").setContext(context).compile(true);
     }
 
-    /**
-     * Find the top-level {@code import} and {@code export} declarations in module source, by tokenising it.
-     * <p>
-     * The transformer downstream is line-oriented: it classifies a line by string-matching
-     * {@code import }/{@code export } at its start. That is only sound if a declaration really does start a line, and
-     * the engine's own lexer is the only thing that knows whether a given {@code export} is a declaration or three
-     * letters inside a template, and whether a {@code /} opens a regular expression or divides. Both questions used to
-     * be answered by {@link #maskModuleComments(String)}, a hand-written character scanner with no notion of regular
-     * expressions at all — so {@code /"/; export const v = 20;} desynchronised its quote state for the rest of the
-     * line, and {@code const t = 1; export const v = 15;} was not recognised as an export at all because the keyword
-     * was not first on its line.
-     * <p>
-     * This does not make module handling a parser: the declaration's <em>contents</em> are still read textually
-     * afterwards. What it fixes is which text that is.
-     *
-     * @param sourceCode
-     *            the module source
-     * @return the scan, or {@code null} when the source cannot be tokenised, in which case callers fall back to the
-     *         regular expressions
-     */
-    ModuleDeclarationScan scanTopLevelModuleDeclarations(String sourceCode) {
-        if (sourceCode == null || sourceCode.isEmpty()) {
-            return new ModuleDeclarationScan(false, false, List.of(), List.of());
-        }
-        if (!sourceCode.contains("import") && !sourceCode.contains("export")) {
-            return new ModuleDeclarationScan(false, false, List.of(), List.of());
-        }
-        List<Token> tokens;
-        try {
-            tokens = tokenizeModuleSource(sourceCode);
-        } catch (RuntimeException e) {
-            // Source that does not tokenise is not this method's problem to report: the compiler
-            // will reject it with a proper SyntaxError. Fall back so nothing changes for it.
-            context.clearPendingException();
-            return null;
-        }
-
-        boolean hasImportDeclaration = false;
-        boolean hasExportDeclaration = false;
-        TreeSet<Integer> lineBreakOffsets = new TreeSet<>();
-        List<Integer> declarationOffsets = new ArrayList<>();
-        for (int index = nextModuleDeclaration(tokens, 0); index >= 0; index = nextModuleDeclaration(tokens,
-                index + 1)) {
-            Token token = tokens.get(index);
-            hasImportDeclaration |= token.type() == TokenType.IMPORT;
-            hasExportDeclaration |= token.type() == TokenType.EXPORT;
-            declarationOffsets.add(token.offset());
-
-            // A declaration that shares its line with earlier code needs a break in front of it.
-            if (index > 0 && tokens.get(index - 1).line() == token.line()) {
-                lineBreakOffsets.add(token.offset());
-            }
-            // And one behind it, when its end is identifiable and code follows on the same line.
-            int endIndex = findModuleDeclarationEnd(tokens, index);
-            if (endIndex >= 0 && endIndex + 1 < tokens.size()
-                    && tokens.get(endIndex + 1).line() == tokens.get(endIndex).line()) {
-                lineBreakOffsets.add(tokens.get(endIndex + 1).offset());
-            }
-        }
-        return new ModuleDeclarationScan(hasImportDeclaration, hasExportDeclaration, List.copyOf(lineBreakOffsets),
-                List.copyOf(declarationOffsets));
-    }
-
-    int skipWhitespace(String text, int startIndex) {
-        int index = Math.max(0, startIndex);
-        while (index < text.length() && Character.isWhitespace(text.charAt(index))) {
-            index++;
-        }
-        return index;
-    }
-
-    /**
-     * Split a string on commas that are not inside quoted strings.
-     */
-    List<String> splitOnTopLevelCommas(String text) {
-        List<String> result = new ArrayList<>();
-        int start = 0;
-        for (int comma; (comma = findTopLevelDelimiter(text, start, ',')) >= 0; start = comma + 1) {
-            result.add(text.substring(start, comma));
-        }
-        result.add(text.substring(start));
-        return result;
+    ModuleSourceScan scan(String source) {
+        return new ModuleSourceScan(context, source);
     }
 
     /**
@@ -1773,188 +1093,12 @@ final class ModuleSourceTransformer {
         }
         // A backslash escapes whatever follows it, so the first matching quote is not necessarily
         // the closing one: `'./a\\'b.mjs'` ends at the third quote, not the second.
-        int closeQuote = -1;
-        for (int index = 1; index < specifierText.length(); index++) {
-            char ch = specifierText.charAt(index);
-            if (ch == '\\') {
-                index++;
-                continue;
-            }
-            if (ch == quote) {
-                closeQuote = index;
-                break;
-            }
-        }
-        if (closeQuote < 0) {
+        int closeQuote = ModuleSourceText.skipQuotedText(specifierText, 0);
+        if (closeQuote >= specifierText.length()) {
             throw new JSException(context.throwSyntaxError("Invalid module specifier"));
         }
         // Everything after the closing quote (e.g. `with { ... }`) is not part of the specifier.
-        return decodeModuleStringLiteralValue(specifierText.substring(1, closeQuote));
-    }
-
-    private static int findBodyClose(String text, int start, int depth) {
-        char quote = 0;
-        boolean foundOpen = depth != 0;
-        for (int i = start; i < text.length(); i++) {
-            char ch = text.charAt(i);
-            if (ch == '/' && i + 1 < text.length()) {
-                char next = text.charAt(i + 1);
-                if (next == '/') {
-                    i = text.indexOf('\n', i + 2);
-                    if (i < 0) {
-                        return -1;
-                    }
-                    continue;
-                }
-                if (next == '*') {
-                    int end = text.indexOf("*/", i + 2);
-                    if (end < 0) {
-                        return -1;
-                    }
-                    i = end + 1;
-                    continue;
-                }
-            }
-            if (quote != 0) {
-                if (ch == '\\') {
-                    i++;
-                } else if (ch == quote) {
-                    quote = 0;
-                }
-            } else if (ch == '\'' || ch == '"' || ch == '`') {
-                quote = ch;
-            } else if (ch == '{') {
-                foundOpen = true;
-                depth++;
-            } else if (ch == '}' && --depth == 0 && foundOpen) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    /**
-     * The index of the last token of a module declaration whose extent is identifiable without parsing.
-     * <p>
-     * That is every {@code import} form, and the {@code export} forms that end at a module specifier or at the closing
-     * brace of an export clause. {@code export default …} and {@code export <declaration>} are not included: their
-     * extent is a declaration body, which is the parser's job, and the transformer's existing multi-line lookahead
-     * already handles them.
-     *
-     * @param tokens
-     *            the token list
-     * @param start
-     *            the index of the {@code import} or {@code export} token
-     * @return the index of the declaration's last token, or -1 when it is not identifiable
-     */
-    static int findModuleDeclarationEnd(List<Token> tokens, int start) {
-        boolean isExport = tokens.get(start).type() == TokenType.EXPORT;
-        int depth = 0;
-        int clauseEnd = -1;
-        for (int index = start + 1; index < tokens.size(); index++) {
-            Token token = tokens.get(index);
-            switch (token.type()) {
-                case LBRACE, LPAREN, LBRACKET -> depth++;
-                case RBRACE, RPAREN, RBRACKET -> {
-                    depth = Math.max(0, depth - 1);
-                    if (depth == 0 && token.type() == TokenType.RBRACE && clauseEnd < 0) {
-                        // The closing brace of an import/export clause: `{ a, b }`.
-                        clauseEnd = index;
-                    }
-                }
-                default -> {
-                }
-            }
-            if (depth != 0) {
-                continue;
-            }
-            if (token.type() == TokenType.STRING && isModuleSpecifierPosition(tokens, start, index)) {
-                // The module specifier. Anything after it is a with-clause or a semicolon.
-                return skipModuleDeclarationTail(tokens, index);
-            }
-            if (isExport && clauseEnd == index) {
-                // `export { a, b };` with no `from`: the clause closes the declaration unless a
-                // `from` follows, which the STRING branch above then picks up.
-                if (index + 1 < tokens.size() && tokens.get(index + 1).type() == TokenType.FROM) {
-                    continue;
-                }
-                return skipModuleDeclarationTail(tokens, index);
-            }
-            if (token.type() == TokenType.SEMICOLON) {
-                return index;
-            }
-            if (isExport && clauseEnd < 0 && index == start + 1 && token.type() != TokenType.MUL
-                    && token.type() != TokenType.LBRACE) {
-                // `export default …` or `export <declaration>`: not identifiable here.
-                return -1;
-            }
-        }
-        return -1;
-    }
-
-    private static int findTopLevelDelimiter(String text, int start, char delimiter) {
-        int depth = 0;
-        for (int i = start; i < text.length(); i++) {
-            char ch = text.charAt(i);
-            if (ch == '\'' || ch == '"' || ch == '`') {
-                i = skipQuotedText(text, i);
-            } else if (depth == 0 && ch == delimiter
-                    && (delimiter != '=' || i + 1 < text.length() && text.charAt(i + 1) != '=')) {
-                return i;
-            } else if (ch == '(' || ch == '[' || ch == '{') {
-                depth++;
-            } else if (ch == ')' || ch == ']' || ch == '}') {
-                depth--;
-            }
-        }
-        return -1;
-    }
-
-    /**
-     * Whether a string token is the module specifier of a declaration rather than a module export name.
-     * <p>
-     * A specifier follows {@code from}, or the {@code import} keyword itself in {@code import 'spec'}. Treating any
-     * top-level string as the specifier broke {@code export * as "All" from './m.js'}, whose export name is also a
-     * top-level string (ES2022 arbitrary module namespace names).
-     *
-     * @param tokens
-     *            the token list
-     * @param start
-     *            the index of the {@code import} or {@code export} token
-     * @param index
-     *            the index of the string token
-     * @return true when the string is the module specifier
-     */
-    static boolean isModuleSpecifierPosition(List<Token> tokens, int start, int index) {
-        if (index == start + 1) {
-            return tokens.get(start).type() == TokenType.IMPORT;
-        }
-        return tokens.get(index - 1).type() == TokenType.FROM;
-    }
-
-    /**
-     * Whether the given text is a well-formed ECMAScript IdentifierName.
-     *
-     * @param name
-     *            the candidate identifier
-     * @return true when every code point is a legal identifier character
-     */
-    static boolean isValidIdentifierName(String name) {
-        if (name == null || name.isEmpty()) {
-            return false;
-        }
-        int firstCodePoint = name.codePointAt(0);
-        if (!UnicodeData.isIdentifierStart(firstCodePoint)) {
-            return false;
-        }
-        for (int offset = Character.charCount(firstCodePoint); offset < name.length();) {
-            int codePoint = name.codePointAt(offset);
-            if (!UnicodeData.isIdentifierPart(codePoint)) {
-                return false;
-            }
-            offset += Character.charCount(codePoint);
-        }
-        return true;
+        return ModuleSourceText.decodeModuleStringLiteralValue(specifierText.substring(1, closeQuote));
     }
 
     private static String[] moduleLines(String source) {
@@ -1966,138 +1110,6 @@ final class ModuleSourceTransformer {
             }
         }
         return lines;
-    }
-
-    static int nextModuleDeclaration(List<Token> tokens, int start) {
-        int depth = 0;
-        for (int index = start; index < tokens.size(); index++) {
-            switch (tokens.get(index).type()) {
-                case LPAREN, LBRACKET, LBRACE -> depth++;
-                case RPAREN, RBRACKET, RBRACE -> depth = Math.max(0, depth - 1);
-                case EXPORT -> {
-                    if (depth == 0) {
-                        return index;
-                    }
-                }
-                case IMPORT -> {
-                    if (depth == 0 && index + 1 < tokens.size()) {
-                        TokenType next = tokens.get(index + 1).type();
-                        if (next != TokenType.LPAREN && next != TokenType.DOT) {
-                            return index;
-                        }
-                    }
-                }
-                default -> {
-                }
-            }
-        }
-        return -1;
-    }
-
-    static int parseHex(String text) {
-        if (text == null || text.isEmpty()) {
-            return -1;
-        }
-        int value = 0;
-        for (int i = 0; i < text.length(); i++) {
-            int digit = Character.digit(text.charAt(i), 16);
-            if (digit < 0) {
-                return -1;
-            }
-            if (value > (Integer.MAX_VALUE - digit) / 16) {
-                return -1;
-            }
-            value = (value << 4) | digit;
-        }
-        return value;
-    }
-
-    /**
-     * Consume an optional {@code with}/{@code assert} attributes clause and an optional semicolon.
-     *
-     * @param tokens
-     *            the token list
-     * @param index
-     *            the index of the last token consumed so far
-     * @return the index of the declaration's last token
-     */
-    static int skipModuleDeclarationTail(List<Token> tokens, int index) {
-        int end = index;
-        int next = end + 1;
-        if (next < tokens.size()
-                && ("with".equals(tokens.get(next).value()) || "assert".equals(tokens.get(next).value()))
-                && next + 1 < tokens.size() && tokens.get(next + 1).type() == TokenType.LBRACE) {
-            int depth = 0;
-            for (int scan = next + 1; scan < tokens.size(); scan++) {
-                if (tokens.get(scan).type() == TokenType.LBRACE) {
-                    depth++;
-                } else if (tokens.get(scan).type() == TokenType.RBRACE) {
-                    depth--;
-                    if (depth == 0) {
-                        end = scan;
-                        break;
-                    }
-                }
-            }
-            next = end + 1;
-        }
-        if (next < tokens.size() && tokens.get(next).type() == TokenType.SEMICOLON) {
-            end = next;
-        }
-        return end;
-    }
-
-    private static int skipQuotedText(String text, int start) {
-        char quote = text.charAt(start);
-        int i = start + 1;
-        while (i < text.length()) {
-            char ch = text.charAt(i);
-            if (ch == quote) {
-                break;
-            }
-            i += ch == '\\' ? 2 : 1;
-        }
-        return i;
-    }
-
-    private static String stripTrailingSemicolons(String text) {
-        text = text.trim();
-        while (text.endsWith(";")) {
-            text = text.substring(0, text.length() - 1).trim();
-        }
-        return text;
-    }
-
-    /**
-     * Tokenise module source into a list.
-     *
-     * @param sourceCode
-     *            the source
-     * @return the tokens, without the terminating {@code EOF}
-     */
-    static List<Token> tokenizeModuleSource(String sourceCode) {
-        Lexer lexer = new Lexer(sourceCode);
-        List<Token> tokens = new ArrayList<>();
-        while (true) {
-            Token token = lexer.nextToken();
-            if (token == null || token.type() == TokenType.EOF) {
-                return tokens;
-            }
-            tokens.add(token);
-        }
-    }
-
-    /**
-     * Where one {@code export default <expression>} ends, and what follows it on its last line.
-     *
-     * @param expression
-     *            the expression's text, exactly as written
-     * @param endLineIndex
-     *            the zero-based index of the line the expression ends on
-     * @param trailingText
-     *            the code that followed it on that line, without the terminating semicolon; empty when nothing did
-     */
-    record DefaultExportExtent(String expression, int endLineIndex, String trailingText) {
     }
 
     private record ExportDeclaration(String source, int end, int lastLine) {
@@ -2115,20 +1127,5 @@ final class ModuleSourceTransformer {
     }
 
     record ImportBinding(String sourceSpecifier, String importedName, boolean deferredImport) {
-    }
-
-    /**
-     * What a token scan found out about a source's top-level module declarations.
-     *
-     * @param hasImportDeclaration
-     *            whether a static {@code import} declaration is present
-     * @param hasExportDeclaration
-     *            whether an {@code export} declaration is present
-     * @param lineBreakOffsets
-     *            offsets at which a line break must be inserted so that every declaration occupies whole lines,
-     *            ascending and distinct
-     */
-    record ModuleDeclarationScan(boolean hasImportDeclaration, boolean hasExportDeclaration,
-            List<Integer> lineBreakOffsets, List<Integer> declarationOffsets) {
     }
 }

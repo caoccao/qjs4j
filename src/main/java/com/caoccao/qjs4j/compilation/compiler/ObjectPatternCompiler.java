@@ -17,10 +17,8 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
-import com.caoccao.qjs4j.core.JSNumber;
 import com.caoccao.qjs4j.vm.Opcode;
 
-import java.math.BigInteger;
 import java.util.ArrayDeque;
 
 /**
@@ -52,40 +50,9 @@ final class ObjectPatternCompiler extends AstNodeCompiler<ObjectPattern> {
 
         for (ObjectPatternProperty prop : objPattern.getProperties()) {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
-            Expression propertyKey = prop.getKey();
-            if (!prop.isComputed() && propertyKey instanceof Identifier identifier) {
-                Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.getValue());
-                maybePreResolveBindingIdentifierReference(bindingIdentifier);
-                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, identifier.getName());
-            } else if (!prop.isComputed() && propertyKey instanceof Literal literal
-                    && literal.getValue() instanceof String propertyName) {
-                Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.getValue());
-                maybePreResolveBindingIdentifierReference(bindingIdentifier);
-                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propertyName);
-            } else if (!prop.isComputed() && propertyKey instanceof Literal literal
-                    && (literal.getValue() instanceof Integer || literal.getValue() instanceof Long)) {
-                long propertyIndex = ((Number) literal.getValue()).longValue();
-                if (propertyIndex >= Integer.MIN_VALUE && propertyIndex <= Integer.MAX_VALUE) {
-                    compilerContext.emitter.emitOpcode(Opcode.PUSH_I32);
-                    compilerContext.emitter.emitI32((int) propertyIndex);
-                } else {
-                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(propertyIndex));
-                }
-                Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.getValue());
-                maybePreResolveBindingIdentifierReference(bindingIdentifier);
-                compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-            } else if (!prop.isComputed() && propertyKey instanceof Literal literal
-                    && literal.getValue() instanceof BigInteger bigIntegerValue) {
-                Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.getValue());
-                maybePreResolveBindingIdentifierReference(bindingIdentifier);
-                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, bigIntegerValue.toString());
-            } else {
-                compilerContext.expressionCompiler.compile(propertyKey);
-                compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
-                Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.getValue());
-                maybePreResolveBindingIdentifierReference(bindingIdentifier);
-                compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-            }
+            String atom = ObjectDestructuringCompiler.prepareRead(compilerContext, prop, -1);
+            maybePreResolveBindingIdentifierReference(getBindingIdentifierForPreResolve(prop.getValue()));
+            ObjectDestructuringCompiler.read(compilerContext.emitter, atom);
             // Assign to the pattern (could be nested)
             compilerContext.patternCompiler.compile(prop.getValue());
 
@@ -98,26 +65,14 @@ final class ObjectPatternCompiler extends AstNodeCompiler<ObjectPattern> {
                 // Stack: [source, excludeList, excludeList]
                 compilerContext.emitter.emitOpcode(Opcode.NULL);
                 // Stack: [source, excludeList, excludeList, null]
-                if (!prop.isComputed() && propertyKey instanceof Identifier identifier) {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, identifier.getName());
-                    compilerContext.emitter.emitOpcode(Opcode.DROP); // drop duplicate excludeList
-                } else if (!prop.isComputed() && propertyKey instanceof Literal literal
-                        && literal.getValue() instanceof String propertyName) {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, propertyName);
-                    compilerContext.emitter.emitOpcode(Opcode.DROP); // drop duplicate excludeList
-                } else if (!prop.isComputed() && propertyKey instanceof Literal literal
-                        && (literal.getValue() instanceof Integer || literal.getValue() instanceof Long)) {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD,
-                            String.valueOf(((Number) literal.getValue()).longValue()));
-                    compilerContext.emitter.emitOpcode(Opcode.DROP); // drop duplicate excludeList
-                } else if (!prop.isComputed() && propertyKey instanceof Literal literal
-                        && literal.getValue() instanceof BigInteger bigIntegerValue) {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, bigIntegerValue.toString());
-                    compilerContext.emitter.emitOpcode(Opcode.DROP); // drop duplicate excludeList
+                String name = ObjectDestructuringCompiler.staticKey(prop);
+                if (name != null) {
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, name);
+                    compilerContext.emitter.emitOpcode(Opcode.DROP);
                 } else {
                     // Computed property key: re-evaluate expression to get the key name
                     compilerContext.emitter.emitOpcode(Opcode.DROP); // drop null
-                    compilerContext.expressionCompiler.compile(propertyKey);
+                    compilerContext.expressionCompiler.compile(prop.getKey());
                     compilerContext.emitter.emitOpcode(Opcode.NULL);
                     compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                     compilerContext.emitter.emitOpcode(Opcode.DROP); // drop null value
@@ -130,39 +85,10 @@ final class ObjectPatternCompiler extends AstNodeCompiler<ObjectPattern> {
         }
 
         if (hasRest) {
-            // Compile rest element: {...rest} = source
-            if (objPattern.getProperties().isEmpty()) {
-                // No properties to exclude, just copy all
-                // Stack: [source]
-                compilerContext.emitter.emitOpcode(Opcode.OBJECT);
-                // Stack: [source, target]
-                compilerContext.emitter.emitOpcode(Opcode.DUP);
-                // Stack: [source, target, target]
-                compilerContext.emitter.emitOpcode(Opcode.ROT3L);
-                // Stack: [target, target, source]
-                compilerContext.emitter.emitOpcode(Opcode.NULL);
-                // Stack: [target, target, source, null(excludeList)]
-                compilerContext.emitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 7);
-                compilerContext.emitter.emitOpcode(Opcode.DROP); // drop null
-                compilerContext.emitter.emitOpcode(Opcode.DROP); // drop source
-                // Stack: [target, target]
-            } else {
-                // Stack: [excludeList, source]
-                compilerContext.emitter.emitOpcode(Opcode.OBJECT);
-                // Stack: [excludeList, source, target]
-                compilerContext.emitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 68);
-                // Stack: [excludeList, source, target]
-            }
-            // Assign target (TOS) to the rest pattern
+            boolean hasExclusions = !objPattern.getProperties().isEmpty();
+            ObjectDestructuringCompiler.copyRest(compilerContext.emitter, hasExclusions);
             compilerContext.patternCompiler.compile(objPattern.getRestElement().getArgument());
-            if (objPattern.getProperties().isEmpty()) {
-                // Drop extra target preserved for COPY_DATA_PROPERTIES.
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
-            } else {
-                // Stack: [excludeList, source]
-                compilerContext.emitter.emitOpcode(Opcode.DROP); // drop source
-                compilerContext.emitter.emitOpcode(Opcode.DROP); // drop excludeList
-            }
+            ObjectDestructuringCompiler.finishRest(compilerContext.emitter, hasExclusions);
         } else {
             // Drop the original object
             compilerContext.emitter.emitOpcode(Opcode.DROP);

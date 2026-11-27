@@ -328,6 +328,16 @@ public final class BytecodeEmitter {
         code[offset + 3] = (byte) jumpDistance;
     }
 
+    void patchJumps(Iterable<Integer> offsets, int target) {
+        for (int offset : offsets) {
+            patchJump(offset, target);
+        }
+    }
+
+    void patchJumpToHere(int operandOffset) {
+        patchJump(operandOffset, currentOffset());
+    }
+
     /**
      * Append one byte, growing the buffer when needed.
      *

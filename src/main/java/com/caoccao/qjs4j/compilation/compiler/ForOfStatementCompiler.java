@@ -78,14 +78,12 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
 
         compilerContext.scopeManager.enterScope();
 
-        boolean isUsingForOf = varDecl != null
-                && (varDecl.getKind() == VariableKind.USING || varDecl.getKind() == VariableKind.AWAIT_USING);
+        boolean isUsingForOf = varDecl != null && varDecl.getKind().isUsing();
         boolean isAwaitUsingForOf = varDecl != null && varDecl.getKind() == VariableKind.AWAIT_USING;
 
         if (!isExpressionBased && !isVar) {
             compilerContext.patternCompiler.declarePatternVariables(pattern);
-            if (varDecl != null && (varDecl.getKind() == VariableKind.CONST || varDecl.getKind() == VariableKind.USING
-                    || varDecl.getKind() == VariableKind.AWAIT_USING)) {
+            if (varDecl != null && varDecl.getKind().isImmutable()) {
                 compilerContext.patternCompiler.markPatternConstBindings(pattern);
             }
         }
@@ -144,7 +142,7 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
             compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
             int bodyJump = compilerContext.emitter.emitJump(Opcode.GOTO);
 
-            compilerContext.emitter.patchJump(nextError, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.patchJumpToHere(nextError);
             int errorLocal = compilerContext.scopeManager.currentScope()
                     .declareLocal("#for_await_next_error_" + compilerContext.emitter.currentOffset());
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, errorLocal);
@@ -154,10 +152,10 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, errorLocal);
             compilerContext.emitter.emitOpcode(Opcode.THROW);
 
-            compilerContext.emitter.patchJump(doneJump, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.patchJumpToHere(doneJump);
             compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
             jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
-            compilerContext.emitter.patchJump(bodyJump, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.patchJumpToHere(bodyJump);
             compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
         } else {
             compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
@@ -212,15 +210,11 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
         int breakTarget = compilerContext.emitter.currentOffset();
         compilerContext.emitHelpers.emitLoopIteratorClose(loop);
         if (jumpOverBreakTarget >= 0) {
-            compilerContext.emitter.patchJump(jumpOverBreakTarget, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.patchJumpToHere(jumpOverBreakTarget);
         }
 
-        for (int breakPos : loop.breakPositions) {
-            compilerContext.emitter.patchJump(breakPos, breakTarget);
-        }
-        for (int continuePos : loop.continuePositions) {
-            compilerContext.emitter.patchJump(continuePos, loopStart);
-        }
+        compilerContext.emitter.patchJumps(loop.breakPositions, breakTarget);
+        compilerContext.emitter.patchJumps(loop.continuePositions, loopStart);
 
         compilerContext.loopManager.popLoop();
 
@@ -273,7 +267,7 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
         compilerContext.emitter.emitU8(5); // JS_THROW_ERROR_INVALID_LVALUE
 
         // End label (when done=true)
-        compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(jumpToEnd);
         // Drop remaining value on stack
         compilerContext.emitter.emitOpcode(Opcode.DROP);
 

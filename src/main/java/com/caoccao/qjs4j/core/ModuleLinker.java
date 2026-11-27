@@ -101,18 +101,13 @@ final class ModuleLinker {
         if (sourceCode == null || (!sourceCode.contains("import") && !sourceCode.contains("export"))) {
             return List.of();
         }
-        List<Token> tokens;
-        try {
-            tokens = ModuleSourceTransformer.tokenizeModuleSource(sourceCode);
-        } catch (RuntimeException notTokenisable) {
-            // Source that does not tokenise is not this pass's problem to report: the compiler
-            // rejects it with a proper SyntaxError.
-            context.clearPendingException();
+        List<Token> tokens = transformer.scan(sourceCode).tokens();
+        if (tokens == null) {
             return null;
         }
         List<LinkedModuleRequest> requests = new ArrayList<>();
-        for (int index = ModuleSourceTransformer.nextModuleDeclaration(tokens,
-                0); index >= 0; index = ModuleSourceTransformer.nextModuleDeclaration(tokens, index + 1)) {
+        for (int index = ModuleSourceScan.nextModuleDeclaration(tokens, 0); index >= 0; index = ModuleSourceScan
+                .nextModuleDeclaration(tokens, index + 1)) {
             Token token = tokens.get(index);
             if (index + 1 >= tokens.size()) {
                 break;
@@ -226,9 +221,9 @@ final class ModuleLinker {
             return Math.min(index, tokens.size() - 1);
         }
         requests.add(new LinkedModuleRequest(tokens.get(index).value(),
-                transformer.moduleTokenLocation(tokens, index, sourceCode), readImportAttributes(tokens, index),
+                ModuleSourceScan.moduleTokenLocation(tokens, index, sourceCode), readImportAttributes(tokens, index),
                 List.copyOf(requestedNames)));
-        return ModuleSourceTransformer.skipModuleDeclarationTail(tokens, index);
+        return ModuleSourceScan.skipModuleDeclarationTail(tokens, index);
     }
 
     /**
@@ -295,7 +290,7 @@ final class ModuleLinker {
                 // An ImportedDefaultBinding asks for the name `default`, and fails to link exactly
                 // as any other name does.
                 importedNames.add(new LinkedExportNameRequest("default",
-                        transformer.moduleTokenLocation(tokens, index, sourceCode)));
+                        ModuleSourceScan.moduleTokenLocation(tokens, index, sourceCode)));
                 index++;
                 if (index < tokens.size() && tokens.get(index).type() == TokenType.COMMA) {
                     index++;
@@ -318,9 +313,9 @@ final class ModuleLinker {
             return Math.min(Math.max(index, start + 1), tokens.size() - 1);
         }
         requests.add(new LinkedModuleRequest(tokens.get(index).value(),
-                transformer.moduleTokenLocation(tokens, index, sourceCode), readImportAttributes(tokens, index),
+                ModuleSourceScan.moduleTokenLocation(tokens, index, sourceCode), readImportAttributes(tokens, index),
                 List.copyOf(importedNames)));
-        return ModuleSourceTransformer.skipModuleDeclarationTail(tokens, index);
+        return ModuleSourceScan.skipModuleDeclarationTail(tokens, index);
     }
 
     /**
@@ -347,7 +342,7 @@ final class ModuleLinker {
             // A ModuleExportName is an IdentifierName — reserved words included — or a string, and
             // the token's value is the decoded one either way.
             importedNames.add(new LinkedExportNameRequest(tokens.get(index).value(),
-                    transformer.moduleTokenLocation(tokens, index, sourceCode)));
+                    ModuleSourceScan.moduleTokenLocation(tokens, index, sourceCode)));
             index++;
             if (index < tokens.size() && tokens.get(index).type() == TokenType.AS) {
                 // `as` and the local binding it introduces, which the exporting module never sees.

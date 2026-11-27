@@ -61,7 +61,7 @@ final class ThrowStatementCompiler {
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, throwValueIndex);
         compilerContext.emitter.emitOpcode(Opcode.THROW);
 
-        compilerContext.emitter.patchJump(disposalCatchJump, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(disposalCatchJump);
 
         int disposalErrorIndex = compilerContext.scopeManager.currentScope()
                 .declareLocal("#disposal_error_" + compilerContext.emitter.currentOffset());

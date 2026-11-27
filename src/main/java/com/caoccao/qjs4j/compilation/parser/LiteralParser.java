@@ -60,8 +60,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                     elements.add(null); // hole in array
                 } else if (parserContext.match(TokenType.ELLIPSIS)) {
                     // Spread element: ...expr
-                    SourceLocation spreadLocation = parserContext.getLocation();
-                    parserContext.advance(); // consume ELLIPSIS
+                    SourceLocation spreadLocation = parserContext.consumeLocation(); // consume ELLIPSIS
                     Expression argument = delegates.expressions.parseAssignmentExpression();
                     elements.add(new SpreadElement(argument, spreadLocation));
                     if (parserContext.consumeIf(TokenType.COMMA)) {
@@ -94,8 +93,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
         while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
             // Spread property: {...expr}
             if (parserContext.match(TokenType.ELLIPSIS)) {
-                SourceLocation spreadLocation = parserContext.getLocation();
-                parserContext.advance(); // consume ELLIPSIS
+                SourceLocation spreadLocation = parserContext.consumeLocation(); // consume ELLIPSIS
                 Expression argument = delegates.expressions.parseAssignmentExpression();
                 properties.add(new ObjectExpressionProperty(null, argument, "spread", false, false, false));
                 if (parserContext.consumeIf(TokenType.COMMA)) {

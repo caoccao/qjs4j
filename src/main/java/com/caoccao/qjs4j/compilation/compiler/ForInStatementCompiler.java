@@ -116,15 +116,13 @@ final class ForInStatementCompiler {
 
         compilerContext.emitter.emitGoto(loopStart);
 
-        compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(jumpToEnd);
         compilerContext.emitter.emitOpcode(Opcode.DROP);
 
         for (int breakPos : loop.breakPositions) {
-            compilerContext.emitter.patchJump(breakPos, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.patchJumpToHere(breakPos);
         }
-        for (int continuePos : loop.continuePositions) {
-            compilerContext.emitter.patchJump(continuePos, loopStart);
-        }
+        compilerContext.emitter.patchJumps(loop.continuePositions, loopStart);
 
         compilerContext.emitter.emitOpcode(Opcode.DROP);
 

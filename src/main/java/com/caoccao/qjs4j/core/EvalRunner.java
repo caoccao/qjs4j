@@ -741,7 +741,7 @@ final class EvalRunner {
             func.setModuleEnvironment(moduleEnvironment);
             if (selfModuleRecord.exportBindingName() != null) {
                 moduleEnvironment.putPrivate(selfModuleRecord.exportBindingName(), selfModuleRecord.namespace());
-                hideGeneratedBindings(func, transformer.generatedModuleNamePrefix(selfModuleRecord.rawSource()));
+                hideGeneratedBindings(func, transformer.scan(selfModuleRecord.rawSource()).generatedModuleNamePrefix());
             }
         }
 

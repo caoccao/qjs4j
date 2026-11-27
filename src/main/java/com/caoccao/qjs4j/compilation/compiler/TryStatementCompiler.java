@@ -113,7 +113,7 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
         int jumpOverCatch = compilerContext.emitter.emitJump(Opcode.GOTO);
 
         if (tryStmt.getHandler() != null) {
-            compilerContext.emitter.patchJump(catchJump, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.patchJumpToHere(catchJump);
             TryStatement.CatchClause handler = tryStmt.getHandler();
 
             if (handler.getParam() != null) {
@@ -125,7 +125,7 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
             }
         }
 
-        compilerContext.emitter.patchJump(jumpOverCatch, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJumpToHere(jumpOverCatch);
     }
 
     private void compileTryFinallyBlock(BlockStatement block) {
@@ -149,11 +149,7 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
 
         // Set up CATCH for exception-safe using disposal
         boolean blockHasUsing = EmitHelpers.hasUsingDeclarations(body);
-        int usingCatchJump = -1;
-        if (blockHasUsing) {
-            usingCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
-            compilerContext.scopeManager.currentScope().setUsingCatchJumpPosition(usingCatchJump);
-        }
+        int usingCatchJump = compilerContext.emitHelpers.beginUsingScope(blockHasUsing);
 
         if (compilerContext.evalReturnLocalIndex >= 0) {
             // The shared completion local handles every statement kind with net-zero stack effect.
@@ -221,22 +217,7 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
             }
         }
 
-        if (blockHasUsing) {
-            // Normal path: NIP_CATCH handles the block completion value
-            // The try-block leaves a value on the stack. NIP_CATCH preserves it.
-            compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
-            compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
-            int jumpOverCatch = compilerContext.emitter.emitJump(Opcode.GOTO);
-
-            // Exception path: caught exception is on the stack
-            compilerContext.emitter.patchJump(usingCatchJump, compilerContext.emitter.currentOffset());
-            compilerContext.emitHelpers
-                    .emitScopeUsingDisposalWithException(compilerContext.scopeManager.currentScope());
-
-            compilerContext.emitter.patchJump(jumpOverCatch, compilerContext.emitter.currentOffset());
-        } else {
-            compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
-        }
+        compilerContext.emitHelpers.finishUsingScope(usingCatchJump, true);
         compilerContext.scopeManager.exitScope();
         compilerContext.popState();
         compilerContext.isLastInProgram = savedIsLastInProgram;
@@ -271,7 +252,7 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
         int finallyExceptionGosub = -1;
 
         if (tryStmt.getHandler() != null) {
-            compilerContext.emitter.patchJump(catchFromTryJump, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.patchJumpToHere(catchFromTryJump);
 
             TryStatement.CatchClause handler = tryStmt.getHandler();
             if (handler.getParam() != null) {
@@ -285,19 +266,19 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
             compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
             catchNormalGosub = compilerContext.emitter.emitJump(Opcode.GOSUB);
             jumpsToEnd.add(compilerContext.emitter.emitJump(Opcode.GOTO));
-            compilerContext.emitter.patchJump(catchBodyCatchJump, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.patchJumpToHere(catchBodyCatchJump);
             compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
             catchExceptionGosub = compilerContext.emitter.emitJump(Opcode.GOSUB);
             compilerContext.emitter.emitOpcode(Opcode.THROW);
             if (handler.getParam() != null) {
                 exitCatchScope();
             }
-            compilerContext.emitter.patchJump(finallyCatchJump, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.patchJumpToHere(finallyCatchJump);
             compilerContext.emitter.markCatchAsFinally(finallyCatchJump);
             finallyExceptionGosub = compilerContext.emitter.emitJump(Opcode.GOSUB);
             compilerContext.emitter.emitOpcode(Opcode.THROW);
         } else {
-            compilerContext.emitter.patchJump(catchFromTryJump, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.patchJumpToHere(catchFromTryJump);
             compilerContext.emitter.markCatchAsFinally(catchFromTryJump);
             finallyExceptionGosub = compilerContext.emitter.emitJump(Opcode.GOSUB);
             compilerContext.emitter.emitOpcode(Opcode.THROW);
@@ -320,9 +301,7 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
         if (finallyExceptionGosub >= 0) {
             compilerContext.emitter.patchJump(finallyExceptionGosub, finallyOffset);
         }
-        for (int gosubPatch : gosubPatches) {
-            compilerContext.emitter.patchJump(gosubPatch, finallyOffset);
-        }
+        compilerContext.emitter.patchJumps(gosubPatches, finallyOffset);
 
         int endOffset = compilerContext.emitter.currentOffset();
         for (int jumpToEnd : jumpsToEnd) {

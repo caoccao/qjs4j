@@ -162,7 +162,6 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
      */
     ClassElement parseClassElement() {
         boolean isStatic = false;
-        boolean isPrivate = false;
         SourceLocation location = parserContext.getLocation();
         SourceLocation methodStartLocation = location;
 
@@ -198,14 +197,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
         // Check for private identifier (#name)
         if (parserContext.match(TokenType.PRIVATE_NAME)) {
-            isPrivate = true;
-            String privateName = parserContext.currentToken.value();
-            // Remove the # prefix for the identifier
-            String name = privateName.substring(1);
-            parserContext.advance();
-
-            Expression key = new PrivateIdentifier(name, methodStartLocation);
-            return parseMethodOrField(key, isStatic, isPrivate, true, methodStartLocation);
+            return parseMethodOrField(parseClassElementName(), isStatic, true, true, methodStartLocation);
         }
 
         if (parserContext.match(TokenType.IDENTIFIER) && "accessor".equals(parserContext.currentToken.value())) {
@@ -215,25 +207,9 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             if (hasNoLineTerminatorAfterAccessor && nextType != TokenType.LPAREN && nextType != TokenType.ASSIGN
                     && nextType != TokenType.SEMICOLON && nextType != TokenType.COMMA && nextType != TokenType.RBRACE) {
                 parserContext.advance(); // consume "accessor"
-                boolean computed = false;
-                Expression key;
-                if (parserContext.match(TokenType.PRIVATE_NAME)) {
-                    String privateName = parserContext.currentToken.value();
-                    String keyName = privateName.substring(1);
-                    key = new PrivateIdentifier(keyName, parserContext.getLocation());
-                    isPrivate = true;
-                    parserContext.advance();
-                } else if (parserContext.match(TokenType.LBRACKET)) {
-                    computed = true;
-                    parserContext.advance();
-                    boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
-                    parserContext.inOperatorAllowed = true;
-                    key = delegates.expressions.parseAssignmentExpression();
-                    parserContext.inOperatorAllowed = savedInOperatorAllowed;
-                    parserContext.expect(TokenType.RBRACKET);
-                } else {
-                    key = delegates.expressions.parsePropertyName();
-                }
+                boolean computed = parserContext.match(TokenType.LBRACKET);
+                boolean isPrivate = parserContext.match(TokenType.PRIVATE_NAME);
+                Expression key = parseClassElementName();
                 validateClassFieldName(key, computed, isPrivate);
                 Expression value = parseClassFieldInitializer();
                 parserContext.consumeSemicolon();
@@ -257,7 +233,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 // async = value; async; async() {}; or async at the end of a line — element named "async"
                 Expression key = new Identifier(JSKeyword.ASYNC, methodStartLocation);
                 parserContext.advance();
-                return parseMethodOrField(key, isStatic, isPrivate, false, methodStartLocation);
+                return parseMethodOrField(key, isStatic, false, false, methodStartLocation);
             }
             if (parserContext.currentToken.escaped()
                     && parserContext.nextToken.line() == parserContext.currentToken.line()) {
@@ -266,60 +242,13 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
             parserContext.advance(); // consume 'async'
 
-            boolean isGenerator = false;
-            if (parserContext.match(TokenType.MUL)) {
-                parserContext.advance(); // consume '*'
-                isGenerator = true;
-            }
-
-            // Parse property name
-            boolean computed = parserContext.match(TokenType.LBRACKET);
-            Expression key;
-            if (parserContext.match(TokenType.PRIVATE_NAME)) {
-                String privateName = parserContext.currentToken.value();
-                String keyName = privateName.substring(1);
-                key = new PrivateIdentifier(keyName, parserContext.getLocation());
-                isPrivate = true;
-                parserContext.advance();
-            } else {
-                key = delegates.expressions.parsePropertyName();
-            }
-
-            FunctionExpression method = parseClassMethod("method", methodStartLocation, true, isGenerator, isStatic,
-                    computed, key);
-            return new MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
+            boolean generator = parserContext.consumeIf(TokenType.MUL);
+            return parseNamedClassMethod("method", methodStartLocation, true, generator, isStatic);
         }
 
         // Check for generator method: *name() {}
-        if (parserContext.match(TokenType.MUL)) {
-            parserContext.advance(); // consume '*'
-
-            boolean computed = parserContext.match(TokenType.LBRACKET);
-            Expression key;
-            if (parserContext.match(TokenType.PRIVATE_NAME)) {
-                String privateName = parserContext.currentToken.value();
-                String keyName = privateName.substring(1);
-                key = new PrivateIdentifier(keyName, parserContext.getLocation());
-                isPrivate = true;
-                parserContext.advance();
-            } else {
-                key = delegates.expressions.parsePropertyName();
-            }
-
-            FunctionExpression method = parseClassMethod("method", methodStartLocation, false, true, isStatic, computed,
-                    key);
-            return new MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
-        }
-
-        // Check for computed property name [expr]
-        if (parserContext.consumeIf(TokenType.LBRACKET)) {
-            // Allow 'in' operator inside computed property names
-            boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
-            parserContext.inOperatorAllowed = true;
-            Expression key = delegates.expressions.parseAssignmentExpression();
-            parserContext.inOperatorAllowed = savedInOperatorAllowed;
-            parserContext.expect(TokenType.RBRACKET);
-            return parseMethodOrField(key, isStatic, isPrivate, true, methodStartLocation);
+        if (parserContext.consumeIf(TokenType.MUL)) {
+            return parseNamedClassMethod("method", methodStartLocation, false, true, isStatic);
         }
 
         // Check for getter/setter
@@ -336,31 +265,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 String kind = name;
                 parserContext.advance(); // consume 'get' or 'set'
 
-                Expression key;
-                boolean computed = false;
-
-                // Parse property name after get/set
-                if (parserContext.match(TokenType.PRIVATE_NAME)) {
-                    String privateName = parserContext.currentToken.value();
-                    String keyName = privateName.substring(1);
-                    key = new PrivateIdentifier(keyName, parserContext.getLocation());
-                    isPrivate = true;
-                    parserContext.advance();
-                } else if (parserContext.consumeIf(TokenType.LBRACKET)) {
-                    // Allow 'in' operator inside computed property names
-                    boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
-                    parserContext.inOperatorAllowed = true;
-                    key = delegates.expressions.parseAssignmentExpression();
-                    parserContext.inOperatorAllowed = savedInOperatorAllowed;
-                    parserContext.expect(TokenType.RBRACKET);
-                    computed = true;
-                } else {
-                    key = delegates.expressions.parsePropertyName();
-                }
-
-                FunctionExpression method = parseClassMethod(kind, methodStartLocation, false, false, isStatic,
-                        computed, key);
-                return new MethodDefinition(key, method, kind, computed, isStatic, isPrivate);
+                return parseNamedClassMethod(kind, methodStartLocation, false, false, isStatic);
             }
         }
 
@@ -368,7 +273,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         boolean computed = parserContext.match(TokenType.LBRACKET);
         Expression key = delegates.expressions.parsePropertyName();
 
-        return parseMethodOrField(key, isStatic, isPrivate, computed, methodStartLocation);
+        return parseMethodOrField(key, isStatic, false, computed, methodStartLocation);
     }
 
     /**
@@ -461,8 +366,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
      * Parse export default async function declaration with optional name.
      */
     Statement parseExportDefaultAsyncFunctionDeclaration() {
-        SourceLocation asyncLocation = parserContext.getLocation();
-        parserContext.advance(); // consume 'async'
+        SourceLocation asyncLocation = parserContext.consumeLocation(); // consume 'async'
         return parseExportDefaultFunctionDeclaration(true);
     }
 
@@ -623,8 +527,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             while (true) {
                 // Check for rest parameter (...args)
                 if (parserContext.match(TokenType.ELLIPSIS)) {
-                    SourceLocation location = parserContext.getLocation();
-                    parserContext.advance(); // consume '...'
+                    SourceLocation location = parserContext.consumeLocation(); // consume '...'
                     Pattern restArg;
                     if (parserContext.match(TokenType.LBRACE) || parserContext.match(TokenType.LBRACKET)) {
                         restArg = delegates.patterns.parsePattern();
@@ -651,8 +554,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
                 // Check for default value: param = defaultExpr
                 // Following QuickJS js_parse_function_decl2 pattern
-                if (parserContext.match(TokenType.ASSIGN)) {
-                    parserContext.advance(); // consume '='
+                if (parserContext.consumeIf(TokenType.ASSIGN)) {
                     defaults.add(delegates.expressions.parseAssignmentExpression());
                 } else {
                     defaults.add(null);
@@ -986,5 +888,24 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
     private boolean hasFunctionNameToken() {
         return parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
                 || parserContext.match(TokenType.YIELD) || parserContext.match(TokenType.LET);
+    }
+
+    private Expression parseClassElementName() {
+        if (parserContext.match(TokenType.PRIVATE_NAME)) {
+            SourceLocation location = parserContext.getLocation();
+            String name = parserContext.currentToken.value().substring(1);
+            parserContext.advance();
+            return new PrivateIdentifier(name, location);
+        }
+        return delegates.expressions.parsePropertyName();
+    }
+
+    private MethodDefinition parseNamedClassMethod(String kind, SourceLocation location, boolean async,
+            boolean generator, boolean isStatic) {
+        boolean computed = parserContext.match(TokenType.LBRACKET);
+        boolean isPrivate = parserContext.match(TokenType.PRIVATE_NAME);
+        Expression key = parseClassElementName();
+        FunctionExpression method = parseClassMethod(kind, location, async, generator, isStatic, computed, key);
+        return new MethodDefinition(key, method, kind, computed, isStatic, isPrivate);
     }
 }

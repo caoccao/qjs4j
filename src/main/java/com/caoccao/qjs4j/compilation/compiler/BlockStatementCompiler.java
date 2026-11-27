@@ -39,7 +39,7 @@ final class BlockStatementCompiler {
         // Phase 1: pre-declare lexical bindings for TDZ before compiling any hoisted functions.
         for (Statement stmt : block.getBody()) {
             if (stmt instanceof VariableDeclaration vd && vd.getKind() != VariableKind.VAR) {
-                if (vd.getKind() == VariableKind.USING || vd.getKind() == VariableKind.AWAIT_USING) {
+                if (vd.getKind().isUsing()) {
                     hasUsingDeclarations = true;
                 }
                 for (VariableDeclarator d : vd.getDeclarations()) {
@@ -50,8 +50,7 @@ final class BlockStatementCompiler {
                         if (localIndex == null) {
                             localIndex = compilerContext.scopeManager.currentScope().declareLocal(name);
                         }
-                        if (vd.getKind() == VariableKind.CONST || vd.getKind() == VariableKind.USING
-                                || vd.getKind() == VariableKind.AWAIT_USING) {
+                        if (vd.getKind().isImmutable()) {
                             compilerContext.scopeManager.currentScope().markConstLocal(name);
                         }
                         compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
@@ -87,11 +86,7 @@ final class BlockStatementCompiler {
         // The CATCH is emitted BEFORE Phase 3 so the CatchOffset is below all
         // statement values. Each statement is net-zero stack effect, so the
         // CatchOffset stays at the bottom.
-        int usingCatchJump = -1;
-        if (hasUsingDeclarations) {
-            usingCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
-            compilerContext.scopeManager.currentScope().setUsingCatchJumpPosition(usingCatchJump);
-        }
+        int usingCatchJump = compilerContext.emitHelpers.beginUsingScope(hasUsingDeclarations);
 
         // Phase 3: compile non-function statements in source order.
         // For function declarations, emit the Annex B var store at the source position
@@ -109,23 +104,7 @@ final class BlockStatementCompiler {
         }
         compilerContext.isLastInProgram = savedIsLastInProgram;
 
-        if (hasUsingDeclarations) {
-            // Normal path: remove CATCH handler, dispose, skip over exception handler
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
-            int jumpOverCatch = compilerContext.emitter.emitJump(Opcode.GOTO);
-
-            // Exception path: caught exception is on the stack
-            compilerContext.emitter.patchJump(usingCatchJump, compilerContext.emitter.currentOffset());
-            compilerContext.emitHelpers
-                    .emitScopeUsingDisposalWithException(compilerContext.scopeManager.currentScope());
-
-            compilerContext.emitter.patchJump(jumpOverCatch, compilerContext.emitter.currentOffset());
-        } else {
-            compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
-        }
+        compilerContext.emitHelpers.finishUsingScope(usingCatchJump, false);
         compilerContext.scopeManager.exitScope();
         compilerContext.popState();
     }

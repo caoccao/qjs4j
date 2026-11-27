@@ -35,15 +35,6 @@ import java.util.Set;
  * throw).
  */
 record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
-    private static boolean isIdentifierNameToken(TokenType type) {
-        return switch (type) {
-            case IDENTIFIER, AS, ASYNC, AWAIT, BREAK, CASE, CATCH, CLASS, CONST, CONTINUE, DEFAULT, DELETE, DO, ELSE,
-                    EXPORT, EXTENDS, FALSE, FINALLY, FOR, FROM, FUNCTION, IF, IMPORT, IN, INSTANCEOF, LET, NEW, NULL,
-                    OF, RETURN, SUPER, SWITCH, THIS, THROW, TRUE, TRY, TYPEOF, VAR, VOID, WHILE, YIELD ->
-                true;
-            default -> false;
-        };
-    }
 
     private void addModuleExportedName(String name) {
         if (parserContext.moduleMode && !parserContext.moduleExportedNames.add(name)) {
@@ -244,8 +235,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         // If there's a line terminator, `async` is an identifier expression statement.
         if (parserContext.nextToken.type() == TokenType.FUNCTION
                 && parserContext.nextToken.line() == parserContext.currentToken.line()) {
-            SourceLocation asyncLocation = parserContext.getLocation();
-            parserContext.advance(); // consume async
+            SourceLocation asyncLocation = parserContext.consumeLocation(); // consume async
             return delegates.functions.parseFunctionDeclaration(true, false, asyncLocation);
         } else {
             return parseExpressionStatement();
@@ -330,8 +320,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
     }
 
     private Statement parseDebuggerStatement() {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.advance();
+        SourceLocation location = parserContext.consumeLocation();
         parserContext.consumeSemicolon();
         return new DebuggerStatement(location);
     }
@@ -645,8 +634,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         parserContext.expect(TokenType.IMPORT);
 
         // Side-effect-only import: import 'module';
-        if (parserContext.match(TokenType.STRING)) {
-            parserContext.advance(); // module specifier
+        if (parserContext.consumeIf(TokenType.STRING)) {
             parseWithClause();
             parserContext.consumeSemicolon();
             return null;
@@ -732,7 +720,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
         // Any IdentifierName including reserved keywords is allowed as
         // import/export specifier names (ES2024 ModuleExportName).
-        if (isIdentifierNameToken(type)) {
+        if (type.isIdentifierName()) {
             String name = parserContext.currentToken.value();
             parserContext.advance();
             return name;
@@ -1142,7 +1130,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 if (parserContext.match(TokenType.STRING)) {
                     key = parserContext.currentToken.value();
                     parserContext.advance();
-                } else if (isIdentifierNameToken(parserContext.currentToken.type())) {
+                } else if (parserContext.currentToken.type().isIdentifierName()) {
                     // AttributeKey is IdentifierName, not IdentifierReference, so a reserved word
                     // is a valid key: `import x from './m.js' with {if: ''}` parses.
                     key = parserContext.currentToken.value();
@@ -1470,8 +1458,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             requireSynchronousFor(isAwait);
         }
         if (left instanceof VariableDeclaration declaration) {
-            if (!of && (declaration.getKind() == VariableKind.USING
-                    || declaration.getKind() == VariableKind.AWAIT_USING)) {
+            if (!of && declaration.getKind().isUsing()) {
                 throw new JSSyntaxErrorException("The left-hand side of a for-in loop may not be a using declaration");
             }
             if (declaration.getDeclarations().size() != 1) {

@@ -31,8 +31,7 @@ final class VariableDeclarationCompiler {
     }
 
     static void compile(CompilerContext compilerContext, VariableDeclaration varDecl) {
-        boolean isUsingDeclaration = varDecl.getKind() == VariableKind.USING
-                || varDecl.getKind() == VariableKind.AWAIT_USING;
+        boolean isUsingDeclaration = varDecl.getKind().isUsing();
         boolean isAwaitUsingDeclaration = varDecl.getKind() == VariableKind.AWAIT_USING;
         if ((varDecl.getKind() == VariableKind.CONST || varDecl.getKind() == VariableKind.LET || isUsingDeclaration)
                 && !compilerContext.inGlobalScope && !compilerContext.varInGlobalProgram) {

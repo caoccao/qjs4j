@@ -53,12 +53,8 @@ final class WhileStatementCompiler extends AstNodeCompiler<WhileLoop> {
         int loopEnd = compilerContext.emitter.currentOffset();
         compilerContext.emitter.patchJump(jumpToEnd, loopEnd);
 
-        for (int breakPos : loop.breakPositions) {
-            compilerContext.emitter.patchJump(breakPos, loopEnd);
-        }
-        for (int continuePos : loop.continuePositions) {
-            compilerContext.emitter.patchJump(continuePos, testStart);
-        }
+        compilerContext.emitter.patchJumps(loop.breakPositions, loopEnd);
+        compilerContext.emitter.patchJumps(loop.continuePositions, testStart);
 
         compilerContext.loopManager.popLoop();
     }
