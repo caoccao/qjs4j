@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.core.temporal.IsoTime;
+import com.caoccao.qjs4j.core.temporal.iso.IsoTime;
 
 /** A Temporal value with a local ISO wall-clock time. */
 public sealed interface JSTemporalTimeValue

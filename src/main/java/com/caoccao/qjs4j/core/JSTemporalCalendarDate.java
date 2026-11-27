@@ -16,7 +16,10 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.core.temporal.*;
+import com.caoccao.qjs4j.core.temporal.calendar.IsoCalendarDate;
+import com.caoccao.qjs4j.core.temporal.calendar.TemporalCalendarId;
+import com.caoccao.qjs4j.core.temporal.calendar.TemporalEraYear;
+import com.caoccao.qjs4j.core.temporal.iso.IsoDate;
 
 /** Shared ISO reference date and calendar slots of PlainDate, PlainYearMonth, and PlainMonthDay. */
 public abstract sealed class JSTemporalCalendarDate extends JSObject implements JSTemporalDateValue

@@ -17,7 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.builtins.*;
-import com.caoccao.qjs4j.builtins.temporal.*;
+import com.caoccao.qjs4j.builtins.temporal.TemporalNow;
 import com.caoccao.qjs4j.exceptions.JSErrorType;
 
 import java.util.*;

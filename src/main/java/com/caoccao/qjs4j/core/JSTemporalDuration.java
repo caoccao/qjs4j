@@ -16,8 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.core.temporal.TemporalDuration;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
+import com.caoccao.qjs4j.core.temporal.duration.TemporalDuration;
 
 public final class JSTemporalDuration extends JSObject {
     private final TemporalDuration duration;

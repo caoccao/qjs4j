@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.core.temporal.TemporalDuration;
+import com.caoccao.qjs4j.core.temporal.duration.TemporalDuration;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 
 import java.math.BigDecimal;

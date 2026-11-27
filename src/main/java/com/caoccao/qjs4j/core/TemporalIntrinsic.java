@@ -16,7 +16,13 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.builtins.temporal.*;
+import com.caoccao.qjs4j.builtins.temporal.duration.TemporalDurationConstructor;
+import com.caoccao.qjs4j.builtins.temporal.duration.TemporalDurationPrototype;
+import com.caoccao.qjs4j.builtins.temporal.instant.TemporalInstantConstructor;
+import com.caoccao.qjs4j.builtins.temporal.instant.TemporalInstantPrototype;
+import com.caoccao.qjs4j.builtins.temporal.plain.*;
+import com.caoccao.qjs4j.builtins.temporal.zoned.TemporalZonedDateTimeConstructor;
+import com.caoccao.qjs4j.builtins.temporal.zoned.TemporalZonedDateTimePrototype;
 
 import java.util.function.Consumer;
 

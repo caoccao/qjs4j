@@ -16,41 +16,44 @@
 
 package com.caoccao.qjs4j.builtins.temporal;
 
+import com.caoccao.qjs4j.builtins.temporal.plain.TemporalPartialDate;
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.core.temporal.*;
+import com.caoccao.qjs4j.core.temporal.TemporalUtils;
+import com.caoccao.qjs4j.core.temporal.calendar.IsoMonth;
+import com.caoccao.qjs4j.core.temporal.calendar.TemporalCalendarId;
 
 /**
  * Reads Temporal fields in the order requested by the caller. After an abrupt completion, later getters are skipped.
  */
-final class TemporalPropertyBag {
+public final class TemporalPropertyBag {
     private final JSContext context;
     private final JSObject fields;
     private boolean hasTimeField;
 
-    TemporalPropertyBag(JSContext context, JSObject fields) {
+    public TemporalPropertyBag(JSContext context, JSObject fields) {
         this.context = context;
         this.fields = fields;
     }
 
-    TemporalCalendarId calendar() {
+    public TemporalCalendarId calendar() {
         JSValue calendar = value("calendar");
         return context.hasPendingException() ? null : TemporalCalendarId.createFromCalendarValue(context, calendar);
     }
 
-    boolean hasDefined(String name) {
+    public boolean hasDefined(String name) {
         JSValue field = value(name);
         return field != null && !(field instanceof JSUndefined);
     }
 
-    boolean hasTimeField() {
+    public boolean hasTimeField() {
         return hasTimeField;
     }
 
-    Integer integer(String name) {
+    public Integer integer(String name) {
         return context.hasPendingException() ? null : TemporalUtils.getOptionalIntegerField(context, fields, name);
     }
 
-    Integer integral(String name) {
+    public Integer integral(String name) {
         if (context.hasPendingException()) {
             return null;
         }
@@ -62,12 +65,12 @@ final class TemporalPropertyBag {
         return context.hasPendingException() ? null : (int) result;
     }
 
-    int integralOrZero(String name) {
+    public int integralOrZero(String name) {
         Integer value = integral(name);
         return value == null ? 0 : value;
     }
 
-    IsoMonth monthCode() {
+    public IsoMonth monthCode() {
         if (context.hasPendingException()) {
             return null;
         }
@@ -75,7 +78,7 @@ final class TemporalPropertyBag {
         return context.hasPendingException() ? null : IsoMonth.fromField(context, value);
     }
 
-    String offset() {
+    public String offset() {
         JSValue value = value("offset");
         if (context.hasPendingException() || value == null || value instanceof JSUndefined) {
             return null;
@@ -90,7 +93,7 @@ final class TemporalPropertyBag {
         return null;
     }
 
-    Integer positiveDateField(String name) {
+    public Integer positiveDateField(String name) {
         Integer value = integer(name);
         if (value != null && value < 1) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
@@ -99,25 +102,26 @@ final class TemporalPropertyBag {
         return value;
     }
 
-    TemporalPartialDate readYearAndEra(TemporalCalendarId calendar, Integer day, Integer month, String monthCode) {
+    public TemporalPartialDate readYearAndEra(TemporalCalendarId calendar, Integer day, Integer month,
+            String monthCode) {
         Integer year = integer("year");
         String era = calendar.hasEra() ? string("era") : null;
         Integer eraYear = calendar.hasEra() ? integer("eraYear") : null;
         return new TemporalPartialDate(day, month, monthCode, year, era, eraYear);
     }
 
-    Integer resolvedYear(TemporalCalendarId calendar, String missingEraMessage) {
+    public Integer resolvedYear(TemporalCalendarId calendar, String missingEraMessage) {
         Integer year = integer("year");
         return context.hasPendingException()
                 ? null
                 : TemporalUtils.resolveEraYear(context, fields, calendar, year, missingEraMessage);
     }
 
-    String string(String name) {
+    public String string(String name) {
         return context.hasPendingException() ? null : TemporalUtils.getStringOption(context, fields, name, null);
     }
 
-    int time(String name, int fallback) {
+    public int time(String name, int fallback) {
         Integer value = integer(name);
         if (value == null) {
             return fallback;
@@ -126,7 +130,7 @@ final class TemporalPropertyBag {
         return value;
     }
 
-    JSValue value(String name) {
+    public JSValue value(String name) {
         return context.hasPendingException() ? null : fields.get(PropertyKey.fromString(name));
     }
 }

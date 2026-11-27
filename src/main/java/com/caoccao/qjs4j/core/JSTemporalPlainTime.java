@@ -16,8 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.core.temporal.IsoTime;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
+import com.caoccao.qjs4j.core.temporal.iso.IsoTime;
 
 /**
  * JSObject subclass representing a Temporal.PlainTime value. Internal slot: [[ISOTime]]

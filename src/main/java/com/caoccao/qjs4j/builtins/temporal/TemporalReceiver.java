@@ -16,6 +16,10 @@
 
 package com.caoccao.qjs4j.builtins.temporal;
 
+import com.caoccao.qjs4j.builtins.temporal.duration.TemporalDurationConstructor;
+import com.caoccao.qjs4j.builtins.temporal.instant.TemporalInstantConstructor;
+import com.caoccao.qjs4j.builtins.temporal.plain.*;
+import com.caoccao.qjs4j.builtins.temporal.zoned.TemporalZonedDateTimeConstructor;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
@@ -23,62 +27,62 @@ import java.util.Comparator;
 import java.util.function.*;
 
 /** Receiver validation shared by the methods and getters of one Temporal prototype. */
-record TemporalReceiver<T extends JSObject>(Class<T> type, String typeName,
+public record TemporalReceiver<T extends JSObject>(Class<T> type, String typeName,
         BiFunction<JSContext, JSValue, JSValue> conversion, PropertyKey prototypeKey) {
     private TemporalReceiver(Class<T> type, String name, BiFunction<JSContext, JSValue, JSValue> conversion) {
         this(type, "Temporal." + name, conversion, PropertyKey.fromString(name));
     }
 
-    T require(JSContext context, JSValue receiver, String method) {
+    public T require(JSContext context, JSValue receiver, String method) {
         return TemporalUtils.checkReceiver(context, receiver, type, typeName, method);
     }
 
-    JSValue read(JSContext context, JSValue receiver, String property, Function<T, JSValue> getter) {
+    public JSValue read(JSContext context, JSValue receiver, String property, Function<T, JSValue> getter) {
         T value = require(context, receiver, property);
         return value == null ? JSUndefined.INSTANCE : getter.apply(value);
     }
 
-    JSValue rejectValueOf(JSContext context) {
+    public JSValue rejectValueOf(JSContext context) {
         context.throwTypeError("Do not use " + typeName + ".prototype.valueOf; use " + typeName
                 + ".prototype.compare for comparison.");
         return JSUndefined.INSTANCE;
     }
 
-    static final TemporalReceiver<JSTemporalPlainDate> PLAIN_DATE = new TemporalReceiver<>(JSTemporalPlainDate.class,
-            "PlainDate",
+    public static final TemporalReceiver<JSTemporalPlainDate> PLAIN_DATE = new TemporalReceiver<>(
+            JSTemporalPlainDate.class, "PlainDate",
             (context, item) -> TemporalPlainDateConstructor.toTemporalDate(context, item, JSUndefined.INSTANCE));
 
-    static final TemporalReceiver<JSTemporalPlainTime> PLAIN_TIME = new TemporalReceiver<>(JSTemporalPlainTime.class,
-            "PlainTime",
+    public static final TemporalReceiver<JSTemporalPlainTime> PLAIN_TIME = new TemporalReceiver<>(
+            JSTemporalPlainTime.class, "PlainTime",
             (context, item) -> TemporalPlainTimeConstructor.toTemporalTime(context, item, JSUndefined.INSTANCE));
 
-    static final TemporalReceiver<JSTemporalPlainDateTime> PLAIN_DATE_TIME = new TemporalReceiver<>(
+    public static final TemporalReceiver<JSTemporalPlainDateTime> PLAIN_DATE_TIME = new TemporalReceiver<>(
             JSTemporalPlainDateTime.class, "PlainDateTime", (context, item) -> TemporalPlainDateTimeConstructor
                     .toTemporalDateTime(context, item, JSUndefined.INSTANCE));
 
-    static final TemporalReceiver<JSTemporalPlainYearMonth> PLAIN_YEAR_MONTH = new TemporalReceiver<>(
+    public static final TemporalReceiver<JSTemporalPlainYearMonth> PLAIN_YEAR_MONTH = new TemporalReceiver<>(
             JSTemporalPlainYearMonth.class, "PlainYearMonth", (context, item) -> TemporalPlainYearMonthConstructor
                     .toTemporalYearMonth(context, item, JSUndefined.INSTANCE));
 
-    static final TemporalReceiver<JSTemporalPlainMonthDay> PLAIN_MONTH_DAY = new TemporalReceiver<>(
+    public static final TemporalReceiver<JSTemporalPlainMonthDay> PLAIN_MONTH_DAY = new TemporalReceiver<>(
             JSTemporalPlainMonthDay.class, "PlainMonthDay", (context, item) -> TemporalPlainMonthDayConstructor
                     .toTemporalMonthDay(context, item, JSUndefined.INSTANCE));
 
-    static final TemporalReceiver<JSTemporalInstant> INSTANT = new TemporalReceiver<>(JSTemporalInstant.class,
+    public static final TemporalReceiver<JSTemporalInstant> INSTANT = new TemporalReceiver<>(JSTemporalInstant.class,
             "Instant", TemporalInstantConstructor::toTemporalInstant);
 
-    static final TemporalReceiver<JSTemporalZonedDateTime> ZONED_DATE_TIME = new TemporalReceiver<>(
+    public static final TemporalReceiver<JSTemporalZonedDateTime> ZONED_DATE_TIME = new TemporalReceiver<>(
             JSTemporalZonedDateTime.class, "ZonedDateTime", TemporalZonedDateTimeConstructor::toTemporalZonedDateTime);
 
-    static final TemporalReceiver<JSTemporalDuration> DURATION = new TemporalReceiver<>(JSTemporalDuration.class,
+    public static final TemporalReceiver<JSTemporalDuration> DURATION = new TemporalReceiver<>(JSTemporalDuration.class,
             "Duration", TemporalDurationConstructor::toTemporalDuration);
 
-    T convert(JSContext context, JSValue item) {
+    public T convert(JSContext context, JSValue item) {
         JSValue result = conversion.apply(context, item);
         return context.hasPendingException() ? null : type.cast(result);
     }
 
-    JSValue compare(JSContext context, JSValue[] args, Comparator<T> comparator) {
+    public JSValue compare(JSContext context, JSValue[] args, Comparator<T> comparator) {
         T first = comparisonOperand(context, JSValue.argumentOrUndefined(args, 0));
         if (first == null) {
             return JSUndefined.INSTANCE;
@@ -87,7 +91,7 @@ record TemporalReceiver<T extends JSObject>(Class<T> type, String typeName,
         return second == null ? JSUndefined.INSTANCE : JSNumber.of(comparator.compare(first, second));
     }
 
-    JSValue equalTo(JSContext context, JSValue receiver, JSValue[] args, BiPredicate<T, T> predicate) {
+    public JSValue equalTo(JSContext context, JSValue receiver, JSValue[] args, BiPredicate<T, T> predicate) {
         T first = require(context, receiver, "equals");
         if (first == null) {
             return JSUndefined.INSTANCE;
@@ -96,7 +100,8 @@ record TemporalReceiver<T extends JSObject>(Class<T> type, String typeName,
         return second == null ? JSUndefined.INSTANCE : JSBoolean.valueOf(predicate.test(first, second));
     }
 
-    JSValue difference(JSContext context, JSValue receiver, JSValue[] args, boolean since, Difference<T> difference) {
+    public JSValue difference(JSContext context, JSValue receiver, JSValue[] args, boolean since,
+            Difference<T> difference) {
         T first = require(context, receiver, since ? "since" : "until");
         if (first == null) {
             return JSUndefined.INSTANCE;
@@ -109,7 +114,7 @@ record TemporalReceiver<T extends JSObject>(Class<T> type, String typeName,
     }
 
     @FunctionalInterface
-    interface Difference<T> {
+    public interface Difference<T> {
         JSValue between(JSContext context, T first, T second, JSValue options, boolean since);
     }
 

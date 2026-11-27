@@ -17,6 +17,13 @@
 package com.caoccao.qjs4j.core.temporal;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.calendar.IsoCalendarDate;
+import com.caoccao.qjs4j.core.temporal.calendar.TemporalCalendarId;
+import com.caoccao.qjs4j.core.temporal.calendar.TemporalEra;
+import com.caoccao.qjs4j.core.temporal.calendar.TemporalMonths;
+import com.caoccao.qjs4j.core.temporal.duration.TemporalRelativeToOption;
+import com.caoccao.qjs4j.core.temporal.format.TemporalDisplayCalendar;
+import com.caoccao.qjs4j.core.temporal.iso.IsoDate;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 
 import java.math.BigInteger;
@@ -337,7 +344,7 @@ public final class TemporalUtils {
         return signCharacter == '+' || signCharacter == '-' || signCharacter == '\u2212';
     }
 
-    static boolean isUnsupportedUmalquraYear(int islamicYear) {
+    public static boolean isUnsupportedUmalquraYear(int islamicYear) {
         return !HijrahChronology.INSTANCE.range(ChronoField.YEAR).isValidValue(islamicYear);
     }
 

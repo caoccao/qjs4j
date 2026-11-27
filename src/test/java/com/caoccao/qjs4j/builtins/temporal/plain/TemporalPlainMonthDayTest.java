@@ -1,0 +1,138 @@
+/*
+ * Copyright (c) 2025-2026. caoccao.com Sam Cao
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.caoccao.qjs4j.builtins.temporal.plain;
+
+import com.caoccao.qjs4j.BaseJavetTest;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+public class TemporalPlainMonthDayTest extends BaseJavetTest {
+
+    @Test
+    public void testCalendarId() {
+        assertStringWithJavet("new Temporal.PlainMonthDay(3, 15).calendarId");
+    }
+
+    @Test
+    public void testConstructorInvalidDay() {
+        assertErrorWithJavet("new Temporal.PlainMonthDay(2, 30)");
+    }
+
+    @Test
+    public void testConstructorInvalidMonth() {
+        assertErrorWithJavet("new Temporal.PlainMonthDay(13, 1)");
+    }
+
+    @Test
+    public void testConstructorWithCalendar() {
+        assertStringWithJavet("new Temporal.PlainMonthDay(3, 15, 'iso8601').toString()");
+    }
+
+    @Test
+    public void testConstructorWithoutNew() {
+        assertErrorWithJavet("Temporal.PlainMonthDay(3, 15)");
+    }
+
+    @Test
+    public void testConstructorWithSubclass() {
+        assertBooleanWithJavet(
+                "(() => { class CustomPlainMonthDay extends Temporal.PlainMonthDay {} const value = new CustomPlainMonthDay(3, 15); return value instanceof CustomPlainMonthDay && value instanceof Temporal.PlainMonthDay; })()");
+    }
+
+    @Test
+    public void testDay() {
+        assertIntegerWithJavet("new Temporal.PlainMonthDay(3, 15).day");
+    }
+
+    @Test
+    public void testEquals() {
+        assertBooleanWithJavet("new Temporal.PlainMonthDay(3, 15).equals('--03-15')");
+    }
+
+    @Test
+    public void testFrom() {
+        assertStringWithJavet("Temporal.PlainMonthDay.from('--03-15').toString()");
+    }
+
+    @Test
+    public void testFromObject() {
+        assertStringWithJavet("Temporal.PlainMonthDay.from({monthCode: 'M03', day: 15}).toString()");
+    }
+
+    @Test
+    public void testFromWithChineseLeapMonthCode() {
+        assertStringWithJavet(
+                "Temporal.PlainMonthDay.from({ calendar: 'chinese', monthCode: 'M03L', day: 1 }).toString()");
+    }
+
+    @Test
+    public void testFromWithDangiLeapMonthCodeConstrainOverflow() {
+        assertStringWithJavet(
+                "Temporal.PlainMonthDay.from({ calendar: 'dangi', monthCode: 'M03L', day: 31 }).toString()");
+    }
+
+    @Test
+    public void testFromWithDangiLeapMonthCodeRejectOverflow() {
+        assertBooleanWithJavet(
+                "(() => { try { Temporal.PlainMonthDay.from({ calendar: 'dangi', monthCode: 'M03L', day: 31 }, { overflow: 'reject' }); return false; } catch (e) { return e instanceof RangeError; } })()");
+    }
+
+    @Test
+    public void testFromWithEraYearWithoutYear() {
+        assertStringWithJavet(
+                "Temporal.PlainMonthDay.from({ calendar: 'gregory', era: 'ce', eraYear: 2024, monthCode: 'M02', day: 29 }).toString()");
+    }
+
+    @Test
+    public void testFromWithInconsistentYearAndEraYear() {
+        assertBooleanWithJavet(
+                "(() => { try { Temporal.PlainMonthDay.from({ calendar: 'gregory', year: 2024, era: 'ce', eraYear: 2023, monthCode: 'M02', day: 29 }); return false; } catch (e) { return e instanceof RangeError; } })()");
+    }
+
+    @Test
+    public void testMonthCode() {
+        assertStringWithJavet("new Temporal.PlainMonthDay(3, 15).monthCode");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"toString()", "toJSON()", "toPlainDate({year: 2024}).toString()", "toString()"})
+    void testStringConversions(String operation) {
+        assertStringWithJavet("new Temporal.PlainMonthDay(3, 15)." + operation);
+    }
+
+    @Test
+    public void testToLocaleString() {
+        assertBooleanWithJavet(
+                "(() => { const value = new Temporal.PlainMonthDay(3, 15); const result = value.toLocaleString('en-US', { calendar: 'iso8601', timeZone: 'UTC', month: '2-digit', day: '2-digit' }); return typeof result === 'string' && result.length > 0; })()");
+    }
+
+    @Test
+    public void testToPlainDateNoYear() {
+        assertErrorWithJavet("new Temporal.PlainMonthDay(3, 15).toPlainDate()");
+    }
+
+    @Test
+    public void testValueOf() {
+        assertErrorWithJavet("new Temporal.PlainMonthDay(3, 15).valueOf()");
+    }
+
+    @Test
+    public void testWith() {
+        assertStringWithJavet("new Temporal.PlainMonthDay(3, 15).with({day: 20}).toString()");
+    }
+}
