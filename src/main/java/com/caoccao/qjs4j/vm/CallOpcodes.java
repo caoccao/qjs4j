@@ -30,7 +30,6 @@ final class CallOpcodes {
 
     private static void call(ExecutionContext executionContext, int argCount, boolean directEvalSyntax) {
         VirtualMachine virtualMachine = executionContext.virtualMachine;
-        JSContext context = virtualMachine.context;
         JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
         int sp = executionContext.sp;
 
@@ -58,131 +57,12 @@ final class CallOpcodes {
         // Pop callee (method)
         JSValue callee = (JSValue) stack[--sp];
 
-        // SWAP locks property tracking while evaluating method-call arguments.
-        // Unlock before invoking the callee so nested calls can build their own chains.
         virtualMachine.valueStack.stackTop = sp;
-
-        // Fast path for native functions (most common case for built-in method calls).
-        // Checked first to avoid Proxy/constructor-type/class-constructor checks on every call.
-        if (callee instanceof JSNativeFunction nativeFunc) {
-            JSConstructorType ctorType = nativeFunc.getConstructorType();
-            if (ctorType == JSConstructorType.SYMBOL_OBJECT) {
-                JSValue result = SymbolConstructor.call(context, receiver, args);
-                stack[sp++] = result;
-                executionContext.sp = sp;
-                virtualMachine.valueStack.stackTop = sp;
-                return;
-            }
-            if (ctorType == JSConstructorType.BIG_INT_OBJECT) {
-                JSValue result = BigIntConstructor.call(context, receiver, args);
-                stack[sp++] = result;
-                executionContext.sp = sp;
-                virtualMachine.valueStack.stackTop = sp;
-                return;
-            }
-            if (nativeFunc.requiresNew()) {
-                JSContext errorContext = nativeFunc.getRealmContext() != null ? nativeFunc.getRealmContext() : context;
-                String constructorName = nativeFunc.getName() != null ? nativeFunc.getName() : "constructor";
-                String errorMessage = switch (constructorName) {
-                    case JSPromise.NAME -> "Promise constructor cannot be invoked without 'new'";
-                    default -> "Constructor " + constructorName + " requires 'new'";
-                };
-                virtualMachine.pendingException = errorContext.throwTypeError(errorMessage);
-                errorContext.clearPendingException();
-                stack[sp++] = JSUndefined.INSTANCE;
-                executionContext.sp = sp;
-                virtualMachine.valueStack.stackTop = sp;
-                return;
-            }
-            try {
-                JSValue result;
-                if (directEvalSyntax && JSKeyword.EVAL.equals(nativeFunc.getName())) {
-                    JSContext evalRealmContext = nativeFunc.getRealmContext() != null
-                            ? nativeFunc.getRealmContext()
-                            : context;
-                    result = JSGlobalObject.GlobalFunction.eval(evalRealmContext, context, args, true);
-                } else {
-                    result = nativeFunc.call(context, receiver, args);
-                }
-                stack[sp++] = callResult(virtualMachine, result);
-            } catch (JSException e) {
-                virtualMachine.pendingException = e.getErrorValue();
-                context.clearPendingException();
-                stack[sp++] = JSUndefined.INSTANCE;
-            } catch (JSVirtualMachineException e) {
-                virtualMachine.captureVMException(e);
-                stack[sp++] = JSUndefined.INSTANCE;
-            } catch (JSErrorException e) {
-                virtualMachine.pendingException = context.throwError(e);
-                context.clearPendingException();
-                stack[sp++] = JSUndefined.INSTANCE;
-            }
-        } else if (callee instanceof JSProxy proxy) {
-            JSValue result = virtualMachine.proxyApply(proxy, receiver, args);
-            stack[sp++] = result;
-        } else if (callee instanceof JSFunction function) {
-            if (function.getHomeObject() == null && receiver instanceof JSObject receiverObject
-                    && function instanceof JSBytecodeFunction bytecodeFunction) {
-                String functionName = bytecodeFunction.getName();
-                if ("<static initializer>".equals(functionName) || "<static field initializer>".equals(functionName)) {
-                    bytecodeFunction.setHomeObject(receiverObject);
-                }
-            }
-
-            boolean isClassCtor = function instanceof JSClass;
-            if (!isClassCtor && function instanceof JSBytecodeFunction bytecodeFunc) {
-                isClassCtor = bytecodeFunc.isClassConstructor();
-            }
-            if (isClassCtor) {
-                JSContext errorContext = function.getRealmContext() != null ? function.getRealmContext() : context;
-                virtualMachine.pendingException = errorContext
-                        .throwTypeError("Class constructor " + function.getName() + " cannot be invoked without 'new'");
-                errorContext.clearPendingException();
-                stack[sp++] = JSUndefined.INSTANCE;
-                executionContext.sp = sp;
-                virtualMachine.valueStack.stackTop = sp;
-                return;
-            }
-
-            if (function instanceof JSBytecodeFunction bytecodeFunc) {
-                try {
-                    // Call through the function's call method to handle async wrapping.
-                    // Pass argCount so the borrowed buffer (which may be oversized) is
-                    // handled correctly by StackFrame and generator/async paths.
-                    JSValue result = bytecodeFunc.call(context, receiver, args, argCount);
-                    stack[sp++] = callResult(virtualMachine, result);
-                } catch (JSException e) {
-                    virtualMachine.pendingException = e.getErrorValue();
-                    context.clearPendingException();
-                    stack[sp++] = JSUndefined.INSTANCE;
-                } catch (JSVirtualMachineException e) {
-                    virtualMachine.captureVMException(e);
-                    stack[sp++] = JSUndefined.INSTANCE;
-                }
-            } else if (function instanceof JSBoundFunction boundFunc) {
-                // Call bound function - the receiver is ignored for bound functions
-                try {
-                    JSValue result = boundFunc.call(context, receiver, args);
-                    // Check for pending exception after bound function call
-                    stack[sp++] = callResult(virtualMachine, result);
-                } catch (JSVirtualMachineException e) {
-                    virtualMachine.captureVMException(e);
-                    stack[sp++] = JSUndefined.INSTANCE;
-                }
-            } else {
-                stack[sp++] = JSUndefined.INSTANCE;
-            }
-            // Clear property access tracking after successful call
-        } else {
-            // Not a function - set pending TypeError so JS catch handlers can process it
-            virtualMachine.pendingException = context
-                    .throwTypeError(describeCallee(executionContext, callee) + " is not a function");
-            context.clearPendingException();
-            stack[sp++] = JSUndefined.INSTANCE;
-        }
-
-        executionContext.sp = sp;
-        virtualMachine.valueStack.stackTop = sp;
+        JSValue result = invoke(executionContext, callee, receiver, args, argCount, directEvalSyntax);
+        // Calling script may reallocate the stack.
+        virtualMachine.valueStack.stack[sp] = result;
+        executionContext.sp = sp + 1;
+        virtualMachine.valueStack.stackTop = sp + 1;
     }
 
     private static JSValue callResult(VirtualMachine vm, JSValue result) {
@@ -234,8 +114,7 @@ final class CallOpcodes {
                 String description = executionContext.bytecode.getCallDescription(pc);
                 if (description != null && !JSTypeChecking.isConstructor(functionValue)) {
                     executionContext.raiseTypeError(description + " is not a constructor");
-                    stack[sp++] = JSUndefined.INSTANCE;
-                    executionContext.finishOpcode(pc + op.getSize(), sp);
+                    executionContext.finishWithResult(op, sp, JSUndefined.INSTANCE);
                     return;
                 }
                 JSValue constructorNewTarget = thisArgValue;
@@ -249,8 +128,7 @@ final class CallOpcodes {
                 if (applyArgs == null) {
                     executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
                             .getPendingException();
-                    stack[sp++] = JSUndefined.INSTANCE;
-                    executionContext.finishOpcode(pc + op.getSize(), sp);
+                    executionContext.finishWithResult(op, sp, JSUndefined.INSTANCE);
                     return;
                 }
                 if (functionValue instanceof JSProxy proxyFunction) {
@@ -260,24 +138,20 @@ final class CallOpcodes {
                 } else {
                     executionContext
                             .raiseTypeError(describeCallee(executionContext, functionValue) + " is not a function");
-                    stack[sp++] = JSUndefined.INSTANCE;
-                    executionContext.finishOpcode(pc + op.getSize(), sp);
+                    executionContext.finishWithResult(op, sp, JSUndefined.INSTANCE);
                     return;
                 }
             }
         } catch (JSVirtualMachineException exception) {
             executionContext.virtualMachine.captureVMException(exception);
-            stack[sp++] = JSUndefined.INSTANCE;
-            executionContext.finishOpcode(pc + op.getSize(), sp);
+            executionContext.finishWithResult(op, sp, JSUndefined.INSTANCE);
             return;
         }
 
-        stack[sp++] = callResult(executionContext.virtualMachine, result);
-        executionContext.finishOpcode(pc + op.getSize(), sp);
+        executionContext.finishWithResult(op, sp, callResult(executionContext.virtualMachine, result));
     }
 
     static void handleApplyEval(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
         JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
         int sp = executionContext.sp;
         JSValue argsArrayValue = (JSValue) stack[--sp];
@@ -297,34 +171,34 @@ final class CallOpcodes {
             call(executionContext, applyArgs.length, true);
             sp = executionContext.sp;
         }
-        executionContext.finishOpcode(pc + op.getSize(), sp);
+        executionContext.finishOpcode(op, sp);
     }
 
     static void handleCall(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int argumentCount = executionContext.bytecode.readU16(pc + 1);
         call(executionContext, argumentCount, false);
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handleCall0(Opcode op, ExecutionContext executionContext) {
         call(executionContext, 0, false);
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handleCall1(Opcode op, ExecutionContext executionContext) {
         call(executionContext, 1, false);
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handleCall2(Opcode op, ExecutionContext executionContext) {
         call(executionContext, 2, false);
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handleCall3(Opcode op, ExecutionContext executionContext) {
         call(executionContext, 3, false);
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handleCallConstructor(Opcode op, ExecutionContext executionContext) {
@@ -414,6 +288,123 @@ final class CallOpcodes {
         tailCall(op, ctx, ctx.bytecode.readU16(ctx.pc + 1), false);
     }
 
+    private static JSValue invoke(ExecutionContext executionContext, JSValue callee, JSValue receiver, JSValue[] args,
+            int argCount, boolean directEvalSyntax) {
+        VirtualMachine vm = executionContext.virtualMachine;
+        if (callee instanceof JSNativeFunction nativeFunction) {
+            return invokeNative(vm, nativeFunction, receiver, args, directEvalSyntax);
+        }
+        if (callee instanceof JSProxy proxy) {
+            return vm.proxyApply(proxy, receiver, args);
+        }
+        if (callee instanceof JSFunction function) {
+            return invokeFunction(vm, function, receiver, args, argCount);
+        }
+        executionContext.raiseTypeError(describeCallee(executionContext, callee) + " is not a function");
+        return JSUndefined.INSTANCE;
+    }
+
+    private static JSValue invokeFunction(VirtualMachine virtualMachine, JSFunction function, JSValue receiver,
+            JSValue[] args, int argCount) {
+        JSContext context = virtualMachine.context;
+        if (function.getHomeObject() == null && receiver instanceof JSObject receiverObject
+                && function instanceof JSBytecodeFunction bytecodeFunction) {
+            String functionName = bytecodeFunction.getName();
+            if ("<static initializer>".equals(functionName) || "<static field initializer>".equals(functionName)) {
+                bytecodeFunction.setHomeObject(receiverObject);
+            }
+        }
+
+        boolean isClassCtor = function instanceof JSClass;
+        if (!isClassCtor && function instanceof JSBytecodeFunction bytecodeFunc) {
+            isClassCtor = bytecodeFunc.isClassConstructor();
+        }
+        if (isClassCtor) {
+            JSContext errorContext = function.getRealmContext() != null ? function.getRealmContext() : context;
+            virtualMachine.pendingException = errorContext
+                    .throwTypeError("Class constructor " + function.getName() + " cannot be invoked without 'new'");
+            errorContext.clearPendingException();
+            return JSUndefined.INSTANCE;
+        }
+
+        if (function instanceof JSBytecodeFunction bytecodeFunc) {
+            try {
+                // Call through the function's call method to handle async wrapping.
+                // Pass argCount so the borrowed buffer (which may be oversized) is
+                // handled correctly by StackFrame and generator/async paths.
+                JSValue result = bytecodeFunc.call(context, receiver, args, argCount);
+                return callResult(virtualMachine, result);
+            } catch (JSException e) {
+                virtualMachine.pendingException = e.getErrorValue();
+                context.clearPendingException();
+                return JSUndefined.INSTANCE;
+            } catch (JSVirtualMachineException e) {
+                virtualMachine.captureVMException(e);
+                return JSUndefined.INSTANCE;
+            }
+        } else if (function instanceof JSBoundFunction boundFunc) {
+            // Call bound function - the receiver is ignored for bound functions
+            try {
+                JSValue result = boundFunc.call(context, receiver, args);
+                // Check for pending exception after bound function call
+                return callResult(virtualMachine, result);
+            } catch (JSVirtualMachineException e) {
+                virtualMachine.captureVMException(e);
+                return JSUndefined.INSTANCE;
+            }
+        } else {
+            return JSUndefined.INSTANCE;
+        }
+    }
+
+    private static JSValue invokeNative(VirtualMachine virtualMachine, JSNativeFunction nativeFunc, JSValue receiver,
+            JSValue[] args, boolean directEvalSyntax) {
+        JSContext context = virtualMachine.context;
+        JSConstructorType ctorType = nativeFunc.getConstructorType();
+        if (ctorType == JSConstructorType.SYMBOL_OBJECT) {
+            JSValue result = SymbolConstructor.call(context, receiver, args);
+            return result;
+        }
+        if (ctorType == JSConstructorType.BIG_INT_OBJECT) {
+            JSValue result = BigIntConstructor.call(context, receiver, args);
+            return result;
+        }
+        if (nativeFunc.requiresNew()) {
+            JSContext errorContext = nativeFunc.getRealmContext() != null ? nativeFunc.getRealmContext() : context;
+            String constructorName = nativeFunc.getName() != null ? nativeFunc.getName() : "constructor";
+            String errorMessage = switch (constructorName) {
+                case JSPromise.NAME -> "Promise constructor cannot be invoked without 'new'";
+                default -> "Constructor " + constructorName + " requires 'new'";
+            };
+            virtualMachine.pendingException = errorContext.throwTypeError(errorMessage);
+            errorContext.clearPendingException();
+            return JSUndefined.INSTANCE;
+        }
+        try {
+            JSValue result;
+            if (directEvalSyntax && JSKeyword.EVAL.equals(nativeFunc.getName())) {
+                JSContext evalRealmContext = nativeFunc.getRealmContext() != null
+                        ? nativeFunc.getRealmContext()
+                        : context;
+                result = JSGlobalObject.GlobalFunction.eval(evalRealmContext, context, args, true);
+            } else {
+                result = nativeFunc.call(context, receiver, args);
+            }
+            return callResult(virtualMachine, result);
+        } catch (JSException e) {
+            virtualMachine.pendingException = e.getErrorValue();
+            context.clearPendingException();
+            return JSUndefined.INSTANCE;
+        } catch (JSVirtualMachineException e) {
+            virtualMachine.captureVMException(e);
+            return JSUndefined.INSTANCE;
+        } catch (JSErrorException e) {
+            virtualMachine.pendingException = context.throwError(e);
+            context.clearPendingException();
+            return JSUndefined.INSTANCE;
+        }
+    }
+
     private static void tailCall(Opcode op, ExecutionContext ctx, int count, boolean directEval) {
         VirtualMachine vm = ctx.virtualMachine;
         JSValue callee = ctx.peek(count + (directEval ? 0 : 1));
@@ -428,7 +419,7 @@ final class CallOpcodes {
         } else {
             call(ctx, count, directEval);
             if (directEval && vm.pendingException != null) {
-                ctx.pc += op.getSize();
+                ctx.advance(op);
                 return;
             }
             ctx.returnValue = ctx.pop();

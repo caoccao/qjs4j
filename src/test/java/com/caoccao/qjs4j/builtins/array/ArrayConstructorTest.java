@@ -175,22 +175,18 @@ public class ArrayConstructorTest extends BaseJavetTest {
     public void testIsArray() {
         // Normal case: array
         JSArray arr = new JSArray(context);
-        JSValue result = ArrayConstructor.isArray(context, JSUndefined.INSTANCE, new JSValue[]{arr});
-        assertThat(result.isBooleanTrue()).isTrue();
+        BuiltinAssertions isArray = builtin(ArrayConstructor::isArray, JSUndefined.INSTANCE);
+        isArray.expectValue(JSBoolean.TRUE, arr);
 
         // Normal case: not array
-        result = ArrayConstructor.isArray(context, JSUndefined.INSTANCE, stringArgs("not array"));
-        assertThat(result.isBooleanFalse()).isTrue();
+        isArray.expectValue(JSBoolean.FALSE, stringArgs("not array"));
 
-        result = ArrayConstructor.isArray(context, JSUndefined.INSTANCE, new JSValue[]{new JSObject(context)});
-        assertThat(result.isBooleanFalse()).isTrue();
+        isArray.expectValue(JSBoolean.FALSE, new JSObject(context));
 
-        result = ArrayConstructor.isArray(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE});
-        assertThat(result.isBooleanFalse()).isTrue();
+        isArray.expectValue(JSBoolean.FALSE, JSNull.INSTANCE);
 
         // Edge case: no arguments
-        result = ArrayConstructor.isArray(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(result.isBooleanFalse()).isTrue();
+        isArray.expectValue(JSBoolean.FALSE);
     }
 
     @Test

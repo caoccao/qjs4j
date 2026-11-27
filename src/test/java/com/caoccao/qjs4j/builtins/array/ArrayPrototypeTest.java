@@ -55,33 +55,27 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         JSArray arr = new JSArray(context, numberArgs(1, 2, 3));
 
         // Normal case: positive index
-        JSValue result = ArrayPrototype.at(context, arr, numberArgs(0));
-        assertNumberValue(result, 1.0);
+        BuiltinAssertions at = builtin(ArrayPrototype::at, arr);
+        at.expectNumber(1.0, numberArgs(0));
 
-        result = ArrayPrototype.at(context, arr, numberArgs(2));
-        assertNumberValue(result, 3.0);
+        at.expectNumber(3.0, numberArgs(2));
 
         // Negative index
-        result = ArrayPrototype.at(context, arr, numberArgs(-1));
-        assertNumberValue(result, 3.0);
+        at.expectNumber(3.0, numberArgs(-1));
 
-        result = ArrayPrototype.at(context, arr, numberArgs(-2));
-        assertNumberValue(result, 2.0);
+        at.expectNumber(2.0, numberArgs(-2));
 
         // Out of bounds
-        result = ArrayPrototype.at(context, arr, numberArgs(3));
-        assertThat(result).isEqualTo(JSUndefined.INSTANCE);
+        at.expectValue(JSUndefined.INSTANCE, numberArgs(3));
 
-        result = ArrayPrototype.at(context, arr, numberArgs(-4));
-        assertThat(result).isEqualTo(JSUndefined.INSTANCE);
+        at.expectValue(JSUndefined.INSTANCE, numberArgs(-4));
 
         // No arguments: ToIntegerOrInfinity(undefined) = 0, so returns arr[0]
-        result = ArrayPrototype.at(context, arr, JSValue.NO_ARGS);
-        assertNumberValue(result, 1.0);
+        at.expectNumber(1.0);
 
         // Edge case: empty array
         JSArray emptyArr = new JSArray(context);
-        result = ArrayPrototype.at(context, emptyArr, numberArgs(0));
+        JSValue result = ArrayPrototype.at(context, emptyArr, numberArgs(0));
         assertThat(result).isEqualTo(JSUndefined.INSTANCE);
 
         // Generic: at works on non-array objects via ToObject + LengthOfArrayLike
@@ -509,12 +503,12 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         // Normal case: non-empty array
         JSArray arr = new JSArray(context, numberArgs(1, 2, 3));
 
-        JSValue result = ArrayPrototype.getLength(context, arr, JSValue.NO_ARGS);
-        assertNumberValue(result, 3.0);
+        BuiltinAssertions getLength = builtin(ArrayPrototype::getLength, arr);
+        getLength.expectNumber(3.0);
 
         // Empty array
         JSArray emptyArr = new JSArray(context);
-        result = ArrayPrototype.getLength(context, emptyArr, JSValue.NO_ARGS);
+        JSValue result = ArrayPrototype.getLength(context, emptyArr, JSValue.NO_ARGS);
         assertNumberValue(result, 0.0);
 
         // Array with specific length
@@ -524,12 +518,10 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
         // After modifying array
         arr.push(new JSNumber(4));
-        result = ArrayPrototype.getLength(context, arr, JSValue.NO_ARGS);
-        assertNumberValue(result, 4.0);
+        getLength.expectNumber(4.0);
 
         arr.pop();
-        result = ArrayPrototype.getLength(context, arr, JSValue.NO_ARGS);
-        assertNumberValue(result, 3.0);
+        getLength.expectNumber(3.0);
 
         // Edge case: getLength on non-array
         JSValue nonArray = new JSString("not an array");
@@ -592,28 +584,24 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         JSArray arr = new JSArray(context, new JSNumber(1), new JSNumber(2), JSUndefined.INSTANCE, new JSNumber(4));
 
         // Normal case
-        JSValue result = ArrayPrototype.includes(context, arr, numberArgs(2));
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        BuiltinAssertions includes = builtin(ArrayPrototype::includes, arr);
+        includes.expectValue(JSBoolean.TRUE, numberArgs(2));
 
         // Not found
-        result = ArrayPrototype.includes(context, arr, numberArgs(3));
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        includes.expectValue(JSBoolean.FALSE, numberArgs(3));
 
         // With fromIndex
-        result = ArrayPrototype.includes(context, arr, numberArgs(2, 2));
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        includes.expectValue(JSBoolean.FALSE, numberArgs(2, 2));
 
         // Negative fromIndex
-        result = ArrayPrototype.includes(context, arr, numberArgs(2, -3));
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        includes.expectValue(JSBoolean.TRUE, numberArgs(2, -3));
 
         // Edge case: includes undefined
-        result = ArrayPrototype.includes(context, arr, new JSValue[]{JSUndefined.INSTANCE});
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        includes.expectValue(JSBoolean.TRUE, JSUndefined.INSTANCE);
 
         // Edge case: includes NaN (special case)
         JSArray nanArr = new JSArray(context, numberArgs(Double.NaN));
-        result = ArrayPrototype.includes(context, nanArr, numberArgs(Double.NaN));
+        JSValue result = ArrayPrototype.includes(context, nanArr, numberArgs(Double.NaN));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Edge case: empty array
@@ -622,8 +610,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Edge case: no search element (searches for undefined, which is in arr)
-        result = ArrayPrototype.includes(context, arr, JSValue.NO_ARGS);
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        includes.expectValue(JSBoolean.TRUE);
 
         // Edge case: includes on null/undefined
         assertPendingTypeError(context, ArrayPrototype.includes(context, JSNull.INSTANCE, numberArgs(1)));
@@ -634,24 +621,21 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         JSArray arr = new JSArray(context, numberArgs(1, 2, 3, 2));
 
         // Normal case
-        JSValue result = ArrayPrototype.indexOf(context, arr, numberArgs(2));
-        assertNumberValue(result, 1.0);
+        BuiltinAssertions indexOf = builtin(ArrayPrototype::indexOf, arr);
+        indexOf.expectNumber(1.0, numberArgs(2));
 
         // With fromIndex
-        result = ArrayPrototype.indexOf(context, arr, numberArgs(2, 2));
-        assertNumberValue(result, 3.0);
+        indexOf.expectNumber(3.0, numberArgs(2, 2));
 
         // Not found
-        result = ArrayPrototype.indexOf(context, arr, numberArgs(4));
-        assertNumberValue(result, -1.0);
+        indexOf.expectNumber(-1.0, numberArgs(4));
 
         // Negative fromIndex
-        result = ArrayPrototype.indexOf(context, arr, numberArgs(2, -2));
-        assertNumberValue(result, 3.0);
+        indexOf.expectNumber(3.0, numberArgs(2, -2));
 
         // Edge case: empty array
         JSArray emptyArr = new JSArray(context);
-        result = ArrayPrototype.indexOf(context, emptyArr, numberArgs(1));
+        JSValue result = ArrayPrototype.indexOf(context, emptyArr, numberArgs(1));
         assertNumberValue(result, -1.0);
 
         // Edge case: no search element
@@ -667,20 +651,18 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         JSArray arr = new JSArray(context, new JSString("a"), new JSString("b"), new JSString("c"));
 
         // Normal case
-        JSValue result = ArrayPrototype.join(context, arr, stringArgs("-"));
-        assertStringValue(result, "a-b-c");
+        BuiltinAssertions join = builtin(ArrayPrototype::join, arr);
+        join.expectString("a-b-c", stringArgs("-"));
 
         // Default separator
-        result = ArrayPrototype.join(context, arr, JSValue.NO_ARGS);
-        assertStringValue(result, "a,b,c");
+        join.expectString("a,b,c");
 
         // Empty separator
-        result = ArrayPrototype.join(context, arr, stringArgs(""));
-        assertStringValue(result, "abc");
+        join.expectString("abc", stringArgs(""));
 
         // Edge case: empty array
         JSArray emptyArr = new JSArray(context);
-        result = ArrayPrototype.join(context, emptyArr, JSValue.NO_ARGS);
+        JSValue result = ArrayPrototype.join(context, emptyArr, JSValue.NO_ARGS);
         assertStringValue(result, "");
 
         // Edge case: array with null/undefined
@@ -712,24 +694,21 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         JSArray arr = new JSArray(context, numberArgs(1, 2, 3, 2));
 
         // Normal case
-        JSValue result = ArrayPrototype.lastIndexOf(context, arr, numberArgs(2));
-        assertNumberValue(result, 3.0);
+        BuiltinAssertions lastIndexOf = builtin(ArrayPrototype::lastIndexOf, arr);
+        lastIndexOf.expectNumber(3.0, numberArgs(2));
 
         // With fromIndex
-        result = ArrayPrototype.lastIndexOf(context, arr, numberArgs(2, 2));
-        assertNumberValue(result, 1.0);
+        lastIndexOf.expectNumber(1.0, numberArgs(2, 2));
 
         // Not found
-        result = ArrayPrototype.lastIndexOf(context, arr, numberArgs(4));
-        assertNumberValue(result, -1.0);
+        lastIndexOf.expectNumber(-1.0, numberArgs(4));
 
         // Negative fromIndex
-        result = ArrayPrototype.lastIndexOf(context, arr, numberArgs(2, -1));
-        assertNumberValue(result, 3.0);
+        lastIndexOf.expectNumber(3.0, numberArgs(2, -1));
 
         // Edge case: empty array
         JSArray emptyArr = new JSArray(context);
-        result = ArrayPrototype.lastIndexOf(context, emptyArr, numberArgs(1));
+        JSValue result = ArrayPrototype.lastIndexOf(context, emptyArr, numberArgs(1));
         assertNumberValue(result, -1.0);
 
         // Edge case: no search element
@@ -783,20 +762,18 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         JSArray arr = new JSArray(context, numberArgs(1, 2, 3));
 
         // Normal case
-        JSValue result = ArrayPrototype.pop(context, arr, JSValue.NO_ARGS);
-        assertNumberValue(result, 3.0);
+        BuiltinAssertions pop = builtin(ArrayPrototype::pop, arr);
+        pop.expectNumber(3.0);
         assertThat(arr.getLength()).isEqualTo(2);
 
-        result = ArrayPrototype.pop(context, arr, JSValue.NO_ARGS);
-        assertNumberValue(result, 2.0);
+        pop.expectNumber(2.0);
         assertThat(arr.getLength()).isEqualTo(1);
 
         // Pop from empty array
-        result = ArrayPrototype.pop(context, arr, JSValue.NO_ARGS);
-        assertNumberValue(result, 1.0);
+        pop.expectNumber(1.0);
         assertThat(arr.getLength()).isEqualTo(0);
 
-        result = ArrayPrototype.pop(context, arr, JSValue.NO_ARGS);
+        JSValue result = ArrayPrototype.pop(context, arr, JSValue.NO_ARGS);
         assertThat(result.isUndefined()).isTrue();
 
         // Edge case: pop from null/undefined

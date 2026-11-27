@@ -36,6 +36,29 @@ import static org.assertj.core.api.Assertions.assertThat;
  * promise and that promise's context for the life of the process; closing its runtime changed nothing.
  */
 public class AtomicsWaitListTest extends BaseTest {
+    private void assertNotifyMissesWaiter(JSRuntime runtime, JSContext context, JSTypedArray waited,
+            JSTypedArray notified, int index) throws InterruptedException {
+        AtomicsObject atomics = runtime.getAtomicsObject();
+
+        CountDownLatch started = new CountDownLatch(1);
+        String[] result = {null};
+        Thread waiter = new Thread(() -> {
+            JSContext waiterContext = runtime.createContext();
+            started.countDown();
+            result[0] = atomics.wait(waiterContext, JSUndefined.INSTANCE,
+                    new JSValue[]{waited, JSNumber.of(0), JSNumber.of(0), JSNumber.of(700)}).toString();
+        }, "location-waiter");
+        waiter.start();
+        assertThat(started.await(10, TimeUnit.SECONDS)).isTrue();
+        Thread.sleep(200);
+
+        assertThat(atomics
+                .notify(context, JSUndefined.INSTANCE, new JSValue[]{notified, JSNumber.of(index), JSNumber.of(1)})
+                .toString()).isEqualTo("0");
+        waiter.join(20000);
+        assertThat(result[0]).isEqualTo("timed-out");
+    }
+
     @Test
     @Timeout(60)
     public void testAnInjectedClusterObjectOutlivesEveryMemberRuntime() {
@@ -226,26 +249,7 @@ public class AtomicsWaitListTest extends BaseTest {
         try (JSRuntime runtime = new JSRuntime()) {
             JSContext context = runtime.createContext();
             JSTypedArray array = sharedInt32Array(context, 4);
-            AtomicsObject atomics = runtime.getAtomicsObject();
-
-            CountDownLatch started = new CountDownLatch(1);
-            String[] result = {null};
-            Thread waiter = new Thread(() -> {
-                JSContext waiterContext = runtime.createContext();
-                started.countDown();
-                result[0] = atomics.wait(waiterContext, JSUndefined.INSTANCE,
-                        new JSValue[]{array, JSNumber.of(0), JSNumber.of(0), JSNumber.of(700)}).toString();
-            }, "index-waiter");
-            waiter.start();
-            assertThat(started.await(10, TimeUnit.SECONDS)).isTrue();
-            Thread.sleep(200);
-
-            assertThat(
-                    atomics.notify(context, JSUndefined.INSTANCE, new JSValue[]{array, JSNumber.of(2), JSNumber.of(1)})
-                            .toString())
-                    .isEqualTo("0");
-            waiter.join(20000);
-            assertThat(result[0]).isEqualTo("timed-out");
+            assertNotifyMissesWaiter(runtime, context, array, array, 2);
         }
     }
 
@@ -256,27 +260,7 @@ public class AtomicsWaitListTest extends BaseTest {
             JSContext context = runtime.createContext();
             JSTypedArray waited = sharedInt32Array(context, 2);
             JSTypedArray other = sharedInt32Array(context, 2);
-            AtomicsObject atomics = runtime.getAtomicsObject();
-
-            CountDownLatch started = new CountDownLatch(1);
-            String[] result = {null};
-            Thread waiter = new Thread(() -> {
-                JSContext waiterContext = runtime.createContext();
-                started.countDown();
-                result[0] = atomics.wait(waiterContext, JSUndefined.INSTANCE,
-                        new JSValue[]{waited, JSNumber.of(0), JSNumber.of(0), JSNumber.of(700)}).toString();
-            }, "cross-buffer-waiter");
-            waiter.start();
-            assertThat(started.await(10, TimeUnit.SECONDS)).isTrue();
-            Thread.sleep(200);
-
-            assertThat(
-                    atomics.notify(context, JSUndefined.INSTANCE, new JSValue[]{other, JSNumber.of(0), JSNumber.of(1)})
-                            .toString())
-                    .as("a notify on a different buffer must find nobody").isEqualTo("0");
-
-            waiter.join(20000);
-            assertThat(result[0]).isEqualTo("timed-out");
+            assertNotifyMissesWaiter(runtime, context, waited, other, 0);
         }
     }
 

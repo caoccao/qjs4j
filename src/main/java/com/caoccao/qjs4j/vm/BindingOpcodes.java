@@ -168,7 +168,7 @@ final class BindingOpcodes {
     static void handleGetArgShort(Opcode op, ExecutionContext executionContext) {
         int argumentIndex = op.getCode() - Opcode.GET_ARG0.getCode();
         executionContext.push(executionContext.virtualMachine.getArgumentValue(argumentIndex));
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handleGetLoc(Opcode op, ExecutionContext executionContext) {
@@ -190,7 +190,7 @@ final class BindingOpcodes {
         JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
         int sp = executionContext.sp;
         stack[sp++] = localValue;
-        executionContext.finishOpcode(pc + op.getSize(), sp);
+        executionContext.finishOpcode(op, sp);
     }
 
     static void handleGetLocShort(Opcode op, ExecutionContext executionContext) {
@@ -252,7 +252,7 @@ final class BindingOpcodes {
     static void handleGetVarRefShort(Opcode op, ExecutionContext executionContext) {
         int varRefIndex = op.getCode() - Opcode.GET_VAR_REF0.getCode();
         executionContext.push(readVarRefValue(executionContext, varRefIndex));
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handleGetVarUndef(Opcode op, ExecutionContext executionContext) {
@@ -308,21 +308,21 @@ final class BindingOpcodes {
         int argumentIndex = op.getCode() - Opcode.PUT_ARG0.getCode();
         JSValue argumentValue = executionContext.pop();
         executionContext.virtualMachine.setArgumentValue(argumentIndex, argumentValue);
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handlePutLoc(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int localIndex = executionContext.bytecode.readU16(pc + 1);
         executionContext.locals[localIndex] = executionContext.pop();
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handlePutLoc8(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int localIndex = executionContext.instructions[pc + 1] & 0xFF;
         executionContext.locals[localIndex] = executionContext.pop();
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handlePutLocCheck(Opcode op, ExecutionContext executionContext) {
@@ -344,11 +344,10 @@ final class BindingOpcodes {
     static void handlePutLocShort(Opcode op, ExecutionContext executionContext) {
         int index = op.getCode() - Opcode.PUT_LOC0.getCode();
         executionContext.locals[index] = executionContext.pop();
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handlePutRefValue(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
         JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
         int sp = executionContext.sp;
         JSValue setValue = (JSValue) stack[--sp];
@@ -360,7 +359,7 @@ final class BindingOpcodes {
 
         if (variableName != null && objectValue.isUndefined()) {
             if (writeDynamicReference(executionContext, variableName, key, setValue)) {
-                executionContext.finishOpcode(pc + op.getSize(), sp);
+                executionContext.finishOpcode(op, sp);
                 return;
             }
         }
@@ -368,7 +367,7 @@ final class BindingOpcodes {
         if (objectValue.isUndefined()) {
             if (executionContext.virtualMachine.context.isStrictMode()) {
                 undefinedReference(executionContext.virtualMachine, key);
-                executionContext.finishOpcode(pc + op.getSize(), sp);
+                executionContext.finishOpcode(op, sp);
                 return;
             }
             objectValue = executionContext.virtualMachine.context.getGlobalObject();
@@ -378,37 +377,37 @@ final class BindingOpcodes {
         if (targetObject == null) {
             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
                     .throwTypeError("value has no property");
-            executionContext.finishOpcode(pc + op.getSize(), sp);
+            executionContext.finishOpcode(op, sp);
             return;
         }
 
         if (targetObject == context.getGlobalObject() && variableName != null) {
             if (writeDynamicReference(executionContext, variableName, key, setValue)) {
-                executionContext.finishOpcode(pc + op.getSize(), sp);
+                executionContext.finishOpcode(op, sp);
                 return;
             }
             if (variableName != null && context.hasGlobalLexicalBinding(variableName)) {
                 if (!context.isGlobalLexicalBindingInitialized(variableName)) {
                     executionContext.virtualMachine.pendingException = context
                             .throwReferenceError("Cannot access '" + variableName + "' before initialization");
-                    executionContext.finishOpcode(pc + op.getSize(), sp);
+                    executionContext.finishOpcode(op, sp);
                     return;
                 }
                 if (context.hasGlobalConstDeclaration(variableName)) {
                     executionContext.virtualMachine.pendingException = context
                             .throwTypeError("Assignment to constant variable.");
-                    executionContext.finishOpcode(pc + op.getSize(), sp);
+                    executionContext.finishOpcode(op, sp);
                     return;
                 }
                 context.writeGlobalLexicalBinding(variableName, setValue);
-                executionContext.finishOpcode(pc + op.getSize(), sp);
+                executionContext.finishOpcode(op, sp);
                 return;
             }
         }
 
         if (!targetObject.has(key) && executionContext.virtualMachine.context.isStrictMode()) {
             undefinedReference(executionContext.virtualMachine, key);
-            executionContext.finishOpcode(pc + op.getSize(), sp);
+            executionContext.finishOpcode(op, sp);
             return;
         }
 
@@ -427,7 +426,7 @@ final class BindingOpcodes {
             context.setInBareVariableAssignment(false);
         }
         executionContext.virtualMachine.capturePendingExceptionFromContext(targetObject.getContext());
-        executionContext.finishOpcode(pc + op.getSize(), sp);
+        executionContext.finishOpcode(op, sp);
     }
 
     static void handlePutVar(Opcode op, ExecutionContext executionContext) {
@@ -557,7 +556,7 @@ final class BindingOpcodes {
         int varRefIndex = op.getCode() - Opcode.PUT_VAR_REF0.getCode();
         JSValue value = executionContext.pop();
         writeVarRefValue(executionContext, varRefIndex, value);
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handleSetArg(Opcode op, ExecutionContext executionContext) {
@@ -570,21 +569,21 @@ final class BindingOpcodes {
     static void handleSetArgShort(Opcode op, ExecutionContext executionContext) {
         int argumentIndex = op.getCode() - Opcode.SET_ARG0.getCode();
         executionContext.virtualMachine.setArgumentValue(argumentIndex, executionContext.peek(0));
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handleSetLoc(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int localIndex = executionContext.bytecode.readU16(pc + 1);
         executionContext.locals[localIndex] = executionContext.peek(0);
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handleSetLoc8(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int localIndex = executionContext.instructions[pc + 1] & 0xFF;
         executionContext.locals[localIndex] = executionContext.peek(0);
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handleSetLocCheck(Opcode op, ExecutionContext executionContext) {
@@ -594,7 +593,7 @@ final class BindingOpcodes {
     static void handleSetLocShort(Opcode op, ExecutionContext executionContext) {
         int index = op.getCode() - Opcode.SET_LOC0.getCode();
         executionContext.locals[index] = executionContext.peek(0);
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handleSetLocUninitialized(Opcode op, ExecutionContext executionContext) {
@@ -617,7 +616,7 @@ final class BindingOpcodes {
     static void handleSetVarRefShort(Opcode op, ExecutionContext executionContext) {
         int varRefIndex = op.getCode() - Opcode.SET_VAR_REF0.getCode();
         executionContext.frame.setVarRef(varRefIndex, executionContext.peek(0));
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     private static boolean internalDeleteDynamicVarBinding(StackFrame stackFrame, String variableName) {
@@ -640,7 +639,7 @@ final class BindingOpcodes {
     private static void pushLocal(Opcode op, ExecutionContext executionContext, int index) {
         JSValue value = executionContext.locals[index];
         executionContext.virtualMachine.valueStack.stack[executionContext.sp++] = value;
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     private static JSValue readNamedBindingValue(ExecutionContext executionContext, String variableName,

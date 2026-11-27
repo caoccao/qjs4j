@@ -27,10 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class FunctionPrototypeTest extends BaseJavetTest {
 
-    @Test
-    public void testApply() {
-        // Create a test function that returns the sum of its arguments
-        JSFunction testFunc = new JSNativeFunction(context, "sum", 2, (childContext, thisArg, args) -> {
+    private JSFunction sumFunction() {
+        return new JSNativeFunction(context, "sum", 2, (childContext, thisArg, args) -> {
             double sum = 0;
             for (JSValue arg : args) {
                 if (arg instanceof JSNumber num) {
@@ -39,26 +37,28 @@ public class FunctionPrototypeTest extends BaseJavetTest {
             }
             return new JSNumber(sum);
         });
+    }
+
+    @Test
+    public void testApply() {
+        JSFunction testFunc = sumFunction();
 
         // Normal case: apply with array of arguments
         JSArray argsArray = new JSArray(context, numberArgs(1, 2, 3));
 
-        JSValue result = FunctionPrototype.apply(context, testFunc, new JSValue[]{JSUndefined.INSTANCE, // thisArg
-                argsArray});
-        assertNumberValue(result, 6.0);
+        BuiltinAssertions apply = builtin(FunctionPrototype::apply, testFunc);
+        apply.expectNumber(6.0, JSUndefined.INSTANCE, // thisArg
+                argsArray);
 
         // Normal case: apply with custom thisArg
         JSObject customThis = new JSObject(context);
-        result = FunctionPrototype.apply(context, testFunc, new JSValue[]{customThis, argsArray});
-        assertNumberValue(result, 6.0);
+        apply.expectNumber(6.0, customThis, argsArray);
 
         // Normal case: apply with no arguments array
-        result = FunctionPrototype.apply(context, testFunc, new JSValue[]{JSUndefined.INSTANCE});
-        assertNumberValue(result, 0.0);
+        apply.expectNumber(0.0, JSUndefined.INSTANCE);
 
         // Normal case: apply with null/undefined arguments array
-        result = FunctionPrototype.apply(context, testFunc, new JSValue[]{JSUndefined.INSTANCE, JSNull.INSTANCE});
-        assertNumberValue(result, 0.0);
+        apply.expectNumber(0.0, JSUndefined.INSTANCE, JSNull.INSTANCE);
 
         // Normal case: apply with array-like object
         JSObject arrayLikeObject = new JSObject(context);
@@ -66,11 +66,10 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         arrayLikeObject.set("1", new JSNumber(5));
         arrayLikeObject.set("2", new JSNumber(6));
         arrayLikeObject.set("length", new JSNumber(3));
-        result = FunctionPrototype.apply(context, testFunc, new JSValue[]{JSUndefined.INSTANCE, arrayLikeObject});
-        assertNumberValue(result, 15.0);
+        apply.expectNumber(15.0, JSUndefined.INSTANCE, arrayLikeObject);
 
         // Edge case: apply with non-array arguments
-        result = FunctionPrototype.apply(context, testFunc,
+        JSValue result = FunctionPrototype.apply(context, testFunc,
                 new JSValue[]{JSUndefined.INSTANCE, new JSString("not an array")});
         assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
@@ -132,37 +131,25 @@ public class FunctionPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testCall() {
-        // Create a test function that returns the sum of its arguments
-        JSFunction testFunc = new JSNativeFunction(context, "sum", 2, (childContext, thisArg, args) -> {
-            double sum = 0;
-            for (JSValue arg : args) {
-                if (arg instanceof JSNumber num) {
-                    sum += num.value();
-                }
-            }
-            return new JSNumber(sum);
-        });
+        JSFunction testFunc = sumFunction();
 
         // Normal case: call with arguments
-        JSValue result = FunctionPrototype.call(context, testFunc, new JSValue[]{JSUndefined.INSTANCE, // thisArg
-                new JSNumber(1), new JSNumber(2), new JSNumber(3)});
-        assertNumberValue(result, 6.0);
+        BuiltinAssertions call = builtin(FunctionPrototype::call, testFunc);
+        call.expectNumber(6.0, JSUndefined.INSTANCE, // thisArg
+                new JSNumber(1), new JSNumber(2), new JSNumber(3));
 
         // Normal case: call with custom thisArg
         JSObject customThis = new JSObject(context);
-        result = FunctionPrototype.call(context, testFunc, new JSValue[]{customThis, new JSNumber(5)});
-        assertNumberValue(result, 5.0);
+        call.expectNumber(5.0, customThis, new JSNumber(5));
 
         // Normal case: call with no arguments
-        result = FunctionPrototype.call(context, testFunc, new JSValue[]{JSUndefined.INSTANCE});
-        assertNumberValue(result, 0.0);
+        call.expectNumber(0.0, JSUndefined.INSTANCE);
 
         // Normal case: call with no thisArg and no arguments
-        result = FunctionPrototype.call(context, testFunc, JSValue.NO_ARGS);
-        assertNumberValue(result, 0.0);
+        call.expectNumber(0.0);
 
         // Edge case: called on non-function
-        result = FunctionPrototype.call(context, new JSString("not a function"), JSValue.NO_ARGS);
+        JSValue result = FunctionPrototype.call(context, new JSString("not a function"), JSValue.NO_ARGS);
         assertTypeError(result);
         assertThat(context.getPendingException()).isNotNull();
     }

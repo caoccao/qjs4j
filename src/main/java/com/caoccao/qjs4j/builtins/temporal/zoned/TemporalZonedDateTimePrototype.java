@@ -17,7 +17,7 @@
 package com.caoccao.qjs4j.builtins.temporal.zoned;
 
 import com.caoccao.qjs4j.builtins.temporal.TemporalLocaleFormat;
-import com.caoccao.qjs4j.builtins.temporal.TemporalPropertyBag;
+import com.caoccao.qjs4j.builtins.temporal.TemporalTimeFields;
 import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.builtins.temporal.duration.TemporalCalendarDifference;
 import com.caoccao.qjs4j.builtins.temporal.duration.TemporalDateAddition;
@@ -498,58 +498,28 @@ public final class TemporalZonedDateTimePrototype {
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        if (args.length == 0 || !(args[0] instanceof JSObject fieldsObject)) {
-            return TemporalError.MISSING_PARTIAL_FIELDS.undefined(context);
-        }
-        if (fieldsObject instanceof JSTemporalPlainDate || fieldsObject instanceof JSTemporalPlainDateTime
-                || fieldsObject instanceof JSTemporalPlainMonthDay || fieldsObject instanceof JSTemporalPlainYearMonth
-                || fieldsObject instanceof JSTemporalPlainTime || fieldsObject instanceof JSTemporalZonedDateTime
-                || fieldsObject instanceof JSTemporalInstant || fieldsObject instanceof JSTemporalDuration) {
-            context.throwTypeError("Temporal error: Invalid ZonedDateTime-like object.");
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue calendarValue = fieldsObject.get(PropertyKey.fromString("calendar"));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(calendarValue instanceof JSUndefined) && calendarValue != null) {
-            context.throwTypeError("Temporal error: Invalid ZonedDateTime-like object.");
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue timeZoneValue = fieldsObject.get(PropertyKey.fromString("timeZone"));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!(timeZoneValue instanceof JSUndefined) && timeZoneValue != null) {
-            context.throwTypeError("Temporal error: Invalid ZonedDateTime-like object.");
+        JSObject fieldsObject = TemporalUtils.requirePartialZonedDateTime(context, args);
+        if (fieldsObject == null) {
             return JSUndefined.INSTANCE;
         }
 
         TemporalCalendarId calendarId = zonedDateTime.getCalendarId();
-        TemporalPropertyBag bag = new TemporalPropertyBag(context, fieldsObject);
+        TemporalTimeFields bag = new TemporalTimeFields(context, fieldsObject);
         Integer dayField = bag.integer("day");
-        Integer hourField = bag.integer("hour");
-        Integer microsecondField = bag.integer("microsecond");
-        Integer millisecondField = bag.integer("millisecond");
-        Integer minuteField = bag.integer("minute");
+        bag.readThroughMinute();
         Integer monthField = bag.integer("month");
         String monthCodeField = bag.string("monthCode");
-        Integer nanosecondField = bag.integer("nanosecond");
+        bag.readNanosecond();
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
         String offsetField = bag.offset();
-        Integer secondField = bag.integer("second");
+        bag.readSecond();
         TemporalPartialDate dateFields = bag.readYearAndEra(calendarId, dayField, monthField, monthCodeField);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasAnyWithField = !dateFields.isEmpty() || hourField != null || microsecondField != null
-                || millisecondField != null || minuteField != null || nanosecondField != null || offsetField != null
-                || secondField != null;
-        if (!hasAnyWithField) {
+        if (dateFields.isEmpty() && !bag.hasTimeField() && offsetField == null) {
             return TemporalError.MISSING_PARTIAL_FIELDS.undefined(context);
         }
 
@@ -569,15 +539,8 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        int mergedHour = hourField != null ? hourField : localDateTime.time().hour();
-        int mergedMinute = minuteField != null ? minuteField : localDateTime.time().minute();
-        int mergedSecond = secondField != null ? secondField : localDateTime.time().second();
-        int mergedMillisecond = millisecondField != null ? millisecondField : localDateTime.time().millisecond();
-        int mergedMicrosecond = microsecondField != null ? microsecondField : localDateTime.time().microsecond();
-        int mergedNanosecond = nanosecondField != null ? nanosecondField : localDateTime.time().nanosecond();
-        IsoTime mergedIsoTime = IsoTime.regulate(context, withOptions.overflow(),
-                TemporalError.INVALID_ISO_DATE.message(), mergedHour, mergedMinute, mergedSecond, mergedMillisecond,
-                mergedMicrosecond, mergedNanosecond);
+        IsoTime mergedIsoTime = bag.regulate(localDateTime.time(), withOptions.overflow(),
+                TemporalError.INVALID_ISO_DATE.message());
         if (mergedIsoTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -598,16 +561,8 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue withCalendar(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "withCalendar");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        TemporalCalendarId calendarId = TemporalUtils.requireCalendarArgument(context, args);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSTemporalZonedDateTime.create(context, zonedDateTime.getEpochNanoseconds(),
-                zonedDateTime.getTimeZoneId(), calendarId);
+        return RECEIVER.withCalendar(context, thisArg, args, (ctx, zonedDateTime, calendarId) -> JSTemporalZonedDateTime
+                .create(ctx, zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId(), calendarId));
     }
 
     public static JSValue withPlainTime(JSContext context, JSValue thisArg, JSValue[] args) {

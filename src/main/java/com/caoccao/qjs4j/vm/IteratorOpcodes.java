@@ -143,7 +143,6 @@ final class IteratorOpcodes {
     }
 
     static void handleAppend(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
         JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
         int sp = executionContext.sp;
         JSValue enumerableObject = (JSValue) stack[--sp];
@@ -161,12 +160,12 @@ final class IteratorOpcodes {
         JSNumber nextPosition = appendIterable(executionContext, array, (int) positionNumber.value(), enumerableObject);
         stack[sp++] = nextPosition == null ? JSUndefined.INSTANCE : array;
         stack[sp++] = nextPosition == null ? JSUndefined.INSTANCE : nextPosition;
-        executionContext.finishOpcode(pc + op.getSize(), sp);
+        executionContext.finishOpcode(op, sp);
     }
 
     static void handleAsyncYieldStar(Opcode op, ExecutionContext executionContext) {
         VirtualMachine vm = executionContext.virtualMachine;
-        vm.valueStack.stackTop = executionContext.sp;
+        executionContext.beginStackOpcode();
         JSContext context = vm.context;
 
         // yield* in async generators uses GetIterator(obj, async) per ES2024 7.4.3
@@ -248,7 +247,7 @@ final class IteratorOpcodes {
                 yieldDelegateResult(executionContext, iteratorObj, result, nextMethod, -1, isNativeAsyncIterator);
             }
         }
-        executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+        executionContext.finishStackOpcode(op);
         if (vm.yieldResult != null) {
             JSValue returnValue = executionContext.pop();
             // Save execution state so the generator can resume from after ASYNC_YIELD_STAR
@@ -258,8 +257,8 @@ final class IteratorOpcodes {
     }
 
     static void handleAwait(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        JSValue value = executionContext.virtualMachine.valueStack.pop();
+        CallStack operandStack = executionContext.beginStackOpcode();
+        JSValue value = operandStack.pop();
 
         // If the value is already a promise, preserve PromiseResolve observability by
         // accessing `constructor` first (may throw), then use the promise directly.
@@ -270,7 +269,7 @@ final class IteratorOpcodes {
             if (executionContext.virtualMachine.context.hasPendingException()) {
                 executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
                         .getPendingException();
-                executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+                executionContext.finishStackOpcode(op);
                 return;
             }
             promise = promiseValue;
@@ -295,7 +294,7 @@ final class IteratorOpcodes {
 
             // Now the promise should be settled, push the resolved value
             if (promise.getState() == JSPromise.PromiseState.FULFILLED) {
-                executionContext.virtualMachine.valueStack.push(promise.getResult());
+                operandStack.push(promise.getResult());
             } else if (promise.getState() == JSPromise.PromiseState.REJECTED) {
                 JSValue result = promise.getResult();
                 executionContext.virtualMachine.pendingException = result;
@@ -305,42 +304,42 @@ final class IteratorOpcodes {
                 throw new JSVirtualMachineException("Promise did not settle after processing microtasks");
             }
         }
-        executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+        executionContext.finishStackOpcode(op);
         if (executionContext.virtualMachine.awaitSuspensionPromise != null) {
             suspendGenerator(executionContext, JSUndefined.INSTANCE);
         }
     }
 
     static void handleForAwaitOfNext(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        JSStackValue catchOffset = executionContext.virtualMachine.valueStack.popStackValue();
-        JSValue nextMethod = executionContext.virtualMachine.valueStack.peek(0);
-        JSValue iterator = executionContext.virtualMachine.valueStack.peek(1);
+        CallStack operandStack = executionContext.beginStackOpcode();
+        JSStackValue catchOffset = operandStack.popStackValue();
+        JSValue nextMethod = operandStack.peek(0);
+        JSValue iterator = operandStack.peek(1);
         if (!(nextMethod instanceof JSFunction nextFunc)) {
             throw new JSVirtualMachineException("Next method must be a function");
         }
         JSValue result = nextFunc.call(executionContext.virtualMachine.context, iterator, JSValue.NO_ARGS);
-        executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
-        executionContext.virtualMachine.valueStack.push(result);
-        executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+        operandStack.pushStackValue(catchOffset);
+        operandStack.push(result);
+        executionContext.finishStackOpcode(op);
     }
 
     static void handleForInNext(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        JSStackValue stackValue = executionContext.virtualMachine.valueStack.popStackValue();
+        CallStack operandStack = executionContext.beginStackOpcode();
+        JSStackValue stackValue = operandStack.popStackValue();
         if (!(stackValue instanceof JSInternalValue internal)
                 || !(internal.value() instanceof JSForInEnumerator enumerator)) {
             throw new JSVirtualMachineException("Invalid for-in enumerator");
         }
         JSValue nextKey = enumerator.next();
-        executionContext.virtualMachine.valueStack.pushStackValue(new JSInternalValue(enumerator));
-        executionContext.virtualMachine.valueStack.push(nextKey);
-        executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+        operandStack.pushStackValue(new JSInternalValue(enumerator));
+        operandStack.push(nextKey);
+        executionContext.finishStackOpcode(op);
     }
 
     static void handleForInStart(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        JSValue sourceValue = executionContext.virtualMachine.valueStack.pop();
+        CallStack operandStack = executionContext.beginStackOpcode();
+        JSValue sourceValue = operandStack.pop();
         JSValue enumerableValue = sourceValue;
         if (!sourceValue.isNullOrUndefined() && !(sourceValue instanceof JSObject)) {
             JSObject boxedObject = executionContext.virtualMachine.toObject(sourceValue);
@@ -351,8 +350,8 @@ final class IteratorOpcodes {
             }
         }
         JSForInEnumerator enumerator = new JSForInEnumerator(enumerableValue);
-        executionContext.virtualMachine.valueStack.pushStackValue(new JSInternalValue(enumerator));
-        executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+        operandStack.pushStackValue(new JSInternalValue(enumerator));
+        executionContext.finishStackOpcode(op);
     }
 
     static void handleForOfNext(Opcode op, ExecutionContext executionContext) {
@@ -360,7 +359,7 @@ final class IteratorOpcodes {
         int nextPc = pc + op.getSize();
         VirtualMachine vm = executionContext.virtualMachine;
         int depth = executionContext.bytecode.readU8(pc + 1);
-        vm.valueStack.stackTop = executionContext.sp;
+        CallStack operandStack = executionContext.beginStackOpcode();
         // Stack layout: ... iter next catch_offset [depth values] (bottom to top)
         // The depth parameter tells us how many values are between catch_offset and top
         // Following QuickJS: offset = -3 - depth
@@ -370,30 +369,30 @@ final class IteratorOpcodes {
             vm.forOfTempValues = new JSValue[Math.max(depth, vm.forOfTempValues.length * 2)];
         }
         for (int i = 0; i < depth; i++) {
-            vm.forOfTempValues[i] = vm.valueStack.pop();
+            vm.forOfTempValues[i] = operandStack.pop();
         }
-        int markerIndex = findIteratorCloseMarker(vm.valueStack.stack, vm.valueStack.stackTop,
+        int markerIndex = findIteratorCloseMarker(operandStack.stack, operandStack.stackTop,
                 executionContext.frameStackBase);
         if (markerIndex < 2) {
             executionContext.setErrorAsPending(vm.context.throwError("Invalid iterator state in FOR_OF_NEXT"));
             return;
         }
 
-        int preservedMarkerCount = vm.valueStack.stackTop - markerIndex - 1;
+        int preservedMarkerCount = operandStack.stackTop - markerIndex - 1;
         JSStackValue[] preservedMarkers = preservedMarkerCount > 0 ? new JSStackValue[preservedMarkerCount] : null;
         for (int markerOffset = 0; markerOffset < preservedMarkerCount; markerOffset++) {
-            preservedMarkers[markerOffset] = vm.valueStack.popStackValue();
+            preservedMarkers[markerOffset] = operandStack.popStackValue();
         }
 
-        JSStackValue catchOffset = vm.valueStack.popStackValue();
+        JSStackValue catchOffset = operandStack.popStackValue();
 
-        int stackTop = vm.valueStack.stackTop;
+        int stackTop = operandStack.stackTop;
         if (stackTop < 2) {
             executionContext.setErrorAsPending(vm.context.throwError("Invalid iterator stack depth in FOR_OF_NEXT"));
             return;
         }
-        JSStackValue nextMethodStackValue = vm.valueStack.stack[stackTop - 1];
-        JSStackValue iteratorStackValue = vm.valueStack.stack[stackTop - 2];
+        JSStackValue nextMethodStackValue = operandStack.stack[stackTop - 1];
+        JSStackValue iteratorStackValue = operandStack.stack[stackTop - 2];
         JSValue nextMethod = nextMethodStackValue instanceof JSValue jsValue ? jsValue : null;
         JSValue iterator = iteratorStackValue instanceof JSValue jsValue ? jsValue : null;
 
@@ -477,29 +476,29 @@ final class IteratorOpcodes {
         }
 
         // Push catch_offset back, then restore temp values, then push value and done
-        vm.valueStack.pushStackValue(catchOffset);
+        operandStack.pushStackValue(catchOffset);
         for (int markerOffset = preservedMarkerCount - 1; markerOffset >= 0; markerOffset--) {
-            vm.valueStack.pushStackValue(preservedMarkers[markerOffset]);
+            operandStack.pushStackValue(preservedMarkers[markerOffset]);
         }
         for (int i = depth - 1; i >= 0; i--) {
-            vm.valueStack.push(vm.forOfTempValues[i]);
+            operandStack.push(vm.forOfTempValues[i]);
             vm.forOfTempValues[i] = null;
         }
-        vm.valueStack.push(value);
-        vm.valueStack.push(done ? JSBoolean.TRUE : JSBoolean.FALSE);
+        operandStack.push(value);
+        operandStack.push(done ? JSBoolean.TRUE : JSBoolean.FALSE);
         executionContext.finishStackOpcode(nextPc);
     }
 
     static void handleForOfStart(Opcode op, ExecutionContext executionContext) {
         int nextPc = executionContext.pc + op.getSize();
         VirtualMachine vm = executionContext.virtualMachine;
-        vm.valueStack.stackTop = executionContext.sp;
+        executionContext.beginStackOpcode();
         startForOf(executionContext, vm.valueStack.pop(), op == Opcode.FOR_AWAIT_OF_START);
         executionContext.finishStackOpcode(nextPc);
     }
 
     static void handleInitialYield(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
+        executionContext.beginStackOpcode();
         // Initial yield - generator is being created
         // Per ES spec, parameter defaults are evaluated before INITIAL_YIELD,
         // so errors during parameter initialization are thrown during the generator function call.
@@ -509,7 +508,7 @@ final class IteratorOpcodes {
             // Signal suspension at INITIAL_YIELD.
             executionContext.virtualMachine.yieldResult = INITIAL_YIELD;
         }
-        executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+        executionContext.finishStackOpcode(op);
         if (executionContext.virtualMachine.yieldResult != null) {
             // Save suspended execution state so the generator resumes after INITIAL_YIELD
             // instead of re-executing from the start (which would re-run parameter
@@ -550,7 +549,7 @@ final class IteratorOpcodes {
             stack[sp - 1] = callResult;
         }
         stack[sp++] = JSBoolean.valueOf(noMethod);
-        executionContext.finishOpcode(pc + op.getSize(), sp);
+        executionContext.finishOpcode(op, sp);
     }
 
     static void handleIteratorCheckObject(Opcode op, ExecutionContext executionContext) {
@@ -561,7 +560,7 @@ final class IteratorOpcodes {
                     "Iterator result " + JSAsyncIterator.describeIteratorResult(iteratorResult) + " is not an object");
             return;
         }
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handleIteratorClose(Opcode op, ExecutionContext executionContext) {
@@ -576,7 +575,7 @@ final class IteratorOpcodes {
             }
         }
         if (markerIndex < 2) {
-            executionContext.pc += op.getSize();
+            executionContext.advance(op);
             return;
         }
 
@@ -600,7 +599,7 @@ final class IteratorOpcodes {
             if (!iteratorAlreadyExhausted) {
                 JSValue returnMethodValue = iteratorObject.get(PropertyKey.RETURN);
                 if (captureCloseException(executionContext.virtualMachine, originalPendingException)) {
-                    executionContext.finishOpcode(executionContext.pc + op.getSize(), sp);
+                    executionContext.finishOpcode(op, sp);
                     return;
                 }
                 if (JSTypeChecking.isCallable(returnMethodValue)) {
@@ -625,7 +624,7 @@ final class IteratorOpcodes {
                 }
             }
         }
-        executionContext.finishOpcode(executionContext.pc + op.getSize(), sp);
+        executionContext.finishOpcode(op, sp);
     }
 
     static void handleIteratorGetValueDone(Opcode op, ExecutionContext executionContext) {
@@ -647,7 +646,7 @@ final class IteratorOpcodes {
         stack[sp - 1] = value;
         stack[sp - 2] = JSNumber.of(0);
         stack[sp++] = JSBoolean.valueOf(done);
-        executionContext.finishOpcode(executionContext.pc + op.getSize(), sp);
+        executionContext.finishOpcode(op, sp);
     }
 
     static void handleIteratorNext(Opcode op, ExecutionContext executionContext) {
@@ -665,15 +664,15 @@ final class IteratorOpcodes {
                 executionContext.virtualMachine.singleArg(argumentValue));
         stack[sp - 1] = nextResult;
         stack[sp - 2] = catchOffsetValue;
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handleYield(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
+        CallStack operandStack = executionContext.beginStackOpcode();
         // Check if we should skip this yield (resuming from later point)
         if (executionContext.virtualMachine.yieldSkipCount > 0) {
             executionContext.virtualMachine.yieldSkipCount--;
-            JSValue yieldedValue = executionContext.virtualMachine.valueStack.pop();
+            JSValue yieldedValue = operandStack.pop();
             JSGeneratorState.ResumeRecord resumeRecord = executionContext.virtualMachine.generatorResumeIndex < executionContext.virtualMachine.generatorResumeRecords
                     .size()
                             ? executionContext.virtualMachine.generatorResumeRecords
@@ -683,10 +682,10 @@ final class IteratorOpcodes {
                 executionContext.virtualMachine.pendingException = resumeRecord.value();
                 executionContext.virtualMachine.context.setPendingException(resumeRecord.value());
             } else if (resumeRecord != null) {
-                executionContext.virtualMachine.valueStack.push(resumeRecord.value());
+                operandStack.push(resumeRecord.value());
             } else {
                 // If resume data is missing, default to undefined to preserve stack shape.
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                operandStack.push(JSUndefined.INSTANCE);
             }
             // Don't yield - just continue execution from the resumed generator state.
         } else {
@@ -694,24 +693,24 @@ final class IteratorOpcodes {
             JSGeneratorState.ResumeRecord resumeRecord = executionContext.virtualMachine.currentGeneratorResumeRecord();
             if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.RETURN) {
                 executionContext.virtualMachine.generatorResumeIndex++;
-                executionContext.virtualMachine.valueStack.pop(); // Pop the yielded value
+                operandStack.pop(); // Pop the yielded value
                 // Trigger force return through finally handlers
                 executionContext.virtualMachine.generatorReturnValue = resumeRecord.value();
                 executionContext.virtualMachine.pendingException = resumeRecord.value();
                 executionContext.virtualMachine.context.setPendingException(resumeRecord.value());
-                executionContext.virtualMachine.valueStack.push(resumeRecord.value());
+                operandStack.push(resumeRecord.value());
             } else {
                 // Pop the yielded value from stack
-                JSValue value = executionContext.virtualMachine.valueStack.pop();
+                JSValue value = operandStack.pop();
 
                 // Create yield result to signal suspension.
                 executionContext.virtualMachine.yieldResult = new YieldResult(YieldResult.Type.YIELD, value);
 
                 // Push the value back so it can be returned
-                executionContext.virtualMachine.valueStack.push(value);
+                operandStack.push(value);
             }
         }
-        executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+        executionContext.finishStackOpcode(op);
         if (executionContext.virtualMachine.yieldResult != null) {
             JSValue returnValue = executionContext.pop();
             suspendGenerator(executionContext, returnValue);
@@ -720,7 +719,7 @@ final class IteratorOpcodes {
 
     static void handleYieldStar(Opcode op, ExecutionContext executionContext) {
         VirtualMachine vm = executionContext.virtualMachine;
-        vm.valueStack.stackTop = executionContext.sp;
+        CallStack operandStack = executionContext.beginStackOpcode();
         try {
 
             // Check for RETURN/THROW resume (yield* delegation protocol per ES2024 27.5.3.3)
@@ -736,7 +735,7 @@ final class IteratorOpcodes {
             if (reuseDelegateIterator) {
                 iteratorObj = lastYieldResult.delegateIterator();
             } else {
-                JSValue iterable = vm.valueStack.pop();
+                JSValue iterable = operandStack.pop();
                 JSObject iterableObj;
                 if (iterable instanceof JSObject obj) {
                     iterableObj = obj;
@@ -826,7 +825,7 @@ final class IteratorOpcodes {
                         if (executionContext.capturePendingException()) {
                             return;
                         }
-                        vm.valueStack.push(value);
+                        operandStack.push(value);
                         // Don't set yieldResult - the yield* expression completes
                     } else {
                         // Set yield result to the raw iterator result object
@@ -835,16 +834,16 @@ final class IteratorOpcodes {
                 }
             }
             if (vm.yieldResult != null) {
-                executionContext.sp = vm.valueStack.stackTop;
+                executionContext.sp = operandStack.stackTop;
                 JSValue returnValue = executionContext.pop();
                 // Resume at the same YIELD_STAR opcode until delegation completes.
                 suspendGenerator(executionContext, returnValue);
                 return;
             }
-            executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+            executionContext.finishStackOpcode(op);
         } catch (JSVirtualMachineException exception) {
             vm.captureVMException(exception);
-            executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+            executionContext.finishStackOpcode(op);
         }
     }
 
@@ -938,7 +937,7 @@ final class IteratorOpcodes {
         }
         if (returning && synchronous) {
             internalStartGeneratorReturnCompletion(executionContext, value);
-            executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+            executionContext.finishStackOpcode(op);
             return false;
         }
         vm.valueStack.push(value);

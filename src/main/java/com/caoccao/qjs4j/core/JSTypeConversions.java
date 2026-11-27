@@ -584,30 +584,21 @@ public final class JSTypeConversions {
      * ToBigInt(value) ES2020 7.1.13 Converts a value to a BigInt.
      */
     public static JSBigInt toBigInt(JSContext context, JSValue value) {
-        if (value instanceof JSBigInt bigInt) {
+        JSValue primitive = toBigIntPrimitive(context, value);
+        if (primitive == null && context != null && context.hasPendingException()) {
+            return new JSBigInt(BigInteger.ZERO);
+        }
+        if (primitive instanceof JSBigInt bigInt) {
             return bigInt;
         }
-        if (value instanceof JSBigIntObject bigIntObject) {
-            return bigIntObject.getValue();
-        }
-        if (value instanceof JSBoolean booleanValue) {
-            return new JSBigInt(booleanValue.value() ? 1L : 0L);
-        }
-        if (value instanceof JSString stringValue) {
+        if (primitive instanceof JSString stringValue) {
             JSBigInt parsed = stringToBigInt(stringValue.value());
             if (parsed == null) {
                 throw new JSSyntaxErrorException("Cannot convert " + stringValue.value() + " to a BigInt");
             }
             return parsed;
         }
-        if (value instanceof JSObject objectValue) {
-            JSValue primitive = toPrimitive(context, objectValue, PreferredType.NUMBER);
-            if (context != null && context.hasPendingException()) {
-                return new JSBigInt(BigInteger.ZERO);
-            }
-            return toBigInt(context, primitive);
-        }
-        throw new JSTypeErrorException("Cannot convert " + value + " to a BigInt");
+        throw new JSTypeErrorException("Cannot convert " + primitive + " to a BigInt");
     }
 
     /**
@@ -617,6 +608,20 @@ public final class JSTypeConversions {
     public static long toBigInt64(JSContext context, JSValue value) {
         JSBigInt bigInt = toBigInt(context, value);
         return bigInt.value().longValue(); // longValue() gives the low 64 bits
+    }
+
+    /** Resolve object and boolean inputs before applying the caller's BigInt syntax and type error policy. */
+    public static JSValue toBigIntPrimitive(JSContext context, JSValue value) {
+        if (value instanceof JSBigIntObject boxed) {
+            return boxed.getValue();
+        }
+        if (value instanceof JSObject object) {
+            value = toPrimitive(context, object, PreferredType.NUMBER);
+            if (context != null && context.hasPendingException()) {
+                return null;
+            }
+        }
+        return value instanceof JSBoolean bool ? new JSBigInt(bool.value() ? 1L : 0L) : value;
     }
 
     /**

@@ -118,13 +118,13 @@ final class ModuleOpcodes {
             resolveState.alreadyResolved = true;
             promise.reject(error);
             executionContext.push(promise);
-            executionContext.pc += op.getSize();
+            executionContext.advance(op);
             return;
         }
         context.enqueueMicrotask(() -> load(context, deferPhase, specifierString, referrerFilename, importAttributes,
                 promise, resolveState));
         executionContext.push(promise);
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     private static void load(JSContext context, boolean deferred, String specifierString, String referrerFilename,

@@ -36,6 +36,21 @@ public class HighPriorityOpcodeTest extends BaseTest {
     }
 
     @Test
+    public void testCallResultSurvivesOperandStackGrowth() {
+        JSNativeFunction grow = new JSNativeFunction(context, "grow", 0, (ctx, receiver, args) -> {
+            CallStack stack = ctx.getVirtualMachine().valueStack;
+            int top = stack.getStackTop();
+            stack.setStackTop(stack.stack.length);
+            stack.push(JSUndefined.INSTANCE);
+            stack.setStackTop(top);
+            return JSNumber.of(41);
+        });
+        context.getGlobalObject().set("grow", grow);
+        assertNumberValue(context.eval("1 + grow()"), 42);
+        assertNumberValue(context.eval("1 + grow(...[])"), 42);
+    }
+
+    @Test
     public void testInitCtor() {
         BytecodeEmitter emitter = new BytecodeEmitter();
         emitter.emitOpcode(Opcode.INIT_CTOR);

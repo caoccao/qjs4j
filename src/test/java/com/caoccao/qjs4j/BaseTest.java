@@ -125,6 +125,11 @@ public abstract class BaseTest {
         return promise.getState() != JSPromise.PromiseState.PENDING;
     }
 
+    /** Bind the receiver once for a table of native builtin input/output cases. */
+    protected BuiltinAssertions builtin(JSNativeCallback callback, JSValue receiver) {
+        return new BuiltinAssertions(callback, receiver);
+    }
+
     protected JSRuntime createRuntime() {
         return new JSRuntime(
                 new JSRuntimeOptions().setModuleLoader(new JSFileSystemModuleLoader()).setTemporalEnabled(true));
@@ -172,5 +177,32 @@ public abstract class BaseTest {
             arguments[i] = new JSString(strings[i]);
         }
         return arguments;
+    }
+
+    protected final class BuiltinAssertions {
+        private final JSNativeCallback callback;
+        private final JSValue receiver;
+
+        private BuiltinAssertions(JSNativeCallback callback, JSValue receiver) {
+            this.callback = callback;
+            this.receiver = receiver;
+        }
+
+        public void expectNaN(JSValue... arguments) {
+            assertThat(callback.call(context, receiver, arguments)).isInstanceOfSatisfying(JSNumber.class,
+                    number -> assertThat(number.value()).isNaN());
+        }
+
+        public void expectNumber(double expected, JSValue... arguments) {
+            assertNumberValue(callback.call(context, receiver, arguments), expected);
+        }
+
+        public void expectString(String expected, JSValue... arguments) {
+            assertStringValue(callback.call(context, receiver, arguments), expected);
+        }
+
+        public void expectValue(JSValue expected, JSValue... arguments) {
+            assertThat(callback.call(context, receiver, arguments)).isEqualTo(expected);
+        }
     }
 }

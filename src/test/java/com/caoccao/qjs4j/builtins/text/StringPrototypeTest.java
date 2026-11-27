@@ -64,30 +64,25 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testCharAt() {
         // Normal case
-        JSValue result = StringPrototype.charAt(context, str, numberArgs(0));
-        assertStringValue(result, "h");
+        BuiltinAssertions charAt = builtin(StringPrototype::charAt, str);
+        charAt.expectString("h", numberArgs(0));
 
-        result = StringPrototype.charAt(context, str, numberArgs(4));
-        assertStringValue(result, "o");
+        charAt.expectString("o", numberArgs(4));
 
         // Default index 0
-        result = StringPrototype.charAt(context, str, JSValue.NO_ARGS);
-        assertStringValue(result, "h");
+        charAt.expectString("h");
 
         // Out of bounds
-        result = StringPrototype.charAt(context, str, numberArgs(-1));
-        assertStringValue(result, "");
+        charAt.expectString("", numberArgs(-1));
 
-        result = StringPrototype.charAt(context, str, numberArgs(20));
-        assertStringValue(result, "");
+        charAt.expectString("", numberArgs(20));
 
         // Non-integer index
-        result = StringPrototype.charAt(context, str, stringArgs("1"));
-        assertStringValue(result, "e");
+        charAt.expectString("e", stringArgs("1"));
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.charAt(context, empty, numberArgs(0));
+        JSValue result = StringPrototype.charAt(context, empty, numberArgs(0));
         assertStringValue(result, "");
 
         // Non-string thisArg
@@ -98,69 +93,60 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testCharCodeAt() {
         // Normal case
-        JSValue result = StringPrototype.charCodeAt(context, str, numberArgs(0));
-        assertNumberValue(result, 104.0);
+        BuiltinAssertions charCodeAt = builtin(StringPrototype::charCodeAt, str);
+        charCodeAt.expectNumber(104.0, numberArgs(0));
 
-        result = StringPrototype.charCodeAt(context, str, numberArgs(4));
-        assertNumberValue(result, 111.0);
+        charCodeAt.expectNumber(111.0, numberArgs(4));
 
         // Default index 0
-        result = StringPrototype.charCodeAt(context, str, JSValue.NO_ARGS);
-        assertNumberValue(result, 104.0);
+        charCodeAt.expectNumber(104.0);
 
         // Out of bounds
-        result = StringPrototype.charCodeAt(context, str, numberArgs(-1));
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isNaN());
+        charCodeAt.expectNaN(numberArgs(-1));
 
-        result = StringPrototype.charCodeAt(context, str, numberArgs(20));
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isNaN());
+        charCodeAt.expectNaN(numberArgs(20));
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.charCodeAt(context, empty, numberArgs(0));
+        JSValue result = StringPrototype.charCodeAt(context, empty, numberArgs(0));
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isNaN());
     }
 
     @Test
     public void testCodePointAt() {
         // Normal case
-        JSValue result = StringPrototype.codePointAt(context, str, numberArgs(0));
-        assertNumberValue(result, 104.0);
+        BuiltinAssertions codePointAt = builtin(StringPrototype::codePointAt, str);
+        codePointAt.expectNumber(104.0, numberArgs(0));
 
         // Surrogate pair (if applicable)
         JSString surrogate = new JSString("😀");
-        result = StringPrototype.codePointAt(context, surrogate, numberArgs(0));
+        JSValue result = StringPrototype.codePointAt(context, surrogate, numberArgs(0));
         assertNumberValue(result, 128512.0);
 
         // Out of bounds
-        result = StringPrototype.codePointAt(context, str, numberArgs(-1));
-        assertThat(result).isEqualTo(JSUndefined.INSTANCE);
+        codePointAt.expectValue(JSUndefined.INSTANCE, numberArgs(-1));
 
-        result = StringPrototype.codePointAt(context, str, numberArgs(20));
-        assertThat(result).isEqualTo(JSUndefined.INSTANCE);
+        codePointAt.expectValue(JSUndefined.INSTANCE, numberArgs(20));
     }
 
     @Test
     public void testConcat() {
         // Normal case
-        JSValue result = StringPrototype.concat(context, str, stringArgs(" test"));
-        assertStringValue(result, "hello world test");
+        BuiltinAssertions concat = builtin(StringPrototype::concat, str);
+        concat.expectString("hello world test", stringArgs(" test"));
 
         // Multiple args
-        result = StringPrototype.concat(context, str, stringArgs(" ", "test"));
-        assertStringValue(result, "hello world test");
+        concat.expectString("hello world test", stringArgs(" ", "test"));
 
         // No args
-        result = StringPrototype.concat(context, str, JSValue.NO_ARGS);
-        assertStringValue(result, "hello world");
+        concat.expectString("hello world");
 
         // Non-string args
-        result = StringPrototype.concat(context, str, numberArgs(42));
-        assertStringValue(result, "hello world42");
+        concat.expectString("hello world42", numberArgs(42));
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.concat(context, empty, new JSValue[]{str});
+        JSValue result = StringPrototype.concat(context, empty, new JSValue[]{str});
         assertStringValue(result, "hello world");
     }
 
@@ -173,31 +159,26 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testEndsWith() {
         // Normal case
-        JSValue result = StringPrototype.endsWith(context, str, stringArgs("world"));
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        BuiltinAssertions endsWith = builtin(StringPrototype::endsWith, str);
+        endsWith.expectValue(JSBoolean.TRUE, stringArgs("world"));
 
-        result = StringPrototype.endsWith(context, str, stringArgs("hello"));
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        endsWith.expectValue(JSBoolean.FALSE, stringArgs("hello"));
 
         // With position
-        result = StringPrototype.endsWith(context, str, new JSValue[]{new JSString("lo"), new JSNumber(5)});
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        endsWith.expectValue(JSBoolean.TRUE, new JSString("lo"), new JSNumber(5));
 
         // Position beyond length
-        result = StringPrototype.endsWith(context, str, new JSValue[]{new JSString("world"), new JSNumber(50)});
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        endsWith.expectValue(JSBoolean.TRUE, new JSString("world"), new JSNumber(50));
 
         // Position 0
-        result = StringPrototype.endsWith(context, str, new JSValue[]{new JSString("world"), new JSNumber(0)});
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        endsWith.expectValue(JSBoolean.FALSE, new JSString("world"), new JSNumber(0));
 
         // Empty search string
-        result = StringPrototype.endsWith(context, str, stringArgs(""));
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        endsWith.expectValue(JSBoolean.TRUE, stringArgs(""));
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.endsWith(context, empty, stringArgs(""));
+        JSValue result = StringPrototype.endsWith(context, empty, stringArgs(""));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
     }
 
@@ -306,53 +287,45 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testIncludes() {
         // Normal case
-        JSValue result = StringPrototype.includes(context, str, stringArgs("world"));
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        BuiltinAssertions includes = builtin(StringPrototype::includes, str);
+        includes.expectValue(JSBoolean.TRUE, stringArgs("world"));
 
-        result = StringPrototype.includes(context, str, stringArgs("test"));
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        includes.expectValue(JSBoolean.FALSE, stringArgs("test"));
 
         // With position
-        result = StringPrototype.includes(context, str, new JSValue[]{new JSString("world"), new JSNumber(6)});
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        includes.expectValue(JSBoolean.TRUE, new JSString("world"), new JSNumber(6));
 
-        result = StringPrototype.includes(context, str, new JSValue[]{new JSString("world"), new JSNumber(7)});
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        includes.expectValue(JSBoolean.FALSE, new JSString("world"), new JSNumber(7));
 
         // Empty search string
-        result = StringPrototype.includes(context, str, stringArgs(""));
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        includes.expectValue(JSBoolean.TRUE, stringArgs(""));
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.includes(context, empty, stringArgs("test"));
+        JSValue result = StringPrototype.includes(context, empty, stringArgs("test"));
         assertThat(result).isEqualTo(JSBoolean.FALSE);
     }
 
     @Test
     public void testIndexOf() {
         // Normal case
-        JSValue result = StringPrototype.indexOf(context, str, stringArgs("world"));
-        assertNumberValue(result, 6.0);
+        BuiltinAssertions indexOf = builtin(StringPrototype::indexOf, str);
+        indexOf.expectNumber(6.0, stringArgs("world"));
 
-        result = StringPrototype.indexOf(context, str, stringArgs("test"));
-        assertNumberValue(result, -1.0);
+        indexOf.expectNumber(-1.0, stringArgs("test"));
 
         // With position
-        result = StringPrototype.indexOf(context, str, new JSValue[]{new JSString("o"), new JSNumber(5)});
-        assertNumberValue(result, 7.0);
+        indexOf.expectNumber(7.0, new JSString("o"), new JSNumber(5));
 
         // Position beyond length
-        result = StringPrototype.indexOf(context, str, new JSValue[]{new JSString("world"), new JSNumber(50)});
-        assertNumberValue(result, -1.0);
+        indexOf.expectNumber(-1.0, new JSString("world"), new JSNumber(50));
 
         // Empty search string
-        result = StringPrototype.indexOf(context, str, stringArgs(""));
-        assertNumberValue(result, 0.0);
+        indexOf.expectNumber(0.0, stringArgs(""));
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.indexOf(context, empty, stringArgs("test"));
+        JSValue result = StringPrototype.indexOf(context, empty, stringArgs("test"));
         assertNumberValue(result, -1.0);
     }
 
@@ -380,27 +353,23 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testLastIndexOf() {
         // Normal case
-        JSValue result = StringPrototype.lastIndexOf(context, str, stringArgs("o"));
-        assertNumberValue(result, 7.0);
+        BuiltinAssertions lastIndexOf = builtin(StringPrototype::lastIndexOf, str);
+        lastIndexOf.expectNumber(7.0, stringArgs("o"));
 
-        result = StringPrototype.lastIndexOf(context, str, stringArgs("test"));
-        assertNumberValue(result, -1.0);
+        lastIndexOf.expectNumber(-1.0, stringArgs("test"));
 
         // With position
-        result = StringPrototype.lastIndexOf(context, str, new JSValue[]{new JSString("o"), new JSNumber(5)});
-        assertNumberValue(result, 4.0);
+        lastIndexOf.expectNumber(4.0, new JSString("o"), new JSNumber(5));
 
         // Position 0
-        result = StringPrototype.lastIndexOf(context, str, new JSValue[]{new JSString("h"), new JSNumber(0)});
-        assertNumberValue(result, 0.0);
+        lastIndexOf.expectNumber(0.0, new JSString("h"), new JSNumber(0));
 
         // Empty search string
-        result = StringPrototype.lastIndexOf(context, str, stringArgs(""));
-        assertNumberValue(result, 11.0);
+        lastIndexOf.expectNumber(11.0, stringArgs(""));
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.lastIndexOf(context, empty, stringArgs("test"));
+        JSValue result = StringPrototype.lastIndexOf(context, empty, stringArgs("test"));
         assertNumberValue(result, -1.0);
     }
 
@@ -542,56 +511,48 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testPadEnd() {
         // Normal case
-        JSValue result = StringPrototype.padEnd(context, str, new JSValue[]{new JSNumber(15), new JSString("*")});
-        assertStringValue(result, "hello world****");
+        BuiltinAssertions padEnd = builtin(StringPrototype::padEnd, str);
+        padEnd.expectString("hello world****", new JSNumber(15), new JSString("*"));
 
         // Shorter target length
-        result = StringPrototype.padEnd(context, str, numberArgs(5));
-        assertStringValue(result, "hello world");
+        padEnd.expectString("hello world", numberArgs(5));
 
         // Default filler
-        result = StringPrototype.padEnd(context, str, numberArgs(15));
-        assertStringValue(result, "hello world    ");
+        padEnd.expectString("hello world    ", numberArgs(15));
 
         // Empty filler
-        result = StringPrototype.padEnd(context, str, new JSValue[]{new JSNumber(15), new JSString("")});
-        assertStringValue(result, "hello world");
+        padEnd.expectString("hello world", new JSNumber(15), new JSString(""));
 
         // Long filler
-        result = StringPrototype.padEnd(context, str, new JSValue[]{new JSNumber(15), new JSString("abc")});
-        assertStringValue(result, "hello worldabca");
+        padEnd.expectString("hello worldabca", new JSNumber(15), new JSString("abc"));
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.padEnd(context, empty, new JSValue[]{new JSNumber(5), new JSString("*")});
+        JSValue result = StringPrototype.padEnd(context, empty, new JSValue[]{new JSNumber(5), new JSString("*")});
         assertStringValue(result, "*****");
     }
 
     @Test
     public void testPadStart() {
         // Normal case
-        JSValue result = StringPrototype.padStart(context, str, new JSValue[]{new JSNumber(15), new JSString("*")});
-        assertStringValue(result, "****hello world");
+        BuiltinAssertions padStart = builtin(StringPrototype::padStart, str);
+        padStart.expectString("****hello world", new JSNumber(15), new JSString("*"));
 
         // Shorter target length
-        result = StringPrototype.padStart(context, str, numberArgs(5));
-        assertStringValue(result, "hello world");
+        padStart.expectString("hello world", numberArgs(5));
 
         // Default filler
-        result = StringPrototype.padStart(context, str, numberArgs(15));
-        assertStringValue(result, "    hello world");
+        padStart.expectString("    hello world", numberArgs(15));
 
         // Empty filler
-        result = StringPrototype.padStart(context, str, new JSValue[]{new JSNumber(15), new JSString("")});
-        assertStringValue(result, "hello world");
+        padStart.expectString("hello world", new JSNumber(15), new JSString(""));
 
         // Long filler
-        result = StringPrototype.padStart(context, str, new JSValue[]{new JSNumber(15), new JSString("abc")});
-        assertStringValue(result, "abcahello world");
+        padStart.expectString("abcahello world", new JSNumber(15), new JSString("abc"));
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.padStart(context, empty, new JSValue[]{new JSNumber(5), new JSString("*")});
+        JSValue result = StringPrototype.padStart(context, empty, new JSValue[]{new JSNumber(5), new JSString("*")});
         assertStringValue(result, "*****");
     }
 
@@ -603,16 +564,14 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testRepeat() {
         // Normal case
-        JSValue result = StringPrototype.repeat(context, str, numberArgs(2));
-        assertStringValue(result, "hello worldhello world");
+        BuiltinAssertions repeat = builtin(StringPrototype::repeat, str);
+        repeat.expectString("hello worldhello world", numberArgs(2));
 
         // Zero count
-        result = StringPrototype.repeat(context, str, numberArgs(0));
-        assertStringValue(result, "");
+        repeat.expectString("", numberArgs(0));
 
         // One count
-        result = StringPrototype.repeat(context, str, numberArgs(1));
-        assertStringValue(result, "hello world");
+        repeat.expectString("hello world", numberArgs(1));
 
         // Negative count
         StringPrototype.repeat(context, str, numberArgs(-1));
@@ -620,27 +579,25 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.repeat(context, empty, numberArgs(3));
+        JSValue result = StringPrototype.repeat(context, empty, numberArgs(3));
         assertStringValue(result, "");
     }
 
     @Test
     public void testReplace() {
         // Normal case
-        JSValue result = StringPrototype.replace(context, str, stringArgs("world", "universe"));
-        assertStringValue(result, "hello universe");
+        BuiltinAssertions replace = builtin(StringPrototype::replace, str);
+        replace.expectString("hello universe", stringArgs("world", "universe"));
 
         // No match
-        result = StringPrototype.replace(context, str, stringArgs("test", "universe"));
-        assertStringValue(result, "hello world");
+        replace.expectString("hello world", stringArgs("test", "universe"));
 
         // Replace with function (simplified, assuming string replacement)
-        result = StringPrototype.replace(context, str, stringArgs("o", "x"));
-        assertStringValue(result, "hellx world");
+        replace.expectString("hellx world", stringArgs("o", "x"));
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.replace(context, empty, stringArgs("", "test"));
+        JSValue result = StringPrototype.replace(context, empty, stringArgs("", "test"));
         assertStringValue(result, "test");
     }
 
@@ -777,26 +734,22 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testSlice() {
         // Normal case
-        JSValue result = StringPrototype.slice(context, str, numberArgs(6));
-        assertStringValue(result, "world");
+        BuiltinAssertions slice = builtin(StringPrototype::slice, str);
+        slice.expectString("world", numberArgs(6));
 
-        result = StringPrototype.slice(context, str, numberArgs(0, 5));
-        assertStringValue(result, "hello");
+        slice.expectString("hello", numberArgs(0, 5));
 
         // Negative indices
-        result = StringPrototype.slice(context, str, numberArgs(-5));
-        assertStringValue(result, "world");
+        slice.expectString("world", numberArgs(-5));
 
-        result = StringPrototype.slice(context, str, numberArgs(0, -6));
-        assertStringValue(result, "hello");
+        slice.expectString("hello", numberArgs(0, -6));
 
         // Out of bounds
-        result = StringPrototype.slice(context, str, numberArgs(50));
-        assertStringValue(result, "");
+        slice.expectString("", numberArgs(50));
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.slice(context, empty, numberArgs(0));
+        JSValue result = StringPrototype.slice(context, empty, numberArgs(0));
         assertStringValue(result, "");
     }
 
@@ -873,27 +826,23 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testStartsWith() {
         // Normal case
-        JSValue result = StringPrototype.startsWith(context, str, stringArgs("hello"));
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        BuiltinAssertions startsWith = builtin(StringPrototype::startsWith, str);
+        startsWith.expectValue(JSBoolean.TRUE, stringArgs("hello"));
 
-        result = StringPrototype.startsWith(context, str, stringArgs("world"));
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        startsWith.expectValue(JSBoolean.FALSE, stringArgs("world"));
 
         // With position
-        result = StringPrototype.startsWith(context, str, new JSValue[]{new JSString("world"), new JSNumber(6)});
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        startsWith.expectValue(JSBoolean.TRUE, new JSString("world"), new JSNumber(6));
 
         // Position beyond length
-        result = StringPrototype.startsWith(context, str, new JSValue[]{new JSString("hello"), new JSNumber(50)});
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        startsWith.expectValue(JSBoolean.FALSE, new JSString("hello"), new JSNumber(50));
 
         // Empty search string
-        result = StringPrototype.startsWith(context, str, stringArgs(""));
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        startsWith.expectValue(JSBoolean.TRUE, stringArgs(""));
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.startsWith(context, empty, stringArgs(""));
+        JSValue result = StringPrototype.startsWith(context, empty, stringArgs(""));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
     }
 
@@ -925,28 +874,24 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testSubstr() {
         // Normal case
-        JSValue result = StringPrototype.substr(context, str, numberArgs(6, 5));
-        assertStringValue(result, "world");
+        BuiltinAssertions substr = builtin(StringPrototype::substr, str);
+        substr.expectString("world", numberArgs(6, 5));
 
         // No length
-        result = StringPrototype.substr(context, str, numberArgs(6));
-        assertStringValue(result, "world");
+        substr.expectString("world", numberArgs(6));
 
         // Negative start
-        result = StringPrototype.substr(context, str, numberArgs(-5, 5));
-        assertStringValue(result, "world");
+        substr.expectString("world", numberArgs(-5, 5));
 
         // Negative length
-        result = StringPrototype.substr(context, str, numberArgs(0, -1));
-        assertStringValue(result, "");
+        substr.expectString("", numberArgs(0, -1));
 
         // Out of bounds
-        result = StringPrototype.substr(context, str, numberArgs(50));
-        assertStringValue(result, "");
+        substr.expectString("", numberArgs(50));
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.substr(context, empty, numberArgs(0));
+        JSValue result = StringPrototype.substr(context, empty, numberArgs(0));
         assertStringValue(result, "");
 
         // Chinese characters
@@ -995,27 +940,23 @@ public class StringPrototypeTest extends BaseJavetTest {
     @Test
     public void testSubstring() {
         // Normal case
-        JSValue result = StringPrototype.substring(context, str, numberArgs(6));
-        assertStringValue(result, "world");
+        BuiltinAssertions substring = builtin(StringPrototype::substring, str);
+        substring.expectString("world", numberArgs(6));
 
-        result = StringPrototype.substring(context, str, numberArgs(0, 5));
-        assertStringValue(result, "hello");
+        substring.expectString("hello", numberArgs(0, 5));
 
         // Swapped indices
-        result = StringPrototype.substring(context, str, numberArgs(5, 0));
-        assertStringValue(result, "hello");
+        substring.expectString("hello", numberArgs(5, 0));
 
         // Negative indices
-        result = StringPrototype.substring(context, str, numberArgs(-5));
-        assertStringValue(result, "hello world");
+        substring.expectString("hello world", numberArgs(-5));
 
         // Out of bounds
-        result = StringPrototype.substring(context, str, numberArgs(50));
-        assertStringValue(result, "");
+        substring.expectString("", numberArgs(50));
 
         // Empty string
         JSString empty = new JSString("");
-        result = StringPrototype.substring(context, empty, numberArgs(0));
+        JSValue result = StringPrototype.substring(context, empty, numberArgs(0));
         assertStringValue(result, "");
 
         // Chinese characters

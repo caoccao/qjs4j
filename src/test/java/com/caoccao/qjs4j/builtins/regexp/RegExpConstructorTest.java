@@ -524,20 +524,17 @@ public class RegExpConstructorTest extends BaseJavetTest {
         JSRegExp regexp = new JSRegExp(context, "hello", "");
 
         // Normal case: match
-        JSValue result = RegExpPrototype.test(context, regexp, stringArgs("hello world"));
-        assertThat(result.isBooleanTrue()).isTrue();
+        BuiltinAssertions test = builtin(RegExpPrototype::test, regexp);
+        test.expectValue(JSBoolean.TRUE, stringArgs("hello world"));
 
         // Normal case: no match
-        result = RegExpPrototype.test(context, regexp, stringArgs("goodbye world"));
-        assertThat(result.isBooleanFalse()).isTrue();
+        test.expectValue(JSBoolean.FALSE, stringArgs("goodbye world"));
 
         // Edge case: empty string
-        result = RegExpPrototype.test(context, regexp, stringArgs(""));
-        assertThat(result.isBooleanFalse()).isTrue();
+        test.expectValue(JSBoolean.FALSE, stringArgs(""));
 
         // Edge case: no arguments (should test against "")
-        result = RegExpPrototype.test(context, regexp, JSValue.NO_ARGS);
-        assertThat(result.isBooleanFalse()).isTrue();
+        test.expectValue(JSBoolean.FALSE);
 
         // Edge case: called on non-RegExp
         assertPendingTypeError(context, RegExpPrototype.test(context, new JSString("not regexp"), stringArgs("test")));
@@ -563,17 +560,15 @@ public class RegExpConstructorTest extends BaseJavetTest {
         JSRegExp regexp = new JSRegExp(context, "o", "g");
 
         // First test should match and update lastIndex
-        JSValue result = RegExpPrototype.test(context, regexp, stringArgs("foo bar"));
-        assertThat(result.isBooleanTrue()).isTrue();
+        BuiltinAssertions test = builtin(RegExpPrototype::test, regexp);
+        test.expectValue(JSBoolean.TRUE, stringArgs("foo bar"));
         assertThat(regexp.getLastIndex() > 0).isTrue();
 
         // Second test should continue from lastIndex
-        result = RegExpPrototype.test(context, regexp, stringArgs("foo bar"));
-        assertThat(result.isBooleanTrue()).isTrue();
+        test.expectValue(JSBoolean.TRUE, stringArgs("foo bar"));
 
         // Third test should fail and reset lastIndex
-        result = RegExpPrototype.test(context, regexp, stringArgs("foo bar"));
-        assertThat(result.isBooleanFalse()).isTrue();
+        test.expectValue(JSBoolean.FALSE, stringArgs("foo bar"));
         assertThat(regexp.getLastIndex()).isEqualTo(0);
     }
 

@@ -263,25 +263,22 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         JSObject child = new JSObject(context, obj);
 
         // Normal case: direct prototype
-        JSValue result = ObjectPrototype.isPrototypeOf(context, proto, new JSValue[]{obj});
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        BuiltinAssertions isPrototypeOf = builtin(ObjectPrototype::isPrototypeOf, proto);
+        isPrototypeOf.expectValue(JSBoolean.TRUE, obj);
 
         // Normal case: prototype chain
-        result = ObjectPrototype.isPrototypeOf(context, proto, new JSValue[]{child});
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        isPrototypeOf.expectValue(JSBoolean.TRUE, child);
 
         // Normal case: same level (not in chain)
-        result = ObjectPrototype.isPrototypeOf(context, obj, new JSValue[]{proto});
+        JSValue result = ObjectPrototype.isPrototypeOf(context, obj, new JSValue[]{proto});
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: no relationship
         JSObject unrelated = new JSObject(context);
-        result = ObjectPrototype.isPrototypeOf(context, proto, new JSValue[]{unrelated});
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        isPrototypeOf.expectValue(JSBoolean.FALSE, unrelated);
 
         // Edge case: primitive argument
-        result = ObjectPrototype.isPrototypeOf(context, proto, stringArgs("test"));
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        isPrototypeOf.expectValue(JSBoolean.FALSE, stringArgs("test"));
 
         // Edge case: null thisArg
         result = ObjectPrototype.isPrototypeOf(context, JSNull.INSTANCE, new JSValue[]{obj});

@@ -417,123 +417,63 @@ public final class ByteArrayAtomics {
         }
 
         static byte getAndAddByte(byte[] array, int offset, byte delta) {
-            synchronized (lockFor(array)) {
-                byte current = array[offset];
-                array[offset] = (byte) (current + delta);
-                return current;
-            }
+            return updateByte(array, offset, delta, Update.ADD);
         }
 
         static int getAndAddInt(byte[] array, int offset, int delta) {
-            synchronized (lockFor(array)) {
-                int current = readInt(array, offset);
-                writeInt(array, offset, current + delta);
-                return current;
-            }
+            return updateInt(array, offset, delta, Update.ADD);
         }
 
         static long getAndAddLong(byte[] array, int offset, long delta) {
-            synchronized (lockFor(array)) {
-                long current = readLong(array, offset);
-                writeLong(array, offset, current + delta);
-                return current;
-            }
+            return updateLong(array, offset, delta, Update.ADD);
         }
 
         static byte getAndBitwiseAndByte(byte[] array, int offset, byte operand) {
-            synchronized (lockFor(array)) {
-                byte current = array[offset];
-                array[offset] = (byte) (current & operand);
-                return current;
-            }
+            return updateByte(array, offset, operand, Update.AND);
         }
 
         static int getAndBitwiseAndInt(byte[] array, int offset, int operand) {
-            synchronized (lockFor(array)) {
-                int current = readInt(array, offset);
-                writeInt(array, offset, current & operand);
-                return current;
-            }
+            return updateInt(array, offset, operand, Update.AND);
         }
 
         static long getAndBitwiseAndLong(byte[] array, int offset, long operand) {
-            synchronized (lockFor(array)) {
-                long current = readLong(array, offset);
-                writeLong(array, offset, current & operand);
-                return current;
-            }
+            return updateLong(array, offset, operand, Update.AND);
         }
 
         static byte getAndBitwiseOrByte(byte[] array, int offset, byte operand) {
-            synchronized (lockFor(array)) {
-                byte current = array[offset];
-                array[offset] = (byte) (current | operand);
-                return current;
-            }
+            return updateByte(array, offset, operand, Update.OR);
         }
 
         static int getAndBitwiseOrInt(byte[] array, int offset, int operand) {
-            synchronized (lockFor(array)) {
-                int current = readInt(array, offset);
-                writeInt(array, offset, current | operand);
-                return current;
-            }
+            return updateInt(array, offset, operand, Update.OR);
         }
 
         static long getAndBitwiseOrLong(byte[] array, int offset, long operand) {
-            synchronized (lockFor(array)) {
-                long current = readLong(array, offset);
-                writeLong(array, offset, current | operand);
-                return current;
-            }
+            return updateLong(array, offset, operand, Update.OR);
         }
 
         static byte getAndBitwiseXorByte(byte[] array, int offset, byte operand) {
-            synchronized (lockFor(array)) {
-                byte current = array[offset];
-                array[offset] = (byte) (current ^ operand);
-                return current;
-            }
+            return updateByte(array, offset, operand, Update.XOR);
         }
 
         static int getAndBitwiseXorInt(byte[] array, int offset, int operand) {
-            synchronized (lockFor(array)) {
-                int current = readInt(array, offset);
-                writeInt(array, offset, current ^ operand);
-                return current;
-            }
+            return updateInt(array, offset, operand, Update.XOR);
         }
 
         static long getAndBitwiseXorLong(byte[] array, int offset, long operand) {
-            synchronized (lockFor(array)) {
-                long current = readLong(array, offset);
-                writeLong(array, offset, current ^ operand);
-                return current;
-            }
+            return updateLong(array, offset, operand, Update.XOR);
         }
 
         static byte getAndSetByte(byte[] array, int offset, byte value) {
-            synchronized (lockFor(array)) {
-                byte current = array[offset];
-                array[offset] = value;
-                return current;
-            }
+            return updateByte(array, offset, value, Update.SET);
         }
 
         static int getAndSetInt(byte[] array, int offset, int value) {
-            synchronized (lockFor(array)) {
-                int current = readInt(array, offset);
-                writeInt(array, offset, value);
-                return current;
-            }
+            return updateInt(array, offset, value, Update.SET);
         }
 
         static long getAndSetLong(byte[] array, int offset, long value) {
-            synchronized (lockFor(array)) {
-                long current = readLong(array, offset);
-                writeLong(array, offset, value);
-                return current;
-            }
+            return updateLong(array, offset, value, Update.SET);
         }
 
         static byte getVolatileByte(byte[] array, int offset) {
@@ -581,6 +521,48 @@ public final class ByteArrayAtomics {
         static void setVolatileShort(byte[] array, int offset, short value) {
             synchronized (lockFor(array)) {
                 writeShort(array, offset, value);
+            }
+        }
+
+        private static byte updateByte(byte[] array, int offset, byte operand, Update operation) {
+            synchronized (lockFor(array)) {
+                byte current = array[offset];
+                array[offset] = (byte) operation.apply(current, operand);
+                return current;
+            }
+        }
+
+        private static int updateInt(byte[] array, int offset, int operand, Update operation) {
+            synchronized (lockFor(array)) {
+                int current = readInt(array, offset);
+                writeInt(array, offset, (int) operation.apply(current, operand));
+                return current;
+            }
+        }
+
+        private static long updateLong(byte[] array, int offset, long operand, Update operation) {
+            synchronized (lockFor(array)) {
+                long current = readLong(array, offset);
+                writeLong(array, offset, operation.apply(current, operand));
+                return current;
+            }
+        }
+
+        private enum Update {
+            ADD,
+            AND,
+            OR,
+            SET,
+            XOR;
+
+            long apply(long current, long operand) {
+                return switch (this) {
+                    case ADD -> current + operand;
+                    case AND -> current & operand;
+                    case OR -> current | operand;
+                    case XOR -> current ^ operand;
+                    case SET -> operand;
+                };
             }
         }
     }

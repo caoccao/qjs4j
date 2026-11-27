@@ -110,7 +110,7 @@ final class ClassOpcodes {
         }
 
         stack[sp++] = objectValue;
-        executionContext.finishOpcode(pc + op.getSize(), sp);
+        executionContext.finishOpcode(op, sp);
     }
 
     static void handleDefineMethodComputed(Opcode op, ExecutionContext executionContext) {
@@ -215,11 +215,11 @@ final class ClassOpcodes {
             }
         }
 
-        executionContext.finishOpcode(pc + op.getSize(), sp);
+        executionContext.finishOpcode(op, sp);
     }
 
     static void handleInitCtor(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
+        CallStack operandStack = executionContext.beginStackOpcode();
         JSValue frameNewTarget = executionContext.virtualMachine.currentFrame.getNewTarget();
         if (frameNewTarget.isNullOrUndefined()) {
             // Keep direct VM opcode tests stable when executionContext.virtualMachine.execute() is used without
@@ -227,8 +227,8 @@ final class ClassOpcodes {
             if (executionContext.virtualMachine.currentFrame.getCaller() == null) {
                 JSValue fallbackThis = executionContext.virtualMachine.currentFrame.getThisArg();
                 if (fallbackThis instanceof JSObject) {
-                    executionContext.virtualMachine.valueStack.push(fallbackThis);
-                    executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+                    operandStack.push(fallbackThis);
+                    executionContext.finishStackOpcode(op);
                     return;
                 }
             }
@@ -242,19 +242,18 @@ final class ClassOpcodes {
         JSFunction currentFunction = executionContext.virtualMachine.currentFrame.getFunction();
         if (hasInitializedThis(executionContext.frame, currentFunction)) {
             executionContext.raiseReferenceError("Super constructor may only be called once");
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+            operandStack.push(JSUndefined.INSTANCE);
+            executionContext.finishStackOpcode(op);
             return;
         }
 
         // Explicit super(...): APPLY constructor mode left the initialized this value on stack.
-        if (executionContext.virtualMachine.valueStack.getStackTop() > executionContext.virtualMachine.currentFrame
-                .getStackBase()) {
-            JSValue thisValue = executionContext.virtualMachine.valueStack.pop();
+        if (operandStack.getStackTop() > executionContext.virtualMachine.currentFrame.getStackBase()) {
+            JSValue thisValue = operandStack.pop();
             if (!(thisValue instanceof JSObject jsObject)) {
                 executionContext.raiseTypeError("super() returned non-object");
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+                operandStack.push(JSUndefined.INSTANCE);
+                executionContext.finishStackOpcode(op);
                 return;
             }
             initializeDerivedThis(executionContext.virtualMachine.currentFrame, jsObject);
@@ -275,15 +274,15 @@ final class ClassOpcodes {
                     callerFrame = callerFrame.getCaller();
                 }
             }
-            executionContext.virtualMachine.valueStack.push(jsObject);
+            operandStack.push(jsObject);
         } else {
             // Default derived constructor path:
             // constructor(...args) { super(...args); }
             JSObject superConstructorObject = currentFunction.getPrototype();
             if (!JSTypeChecking.isConstructor(superConstructorObject)) {
                 executionContext.raiseTypeError("parent class must be constructor");
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+                operandStack.push(JSUndefined.INSTANCE);
+                executionContext.finishStackOpcode(op);
                 return;
             }
 
@@ -296,21 +295,21 @@ final class ClassOpcodes {
                         executionContext.frame.getArguments(), frameNewTarget);
             } else {
                 executionContext.raiseTypeError("parent class must be constructor");
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+                operandStack.push(JSUndefined.INSTANCE);
+                executionContext.finishStackOpcode(op);
                 return;
             }
             if (executionContext.capturePendingException()) {
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                operandStack.push(JSUndefined.INSTANCE);
             } else if (!(superResult instanceof JSObject superObject)) {
                 executionContext.raiseTypeError("super() returned non-object");
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                operandStack.push(JSUndefined.INSTANCE);
             } else {
                 initializeDerivedThis(executionContext.virtualMachine.currentFrame, superObject);
-                executionContext.virtualMachine.valueStack.push(superObject);
+                operandStack.push(superObject);
             }
         }
-        executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+        executionContext.finishStackOpcode(op);
     }
 
     static void handleSetHomeObject(Opcode op, ExecutionContext executionContext) {
@@ -321,7 +320,7 @@ final class ClassOpcodes {
         if (methodValue instanceof JSFunction methodFunction && homeObjectValue instanceof JSObject homeObject) {
             methodFunction.setHomeObject(homeObject);
         }
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handleSetName(Opcode op, ExecutionContext executionContext) {
@@ -338,7 +337,7 @@ final class ClassOpcodes {
         JSValue nameValue = (JSValue) stack[sp - 2];
         executionContext.virtualMachine.setObjectName((JSValue) stack[sp - 1],
                 executionContext.virtualMachine.getComputedNameString(nameValue));
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handleSetProto(Opcode op, ExecutionContext executionContext) {
@@ -353,7 +352,7 @@ final class ClassOpcodes {
                 object.setPrototype(null);
             }
         }
-        executionContext.finishOpcode(executionContext.pc + op.getSize(), sp);
+        executionContext.finishOpcode(op, sp);
     }
 
     private static boolean hasInitializedThis(StackFrame frame, JSFunction function) {

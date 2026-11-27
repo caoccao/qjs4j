@@ -26,8 +26,8 @@ import com.caoccao.qjs4j.core.temporal.calendar.TemporalCalendarId;
 /**
  * Reads Temporal fields in the order requested by the caller. After an abrupt completion, later getters are skipped.
  */
-public final class TemporalPropertyBag {
-    private final JSContext context;
+public class TemporalPropertyBag {
+    protected final JSContext context;
     private final JSObject fields;
     private boolean hasTimeField;
 

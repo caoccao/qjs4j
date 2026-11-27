@@ -29,6 +29,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
 
+    private void assertInvalidReceiverRejection(JSValue result) {
+        JSPromise promise = result.asPromise().orElseThrow();
+        assertThat(awaitPromise(promise)).isTrue();
+        assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
+        assertTypeError(promise.getResult());
+        assertThat(context.hasPendingException()).isFalse();
+    }
+
     @Test
     public void testCreateDelayedGenerator() {
         // Test creating a delayed generator with some values
@@ -111,11 +119,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
     public void testNextOnNonAsyncGenerator() {
         // Test next() called on non-async generator
         JSValue result = AsyncGeneratorPrototype.next(context, new JSString("not a generator"), JSValue.NO_ARGS);
-        JSPromise promise = result.asPromise().orElseThrow();
-        assertThat(awaitPromise(promise)).isTrue();
-        assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
-        assertTypeError(promise.getResult());
-        assertThat(context.hasPendingException()).isFalse();
+        assertInvalidReceiverRejection(result);
     }
 
     @Test
@@ -171,11 +175,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
     public void testReturnOnNonAsyncGenerator() {
         // Test return() called on non-async generator
         JSValue result = AsyncGeneratorPrototype.return_(context, new JSNumber(123), stringArgs("value"));
-        JSPromise promise = result.asPromise().orElseThrow();
-        assertThat(awaitPromise(promise)).isTrue();
-        assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
-        assertTypeError(promise.getResult());
-        assertThat(context.hasPendingException()).isFalse();
+        assertInvalidReceiverRejection(result);
     }
 
     @Test
@@ -214,11 +214,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
     public void testThrowOnNonAsyncGenerator() {
         // Test throw() called on non-async generator
         JSValue result = AsyncGeneratorPrototype.throw_(context, new JSObject(context), stringArgs("error"));
-        JSPromise promise = result.asPromise().orElseThrow();
-        assertThat(awaitPromise(promise)).isTrue();
-        assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
-        assertTypeError(promise.getResult());
-        assertThat(context.hasPendingException()).isFalse();
+        assertInvalidReceiverRejection(result);
     }
 
     @Test

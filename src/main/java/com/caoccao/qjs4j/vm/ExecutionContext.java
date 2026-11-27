@@ -41,6 +41,16 @@ final class ExecutionContext {
         this.sp = 0;
     }
 
+    void advance(Opcode op) {
+        pc += op.getSize();
+    }
+
+    CallStack beginStackOpcode() {
+        CallStack stack = virtualMachine.valueStack;
+        stack.stackTop = sp;
+        return stack;
+    }
+
     boolean capturePendingException() {
         JSContext context = virtualMachine.context;
         if (context.hasPendingException()) {
@@ -56,9 +66,23 @@ final class ExecutionContext {
         pc = nextPc;
     }
 
+    void finishOpcode(Opcode op, int stackPointer) {
+        finishOpcode(pc + op.getSize(), stackPointer);
+    }
+
     /** A handler using CallStack.push/pop takes its final depth from that stack. */
     void finishStackOpcode(int nextPc) {
         finishOpcode(nextPc, virtualMachine.valueStack.stackTop);
+    }
+
+    void finishStackOpcode(Opcode op) {
+        finishOpcode(op, virtualMachine.valueStack.stackTop);
+    }
+
+    /** A getter or call can grow the backing stack while it runs. Publish to its current array. */
+    void finishWithResult(Opcode op, int resultSlot, JSValue value) {
+        virtualMachine.valueStack.stack[resultSlot] = value;
+        finishOpcode(op, resultSlot + 1);
     }
 
     JSValue peek(int offset) {

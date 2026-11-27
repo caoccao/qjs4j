@@ -281,15 +281,8 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue withCalendar(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = RECEIVER.require(context, thisArg, "withCalendar");
-        if (plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        TemporalCalendarId calendarId = TemporalUtils.requireCalendarArgument(context, args);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSTemporalPlainDate.create(context, plainDate.getIsoDate(), calendarId);
+        return RECEIVER.withCalendar(context, thisArg, args,
+                (ctx, plainDate, calendarId) -> JSTemporalPlainDate.create(ctx, plainDate.getIsoDate(), calendarId));
     }
 
     public static JSValue year(JSContext context, JSValue thisArg, JSValue[] args) {

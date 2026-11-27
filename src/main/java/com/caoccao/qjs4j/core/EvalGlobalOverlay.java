@@ -163,7 +163,4 @@ final class EvalGlobalOverlay {
         }
     }
 
-    boolean wasAbsent(String name) {
-        return absentKeys.contains(name);
-    }
 }

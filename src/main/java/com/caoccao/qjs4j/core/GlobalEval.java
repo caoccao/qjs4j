@@ -21,7 +21,6 @@ import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.core.error.JSStackFrame;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.vm.StackFrame;
-import com.caoccao.qjs4j.vm.VarRef;
 
 import java.util.*;
 
@@ -78,11 +77,8 @@ final class GlobalEval {
         } else if (node instanceof IfStatement branch) {
             collectCallerBindings(branch.getConsequent(), vars, constants);
             collectCallerBindings(branch.getAlternate(), vars, constants);
-        } else if (node instanceof ForStatement loop) {
-            collectCallerBindings(loop.getInit(), vars, constants);
-            collectCallerBindings(loop.getBody(), vars, constants);
-        } else if (node instanceof ForEachStatement loop) {
-            collectCallerBindings(loop.getLeft(), vars, constants);
+        } else if (node instanceof ForLoop loop) {
+            collectCallerBindings(loop.getHead(), vars, constants);
             collectCallerBindings(loop.getBody(), vars, constants);
         } else if (node instanceof WhileLoop loop) {
             collectCallerBindings(loop.getBody(), vars, constants);
@@ -108,29 +104,6 @@ final class GlobalEval {
         for (Statement statement : statements) {
             collectCallerBindings(statement, vars, constants);
         }
-    }
-
-    private static boolean containsIdentifierReference(String sourceCode, String identifierName) {
-        if (sourceCode == null || sourceCode.isEmpty() || identifierName == null || identifierName.isEmpty()) {
-            return false;
-        }
-        int searchIndex = 0;
-        while (searchIndex <= sourceCode.length() - identifierName.length()) {
-            int matchIndex = sourceCode.indexOf(identifierName, searchIndex);
-            if (matchIndex < 0) {
-                return false;
-            }
-            int beforeIndex = matchIndex - 1;
-            int afterIndex = matchIndex + identifierName.length();
-            boolean hasIdentifierCharBefore = beforeIndex >= 0 && isIdentifierPartAscii(sourceCode.charAt(beforeIndex));
-            boolean hasIdentifierCharAfter = afterIndex < sourceCode.length()
-                    && isIdentifierPartAscii(sourceCode.charAt(afterIndex));
-            if (!hasIdentifierCharBefore && !hasIdentifierCharAfter) {
-                return true;
-            }
-            searchIndex = matchIndex + identifierName.length();
-        }
-        return false;
     }
 
     static JSValue evaluate(JSContext realmContext, JSContext callerContext, JSValue[] args,
@@ -160,12 +133,7 @@ final class GlobalEval {
         boolean inheritedStrictMode = shouldUseCallerFrameSemantics && callerFrame != null
                 && callerFrame.getFunction() instanceof JSBytecodeFunction bytecodeFunction
                 && bytecodeFunction.isStrict();
-        String[] localVarNames = null;
-        Map<String, Integer> localVarNameToIndex = null;
-        Set<String> localVarNameSet = null;
-        Map<String, Integer> capturedVarOverlaySlots = null;
-        EvalGlobalOverlay overlay = null;
-        Set<String> constantOverlayBindingNames = new HashSet<>();
+        EvalCallerBindings bindings = null;
         Set<String> evalVarDeclarations = null;
         Set<String> evalLexDeclarations = null;
         Set<String> evalFunctionDeclarations = null;
@@ -178,27 +146,6 @@ final class GlobalEval {
         JSObject global = realmContext.getGlobalObject();
         JSBytecodeFunction callerBytecodeFunction = callerFrame != null
                 && callerFrame.getFunction() instanceof JSBytecodeFunction bytecodeFunction ? bytecodeFunction : null;
-        // Track function expression name binding index so eval cannot overwrite it.
-        // Per ES2024 14.1.2 step 27, the binding is immutable (TypeError in strict,
-        // silently ignored in sloppy mode).
-        int functionNameLocalIndex = callerBytecodeFunction != null ? callerBytecodeFunction.getSelfLocalIndex() : -1;
-        // The named-function-expression bindings this frame resolves through a parameter
-        // environment rather than through an ordinary local. The two are kept apart because
-        // they are not the same claim, and conflating them was a defect: a name is not a
-        // binding identity, so an *inherited* name says nothing about a binding of the same
-        // spelling that this frame declares itself. A nested closure written in an enclosing
-        // initializer may have its own parameter, `var`, lexical, class or function called `n`,
-        // and that nearer binding shadows the function-expression one and is mutable — but
-        // membership in a set of names classified it as the immutable one, so direct eval's
-        // assignment to it was discarded. The frame's *own* name is a binding of this frame, so
-        // it stays authoritative. See EvalGlobalOverlay.bindParameterFunction.
-        String activeOwnParameterScopeFunctionName = callerBytecodeFunction == null
-                ? null
-                : callerBytecodeFunction.getActiveParameterScopeFunctionName(callerFrame);
-        Set<String> inheritedParameterScopeFunctionNames = callerBytecodeFunction == null
-                ? Set.of()
-                : callerBytecodeFunction.getInheritedParameterScopeFunctionNames();
-
         // When eval runs inside a function, snapshot global property names so we can
         // clean up var/function bindings that should be function-scoped (not global).
         Set<String> globalKeysBefore = null;
@@ -220,117 +167,12 @@ final class GlobalEval {
 
         if ((shouldOverlayLocals || shouldOverlayTopLevelLexicals) && callerBytecodeFunction != null
                 && callerBytecodeFunction.getBytecode().getLocalVarNames() != null) {
-            localVarNames = callerBytecodeFunction.getBytecode().getLocalVarNames();
-            localVarNameToIndex = new HashMap<>();
-            localVarNameSet = new HashSet<>();
-            capturedVarOverlaySlots = new LinkedHashMap<>();
-            overlay = new EvalGlobalOverlay(global);
-            JSValue[] locals = callerFrame.getLocals();
-            for (int i = 0; i < localVarNames.length && i < locals.length; i++) {
-                String name = localVarNames[i];
-                if (name == null) {
-                    continue;
-                }
-                if (name.startsWith("#")) {
-                    continue;
-                }
-                if (shouldOverlayTopLevelLexicals && locals[i] instanceof JSSymbol symbolValue
-                        && "UninitializedMarker".equals(symbolValue.getDescription())) {
-                    continue;
-                }
-                if (shouldOverlayTopLevelLexicals && !callerContext.hasGlobalLexDeclaration(name)) {
-                    boolean localBindingIsUndefined = locals[i] == null || locals[i] == JSUndefined.INSTANCE;
-                    boolean evalSourceMentionsBinding = containsIdentifierReference(code, name);
-                    if (localBindingIsUndefined || !evalSourceMentionsBinding) {
-                        continue;
-                    }
-                }
-                localVarNameSet.add(name);
-                localVarNameToIndex.putIfAbsent(name, i);
-                overlay.bind(name, locals[i]);
-                // Function name bindings are immutable: make the overlay property
-                // non-writable so PUT_VAR throws TypeError in strict mode and
-                // silently fails in sloppy mode.
-                boolean isFunctionNameBinding = functionNameLocalIndex >= 0 && i == functionNameLocalIndex;
-                boolean isConstLexicalBinding = shouldOverlayLocals && constLexicalNames != null
-                        && constLexicalNames.contains(name);
-                if (isFunctionNameBinding || isConstLexicalBinding) {
-                    overlay.makeImmutable(name, locals[i]);
-                    if (isConstLexicalBinding && !isFunctionNameBinding) {
-                        constantOverlayBindingNames.add(name);
-                    }
-                }
-            }
+            bindings = new EvalCallerBindings(global, callerFrame, callerBytecodeFunction);
+            bindings.bindLocals(callerContext, code, shouldOverlayTopLevelLexicals, constLexicalNames);
             if (shouldOverlayLocals) {
-                IdentityHashMap<StackFrame, Boolean> visitedLexicalFrames = new IdentityHashMap<>();
-                if (callerBytecodeFunction.isEvalDynamicScopeLookupEnabled()
-                        && callerBytecodeFunction.getEvalDynamicScopeFrame() != null) {
-                    StackFrame evalScopeFrame = callerBytecodeFunction.getEvalDynamicScopeFrame();
-                    while (evalScopeFrame != null && visitedLexicalFrames.put(evalScopeFrame, Boolean.TRUE) == null) {
-                        if (evalScopeFrame != callerFrame) {
-                            overlay.bindFrameLocals(evalScopeFrame, localVarNameSet);
-                            overlay.bindDynamicVariables(evalScopeFrame);
-                        }
-                        evalScopeFrame = evalScopeFrame.getCaller();
-                    }
-                }
-                VarRef[] callerVarRefs = callerBytecodeFunction.getVarRefs();
-                if (callerVarRefs != null) {
-                    int selfCaptureIndex = callerBytecodeFunction.getSelfCaptureIndex();
-                    for (int captureSlot = 0; captureSlot < callerVarRefs.length; captureSlot++) {
-                        String capturedVarName = callerBytecodeFunction.getCapturedVarName(captureSlot);
-                        if (capturedVarName == null || capturedVarName.startsWith("#")) {
-                            continue;
-                        }
-                        if (localVarNameSet.contains(capturedVarName)) {
-                            continue;
-                        }
-                        JSValue capturedValue = callerFrame.getVarRef(captureSlot);
-                        overlay.bind(capturedVarName, capturedValue);
-                        capturedVarOverlaySlots.put(capturedVarName, captureSlot);
-                        // Both captures represent immutable function-expression bindings.
-                        if (inheritedParameterScopeFunctionNames.contains(capturedVarName)
-                                || selfCaptureIndex >= 0 && captureSlot == selfCaptureIndex) {
-                            overlay.makeImmutable(capturedVarName, capturedValue);
-                        }
-                    }
-                }
-                // ES2024 15.2.5: a default initializer runs in the parameter environment, whose
-                // outer environment holds the named function expression's own binding. A `var`,
-                // lexical, class or function declaration of that name in the body is a
-                // different binding, and it does not exist yet. Both are slots of one flattened
-                // frame and the name maps to the body one, so while the frame is still
-                // initializing parameters the name has to be pointed back at the function.
-                overlay.bindParameterFunction(callerFrame, callerBytecodeFunction);
-                overlay.bindDynamicVariables(callerFrame);
-                List<WithObjectCandidate> withObjectCandidates = new ArrayList<>();
-                JSValue[] callerLocals = callerFrame.getLocals();
-                for (int i = 0; i < localVarNames.length && i < callerLocals.length; i++) {
-                    String name = localVarNames[i];
-                    JSValue localValue = callerLocals[i];
-                    if (name == null || localValue == null || localValue == JSUndefined.INSTANCE) {
-                        continue;
-                    }
-                    if (!(localValue instanceof JSObject withObject) || !name.startsWith("#withObject")) {
-                        continue;
-                    }
-                    withObjectCandidates.add(new WithObjectCandidate(parseWithDepth(name), withObject));
-                }
-                withObjectCandidates.sort(Comparator.comparingInt(WithObjectCandidate::depth));
-                for (WithObjectCandidate withObjectCandidate : withObjectCandidates) {
-                    JSObject withObject = withObjectCandidate.object();
-                    for (PropertyKey propertyKey : withObject.ownPropertyKeys()) {
-                        if (!propertyKey.isString()) {
-                            continue;
-                        }
-                        String keyName = propertyKey.asString();
-                        overlay.bind(keyName, withObject.get(propertyKey));
-                    }
-                }
+                bindings.bindEnclosingScopes();
             }
         }
-
-        constantOverlayBindingNames.remove(activeOwnParameterScopeFunctionName);
 
         // This eval's lexical environment, nested in the caller's when the caller is itself eval code. The
         // compiled eval code and every function created inside it carry it; only they may consult the overlay.
@@ -339,8 +181,8 @@ final class GlobalEval {
                         ? callerFrame.getFunction().getEvalEnvironment()
                         : null);
         realmContext.setPendingDirectEvalEnvironment(evalEnvironment);
-        if (overlay != null) {
-            overlay.push(evalEnvironment, constantOverlayBindingNames);
+        if (bindings != null) {
+            bindings.push(evalEnvironment);
             overlayStatePushed = true;
         }
 
@@ -378,8 +220,7 @@ final class GlobalEval {
             // so "var x" in eval conflicts with parameter "x".
             if (isEvalInFunction && callerBytecodeFunction != null && callerBytecodeFunction.hasParameterExpressions()
                     && !callerBytecodeFunction.isStrict() && !evalCodeStrict && parsedEvalDeclarations
-                    && evalVarDeclarations != null && localVarNameSet != null) {
-                callerVarEnvironmentAnalysis = analyzeCallerVarEnvironment(callerBytecodeFunction);
+                    && evalVarDeclarations != null && bindings != null) {
                 Set<String> bodyVarNames = callerVarEnvironmentAnalysis != null
                         ? callerVarEnvironmentAnalysis.bodyVarNames()
                         : null;
@@ -388,7 +229,7 @@ final class GlobalEval {
                         if (JSKeyword.ARGUMENTS.equals(evalVar)) {
                             continue;
                         }
-                        if (localVarNameSet.contains(evalVar) && !bodyVarNames.contains(evalVar)) {
+                        if (bindings.hasLocal(evalVar) && !bodyVarNames.contains(evalVar)) {
                             throw new JSException(realmContext.throwError("SyntaxError",
                                     "Identifier '" + evalVar + "' has already been declared"));
                         }
@@ -429,8 +270,7 @@ final class GlobalEval {
                         throw new JSException(realmContext.throwError("SyntaxError",
                                 "Identifier '" + declarationName + "' has already been declared"));
                     }
-                    if (localVarNameSet != null && localVarNameSet.contains(declarationName)
-                            && functionVarEnvironmentNames != null
+                    if (bindings != null && bindings.hasLocal(declarationName) && functionVarEnvironmentNames != null
                             && !functionVarEnvironmentNames.contains(declarationName)) {
                         throw new JSException(realmContext.throwError("SyntaxError",
                                 "Identifier '" + declarationName + "' has already been declared"));
@@ -438,45 +278,8 @@ final class GlobalEval {
                 }
             }
 
-            if (isEvalInFunction && parsedEvalDeclarations && evalVarDeclarations != null && overlay != null) {
-                for (String declarationName : evalVarDeclarations) {
-                    boolean shadowsCallerLocal = localVarNameSet != null && localVarNameSet.contains(declarationName);
-                    if (shadowsCallerLocal) {
-                        if (!evalCodeStrict && callerFrame != null && localVarNameToIndex != null) {
-                            Integer localIndex = localVarNameToIndex.get(declarationName);
-                            if (localIndex != null && functionVarEnvironmentNames != null
-                                    && functionVarEnvironmentNames.contains(declarationName)
-                                    && (functionNameLocalIndex < 0 || localIndex != functionNameLocalIndex)) {
-                                callerFrame.setDynamicVarBindingAlias(declarationName, localIndex);
-                            }
-                        }
-                        continue;
-                    }
-                    PropertyKey declarationKey = PropertyKey.fromString(declarationName);
-                    JSValue initialValue;
-                    if (isEvalInFunction) {
-                        JSValue dynamicVarBindingValue = callerFrame != null
-                                ? callerFrame.getDynamicVarBinding(declarationName)
-                                : null;
-                        if (dynamicVarBindingValue != null) {
-                            initialValue = dynamicVarBindingValue;
-                        } else {
-                            // Direct eval var declarations in functions create or reuse
-                            // function var-environment bindings, not global properties.
-                            initialValue = JSUndefined.INSTANCE;
-                        }
-                    } else if (overlay.wasAbsent(declarationName)) {
-                        // Outer lexical overlays should not initialize eval-introduced var bindings.
-                        // Var declarations created by eval start as undefined in the caller var environment.
-                        initialValue = JSUndefined.INSTANCE;
-                    } else {
-                        initialValue = global.has(declarationKey) ? global.get(declarationKey) : JSUndefined.INSTANCE;
-                    }
-                    overlay.bind(declarationName, initialValue);
-                    if (!evalCodeStrict && callerFrame != null) {
-                        callerFrame.setDynamicVarBinding(declarationName, initialValue);
-                    }
-                }
+            if (isEvalInFunction && parsedEvalDeclarations && evalVarDeclarations != null && bindings != null) {
+                bindings.declareVariables(evalVarDeclarations, functionVarEnvironmentNames, evalCodeStrict);
             }
 
             if (!isDirectEvalCall && !evalCodeStrict && parsedEvalDeclarations) {
@@ -525,70 +328,13 @@ final class GlobalEval {
                 return JSUndefined.INSTANCE;
             }
 
-            // Copy modified values back to caller's locals
-            if (localVarNames != null) {
-                JSValue[] locals = callerFrame.getLocals();
-                for (int i = 0; i < localVarNames.length && i < locals.length; i++) {
-                    String name = localVarNames[i];
-                    if (name == null) {
-                        continue;
-                    }
-                    if (name.startsWith("#")) {
-                        continue;
-                    }
-                    if (evalCodeStrict && evalVarDeclarations != null && evalVarDeclarations.contains(name)) {
-                        continue;
-                    }
-                    // Skip function name bindings — they are immutable and
-                    // the non-writable overlay property prevented modification.
-                    if (functionNameLocalIndex >= 0 && i == functionNameLocalIndex) {
-                        continue;
-                    }
-                    // While the parameter environment is what the name resolves through, the
-                    // overlay holds the function, not the body's binding of the same name.
-                    // Copying it back would put the function into the body's slot.
-                    //
-                    // Only this frame's own name. Every name in this loop is a local of this
-                    // frame, and a local is a nearer binding than anything an enclosing
-                    // parameter environment provides, so an inherited name here belongs to a
-                    // binding that is being shadowed. Skipping those discarded the write: a
-                    // nested closure's `let n = 1; eval('n = 2')` left n at 1.
-                    if (name.equals(activeOwnParameterScopeFunctionName)) {
-                        continue;
-                    }
-                    PropertyKey key = PropertyKey.fromString(name);
-                    if (global.has(key)) {
-                        locals[i] = global.get(key);
-                    }
-                }
-            }
-            if (capturedVarOverlaySlots != null && callerBytecodeFunction != null) {
-                int selfCaptureIndex = callerBytecodeFunction.getSelfCaptureIndex();
-                for (Map.Entry<String, Integer> entry : capturedVarOverlaySlots.entrySet()) {
-                    String name = entry.getKey();
-                    int captureSlot = entry.getValue();
-                    if (evalCodeStrict && evalVarDeclarations != null && evalVarDeclarations.contains(name)) {
-                        continue;
-                    }
-                    if (selfCaptureIndex >= 0 && captureSlot == selfCaptureIndex) {
-                        continue;
-                    }
-                    // Immutable, like any other named-function-expression binding. A capture is
-                    // only reached for a name this frame has no local of, so the entry really
-                    // does describe the binding the overlay holds.
-                    if (inheritedParameterScopeFunctionNames.contains(name)) {
-                        continue;
-                    }
-                    PropertyKey key = PropertyKey.fromString(name);
-                    if (global.has(key)) {
-                        callerFrame.setVarRef(captureSlot, global.get(key));
-                    }
-                }
+            if (bindings != null) {
+                bindings.writeBack(evalCodeStrict ? evalVarDeclarations : null);
             }
             if (isEvalInFunction && !evalCodeStrict && parsedEvalDeclarations && evalVarDeclarations != null
                     && callerFrame != null) {
                 for (String declarationName : evalVarDeclarations) {
-                    if (localVarNameSet != null && localVarNameSet.contains(declarationName)) {
+                    if (bindings != null && bindings.hasLocal(declarationName)) {
                         continue;
                     }
                     PropertyKey key = PropertyKey.fromString(declarationName);
@@ -608,10 +354,10 @@ final class GlobalEval {
             callerContext.setPendingException(e.getErrorValue());
             return JSUndefined.INSTANCE;
         } finally {
-            if (overlay != null) {
+            if (bindings != null) {
                 boolean keepGlobalVars = callerFrame != null && callerFrame.getCaller() == null && !evalCodeStrict
                         && parsedEvalDeclarations;
-                overlay.restore(keepGlobalVars ? evalVarDeclarations : null, callerContext);
+                bindings.overlay.restore(keepGlobalVars ? evalVarDeclarations : null, callerContext);
             }
             // Clean up eval-created bindings that should be function-scoped (not global).
             // Per ES2024 B.3.3.3, var/function declarations in eval inside a function
@@ -622,7 +368,7 @@ final class GlobalEval {
                     if (globalKeysBefore.contains(declarationName)) {
                         continue;
                     }
-                    if (localVarNameSet != null && localVarNameSet.contains(declarationName)) {
+                    if (bindings != null && bindings.hasLocal(declarationName)) {
                         continue;
                     }
                     global.delete(PropertyKey.fromString(declarationName));
@@ -647,7 +393,7 @@ final class GlobalEval {
                     && !evalCodeStrict && parsedEvalDeclarations && evalVarDeclarations != null
                     && callerFrame != null) {
                 for (String declarationName : evalVarDeclarations) {
-                    if (localVarNameSet != null && localVarNameSet.contains(declarationName)) {
+                    if (bindings != null && bindings.hasLocal(declarationName)) {
                         continue;
                     }
                     JSValue dynValue = callerFrame.getDynamicVarBinding(declarationName);
@@ -677,19 +423,6 @@ final class GlobalEval {
         return null;
     }
 
-    private static boolean isIdentifierPartAscii(char character) {
-        if (character >= 'a' && character <= 'z') {
-            return true;
-        }
-        if (character >= 'A' && character <= 'Z') {
-            return true;
-        }
-        if (character >= '0' && character <= '9') {
-            return true;
-        }
-        return character == '_' || character == '$';
-    }
-
     private static Expression parseTopLevelExpression(String wrappedSource) {
         try {
             Program parsedProgram = new Compiler(wrappedSource, "<eval-caller>").parse(false);
@@ -703,24 +436,8 @@ final class GlobalEval {
         }
     }
 
-    private static int parseWithDepth(String localName) {
-        int depth = 0;
-        int index = "$withObject".length();
-        while (index < localName.length()) {
-            char current = localName.charAt(index);
-            if (current < '0' || current > '9') {
-                return depth;
-            }
-            depth = depth * 10 + (current - '0');
-            index++;
-        }
-        return depth;
-    }
-
     private record CallerVarEnvironmentAnalysis(Set<String> bodyVarNames, Set<String> functionVarEnvironmentNames,
             Set<String> constLexicalNames) {
     }
 
-    private record WithObjectCandidate(int depth, JSObject object) {
-    }
 }

@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.builtins.temporal.plain;
 
-import com.caoccao.qjs4j.builtins.temporal.TemporalPropertyBag;
+import com.caoccao.qjs4j.builtins.temporal.TemporalTimeFields;
 import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
@@ -105,13 +105,10 @@ public final class TemporalPlainTimeConstructor {
 
     static JSValue timeFromFields(JSContext context, JSObject fields, JSValue options, IsoTime original,
             String missingFieldsError) {
-        TemporalPropertyBag bag = new TemporalPropertyBag(context, fields);
-        int hour = bag.time("hour", original.hour());
-        int microsecond = bag.time("microsecond", original.microsecond());
-        int millisecond = bag.time("millisecond", original.millisecond());
-        int minute = bag.time("minute", original.minute());
-        int nanosecond = bag.time("nanosecond", original.nanosecond());
-        int second = bag.time("second", original.second());
+        TemporalTimeFields bag = new TemporalTimeFields(context, fields);
+        bag.readThroughMinute();
+        bag.readNanosecond();
+        bag.readSecond();
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -125,8 +122,7 @@ public final class TemporalPlainTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        IsoTime time = IsoTime.regulate(context, overflow, "Temporal error: Invalid time", hour, minute, second,
-                millisecond, microsecond, nanosecond);
+        IsoTime time = bag.regulate(original, overflow, "Temporal error: Invalid time");
         return time == null ? JSUndefined.INSTANCE : JSTemporalPlainTime.create(context, time);
     }
 

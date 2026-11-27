@@ -51,51 +51,39 @@ public class ArrayBufferConstructorTest extends BaseJavetTest {
         // Normal case: TypedArray instances should return true
         JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
         JSUint8Array uint8Array = new JSUint8Array(context, buffer, 0, 8);
-        JSValue result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{uint8Array});
-        assertThat(result.isBooleanTrue()).isTrue();
+        BuiltinAssertions isView = builtin(ArrayBufferConstructor::isView, JSUndefined.INSTANCE);
+        isView.expectValue(JSBoolean.TRUE, uint8Array);
 
         JSInt32Array int32Array = new JSInt32Array(context, buffer, 0, 4);
-        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{int32Array});
-        assertThat(result.isBooleanTrue()).isTrue();
+        isView.expectValue(JSBoolean.TRUE, int32Array);
 
         JSFloat16Array float16Array = new JSFloat16Array(context, buffer, 0, 8);
-        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{float16Array});
-        assertThat(result.isBooleanTrue()).isTrue();
+        isView.expectValue(JSBoolean.TRUE, float16Array);
 
         JSFloat32Array float32Array = new JSFloat32Array(context, buffer, 0, 4);
-        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{float32Array});
-        assertThat(result.isBooleanTrue()).isTrue();
+        isView.expectValue(JSBoolean.TRUE, float32Array);
 
         // Normal case: DataView should return true
         JSDataView dataView = new JSDataView(context, buffer);
-        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{dataView});
-        assertThat(result.isBooleanTrue()).isTrue();
+        isView.expectValue(JSBoolean.TRUE, dataView);
 
         // Normal case: non-view objects should return false
-        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{new JSArray(context)});
-        assertThat(result.isBooleanFalse()).isTrue();
+        isView.expectValue(JSBoolean.FALSE, new JSArray(context));
 
-        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{new JSObject(context)});
-        assertThat(result.isBooleanFalse()).isTrue();
+        isView.expectValue(JSBoolean.FALSE, new JSObject(context));
 
-        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, stringArgs("test"));
-        assertThat(result.isBooleanFalse()).isTrue();
+        isView.expectValue(JSBoolean.FALSE, stringArgs("test"));
 
-        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, numberArgs(123));
-        assertThat(result.isBooleanFalse()).isTrue();
+        isView.expectValue(JSBoolean.FALSE, numberArgs(123));
 
-        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{JSBoolean.TRUE});
-        assertThat(result.isBooleanFalse()).isTrue();
+        isView.expectValue(JSBoolean.FALSE, JSBoolean.TRUE);
 
-        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE});
-        assertThat(result.isBooleanFalse()).isTrue();
+        isView.expectValue(JSBoolean.FALSE, JSNull.INSTANCE);
 
-        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{JSUndefined.INSTANCE});
-        assertThat(result.isBooleanFalse()).isTrue();
+        isView.expectValue(JSBoolean.FALSE, JSUndefined.INSTANCE);
 
         // Edge case: no arguments
-        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        assertThat(result.isBooleanFalse()).isTrue();
+        isView.expectValue(JSBoolean.FALSE);
     }
 
     @Test

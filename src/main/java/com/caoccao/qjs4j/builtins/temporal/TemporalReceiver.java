@@ -23,6 +23,8 @@ import com.caoccao.qjs4j.builtins.temporal.zoned.TemporalZonedDateTimeConstructo
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
+import com.caoccao.qjs4j.core.temporal.calendar.TemporalCalendarId;
+
 import java.util.Comparator;
 import java.util.function.*;
 
@@ -126,5 +128,20 @@ public record TemporalReceiver<T extends JSObject>(Class<T> type, String typeNam
         // only read immutable slots, but the lookup can invoke user-defined getters.
         TemporalUtils.getTemporalPrototypeByKey(context, prototypeKey);
         return context.hasPendingException() ? null : type.cast(value);
+    }
+
+    public JSValue withCalendar(JSContext context, JSValue receiver, JSValue[] args,
+            CalendarReplacement<T> replacement) {
+        T value = require(context, receiver, "withCalendar");
+        if (value == null) {
+            return JSUndefined.INSTANCE;
+        }
+        TemporalCalendarId calendar = TemporalUtils.requireCalendarArgument(context, args);
+        return context.hasPendingException() ? JSUndefined.INSTANCE : replacement.create(context, value, calendar);
+    }
+
+    @FunctionalInterface
+    public interface CalendarReplacement<T> {
+        JSValue create(JSContext context, T value, TemporalCalendarId calendar);
     }
 }

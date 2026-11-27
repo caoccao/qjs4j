@@ -146,19 +146,17 @@ public class MapPrototypeTest extends BaseJavetTest {
         JSMap map = newStringMap();
 
         // Normal case: delete existing key
-        JSValue result = MapPrototype.delete(context, map, stringArgs("key1"));
-        assertThat(result.isBooleanTrue()).isTrue();
+        BuiltinAssertions delete = builtin(MapPrototype::delete, map);
+        delete.expectValue(JSBoolean.TRUE, stringArgs("key1"));
         assertThat(map.size()).isEqualTo(1);
         assertThat(map.mapGet(new JSString("key1")).isUndefined()).isTrue();
 
         // Normal case: delete non-existing key
-        result = MapPrototype.delete(context, map, stringArgs("key3"));
-        assertThat(result.isBooleanFalse()).isTrue();
+        delete.expectValue(JSBoolean.FALSE, stringArgs("key3"));
         assertThat(map.size()).isEqualTo(1);
 
         // Normal case: no arguments
-        result = MapPrototype.delete(context, map, JSValue.NO_ARGS);
-        assertThat(result.isBooleanFalse()).isTrue();
+        delete.expectValue(JSBoolean.FALSE);
 
         // Edge case: called on non-Map
         assertPendingTypeError(context, MapPrototype.delete(context, new JSString("not map"), stringArgs("key")));
@@ -760,16 +758,14 @@ public class MapPrototypeTest extends BaseJavetTest {
         map.mapSet(new JSString("key1"), new JSString("value1"));
 
         // Normal case: existing key
-        JSValue result = MapPrototype.has(context, map, stringArgs("key1"));
-        assertThat(result.isBooleanTrue()).isTrue();
+        BuiltinAssertions has = builtin(MapPrototype::has, map);
+        has.expectValue(JSBoolean.TRUE, stringArgs("key1"));
 
         // Normal case: non-existing key
-        result = MapPrototype.has(context, map, stringArgs("key2"));
-        assertThat(result.isBooleanFalse()).isTrue();
+        has.expectValue(JSBoolean.FALSE, stringArgs("key2"));
 
         // Normal case: no arguments
-        result = MapPrototype.has(context, map, JSValue.NO_ARGS);
-        assertThat(result.isBooleanFalse()).isTrue();
+        has.expectValue(JSBoolean.FALSE);
 
         // Edge case: called on non-Map
         assertPendingTypeError(context, MapPrototype.has(context, new JSString("not map"), stringArgs("key")));

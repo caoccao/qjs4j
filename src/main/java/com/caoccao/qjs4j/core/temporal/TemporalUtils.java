@@ -27,7 +27,6 @@ import com.caoccao.qjs4j.core.temporal.iso.IsoDate;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 
 import java.math.BigInteger;
-import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -494,12 +493,10 @@ public final class TemporalUtils {
         return false;
     }
 
-    /** Validate the partial object for a plain date or time's with() method, in observable property-read order. */
-    public static JSObject requirePartialTemporalObject(JSContext context, JSValue[] args, String errorMessage) {
-        if (args.length == 0 || !(args[0] instanceof JSObject fields) || fields instanceof JSTemporalPlainDate
-                || fields instanceof JSTemporalPlainDateTime || fields instanceof JSTemporalPlainMonthDay
-                || fields instanceof JSTemporalPlainTime || fields instanceof JSTemporalPlainYearMonth
-                || fields instanceof JSTemporalZonedDateTime) {
+    private static JSObject requirePartialTemporalObject(JSContext context, JSObject fields, String errorMessage) {
+        if (fields instanceof JSTemporalPlainDate || fields instanceof JSTemporalPlainDateTime
+                || fields instanceof JSTemporalPlainMonthDay || fields instanceof JSTemporalPlainTime
+                || fields instanceof JSTemporalPlainYearMonth || fields instanceof JSTemporalZonedDateTime) {
             context.throwTypeError(errorMessage);
             return null;
         }
@@ -520,6 +517,27 @@ public final class TemporalUtils {
             return null;
         }
         return fields;
+    }
+
+    /** Validate the partial object for a plain date or time's with() method, in observable property-read order. */
+    public static JSObject requirePartialTemporalObject(JSContext context, JSValue[] args, String errorMessage) {
+        if (args.length == 0 || !(args[0] instanceof JSObject fields)) {
+            context.throwTypeError(errorMessage);
+            return null;
+        }
+        return requirePartialTemporalObject(context, fields, errorMessage);
+    }
+
+    public static JSObject requirePartialZonedDateTime(JSContext context, JSValue[] args) {
+        if (args.length == 0 || !(args[0] instanceof JSObject fields)) {
+            return TemporalError.MISSING_PARTIAL_FIELDS.reject(context);
+        }
+        String invalid = "Temporal error: Invalid ZonedDateTime-like object.";
+        if (fields instanceof JSTemporalInstant || fields instanceof JSTemporalDuration) {
+            context.throwTypeError(invalid);
+            return null;
+        }
+        return requirePartialTemporalObject(context, fields, invalid);
     }
 
     /** Resolve the optional year and era fields after reading the calendar's other date fields. */

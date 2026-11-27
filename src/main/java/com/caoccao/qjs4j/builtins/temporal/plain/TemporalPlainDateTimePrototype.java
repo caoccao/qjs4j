@@ -17,7 +17,7 @@
 package com.caoccao.qjs4j.builtins.temporal.plain;
 
 import com.caoccao.qjs4j.builtins.temporal.TemporalLocaleFormat;
-import com.caoccao.qjs4j.builtins.temporal.TemporalPropertyBag;
+import com.caoccao.qjs4j.builtins.temporal.TemporalTimeFields;
 import com.caoccao.qjs4j.builtins.temporal.TemporalReceiver;
 import com.caoccao.qjs4j.builtins.temporal.duration.TemporalCalendarDifference;
 import com.caoccao.qjs4j.builtins.temporal.duration.TemporalDateAddition;
@@ -316,16 +316,13 @@ public final class TemporalPlainDateTimePrototype {
 
         IsoTime originalTime = plainDateTime.getIsoDateTime().time();
         TemporalCalendarId calendarId = plainDateTime.getCalendarId();
-        TemporalPropertyBag bag = new TemporalPropertyBag(context, fields);
+        TemporalTimeFields bag = new TemporalTimeFields(context, fields);
         Integer day = bag.positiveDateField("day");
-        int hour = bag.time("hour", originalTime.hour());
-        int microsecond = bag.time("microsecond", originalTime.microsecond());
-        int millisecond = bag.time("millisecond", originalTime.millisecond());
-        int minute = bag.time("minute", originalTime.minute());
+        bag.readThroughMinute();
         Integer month = bag.positiveDateField("month");
         String monthCode = bag.string("monthCode");
-        int nanosecond = bag.time("nanosecond", originalTime.nanosecond());
-        int second = bag.time("second", originalTime.second());
+        bag.readNanosecond();
+        bag.readSecond();
         TemporalPartialDate dateFields = bag.readYearAndEra(calendarId, day, month, monthCode);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -345,8 +342,7 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        IsoTime resultTime = IsoTime.regulate(context, overflow, TemporalError.INVALID_ISO_DATE.message(), hour, minute,
-                second, millisecond, microsecond, nanosecond);
+        IsoTime resultTime = bag.regulate(originalTime, overflow, TemporalError.INVALID_ISO_DATE.message());
         if (resultTime == null) {
             return JSUndefined.INSTANCE;
         }
@@ -359,15 +355,8 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     public static JSValue withCalendar(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDateTime plainDateTime = RECEIVER.require(context, thisArg, "withCalendar");
-        if (plainDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        TemporalCalendarId calendarId = TemporalUtils.requireCalendarArgument(context, args);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSTemporalPlainDateTime.create(context, plainDateTime.getIsoDateTime(), calendarId);
+        return RECEIVER.withCalendar(context, thisArg, args, (ctx, plainDateTime, calendarId) -> JSTemporalPlainDateTime
+                .create(ctx, plainDateTime.getIsoDateTime(), calendarId));
     }
 
     public static JSValue withPlainTime(JSContext context, JSValue thisArg, JSValue[] args) {

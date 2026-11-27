@@ -279,19 +279,17 @@ public class SetPrototypeTest extends BaseJavetTest {
         set.setAdd(new JSString("value2"));
 
         // Normal case: delete existing value
-        JSValue result = SetPrototype.delete(context, set, stringArgs("value1"));
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        BuiltinAssertions delete = builtin(SetPrototype::delete, set);
+        delete.expectValue(JSBoolean.TRUE, stringArgs("value1"));
         assertThat(set.size()).isEqualTo(1);
         assertThat(set.setHas(new JSString("value1"))).isFalse();
 
         // Normal case: delete non-existing value
-        result = SetPrototype.delete(context, set, stringArgs("nonexistent"));
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        delete.expectValue(JSBoolean.FALSE, stringArgs("nonexistent"));
         assertThat(set.size()).isEqualTo(1);
 
         // Normal case: no arguments
-        result = SetPrototype.delete(context, set, JSValue.NO_ARGS);
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        delete.expectValue(JSBoolean.FALSE);
 
         // Edge case: called on non-Set
         assertPendingTypeError(context, SetPrototype.delete(context, new JSString("not set"), stringArgs("value")));
@@ -767,16 +765,14 @@ public class SetPrototypeTest extends BaseJavetTest {
         set.setAdd(new JSString("value1"));
 
         // Normal case: existing value
-        JSValue result = SetPrototype.has(context, set, stringArgs("value1"));
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        BuiltinAssertions has = builtin(SetPrototype::has, set);
+        has.expectValue(JSBoolean.TRUE, stringArgs("value1"));
 
         // Normal case: non-existing value
-        result = SetPrototype.has(context, set, stringArgs("value2"));
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        has.expectValue(JSBoolean.FALSE, stringArgs("value2"));
 
         // Normal case: no arguments
-        result = SetPrototype.has(context, set, JSValue.NO_ARGS);
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        has.expectValue(JSBoolean.FALSE);
 
         // Edge case: called on non-Set
         assertPendingTypeError(context, SetPrototype.has(context, new JSString("not set"), stringArgs("value")));

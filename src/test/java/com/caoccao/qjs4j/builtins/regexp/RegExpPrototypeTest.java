@@ -428,20 +428,18 @@ public class RegExpPrototypeTest extends BaseJavetTest {
         JSRegExp regexp = new JSRegExp(context, "test", "");
 
         // Normal case: match found
-        JSValue result = RegExpPrototype.test(context, regexp, stringArgs("this is a test"));
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        BuiltinAssertions test = builtin(RegExpPrototype::test, regexp);
+        test.expectValue(JSBoolean.TRUE, stringArgs("this is a test"));
 
         // Normal case: no match
-        result = RegExpPrototype.test(context, regexp, stringArgs("no match here"));
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        test.expectValue(JSBoolean.FALSE, stringArgs("no match here"));
 
         // Normal case: empty string
-        result = RegExpPrototype.test(context, regexp, stringArgs(""));
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        test.expectValue(JSBoolean.FALSE, stringArgs(""));
 
         // Normal case: case insensitive
         JSRegExp caseInsensitive = new JSRegExp(context, "TEST", "i");
-        result = RegExpPrototype.test(context, caseInsensitive, stringArgs("test"));
+        JSValue result = RegExpPrototype.test(context, caseInsensitive, stringArgs("test"));
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: global regex with lastIndex
@@ -455,8 +453,7 @@ public class RegExpPrototypeTest extends BaseJavetTest {
         assertThat(global.getLastIndex()).isEqualTo(9); // After second match
 
         // Normal case: no arguments (empty string)
-        result = RegExpPrototype.test(context, regexp, JSValue.NO_ARGS);
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        test.expectValue(JSBoolean.FALSE);
 
         // Edge case: called on non-RegExp
         result = RegExpPrototype.test(context, new JSString("not a regexp"), JSValue.NO_ARGS);

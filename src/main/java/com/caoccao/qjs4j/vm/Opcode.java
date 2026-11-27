@@ -25,13 +25,13 @@ import java.util.stream.Stream;
  */
 public enum Opcode {
     /** a b -> a+b */
-    ADD(155, 1, 2, 1, OpcodeHandler::handleAdd),
+    ADD(155, 1, 2, 1, NumericOpcodes::handleAdd),
     /** this_obj home_obj -> */
     ADD_BRAND(46, 1, 2, 0, OpcodeHandler::handleInvalid),
     /** val -> (add to local variable, u8 loc index) */
-    ADD_LOC(146, 2, 1, 0, OpcodeHandler::handleAddLoc),
+    ADD_LOC(146, 2, 1, 0, NumericOpcodes::handleAddLoc),
     /** a b -&gt; a&amp;b (bitwise AND) */
-    AND(171, 1, 2, 1, OpcodeHandler::handleAnd),
+    AND(171, 1, 2, 1, NumericOpcodes::bitwise),
     /** array idx enum_obj -> array idx (append enumerated, update length) */
     APPEND(79, 1, 3, 2, IteratorOpcodes::handleAppend),
     /** func this args -> ret */
@@ -71,9 +71,9 @@ public enum Opcode {
     /** target source excludeList -> target source excludeList (u8 mask) */
     COPY_DATA_PROPERTIES(80, 2, 3, 3, OpcodeHandler::handleCopyDataProperties),
     /** val -> val-1 (prefix decrement value) */
-    DEC(140, 1, 1, 1, OpcodeHandler::handleDec),
+    DEC(140, 1, 1, 1, NumericOpcodes::handleDec),
     /** decrement local variable in place (u8 loc index) */
-    DEC_LOC(144, 2, 0, 0, OpcodeHandler::handleDecLoc),
+    DEC_LOC(144, 2, 0, 0, NumericOpcodes::handleDecLoc),
     /** array idx val -> array idx (define indexed element) */
     DEFINE_ARRAY_EL(78, 1, 3, 2, PropertyOpcodes::handleDefineArrayEl),
     /** parent ctor -> ctor proto (define class by atom) */
@@ -93,7 +93,7 @@ public enum Opcode {
     /** -> bool (delete variable by atom name) */
     DELETE_VAR(151, 5, 0, 1, BindingOpcodes::handleDeleteVar),
     /** a b -> a/b */
-    DIV(153, 1, 2, 1, OpcodeHandler::handleDivisionOrRemainder),
+    DIV(153, 1, 2, 1, NumericOpcodes::handleDivisionOrRemainder),
     /** a -> */
     DROP(14, 1, 1, 0, OpcodeHandler::handleDrop),
     /** a -> a a */
@@ -105,7 +105,7 @@ public enum Opcode {
     /** a b c -> a b c a b c */
     DUP3(20, 1, 3, 6, OpcodeHandler::handleDup3),
     /** a b -> a==b (abstract equality) */
-    EQ(167, 1, 2, 1, OpcodeHandler::handleAbstractEquality),
+    EQ(167, 1, 2, 1, NumericOpcodes::handleAbstractEquality),
     /** func args... -> ret_val */
     EVAL(50, 5, -1, 1, CallOpcodes::handleEval),
     /** create function closure from constant -> func */
@@ -195,9 +195,9 @@ public enum Opcode {
     /** unconditional jump (i8 offset) */
     GOTO8(234, 2, 0, 0, OpcodeHandler::handleGoto8),
     /** a b -> a>b */
-    GT(163, 1, 2, 1, OpcodeHandler::handleGt),
+    GT(163, 1, 2, 1, NumericOpcodes::handleGt),
     /** a b -> a>=b */
-    GTE(164, 1, 2, 1, OpcodeHandler::handleGte),
+    GTE(164, 1, 2, 1, NumericOpcodes::handleGte),
     /** val -> (branch if false, i32 label offset) */
     IF_FALSE(104, 5, 1, 0, OpcodeHandler::handleIfFalse),
     /** val -> (branch if false, i8 offset) */
@@ -211,9 +211,9 @@ public enum Opcode {
     /** prop obj -> bool (in operator) */
     IN(166, 1, 2, 1, OpcodeHandler::handleIn),
     /** val -> val+1 (prefix increment value) */
-    INC(141, 1, 1, 1, OpcodeHandler::handleInc),
+    INC(141, 1, 1, 1, NumericOpcodes::handleInc),
     /** increment local variable in place (u8 loc index) */
-    INC_LOC(145, 2, 0, 0, OpcodeHandler::handleIncLoc),
+    INC_LOC(145, 2, 0, 0, NumericOpcodes::handleIncLoc),
     /** initialize constructor this object -> this */
     INIT_CTOR(44, 1, 0, 1, ClassOpcodes::handleInitCtor),
     /** suspend generator at start */
@@ -247,9 +247,9 @@ public enum Opcode {
     /** val -> !val (logical NOT) */
     LNOT(148, 1, 1, 1, OpcodeHandler::handleLogicalNot),
     /** a b -&gt; a&lt;b */
-    LT(161, 1, 2, 1, OpcodeHandler::handleLt),
+    LT(161, 1, 2, 1, NumericOpcodes::handleLt),
     /** a b -&gt; a&lt;=b */
-    LTE(162, 1, 2, 1, OpcodeHandler::handleLte),
+    LTE(162, 1, 2, 1, NumericOpcodes::handleLte),
     /** -> obj prop (make argument reference, atom+u16) */
     MAKE_ARG_REF(119, 7, 0, 2, BindingOpcodes::handleMakeScopedRef),
     /** -> obj prop (make local variable reference, atom+u16) */
@@ -259,13 +259,13 @@ public enum Opcode {
     /** -> obj prop (make closure var reference, atom+u16) */
     MAKE_VAR_REF_REF(120, 7, 0, 2, BindingOpcodes::handleMakeScopedRef),
     /** a b -> a%b */
-    MOD(154, 1, 2, 1, OpcodeHandler::handleDivisionOrRemainder),
+    MOD(154, 1, 2, 1, NumericOpcodes::handleDivisionOrRemainder),
     /** a b -> a*b */
-    MUL(152, 1, 2, 1, OpcodeHandler::handleMul),
+    MUL(152, 1, 2, 1, NumericOpcodes::multiplyOrSubtract),
     /** val -> -val (unary minus) */
-    NEG(138, 1, 1, 1, OpcodeHandler::handleNeg),
+    NEG(138, 1, 1, 1, NumericOpcodes::handleNeg),
     /** a b -> a!=b */
-    NEQ(168, 1, 2, 1, OpcodeHandler::handleAbstractEquality),
+    NEQ(168, 1, 2, 1, NumericOpcodes::handleAbstractEquality),
     /** a b -> b */
     NIP(15, 1, 2, 1, OpcodeHandler::handleNip),
     /** catch ... a -> a (remove catch handler) */
@@ -275,13 +275,13 @@ public enum Opcode {
     /** no operation (last non-short opcode) */
     NOP(177, 1, 0, 0, OpcodeHandler::handleNop),
     /** val -> ~val (bitwise NOT) */
-    NOT(147, 1, 1, 1, OpcodeHandler::handleNot),
+    NOT(147, 1, 1, 1, NumericOpcodes::handleNot),
     /** push null -> null */
     NULL(7, 1, 0, 1, OpcodeHandler::handleNull),
     /** create empty object -> obj */
     OBJECT(11, 1, 0, 1, OpcodeHandler::handleObjectNew),
     /** a b -> a|b (bitwise OR) */
-    OR(173, 1, 2, 1, OpcodeHandler::handleOr),
+    OR(173, 1, 2, 1, NumericOpcodes::bitwise),
     /** obj a b -> a obj b */
     PERM3(24, 1, 3, 3, OpcodeHandler::handlePerm3),
     /** obj prop a b -> a obj prop b */
@@ -289,33 +289,33 @@ public enum Opcode {
     /** this obj prop a b -> a this obj prop b */
     PERM5(26, 1, 5, 5, OpcodeHandler::handlePerm5),
     /** val -> +val (unary plus, ToNumber) */
-    PLUS(139, 1, 1, 1, OpcodeHandler::handlePlus),
+    PLUS(139, 1, 1, 1, NumericOpcodes::handlePlus),
     /** val -> val-1 (postfix decrement value) */
-    POST_DEC(142, 1, 1, 1, OpcodeHandler::handlePostDec),
+    POST_DEC(142, 1, 1, 1, NumericOpcodes::handlePostDec),
     /** val -> val+1 (postfix increment value) */
-    POST_INC(143, 1, 1, 1, OpcodeHandler::handlePostInc),
+    POST_INC(143, 1, 1, 1, NumericOpcodes::handlePostInc),
     /** a b -> a**b */
-    POW(157, 1, 2, 1, OpcodeHandler::handleExp),
+    POW(157, 1, 2, 1, NumericOpcodes::handleNumericOperands),
     /** sym obj -> bool (private field existence check) */
     PRIVATE_IN(175, 1, 2, 1, PropertyOpcodes::handlePrivateIn),
     /** push private symbol from atom -> sym */
     PRIVATE_SYMBOL(5, 5, 0, 1, PropertyOpcodes::handlePrivateSymbol),
     /** -> 0 (push integer 0) */
-    PUSH_0(179, 1, 0, 1, OpcodeHandler::handlePush0),
+    PUSH_0(179, 1, 0, 1, OpcodeHandler::pushSmallInteger),
     /** -> 1 (push integer 1) */
-    PUSH_1(180, 1, 0, 1, OpcodeHandler::handlePush1),
+    PUSH_1(180, 1, 0, 1, OpcodeHandler::pushSmallInteger),
     /** -> 2 (push integer 2) */
-    PUSH_2(181, 1, 0, 1, OpcodeHandler::handlePush2),
+    PUSH_2(181, 1, 0, 1, OpcodeHandler::pushSmallInteger),
     /** -> 3 (push integer 3) */
-    PUSH_3(182, 1, 0, 1, OpcodeHandler::handlePush3),
+    PUSH_3(182, 1, 0, 1, OpcodeHandler::pushSmallInteger),
     /** -> 4 (push integer 4) */
-    PUSH_4(183, 1, 0, 1, OpcodeHandler::handlePush4),
+    PUSH_4(183, 1, 0, 1, OpcodeHandler::pushSmallInteger),
     /** -> 5 (push integer 5) */
-    PUSH_5(184, 1, 0, 1, OpcodeHandler::handlePush5),
+    PUSH_5(184, 1, 0, 1, OpcodeHandler::pushSmallInteger),
     /** -> 6 (push integer 6) */
-    PUSH_6(185, 1, 0, 1, OpcodeHandler::handlePush6),
+    PUSH_6(185, 1, 0, 1, OpcodeHandler::pushSmallInteger),
     /** -> 7 (push integer 7) */
-    PUSH_7(186, 1, 0, 1, OpcodeHandler::handlePush7),
+    PUSH_7(186, 1, 0, 1, OpcodeHandler::pushSmallInteger),
     /** push atom as string value -> val */
     PUSH_ATOM_VALUE(4, 5, 0, 1, OpcodeHandler::handlePushAtomValue),
     /** push BigInt from i32 immediate -> bigint */
@@ -336,7 +336,7 @@ public enum Opcode {
     PUSH_I8(187, 2, 0, 1, OpcodeHandler::handlePushI8),
     // SHORT_OPCODES — compact 1-2 byte variants of common operations
     /** -> -1 (push integer -1) */
-    PUSH_MINUS1(178, 1, 0, 1, OpcodeHandler::handlePushMinus1),
+    PUSH_MINUS1(178, 1, 0, 1, OpcodeHandler::pushSmallInteger),
     /** push this value -> this (only at function start) */
     PUSH_THIS(8, 1, 0, 1, OpcodeHandler::handlePushThis),
     /** push true -> true */
@@ -417,7 +417,7 @@ public enum Opcode {
     /** x a b c d -> a b c d x */
     ROT5L(32, 1, 5, 5, OpcodeHandler::handleRot5l),
     /** a b -> a>>b (signed right shift) */
-    SAR(159, 1, 2, 1, OpcodeHandler::handleSar),
+    SAR(159, 1, 2, 1, NumericOpcodes::handleSar),
     /** val -> val (set argument, keep value) */
     SET_ARG(90, 3, 1, 1, BindingOpcodes::handleSetArg),
     /** val -> val (set argument 0) */
@@ -463,17 +463,17 @@ public enum Opcode {
     /** val -> val (set closure var 3) */
     SET_VAR_REF3(230, 1, 1, 1, BindingOpcodes::handleSetVarRefShort),
     /** a b -&gt; a&lt;&lt;b */
-    SHL(158, 1, 2, 1, OpcodeHandler::handleShl),
+    SHL(158, 1, 2, 1, NumericOpcodes::handleShl),
     /** a b -> a>>>b (unsigned right shift) */
-    SHR(160, 1, 2, 1, OpcodeHandler::handleShr),
+    SHR(160, 1, 2, 1, NumericOpcodes::handleShr),
     /** create special object (u8 type) -> obj (only at function start) */
     SPECIAL_OBJECT(12, 2, 0, 1, OpcodeHandler::handleSpecialObject),
     /** a b -> a===b (strict equality) */
-    STRICT_EQ(169, 1, 2, 1, OpcodeHandler::handleStrictEquality),
+    STRICT_EQ(169, 1, 2, 1, NumericOpcodes::handleStrictEquality),
     /** a b -> a!==b */
-    STRICT_NEQ(170, 1, 2, 1, OpcodeHandler::handleStrictEquality),
+    STRICT_NEQ(170, 1, 2, 1, NumericOpcodes::handleStrictEquality),
     /** a b -> a-b */
-    SUB(156, 1, 2, 1, OpcodeHandler::handleSub),
+    SUB(156, 1, 2, 1, NumericOpcodes::multiplyOrSubtract),
     /** a b -> b a */
     SWAP(27, 1, 2, 2, OpcodeHandler::handleSwap),
     /** a b c d -> c d a b */
@@ -509,7 +509,7 @@ public enum Opcode {
     /** put variable in with scope (atom, label, u8) */
     WITH_PUT_VAR(114, 10, 1, 0, OpcodeHandler::handleInvalid),
     /** a b -> a^b (bitwise XOR) */
-    XOR(172, 1, 2, 1, OpcodeHandler::handleXor),
+    XOR(172, 1, 2, 1, NumericOpcodes::bitwise),
     /** val -> sent_val resume_kind (yield value) */
     YIELD(134, 1, 1, 2, IteratorOpcodes::handleYield),
     /** val -> sent_val resume_kind (delegate to iterable) */

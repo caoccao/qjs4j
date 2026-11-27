@@ -116,7 +116,6 @@ final class PropertyOpcodes {
 
     private static void getIndexedValue(Opcode op, ExecutionContext executionContext, boolean preserveReceiver) {
         VirtualMachine vm = executionContext.virtualMachine;
-        int pc = executionContext.pc;
         JSStackValue[] stack = vm.valueStack.stack;
         int sp = executionContext.sp;
         JSValue indexValue = (JSValue) stack[--sp];
@@ -127,7 +126,7 @@ final class PropertyOpcodes {
             int index = (int) number.value();
             if (index == number.value() && index >= 0 && index < string.value().length()) {
                 stack[resultIndex] = new JSString(String.valueOf(string.value().charAt(index)));
-                executionContext.finishOpcode(pc + op.getSize(), resultIndex + 1);
+                executionContext.finishOpcode(op, resultIndex + 1);
                 return;
             }
         }
@@ -156,7 +155,7 @@ final class PropertyOpcodes {
         if (!preserveReceiver) {
             vm.valueStack.stackTop = resultIndex + 1;
         }
-        executionContext.finishOpcode(pc + op.getSize(), resultIndex + 1);
+        executionContext.finishOpcode(op, resultIndex + 1);
     }
 
     private static JSValue getNamedProperty(ExecutionContext execution, JSValue value, PropertyKey key, String name,
@@ -199,7 +198,7 @@ final class PropertyOpcodes {
         int index = (int) indexNumber.value();
         array.set(index, value);
 
-        executionContext.finishOpcode(executionContext.pc + op.getSize(), sp);
+        executionContext.finishOpcode(op, sp);
     }
 
     static void handleDefineField(Opcode op, ExecutionContext executionContext) {
@@ -222,11 +221,10 @@ final class PropertyOpcodes {
         }
 
         stack[sp++] = objectValue;
-        executionContext.finishOpcode(pc + op.getSize(), sp);
+        executionContext.finishOpcode(op, sp);
     }
 
     static void handleDefinePrivateField(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
         JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
         int sp = executionContext.sp;
         JSValue value = (JSValue) stack[--sp];
@@ -239,7 +237,7 @@ final class PropertyOpcodes {
                 executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
                         .throwTypeError("Cannot define private field on a non-extensible object");
                 stack[sp++] = objectValue;
-                executionContext.finishOpcode(pc + op.getSize(), sp);
+                executionContext.finishOpcode(op, sp);
                 return;
             }
             boolean hasPrivateProperty = object instanceof JSProxy proxy
@@ -249,7 +247,7 @@ final class PropertyOpcodes {
                 executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
                         .throwTypeError("Cannot initialize the same private elements twice on an object");
                 stack[sp++] = objectValue;
-                executionContext.finishOpcode(pc + op.getSize(), sp);
+                executionContext.finishOpcode(op, sp);
                 return;
             }
             if (object instanceof JSProxy proxy) {
@@ -265,19 +263,19 @@ final class PropertyOpcodes {
         }
 
         stack[sp++] = objectValue;
-        executionContext.finishOpcode(pc + op.getSize(), sp);
+        executionContext.finishOpcode(op, sp);
     }
 
     static void handleDelete(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        JSValue property = executionContext.virtualMachine.valueStack.pop();
-        JSValue object = executionContext.virtualMachine.valueStack.pop();
+        CallStack operandStack = executionContext.beginStackOpcode();
+        JSValue property = operandStack.pop();
+        JSValue object = operandStack.pop();
         JSObject targetObject = executionContext.virtualMachine.toObject(object);
         if (targetObject == null) {
             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
                     .throwTypeError("Cannot convert undefined or null to object");
-            executionContext.virtualMachine.valueStack.push(JSBoolean.FALSE);
-            executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+            operandStack.push(JSBoolean.FALSE);
+            executionContext.finishStackOpcode(op);
             return;
         }
         PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, property);
@@ -286,8 +284,8 @@ final class PropertyOpcodes {
             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context
                     .getPendingException();
         }
-        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
-        executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+        operandStack.push(JSBoolean.valueOf(result));
+        executionContext.finishStackOpcode(op);
     }
 
     static void handleGetArrayEl(Opcode op, ExecutionContext executionContext) {
@@ -336,12 +334,8 @@ final class PropertyOpcodes {
 
         PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, indexValue);
         JSValue result = targetObject.get(key, arrayObjectValue);
-        if (executionContext.capturePendingException()) {
-            stack[sp++] = JSUndefined.INSTANCE;
-        } else {
-            stack[sp++] = result;
-        }
-        executionContext.finishOpcode(pc + op.getSize(), sp);
+        executionContext.finishWithResult(op, sp,
+                executionContext.capturePendingException() ? JSUndefined.INSTANCE : result);
     }
 
     static void handleGetField(Opcode op, ExecutionContext executionContext) {
@@ -375,14 +369,13 @@ final class PropertyOpcodes {
     }
 
     static void handleGetPrivateField(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
         JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
         int sp = executionContext.sp;
         JSValue privateSymbolValue = (JSValue) stack[--sp];
         JSValue objectValue = (JSValue) stack[--sp];
         stack[sp++] = accessPrivateField(executionContext.virtualMachine, objectValue, privateSymbolValue,
                 JSUndefined.INSTANCE, false);
-        executionContext.finishOpcode(pc + op.getSize(), sp);
+        executionContext.finishOpcode(op, sp);
     }
 
     static void handleGetSuper(Opcode op, ExecutionContext executionContext) {
@@ -397,11 +390,10 @@ final class PropertyOpcodes {
             JSObject prototypeObject = object.getPrototype();
             stack[sp - 1] = prototypeObject != null ? prototypeObject : JSNull.INSTANCE;
         }
-        executionContext.pc += op.getSize();
+        executionContext.advance(op);
     }
 
     static void handleGetSuperValue(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
         JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
         int sp = executionContext.sp;
         JSValue keyValue = (JSValue) stack[--sp];
@@ -411,7 +403,7 @@ final class PropertyOpcodes {
         if (!(superObjectValue instanceof JSObject superObject)) {
             executionContext.raiseTypeError("super object expected");
             stack[sp++] = JSUndefined.INSTANCE;
-            executionContext.finishOpcode(pc + op.getSize(), sp);
+            executionContext.finishOpcode(op, sp);
             return;
         }
 
@@ -421,30 +413,26 @@ final class PropertyOpcodes {
         // primitive as 'this' (e.g., super.prop.call(3) should see this === 3).
         JSValue result = superObject.getWithReceiver(key, receiverValue);
 
-        if (executionContext.capturePendingException()) {
-            stack[sp++] = JSUndefined.INSTANCE;
-        } else {
-            stack[sp++] = result;
-        }
-        executionContext.finishOpcode(pc + op.getSize(), sp);
+        executionContext.finishWithResult(op, sp,
+                executionContext.capturePendingException() ? JSUndefined.INSTANCE : result);
     }
 
     static void handlePrivateIn(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        JSValue privateField = executionContext.virtualMachine.valueStack.pop();
-        JSValue object = executionContext.virtualMachine.valueStack.pop();
+        CallStack operandStack = executionContext.beginStackOpcode();
+        JSValue privateField = operandStack.pop();
+        JSValue object = operandStack.pop();
         if (!(object instanceof JSObject jsObj)) {
             executionContext.raiseTypeError("invalid 'in' operand");
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+            operandStack.push(JSUndefined.INSTANCE);
+            executionContext.finishStackOpcode(op);
             return;
         }
         boolean result = false;
         if (privateField instanceof JSSymbol symbol) {
             result = jsObj.has(PropertyKey.fromSymbol(symbol));
         }
-        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
-        executionContext.finishStackOpcode(executionContext.pc + op.getSize());
+        operandStack.push(JSBoolean.valueOf(result));
+        executionContext.finishStackOpcode(op);
     }
 
     static void handlePrivateSymbol(Opcode op, ExecutionContext executionContext) {
@@ -456,7 +444,6 @@ final class PropertyOpcodes {
     }
 
     static void handlePutArrayEl(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
         JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
         int sp = executionContext.sp;
         JSValue assignedValue = (JSValue) stack[--sp];
@@ -465,7 +452,7 @@ final class PropertyOpcodes {
 
         putProperty(executionContext, objectValue, null, null, indexValue, assignedValue);
         stack[sp++] = assignedValue;
-        executionContext.finishOpcode(pc + op.getSize(), sp);
+        executionContext.finishOpcode(op, sp);
     }
 
     static void handlePutField(Opcode op, ExecutionContext executionContext) {
@@ -481,19 +468,17 @@ final class PropertyOpcodes {
     }
 
     static void handlePutPrivateField(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
         JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
         int sp = executionContext.sp;
         JSValue privateSymbolValue = (JSValue) stack[--sp];
         JSValue value = (JSValue) stack[--sp];
         JSValue objectValue = (JSValue) stack[--sp];
         stack[sp++] = accessPrivateField(executionContext.virtualMachine, objectValue, privateSymbolValue, value, true);
-        executionContext.finishOpcode(pc + op.getSize(), sp);
+        executionContext.finishOpcode(op, sp);
     }
 
     // Stack: this obj key val -> val (QuickJS order: value at top)
     static void handlePutSuperValue(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
         JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
         int sp = executionContext.sp;
         JSValue assignedValue = (JSValue) stack[--sp];
@@ -504,7 +489,7 @@ final class PropertyOpcodes {
         if (!(superObjectValue instanceof JSObject superObject)) {
             executionContext.raiseTypeError("super object expected");
             stack[sp++] = assignedValue;
-            executionContext.finishOpcode(pc + op.getSize(), sp);
+            executionContext.finishOpcode(op, sp);
             return;
         }
 
@@ -521,7 +506,7 @@ final class PropertyOpcodes {
 
         executionContext.virtualMachine.capturePendingExceptionFromContext(superObject.getContext());
         stack[sp++] = assignedValue;
-        executionContext.finishOpcode(pc + op.getSize(), sp);
+        executionContext.finishOpcode(op, sp);
     }
 
     private static void putPrimitiveProperty(ExecutionContext execution, JSValue receiver, PropertyKey key,

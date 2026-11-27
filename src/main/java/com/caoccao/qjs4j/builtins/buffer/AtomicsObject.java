@@ -20,11 +20,8 @@ import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.buffer.*;
 import com.caoccao.qjs4j.core.promise.JSPromise;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
-import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
-import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 import com.caoccao.qjs4j.utils.ByteArrayAtomics;
 
-import java.math.BigInteger;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -44,7 +41,6 @@ import java.util.logging.Logger;
  * (runtime), not shared globally across the JVM.
  */
 public final class AtomicsObject implements AutoCloseable {
-    private static final String INTEGER_ARRAY_REQUIREMENT = " only works on Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, BigInt64Array, or BigUint64Array";
     /**
      * How long {@link #close()} waits for the {@code waitAsync} executor to stop.
      */
@@ -83,14 +79,14 @@ public final class AtomicsObject implements AutoCloseable {
      * old value.
      */
     public JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readModifyWrite(context, args, AtomicOperation.ADD);
+        return AtomicOperation.ADD.apply(context, args);
     }
 
     /**
      * Atomics.and(typedArray, index, value) ES2017 24.4.4 Atomically computes bitwise AND and returns the old value.
      */
     public JSValue and(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readModifyWrite(context, args, AtomicOperation.AND);
+        return AtomicOperation.AND.apply(context, args);
     }
 
     /**
@@ -162,7 +158,7 @@ public final class AtomicsObject implements AutoCloseable {
      * exchanges if equal, returns the old value.
      */
     public JSValue compareExchange(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readModifyWrite(context, args, AtomicOperation.COMPARE_EXCHANGE);
+        return AtomicOperation.COMPARE_EXCHANGE.apply(context, args);
     }
 
     private JSValue enqueueWait(JSContext context, JSTypedArray typedArray, long index, long timeoutMillis) {
@@ -215,7 +211,7 @@ public final class AtomicsObject implements AutoCloseable {
      * old value.
      */
     public JSValue exchange(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readModifyWrite(context, args, AtomicOperation.EXCHANGE);
+        return AtomicOperation.EXCHANGE.apply(context, args);
     }
 
     /**
@@ -228,8 +224,8 @@ public final class AtomicsObject implements AutoCloseable {
      * @return the wait list, or {@code null}
      */
     WaitList findWaitList(JSTypedArray typedArray, long index) {
-        Map<Integer, WaitList> byOffset = waitLists.get(requireAtomicArray(typedArray, index));
-        return byOffset == null ? null : byOffset.get(getWaitOffset(typedArray, index));
+        Map<Integer, WaitList> byOffset = waitLists.get(AtomicOperation.requireAtomicArray(typedArray, index));
+        return byOffset == null ? null : byOffset.get(AtomicOperation.byteOffset(typedArray, index));
     }
 
     /**
@@ -288,32 +284,7 @@ public final class AtomicsObject implements AutoCloseable {
      * Atomics.load(typedArray, index) ES2017 24.4.7 Atomically loads and returns the value at index.
      */
     public JSValue load(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length < 2) {
-            return context.throwTypeError("Atomics.load requires typedArray and index");
-        }
-
-        if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return context.throwTypeError("Atomics.load requires a TypedArray");
-        }
-        if (!typedArray.isAtomicsReadableAndWriteable()) {
-            return context.throwTypeError("Atomics.load" + INTEGER_ARRAY_REQUIREMENT);
-        }
-
-        try {
-            long index = getAtomicIndex(context, typedArray, args[1]);
-            byte[] array = requireAtomicArray(typedArray, index);
-            int offset = getWaitOffset(typedArray, index);
-            long value = switch (typedArray.getBytesPerElement()) {
-                case 1 -> ByteArrayAtomics.getVolatileByte(array, offset);
-                case 2 -> ByteArrayAtomics.getVolatileShort(array, offset);
-                case 4 -> ByteArrayAtomics.getVolatileInt(array, offset);
-                case 8 -> ByteArrayAtomics.getVolatileLong(array, offset);
-                default -> throw new AssertionError(typedArray.getBytesPerElement());
-            };
-            return atomicResult(typedArray, value);
-        } catch (JSErrorException e) {
-            return context.throwError(e);
-        }
+        return AtomicOperation.load(context, args);
     }
 
     /**
@@ -333,7 +304,8 @@ public final class AtomicsObject implements AutoCloseable {
             return context.throwTypeError(typedArray.getObjectTag() + " is not an int32 or BigInt64 typed array.");
         }
         try {
-            long index = getAtomicIndex(context, typedArray, args.length >= 2 ? args[1] : JSUndefined.INSTANCE);
+            long index = AtomicOperation.getAtomicIndex(context, typedArray,
+                    args.length >= 2 ? args[1] : JSUndefined.INSTANCE);
             double countNumber = args.length >= 3 && !(args[2] instanceof JSUndefined)
                     ? JSTypeConversions.toInteger(context, args[2])
                     : Double.POSITIVE_INFINITY;
@@ -364,7 +336,7 @@ public final class AtomicsObject implements AutoCloseable {
      * Atomics.or(typedArray, index, value) ES2017 24.4.8 Atomically computes bitwise OR and returns the old value.
      */
     public JSValue or(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readModifyWrite(context, args, AtomicOperation.OR);
+        return AtomicOperation.OR.apply(context, args);
     }
 
     /**
@@ -404,8 +376,8 @@ public final class AtomicsObject implements AutoCloseable {
      * @return the caller's registration
      */
     WaitRegistration registerWaiter(JSTypedArray typedArray, long index) {
-        byte[] block = requireAtomicArray(typedArray, index);
-        int offset = getWaitOffset(typedArray, index);
+        byte[] block = AtomicOperation.requireAtomicArray(typedArray, index);
+        int offset = AtomicOperation.byteOffset(typedArray, index);
         while (true) {
             Map<Integer, WaitList> byOffset = waitLists.computeIfAbsent(block, key -> new ConcurrentHashMap<>());
             WaitList waitList = byOffset.computeIfAbsent(offset, key -> new WaitList());
@@ -441,50 +413,7 @@ public final class AtomicsObject implements AutoCloseable {
      * Atomics.store(typedArray, index, value) ES2017 24.4.11 Atomically stores value at index and returns the value.
      */
     public JSValue store(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length < 3) {
-            return context.throwTypeError("Atomics.store requires typedArray, index, and value");
-        }
-
-        if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return context.throwTypeError("Atomics.store requires a TypedArray");
-        }
-        if (!typedArray.isAtomicsReadableAndWriteable()) {
-            return context.throwTypeError("Atomics.store" + INTEGER_ARRAY_REQUIREMENT);
-        }
-
-        try {
-            long index = getAtomicIndex(context, typedArray, args[1]);
-            if (typedArray instanceof JSBigInt64Array || typedArray instanceof JSBigUint64Array) {
-                JSBigInt returnValue = JSTypeConversions.toBigInt(context, args[2]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                long storedValue = returnValue.value().longValue();
-                byte[] arr = requireAtomicArray(typedArray, index);
-                int byteOffset = getWaitOffset(typedArray, index);
-                ByteArrayAtomics.setVolatileLong(arr, byteOffset, storedValue);
-                return returnValue;
-            }
-            double returnValue = JSTypeConversions.toInteger(context, args[2]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (returnValue == 0.0) {
-                returnValue = 0.0;
-            }
-            int int32Value = JSTypeConversions.toInt32(context, JSNumber.of(returnValue));
-            byte[] array = requireAtomicArray(typedArray, index);
-            int offset = getWaitOffset(typedArray, index);
-            switch (typedArray.getBytesPerElement()) {
-                case 1 -> ByteArrayAtomics.setVolatileByte(array, offset, (byte) int32Value);
-                case 2 -> ByteArrayAtomics.setVolatileShort(array, offset, (short) int32Value);
-                case 4 -> ByteArrayAtomics.setVolatileInt(array, offset, int32Value);
-                default -> throw new AssertionError(typedArray.getBytesPerElement());
-            }
-            return JSNumber.of(returnValue);
-        } catch (JSErrorException e) {
-            return context.throwError(e);
-        }
+        return AtomicOperation.store(context, args);
     }
 
     /**
@@ -492,7 +421,7 @@ public final class AtomicsObject implements AutoCloseable {
      * returns the old value.
      */
     public JSValue sub(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readModifyWrite(context, args, AtomicOperation.SUB);
+        return AtomicOperation.SUB.apply(context, args);
     }
 
     /**
@@ -531,16 +460,14 @@ public final class AtomicsObject implements AutoCloseable {
                 return context.throwTypeError(method + " requires a SharedArrayBuffer");
             }
 
-            long index = getAtomicIndex(context, typedArray, args[1]);
+            long index = AtomicOperation.getAtomicIndex(context, typedArray, args[1]);
             boolean int32 = typedArray instanceof JSInt32Array;
-            long expected = int32
-                    ? JSTypeConversions.toInt32(context, args[2])
-                    : JSTypeConversions.toBigInt64(context, args[2]);
+            long expected = AtomicOperation.toAtomicOperand(context, typedArray.getBytesPerElement(), args[2]);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            byte[] bytes = requireAtomicArray(typedArray, index);
-            int offset = getWaitOffset(typedArray, index);
+            byte[] bytes = AtomicOperation.requireAtomicArray(typedArray, index);
+            int offset = AtomicOperation.byteOffset(typedArray, index);
             long current = int32
                     ? ByteArrayAtomics.getVolatileInt(bytes, offset)
                     : ByteArrayAtomics.getVolatileLong(bytes, offset);
@@ -584,26 +511,7 @@ public final class AtomicsObject implements AutoCloseable {
      * Atomics.xor(typedArray, index, value) ES2017 24.4.14 Atomically computes bitwise XOR and returns the old value.
      */
     public JSValue xor(JSContext context, JSValue thisArg, JSValue[] args) {
-        return readModifyWrite(context, args, AtomicOperation.XOR);
-    }
-
-    private static JSValue atomicResult(JSTypedArray typedArray, long value) {
-        if (typedArray instanceof JSBigUint64Array) {
-            return JSBigInt.fromUnsignedLong(value);
-        }
-        if (typedArray instanceof JSBigInt64Array) {
-            return new JSBigInt(BigInteger.valueOf(value));
-        }
-        if (typedArray instanceof JSUint32Array) {
-            return JSNumber.of(Integer.toUnsignedLong((int) value));
-        }
-        if (typedArray instanceof JSUint16Array) {
-            return JSNumber.of(Short.toUnsignedInt((short) value));
-        }
-        if (typedArray instanceof JSUint8Array) {
-            return JSNumber.of(Byte.toUnsignedInt((byte) value));
-        }
-        return JSNumber.of((int) value);
+        return AtomicOperation.XOR.apply(context, args);
     }
 
     private static JSObject createWaitAsyncSyncResult(JSContext context, String value) {
@@ -611,21 +519,6 @@ public final class AtomicsObject implements AutoCloseable {
         result.set(PropertyKey.ASYNC, JSBoolean.FALSE);
         result.set(PropertyKey.VALUE, new JSString(value));
         return result;
-    }
-
-    private static long getAtomicIndex(JSContext context, JSTypedArray typedArray, JSValue indexValue) {
-        if (typedArray.isOutOfBounds()) {
-            throw new JSTypeErrorException("TypedArray buffer is detached or out of bounds");
-        }
-        long typedArrayLength = typedArray.getLength();
-        long indexLong = JSTypeConversions.toIndex(context, indexValue);
-        if (context.hasPendingException()) {
-            throw new com.caoccao.qjs4j.exceptions.JSException(context.getPendingException());
-        }
-        if (indexLong >= typedArrayLength) {
-            throw new JSRangeErrorException("Index out of bounds");
-        }
-        return indexLong;
     }
 
     private static double getAtomicsWaitTimeout(JSContext context, JSValue[] args, int timeoutArgIndex) {
@@ -646,74 +539,6 @@ public final class AtomicsObject implements AutoCloseable {
      *            the element index
      * @return the byte offset within the page
      */
-    private static int getWaitOffset(JSTypedArray typedArray, long index) {
-        return typedArray.getBuffer().getBuffer()
-                .arrayOffsetAt(typedArray.getByteOffset() + index * typedArray.getBytesPerElement());
-    }
-
-    private static JSValue readModifyWrite(JSContext context, JSValue[] args, AtomicOperation operation) {
-        boolean compare = operation == AtomicOperation.COMPARE_EXCHANGE;
-        if (args.length < (compare ? 4 : 3)) {
-            return context.throwTypeError(operation.methodName + (compare
-                    ? " requires typedArray, index, expectedValue, and replacementValue"
-                    : " requires typedArray, index, and value"));
-        }
-        if (!(args[0] instanceof JSTypedArray typedArray)) {
-            return context.throwTypeError(operation.methodName + " requires a TypedArray");
-        }
-        if (!typedArray.isAtomicsReadableAndWriteable()) {
-            return context.throwTypeError(operation.methodName + INTEGER_ARRAY_REQUIREMENT);
-        }
-
-        try {
-            long index = getAtomicIndex(context, typedArray, args[1]);
-            int width = typedArray.getBytesPerElement();
-            long operand = toAtomicOperand(context, width, args[2]);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            long replacement = 0;
-            if (compare) {
-                replacement = toAtomicOperand(context, width, args[3]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-            }
-            // User code can detach or resize the buffer during either coercion.
-            byte[] array = requireAtomicArray(typedArray, index);
-            int offset = getWaitOffset(typedArray, index);
-            long previous = switch (width) {
-                case 1 -> operation.updateByte(array, offset, (byte) operand, (byte) replacement);
-                case 2 -> operation.updateShort(array, offset, (short) operand, (short) replacement);
-                case 4 -> operation.updateInt(array, offset, (int) operand, (int) replacement);
-                case 8 -> operation.updateLong(array, offset, operand, replacement);
-                default -> throw new AssertionError(width);
-            };
-            return atomicResult(typedArray, previous);
-        } catch (JSErrorException e) {
-            return context.throwError(e);
-        }
-    }
-
-    private static byte[] requireAtomicArray(JSTypedArray typedArray, long index) {
-        // Conversion of the index or value can resize or detach an ordinary ArrayBuffer.
-        // An out-of-bounds or detached view has length zero.
-        if (index >= typedArray.getLength()) {
-            throw new JSTypeErrorException("TypedArray buffer is detached or out of bounds");
-        }
-        JSByteBuffer byteBuffer = typedArray.getBuffer().getBuffer();
-        if (byteBuffer == null) {
-            throw new JSTypeErrorException("TypedArray buffer is detached");
-        }
-        return byteBuffer.arrayAt(typedArray.getByteOffset() + index * typedArray.getBytesPerElement());
-    }
-
-    private static long toAtomicOperand(JSContext context, int width, JSValue value) {
-        // The only 8-byte integer typed arrays are BigInt64Array and BigUint64Array.
-        return width == Long.BYTES
-                ? JSTypeConversions.toBigInt64(context, value)
-                : JSTypeConversions.toInt32(context, value);
-    }
 
     /**
      * An {@code Atomics.waitAsync} in flight, owned by the runtime whose script started it.
@@ -741,86 +566,6 @@ public final class AtomicsObject implements AutoCloseable {
 
         private boolean isCancelled() {
             return cancelled.get();
-        }
-    }
-
-    private enum AtomicOperation {
-        ADD("add"),
-        AND("and"),
-        COMPARE_EXCHANGE("compareExchange"),
-        EXCHANGE("exchange"),
-        OR("or"),
-        SUB("sub"),
-        XOR("xor");
-
-        final String methodName;
-
-        AtomicOperation(String name) {
-            methodName = "Atomics." + name;
-        }
-
-        byte updateByte(byte[] array, int offset, byte operand, byte replacement) {
-            return switch (this) {
-                case ADD -> ByteArrayAtomics.getAndAddByte(array, offset, operand);
-                case SUB -> ByteArrayAtomics.getAndAddByte(array, offset, (byte) -operand);
-                case AND -> ByteArrayAtomics.getAndBitwiseAndByte(array, offset, operand);
-                case OR -> ByteArrayAtomics.getAndBitwiseOrByte(array, offset, operand);
-                case XOR -> ByteArrayAtomics.getAndBitwiseXorByte(array, offset, operand);
-                case EXCHANGE -> ByteArrayAtomics.getAndSetByte(array, offset, operand);
-                case COMPARE_EXCHANGE -> ByteArrayAtomics.compareAndExchangeByte(array, offset, operand, replacement);
-            };
-        }
-
-        int updateInt(byte[] array, int offset, int operand, int replacement) {
-            return switch (this) {
-                case ADD -> ByteArrayAtomics.getAndAddInt(array, offset, operand);
-                case SUB -> ByteArrayAtomics.getAndAddInt(array, offset, -operand);
-                case AND -> ByteArrayAtomics.getAndBitwiseAndInt(array, offset, operand);
-                case OR -> ByteArrayAtomics.getAndBitwiseOrInt(array, offset, operand);
-                case XOR -> ByteArrayAtomics.getAndBitwiseXorInt(array, offset, operand);
-                case EXCHANGE -> ByteArrayAtomics.getAndSetInt(array, offset, operand);
-                case COMPARE_EXCHANGE -> ByteArrayAtomics.compareAndExchangeInt(array, offset, operand, replacement);
-            };
-        }
-
-        long updateLong(byte[] array, int offset, long operand, long replacement) {
-            return switch (this) {
-                case ADD -> ByteArrayAtomics.getAndAddLong(array, offset, operand);
-                case SUB -> ByteArrayAtomics.getAndAddLong(array, offset, -operand);
-                case AND -> ByteArrayAtomics.getAndBitwiseAndLong(array, offset, operand);
-                case OR -> ByteArrayAtomics.getAndBitwiseOrLong(array, offset, operand);
-                case XOR -> ByteArrayAtomics.getAndBitwiseXorLong(array, offset, operand);
-                case EXCHANGE -> ByteArrayAtomics.getAndSetLong(array, offset, operand);
-                case COMPARE_EXCHANGE -> ByteArrayAtomics.compareAndExchangeLong(array, offset, operand, replacement);
-            };
-        }
-
-        short updateShort(byte[] array, int offset, short operand, short replacement) {
-            // Short views lack atomic read-modify-write operations. Storage pages are padded to
-            // a multiple of four bytes so the CAS can preserve the neighboring halfword.
-            int wordOffset = offset & ~3;
-            int shift = (offset & 2) << 3;
-            int mask = 0xFFFF << shift;
-            while (true) {
-                int word = ByteArrayAtomics.getVolatileInt(array, wordOffset);
-                short previous = (short) (word >>> shift);
-                if (this == COMPARE_EXCHANGE && previous != operand) {
-                    return previous;
-                }
-                int next = switch (this) {
-                    case ADD -> previous + operand;
-                    case SUB -> previous - operand;
-                    case AND -> previous & operand;
-                    case OR -> previous | operand;
-                    case XOR -> previous ^ operand;
-                    case EXCHANGE -> operand;
-                    case COMPARE_EXCHANGE -> replacement;
-                };
-                int updated = (word & ~mask) | ((next & 0xFFFF) << shift);
-                if (ByteArrayAtomics.compareAndExchangeInt(array, wordOffset, word, updated) == word) {
-                    return previous;
-                }
-            }
         }
     }
 

@@ -179,24 +179,20 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertPendingTypeError(context, ObjectConstructor.freeze(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
 
         // Normal case: freeze primitive (returns primitive)
-        result = ObjectPrototype.freeze(context, JSUndefined.INSTANCE, stringArgs("string"));
-        assertStringValue(result, "string");
+        BuiltinAssertions freeze = builtin(ObjectPrototype::freeze, JSUndefined.INSTANCE);
+        freeze.expectString("string", stringArgs("string"));
 
         // Edge case: freeze number primitive
-        result = ObjectPrototype.freeze(context, JSUndefined.INSTANCE, numberArgs(42));
-        assertNumberValue(result, 42.0);
+        freeze.expectNumber(42.0, numberArgs(42));
 
         // Edge case: freeze boolean primitive
-        result = ObjectPrototype.freeze(context, JSUndefined.INSTANCE, new JSValue[]{JSBoolean.TRUE});
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        freeze.expectValue(JSBoolean.TRUE, JSBoolean.TRUE);
 
         // Edge case: freeze null (returns null)
-        result = ObjectPrototype.freeze(context, JSUndefined.INSTANCE, new JSValue[]{JSNull.INSTANCE});
-        assertThat(result).isEqualTo(JSNull.INSTANCE);
+        freeze.expectValue(JSNull.INSTANCE, JSNull.INSTANCE);
 
         // Edge case: freeze undefined (returns undefined)
-        result = ObjectPrototype.freeze(context, JSUndefined.INSTANCE, new JSValue[]{JSUndefined.INSTANCE});
-        assertThat(result).isEqualTo(JSUndefined.INSTANCE);
+        freeze.expectValue(JSUndefined.INSTANCE, JSUndefined.INSTANCE);
 
         assertBooleanWithJavet(
                 // Test Object.isFrozen returns true after freeze
@@ -537,25 +533,20 @@ public class ObjectConstructorTest extends BaseJavetTest {
         obj.set("existingProp", new JSString("value"));
 
         // Normal case: existing property
-        JSValue result = ObjectConstructor.hasOwn(context, JSUndefined.INSTANCE,
-                new JSValue[]{obj, new JSString("existingProp")});
-        assertThat(result.isBooleanTrue()).isTrue();
+        BuiltinAssertions hasOwn = builtin(ObjectConstructor::hasOwn, JSUndefined.INSTANCE);
+        hasOwn.expectValue(JSBoolean.TRUE, obj, new JSString("existingProp"));
 
         // Normal case: non-existing property
-        result = ObjectConstructor.hasOwn(context, JSUndefined.INSTANCE,
-                new JSValue[]{obj, new JSString("nonexistent")});
-        assertThat(result.isBooleanFalse()).isTrue();
+        hasOwn.expectValue(JSBoolean.FALSE, obj, new JSString("nonexistent"));
 
         // Edge case: insufficient arguments (should return false, not throw)
-        result = ObjectConstructor.hasOwn(context, JSUndefined.INSTANCE, new JSValue[]{obj});
-        assertThat(result.isBooleanFalse()).isTrue();
+        hasOwn.expectValue(JSBoolean.FALSE, obj);
 
         // Edge case: no arguments
         assertPendingTypeError(context, ObjectConstructor.hasOwn(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
 
         // Edge case: non-object primitive (should ToObject per spec)
-        result = ObjectConstructor.hasOwn(context, JSUndefined.INSTANCE, stringArgs("test", "length"));
-        assertThat(result.isBooleanTrue()).isTrue();
+        hasOwn.expectValue(JSBoolean.TRUE, stringArgs("test", "length"));
     }
 
     @Test
@@ -565,16 +556,14 @@ public class ObjectConstructorTest extends BaseJavetTest {
         obj.set("b", new JSNumber(2));
 
         // Normal case: property exists
-        JSValue result = ObjectConstructor.hasOwnProperty(context, obj, stringArgs("a"));
-        assertThat(result.isBooleanTrue()).isTrue();
+        BuiltinAssertions hasOwnProperty = builtin(ObjectConstructor::hasOwnProperty, obj);
+        hasOwnProperty.expectValue(JSBoolean.TRUE, stringArgs("a"));
 
         // Property doesn't exist
-        result = ObjectConstructor.hasOwnProperty(context, obj, stringArgs("z"));
-        assertThat(result.isBooleanFalse()).isTrue();
+        hasOwnProperty.expectValue(JSBoolean.FALSE, stringArgs("z"));
 
         // Edge case: no arguments
-        result = ObjectConstructor.hasOwnProperty(context, obj, JSValue.NO_ARGS);
-        assertThat(result.isBooleanFalse()).isTrue();
+        hasOwnProperty.expectValue(JSBoolean.FALSE);
 
         // Edge case: called on non-object
         assertPendingTypeError(context,
