@@ -22,8 +22,6 @@ import com.caoccao.qjs4j.core.collection.JSMap;
 import com.caoccao.qjs4j.core.iterator.JSIterator;
 import com.caoccao.qjs4j.core.iterator.JSIteratorHelper;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -193,23 +191,43 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testDeleteAndReAdd() {
         // Delete and re-add an entry
-        assertIntegerWithJavet(visitCount("[[1, 'a'], [2, 'b'], [3, 'c']]", """
-                if(k === 1) {
+        assertIntegerWithJavet("""
+                var count = 0;
+                var m = new Map([[1, 'a'], [2, 'b'], [3, 'c']]);
+                m.forEach(function(v, k) {
+                  if(k === 1) {
                   m.delete(3);
                   m.set(3, 'new');
-                }"""));
+                }
+                  count++;
+                });
+                count""");
     }
 
     @Test
     void testDeleteCurrentEntry() {
         // Delete the current entry during iteration
-        assertIntegerWithJavet(visitCount("[[1, 'a'], [2, 'b'], [3, 'c']]", "m.delete(k);"));
+        assertIntegerWithJavet("""
+                var count = 0;
+                var m = new Map([[1, 'a'], [2, 'b'], [3, 'c']]);
+                m.forEach(function(v, k) {
+                  m.delete(k);
+                  count++;
+                });
+                count""");
     }
 
     @Test
     void testDeleteDuringIteration() {
         // Delete an entry that hasn't been visited yet
-        assertIntegerWithJavet(visitCount("[[1, 'a'], [2, 'b'], [3, 'c']]", "if(k === 2) m.delete(3);"));
+        assertIntegerWithJavet("""
+                var count = 0;
+                var m = new Map([[1, 'a'], [2, 'b'], [3, 'c']]);
+                m.forEach(function(v, k) {
+                  if(k === 2) m.delete(3);
+                  count++;
+                });
+                count""");
     }
 
     @Test
@@ -242,11 +260,17 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testDeleteMultipleDuringIteration() {
         // Delete multiple entries during iteration
-        assertIntegerWithJavet(visitCount("[[1, 'a'], [2, 'b'], [3, 'c'], [4, 'd'], [5, 'e']]", """
-                if(k === 1) {
+        assertIntegerWithJavet("""
+                var count = 0;
+                var m = new Map([[1, 'a'], [2, 'b'], [3, 'c'], [4, 'd'], [5, 'e']]);
+                m.forEach(function(v, k) {
+                  if(k === 1) {
                   m.delete(3);
                   m.delete(4);
-                }"""));
+                }
+                  count++;
+                });
+                count""");
     }
 
     @Test
@@ -260,7 +284,14 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testDeleteNonExistent() {
         // Delete non-existent key during iteration
-        assertIntegerWithJavet(visitCount("[[1, 'a'], [2, 'b']]", "m.delete(999);"));
+        assertIntegerWithJavet("""
+                var count = 0;
+                var m = new Map([[1, 'a'], [2, 'b']]);
+                m.forEach(function(v, k) {
+                  m.delete(999);
+                  count++;
+                });
+                count""");
     }
 
     @Test
@@ -280,7 +311,14 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testDeletePreviousEntry() {
         // Delete an entry that was already visited
-        assertIntegerWithJavet(visitCount("[[1, 'a'], [2, 'b'], [3, 'c']]", "if(k === 3) m.delete(1);"));
+        assertIntegerWithJavet("""
+                var count = 0;
+                var m = new Map([[1, 'a'], [2, 'b'], [3, 'c']]);
+                m.forEach(function(v, k) {
+                  if(k === 3) m.delete(1);
+                  count++;
+                });
+                count""");
     }
 
     @Test
@@ -308,13 +346,27 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testDeleteWithNullValue() {
         // Test with a map that has null as a value
-        assertIntegerWithJavet(visitCount("[[1, null], [2, 'b'], [3, 'c']]", "if(k === 1) m.delete(2);"));
+        assertIntegerWithJavet("""
+                var count = 0;
+                var m = new Map([[1, null], [2, 'b'], [3, 'c']]);
+                m.forEach(function(v, k) {
+                  if(k === 1) m.delete(2);
+                  count++;
+                });
+                count""");
     }
 
     @Test
     void testDeleteWithUndefinedValue() {
         // Test with a map that has undefined as a value
-        assertIntegerWithJavet(visitCount("[[1, undefined], [2, 'b'], [3, 'c']]", "if(k === 1) m.delete(2);"));
+        assertIntegerWithJavet("""
+                var count = 0;
+                var m = new Map([[1, undefined], [2, 'b'], [3, 'c']]);
+                m.forEach(function(v, k) {
+                  if(k === 1) m.delete(2);
+                  count++;
+                });
+                count""");
     }
 
     @Test
@@ -382,57 +434,77 @@ public class MapPrototypeTest extends BaseJavetTest {
                 "typeof new Map([[1, 'a']]).entries().next === 'function'");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {".entries", "[Symbol.iterator]"})
-    void testEntryIteratorPreservesInsertionOrder(String accessor) {
+    @Test
+    void testEntryIteratorPreservesInsertionOrder() {
         assertStringWithJavet("""
                 var m = new Map();
                 m.set(3, 'c');
                 m.set(1, 'a');
                 m.set(2, 'b');
-                var it = m%s();
+                var it = m.entries();
                 var result = '';
                 var entry;
                 while (!(entry = it.next()).done) {
                   result += entry.value[0];
                 }
-                result""".formatted(accessor));
+                result""", """
+                var m = new Map();
+                m.set(3, 'c');
+                m.set(1, 'a');
+                m.set(2, 'b');
+                var it = m[Symbol.iterator]();
+                var result = '';
+                var entry;
+                while (!(entry = it.next()).done) {
+                  result += entry.value[0];
+                }
+                result""");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {".entries", "[Symbol.iterator]"})
-    void testEntryIteratorProducesKeyValuePairs(String accessor) {
+    @Test
+    void testEntryIteratorProducesKeyValuePairs() {
         assertStringWithJavet("""
                 var m = new Map([[1, 'a'], [2, 'b'], [3, 'c']]);
-                var it = m%s();
+                var it = m.entries();
                 var result = '';
                 var entry;
                 while (!(entry = it.next()).done) {
                   result += entry.value[0] + entry.value[1];
                 }
-                result""".formatted(accessor));
+                result""", """
+                var m = new Map([[1, 'a'], [2, 'b'], [3, 'c']]);
+                var it = m[Symbol.iterator]();
+                var result = '';
+                var entry;
+                while (!(entry = it.next()).done) {
+                  result += entry.value[0] + entry.value[1];
+                }
+                result""");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {".entries", "[Symbol.iterator]"})
-    void testEntryIteratorReturnsIterator(String accessor) {
-        assertBooleanWithJavet("typeof new Map([[1, 'a']])%s() === 'object'".formatted(accessor),
-                "typeof new Map([[1, 'a']])%s().next === 'function'".formatted(accessor));
+    @Test
+    public void testEntryIteratorReturnsIterator() {
+        assertBooleanWithJavet("typeof new Map([[1, 'a']]).entries() === 'object'",
+                "typeof new Map([[1, 'a']]).entries().next === 'function'",
+                "typeof new Map([[1, 'a']])[Symbol.iterator]() === 'object'",
+                "typeof new Map([[1, 'a']])[Symbol.iterator]().next === 'function'");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {".entries", "[Symbol.iterator]"})
-    void testEntryIteratorWithEmptyMap(String accessor) {
+    @Test
+    void testEntryIteratorWithEmptyMap() {
         assertBooleanWithJavet("""
                 var m = new Map();
-                var it = m%s();
+                var it = m.entries();
                 var entry = it.next();
-                entry.done""".formatted(accessor));
+                entry.done""", """
+                var m = new Map();
+                var it = m[Symbol.iterator]();
+                var entry = it.next();
+                entry.done""");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {".entries", "[Symbol.iterator]"})
-    void testEntryIteratorWithMixedTypes(String accessor) {
+    @Test
+    void testEntryIteratorWithMixedTypes() {
         assertIntegerWithJavet("""
                 var m = new Map();
                 m.set(1, 'num');
@@ -440,10 +512,20 @@ public class MapPrototypeTest extends BaseJavetTest {
                 m.set(true, 'bool');
                 m.set(null, 'null');
                 m.set(undefined, 'undef');
-                var it = m%s();
+                var it = m.entries();
                 var count = 0;
                 while (!it.next().done) count++;
-                count""".formatted(accessor));
+                count""", """
+                var m = new Map();
+                m.set(1, 'num');
+                m.set('str', 'string');
+                m.set(true, 'bool');
+                m.set(null, 'null');
+                m.set(undefined, 'undef');
+                var it = m[Symbol.iterator]();
+                var count = 0;
+                while (!it.next().done) count++;
+                count""");
     }
 
     @Test
@@ -481,11 +563,17 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testForEachAddsDifferentTypes() {
         // Test adding different types of keys during iteration
-        assertIntegerWithJavet(visitCount("[[1, 'num']]", """
-                if(count === 0) {
+        assertIntegerWithJavet("""
+                var count = 0;
+                var m = new Map([[1, 'num']]);
+                m.forEach(function(v, k) {
+                  if(count === 0) {
                   m.set('string', 's');
                   m.set(true, 't');
-                }"""));
+                }
+                  count++;
+                });
+                count""");
     }
 
     @Test
@@ -513,23 +601,43 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testForEachComplexDynamicGrowth() {
         // Complex test: each iteration adds multiple entries if under limit
-        assertIntegerWithJavet(visitCount("[[0, 'start']]", """
-                if(count < 3) {
+        assertIntegerWithJavet("""
+                var count = 0;
+                var m = new Map([[0, 'start']]);
+                m.forEach(function(v, k) {
+                  if(count < 3) {
                   m.set(count * 10 + 1, 'a');
                   m.set(count * 10 + 2, 'b');
-                }"""));
+                }
+                  count++;
+                });
+                count""");
     }
 
     @Test
     void testForEachDeleteDuringIteration() {
         // Delete during iteration - implementation specific behavior
-        assertIntegerWithJavet(visitCount("[[1, 'a'], [2, 'b'], [3, 'c']]", "if(k === 2) m.delete(3);"));
+        assertIntegerWithJavet("""
+                var count = 0;
+                var m = new Map([[1, 'a'], [2, 'b'], [3, 'c']]);
+                m.forEach(function(v, k) {
+                  if(k === 2) m.delete(3);
+                  count++;
+                });
+                count""");
     }
 
     @Test
     void testForEachDuplicateKeyDoesNotIncreaseVisits() {
         // Setting an existing key should not cause additional visits
-        assertIntegerWithJavet(visitCount("[[1, 'a'], [2, 'b']]", "m.set(1, 'updated');"));
+        assertIntegerWithJavet("""
+                var count = 0;
+                var m = new Map([[1, 'a'], [2, 'b']]);
+                m.forEach(function(v, k) {
+                  m.set(1, 'updated');
+                  count++;
+                });
+                count""");
     }
 
     @Test
@@ -614,7 +722,14 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testForEachVisitsNewlyAddedEntries() {
         // QuickJS behavior: forEach continues to visit entries added during iteration
-        assertIntegerWithJavet(visitCount("[[1, 'a']]", "if(count < 5) m.set(count + 10, 'x');"));
+        assertIntegerWithJavet("""
+                var count = 0;
+                var m = new Map([[1, 'a']]);
+                m.forEach(function(v, k) {
+                  if(count < 5) m.set(count + 10, 'x');
+                  count++;
+                });
+                count""");
     }
 
     @Test
@@ -938,19 +1053,27 @@ public class MapPrototypeTest extends BaseJavetTest {
                 "var m = new Map(); for(var i = 0; i < 1000; i++) m.set(i, 'val'); m.delete(500); m.has(500)");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {".entries", "[Symbol.iterator]"})
-    void testManualEntryIteration(String accessor) {
+    @Test
+    void testManualEntryIteration() {
         assertStringWithJavet("""
                 var result = '';
                 var m = new Map([[1, 'a'], [2, 'b']]);
-                var it = m%s();
+                var it = m.entries();
                 var entry;
                 while (!(entry = it.next()).done) {
                   var arr = entry.value;
                   result += arr[0] + arr[1];
                 }
-                result""".formatted(accessor));
+                result""", """
+                var result = '';
+                var m = new Map([[1, 'a'], [2, 'b']]);
+                var it = m[Symbol.iterator]();
+                var entry;
+                while (!(entry = it.next()).done) {
+                  var arr = entry.value;
+                  result += arr[0] + arr[1];
+                }
+                result""");
     }
 
     @Test
@@ -1175,7 +1298,14 @@ public class MapPrototypeTest extends BaseJavetTest {
     @Test
     void testNoDelete() {
         // Control test: no deletion
-        assertIntegerWithJavet(visitCount("[[1, 'a'], [2, 'b'], [3, 'c']]", ""));
+        assertIntegerWithJavet("""
+                var count = 0;
+                var m = new Map([[1, 'a'], [2, 'b'], [3, 'c']]);
+                m.forEach(function(v, k) {
+                \s\s
+                  count++;
+                });
+                count""");
     }
 
     @Test
@@ -1485,14 +1615,4 @@ public class MapPrototypeTest extends BaseJavetTest {
                 Map.prototype.entries.length === 0""");
     }
 
-    private static String visitCount(String entries, String mutation) {
-        return """
-                var count = 0;
-                var m = new Map(%s);
-                m.forEach(function(v, k) {
-                  %s
-                  count++;
-                });
-                count""".formatted(entries, mutation);
-    }
 }

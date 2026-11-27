@@ -223,8 +223,7 @@ final class CompilerAnalysis {
                 // Create new local in function scope, initialized to undefined
                 int localIndex = compilerContext.scopeManager.currentScope().declareLocal(name);
                 compilerContext.annexBFunctionScopeLocals.put(name, localIndex);
-                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                compilerContext.emitter.emitPutLocal(localIndex);
+                compilerContext.emitter.emitUndefinedLocal(localIndex);
             }
         }
     }

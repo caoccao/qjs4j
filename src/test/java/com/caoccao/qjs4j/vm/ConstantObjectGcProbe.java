@@ -30,9 +30,9 @@ import java.util.List;
  * Runs collection assertions in a small JVM that the parent test can terminate if collection stalls.
  */
 public final class ConstantObjectGcProbe {
-    private static WeakReference<JSValue> evaluateTemplate(JSContext context, int index) {
+    private static WeakReference<JSValue> evaluateTemplate(JSContext context, String source) {
         // Keep the strong reference in a separate frame, away from the collection loop.
-        JSValue value = context.eval("tag`payload" + index + " ${1} ${2} ${3}`");
+        JSValue value = context.eval(source);
         if (!(value instanceof JSArray)) {
             throw new AssertionError("Expected a template object, got " + value);
         }
@@ -46,7 +46,7 @@ public final class ConstantObjectGcProbe {
             List<WeakReference<JSValue>> references = new ArrayList<>();
             System.out.println("Evaluating " + count + " distinct template objects");
             for (int index = 0; index < count; index++) {
-                references.add(evaluateTemplate(context, index));
+                references.add(evaluateTemplate(context, "tag`payload" + index + " ${1} ${2} ${3}`"));
             }
             // Replace the last tag call's cached state with an unsampled template, then release
             // the most recently compiled program. The VM may retain that one last call.

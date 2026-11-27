@@ -32,13 +32,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * past the old ceiling.
  */
 public class RegExpLargeCharacterClassTest extends BaseJavetTest {
-    private static final String BUILD_PATTERN = """
-            function classOf(count, negated) {
-              var p = negated ? '[^' : '[';
-              for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
-              return p + ']';
-            }
-            """;
 
     @Test
     public void testAppendU16RejectsValuesThatDoNotFit() {
@@ -51,30 +44,108 @@ public class RegExpLargeCharacterClassTest extends BaseJavetTest {
 
     @Test
     public void testLargeClassMatchesAndRejectsCorrectly() {
-        for (int count : new int[]{8191, 8192, 20000}) {
-            assertBooleanWithJavet(
-                    BUILD_PATTERN + "new RegExp(classOf(" + count + ", false), 'u').test(String.fromCodePoint(0));");
-            assertBooleanWithJavet(
-                    BUILD_PATTERN + "new RegExp(classOf(" + count + ", false), 'u').test(String.fromCodePoint(1));");
-            assertBooleanWithJavet(BUILD_PATTERN + "new RegExp(classOf(" + count
-                    + ", false), 'u').test(String.fromCodePoint((" + count + " - 1) * 2));");
-        }
+        assertBooleanWithJavet("""
+                function classOf(count, negated) {
+                  var p = negated ? '[^' : '[';
+                  for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
+                  return p + ']';
+                }
+                new RegExp(classOf(8191, false), 'u').test(String.fromCodePoint(0));""", """
+                function classOf(count, negated) {
+                  var p = negated ? '[^' : '[';
+                  for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
+                  return p + ']';
+                }
+                new RegExp(classOf(8191, false), 'u').test(String.fromCodePoint(1));""", """
+                function classOf(count, negated) {
+                  var p = negated ? '[^' : '[';
+                  for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
+                  return p + ']';
+                }
+                new RegExp(classOf(8191, false), 'u').test(String.fromCodePoint((8191 - 1) * 2));""", """
+                function classOf(count, negated) {
+                  var p = negated ? '[^' : '[';
+                  for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
+                  return p + ']';
+                }
+                new RegExp(classOf(8192, false), 'u').test(String.fromCodePoint(0));""", """
+                function classOf(count, negated) {
+                  var p = negated ? '[^' : '[';
+                  for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
+                  return p + ']';
+                }
+                new RegExp(classOf(8192, false), 'u').test(String.fromCodePoint(1));""", """
+                function classOf(count, negated) {
+                  var p = negated ? '[^' : '[';
+                  for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
+                  return p + ']';
+                }
+                new RegExp(classOf(8192, false), 'u').test(String.fromCodePoint((8192 - 1) * 2));""", """
+                function classOf(count, negated) {
+                  var p = negated ? '[^' : '[';
+                  for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
+                  return p + ']';
+                }
+                new RegExp(classOf(20000, false), 'u').test(String.fromCodePoint(0));""", """
+                function classOf(count, negated) {
+                  var p = negated ? '[^' : '[';
+                  for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
+                  return p + ']';
+                }
+                new RegExp(classOf(20000, false), 'u').test(String.fromCodePoint(1));""", """
+                function classOf(count, negated) {
+                  var p = negated ? '[^' : '[';
+                  for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
+                  return p + ']';
+                }
+                new RegExp(classOf(20000, false), 'u').test(String.fromCodePoint((20000 - 1) * 2));""");
     }
 
     @Test
     public void testLargeClassWithIgnoreCase() {
-        assertBooleanWithJavet(BUILD_PATTERN + "new RegExp(classOf(8192, false), 'ui').test(String.fromCodePoint(0));");
-        assertBooleanWithJavet(BUILD_PATTERN + "new RegExp(classOf(8192, false), 'ui').test(String.fromCodePoint(1));");
+        assertBooleanWithJavet("""
+                function classOf(count, negated) {
+                  var p = negated ? '[^' : '[';
+                  for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
+                  return p + ']';
+                }
+                new RegExp(classOf(8192, false), 'ui').test(String.fromCodePoint(0));""");
+        assertBooleanWithJavet("""
+                function classOf(count, negated) {
+                  var p = negated ? '[^' : '[';
+                  for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
+                  return p + ']';
+                }
+                new RegExp(classOf(8192, false), 'ui').test(String.fromCodePoint(1));""");
     }
 
     @Test
     public void testLargeInvertedClass() {
-        for (int count : new int[]{8191, 8192}) {
-            assertBooleanWithJavet(
-                    BUILD_PATTERN + "new RegExp(classOf(" + count + ", true), 'u').test(String.fromCodePoint(0));");
-            assertBooleanWithJavet(
-                    BUILD_PATTERN + "new RegExp(classOf(" + count + ", true), 'u').test(String.fromCodePoint(1));");
-        }
+        assertBooleanWithJavet("""
+                function classOf(count, negated) {
+                  var p = negated ? '[^' : '[';
+                  for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
+                  return p + ']';
+                }
+                new RegExp(classOf(8191, true), 'u').test(String.fromCodePoint(0));""", """
+                function classOf(count, negated) {
+                  var p = negated ? '[^' : '[';
+                  for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
+                  return p + ']';
+                }
+                new RegExp(classOf(8191, true), 'u').test(String.fromCodePoint(1));""", """
+                function classOf(count, negated) {
+                  var p = negated ? '[^' : '[';
+                  for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
+                  return p + ']';
+                }
+                new RegExp(classOf(8192, true), 'u').test(String.fromCodePoint(0));""", """
+                function classOf(count, negated) {
+                  var p = negated ? '[^' : '[';
+                  for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
+                  return p + ']';
+                }
+                new RegExp(classOf(8192, true), 'u').test(String.fromCodePoint(1));""");
     }
 
     @Test
@@ -86,7 +157,19 @@ public class RegExpLargeCharacterClassTest extends BaseJavetTest {
 
     @Test
     public void testUnicodeSetsClassWithManyRanges() {
-        assertBooleanWithJavet(BUILD_PATTERN + "new RegExp(classOf(9000, false), 'v').test(String.fromCodePoint(0));");
-        assertBooleanWithJavet(BUILD_PATTERN + "new RegExp(classOf(9000, false), 'v').test(String.fromCodePoint(1));");
+        assertBooleanWithJavet("""
+                function classOf(count, negated) {
+                  var p = negated ? '[^' : '[';
+                  for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
+                  return p + ']';
+                }
+                new RegExp(classOf(9000, false), 'v').test(String.fromCodePoint(0));""");
+        assertBooleanWithJavet("""
+                function classOf(count, negated) {
+                  var p = negated ? '[^' : '[';
+                  for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
+                  return p + ']';
+                }
+                new RegExp(classOf(9000, false), 'v').test(String.fromCodePoint(1));""");
     }
 }

@@ -86,13 +86,14 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testBorrowedTypedArrayTraversalReadsLengthAsAProperty() {
-        assertStringWithJavet(inArrowFunction("""
-                  const view = new Uint8Array([2, 4, 8]);
-                  Object.defineProperty(view, 'length', { get() { return 1; } });
-                  const sum = (a, b) => a + b;
-                  return [view.reduce(sum), Array.prototype.reduce.call(view, sum),
-                          view.includes(8), Array.prototype.includes.call(view, 8)].join(',');
-                """));
+        assertStringWithJavet("""
+                (() => {
+                    const view = new Uint8Array([2, 4, 8]);
+                    Object.defineProperty(view, 'length', { get() { return 1; } });
+                    const sum = (a, b) => a + b;
+                    return [view.reduce(sum), Array.prototype.reduce.call(view, sum),
+                            view.includes(8), Array.prototype.includes.call(view, 8)].join(',');
+                })()""");
     }
 
     @Test
@@ -549,38 +550,21 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         JSObject unscopables = result.asObject().orElseThrow();
 
         // Verify ES2015 methods are marked as unscopable
-        assertThat(unscopables.get("copyWithin")).isEqualTo(JSBoolean.TRUE);
-        assertThat(unscopables.get("entries")).isEqualTo(JSBoolean.TRUE);
-        assertThat(unscopables.get("fill")).isEqualTo(JSBoolean.TRUE);
-        assertThat(unscopables.get("find")).isEqualTo(JSBoolean.TRUE);
-        assertThat(unscopables.get("findIndex")).isEqualTo(JSBoolean.TRUE);
-        assertThat(unscopables.get("flat")).isEqualTo(JSBoolean.TRUE);
-        assertThat(unscopables.get("flatMap")).isEqualTo(JSBoolean.TRUE);
-        assertThat(unscopables.get("includes")).isEqualTo(JSBoolean.TRUE);
-        assertThat(unscopables.get("keys")).isEqualTo(JSBoolean.TRUE);
-        assertThat(unscopables.get("values")).isEqualTo(JSBoolean.TRUE);
+        for (String name : new String[]{"copyWithin", "entries", "fill", "find", "findIndex", "flat", "flatMap",
+                "includes", "keys", "values"}) {
+            assertThat(unscopables.get(name)).as(name).isEqualTo(JSBoolean.TRUE);
+        }
 
         // Verify ES2022+ methods are marked as unscopable
-        assertThat(unscopables.get("at")).isEqualTo(JSBoolean.TRUE);
-        assertThat(unscopables.get("findLast")).isEqualTo(JSBoolean.TRUE);
-        assertThat(unscopables.get("findLastIndex")).isEqualTo(JSBoolean.TRUE);
-        assertThat(unscopables.get("toReversed")).isEqualTo(JSBoolean.TRUE);
-        assertThat(unscopables.get("toSorted")).isEqualTo(JSBoolean.TRUE);
-        assertThat(unscopables.get("toSpliced")).isEqualTo(JSBoolean.TRUE);
+        for (String name : new String[]{"at", "findLast", "findLastIndex", "toReversed", "toSorted", "toSpliced"}) {
+            assertThat(unscopables.get(name)).as(name).isEqualTo(JSBoolean.TRUE);
+        }
 
         // Verify old methods are NOT in unscopables (they should return undefined)
-        assertThat(unscopables.get("push").isUndefined()).isTrue();
-        assertThat(unscopables.get("pop").isUndefined()).isTrue();
-        assertThat(unscopables.get("shift").isUndefined()).isTrue();
-        assertThat(unscopables.get("unshift").isUndefined()).isTrue();
-        assertThat(unscopables.get("slice").isUndefined()).isTrue();
-        assertThat(unscopables.get("splice").isUndefined()).isTrue();
-        assertThat(unscopables.get("concat").isUndefined()).isTrue();
-        assertThat(unscopables.get("join").isUndefined()).isTrue();
-        assertThat(unscopables.get("reverse").isUndefined()).isTrue();
-        assertThat(unscopables.get("sort").isUndefined()).isTrue();
-        assertThat(unscopables.get("indexOf").isUndefined()).isTrue();
-        assertThat(unscopables.get("lastIndexOf").isUndefined()).isTrue();
+        for (String name : new String[]{"push", "pop", "shift", "unshift", "slice", "splice", "concat", "join",
+                "reverse", "sort", "indexOf", "lastIndexOf"}) {
+            assertThat(unscopables.get(name).isUndefined()).as(name).isTrue();
+        }
     }
 
     @Test
@@ -1055,15 +1039,16 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testSpeciesCopyObservesHasBeforeGet() {
-        assertStringWithJavet(inArrowFunction("""
-                  const log = [];
-                  const source = new Proxy({length: 3, 0: undefined, 2: 4}, {
-                      has(target, key) { log.push('has ' + key); return Reflect.has(target, key); },
-                      get(target, key) { log.push('get ' + key); return Reflect.get(target, key); }
-                  });
-                  const copy = Array.prototype.slice.call(source);
-                  return JSON.stringify([log, Object.keys(copy), copy]);
-                """));
+        assertStringWithJavet("""
+                (() => {
+                    const log = [];
+                    const source = new Proxy({length: 3, 0: undefined, 2: 4}, {
+                        has(target, key) { log.push('has ' + key); return Reflect.has(target, key); },
+                        get(target, key) { log.push('get ' + key); return Reflect.get(target, key); }
+                    });
+                    const copy = Array.prototype.slice.call(source);
+                    return JSON.stringify([log, Object.keys(copy), copy]);
+                })()""");
     }
 
     @Test
@@ -1313,23 +1298,24 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testToSplicedCreatesDenseOwnPropertiesInGetOrder() {
-        assertBooleanWithJavet(inArrowFunction("""
-                const reads = [];
-                const source = {
-                  length: 4,
-                  get 0() { reads.push(0); return 'a'; },
-                  get 1() { reads.push(1); return undefined; },
-                  get 3() { reads.push(3); return 'd'; }
-                };
-                const result = Array.prototype.toSpliced.call(source, 2, 1, 'x');
-                return reads.join(',') === '0,1,3'
-                  && result.length === 4
-                  && result[0] === 'a'
-                  && Object.hasOwn(result, 1)
-                  && result[1] === undefined
-                  && result[2] === 'x'
-                  && result[3] === 'd';
-                """));
+        assertBooleanWithJavet("""
+                (() => {
+                  const reads = [];
+                  const source = {
+                    length: 4,
+                    get 0() { reads.push(0); return 'a'; },
+                    get 1() { reads.push(1); return undefined; },
+                    get 3() { reads.push(3); return 'd'; }
+                  };
+                  const result = Array.prototype.toSpliced.call(source, 2, 1, 'x');
+                  return reads.join(',') === '0,1,3'
+                    && result.length === 4
+                    && result[0] === 'a'
+                    && Object.hasOwn(result, 1)
+                    && result[1] === undefined
+                    && result[2] === 'x'
+                    && result[3] === 'd';
+                })()""");
     }
 
     @Test

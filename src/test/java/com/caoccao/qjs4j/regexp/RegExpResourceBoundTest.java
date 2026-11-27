@@ -21,7 +21,11 @@ import com.caoccao.qjs4j.unicode.UnicodePropertyResolver;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.StringJoiner;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * A guest-supplied pattern must not choose how much memory the matcher claims — and the ceiling it runs into has to be
@@ -43,65 +47,21 @@ import java.util.StringJoiner;
  */
 public class RegExpResourceBoundTest extends BaseJavetTest {
 
-    private String allStringsInUnicodeProperty(String propertyName) {
-        UnicodePropertyResolver.SequencePropertyResult property = UnicodePropertyResolver
-                .resolveSequenceProperty(propertyName);
-        StringJoiner strings = new StringJoiner(",");
-        int[] ranges = property.codePointRanges();
-        for (int i = 0; i < ranges.length; i += 2) {
-            for (int codePoint = ranges[i]; codePoint <= ranges[i + 1]; codePoint++) {
-                strings.add(toJavaScriptString(codePoint));
-            }
-        }
-        for (int[] sequence : property.sequences()) {
-            strings.add(toJavaScriptString(sequence));
-        }
-        return """
-                (function () {
-                  const regExp = /^\\p{%2$s}$/v;
-                  const subject = [%1$s].filter(string => regExp.test(string)).join('');
-                  try { return String(/^\\p{%2$s}+$/v.test(subject)) } catch (e) { return e.name }
-                })()""".formatted(strings, propertyName);
-    }
-
-    /**
-     * Source that builds a subject containing every Unicode code point, then applies a pattern.
-     *
-     * @param pattern
-     *            the regular expression literal to test with
-     * @return source evaluating to {@code 'true'}, {@code 'false'} or the error name
-     */
-    private String everyCodePoint(String pattern) {
-        return """
-                (function () {
-                  const parts = [];
-                  for (let cp = 0; cp <= 0x10FFFF; cp++) parts.push(cp);
-                  let subject = '';
-                  for (let i = 0; i < parts.length; i += 10000) {
-                    subject += String.fromCodePoint.apply(null, parts.slice(i, i + 10000));
-                  }
-                  try { return String(%s.test(subject)) } catch (e) { return e.name }
-                })()""".formatted(pattern);
-    }
-
-    private String groups(int count) {
-        return "()".repeat(count);
-    }
-
     @Test
     @Timeout(60)
     public void testCaptureCountAtQuickJsLimitIsAccepted() {
-        assertStringWithJavet("(function () { try { new RegExp('%s'); return 'OK' } catch (e) { return e.name } })()"
-                .formatted(groups(254)));
+        assertStringWithJavet(
+                "(function () { try { new RegExp('()'.repeat(254)); return 'OK' } catch (e) { return e.name } })()");
     }
 
     @Test
     @Timeout(300)
     public void testGreedyMatchOverAHalfMillionCharacterSubject() {
-        assertStringWithJavet(inFunction("""
-                const subject = 'x'.repeat(500000);
-                try { return String(/^([\\s\\S])+$/u.test(subject)) } catch (e) { return e.name }
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  const subject = 'x'.repeat(500000);
+                  try { return String(/^([\\s\\S])+$/u.test(subject)) } catch (e) { return e.name }
+                })()""");
     }
 
     @Test
@@ -110,7 +70,16 @@ public class RegExpResourceBoundTest extends BaseJavetTest {
         // ~1.11 million backtrack points. At the old 84-byte frame that was ~93 MiB — more than
         // V8's entire 64 MiB stack — so all 426 property-escape tests failed with
         // "exceeded the backtracking stack limit".
-        assertStringWithJavet(everyCodePoint("/^[\\s\\S]+$/u"));
+        assertStringWithJavet("""
+                (function () {
+                  const parts = [];
+                  for (let cp = 0; cp <= 0x10FFFF; cp++) parts.push(cp);
+                  let subject = '';
+                  for (let i = 0; i < parts.length; i += 10000) {
+                    subject += String.fromCodePoint.apply(null, parts.slice(i, i + 10000));
+                  }
+                  try { return String(/^[\\s\\S]+$/u.test(subject)) } catch (e) { return e.name }
+                })()""");
     }
 
     @Test
@@ -119,7 +88,16 @@ public class RegExpResourceBoundTest extends BaseJavetTest {
         // A capture inside the loop dirties the saved state on every iteration, so each backtrack
         // point appends a state instead of sharing one. This is the expensive shape, and whether
         // it fits in 64 MiB is V8's answer to give, not mine.
-        assertStringWithJavet(everyCodePoint("/^([\\s\\S])+$/u"));
+        assertStringWithJavet("""
+                (function () {
+                  const parts = [];
+                  for (let cp = 0; cp <= 0x10FFFF; cp++) parts.push(cp);
+                  let subject = '';
+                  for (let i = 0; i < parts.length; i += 10000) {
+                    subject += String.fromCodePoint.apply(null, parts.slice(i, i + 10000));
+                  }
+                  try { return String(/^([\\s\\S])+$/u.test(subject)) } catch (e) { return e.name }
+                })()""");
     }
 
     @Test
@@ -127,29 +105,39 @@ public class RegExpResourceBoundTest extends BaseJavetTest {
     public void testNegatedPropertyEscapeOverEveryCodePoint() {
         // Verbatim the pattern from property-escapes/generated/White_Space.js, which was among the
         // 426 failures.
-        assertStringWithJavet(everyCodePoint("/^\\P{White_Space}+$/u"));
+        assertStringWithJavet("""
+                (function () {
+                  const parts = [];
+                  for (let cp = 0; cp <= 0x10FFFF; cp++) parts.push(cp);
+                  let subject = '';
+                  for (let i = 0; i < parts.length; i += 10000) {
+                    subject += String.fromCodePoint.apply(null, parts.slice(i, i + 10000));
+                  }
+                  try { return String(/^\\P{White_Space}+$/u.test(subject)) } catch (e) { return e.name }
+                })()""");
     }
 
     @Test
     @Timeout(60)
     public void testNonCapturingGroupsDoNotCountTowardTheLimit() {
-        assertStringWithJavet("(function () { try { new RegExp('%s'); return 'OK' } catch (e) { return e.name } })()"
-                .formatted("(?:)".repeat(1000)));
+        assertStringWithJavet(
+                "(function () { try { new RegExp('(?:)'.repeat(1000)); return 'OK' } catch (e) { return e.name } })()");
     }
 
     @Test
     @Timeout(60)
     public void testOrdinaryCaptureHeavyPatternStillMatches() {
-        assertStringWithJavet(inFunction("""
-                const pattern = new RegExp('%s' + '(x)');
-                const match = pattern.exec('x');
-                return match.length + ',' + match[match.length - 1];
-                """.formatted(groups(200))));
+        assertStringWithJavet("""
+                (function () {
+                  const pattern = new RegExp('()'.repeat(200) + '(x)');
+                  const match = pattern.exec('x');
+                  return match.length + ',' + match[match.length - 1];
+                })()""");
     }
 
     @Test
     @Timeout(300)
-    public void testRgiEmojiPropertyMatchesAllStringsAsOneSubject() {
+    public void testRgiEmojiPropertyMatchesAllStringsAsOneSubject() throws IOException {
         // This is the same end-to-end shape as Test262's generated RGI_Emoji.js: concatenate every
         // string in the property, then match the complete subject with a greedy +. Each failed
         // branch pops a saved state before trying the next alternative, which exposed a leak of
@@ -157,14 +145,17 @@ public class RegExpResourceBoundTest extends BaseJavetTest {
         // This subject comes from qjs4j's Unicode 17 tables. The embedded V8 currently uses an
         // older Unicode version, so each engine first filters the list through its own RGI_Emoji
         // table. That isolates the resource-bound comparison from Unicode data-version skew.
-        assertStringWithJavet(allStringsInUnicodeProperty("RGI_Emoji"));
+        assertStringWithJavet(loadCode("regexp/rgi-emoji.js"));
+        var property = UnicodePropertyResolver.resolveSequenceProperty("RGI_Emoji");
+        List<String> expected = new ArrayList<>();
+        int[] ranges = property.codePointRanges();
+        for (int i = 0; i < ranges.length; i += 2) {
+            for (int cp = ranges[i]; cp <= ranges[i + 1]; cp++)
+                expected.add(Character.toString(cp));
+        }
+        for (int[] sequence : property.sequences())
+            expected.add(new String(sequence, 0, sequence.length));
+        assertThat(context.eval("candidates").toJavaObject()).isEqualTo(expected);
     }
 
-    private String toJavaScriptString(int... codePoints) {
-        StringBuilder string = new StringBuilder("'");
-        for (int codePoint : codePoints) {
-            string.append("\\u{").append(Integer.toHexString(codePoint)).append('}');
-        }
-        return string.append('\'').toString();
-    }
 }

@@ -33,16 +33,11 @@ public final class JSAggregateError extends JSError {
      * Create an AggregateError with a message.
      */
     public JSAggregateError(JSContext context, String message) {
-        super(context, message);
+        this(context, message, null);
     }
 
     public JSAggregateError(JSContext context, String message, SourceLocation sourceLocation) {
-        super(context, message, sourceLocation);
-    }
-
-    @Override
-    public String getErrorName() {
-        return NAME;
+        super(context, NAME, message, sourceLocation);
     }
 
     /**

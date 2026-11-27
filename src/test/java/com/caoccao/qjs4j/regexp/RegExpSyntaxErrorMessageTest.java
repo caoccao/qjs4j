@@ -27,16 +27,6 @@ import org.junit.jupiter.api.Test;
  * position, a group of unknown type quoted it, and a set operation cut short said "Unexpected end of character class".
  */
 public class RegExpSyntaxErrorMessageTest extends BaseJavetTest {
-    private static final String TRY_EACH = """
-            const tryEach = cases => cases.map(([pattern, flags]) => {
-              try {
-                new RegExp(pattern, flags);
-                return pattern + ' ok';
-              } catch (e) {
-                return e.name + ': ' + e.message;
-              }
-            }).join('\\n');
-            """;
 
     @Test
     public void testBackwardBackReferences() {
@@ -55,7 +45,15 @@ public class RegExpSyntaxErrorMessageTest extends BaseJavetTest {
     @Test
     public void testGroupsAndModifiers() {
         assertStringWithJavet(
-                TRY_EACH + """
+                """
+                        const tryEach = cases => cases.map(([pattern, flags]) => {
+                          try {
+                            new RegExp(pattern, flags);
+                            return pattern + ' ok';
+                          } catch (e) {
+                            return e.name + ': ' + e.message;
+                          }
+                        }).join('\\n');
                         tryEach([
                           ['a)', ''], ['(?', ''], ['(?i:a', ''], ['(?<>a)', ''], ['(?<1a>x)', ''], ['(?=a', ''], ['(?<=a', ''],
                           ['(?<a>.)\\\\k<>', ''], ['(?<a>.)\\\\k<a', ''], ['(?<a>x)(?<a>y)', ''], ['\\\\k<a>', 'u'], ['(?<a', ''],
@@ -67,7 +65,15 @@ public class RegExpSyntaxErrorMessageTest extends BaseJavetTest {
 
     @Test
     public void testQuantifiersAndClasses() {
-        assertStringWithJavet(TRY_EACH + """
+        assertStringWithJavet("""
+                const tryEach = cases => cases.map(([pattern, flags]) => {
+                  try {
+                    new RegExp(pattern, flags);
+                    return pattern + ' ok';
+                  } catch (e) {
+                    return e.name + ': ' + e.message;
+                  }
+                }).join('\\n');
                 tryEach([
                   ['*', ''], ['a|*', ''], ['{1}', ''], ['a{2,1}', ''], ['a{2,1}', 'u'], ['a{1', 'u'], ['a{1,2', 'u'],
                   ['a{', 'u'], ['a{1}{', 'u'], ['a{,5}', 'u'], ['x]', 'u'], ['x}', 'u'], ['{', 'u'], ['a|{', 'u'],

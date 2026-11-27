@@ -18,8 +18,6 @@ package com.caoccao.qjs4j.builtins.temporal.plain;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 public class TemporalPlainDateTest extends BaseJavetTest {
     @Test
@@ -105,18 +103,31 @@ public class TemporalPlainDateTest extends BaseJavetTest {
 
     @Test
     public void testDifferenceRoundingAcrossUnitBoundaries() {
-        for (String method : new String[]{"since", "until"}) {
-            for (String[] dates : new String[][]{{"2022-01-01", "2023-12-25"}, {"2023-12-25", "2022-01-01"},
-                    {"2023-01-01", "2023-01-31"}, {"2023-01-31", "2023-01-01"}}) {
-                for (String largestUnit : new String[]{"year", "month", "week"}) {
-                    String smallestUnit = "year".equals(largestUnit) ? "month" : "day";
-                    assertStringWithJavet(
-                            "Temporal.PlainDate.from('" + dates[0] + "')." + method + "(Temporal.PlainDate.from('"
-                                    + dates[1] + "'), {largestUnit: '" + largestUnit + "', smallestUnit: '"
-                                    + smallestUnit + "', roundingMode: 'expand', roundingIncrement: 2}).toString()");
-                }
-            }
-        }
+        assertStringWithJavet(
+                "Temporal.PlainDate.from('2022-01-01').since(Temporal.PlainDate.from('2023-12-25'), {largestUnit: 'year', smallestUnit: 'month', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2022-01-01').since(Temporal.PlainDate.from('2023-12-25'), {largestUnit: 'month', smallestUnit: 'day', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2022-01-01').since(Temporal.PlainDate.from('2023-12-25'), {largestUnit: 'week', smallestUnit: 'day', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2023-12-25').since(Temporal.PlainDate.from('2022-01-01'), {largestUnit: 'year', smallestUnit: 'month', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2023-12-25').since(Temporal.PlainDate.from('2022-01-01'), {largestUnit: 'month', smallestUnit: 'day', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2023-12-25').since(Temporal.PlainDate.from('2022-01-01'), {largestUnit: 'week', smallestUnit: 'day', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2023-01-01').since(Temporal.PlainDate.from('2023-01-31'), {largestUnit: 'year', smallestUnit: 'month', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2023-01-01').since(Temporal.PlainDate.from('2023-01-31'), {largestUnit: 'month', smallestUnit: 'day', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2023-01-01').since(Temporal.PlainDate.from('2023-01-31'), {largestUnit: 'week', smallestUnit: 'day', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2023-01-31').since(Temporal.PlainDate.from('2023-01-01'), {largestUnit: 'year', smallestUnit: 'month', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2023-01-31').since(Temporal.PlainDate.from('2023-01-01'), {largestUnit: 'month', smallestUnit: 'day', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2023-01-31').since(Temporal.PlainDate.from('2023-01-01'), {largestUnit: 'week', smallestUnit: 'day', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2022-01-01').until(Temporal.PlainDate.from('2023-12-25'), {largestUnit: 'year', smallestUnit: 'month', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2022-01-01').until(Temporal.PlainDate.from('2023-12-25'), {largestUnit: 'month', smallestUnit: 'day', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2022-01-01').until(Temporal.PlainDate.from('2023-12-25'), {largestUnit: 'week', smallestUnit: 'day', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2023-12-25').until(Temporal.PlainDate.from('2022-01-01'), {largestUnit: 'year', smallestUnit: 'month', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2023-12-25').until(Temporal.PlainDate.from('2022-01-01'), {largestUnit: 'month', smallestUnit: 'day', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2023-12-25').until(Temporal.PlainDate.from('2022-01-01'), {largestUnit: 'week', smallestUnit: 'day', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2023-01-01').until(Temporal.PlainDate.from('2023-01-31'), {largestUnit: 'year', smallestUnit: 'month', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2023-01-01').until(Temporal.PlainDate.from('2023-01-31'), {largestUnit: 'month', smallestUnit: 'day', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2023-01-01').until(Temporal.PlainDate.from('2023-01-31'), {largestUnit: 'week', smallestUnit: 'day', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2023-01-31').until(Temporal.PlainDate.from('2023-01-01'), {largestUnit: 'year', smallestUnit: 'month', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2023-01-31').until(Temporal.PlainDate.from('2023-01-01'), {largestUnit: 'month', smallestUnit: 'day', roundingMode: 'expand', roundingIncrement: 2}).toString()",
+                "Temporal.PlainDate.from('2023-01-31').until(Temporal.PlainDate.from('2023-01-01'), {largestUnit: 'week', smallestUnit: 'day', roundingMode: 'expand', roundingIncrement: 2}).toString()");
     }
 
     @Test
@@ -169,11 +180,14 @@ public class TemporalPlainDateTest extends BaseJavetTest {
         assertBooleanWithJavet("new Temporal.PlainDate(2024, 3, 15).inLeapYear");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"day", "dayOfWeek", "dayOfYear", "daysInWeek", "daysInYear", "month", "monthsInYear",
-            "weekOfYear", "year", "yearOfWeek"})
-    void testIntegerProperties(String property) {
-        assertIntegerWithJavet("new Temporal.PlainDate(2024, 3, 15)." + property);
+    @Test
+    void testIntegerProperties() {
+        assertIntegerWithJavet("new Temporal.PlainDate(2024, 3, 15).day",
+                "new Temporal.PlainDate(2024, 3, 15).dayOfWeek", "new Temporal.PlainDate(2024, 3, 15).dayOfYear",
+                "new Temporal.PlainDate(2024, 3, 15).daysInWeek", "new Temporal.PlainDate(2024, 3, 15).daysInYear",
+                "new Temporal.PlainDate(2024, 3, 15).month", "new Temporal.PlainDate(2024, 3, 15).monthsInYear",
+                "new Temporal.PlainDate(2024, 3, 15).weekOfYear", "new Temporal.PlainDate(2024, 3, 15).year",
+                "new Temporal.PlainDate(2024, 3, 15).yearOfWeek");
     }
 
     @Test
@@ -191,12 +205,16 @@ public class TemporalPlainDateTest extends BaseJavetTest {
         assertStringWithJavet("new Temporal.PlainDate(2024, 3, 1).since('2024-01-01').toString()");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"toString()", "toJSON()", "toPlainDateTime().toString()",
-            "toPlainDateTime('12:30').toString()", "toPlainMonthDay().toString()", "toPlainYearMonth().toString()",
-            "toString()", "toString({calendarName: 'always'})"})
-    void testStringConversions(String operation) {
-        assertStringWithJavet("new Temporal.PlainDate(2024, 1, 15)." + operation);
+    @Test
+    void testStringConversions() {
+        assertStringWithJavet("new Temporal.PlainDate(2024, 1, 15).toString()",
+                "new Temporal.PlainDate(2024, 1, 15).toJSON()",
+                "new Temporal.PlainDate(2024, 1, 15).toPlainDateTime().toString()",
+                "new Temporal.PlainDate(2024, 1, 15).toPlainDateTime('12:30').toString()",
+                "new Temporal.PlainDate(2024, 1, 15).toPlainMonthDay().toString()",
+                "new Temporal.PlainDate(2024, 1, 15).toPlainYearMonth().toString()",
+                "new Temporal.PlainDate(2024, 1, 15).toString()",
+                "new Temporal.PlainDate(2024, 1, 15).toString({calendarName: 'always'})");
     }
 
     @Test

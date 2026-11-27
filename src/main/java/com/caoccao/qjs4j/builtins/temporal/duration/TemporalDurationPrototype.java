@@ -212,16 +212,10 @@ public final class TemporalDurationPrototype {
                 return null;
             }
 
-            String roundingModeText = TemporalUtils.getStringOption(context, optionsObject, "roundingMode",
-                    "halfExpand");
-            if (context.hasPendingException() || roundingModeText == null) {
+            roundingMode = TemporalRoundingMode.readRoundOption(context, optionsObject, false);
+            if (roundingMode == null) {
                 return null;
             }
-            roundingMode = TemporalRoundingMode.fromString(roundingModeText);
-            if (roundingMode == null) {
-                return TemporalError.INVALID_ROUNDING_MODE.reject(context);
-            }
-
             smallestUnitText = TemporalUtils.getStringOption(context, optionsObject, "smallestUnit", null);
             if (context.hasPendingException()) {
                 return null;

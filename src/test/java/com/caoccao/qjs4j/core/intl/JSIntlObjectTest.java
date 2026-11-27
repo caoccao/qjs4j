@@ -41,16 +41,17 @@ public class JSIntlObjectTest extends BaseJavetTest {
 
     @Test
     public void testCompactFormatPartsAtScaleBoundaries() {
-        assertStringWithJavet(inArrowFunction("""
-                  const results = [];
-                  for (const locale of ['en', 'en-IN', 'ja', 'ko', 'zh-TW']) {
-                      const format = new Intl.NumberFormat(locale, {notation: 'compact'});
-                      for (const value of [999, 1000, 10000, 100000, 1000000, 10000000, 100000000]) {
-                          results.push(format.formatToParts(value).map(p => p.type + '=' + p.value).join(','));
-                      }
-                  }
-                  return results.join('|');
-                """));
+        assertStringWithJavet("""
+                (() => {
+                    const results = [];
+                    for (const locale of ['en', 'en-IN', 'ja', 'ko', 'zh-TW']) {
+                        const format = new Intl.NumberFormat(locale, {notation: 'compact'});
+                        for (const value of [999, 1000, 10000, 100000, 1000000, 10000000, 100000000]) {
+                            results.push(format.formatToParts(value).map(p => p.type + '=' + p.value).join(','));
+                        }
+                    }
+                    return results.join('|');
+                })()""");
     }
 
     @Test
@@ -183,15 +184,16 @@ public class JSIntlObjectTest extends BaseJavetTest {
 
     @Test
     public void testRelativeTimePartsAfterCoercion() {
-        assertStringWithJavet(inArrowFunction("""
-                  const formatter = new Intl.RelativeTimeFormat('en', {numeric: 'auto'});
-                  const calls = [];
-                  const value = { valueOf() { calls.push('value'); return -2.5; } };
-                  const unit = { toString() { calls.push('unit'); return 'days'; } };
-                  const parts = formatter.formatToParts(value, unit);
-                  return JSON.stringify([calls, parts.map(p => [p.type, p.value, p.unit]),
-                      formatter.formatToParts(-1, 'days')]);
-                """));
+        assertStringWithJavet("""
+                (() => {
+                    const formatter = new Intl.RelativeTimeFormat('en', {numeric: 'auto'});
+                    const calls = [];
+                    const value = { valueOf() { calls.push('value'); return -2.5; } };
+                    const unit = { toString() { calls.push('unit'); return 'days'; } };
+                    const parts = formatter.formatToParts(value, unit);
+                    return JSON.stringify([calls, parts.map(p => [p.type, p.value, p.unit]),
+                        formatter.formatToParts(-1, 'days')]);
+                })()""");
     }
 
     @Test

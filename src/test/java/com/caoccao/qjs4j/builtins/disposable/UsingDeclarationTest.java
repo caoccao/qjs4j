@@ -18,17 +18,11 @@ package com.caoccao.qjs4j.builtins.disposable;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 public class UsingDeclarationTest extends BaseJavetTest {
-    private void assertInScriptAndFunction(String body, String result) {
-        assertStringWithJavet(body + result + ";", "(() => {\n" + body + "return " + result + ";\n})();");
-    }
 
-    @ParameterizedTest
-    @ValueSource(ints = {1, 2})
-    public void testAwaitUsingAsyncDisposeOnReturn(int returnValue) {
+    @Test
+    public void testAwaitUsingAsyncDisposeOnReturn() {
         assertStringWithJavet("""
                 (async () => {
                     const log = [];
@@ -37,11 +31,23 @@ public class UsingDeclarationTest extends BaseJavetTest {
                             [Symbol.asyncDispose]() { log.push("a"); }
                         };
                         log.push("b");
-                        return %d;
+                        return 1;
                     }
                     const value = await f();
                     return JSON.stringify(log) + "|" + String(value);
-                })();""".formatted(returnValue));
+                })();""", """
+                (async () => {
+                    const log = [];
+                    async function f() {
+                        await using r = {
+                            [Symbol.asyncDispose]() { log.push("a"); }
+                        };
+                        log.push("b");
+                        return 2;
+                    }
+                    const value = await f();
+                    return JSON.stringify(log) + "|" + String(value);
+                })();""");
     }
 
     @Test
@@ -61,13 +67,21 @@ public class UsingDeclarationTest extends BaseJavetTest {
 
     @Test
     public void testUsingDisposesOnBlockExit() {
-        assertInScriptAndFunction("""
+        assertStringWithJavet("""
                 const log = [];
                 {
                     using r = { [Symbol.dispose]() { log.push("d"); } };
                     log.push("b");
                 }
-                """, "JSON.stringify(log)");
+                JSON.stringify(log);""", """
+                (() => {
+                const log = [];
+                {
+                    using r = { [Symbol.dispose]() { log.push("d"); } };
+                    log.push("b");
+                }
+                return JSON.stringify(log);
+                })();""");
     }
 
     @Test
@@ -89,7 +103,7 @@ public class UsingDeclarationTest extends BaseJavetTest {
 
     @Test
     public void testUsingDisposesOnReturn() {
-        assertInScriptAndFunction("""
+        assertStringWithJavet("""
                 const log = [];
                 function f() {
                     using r = { [Symbol.dispose]() { log.push("d"); } };
@@ -97,7 +111,17 @@ public class UsingDeclarationTest extends BaseJavetTest {
                     return 7;
                 }
                 const value = f();
-                """, "JSON.stringify(log) + \"|\" + String(value)");
+                JSON.stringify(log) + "|" + String(value);""", """
+                (() => {
+                const log = [];
+                function f() {
+                    using r = { [Symbol.dispose]() { log.push("d"); } };
+                    log.push("b");
+                    return 7;
+                }
+                const value = f();
+                return JSON.stringify(log) + "|" + String(value);
+                })();""");
     }
 
     @Test

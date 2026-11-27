@@ -1,42 +1,88 @@
 package com.caoccao.qjs4j.vm;
 
 import com.caoccao.qjs4j.BaseJavetTest;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.Test;
 
 public class ClassDefinitionParityTest extends BaseJavetTest {
-    @ParameterizedTest
-    @ValueSource(strings = {"declaration", "expression", "computedString", "computedSymbol"})
-    public void testAbsentAndNullHeritage(String form) {
-        assertStringWithJavet("""
-                (() => {
-                  const ordinary = (() => { %s })();
-                  const nullBase = (() => { %s })();
-                  const instance = new nullBase();
-                  const defaultNullBase = (() => { %s })();
-                  let error;
-                  try { new defaultNullBase(); } catch (e) { error = e.name; }
-                  return [ordinary.name, new ordinary() instanceof ordinary,
-                    Object.getPrototypeOf(ordinary) === Function.prototype,
-                    Object.getPrototypeOf(ordinary.prototype) === Object.prototype,
-                    Object.getPrototypeOf(nullBase) === Function.prototype,
-                    Object.getPrototypeOf(nullBase.prototype) === null,
-                    Object.getPrototypeOf(instance) === nullBase.prototype, error].join('|');
-                })()
-                """.formatted(definition(form, "", ""),
-                definition(form, "extends null", "constructor() { return Object.create(new.target.prototype); }"),
-                definition(form, "extends null", "")));
+    @Test
+    public void testAbsentAndNullHeritage() {
+        assertStringWithJavet(
+                """
+                        (() => {
+                          const ordinary = (() => { class Subject  {  }; return Subject; })();
+                          const nullBase = (() => { class Subject extends null { constructor() { return Object.create(new.target.prototype); } }; return Subject; })();
+                          const instance = new nullBase();
+                          const defaultNullBase = (() => { class Subject extends null {  }; return Subject; })();
+                          let error;
+                          try { new defaultNullBase(); } catch (e) { error = e.name; }
+                          return [ordinary.name, new ordinary() instanceof ordinary,
+                            Object.getPrototypeOf(ordinary) === Function.prototype,
+                            Object.getPrototypeOf(ordinary.prototype) === Object.prototype,
+                            Object.getPrototypeOf(nullBase) === Function.prototype,
+                            Object.getPrototypeOf(nullBase.prototype) === null,
+                            Object.getPrototypeOf(instance) === nullBase.prototype, error].join('|');
+                        })()
+                        """,
+                """
+                        (() => {
+                          const ordinary = (() => { return (class Subject  {  }); })();
+                          const nullBase = (() => { return (class Subject extends null { constructor() { return Object.create(new.target.prototype); } }); })();
+                          const instance = new nullBase();
+                          const defaultNullBase = (() => { return (class Subject extends null {  }); })();
+                          let error;
+                          try { new defaultNullBase(); } catch (e) { error = e.name; }
+                          return [ordinary.name, new ordinary() instanceof ordinary,
+                            Object.getPrototypeOf(ordinary) === Function.prototype,
+                            Object.getPrototypeOf(ordinary.prototype) === Object.prototype,
+                            Object.getPrototypeOf(nullBase) === Function.prototype,
+                            Object.getPrototypeOf(nullBase.prototype) === null,
+                            Object.getPrototypeOf(instance) === nullBase.prototype, error].join('|');
+                        })()
+                        """,
+                """
+                        (() => {
+                          const ordinary = (() => { const key = 'chosen'; return ({ [key]: class  {  } })[key]; })();
+                          const nullBase = (() => { const key = 'chosen'; return ({ [key]: class extends null { constructor() { return Object.create(new.target.prototype); } } })[key]; })();
+                          const instance = new nullBase();
+                          const defaultNullBase = (() => { const key = 'chosen'; return ({ [key]: class extends null {  } })[key]; })();
+                          let error;
+                          try { new defaultNullBase(); } catch (e) { error = e.name; }
+                          return [ordinary.name, new ordinary() instanceof ordinary,
+                            Object.getPrototypeOf(ordinary) === Function.prototype,
+                            Object.getPrototypeOf(ordinary.prototype) === Object.prototype,
+                            Object.getPrototypeOf(nullBase) === Function.prototype,
+                            Object.getPrototypeOf(nullBase.prototype) === null,
+                            Object.getPrototypeOf(instance) === nullBase.prototype, error].join('|');
+                        })()
+                        """,
+                """
+                        (() => {
+                          const ordinary = (() => { const key = Symbol('chosen'); return ({ [key]: class  {  } })[key]; })();
+                          const nullBase = (() => { const key = Symbol('chosen'); return ({ [key]: class extends null { constructor() { return Object.create(new.target.prototype); } } })[key]; })();
+                          const instance = new nullBase();
+                          const defaultNullBase = (() => { const key = Symbol('chosen'); return ({ [key]: class extends null {  } })[key]; })();
+                          let error;
+                          try { new defaultNullBase(); } catch (e) { error = e.name; }
+                          return [ordinary.name, new ordinary() instanceof ordinary,
+                            Object.getPrototypeOf(ordinary) === Function.prototype,
+                            Object.getPrototypeOf(ordinary.prototype) === Object.prototype,
+                            Object.getPrototypeOf(nullBase) === Function.prototype,
+                            Object.getPrototypeOf(nullBase.prototype) === null,
+                            Object.getPrototypeOf(instance) === nullBase.prototype, error].join('|');
+                        })()
+                        """);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"declaration", "expression", "computedString", "computedSymbol"})
-    public void testInheritanceNamesAndDescriptors(String form) {
+    @Test
+    public void testInheritanceNamesAndDescriptors() {
         assertStringWithJavet("""
                 (() => {
                   function Base(value) { this.value = value; }
                   Base.prototype.describe = function () { return 'base:' + this.value; };
                   Base.label = 'static';
-                  const subject = (() => { %s })();
+                  const subject = (() => { class Subject extends Base { read() { return this.value; }
+                static read() { return this.label; }
+                 }; return Subject; })();
                   const instance = new subject(7);
                   const prototype = Object.getOwnPropertyDescriptor(subject, 'prototype');
                   const constructor = Object.getOwnPropertyDescriptor(subject.prototype, 'constructor');
@@ -49,56 +95,181 @@ public class ClassDefinitionParityTest extends BaseJavetTest {
                     constructor.writable, constructor.enumerable, constructor.configurable,
                     name.writable, name.enumerable, name.configurable].join('|');
                 })()
-                """.formatted(definition(form, "extends Base", """
-                read() { return this.value; }
+                """, """
+                (() => {
+                  function Base(value) { this.value = value; }
+                  Base.prototype.describe = function () { return 'base:' + this.value; };
+                  Base.label = 'static';
+                  const subject = (() => { return (class Subject extends Base { read() { return this.value; }
                 static read() { return this.label; }
-                """)));
+                 }); })();
+                  const instance = new subject(7);
+                  const prototype = Object.getOwnPropertyDescriptor(subject, 'prototype');
+                  const constructor = Object.getOwnPropertyDescriptor(subject.prototype, 'constructor');
+                  const name = Object.getOwnPropertyDescriptor(subject, 'name');
+                  return [subject.name, instance.value, instance.read(), subject.read(),
+                    Object.getPrototypeOf(subject) === Base,
+                    Object.getPrototypeOf(subject.prototype) === Base.prototype,
+                    instance.constructor === subject,
+                    prototype.writable, prototype.enumerable, prototype.configurable,
+                    constructor.writable, constructor.enumerable, constructor.configurable,
+                    name.writable, name.enumerable, name.configurable].join('|');
+                })()
+                """,
+                """
+                        (() => {
+                          function Base(value) { this.value = value; }
+                          Base.prototype.describe = function () { return 'base:' + this.value; };
+                          Base.label = 'static';
+                          const subject = (() => { const key = 'chosen'; return ({ [key]: class extends Base { read() { return this.value; }
+                        static read() { return this.label; }
+                         } })[key]; })();
+                          const instance = new subject(7);
+                          const prototype = Object.getOwnPropertyDescriptor(subject, 'prototype');
+                          const constructor = Object.getOwnPropertyDescriptor(subject.prototype, 'constructor');
+                          const name = Object.getOwnPropertyDescriptor(subject, 'name');
+                          return [subject.name, instance.value, instance.read(), subject.read(),
+                            Object.getPrototypeOf(subject) === Base,
+                            Object.getPrototypeOf(subject.prototype) === Base.prototype,
+                            instance.constructor === subject,
+                            prototype.writable, prototype.enumerable, prototype.configurable,
+                            constructor.writable, constructor.enumerable, constructor.configurable,
+                            name.writable, name.enumerable, name.configurable].join('|');
+                        })()
+                        """,
+                """
+                        (() => {
+                          function Base(value) { this.value = value; }
+                          Base.prototype.describe = function () { return 'base:' + this.value; };
+                          Base.label = 'static';
+                          const subject = (() => { const key = Symbol('chosen'); return ({ [key]: class extends Base { read() { return this.value; }
+                        static read() { return this.label; }
+                         } })[key]; })();
+                          const instance = new subject(7);
+                          const prototype = Object.getOwnPropertyDescriptor(subject, 'prototype');
+                          const constructor = Object.getOwnPropertyDescriptor(subject.prototype, 'constructor');
+                          const name = Object.getOwnPropertyDescriptor(subject, 'name');
+                          return [subject.name, instance.value, instance.read(), subject.read(),
+                            Object.getPrototypeOf(subject) === Base,
+                            Object.getPrototypeOf(subject.prototype) === Base.prototype,
+                            instance.constructor === subject,
+                            prototype.writable, prototype.enumerable, prototype.configurable,
+                            constructor.writable, constructor.enumerable, constructor.configurable,
+                            name.writable, name.enumerable, name.configurable].join('|');
+                        })()
+                        """);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"declaration", "expression", "computedString", "computedSymbol"})
-    public void testInvalidParentConstructors(String form) {
+    @Test
+    public void testInvalidParentConstructors() {
         assertStringWithJavet("""
                 (() => [17, {}, () => {}].map(Base => {
-                  try { (() => { %s })(); return 'missing error'; }
+                  try { (() => { class Subject extends Base {  }; return Subject; })(); return 'missing error'; }
                   catch (e) { return e.name; }
                 }).join('|'))()
-                """.formatted(definition(form, "extends Base", "")));
+                """, """
+                (() => [17, {}, () => {}].map(Base => {
+                  try { (() => { return (class Subject extends Base {  }); })(); return 'missing error'; }
+                  catch (e) { return e.name; }
+                }).join('|'))()
+                """,
+                """
+                        (() => [17, {}, () => {}].map(Base => {
+                          try { (() => { const key = 'chosen'; return ({ [key]: class extends Base {  } })[key]; })(); return 'missing error'; }
+                          catch (e) { return e.name; }
+                        }).join('|'))()
+                        """,
+                """
+                        (() => [17, {}, () => {}].map(Base => {
+                          try { (() => { const key = Symbol('chosen'); return ({ [key]: class extends Base {  } })[key]; })(); return 'missing error'; }
+                          catch (e) { return e.name; }
+                        }).join('|'))()
+                        """);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"declaration", "expression", "computedString", "computedSymbol"})
-    public void testPrototypeGetterOrderingAndExceptions(String form) {
-        assertStringWithJavet("""
-                (() => ['object', 'null', 'primitive', 'throw'].map(mode => {
-                  const log = [];
-                  const marker = {};
-                  const Base = new Proxy(function () {}, { get(target, key, receiver) {
-                    log.push('get:' + String(key));
-                    if (key === 'prototype') {
-                      if (mode === 'throw') throw marker;
-                      return mode === 'object' ? {} : mode === 'null' ? null : 17;
-                    }
-                    return Reflect.get(target, key, receiver);
-                  } });
-                  let outcome;
-                  try { (() => { %s })(); outcome = 'ok'; }
-                  catch (e) { outcome = e === marker ? 'marker' : e.name; }
-                  // Evaluate another class after the error to check that the VM recovered.
-                  const recovered = class { static value = 7; };
-                  return [outcome, log.join(','), recovered.value].join('|');
-                }).join(';'))()
-                """.formatted(definition(form, "extends Base", "static value = (log.push('field'), 1);")));
+    @Test
+    public void testPrototypeGetterOrderingAndExceptions() {
+        assertStringWithJavet(
+                """
+                        (() => ['object', 'null', 'primitive', 'throw'].map(mode => {
+                          const log = [];
+                          const marker = {};
+                          const Base = new Proxy(function () {}, { get(target, key, receiver) {
+                            log.push('get:' + String(key));
+                            if (key === 'prototype') {
+                              if (mode === 'throw') throw marker;
+                              return mode === 'object' ? {} : mode === 'null' ? null : 17;
+                            }
+                            return Reflect.get(target, key, receiver);
+                          } });
+                          let outcome;
+                          try { (() => { class Subject extends Base { static value = (log.push('field'), 1); }; return Subject; })(); outcome = 'ok'; }
+                          catch (e) { outcome = e === marker ? 'marker' : e.name; }
+                          // Evaluate another class after the error to check that the VM recovered.
+                          const recovered = class { static value = 7; };
+                          return [outcome, log.join(','), recovered.value].join('|');
+                        }).join(';'))()
+                        """,
+                """
+                        (() => ['object', 'null', 'primitive', 'throw'].map(mode => {
+                          const log = [];
+                          const marker = {};
+                          const Base = new Proxy(function () {}, { get(target, key, receiver) {
+                            log.push('get:' + String(key));
+                            if (key === 'prototype') {
+                              if (mode === 'throw') throw marker;
+                              return mode === 'object' ? {} : mode === 'null' ? null : 17;
+                            }
+                            return Reflect.get(target, key, receiver);
+                          } });
+                          let outcome;
+                          try { (() => { return (class Subject extends Base { static value = (log.push('field'), 1); }); })(); outcome = 'ok'; }
+                          catch (e) { outcome = e === marker ? 'marker' : e.name; }
+                          // Evaluate another class after the error to check that the VM recovered.
+                          const recovered = class { static value = 7; };
+                          return [outcome, log.join(','), recovered.value].join('|');
+                        }).join(';'))()
+                        """,
+                """
+                        (() => ['object', 'null', 'primitive', 'throw'].map(mode => {
+                          const log = [];
+                          const marker = {};
+                          const Base = new Proxy(function () {}, { get(target, key, receiver) {
+                            log.push('get:' + String(key));
+                            if (key === 'prototype') {
+                              if (mode === 'throw') throw marker;
+                              return mode === 'object' ? {} : mode === 'null' ? null : 17;
+                            }
+                            return Reflect.get(target, key, receiver);
+                          } });
+                          let outcome;
+                          try { (() => { const key = 'chosen'; return ({ [key]: class extends Base { static value = (log.push('field'), 1); } })[key]; })(); outcome = 'ok'; }
+                          catch (e) { outcome = e === marker ? 'marker' : e.name; }
+                          // Evaluate another class after the error to check that the VM recovered.
+                          const recovered = class { static value = 7; };
+                          return [outcome, log.join(','), recovered.value].join('|');
+                        }).join(';'))()
+                        """,
+                """
+                        (() => ['object', 'null', 'primitive', 'throw'].map(mode => {
+                          const log = [];
+                          const marker = {};
+                          const Base = new Proxy(function () {}, { get(target, key, receiver) {
+                            log.push('get:' + String(key));
+                            if (key === 'prototype') {
+                              if (mode === 'throw') throw marker;
+                              return mode === 'object' ? {} : mode === 'null' ? null : 17;
+                            }
+                            return Reflect.get(target, key, receiver);
+                          } });
+                          let outcome;
+                          try { (() => { const key = Symbol('chosen'); return ({ [key]: class extends Base { static value = (log.push('field'), 1); } })[key]; })(); outcome = 'ok'; }
+                          catch (e) { outcome = e === marker ? 'marker' : e.name; }
+                          // Evaluate another class after the error to check that the VM recovered.
+                          const recovered = class { static value = 7; };
+                          return [outcome, log.join(','), recovered.value].join('|');
+                        }).join(';'))()
+                        """);
     }
 
-    private static String definition(String form, String heritage, String body) {
-        String tail = heritage + " { " + body + " }";
-        return switch (form) {
-            case "declaration" -> "class Subject " + tail + "; return Subject;";
-            case "expression" -> "return (class Subject " + tail + ");";
-            case "computedString" -> "const key = 'chosen'; return ({ [key]: class " + tail + " })[key];";
-            case "computedSymbol" -> "const key = Symbol('chosen'); return ({ [key]: class " + tail + " })[key];";
-            default -> throw new IllegalArgumentException(form);
-        };
-    }
 }

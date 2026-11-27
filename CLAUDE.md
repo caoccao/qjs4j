@@ -196,6 +196,10 @@ RuntimeException
 
 ## Testing Guidelines
 
+Keep each JavaScript test case as a complete script in a Java string literal, text block, or `.js` fixture so a reviewer can copy it into Node.js and run it. Pass the full script to evaluation and assertion helpers. Do not extract repeated JavaScript into Java helpers, shared fragments, or formatting templates, even when `jscpd` reports duplication.
+
+Group scripts that use the same assertion in an ordinary `@Test`. For example, `assertStringWithJavet("'a'.toUpperCase()", "'ABC'.toLowerCase()")` checks each script independently. Use the matching varargs assertion for other result types. Avoid `@ValueSource(strings = ...)` for these cases.
+
 ### Test Stack
 JDK 17+. JUnit 6 (6.0.1) + AssertJ + Javet (V8 parity comparison) + JSON-unit-assertj.
 

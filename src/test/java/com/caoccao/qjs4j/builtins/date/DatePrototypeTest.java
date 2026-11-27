@@ -77,9 +77,9 @@ public class DatePrototypeTest extends BaseJavetTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("dateGetters")
-    void testDateGetter(String name, JSNativeCallback getter) {
+    void testDateGetter(String code, JSNativeCallback getter) {
         // Midnight UTC, January 1, 2024.
-        assertIntegerWithJavet("new Date(1704067200000)." + name + "();");
+        assertIntegerWithJavet(code);
         assertPendingTypeError(context, getter.call(context, new JSString("not a date"), JSValue.NO_ARGS));
     }
 
@@ -350,15 +350,17 @@ public class DatePrototypeTest extends BaseJavetTest {
     }
 
     private static Stream<Arguments> dateGetters() {
-        return Stream.of(Arguments.of("getDate", (JSNativeCallback) DatePrototype::getDate),
-                Arguments.of("getFullYear", (JSNativeCallback) DatePrototype::getFullYear),
-                Arguments.of("getMilliseconds", (JSNativeCallback) DatePrototype::getMilliseconds),
-                Arguments.of("getMinutes", (JSNativeCallback) DatePrototype::getMinutes),
-                Arguments.of("getMonth", (JSNativeCallback) DatePrototype::getMonth),
-                Arguments.of("getSeconds", (JSNativeCallback) DatePrototype::getSeconds),
-                Arguments.of("getUTCDate", (JSNativeCallback) DatePrototype::getUTCDate),
-                Arguments.of("getUTCFullYear", (JSNativeCallback) DatePrototype::getUTCFullYear),
-                Arguments.of("getUTCHours", (JSNativeCallback) DatePrototype::getUTCHours),
-                Arguments.of("getUTCMonth", (JSNativeCallback) DatePrototype::getUTCMonth));
+        return Stream.of(Arguments.of("new Date(1704067200000).getDate();", (JSNativeCallback) DatePrototype::getDate),
+                Arguments.of("new Date(1704067200000).getFullYear();", (JSNativeCallback) DatePrototype::getFullYear),
+                Arguments.of("new Date(1704067200000).getMilliseconds();",
+                        (JSNativeCallback) DatePrototype::getMilliseconds),
+                Arguments.of("new Date(1704067200000).getMinutes();", (JSNativeCallback) DatePrototype::getMinutes),
+                Arguments.of("new Date(1704067200000).getMonth();", (JSNativeCallback) DatePrototype::getMonth),
+                Arguments.of("new Date(1704067200000).getSeconds();", (JSNativeCallback) DatePrototype::getSeconds),
+                Arguments.of("new Date(1704067200000).getUTCDate();", (JSNativeCallback) DatePrototype::getUTCDate),
+                Arguments.of("new Date(1704067200000).getUTCFullYear();",
+                        (JSNativeCallback) DatePrototype::getUTCFullYear),
+                Arguments.of("new Date(1704067200000).getUTCHours();", (JSNativeCallback) DatePrototype::getUTCHours),
+                Arguments.of("new Date(1704067200000).getUTCMonth();", (JSNativeCallback) DatePrototype::getUTCMonth));
     }
 }

@@ -44,7 +44,9 @@ public class JSModuleIdentifierSpellingTest extends BaseJavetTest {
 
     @Test
     public void testADefaultExportedUnicodeFunctionName() {
-        assertStringWithJavet("export default function café() { return 42; }\n" + "String(café());");
+        assertStringWithJavet("""
+                export default function café() { return 42; }
+                String(café());""");
     }
 
     @Test
@@ -56,7 +58,9 @@ public class JSModuleIdentifierSpellingTest extends BaseJavetTest {
 
     @Test
     public void testAnAsyncUnicodeExportedFunctionName() {
-        assertStringWithJavet("export async function café() { return 42; }\n" + "String(typeof café);");
+        assertStringWithJavet("""
+                export async function café() { return 42; }
+                String(typeof café);""");
     }
 
     @Test
@@ -105,20 +109,26 @@ public class JSModuleIdentifierSpellingTest extends BaseJavetTest {
 
     @Test
     public void testAUnicodeExportedGeneratorName() {
-        assertStringWithJavet("export function* genérateur() { yield 42; }\n" + "String(genérateur().next().value);");
+        assertStringWithJavet("""
+                export function* genérateur() { yield 42; }
+                String(genérateur().next().value);""");
     }
 
     @Test
     public void testAUnicodeExportedLetAndDestructuredNames() {
-        assertStringWithJavet("export let { á, b: é } = { á: 1, b: 2 };\n" + "String(á + é);");
+        assertStringWithJavet("""
+                export let { á, b: é } = { á: 1, b: 2 };
+                String(á + é);""");
     }
 
     @Test
     public void testAUnicodeExportedNameIsAlsoTheExportedName() {
         // The transformer builds an exports object keyed by the exported name, so a mis-extracted
         // name is visible from inside the module too, through its own namespace.
-        assertStringWithJavet(
-                "export const módulo = 42;\n" + "export function read() { return módulo; }\n" + "String(read());");
+        assertStringWithJavet("""
+                export const módulo = 42;
+                export function read() { return módulo; }
+                String(read());""");
     }
 
     @Test

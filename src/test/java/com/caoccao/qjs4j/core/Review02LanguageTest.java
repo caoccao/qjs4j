@@ -6,33 +6,110 @@ import org.junit.jupiter.api.Test;
 class Review02LanguageTest extends BaseJavetTest {
     @Test
     void asyncFromSyncClosesOnlyWhenAwaitingAnUnfinishedValueRejects() {
-        for (String value : new String[]{"Promise.reject('value')", "{get then(){throw 'then'}}",
-                "Object.defineProperty(Promise.resolve(1),'constructor',{get(){throw 'constructor'}})"}) {
-            for (boolean done : new boolean[]{false, true}) {
-                for (String close : new String[]{"log.push('return');return {done:true}",
-                        "log.push('return');throw 'close'"}) {
-                    assertStringWithJavet("""
-                            (async()=>{const log=[],it={ [Symbol.iterator](){return this},
-                            next(){return {value:%s,done:%s}},return(){%s}};
-                            try{for await(const x of it){log.push('body')}}catch(e){log.push(String(e))}
-                            return JSON.stringify(log)})()
-                            """.formatted(value, done, close));
-                }
-            }
-        }
+        assertStringWithJavet(
+                """
+                        (async()=>{const log=[],it={ [Symbol.iterator](){return this},
+                        next(){return {value:Promise.reject('value'),done:false}},return(){log.push('return');return {done:true}}};
+                        try{for await(const x of it){log.push('body')}}catch(e){log.push(String(e))}
+                        return JSON.stringify(log)})()
+                        """,
+                """
+                        (async()=>{const log=[],it={ [Symbol.iterator](){return this},
+                        next(){return {value:Promise.reject('value'),done:false}},return(){log.push('return');throw 'close'}};
+                        try{for await(const x of it){log.push('body')}}catch(e){log.push(String(e))}
+                        return JSON.stringify(log)})()
+                        """,
+                """
+                        (async()=>{const log=[],it={ [Symbol.iterator](){return this},
+                        next(){return {value:Promise.reject('value'),done:true}},return(){log.push('return');return {done:true}}};
+                        try{for await(const x of it){log.push('body')}}catch(e){log.push(String(e))}
+                        return JSON.stringify(log)})()
+                        """,
+                """
+                        (async()=>{const log=[],it={ [Symbol.iterator](){return this},
+                        next(){return {value:Promise.reject('value'),done:true}},return(){log.push('return');throw 'close'}};
+                        try{for await(const x of it){log.push('body')}}catch(e){log.push(String(e))}
+                        return JSON.stringify(log)})()
+                        """,
+                """
+                        (async()=>{const log=[],it={ [Symbol.iterator](){return this},
+                        next(){return {value:{get then(){throw 'then'}},done:false}},return(){log.push('return');return {done:true}}};
+                        try{for await(const x of it){log.push('body')}}catch(e){log.push(String(e))}
+                        return JSON.stringify(log)})()
+                        """,
+                """
+                        (async()=>{const log=[],it={ [Symbol.iterator](){return this},
+                        next(){return {value:{get then(){throw 'then'}},done:false}},return(){log.push('return');throw 'close'}};
+                        try{for await(const x of it){log.push('body')}}catch(e){log.push(String(e))}
+                        return JSON.stringify(log)})()
+                        """,
+                """
+                        (async()=>{const log=[],it={ [Symbol.iterator](){return this},
+                        next(){return {value:{get then(){throw 'then'}},done:true}},return(){log.push('return');return {done:true}}};
+                        try{for await(const x of it){log.push('body')}}catch(e){log.push(String(e))}
+                        return JSON.stringify(log)})()
+                        """,
+                """
+                        (async()=>{const log=[],it={ [Symbol.iterator](){return this},
+                        next(){return {value:{get then(){throw 'then'}},done:true}},return(){log.push('return');throw 'close'}};
+                        try{for await(const x of it){log.push('body')}}catch(e){log.push(String(e))}
+                        return JSON.stringify(log)})()
+                        """,
+                """
+                        (async()=>{const log=[],it={ [Symbol.iterator](){return this},
+                        next(){return {value:Object.defineProperty(Promise.resolve(1),'constructor',{get(){throw 'constructor'}}),done:false}},return(){log.push('return');return {done:true}}};
+                        try{for await(const x of it){log.push('body')}}catch(e){log.push(String(e))}
+                        return JSON.stringify(log)})()
+                        """,
+                """
+                        (async()=>{const log=[],it={ [Symbol.iterator](){return this},
+                        next(){return {value:Object.defineProperty(Promise.resolve(1),'constructor',{get(){throw 'constructor'}}),done:false}},return(){log.push('return');throw 'close'}};
+                        try{for await(const x of it){log.push('body')}}catch(e){log.push(String(e))}
+                        return JSON.stringify(log)})()
+                        """,
+                """
+                        (async()=>{const log=[],it={ [Symbol.iterator](){return this},
+                        next(){return {value:Object.defineProperty(Promise.resolve(1),'constructor',{get(){throw 'constructor'}}),done:true}},return(){log.push('return');return {done:true}}};
+                        try{for await(const x of it){log.push('body')}}catch(e){log.push(String(e))}
+                        return JSON.stringify(log)})()
+                        """,
+                """
+                        (async()=>{const log=[],it={ [Symbol.iterator](){return this},
+                        next(){return {value:Object.defineProperty(Promise.resolve(1),'constructor',{get(){throw 'constructor'}}),done:true}},return(){log.push('return');throw 'close'}};
+                        try{for await(const x of it){log.push('body')}}catch(e){log.push(String(e))}
+                        return JSON.stringify(log)})()
+                        """);
     }
 
     @Test
     void asyncIteratorClosePreservesOriginalThrowForSynchronousFailures() {
-        for (String close : new String[]{"get return(){throw 'getter'}", "return(){throw 'method'}", "return:1",
-                "return:undefined", "return:new Proxy(function(){return Promise.resolve({done:true})},{})"}) {
-            assertStringWithJavet("""
-                    (async()=>{const log=[],it={ [Symbol.asyncIterator](){return this},
-                    next(){return Promise.resolve({value:1,done:false})},%s};
-                    try{for await(const x of it){throw 'body'}}catch(e){log.push(String(e))}
-                    return JSON.stringify(log)})()
-                    """.formatted(close));
-        }
+        assertStringWithJavet("""
+                (async()=>{const log=[],it={ [Symbol.asyncIterator](){return this},
+                next(){return Promise.resolve({value:1,done:false})},get return(){throw 'getter'}};
+                try{for await(const x of it){throw 'body'}}catch(e){log.push(String(e))}
+                return JSON.stringify(log)})()
+                """, """
+                (async()=>{const log=[],it={ [Symbol.asyncIterator](){return this},
+                next(){return Promise.resolve({value:1,done:false})},return(){throw 'method'}};
+                try{for await(const x of it){throw 'body'}}catch(e){log.push(String(e))}
+                return JSON.stringify(log)})()
+                """, """
+                (async()=>{const log=[],it={ [Symbol.asyncIterator](){return this},
+                next(){return Promise.resolve({value:1,done:false})},return:1};
+                try{for await(const x of it){throw 'body'}}catch(e){log.push(String(e))}
+                return JSON.stringify(log)})()
+                """, """
+                (async()=>{const log=[],it={ [Symbol.asyncIterator](){return this},
+                next(){return Promise.resolve({value:1,done:false})},return:undefined};
+                try{for await(const x of it){throw 'body'}}catch(e){log.push(String(e))}
+                return JSON.stringify(log)})()
+                """,
+                """
+                        (async()=>{const log=[],it={ [Symbol.asyncIterator](){return this},
+                        next(){return Promise.resolve({value:1,done:false})},return:new Proxy(function(){return Promise.resolve({done:true})},{})};
+                        try{for await(const x of it){throw 'body'}}catch(e){log.push(String(e))}
+                        return JSON.stringify(log)})()
+                        """);
     }
 
     @Test
@@ -52,14 +129,17 @@ class Review02LanguageTest extends BaseJavetTest {
 
     @Test
     void classDeclarationAndExpressionShareInitializationSemantics() {
-        for (String declaration : new String[]{"class C", "const C=class C"}) {
-            assertStringWithJavet("""
-                    (()=>{const log=[];class B{m(){return 'base'}};%s extends B {
-                      #x=3;static x=log.push('static');static {log.push(this.name)}
-                      ['m'](){return super.m()+this.#x} [log.push('key')]=4;
-                    };const c=new C();return JSON.stringify([log,c.m(),c[1],C.name]);})()
-                    """.formatted(declaration));
-        }
+        assertStringWithJavet("""
+                (()=>{const log=[];class B{m(){return 'base'}};class C extends B {
+                  #x=3;static x=log.push('static');static {log.push(this.name)}
+                  ['m'](){return super.m()+this.#x} [log.push('key')]=4;
+                };const c=new C();return JSON.stringify([log,c.m(),c[1],C.name]);})()
+                """, """
+                (()=>{const log=[];class B{m(){return 'base'}};const C=class C extends B {
+                  #x=3;static x=log.push('static');static {log.push(this.name)}
+                  ['m'](){return super.m()+this.#x} [log.push('key')]=4;
+                };const c=new C();return JSON.stringify([log,c.m(),c[1],C.name]);})()
+                """);
     }
 
     @Test
@@ -70,16 +150,30 @@ class Review02LanguageTest extends BaseJavetTest {
 
     @Test
     void forAwaitDoesNotCloseWhenNextOrItsResultFails() {
-        for (String next : new String[]{"throw 'next'", "return Promise.reject('next')",
-                "return Promise.resolve({get done(){throw 'done'}})",
-                "return Promise.resolve({done:false,get value(){throw 'value'}})"}) {
-            assertStringWithJavet("""
-                    (async()=>{const log=[],it={ [Symbol.asyncIterator](){return this},next(){%s},
-                    return(){log.push('return');return {done:true}}};
-                    try{for await(const x of it){log.push('body')}}catch(e){log.push(String(e))}
-                    return JSON.stringify(log)})()
-                    """.formatted(next));
-        }
+        assertStringWithJavet("""
+                (async()=>{const log=[],it={ [Symbol.asyncIterator](){return this},next(){throw 'next'},
+                return(){log.push('return');return {done:true}}};
+                try{for await(const x of it){log.push('body')}}catch(e){log.push(String(e))}
+                return JSON.stringify(log)})()
+                """,
+                """
+                        (async()=>{const log=[],it={ [Symbol.asyncIterator](){return this},next(){return Promise.reject('next')},
+                        return(){log.push('return');return {done:true}}};
+                        try{for await(const x of it){log.push('body')}}catch(e){log.push(String(e))}
+                        return JSON.stringify(log)})()
+                        """,
+                """
+                        (async()=>{const log=[],it={ [Symbol.asyncIterator](){return this},next(){return Promise.resolve({get done(){throw 'done'}})},
+                        return(){log.push('return');return {done:true}}};
+                        try{for await(const x of it){log.push('body')}}catch(e){log.push(String(e))}
+                        return JSON.stringify(log)})()
+                        """,
+                """
+                        (async()=>{const log=[],it={ [Symbol.asyncIterator](){return this},next(){return Promise.resolve({done:false,get value(){throw 'value'}})},
+                        return(){log.push('return');return {done:true}}};
+                        try{for await(const x of it){log.push('body')}}catch(e){log.push(String(e))}
+                        return JSON.stringify(log)})()
+                        """);
         assertStringWithJavet("""
                 (()=>{const log=[];async function f(){const p=Promise.resolve(0);
                 Object.defineProperty(p,'constructor',{get(){throw 'constructor'}});
@@ -110,46 +204,63 @@ class Review02LanguageTest extends BaseJavetTest {
 
     @Test
     void privateClosuresShareTheInstancesPrivateBrand() {
-        for (String form : new String[]{"class C", "const C=class"}) {
-            assertStringWithJavet("""
-                    (()=>{function make(n){%s {#$_=n; #m(){return this.#$_}
-                    get #v(){return this.#m()} set #v(v){this.#$_=v}
-                    read(){return this.#v} write(v){this.#v=v} method(){return this.#m}}
-                    return new C()};const a=make(1),b=make(2);a.write(7);
-                    const out=[a.read(),b.read()];try{a.method().call(b)}catch(e){out.push(e.name)}
-                    return JSON.stringify(out)})()
-                    """.formatted(form));
-        }
+        assertStringWithJavet("""
+                (()=>{function make(n){class C {#$_=n; #m(){return this.#$_}
+                get #v(){return this.#m()} set #v(v){this.#$_=v}
+                read(){return this.#v} write(v){this.#v=v} method(){return this.#m}}
+                return new C()};const a=make(1),b=make(2);a.write(7);
+                const out=[a.read(),b.read()];try{a.method().call(b)}catch(e){out.push(e.name)}
+                return JSON.stringify(out)})()
+                """, """
+                (()=>{function make(n){const C=class {#$_=n; #m(){return this.#$_}
+                get #v(){return this.#m()} set #v(v){this.#$_=v}
+                read(){return this.#v} write(v){this.#v=v} method(){return this.#m}}
+                return new C()};const a=make(1),b=make(2);a.write(7);
+                const out=[a.read(),b.read()];try{a.method().call(b)}catch(e){out.push(e.name)}
+                return JSON.stringify(out)})()
+                """);
     }
 
     @Test
     void privateMethodsCaptureTheirClassEnvironment() {
-        for (String declaration : new String[]{"class C", "const C=class C"}) {
-            assertStringWithJavet(
-                    """
-                            (()=>{function make(x){%s {
-                              #m(){return [x,typeof C]}
-                              get #v(){return x} set #v(v){x=v}
-                              read(){return this.#m()} get(){return this.#v} set(v){this.#v=v}
-                              method(){return this.#m}
-                            };return [new C(),new C()]}
-                            const [a,b]=make(1),[c,d]=make(2);a.set(7);
-                            return JSON.stringify([a.read(),b.get(),c.read(),d.get(),a.method()===b.method(),a.method()===c.method()]);})()
-                            """
-                            .formatted(declaration));
-        }
+        assertStringWithJavet(
+                """
+                        (()=>{function make(x){class C {
+                          #m(){return [x,typeof C]}
+                          get #v(){return x} set #v(v){x=v}
+                          read(){return this.#m()} get(){return this.#v} set(v){this.#v=v}
+                          method(){return this.#m}
+                        };return [new C(),new C()]}
+                        const [a,b]=make(1),[c,d]=make(2);a.set(7);
+                        return JSON.stringify([a.read(),b.get(),c.read(),d.get(),a.method()===b.method(),a.method()===c.method()]);})()
+                        """,
+                """
+                        (()=>{function make(x){const C=class C {
+                          #m(){return [x,typeof C]}
+                          get #v(){return x} set #v(v){x=v}
+                          read(){return this.#m()} get(){return this.#v} set(v){this.#v=v}
+                          method(){return this.#m}
+                        };return [new C(),new C()]}
+                        const [a,b]=make(1),[c,d]=make(2);a.set(7);
+                        return JSON.stringify([a.read(),b.get(),c.read(),d.get(),a.method()===b.method(),a.method()===c.method()]);})()
+                        """);
     }
 
     @Test
     void rejectedAsyncYieldThrowsInsideGenerator() {
-        for (String value : new String[]{"Promise.reject('x')", "{then(r,j){j('x')}}", "{get then(){throw 'x'}}"}) {
-            assertStringWithJavet(
-                    """
-                            (async()=>{const log=[];async function* f(){try{yield %s}catch(e){log.push(e);yield 'caught'}finally{log.push('finally')}}
-                            const g=f();const a=await g.next(),b=await g.next();return JSON.stringify([a,b,log])})()
-                            """
-                            .formatted(value));
-        }
+        assertStringWithJavet(
+                """
+                        (async()=>{const log=[];async function* f(){try{yield Promise.reject('x')}catch(e){log.push(e);yield 'caught'}finally{log.push('finally')}}
+                        const g=f();const a=await g.next(),b=await g.next();return JSON.stringify([a,b,log])})()
+                        """,
+                """
+                        (async()=>{const log=[];async function* f(){try{yield {then(r,j){j('x')}}}catch(e){log.push(e);yield 'caught'}finally{log.push('finally')}}
+                        const g=f();const a=await g.next(),b=await g.next();return JSON.stringify([a,b,log])})()
+                        """,
+                """
+                        (async()=>{const log=[];async function* f(){try{yield {get then(){throw 'x'}}}catch(e){log.push(e);yield 'caught'}finally{log.push('finally')}}
+                        const g=f();const a=await g.next(),b=await g.next();return JSON.stringify([a,b,log])})()
+                        """);
     }
 
     @Test
@@ -175,17 +286,41 @@ class Review02LanguageTest extends BaseJavetTest {
 
     @Test
     void throwingForAwaitBodyAwaitsCleanup() {
-        for (String result : new String[]{"{then(resolve){log.push('closed');resolve({done:true})}}",
-                "Promise.resolve().then(()=>{log.push('closed');return {done:true}})", "Promise.reject('cleanup')",
-                "{then(resolve,reject){log.push('closed');reject('cleanup')}}", "1"}) {
-            assertStringWithJavet("""
-                    (async()=>{const log=[];const it={
-                      [Symbol.asyncIterator](){return this},next(){return Promise.resolve({value:1,done:false})},
-                      return(){log.push('return');return %s}
-                    };try{for await(const x of it){throw 'body'}}catch(e){log.push('catch:'+e)}
-                    return JSON.stringify(log)})()
-                    """.formatted(result));
-        }
+        assertStringWithJavet("""
+                (async()=>{const log=[];const it={
+                  [Symbol.asyncIterator](){return this},next(){return Promise.resolve({value:1,done:false})},
+                  return(){log.push('return');return {then(resolve){log.push('closed');resolve({done:true})}}}
+                };try{for await(const x of it){throw 'body'}}catch(e){log.push('catch:'+e)}
+                return JSON.stringify(log)})()
+                """,
+                """
+                        (async()=>{const log=[];const it={
+                          [Symbol.asyncIterator](){return this},next(){return Promise.resolve({value:1,done:false})},
+                          return(){log.push('return');return Promise.resolve().then(()=>{log.push('closed');return {done:true}})}
+                        };try{for await(const x of it){throw 'body'}}catch(e){log.push('catch:'+e)}
+                        return JSON.stringify(log)})()
+                        """,
+                """
+                        (async()=>{const log=[];const it={
+                          [Symbol.asyncIterator](){return this},next(){return Promise.resolve({value:1,done:false})},
+                          return(){log.push('return');return Promise.reject('cleanup')}
+                        };try{for await(const x of it){throw 'body'}}catch(e){log.push('catch:'+e)}
+                        return JSON.stringify(log)})()
+                        """,
+                """
+                        (async()=>{const log=[];const it={
+                          [Symbol.asyncIterator](){return this},next(){return Promise.resolve({value:1,done:false})},
+                          return(){log.push('return');return {then(resolve,reject){log.push('closed');reject('cleanup')}}}
+                        };try{for await(const x of it){throw 'body'}}catch(e){log.push('catch:'+e)}
+                        return JSON.stringify(log)})()
+                        """,
+                """
+                        (async()=>{const log=[];const it={
+                          [Symbol.asyncIterator](){return this},next(){return Promise.resolve({value:1,done:false})},
+                          return(){log.push('return');return 1}
+                        };try{for await(const x of it){throw 'body'}}catch(e){log.push('catch:'+e)}
+                        return JSON.stringify(log)})()
+                        """);
         assertStringWithJavet("""
                 (async()=>{const log=[];function it(n){return {
                 [Symbol.asyncIterator](){return this},next(){return Promise.resolve({value:1,done:false})},
@@ -197,13 +332,11 @@ class Review02LanguageTest extends BaseJavetTest {
 
     @Test
     void usingSwitchValidationDoesNotDependOnTestMarker() {
-        for (String marker : new String[]{"", "// $DONOTEVALUATE\n"}) {
-            for (String statement : new String[]{"using x=null;", "await using x=null;"}) {
-                String source = marker + "switch(1){case 1:" + statement + "}";
-                assertStringWithJavet("(()=>{try{Object.getPrototypeOf(async function(){}).constructor(" + "'"
-                        + source.replace("\n", "\\n") + "');return 'accepted'}catch(e){return e.name}})()");
-            }
-        }
+        assertStringWithJavet(
+                "(()=>{try{Object.getPrototypeOf(async function(){}).constructor('switch(1){case 1:using x=null;}');return 'accepted'}catch(e){return e.name}})()",
+                "(()=>{try{Object.getPrototypeOf(async function(){}).constructor('switch(1){case 1:await using x=null;}');return 'accepted'}catch(e){return e.name}})()",
+                "(()=>{try{Object.getPrototypeOf(async function(){}).constructor('// $DONOTEVALUATE\\nswitch(1){case 1:using x=null;}');return 'accepted'}catch(e){return e.name}})()",
+                "(()=>{try{Object.getPrototypeOf(async function(){}).constructor('// $DONOTEVALUATE\\nswitch(1){case 1:await using x=null;}');return 'accepted'}catch(e){return e.name}})()");
         assertStringWithJavet("(()=>{switch(1){case 1:{using x=null;return 'ok'}}})()");
     }
 }

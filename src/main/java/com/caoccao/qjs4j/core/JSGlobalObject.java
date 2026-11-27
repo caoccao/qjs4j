@@ -361,25 +361,25 @@ public final class JSGlobalObject {
      */
     private void initializeConsoleObject() {
         JSObject consoleObj = context.createJSObject();
-        consoleObj.set("assert", new JSNativeFunction(context, "assert", 0, console::assert_));
-        consoleObj.set("clear", new JSNativeFunction(context, "clear", 0, console::clear));
-        consoleObj.set("count", new JSNativeFunction(context, "count", 0, console::count));
-        consoleObj.set("countReset", new JSNativeFunction(context, "countReset", 0, console::countReset));
-        consoleObj.set("debug", new JSNativeFunction(context, "debug", 0, console::debug));
-        consoleObj.set("dir", new JSNativeFunction(context, "dir", 0, console::dir));
-        consoleObj.set("dirxml", new JSNativeFunction(context, "dirxml", 0, console::dirxml));
-        consoleObj.set("error", new JSNativeFunction(context, "error", 0, console::error));
-        consoleObj.set("group", new JSNativeFunction(context, "group", 0, console::group));
-        consoleObj.set("groupCollapsed", new JSNativeFunction(context, "groupCollapsed", 0, console::groupCollapsed));
-        consoleObj.set("groupEnd", new JSNativeFunction(context, "groupEnd", 0, console::groupEnd));
-        consoleObj.set("info", new JSNativeFunction(context, "info", 0, console::info));
+        installConsoleMethod(consoleObj, "assert", console::assert_);
+        installConsoleMethod(consoleObj, "clear", console::clear);
+        installConsoleMethod(consoleObj, "count", console::count);
+        installConsoleMethod(consoleObj, "countReset", console::countReset);
+        installConsoleMethod(consoleObj, "debug", console::debug);
+        installConsoleMethod(consoleObj, "dir", console::dir);
+        installConsoleMethod(consoleObj, "dirxml", console::dirxml);
+        installConsoleMethod(consoleObj, "error", console::error);
+        installConsoleMethod(consoleObj, "group", console::group);
+        installConsoleMethod(consoleObj, "groupCollapsed", console::groupCollapsed);
+        installConsoleMethod(consoleObj, "groupEnd", console::groupEnd);
+        installConsoleMethod(consoleObj, "info", console::info);
         consoleObj.set("log", new JSNativeFunction(context, "log", 1, console::log));
-        consoleObj.set("table", new JSNativeFunction(context, "table", 0, console::table));
-        consoleObj.set("time", new JSNativeFunction(context, "time", 0, console::time));
-        consoleObj.set("timeEnd", new JSNativeFunction(context, "timeEnd", 0, console::timeEnd));
-        consoleObj.set("timeLog", new JSNativeFunction(context, "timeLog", 0, console::timeLog));
-        consoleObj.set("trace", new JSNativeFunction(context, "trace", 0, console::trace));
-        consoleObj.set("warn", new JSNativeFunction(context, "warn", 0, console::warn));
+        installConsoleMethod(consoleObj, "table", console::table);
+        installConsoleMethod(consoleObj, "time", console::time);
+        installConsoleMethod(consoleObj, "timeEnd", console::timeEnd);
+        installConsoleMethod(consoleObj, "timeLog", console::timeLog);
+        installConsoleMethod(consoleObj, "trace", console::trace);
+        installConsoleMethod(consoleObj, "warn", console::warn);
 
         defineBuiltin(globalObject, "console", consoleObj);
     }
@@ -1341,6 +1341,10 @@ public final class JSGlobalObject {
 
             defineBuiltin(globalObject, def.name, constructor);
         }
+    }
+
+    private void installConsoleMethod(JSObject target, String name, JSNativeCallback callback) {
+        target.set(name, new JSNativeFunction(context, name, 0, callback));
     }
 
     private void installIntlConstructor(JSObject intl, String name, int length, JSObject prototype, boolean requiresNew,

@@ -37,7 +37,7 @@ public sealed class JSError extends JSObject permits JSAggregateError, JSRangeEr
     public static final int DEFAULT_STACK_TRACE_LIMIT = 10;
     public static final String NAME = "Error";
     public static final PropertyKey STACK_TRACE_LIMIT = PropertyKey.fromString("stackTraceLimit");
-    protected final JSContext context;
+    private final String errorName;
     private final SourceLocation sourceLocation;
     /**
      * The name of the source {@link #getSourceLocation()} indexes into, when it is not the source the embedder handed
@@ -62,17 +62,22 @@ public sealed class JSError extends JSObject permits JSAggregateError, JSRangeEr
      * Create an Error with a message and source location.
      */
     public JSError(JSContext context, String message, SourceLocation sourceLocation) {
+        this(context, NAME, message, sourceLocation);
+    }
+
+    JSError(JSContext context, String errorName, String message, SourceLocation sourceLocation) {
         super(context);
-        this.context = context;
+        this.errorName = errorName;
         this.sourceLocation = sourceLocation;
         if (message != null && !message.isEmpty()) {
-            defineProperty(PropertyKey.MESSAGE, PropertyDescriptor.dataDescriptor(new JSString(message),
+            // A fresh error has no existing descriptor to validate or merge.
+            definePropertyInternal(PropertyKey.MESSAGE, PropertyDescriptor.dataDescriptor(new JSString(message),
                     PropertyDescriptor.DataState.ConfigurableWritable));
         }
     }
 
     public String getErrorName() {
-        return NAME;
+        return errorName;
     }
 
     /**

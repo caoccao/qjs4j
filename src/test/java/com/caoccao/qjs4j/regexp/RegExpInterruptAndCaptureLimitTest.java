@@ -37,7 +37,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 254 groups where V8 allows 32,767.
  */
 public class RegExpInterruptAndCaptureLimitTest extends BaseJavetTest {
-    private static final String CATASTROPHIC = "/(a+)+$/.test('a'.repeat(40) + 'b')";
 
     @Test
     public void testCaptureGroupCountMatchesV8() {
@@ -65,7 +64,8 @@ public class RegExpInterruptAndCaptureLimitTest extends BaseJavetTest {
     public void testDeadlineStopsAMatch() {
         try (JSRuntime runtime = createUnboundedRuntime(); JSContext deadlineContext = runtime.createContext()) {
             deadlineContext.getVirtualMachine().setExecutionDeadline(System.currentTimeMillis() + 200);
-            assertThatThrownBy(() -> deadlineContext.eval("try { " + CATASTROPHIC + " } catch (e) { 'SWALLOWED' }"))
+            assertThatThrownBy(
+                    () -> deadlineContext.eval("try { /(a+)+$/.test('a'.repeat(40) + 'b') } catch (e) { 'SWALLOWED' }"))
                     .isInstanceOf(JSTerminationException.class).hasMessage("execution timeout");
         }
     }

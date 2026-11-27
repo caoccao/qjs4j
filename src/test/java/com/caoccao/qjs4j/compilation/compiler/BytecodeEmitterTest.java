@@ -23,6 +23,8 @@ import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.vm.Bytecode;
 import com.caoccao.qjs4j.vm.Opcode;
 import org.junit.jupiter.api.Test;
+
+import java.nio.ByteBuffer;
 import org.junit.jupiter.api.Timeout;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -100,7 +102,22 @@ public class BytecodeEmitterTest extends BaseTest {
         // Exercises many jump patches and many distinct atoms in a single function.
         // The last branch never matches, so `r` ends at -1, normalised to 1 by `r && 1 || 0`;
         // the result is then 1 + v0.p0 (0) + v399.p399 (399).
-        context.eval(buildLargeFunctionSource(400));
+        int branchCount = 400;
+        StringBuilder source = new StringBuilder("function big(x) {\n  let r = 0;\n");
+        for (int index = 0; index < branchCount; index++) {
+            source.append("  if (x === ").append(index).append(") { r += ").append(index)
+                    .append("; } else { r -= 1; }\n");
+            source.append("  for (let i").append(index).append(" = 0; i").append(index).append(" < 1; i").append(index)
+                    .append("++) { r += 0; }\n");
+            source.append("  r = r && 1 || 0;\n");
+            source.append("  var v").append(index).append(" = { p").append(index).append(": ").append(index)
+                    .append(" };\n");
+        }
+        // Reference the first and last object literal so the returned value proves every branch
+        // body compiled and every per-branch atom resolved.
+        source.append("  return r + v0.p0 + v").append(branchCount - 1).append(".p").append(branchCount - 1)
+                .append(";\n}\n");
+        context.eval(source.toString());
         assertThat(context.eval("big(0)")).isEqualTo(JSNumber.of(400));
         assertThat(context.eval("big(7)")).isEqualTo(JSNumber.of(400));
     }
@@ -123,9 +140,7 @@ public class BytecodeEmitterTest extends BaseTest {
         int jumpPosition = emitter.emitJump(Opcode.GOTO);
         emitter.patchJump(jumpPosition, loopStart);
 
-        byte[] code = emitter.getCode();
-        int patched = ((code[jumpPosition] & 0xFF) << 24) | ((code[jumpPosition + 1] & 0xFF) << 16)
-                | ((code[jumpPosition + 2] & 0xFF) << 8) | (code[jumpPosition + 3] & 0xFF);
+        int patched = ByteBuffer.wrap(emitter.getCode()).getInt(jumpPosition);
         assertThat(patched).isEqualTo(loopStart - (jumpPosition + 4)).isNegative();
     }
 
@@ -141,8 +156,7 @@ public class BytecodeEmitterTest extends BaseTest {
 
         assertThat(emitter.getCodeSize()).as("patching must not change the code size").isEqualTo(sizeBeforePatch);
         byte[] code = emitter.getCode();
-        int patched = ((code[jumpPosition] & 0xFF) << 24) | ((code[jumpPosition + 1] & 0xFF) << 16)
-                | ((code[jumpPosition + 2] & 0xFF) << 8) | (code[jumpPosition + 3] & 0xFF);
+        int patched = ByteBuffer.wrap(code).getInt(jumpPosition);
         assertThat(patched).isEqualTo(sizeBeforePatch - (jumpPosition + 4));
         assertThat(code[0]).as("bytes before the patch are untouched").isEqualTo((byte) 0x01);
         assertThat(code[sizeBeforePatch - 1]).as("bytes after the patch are untouched").isEqualTo((byte) 0x02);
@@ -184,11 +198,7 @@ public class BytecodeEmitterTest extends BaseTest {
         // 8000 branches is roughly 1.2 MB of source with ~32000 jump patches. With the quadratic
         // emitter this moved gigabytes through Arrays.copyOf; the bound here is generous enough
         // not to be timing-sensitive while still failing if quadratic behaviour returns.
-        context.eval(buildLargeFunctionSource(8000));
-        assertThat(context.eval("big(1)")).isEqualTo(JSNumber.of(8000));
-    }
-
-    private static String buildLargeFunctionSource(int branchCount) {
+        int branchCount = 8000;
         StringBuilder source = new StringBuilder("function big(x) {\n  let r = 0;\n");
         for (int index = 0; index < branchCount; index++) {
             source.append("  if (x === ").append(index).append(") { r += ").append(index)
@@ -203,6 +213,8 @@ public class BytecodeEmitterTest extends BaseTest {
         // body compiled and every per-branch atom resolved.
         source.append("  return r + v0.p0 + v").append(branchCount - 1).append(".p").append(branchCount - 1)
                 .append(";\n}\n");
-        return source.toString();
+        context.eval(source.toString());
+        assertThat(context.eval("big(1)")).isEqualTo(JSNumber.of(8000));
     }
+
 }

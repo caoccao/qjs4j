@@ -27,6 +27,11 @@ final class JavaCollectionKeys {
     private JavaCollectionKeys() {
     }
 
+    static boolean collectionEquals(CollectionKey collection, Object other, Class<?> kind) {
+        return collection == other
+                || !(collection instanceof IdentityKey) && kind.isInstance(other) && valueEquals(collection, other);
+    }
+
     static int collectionHash(CollectionKey key, Integer knownHash) {
         if (key instanceof IdentityKey) {
             return System.identityHashCode(key);

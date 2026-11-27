@@ -23,6 +23,7 @@ import com.caoccao.qjs4j.core.buffer.JSSharedArrayBuffer;
 import com.caoccao.qjs4j.core.promise.JSPromise;
 import com.caoccao.qjs4j.utils.ByteArrayAtomics;
 import org.junit.jupiter.api.Test;
+import java.util.List;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -191,9 +192,9 @@ public class AtomicsObjectTest extends BaseJavetTest {
         for (int size : new int[]{1, 2, 4, 8}) {
             assertThat(atomics().isLockFree(context, null, numberArgs(size))).as("size " + size)
                     .isEqualTo(JSBoolean.valueOf(lockFree));
-            assertThat(context.eval("Atomics.isLockFree(" + size + ")").toString()).as("guest-visible size " + size)
-                    .isEqualTo(String.valueOf(lockFree));
         }
+        assertThat(context.eval("[1, 2, 4, 8].map(size => Atomics.isLockFree(size))").toJavaObject())
+                .isEqualTo(List.of(lockFree, lockFree, lockFree, lockFree));
         assertThat(context.eval("Atomics.isLockFree(3)").toString()).isEqualTo("false");
         assertThat(context.eval("Atomics.isLockFree(0)").toString()).isEqualTo("false");
     }

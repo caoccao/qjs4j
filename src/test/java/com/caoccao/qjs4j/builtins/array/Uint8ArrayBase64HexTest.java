@@ -35,14 +35,16 @@ public class Uint8ArrayBase64HexTest extends BaseJavetTest {
 
     @Test
     public void testSetFrom() {
-        assertStringWithJavet(inArrowFunction("""
-                const a = new Uint8Array(8);
-                const r = a.setFromBase64('AQIDBA==');
-                return [r.read, r.written, a[0], a[1], a[2], a[3]].join(',');
-                """), inArrowFunction("""
-                const a = new Uint8Array(8);
-                const r = a.setFromHex('00112233');
-                return [r.read, r.written, a[0], a[1], a[2], a[3]].join(',');
-                """));
+        assertStringWithJavet("""
+                (() => {
+                  const a = new Uint8Array(8);
+                  const r = a.setFromBase64('AQIDBA==');
+                  return [r.read, r.written, a[0], a[1], a[2], a[3]].join(',');
+                })()""", """
+                (() => {
+                  const a = new Uint8Array(8);
+                  const r = a.setFromHex('00112233');
+                  return [r.read, r.written, a[0], a[1], a[2], a[3]].join(',');
+                })()""");
     }
 }

@@ -262,38 +262,42 @@ public class FunctionPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testFunctionEdgeCasesWithJavet() {
-        assertIntegerWithJavet(inArrowFunction("""
-                function sum(a, b, c) {
-                  return a + b + c;
-                }
-                return sum.apply(null, { 0: 1, 1: 2, 2: 3, length: 3 });
-                """), inArrowFunction("""
-                function sum(a, b, c) {
-                  return a + b + c;
-                }
-                const args = (function() { return arguments; })(1, 2, 3);
-                return sum.apply(null, args);
-                """));
+        assertIntegerWithJavet("""
+                (() => {
+                  function sum(a, b, c) {
+                    return a + b + c;
+                  }
+                  return sum.apply(null, { 0: 1, 1: 2, 2: 3, length: 3 });
+                })()""", """
+                (() => {
+                  function sum(a, b, c) {
+                    return a + b + c;
+                  }
+                  const args = (function() { return arguments; })(1, 2, 3);
+                  return sum.apply(null, args);
+                })()""");
 
-        assertBooleanWithJavet(inArrowFunction("""
-                function C(a, b) {
-                  this.sum = a + b;
-                }
-                const Bound = C.bind({ sum: -1 }, 2);
-                const instance = new Bound(5);
-                return instance.sum === 7 && instance instanceof C && instance instanceof Bound;
-                """), inArrowFunction("""
-                const methods = ['call', 'apply', 'bind', 'toString'];
-                const methodsOk = methods.every((name) => {
-                  const d = Object.getOwnPropertyDescriptor(Function.prototype, name);
-                  return d.writable === true && d.enumerable === false && d.configurable === true;
-                });
-                const constructorDesc = Object.getOwnPropertyDescriptor(Function, 'prototype');
-                return methodsOk
-                  && constructorDesc.writable === false
-                  && constructorDesc.enumerable === false
-                  && constructorDesc.configurable === false;
-                """));
+        assertBooleanWithJavet("""
+                (() => {
+                  function C(a, b) {
+                    this.sum = a + b;
+                  }
+                  const Bound = C.bind({ sum: -1 }, 2);
+                  const instance = new Bound(5);
+                  return instance.sum === 7 && instance instanceof C && instance instanceof Bound;
+                })()""", """
+                (() => {
+                  const methods = ['call', 'apply', 'bind', 'toString'];
+                  const methodsOk = methods.every((name) => {
+                    const d = Object.getOwnPropertyDescriptor(Function.prototype, name);
+                    return d.writable === true && d.enumerable === false && d.configurable === true;
+                  });
+                  const constructorDesc = Object.getOwnPropertyDescriptor(Function, 'prototype');
+                  return methodsOk
+                    && constructorDesc.writable === false
+                    && constructorDesc.enumerable === false
+                    && constructorDesc.configurable === false;
+                })()""");
 
         assertErrorWithJavet("new Function(Symbol('x'))");
 

@@ -16,12 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.core.buffer.*;
-import com.caoccao.qjs4j.core.collection.*;
 import com.caoccao.qjs4j.core.date.JSDate;
-import com.caoccao.qjs4j.core.disposable.JSAsyncDisposableStack;
-import com.caoccao.qjs4j.core.disposable.JSDisposableStack;
-import com.caoccao.qjs4j.core.error.*;
+import com.caoccao.qjs4j.core.error.JSError;
 import com.caoccao.qjs4j.core.iterator.JSIterator;
 import com.caoccao.qjs4j.core.promise.JSPromise;
 import com.caoccao.qjs4j.core.regexp.JSRegExp;
@@ -79,36 +75,15 @@ final class RealmIntrinsics {
      *            the realm's global object
      */
     void cacheFromGlobalObject(JSObject globalObject) {
-        JSValue objectCtor = globalObject.get(JSObject.NAME);
-        if (objectCtor instanceof JSObject objCtorObj) {
-            JSValue proto = objCtorObj.get(PropertyKey.PROTOTYPE);
-            if (proto instanceof JSObject protoObj) {
-                cachedObjectPrototype = protoObj;
-            }
-        }
-        JSValue dateCtor = globalObject.get(JSDate.NAME);
-        if (dateCtor instanceof JSObject dateCtorObj) {
-            JSValue proto = dateCtorObj.get(PropertyKey.PROTOTYPE);
-            if (proto instanceof JSObject protoObj) {
-                cachedDatePrototype = protoObj;
-            }
-        }
-        JSValue promiseCtor = globalObject.get(JSPromise.NAME);
-        if (promiseCtor instanceof JSObject promiseCtorObject) {
-            JSValue proto = promiseCtorObject.get(PropertyKey.PROTOTYPE);
-            if (proto instanceof JSObject protoObj) {
-                cachedPromisePrototype = protoObj;
-            }
-        }
+        cachedObjectPrototype = prototypeOrDefault(globalObject.get(JSObject.NAME), cachedObjectPrototype);
+        cachedDatePrototype = prototypeOrDefault(globalObject.get(JSDate.NAME), cachedDatePrototype);
+        cachedPromisePrototype = prototypeOrDefault(globalObject.get(JSPromise.NAME), cachedPromisePrototype);
         // Installed by the engine itself before this runs.
         cachedErrorConstructor = (JSObject) globalObject.get(JSError.NAME);
         JSValue regExpCtor = globalObject.get(JSRegExp.NAME);
         if (regExpCtor instanceof JSObject regExpCtorObject) {
             cachedRegExpConstructor = regExpCtorObject;
-            JSValue proto = regExpCtorObject.get(PropertyKey.PROTOTYPE);
-            if (proto instanceof JSObject protoObj) {
-                cachedRegExpPrototype = protoObj;
-            }
+            cachedRegExpPrototype = prototypeOrDefault(regExpCtorObject, cachedRegExpPrototype);
         }
     }
 
@@ -191,50 +166,7 @@ final class RealmIntrinsics {
     String getIntrinsicDefaultPrototypeName(JSFunction function) {
         JSConstructorType constructorType = function.getConstructorType();
         if (constructorType != null) {
-            return switch (constructorType) {
-                case AGGREGATE_ERROR -> JSAggregateError.NAME;
-                case ARRAY -> JSArray.NAME;
-                case ARRAY_BUFFER -> JSArrayBuffer.NAME;
-                case ASYNC_DISPOSABLE_STACK -> JSAsyncDisposableStack.NAME;
-                case BIG_INT_OBJECT -> JSBigIntObject.NAME;
-                case BOOLEAN_OBJECT -> JSBooleanObject.NAME;
-                case DATA_VIEW -> JSDataView.NAME;
-                case DATE -> JSDate.NAME;
-                case DISPOSABLE_STACK -> JSDisposableStack.NAME;
-                case ERROR -> JSError.NAME;
-                case EVAL_ERROR -> JSEvalError.NAME;
-                case FINALIZATION_REGISTRY -> JSFinalizationRegistry.NAME;
-                case MAP -> JSMap.NAME;
-                case NUMBER_OBJECT -> JSNumberObject.NAME;
-                case PROMISE -> JSPromise.NAME;
-                case PROXY -> JSObject.NAME;
-                case RANGE_ERROR -> JSRangeError.NAME;
-                case REFERENCE_ERROR -> JSReferenceError.NAME;
-                case REGEXP -> JSRegExp.NAME;
-                case SET -> JSSet.NAME;
-                case SHARED_ARRAY_BUFFER -> JSSharedArrayBuffer.NAME;
-                case STRING_OBJECT -> JSStringObject.NAME;
-                case SUPPRESSED_ERROR -> JSSuppressedError.NAME;
-                case SYMBOL_OBJECT -> JSSymbolObject.NAME;
-                case SYNTAX_ERROR -> JSSyntaxError.NAME;
-                case TYPED_ARRAY_BIGINT64 -> JSBigInt64Array.NAME;
-                case TYPED_ARRAY_BIGUINT64 -> JSBigUint64Array.NAME;
-                case TYPED_ARRAY_FLOAT16 -> JSFloat16Array.NAME;
-                case TYPED_ARRAY_FLOAT32 -> JSFloat32Array.NAME;
-                case TYPED_ARRAY_FLOAT64 -> JSFloat64Array.NAME;
-                case TYPED_ARRAY_INT16 -> JSInt16Array.NAME;
-                case TYPED_ARRAY_INT32 -> JSInt32Array.NAME;
-                case TYPED_ARRAY_INT8 -> JSInt8Array.NAME;
-                case TYPED_ARRAY_UINT16 -> JSUint16Array.NAME;
-                case TYPED_ARRAY_UINT32 -> JSUint32Array.NAME;
-                case TYPED_ARRAY_UINT8 -> JSUint8Array.NAME;
-                case TYPED_ARRAY_UINT8_CLAMPED -> JSUint8ClampedArray.NAME;
-                case TYPE_ERROR -> JSTypeError.NAME;
-                case URI_ERROR -> JSURIError.NAME;
-                case WEAK_MAP -> JSWeakMap.NAME;
-                case WEAK_REF -> JSWeakRef.NAME;
-                case WEAK_SET -> JSWeakSet.NAME;
-            };
+            return constructorType.defaultPrototypeName();
         }
         if (function instanceof JSClass) {
             return JSObject.NAME;
@@ -277,31 +209,16 @@ final class RealmIntrinsics {
             return realmContext.getObjectPrototype();
         }
         if ("AsyncFunction".equals(intrinsicDefaultPrototypeName)) {
-            JSObject asyncFunctionConstructor = realmContext.getAsyncFunctionConstructor();
-            if (asyncFunctionConstructor != null) {
-                JSValue asyncFunctionPrototype = asyncFunctionConstructor.get(PropertyKey.PROTOTYPE);
-                if (asyncFunctionPrototype instanceof JSObject asyncFunctionPrototypeObject) {
-                    return asyncFunctionPrototypeObject;
-                }
+            JSObject asyncPrototype = prototypeOrDefault(realmContext.getAsyncFunctionConstructor(), null);
+            if (asyncPrototype != null) {
+                return asyncPrototype;
             }
-            JSValue fallbackFunctionConstructor = realmContext.getGlobalObject().get(JSFunction.NAME);
-            if (fallbackFunctionConstructor instanceof JSObject fallbackFunctionObject) {
-                JSValue fallbackFunctionPrototype = fallbackFunctionObject.get(PropertyKey.PROTOTYPE);
-                if (fallbackFunctionPrototype instanceof JSObject fallbackFunctionPrototypeObject) {
-                    return fallbackFunctionPrototypeObject;
-                }
-            }
-            return realmContext.getObjectPrototype();
+            intrinsicDefaultPrototypeName = JSFunction.NAME;
         }
 
-        JSValue intrinsicConstructor = realmContext.getGlobalObject().get(intrinsicDefaultPrototypeName);
-        if (intrinsicConstructor instanceof JSObject intrinsicObject) {
-            JSValue intrinsicPrototype = intrinsicObject.get(PropertyKey.PROTOTYPE);
-            if (intrinsicPrototype instanceof JSObject intrinsicPrototypeObject) {
-                return intrinsicPrototypeObject;
-            }
-        }
-        return realmContext.getObjectPrototype();
+        JSValue constructor = realmContext.getGlobalObject().get(intrinsicDefaultPrototypeName);
+        JSObject prototype = prototypeOrDefault(constructor, null);
+        return prototype != null ? prototype : realmContext.getObjectPrototype();
     }
 
     JSObject getIteratorPrototype(String tag) {
@@ -424,5 +341,12 @@ final class RealmIntrinsics {
         }
         receiver.setPrototype(prototype);
         return true;
+    }
+
+    private static JSObject prototypeOrDefault(JSValue constructor, JSObject fallback) {
+        if (constructor instanceof JSObject object && object.get(PropertyKey.PROTOTYPE) instanceof JSObject prototype) {
+            return prototype;
+        }
+        return fallback;
     }
 }

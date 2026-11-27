@@ -18,8 +18,6 @@ package com.caoccao.qjs4j.builtins.temporal.plain;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 public class TemporalPlainMonthDayTest extends BaseJavetTest {
 
@@ -109,10 +107,12 @@ public class TemporalPlainMonthDayTest extends BaseJavetTest {
         assertStringWithJavet("new Temporal.PlainMonthDay(3, 15).monthCode");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"toString()", "toJSON()", "toPlainDate({year: 2024}).toString()", "toString()"})
-    void testStringConversions(String operation) {
-        assertStringWithJavet("new Temporal.PlainMonthDay(3, 15)." + operation);
+    @Test
+    void testStringConversions() {
+        assertStringWithJavet("new Temporal.PlainMonthDay(3, 15).toString()",
+                "new Temporal.PlainMonthDay(3, 15).toJSON()",
+                "new Temporal.PlainMonthDay(3, 15).toPlainDate({year: 2024}).toString()",
+                "new Temporal.PlainMonthDay(3, 15).toString()");
     }
 
     @Test

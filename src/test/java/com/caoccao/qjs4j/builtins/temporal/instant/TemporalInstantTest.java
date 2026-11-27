@@ -18,8 +18,6 @@ package com.caoccao.qjs4j.builtins.temporal.instant;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 public class TemporalInstantTest extends BaseJavetTest {
 
@@ -104,11 +102,11 @@ public class TemporalInstantTest extends BaseJavetTest {
         assertStringWithJavet("new Temporal.Instant(3600000000000n).since('1970-01-01T00:00:00Z').toString()");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"toString()", "toJSON()", "toString()", "toString({timeZone: 'UTC'})",
-            "toZonedDateTimeISO('UTC').toString()"})
-    void testStringConversions(String operation) {
-        assertStringWithJavet("new Temporal.Instant(0n)." + operation);
+    @Test
+    void testStringConversions() {
+        assertStringWithJavet("new Temporal.Instant(0n).toString()", "new Temporal.Instant(0n).toJSON()",
+                "new Temporal.Instant(0n).toString()", "new Temporal.Instant(0n).toString({timeZone: 'UTC'})",
+                "new Temporal.Instant(0n).toZonedDateTimeISO('UTC').toString()");
     }
 
     @Test

@@ -16,72 +16,77 @@
 
 package com.caoccao.qjs4j.compilation.lexer;
 
+import com.caoccao.qjs4j.core.JSKeyword;
+
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Enumeration of all JavaScript token types.
  */
 public enum TokenType {
     AND_ASSIGN,
     ARROW,
-    AS(true, true),
+    AS(JSKeyword.AS, true),
     ASSIGN,
-    ASYNC(true, true),
+    ASYNC(JSKeyword.ASYNC, true),
     AT,
-    AWAIT(true, true),
+    AWAIT(JSKeyword.AWAIT, true),
 
     BIGINT,
     BIT_AND,
     BIT_NOT,
     BIT_OR,
     BIT_XOR,
-    BREAK(true),
+    BREAK(JSKeyword.BREAK),
 
-    CASE(true),
-    CATCH(true),
-    CLASS(true),
+    CASE(JSKeyword.CASE),
+    CATCH(JSKeyword.CATCH),
+    CLASS(JSKeyword.CLASS),
     COLON,
     COMMA,
-    CONST(true),
-    CONTINUE(true),
+    CONST(JSKeyword.CONST),
+    CONTINUE(JSKeyword.CONTINUE),
 
     DEC,
-    DEFAULT(true),
-    DELETE(true),
+    DEFAULT(JSKeyword.DEFAULT),
+    DELETE(JSKeyword.DELETE),
     DIV,
     DIV_ASSIGN,
-    DO(true),
+    DO(JSKeyword.DO),
     DOT,
 
     ELLIPSIS,
-    ELSE(true),
+    ELSE(JSKeyword.ELSE),
     EOF,
     EQ,
     EXP,
     EXP_ASSIGN,
-    EXPORT(true),
-    EXTENDS(true),
+    EXPORT(JSKeyword.EXPORT),
+    EXTENDS(JSKeyword.EXTENDS),
 
-    FALSE(true),
-    FINALLY(true),
-    FOR(true),
-    FROM(true, true),
-    FUNCTION(true),
+    FALSE(JSKeyword.FALSE),
+    FINALLY(JSKeyword.FINALLY),
+    FOR(JSKeyword.FOR),
+    FROM(JSKeyword.FROM, true),
+    FUNCTION(JSKeyword.FUNCTION),
 
     GE,
     GT,
 
     HASH,
 
-    IDENTIFIER(true, true),
-    IF(true),
-    IMPORT(true),
-    IN(true),
+    IDENTIFIER(null, true),
+    IF(JSKeyword.IF),
+    IMPORT(JSKeyword.IMPORT),
+    IN(JSKeyword.IN),
     INC,
-    INSTANCEOF(true),
+    INSTANCEOF(JSKeyword.INSTANCEOF),
 
     LBRACE,
     LBRACKET,
     LE,
-    LET(true, true),
+    LET(JSKeyword.LET, true),
     LOGICAL_AND,
     LOGICAL_AND_ASSIGN,
     LOGICAL_OR,
@@ -100,14 +105,14 @@ public enum TokenType {
     MUL_ASSIGN,
 
     NE,
-    NEW(true),
+    NEW(JSKeyword.NEW),
     NOT,
-    NULL(true),
+    NULL(JSKeyword.NULL),
     NULLISH_ASSIGN,
     NULLISH_COALESCING,
     NUMBER,
 
-    OF(true, true),
+    OF(JSKeyword.OF, true),
     OPTIONAL_CHAINING,
     OR_ASSIGN,
 
@@ -121,7 +126,7 @@ public enum TokenType {
     RBRACE,
     RBRACKET,
     REGEX,
-    RETURN(true),
+    RETURN(JSKeyword.RETURN),
     RPAREN,
     RSHIFT,
     RSHIFT_ASSIGN,
@@ -130,42 +135,53 @@ public enum TokenType {
     STRICT_EQ,
     STRICT_NE,
     STRING,
-    SUPER(true),
-    SWITCH(true),
+    SUPER(JSKeyword.SUPER),
+    SWITCH(JSKeyword.SWITCH),
 
     TEMPLATE,
-    THIS(true),
-    THROW(true),
-    TRUE(true),
-    TRY(true),
-    TYPEOF(true),
+    THIS(JSKeyword.THIS),
+    THROW(JSKeyword.THROW),
+    TRUE(JSKeyword.TRUE),
+    TRY(JSKeyword.TRY),
+    TYPEOF(JSKeyword.TYPEOF),
 
     URSHIFT,
     URSHIFT_ASSIGN,
 
-    VAR(true),
-    VOID(true),
+    VAR(JSKeyword.VAR),
+    VOID(JSKeyword.VOID),
 
-    WHILE(true),
+    WHILE(JSKeyword.WHILE),
 
     XOR_ASSIGN,
 
-    YIELD(true, true);
+    YIELD(JSKeyword.YIELD, true);
 
+    private static final Map<String, TokenType> KEYWORDS = new HashMap<>();
+    static {
+        for (TokenType type : values()) {
+            if (type.keyword != null) {
+                KEYWORDS.put(type.keyword, type);
+            }
+        }
+    }
     private final boolean identifierCandidate;
     private final boolean identifierName;
 
+    private final String keyword;
+
     TokenType() {
-        this(false);
+        this(null, false);
     }
 
-    TokenType(boolean identifierName) {
-        this(identifierName, false);
+    TokenType(String keyword) {
+        this(keyword, false);
     }
 
-    TokenType(boolean identifierName, boolean identifierCandidate) {
+    TokenType(String keyword, boolean identifierCandidate) {
         this.identifierCandidate = identifierCandidate;
-        this.identifierName = identifierName;
+        this.keyword = keyword;
+        this.identifierName = keyword != null || identifierCandidate;
     }
 
     /** A token that can start a label or an async arrow parameter, subject to contextual restrictions. */
@@ -175,5 +191,9 @@ public enum TokenType {
 
     public boolean isIdentifierName() {
         return identifierName;
+    }
+
+    static TokenType keywordOrIdentifier(String value) {
+        return KEYWORDS.getOrDefault(value, IDENTIFIER);
     }
 }

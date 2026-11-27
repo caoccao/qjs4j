@@ -33,15 +33,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * English AM/PM was preceded by U+202F, which V8 replaces with an ordinary space.
  */
 public class IntlFormatParityTest extends BaseJavetTest {
-    private static final String DATE_FORMAT = """
-            const date = new Date(Date.UTC(2024, 2, 5, 13, 4, 5));
-            const format = (locale, options) =>
-              new Intl.DateTimeFormat(locale, { timeZone: 'UTC', ...options }).format(date);
-            """;
 
     @Test
     public void testDateTimeFormatAtTimeGlue() {
-        assertStringWithJavet(DATE_FORMAT + """
+        assertStringWithJavet("""
+                const date = new Date(Date.UTC(2024, 2, 5, 13, 4, 5));
+                const format = (locale, options) =>
+                  new Intl.DateTimeFormat(locale, { timeZone: 'UTC', ...options }).format(date);
                 [
                   format('en', { dateStyle: 'full', timeStyle: 'long' }),
                   format('en', { dateStyle: 'long', timeStyle: 'short' }),
@@ -66,7 +64,10 @@ public class IntlFormatParityTest extends BaseJavetTest {
     @Test
     public void testDateTimeFormatComponentPatternsFollowCldrSkeletons() {
         // The CLDR skeleton lookup is JDK 19+ API; JDK 17 and 18 keep deriving component patterns from the date styles.
-        assertStringWithJavet(DATE_FORMAT + """
+        assertStringWithJavet("""
+                const date = new Date(Date.UTC(2024, 2, 5, 13, 4, 5));
+                const format = (locale, options) =>
+                  new Intl.DateTimeFormat(locale, { timeZone: 'UTC', ...options }).format(date);
                 [
                   format('en-GB', {}), format('fr', {}), format('ru', {}), format('en-CA', {}),
                   format('hu', {}), format('de', {}), format('ja', {}),
@@ -85,15 +86,24 @@ public class IntlFormatParityTest extends BaseJavetTest {
                 ].join('\\n')""");
         // Other calendars, and skeletons the JDK cannot resolve ("yd"), keep the style-derived patterns. Neither
         // matches V8 exactly, so only the fields are checked.
-        assertBooleanWithJavet(DATE_FORMAT + """
+        assertBooleanWithJavet("""
+                const date = new Date(Date.UTC(2024, 2, 5, 13, 4, 5));
+                const format = (locale, options) =>
+                  new Intl.DateTimeFormat(locale, { timeZone: 'UTC', ...options }).format(date);
                 format('en', { calendar: 'buddhist', year: 'numeric', month: 'numeric', day: 'numeric' })
-                  .startsWith('3/5/2567')""", DATE_FORMAT + """
+                  .startsWith('3/5/2567')""", """
+                const date = new Date(Date.UTC(2024, 2, 5, 13, 4, 5));
+                const format = (locale, options) =>
+                  new Intl.DateTimeFormat(locale, { timeZone: 'UTC', ...options }).format(date);
                 /5.*2024|2024.*5/.test(format('en', { year: 'numeric', day: 'numeric' }))""");
     }
 
     @Test
     public void testDateTimeFormatEraWidths() {
-        assertStringWithJavet(DATE_FORMAT + """
+        assertStringWithJavet("""
+                const date = new Date(Date.UTC(2024, 2, 5, 13, 4, 5));
+                const format = (locale, options) =>
+                  new Intl.DateTimeFormat(locale, { timeZone: 'UTC', ...options }).format(date);
                 const bc = (era) =>
                   new Intl.DateTimeFormat('en', { timeZone: 'UTC', era, year: 'numeric' }).format(Date.UTC(-100, 0, 1));
                 [
@@ -106,7 +116,10 @@ public class IntlFormatParityTest extends BaseJavetTest {
 
     @Test
     public void testDateTimeFormatFormatsWeekdayAlone() {
-        assertStringWithJavet(DATE_FORMAT + """
+        assertStringWithJavet("""
+                const date = new Date(Date.UTC(2024, 2, 5, 13, 4, 5));
+                const format = (locale, options) =>
+                  new Intl.DateTimeFormat(locale, { timeZone: 'UTC', ...options }).format(date);
                 [
                   format('en', { weekday: 'long' }),
                   format('en', { weekday: 'short' }),
@@ -116,7 +129,10 @@ public class IntlFormatParityTest extends BaseJavetTest {
 
     @Test
     public void testDateTimeFormatUsesOrdinarySpaceBeforeDayPeriod() {
-        assertStringWithJavet(DATE_FORMAT + """
+        assertStringWithJavet("""
+                const date = new Date(Date.UTC(2024, 2, 5, 13, 4, 5));
+                const format = (locale, options) =>
+                  new Intl.DateTimeFormat(locale, { timeZone: 'UTC', ...options }).format(date);
                 [
                   format('en', { hour: 'numeric', minute: 'numeric' }),
                   format('en', { timeStyle: 'short' }),

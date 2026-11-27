@@ -85,8 +85,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
             }
             if (compilerContext.scopeManager.currentScope().getLocal(variableName) == null) {
                 int localIndex = compilerContext.scopeManager.currentScope().declareLocal(variableName);
-                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                compilerContext.emitter.emitPutLocal(localIndex);
+                compilerContext.emitter.emitUndefinedLocal(localIndex);
             }
         }
 
@@ -187,8 +186,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
                     if (localIndex == null) {
                         localIndex = compilerContext.scopeManager.currentScope().declareLocal(varName);
                     }
-                    compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                    compilerContext.emitter.emitPutLocal(localIndex);
+                    compilerContext.emitter.emitUndefinedLocal(localIndex);
                 } else {
                     compilerContext.emitHelpers.emitConditionalVarInit(varName);
                 }
@@ -220,8 +218,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
             // Every expression statement stores its result here (like QuickJS's eval_ret_idx).
             int evalRetLocalIndex = compilerContext.scopeManager.currentScope().declareLocal("#eval_ret");
             compilerContext.evalReturnLocalIndex = evalRetLocalIndex;
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitPutLocal(evalRetLocalIndex);
+            compilerContext.emitter.emitUndefinedLocal(evalRetLocalIndex);
 
             // Phase 2: Compile all non-FunctionDeclaration statements in source order.
             for (int i = 0; i < body.size(); i++) {

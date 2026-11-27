@@ -29,7 +29,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * appending in both directions — against V8; the unit cases pin the representation itself.
  */
 public class JSStringRopeTest extends BaseJavetTest {
-    private static final String LONG = "'0123456789'.repeat(30)";
 
     @Test
     public void testAppendingAShortStringRebuildsTheLastLeaf() {
@@ -53,7 +52,7 @@ public class JSStringRopeTest extends BaseJavetTest {
                 "var s = ''; var t = ''; for (var i = 0; i < 2000; i++) { s += 'ab'; t += s.charAt(i) } t.slice(-8)",
                 "var s = 'a'; for (var i = 0; i < 12; i++) { s = s + s } s.length + ':' + s.indexOf('b')",
                 "var s = ''; for (var i = 0; i < 1000; i++) { s += `${i},` } s.split(',').length + ''",
-                "var s = " + LONG + "; s += 'tail'; s.length + ':' + s.at(-1) + ':' + s[0]");
+                "var s = '0123456789'.repeat(30); s += 'tail'; s.length + ':' + s.at(-1) + ':' + s[0]");
     }
 
     @Test
@@ -121,8 +120,8 @@ public class JSStringRopeTest extends BaseJavetTest {
             assertThat(string.isRope()).isTrue();
             assertThat(string.length()).isEqualTo(1000);
         });
-        assertIntegerWithJavet("'abc'.length", "var s = 'abc'; s.length", "var s = " + LONG + " + 'x'; s.length",
-                "var s = ''; s.length", "String.prototype.length");
+        assertIntegerWithJavet("'abc'.length", "var s = 'abc'; s.length",
+                "var s = '0123456789'.repeat(30) + 'x'; s.length", "var s = ''; s.length", "String.prototype.length");
         assertErrorWithJavet("var s = 'abc'; s.length()");
         assertStringWithJavet("var s = 'abc'; typeof s.length",
                 "'use strict'; var s = 'abc'; try { s.length = 1; 'no' } catch (e) { e.constructor.name }");
@@ -130,15 +129,23 @@ public class JSStringRopeTest extends BaseJavetTest {
 
     @Test
     public void testRopesAreUsableEverywhereAStringIs() {
-        String rope = "var r = " + LONG + " + " + LONG + "; ";
-        assertBooleanWithJavet(rope + "r === '0123456789'.repeat(60)", rope + "r == '0123456789'.repeat(60)",
-                rope + "r < r + 'a'", rope + "Object.is(r, '0123456789'.repeat(60))",
-                rope + "new Set([r]).has('0123456789'.repeat(60))",
-                rope + "var o = {}; o[r] = 1; o['0123456789'.repeat(60)] === 1",
-                rope + "new Map([[r, 1]]).get('0123456789'.repeat(60)) === 1", rope + "/9012$/.test(r)",
-                rope + "r.startsWith('0123') && r.endsWith('6789')");
-        assertStringWithJavet(rope + "JSON.stringify(r).length + ''", rope + "r.toUpperCase().slice(0, 3)",
-                rope + "typeof r", rope + "[...r].length + ''", rope + "r.replace('0', '_').slice(0, 2)",
-                rope + "new String(r).length + ''", rope + "String(r.length)");
+        assertBooleanWithJavet(
+                "var r = '0123456789'.repeat(30) + '0123456789'.repeat(30); r === '0123456789'.repeat(60)",
+                "var r = '0123456789'.repeat(30) + '0123456789'.repeat(30); r == '0123456789'.repeat(60)",
+                "var r = '0123456789'.repeat(30) + '0123456789'.repeat(30); r < r + 'a'",
+                "var r = '0123456789'.repeat(30) + '0123456789'.repeat(30); Object.is(r, '0123456789'.repeat(60))",
+                "var r = '0123456789'.repeat(30) + '0123456789'.repeat(30); new Set([r]).has('0123456789'.repeat(60))",
+                "var r = '0123456789'.repeat(30) + '0123456789'.repeat(30); var o = {}; o[r] = 1; o['0123456789'.repeat(60)] === 1",
+                "var r = '0123456789'.repeat(30) + '0123456789'.repeat(30); new Map([[r, 1]]).get('0123456789'.repeat(60)) === 1",
+                "var r = '0123456789'.repeat(30) + '0123456789'.repeat(30); /9012$/.test(r)",
+                "var r = '0123456789'.repeat(30) + '0123456789'.repeat(30); r.startsWith('0123') && r.endsWith('6789')");
+        assertStringWithJavet(
+                "var r = '0123456789'.repeat(30) + '0123456789'.repeat(30); JSON.stringify(r).length + ''",
+                "var r = '0123456789'.repeat(30) + '0123456789'.repeat(30); r.toUpperCase().slice(0, 3)",
+                "var r = '0123456789'.repeat(30) + '0123456789'.repeat(30); typeof r",
+                "var r = '0123456789'.repeat(30) + '0123456789'.repeat(30); [...r].length + ''",
+                "var r = '0123456789'.repeat(30) + '0123456789'.repeat(30); r.replace('0', '_').slice(0, 2)",
+                "var r = '0123456789'.repeat(30) + '0123456789'.repeat(30); new String(r).length + ''",
+                "var r = '0123456789'.repeat(30) + '0123456789'.repeat(30); String(r.length)");
     }
 }

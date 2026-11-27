@@ -135,8 +135,7 @@ final class BindingOpcodes {
 
     static void handleDeleteVar(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
-        String variableName = executionContext.bytecode.getAtoms()[atomIndex];
+        String variableName = executionContext.bytecode.readAtom(pc + 1);
         boolean deleted;
         JSContext context = executionContext.virtualMachine.context;
         StackFrame dynamicBindingFrame = findDynamicVarBindingFrame(executionContext, variableName);
@@ -263,7 +262,7 @@ final class BindingOpcodes {
         int pc = executionContext.pc;
         int atomIndex = executionContext.bytecode.readU32(pc + 1);
         int refIndex = executionContext.bytecode.readU16(pc + 5);
-        String atomName = executionContext.bytecode.getAtoms()[atomIndex];
+        String atomName = executionContext.bytecode.getAtom(atomIndex);
         JSObject referenceObject = executionContext.virtualMachine.createReferenceObject(op, refIndex, atomName);
         executionContext.push(referenceObject);
         executionContext.push(new JSString(atomName));
@@ -272,8 +271,7 @@ final class BindingOpcodes {
 
     static void handleMakeVarRef(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
-        String atomName = executionContext.bytecode.getAtoms()[atomIndex];
+        String atomName = executionContext.bytecode.readAtom(pc + 1);
         JSContext context = executionContext.virtualMachine.context;
         PropertyKey key = PropertyKey.fromString(atomName);
         JSValue baseObject;

@@ -31,96 +31,104 @@ public class DisposableStackTest extends BaseJavetTest {
 
     @Test
     public void testDeferOnDisposedStackThrows() {
-        assertErrorWithJavet(inArrowFunction("""
-                  const stack = new DisposableStack();
-                  stack.dispose();
-                  stack.defer(() => {});
-                """));
+        assertErrorWithJavet("""
+                (() => {
+                    const stack = new DisposableStack();
+                    stack.dispose();
+                    stack.defer(() => {});
+                })()""");
     }
 
     @Test
     public void testDisposeIsIdempotent() {
-        assertIntegerWithJavet(inArrowFunction("""
-                  const stack = new DisposableStack();
-                  let count = 0;
-                  stack.defer(() => { count++; });
-                  stack.dispose();
-                  stack.dispose();
-                  return count;
-                """));
+        assertIntegerWithJavet("""
+                (() => {
+                    const stack = new DisposableStack();
+                    let count = 0;
+                    stack.defer(() => { count++; });
+                    stack.dispose();
+                    stack.dispose();
+                    return count;
+                })()""");
     }
 
     @Test
     public void testMoveTransfersResources() {
-        assertStringWithJavet(inArrowFunction("""
-                  const log = [];
-                  const stack1 = new DisposableStack();
-                  stack1.defer(() => { log.push(1); });
-                  const stack2 = stack1.move();
-                  stack2.dispose();
-                  return stack1.disposed + "|" + stack2.disposed + "|" + JSON.stringify(log);
-                """));
+        assertStringWithJavet("""
+                (() => {
+                    const log = [];
+                    const stack1 = new DisposableStack();
+                    stack1.defer(() => { log.push(1); });
+                    const stack2 = stack1.move();
+                    stack2.dispose();
+                    return stack1.disposed + "|" + stack2.disposed + "|" + JSON.stringify(log);
+                })()""");
     }
 
     @Test
     public void testSuppressedErrorChaining() {
-        assertStringWithJavet(inArrowFunction("""
-                  const stack = new DisposableStack();
-                  stack.defer(() => { throw new Error("first"); });
-                  stack.defer(() => { throw new Error("second"); });
-                  try {
-                      stack.dispose();
-                      return "false";
-                  } catch (e) {
-                      return String(
-                          e.name === "SuppressedError"
-                          && e.error.message.includes("first")
-                          && e.suppressed.message.includes("second")
-                      );
-                  }
-                """));
+        assertStringWithJavet("""
+                (() => {
+                    const stack = new DisposableStack();
+                    stack.defer(() => { throw new Error("first"); });
+                    stack.defer(() => { throw new Error("second"); });
+                    try {
+                        stack.dispose();
+                        return "false";
+                    } catch (e) {
+                        return String(
+                            e.name === "SuppressedError"
+                            && e.error.message.includes("first")
+                            && e.suppressed.message.includes("second")
+                        );
+                    }
+                })()""");
     }
 
     @Test
     public void testSymbolDisposeAlias() {
-        assertStringWithJavet(inArrowFunction("""
-                  const log = [];
-                  const stack = new DisposableStack();
-                  stack.defer(() => { log.push("x"); });
-                  stack[Symbol.dispose]();
-                  return JSON.stringify(log) + "|" + String(stack.disposed);
-                """));
+        assertStringWithJavet("""
+                (() => {
+                    const log = [];
+                    const stack = new DisposableStack();
+                    stack.defer(() => { log.push("x"); });
+                    stack[Symbol.dispose]();
+                    return JSON.stringify(log) + "|" + String(stack.disposed);
+                })()""");
     }
 
     @Test
     public void testUseAdoptDeferLifoOrder() {
-        assertStringWithJavet(inArrowFunction("""
-                  const log = [];
-                  const stack = new DisposableStack();
-                  const a = { [Symbol.dispose]() { log.push("a"); } };
-                  const b = { [Symbol.dispose]() { log.push("b"); } };
-                  stack.use(a);
-                  stack.adopt("x", (value) => { log.push(value); });
-                  stack.defer(() => { log.push("d"); });
-                  stack.use(b);
-                  stack.dispose();
-                  return JSON.stringify(log);
-                """));
+        assertStringWithJavet("""
+                (() => {
+                    const log = [];
+                    const stack = new DisposableStack();
+                    const a = { [Symbol.dispose]() { log.push("a"); } };
+                    const b = { [Symbol.dispose]() { log.push("b"); } };
+                    stack.use(a);
+                    stack.adopt("x", (value) => { log.push(value); });
+                    stack.defer(() => { log.push("d"); });
+                    stack.use(b);
+                    stack.dispose();
+                    return JSON.stringify(log);
+                })()""");
     }
 
     @Test
     public void testUseNonDisposableThrows() {
-        assertErrorWithJavet(inArrowFunction("""
-                  const stack = new DisposableStack();
-                  stack.use(1);
-                """));
+        assertErrorWithJavet("""
+                (() => {
+                    const stack = new DisposableStack();
+                    stack.use(1);
+                })()""");
     }
 
     @Test
     public void testUseNullAndUndefined() {
-        assertBooleanWithJavet(inArrowFunction("""
-                  const stack = new DisposableStack();
-                  return stack.use(null) === null && stack.use(undefined) === undefined;
-                """));
+        assertBooleanWithJavet("""
+                (() => {
+                    const stack = new DisposableStack();
+                    return stack.use(null) === null && stack.use(undefined) === undefined;
+                })()""");
     }
 }

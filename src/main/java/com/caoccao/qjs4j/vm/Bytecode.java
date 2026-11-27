@@ -194,6 +194,11 @@ public final class Bytecode {
         return sourcePositions;
     }
 
+    /** Decode a four-byte atom-pool index and resolve the name at that operand. */
+    String readAtom(int offset) {
+        return getAtom(readU32(offset));
+    }
+
     public int readI32(int offset) {
         return readU32(offset);
     }

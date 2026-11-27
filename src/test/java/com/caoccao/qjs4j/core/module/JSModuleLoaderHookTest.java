@@ -92,8 +92,12 @@ public class JSModuleLoaderHookTest extends ModuleFileTest {
             assertThat(requests).contains("resolve ./dep.mjs", "load /virtual/dep.mjs", "resolve ./data.json",
                     "load /virtual/data.json", "load /virtual/note.txt", "load /virtual/raw.bin");
 
-            assertThat(evalAndSettle(moduleContext, outcomeOf("import('./note.txt', { with: { type: 'text' } })"),
-                    "/virtual/dynamic.mjs")).isEqualTo("resolved:hello");
+            assertThat(evalAndSettle(moduleContext, """
+                    globalThis.result = 'pending';
+                    import('./note.txt', { with: { type: 'text' } }).then(
+                      m => { globalThis.result = 'resolved:' + String(m.default); },
+                      e => { globalThis.result = 'rejected:' + e.name + ': ' + e.message; });
+                    """, "/virtual/dynamic.mjs")).isEqualTo("resolved:hello");
             // Deferred imports read their module, its dependencies and their payloads through the hook too.
             assertThat(evalAndSettle(moduleContext, """
                     import defer * as lazy from './lazy.mjs';
@@ -102,7 +106,12 @@ public class JSModuleLoaderHookTest extends ModuleFileTest {
                     """, "/virtual/deferred.mjs")).isEqualTo("11,2");
             assertThat(requests).contains("load /virtual/lazy.mjs", "load /virtual/child.mjs",
                     "load /virtual/lazy.bin");
-            assertThat(evalAndSettle(moduleContext, outcomeOf("import('./absent.mjs')"), "/virtual/absent-main.mjs"))
+            assertThat(evalAndSettle(moduleContext, """
+                    globalThis.result = 'pending';
+                    import('./absent.mjs').then(
+                      m => { globalThis.result = 'resolved:' + String(m.default); },
+                      e => { globalThis.result = 'rejected:' + e.name + ': ' + e.message; });
+                    """, "/virtual/absent-main.mjs"))
                     .isEqualTo("rejected:TypeError: Cannot find module './absent.mjs'");
         }
     }
@@ -112,20 +121,25 @@ public class JSModuleLoaderHookTest extends ModuleFileTest {
         // The review's reproduction: a default runtime handed out any readable file.
         Path secret = outsideDirectory.resolve("secret.txt");
         Files.writeString(secret, "TOP SECRET");
-        String secretPath = secret.toString().replace("\\", "\\\\");
         try (JSRuntime runtime = new JSRuntime(); JSContext moduleContext = runtime.createContext()) {
-            assertThat(
-                    evalAndSettle(moduleContext, outcomeOf("import('" + secretPath + "', { with: { type: 'text' } })"),
-                            moduleDirectory.resolve("text.mjs").toString()))
+            moduleContext.getGlobalObject().set("secretPath", new JSString(secret.toString()));
+            assertThat(evalAndSettle(moduleContext, """
+                    globalThis.result = 'pending';
+                    import(globalThis.secretPath, { with: { type: 'text' } }).then(
+                      m => { globalThis.result = 'resolved:' + String(m.default); },
+                      e => { globalThis.result = 'rejected:' + e.name + ': ' + e.message; });
+                    """, moduleDirectory.resolve("text.mjs").toString()))
                     .isEqualTo("rejected:TypeError: Cannot find module '" + secret + "'");
-            assertThat(
-                    evalAndSettle(moduleContext, outcomeOf("import('" + secretPath + "', { with: { type: 'bytes' } })"),
-                            moduleDirectory.resolve("bytes.mjs").toString()))
+            assertThat(evalAndSettle(moduleContext, """
+                    globalThis.result = 'pending';
+                    import(globalThis.secretPath, { with: { type: 'bytes' } }).then(
+                      m => { globalThis.result = 'resolved:' + String(m.default); },
+                      e => { globalThis.result = 'rejected:' + e.name + ': ' + e.message; });
+                    """, moduleDirectory.resolve("bytes.mjs").toString()))
                     .isEqualTo("rejected:TypeError: Cannot find module '" + secret + "'");
-            assertThatThrownBy(() -> moduleContext.eval("import s from '" + secretPath + "' with { type: 'text' };",
-                    moduleDirectory.resolve("static.mjs").toString(), true))
-                    .isInstanceOfSatisfying(JSException.class, e -> assertThat(e.getMessage())
-                            .isEqualTo("TypeError: Cannot find module '" + secret + "'"));
+            assertThatThrownBy(() -> moduleContext.eval("import s from './secret.txt' with { type: 'text' };",
+                    outsideDirectory.resolve("static.mjs").toString(), true)).isInstanceOfSatisfying(JSException.class,
+                            e -> assertThat(e.getMessage()).isEqualTo("TypeError: Cannot find module './secret.txt'"));
             // A module whose source is handed to eval still runs: only loading is refused.
             assertThat(moduleContext.eval("const v = await 1; String(v + 1);", "entry.mjs", true).toString())
                     .isEqualTo("2");
@@ -212,12 +226,19 @@ public class JSModuleLoaderHookTest extends ModuleFileTest {
 
         try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setModuleLoader(loader));
                 JSContext moduleContext = runtime.createContext()) {
-            assertThat(evalAndSettle(moduleContext, outcomeOf("import('./inside.mjs')"), referrer))
-                    .isEqualTo("resolved:inside");
-            String outsidePath = outside.toString().replace("\\", "\\\\");
-            assertThat(evalAndSettle(moduleContext,
-                    outcomeOf("import('" + outsidePath + "', { with: { type: 'text' } })"), referrer))
-                    .isEqualTo("rejected:TypeError: Cannot find module '" + outside + "'");
+            assertThat(evalAndSettle(moduleContext, """
+                    globalThis.result = 'pending';
+                    import('./inside.mjs').then(
+                      m => { globalThis.result = 'resolved:' + String(m.default); },
+                      e => { globalThis.result = 'rejected:' + e.name + ': ' + e.message; });
+                    """, referrer)).isEqualTo("resolved:inside");
+            moduleContext.getGlobalObject().set("outsidePath", new JSString(outside.toString()));
+            assertThat(evalAndSettle(moduleContext, """
+                    globalThis.result = 'pending';
+                    import(globalThis.outsidePath, { with: { type: 'text' } }).then(
+                      m => { globalThis.result = 'resolved:' + String(m.default); },
+                      e => { globalThis.result = 'rejected:' + e.name + ': ' + e.message; });
+                    """, referrer)).isEqualTo("rejected:TypeError: Cannot find module '" + outside + "'");
         }
     }
 
@@ -306,16 +327,16 @@ public class JSModuleLoaderHookTest extends ModuleFileTest {
     public void testShadowRealmImportValueGoesThroughTheLoader() throws IOException {
         Path module = moduleDirectory.resolve("realm-module.js");
         Files.writeString(module, "export var answer = 42;\n");
-        String modulePath = module.toString().replace("\\", "\\\\");
         String script = """
                 globalThis.result = 'pending';
-                new ShadowRealm().importValue('%s', 'answer').then(
+                new ShadowRealm().importValue(globalThis.modulePath, 'answer').then(
                   v => { globalThis.result = 'resolved:' + v; },
                   e => { globalThis.result = 'rejected:' + e.name + ': ' + e.message; });
-                """.formatted(modulePath);
+                """;
         try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setShadowRealmEnabled(true)
                 .setModuleLoader(new JSFileSystemModuleLoader(moduleDirectory)));
                 JSContext realmContext = runtime.createContext()) {
+            realmContext.getGlobalObject().set("modulePath", new JSString(module.toString()));
             realmContext.eval(script, "realm.js", false);
             realmContext.processMicrotasks();
             assertThat(realmContext.eval("globalThis.result").toString()).isEqualTo("resolved:42");
@@ -333,6 +354,7 @@ public class JSModuleLoaderHookTest extends ModuleFileTest {
         }
         try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setShadowRealmEnabled(true));
                 JSContext realmContext = runtime.createContext()) {
+            realmContext.getGlobalObject().set("modulePath", new JSString(module.toString()));
             realmContext.eval(script, "realm.js", false);
             realmContext.processMicrotasks();
             assertThat(realmContext.eval("globalThis.result").toString())
@@ -346,12 +368,4 @@ public class JSModuleLoaderHookTest extends ModuleFileTest {
         return moduleContext.eval("globalThis.result").toString();
     }
 
-    private static String outcomeOf(String importExpression) {
-        return """
-                globalThis.result = 'pending';
-                %s.then(
-                  m => { globalThis.result = 'resolved:' + String(m.default); },
-                  e => { globalThis.result = 'rejected:' + e.name + ': ' + e.message; });
-                """.formatted(importExpression);
-    }
 }

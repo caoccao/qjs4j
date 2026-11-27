@@ -16,30 +16,18 @@
 
 package com.caoccao.qjs4j.regexp;
 
-import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.*;
 
-public class RegExpEngineTest extends BaseJavetTest {
+public class RegExpEngineTest extends RegExpTestBase {
     private RegExpEngine.MatchResult assertMatch(RegExpEngine engine, String input, int start, String expected) {
         RegExpEngine.MatchResult result = engine.exec(input, start);
         assertThat(result).isNotNull();
         assertThat(result.matched()).isTrue();
         assertThat(result.getMatch()).isEqualTo(expected);
         return result;
-    }
-
-    private RegExpEngine compilePattern(String pattern, String flags) {
-        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
-        return new RegExpEngine(compiler.compile(pattern, flags));
-    }
-
-    private boolean matches(String pattern, String flags, String input) {
-        RegExpEngine engine = compilePattern(pattern, flags);
-        RegExpEngine.MatchResult result = engine.exec(input, 0);
-        return result != null && result.matched();
     }
 
     @Test
@@ -134,11 +122,11 @@ public class RegExpEngineTest extends BaseJavetTest {
 
     @Test
     public void testLookbehindAssertionsBasic() {
-        assertThat(matches("(?<=a)b", "", "ab")).isTrue();
-        assertThat(matches("(?<=a)b", "", "cb")).isFalse();
-        assertThat(matches("(?<!a)b", "", "cb")).isTrue();
-        assertThat(matches("(?<!a)b", "", "ab")).isFalse();
-        assertThat(matches("(?<!a)b", "", "b")).isTrue();
+        assertMatches("(?<=a)b", "", "ab");
+        assertDoesNotMatch("(?<=a)b", "", "cb");
+        assertMatches("(?<!a)b", "", "cb");
+        assertDoesNotMatch("(?<!a)b", "", "ab");
+        assertMatches("(?<!a)b", "", "b");
     }
 
     @Test
@@ -147,7 +135,7 @@ public class RegExpEngineTest extends BaseJavetTest {
         RegExpEngine.MatchResult result = assertMatch(engine, "ab", 0, "b");
         assertThat(result.getCapture(1)).isEqualTo("a");
 
-        assertThat(matches("(?<=(a))\\1", "", "aa")).isTrue();
+        assertMatches("(?<=(a))\\1", "", "aa");
     }
 
     @Test
@@ -166,10 +154,10 @@ public class RegExpEngineTest extends BaseJavetTest {
 
     @Test
     public void testLookbehindAssertionsVariableLength() {
-        assertThat(matches("(?<=a*)b", "", "aaab")).isTrue();
-        assertThat(matches("(?<=a{2,3})b", "", "aaab")).isTrue();
-        assertThat(matches("(?<=a{2,3})b", "", "ab")).isFalse();
-        assertThat(matches("(?<=a)b+", "", "abbb")).isTrue();
+        assertMatches("(?<=a*)b", "", "aaab");
+        assertMatches("(?<=a{2,3})b", "", "aaab");
+        assertDoesNotMatch("(?<=a{2,3})b", "", "ab");
+        assertMatches("(?<=a)b+", "", "abbb");
     }
 
     @Test
@@ -280,45 +268,45 @@ public class RegExpEngineTest extends BaseJavetTest {
     @Test
     public void testOptionalGroupWithAlternationInStarLoop() {
         // Basic: alternation without star, without optional
-        assertThat(matches("^(a|b)$", "", "a")).as("basic alt a").isTrue();
-        assertThat(matches("^(a|b)$", "", "b")).as("basic alt b").isTrue();
+        assertThat(patternMatches("^(a|b)$", "", "a")).as("basic alt a").isTrue();
+        assertThat(patternMatches("^(a|b)$", "", "b")).as("basic alt b").isTrue();
 
         // Optional alternation (no star)
-        assertThat(matches("^(a|b)?$", "", "")).as("opt alt empty").isTrue();
-        assertThat(matches("^(a|b)?$", "", "a")).as("opt alt a").isTrue();
+        assertThat(patternMatches("^(a|b)?$", "", "")).as("opt alt empty").isTrue();
+        assertThat(patternMatches("^(a|b)?$", "", "a")).as("opt alt a").isTrue();
 
         // Star without alternation
-        assertThat(matches("^(x)?$", "", "")).as("opt x empty").isTrue();
-        assertThat(matches("^(xa?)*$", "", "x")).as("star xa? x").isTrue();
-        assertThat(matches("^(xa?)*$", "", "xa")).as("star xa? xa").isTrue();
+        assertThat(patternMatches("^(x)?$", "", "")).as("opt x empty").isTrue();
+        assertThat(patternMatches("^(xa?)*$", "", "x")).as("star xa? x").isTrue();
+        assertThat(patternMatches("^(xa?)*$", "", "xa")).as("star xa? xa").isTrue();
 
         // Non-capturing optional alternation in star - simplest case
-        assertThat(matches("^(?:a|b)*$", "", "a")).as("nc star alt a").isTrue();
-        assertThat(matches("^(?:a|b)+$", "", "a")).as("nc plus alt a").isTrue();
+        assertThat(patternMatches("^(?:a|b)*$", "", "a")).as("nc star alt a").isTrue();
+        assertThat(patternMatches("^(?:a|b)+$", "", "a")).as("nc plus alt a").isTrue();
 
         // Optional alternation - no star
-        assertThat(matches("^x(?:a|b)?$", "", "x")).as("nc x opt alt").isTrue();
-        assertThat(matches("^x(?:a|b)?$", "", "xa")).as("nc xa opt alt").isTrue();
+        assertThat(patternMatches("^x(?:a|b)?$", "", "x")).as("nc x opt alt").isTrue();
+        assertThat(patternMatches("^x(?:a|b)?$", "", "xa")).as("nc xa opt alt").isTrue();
 
         // Star of simple optional
-        assertThat(matches("^(?:xa?)*$", "", "x")).as("nc star xa?").isTrue();
+        assertThat(patternMatches("^(?:xa?)*$", "", "x")).as("nc star xa?").isTrue();
 
         // Star of alternation without optional
-        assertThat(matches("^(?:x(?:a|b))*$", "", "xa")).as("nc star x-alt xa").isTrue();
+        assertThat(patternMatches("^(?:x(?:a|b))*$", "", "xa")).as("nc star x-alt xa").isTrue();
 
         // Now the previously-failing combo: optional alternation in star
-        assertThat(matches("^(?:x(?:a|b)?)*$", "", "x")).as("nc star x opt-alt x").isTrue();
-        assertThat(matches("^(?:x(?:a|b)?)*$", "", "xa")).as("nc star x opt-alt xa").isTrue();
+        assertThat(patternMatches("^(?:x(?:a|b)?)*$", "", "x")).as("nc star x opt-alt x").isTrue();
+        assertThat(patternMatches("^(?:x(?:a|b)?)*$", "", "xa")).as("nc star x opt-alt xa").isTrue();
 
         // Capturing optional alternation in star
-        assertThat(matches("^(x(a|b)?)*$", "", "x")).as("star x matches").isTrue();
-        assertThat(matches("^(x(a|b)?)*$", "", "xa")).as("star xa matches").isTrue();
-        assertThat(matches("^(x(a|b)?)*$", "", "xaxb")).as("star xaxb matches").isTrue();
+        assertThat(patternMatches("^(x(a|b)?)*$", "", "x")).as("star x matches").isTrue();
+        assertThat(patternMatches("^(x(a|b)?)*$", "", "xa")).as("star xa matches").isTrue();
+        assertThat(patternMatches("^(x(a|b)?)*$", "", "xaxb")).as("star xaxb matches").isTrue();
 
         // Original failing patterns from the bug report
-        assertThat(matches("^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$", "i", "ab-t-cd"))
+        assertThat(patternMatches("^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$", "i", "ab-t-cd"))
                 .as("pattern with alternation in star").isTrue();
-        assertThat(matches("^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$", "i", "ab-t-cd-ab"))
+        assertThat(patternMatches("^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$", "i", "ab-t-cd-ab"))
                 .as("pattern with alternation in star, matching alternation").isTrue();
     }
 
@@ -339,45 +327,45 @@ public class RegExpEngineTest extends BaseJavetTest {
 
     @Test
     public void testUnicodePropertyEscapesBasics() {
-        assertThat(matches("\\p{L}", "u", "A")).isTrue();
-        assertThat(matches("\\p{L}", "u", "π")).isTrue();
-        assertThat(matches("\\p{L}", "u", "1")).isFalse();
-        assertThat(matches("\\P{L}", "u", "1")).isTrue();
-        assertThat(matches("\\P{L}", "u", "π")).isFalse();
-        assertThat(matches("\\p{Any}", "u", "😀")).isTrue();
-        assertThat(matches("\\p{Assigned}", "u", "A")).isTrue();
+        assertMatches("\\p{L}", "u", "A");
+        assertMatches("\\p{L}", "u", "π");
+        assertDoesNotMatch("\\p{L}", "u", "1");
+        assertMatches("\\P{L}", "u", "1");
+        assertDoesNotMatch("\\P{L}", "u", "π");
+        assertMatches("\\p{Any}", "u", "😀");
+        assertMatches("\\p{Assigned}", "u", "A");
     }
 
     @Test
     public void testUnicodePropertyEscapesInCharacterClass() {
-        assertThat(matches("^[\\p{L}\\p{Nd}]+$", "u", "Aπ9")).isTrue();
-        assertThat(matches("^[\\P{L}]+$", "u", "123_")).isTrue();
-        assertThat(matches("^[\\P{L}]+$", "u", "123A")).isFalse();
+        assertMatches("^[\\p{L}\\p{Nd}]+$", "u", "Aπ9");
+        assertMatches("^[\\P{L}]+$", "u", "123_");
+        assertDoesNotMatch("^[\\P{L}]+$", "u", "123A");
     }
 
     @Test
     public void testUnicodePropertyEscapesPropertyForms() {
-        assertThat(matches("\\p{gc=Lu}", "u", "A")).isTrue();
-        assertThat(matches("\\p{gc=Lu}", "u", "a")).isFalse();
-        assertThat(matches("\\p{General_Category=Uppercase_Letter}", "u", "A")).isTrue();
-        assertThat(matches("\\p{Script=Greek}", "u", "Ω")).isTrue();
-        assertThat(matches("\\p{Script=Greek}", "u", "A")).isFalse();
-        assertThat(matches("\\p{sc=Grek}", "u", "β")).isTrue();
-        assertThat(matches("\\p{Script_Extensions=Greek}", "u", "π")).isTrue();
-        assertThat(matches("\\p{ASCII}", "u", "A")).isTrue();
-        assertThat(matches("\\p{ASCII}", "u", "π")).isFalse();
-        assertThat(matches("\\p{White_Space}", "u", "\u00A0")).isTrue();
-        assertThat(matches("\\p{ID_Start}", "u", "A")).isTrue();
-        assertThat(matches("\\p{ID_Start}", "u", "1")).isFalse();
-        assertThat(matches("\\p{ID_Continue}", "u", "1")).isTrue();
+        assertMatches("\\p{gc=Lu}", "u", "A");
+        assertDoesNotMatch("\\p{gc=Lu}", "u", "a");
+        assertMatches("\\p{General_Category=Uppercase_Letter}", "u", "A");
+        assertMatches("\\p{Script=Greek}", "u", "Ω");
+        assertDoesNotMatch("\\p{Script=Greek}", "u", "A");
+        assertMatches("\\p{sc=Grek}", "u", "β");
+        assertMatches("\\p{Script_Extensions=Greek}", "u", "π");
+        assertMatches("\\p{ASCII}", "u", "A");
+        assertDoesNotMatch("\\p{ASCII}", "u", "π");
+        assertMatches("\\p{White_Space}", "u", "\u00A0");
+        assertMatches("\\p{ID_Start}", "u", "A");
+        assertDoesNotMatch("\\p{ID_Start}", "u", "1");
+        assertMatches("\\p{ID_Continue}", "u", "1");
     }
 
     @Test
     public void testUnicodePropertyEscapesRequireUnicodeMode() {
-        assertThat(matches("\\p{L}", "", "p{L}")).isTrue();
-        assertThat(matches("\\p{L}", "", "A")).isFalse();
-        assertThat(matches("[\\p{L}]", "", "{")).isTrue();
-        assertThat(matches("\\P{L}", "", "P{L}")).isTrue();
+        assertMatches("\\p{L}", "", "p{L}");
+        assertDoesNotMatch("\\p{L}", "", "A");
+        assertMatches("[\\p{L}]", "", "{");
+        assertMatches("\\P{L}", "", "P{L}");
     }
 
     @Test

@@ -29,8 +29,7 @@ final class SwitchStatementCompiler {
     static void compile(CompilerContext compilerContext, SwitchStatement switchStmt) {
         if (compilerContext.evalReturnLocalIndex >= 0) {
             // Default switch completion value is undefined.
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitUndefinedLocal(compilerContext.evalReturnLocalIndex);
         }
 
         // Compile discriminant

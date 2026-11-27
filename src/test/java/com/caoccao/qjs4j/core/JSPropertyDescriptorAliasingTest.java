@@ -138,22 +138,24 @@ public class JSPropertyDescriptorAliasingTest extends BaseJavetTest {
         // The assignment is caught rather than left to propagate because the Javet harness runs
         // every source twice, once with 'use strict' prepended, and the strict variant throws. Both
         // the message and the resulting length are compared with V8.
-        assertStringWithJavet(inFunction("""
-                const a = [];
-                Object.defineProperty(a, '2147483648', { value: 1, configurable: false });
-                try { a.length = 0 } catch (e) { return e.message + ',' + String(a.length) }
-                return String(a.length);
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  const a = [];
+                  Object.defineProperty(a, '2147483648', { value: 1, configurable: false });
+                  try { a.length = 0 } catch (e) { return e.message + ',' + String(a.length) }
+                  return String(a.length);
+                })()""");
     }
 
     @Test
     public void testObjectGetOwnPropertyDescriptorStillReportsTrueAttributes() {
-        assertStringWithJavet(inFunction("""
-                const o = {};
-                Object.defineProperty(
-                    o, 'a', { value: 1, writable: false, enumerable: true, configurable: false });
-                return JSON.stringify(Object.getOwnPropertyDescriptor(o, 'a'));
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  const o = {};
+                  Object.defineProperty(
+                      o, 'a', { value: 1, writable: false, enumerable: true, configurable: false });
+                  return JSON.stringify(Object.getOwnPropertyDescriptor(o, 'a'));
+                })()""");
     }
 
     @Test

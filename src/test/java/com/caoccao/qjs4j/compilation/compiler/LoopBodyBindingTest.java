@@ -29,54 +29,56 @@ import org.junit.jupiter.api.Test;
 public class LoopBodyBindingTest extends BaseJavetTest {
     @Test
     public void testBindingsInLoopBodies() {
-        assertStringWithJavet(collect("for (let i = 0; i < 3; i++) fs.push(() => i);"),
-                collect("for (let i = 0; i < 3; i++) { const k = i; fs.push(() => k); }"),
-                collect("for (let i = 0; i < 3; i++) { let k = i; fs.push(() => k); }"),
-                collect("let i = 0; while (i < 3) { const k = i++; fs.push(() => k); }"),
-                collect("for (var i = 0; i < 3; i++) { { const k = i; fs.push(() => k); } }"),
-                collect("for (const v of [0, 1, 2]) { const k = v; fs.push(() => k); }"),
-                collect("for (const key in { a: 1, b: 2 }) { const k = key; fs.push(() => k); }"),
-                collect("let i = 0; do { const k = i; fs.push(() => k); } while (++i < 3);"),
-                collect("for (let i = 0; i < 3; i++) { const k = i; fs.push(function () { return k; }); }"),
-                collect("for (let i = 0; i < 3; i++) { const k = i; function f() { return k } fs.push(f); }"),
-                collect("for (let i = 0; i < 3; i++) { switch (i) { default: let k = i; fs.push(() => k); } }"),
-                collect("""
-                        for (let i = 0; i < 3; i++) {
+        assertStringWithJavet(
+                "(() => { const fs = []; for (let i = 0; i < 3; i++) fs.push(() => i); return fs.map(f => f()).join(); })()",
+                "(() => { const fs = []; for (let i = 0; i < 3; i++) { const k = i; fs.push(() => k); } return fs.map(f => f()).join(); })()",
+                "(() => { const fs = []; for (let i = 0; i < 3; i++) { let k = i; fs.push(() => k); } return fs.map(f => f()).join(); })()",
+                "(() => { const fs = []; let i = 0; while (i < 3) { const k = i++; fs.push(() => k); } return fs.map(f => f()).join(); })()",
+                "(() => { const fs = []; for (var i = 0; i < 3; i++) { { const k = i; fs.push(() => k); } } return fs.map(f => f()).join(); })()",
+                "(() => { const fs = []; for (const v of [0, 1, 2]) { const k = v; fs.push(() => k); } return fs.map(f => f()).join(); })()",
+                "(() => { const fs = []; for (const key in { a: 1, b: 2 }) { const k = key; fs.push(() => k); } return fs.map(f => f()).join(); })()",
+                "(() => { const fs = []; let i = 0; do { const k = i; fs.push(() => k); } while (++i < 3); return fs.map(f => f()).join(); })()",
+                "(() => { const fs = []; for (let i = 0; i < 3; i++) { const k = i; fs.push(function () { return k; }); } return fs.map(f => f()).join(); })()",
+                "(() => { const fs = []; for (let i = 0; i < 3; i++) { const k = i; function f() { return k } fs.push(f); } return fs.map(f => f()).join(); })()",
+                "(() => { const fs = []; for (let i = 0; i < 3; i++) { switch (i) { default: let k = i; fs.push(() => k); } } return fs.map(f => f()).join(); })()",
+                """
+                        (() => { const fs = []; for (let i = 0; i < 3; i++) {
                           class C { static v = i; static get() { return C.v } }
                           fs.push(() => C.get());
-                        }"""),
-                collect("for (let i = 0; i < 4; i++) { const k = i; fs.push(() => k); if (i % 2) continue; }"),
-                collect("""
-                        for (let j = 0; j < 2; j++) {
+                        } return fs.map(f => f()).join(); })()""",
+                "(() => { const fs = []; for (let i = 0; i < 4; i++) { const k = i; fs.push(() => k); if (i % 2) continue; } return fs.map(f => f()).join(); })()",
+                """
+                        (() => { const fs = []; for (let j = 0; j < 2; j++) {
                           for (let i = 0; i < 3; i++) { const k = j * 10 + i; fs.push(() => k); break; }
-                        }"""), collect("for (let i = 0; i < 3; i++) { let k = i; fs.push(() => k); k += 100; }"),
-                collect("""
-                        for (let i = 0; i < 3; i++) {
+                        } return fs.map(f => f()).join(); })()""",
+                "(() => { const fs = []; for (let i = 0; i < 3; i++) { let k = i; fs.push(() => k); k += 100; } return fs.map(f => f()).join(); })()",
+                """
+                        (() => { const fs = []; for (let i = 0; i < 3; i++) {
                           const { a, b: [c] } = { a: i, b: [i * 2] };
                           fs.push(() => a + ':' + c);
-                        }"""), inArrowFunction("""
-                        function* g() { for (let i = 0; i < 3; i++) { const k = i; yield () => k; } }
-                        return [...g()].map(f => f()).join();
-                        """));
+                        } return fs.map(f => f()).join(); })()""", """
+                        (() => {
+                          function* g() { for (let i = 0; i < 3; i++) { const k = i; yield () => k; } }
+                          return [...g()].map(f => f()).join();
+                        })()""");
     }
 
     @Test
     public void testCatchParameters() {
-        assertStringWithJavet(collect("for (let i = 0; i < 3; i++) { try { throw i } catch (e) { fs.push(() => e) } }"),
-                collect("""
-                        for (let i = 0; i < 3; i++) {
+        assertStringWithJavet(
+                "(() => { const fs = []; for (let i = 0; i < 3; i++) { try { throw i } catch (e) { fs.push(() => e) } } return fs.map(f => f()).join(); })()",
+                """
+                        (() => { const fs = []; for (let i = 0; i < 3; i++) {
                           try { throw { v: i } } catch ({ v }) { fs.push(() => v) }
-                        }"""), collect("""
-                        for (let i = 0; i < 3; i++) {
+                        } return fs.map(f => f()).join(); })()""", """
+                        (() => { const fs = []; for (let i = 0; i < 3; i++) {
                           try { throw { v: i } } catch ({ v }) { fs.push(() => v) } finally { fs.push(() => 'f') }
-                        }"""), inArrowFunction("""
-                        try {
-                          try { throw {} } catch ({ a = typeof b, b }) { return a }
-                        } catch (e) { return e.name + ': ' + e.message }
-                        """));
+                        } return fs.map(f => f()).join(); })()""", """
+                        (() => {
+                          try {
+                            try { throw {} } catch ({ a = typeof b, b }) { return a }
+                          } catch (e) { return e.name + ': ' + e.message }
+                        })()""");
     }
 
-    private static String collect(String loop) {
-        return "(() => { const fs = []; " + loop + " return fs.map(f => f()).join(); })()";
-    }
 }

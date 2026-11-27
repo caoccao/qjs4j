@@ -45,15 +45,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 public class JSErrorPathPurityTest extends BaseJavetTest {
 
-    private void assertReportingSkipsGetter(String constructor, String property, String getterResult) {
+    private void assertReportingSkipsGetter(String property, String code) {
         context.getGlobalObject().set("calls", JSNumber.of(0));
-        assertThatThrownBy(() -> context.eval("""
-                const error = %s;
-                Object.defineProperty(error, '%s', {
-                    get() { globalThis.calls++; return %s },
-                });
-                throw error;
-                """.formatted(constructor, property, getterResult))).isInstanceOf(JSException.class);
+        assertThatThrownBy(() -> context.eval(code)).isInstanceOf(JSException.class);
         assertThat(context.getGlobalObject().get("calls"))
                 .as("reporting a thrown Error must skip its %s getter", property).isEqualTo(JSNumber.of(0));
     }
@@ -65,20 +59,21 @@ public class JSErrorPathPurityTest extends BaseJavetTest {
 
     @Test
     public void testDeleteErrorMessageDoesNotInvokeAConstructorGetter() {
-        assertStringWithJavet(inFunction("""
-                'use strict';
-                let getterRan = false;
-                const proto = {};
-                Object.defineProperty(proto, 'constructor', {
-                  get() { getterRan = true; return function Tricky() {} },
-                  configurable: true,
-                });
-                const target = Object.create(proto);
-                Object.defineProperty(target, 'fixed', { value: 1, configurable: false });
-                let caught = '';
-                try { delete target.fixed } catch (e) { caught = e.name }
-                return caught + ',' + getterRan;
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  'use strict';
+                  let getterRan = false;
+                  const proto = {};
+                  Object.defineProperty(proto, 'constructor', {
+                    get() { getterRan = true; return function Tricky() {} },
+                    configurable: true,
+                  });
+                  const target = Object.create(proto);
+                  Object.defineProperty(target, 'fixed', { value: 1, configurable: false });
+                  let caught = '';
+                  try { delete target.fixed } catch (e) { caught = e.name }
+                  return caught + ',' + getterRan;
+                })()""");
     }
 
     @Test
@@ -95,55 +90,58 @@ public class JSErrorPathPurityTest extends BaseJavetTest {
     @Test
     public void testFailedAssignmentDescriptionDoesNotRunProxyTraps() {
         // getObjectDescriptionForError walks the prototype chain for constructor/name.
-        assertStringWithJavet(inFunction("""
-                'use strict';
-                let descriptionTrapCalls = 0;
-                const proto = new Proxy({}, {
-                  getOwnPropertyDescriptor() { descriptionTrapCalls++; return undefined },
-                  get() { descriptionTrapCalls++; return undefined },
-                });
-                const target = Object.create(proto);
-                // defineProperty, not assignment: an assignment would be forwarded to the
-                // Proxy's [[Set]] instead of creating an own property here.
-                Object.defineProperty(target, 'value', { value: 1, writable: false });
-                let caught = '';
-                try { target.value = 2 } catch (e) { caught = e.name }
-                return caught + ',' + descriptionTrapCalls;
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  'use strict';
+                  let descriptionTrapCalls = 0;
+                  const proto = new Proxy({}, {
+                    getOwnPropertyDescriptor() { descriptionTrapCalls++; return undefined },
+                    get() { descriptionTrapCalls++; return undefined },
+                  });
+                  const target = Object.create(proto);
+                  // defineProperty, not assignment: an assignment would be forwarded to the
+                  // Proxy's [[Set]] instead of creating an own property here.
+                  Object.defineProperty(target, 'value', { value: 1, writable: false });
+                  let caught = '';
+                  try { target.value = 2 } catch (e) { caught = e.name }
+                  return caught + ',' + descriptionTrapCalls;
+                })()""");
     }
 
     @Test
     public void testFrozenAssignmentErrorMessageDoesNotInvokeAConstructorGetter() {
-        assertStringWithJavet(inFunction("""
-                'use strict';
-                let getterRan = false;
-                const proto = {};
-                Object.defineProperty(proto, 'constructor', {
-                  get() { getterRan = true; return function Tricky() {} },
-                  configurable: true,
-                });
-                const target = Object.create(proto);
-                target.value = 1;
-                Object.freeze(target);
-                let caught = '';
-                try { target.value = 2 } catch (e) { caught = e.name }
-                return caught + ',' + getterRan;
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  'use strict';
+                  let getterRan = false;
+                  const proto = {};
+                  Object.defineProperty(proto, 'constructor', {
+                    get() { getterRan = true; return function Tricky() {} },
+                    configurable: true,
+                  });
+                  const target = Object.create(proto);
+                  target.value = 1;
+                  Object.freeze(target);
+                  let caught = '';
+                  try { target.value = 2 } catch (e) { caught = e.name }
+                  return caught + ',' + getterRan;
+                })()""");
     }
 
     @Test
     public void testInheritedSetterFailureIsReported() {
-        assertStringWithJavet(inFunction("""
-                'use strict';
-                const proto = {};
-                Object.defineProperty(proto, 'x', {
-                  set() { throw new RangeError('from proto setter') },
-                  configurable: true,
-                });
-                const target = Object.create(proto);
-                try { target.x = 1; return 'NO ERROR' }
-                catch (e) { return 'CAUGHT ' + e.name + ': ' + e.message }
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  'use strict';
+                  const proto = {};
+                  Object.defineProperty(proto, 'x', {
+                    set() { throw new RangeError('from proto setter') },
+                    configurable: true,
+                  });
+                  const target = Object.create(proto);
+                  try { target.x = 1; return 'NO ERROR' }
+                  catch (e) { return 'CAUGHT ' + e.name + ': ' + e.message }
+                })()""");
     }
 
     @Test
@@ -160,28 +158,30 @@ public class JSErrorPathPurityTest extends BaseJavetTest {
     public void testSetterFailureIsReportedEvenWhenAnExceptionWasAlreadyPending() {
         // The setter's own failure must not be swallowed just because something was already
         // pending. Reported through the strict-mode assignment result.
-        assertStringWithJavet(inFunction("""
-                'use strict';
-                const target = {};
-                Object.defineProperty(target, 'x', {
-                  set() { throw new RangeError('from setter') },
-                  configurable: true,
-                });
-                try { target.x = 1; return 'NO ERROR' }
-                catch (e) { return 'CAUGHT ' + e.name + ': ' + e.message }
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  'use strict';
+                  const target = {};
+                  Object.defineProperty(target, 'x', {
+                    set() { throw new RangeError('from setter') },
+                    configurable: true,
+                  });
+                  try { target.x = 1; return 'NO ERROR' }
+                  catch (e) { return 'CAUGHT ' + e.name + ': ' + e.message }
+                })()""");
     }
 
     @Test
     public void testSucceedingSetterStillReportsSuccess() {
-        assertStringWithJavet(inFunction("""
-                'use strict';
-                let stored = 0;
-                const target = {};
-                Object.defineProperty(target, 'x', { set(v) { stored = v }, configurable: true });
-                target.x = 42;
-                return String(stored);
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  'use strict';
+                  let stored = 0;
+                  const target = {};
+                  Object.defineProperty(target, 'x', { set(v) { stored = v }, configurable: true });
+                  target.x = 42;
+                  return String(stored);
+                })()""");
     }
 
     @Test
@@ -247,12 +247,24 @@ public class JSErrorPathPurityTest extends BaseJavetTest {
         // routes an uncaught error takes out of the interpreter: JSException.formatErrorMessage and
         // the JSVirtualMachineException(JSError) constructor. A guest could therefore have code run
         // twice merely by throwing an error whose message is an accessor.
-        assertReportingSkipsGetter("new Error()", "message", "'boom'");
+        assertReportingSkipsGetter("message", """
+                const error = new Error();
+                Object.defineProperty(error, 'message', {
+                    get() { globalThis.calls++; return 'boom' },
+                });
+                throw error;
+                """);
     }
 
     @Test
     public void testUncaughtErrorInstanceWithANameGetterDoesNotRunIt() {
-        assertReportingSkipsGetter("new Error('ordinary')", "name", "'Weird'");
+        assertReportingSkipsGetter("name", """
+                const error = new Error('ordinary');
+                Object.defineProperty(error, 'name', {
+                    get() { globalThis.calls++; return 'Weird' },
+                });
+                throw error;
+                """);
     }
 
     @Test
@@ -296,15 +308,16 @@ public class JSErrorPathPurityTest extends BaseJavetTest {
     @Test
     public void testUncaughtThrownProxyDoesNotRunItsTrapsDuringUnwinding() {
         // safeExceptionToString runs while the VM unwinds, before the JSException is built.
-        assertStringWithJavet(inFunction("""
-                let unwindTrapCalls = 0;
-                const proxy = new Proxy({}, {
-                  getOwnPropertyDescriptor() { unwindTrapCalls++; return undefined },
-                  get() { unwindTrapCalls++; return undefined },
-                });
-                try { throw proxy } catch (e) { }
-                return String(unwindTrapCalls);
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  let unwindTrapCalls = 0;
+                  const proxy = new Proxy({}, {
+                    getOwnPropertyDescriptor() { unwindTrapCalls++; return undefined },
+                    get() { unwindTrapCalls++; return undefined },
+                  });
+                  try { throw proxy } catch (e) { }
+                  return String(unwindTrapCalls);
+                })()""");
     }
 
     @Test
@@ -314,14 +327,14 @@ public class JSErrorPathPurityTest extends BaseJavetTest {
         // message is rendered; an undefined one is treated as absent and name is used instead.
         // Called directly rather than through eval(): eval() rebuilds the report from the thrown
         // value, so the VM's own description is only visible to a host that invokes a function.
-        assertThatThrownBy(() -> throwFrom("({ message: 1234 })")).isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("1234");
-        assertThatThrownBy(() -> throwFrom("({ message: undefined, name: 'Named' })"))
+        assertThatThrownBy(() -> throwFrom("(function () { throw ({ message: 1234 }) })"))
+                .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("1234");
+        assertThatThrownBy(() -> throwFrom("(function () { throw ({ message: undefined, name: 'Named' }) })"))
                 .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("Named");
-        assertThatThrownBy(() -> throwFrom("'a bare string'")).isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("a bare string");
-        assertThatThrownBy(() -> throwFrom("({ nothing: 1 })")).isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("Unhandled exception");
+        assertThatThrownBy(() -> throwFrom("(function () { throw 'a bare string' })"))
+                .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("a bare string");
+        assertThatThrownBy(() -> throwFrom("(function () { throw ({ nothing: 1 }) })"))
+                .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("Unhandled exception");
     }
 
     /**
@@ -331,8 +344,8 @@ public class JSErrorPathPurityTest extends BaseJavetTest {
      * @param expression
      *            the expression to throw
      */
-    private void throwFrom(String expression) {
-        JSValue function = context.eval("(function () { throw " + expression + " })");
+    private void throwFrom(String code) {
+        JSValue function = context.eval(code);
         ((JSFunction) function).call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
     }
 }

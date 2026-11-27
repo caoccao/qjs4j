@@ -92,11 +92,8 @@ public final class TemporalInstantPrototype {
     }
 
     public static JSValue epochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalInstant instant = RECEIVER.require(context, thisArg, "epochMilliseconds");
-        if (instant == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSNumber.of(TemporalUtils.epochMilliseconds(instant.getEpochNanoseconds()));
+        return RECEIVER.read(context, thisArg, "epochMilliseconds",
+                value -> JSNumber.of(TemporalUtils.epochMilliseconds(value.getEpochNanoseconds())));
     }
 
     public static JSValue epochNanoseconds(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -182,13 +179,9 @@ public final class TemporalInstantPrototype {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            String mode = TemporalUtils.getStringOption(context, optionsObj, "roundingMode", "halfExpand");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            roundingMode = TemporalRoundingMode.fromString(mode);
+            roundingMode = TemporalRoundingMode.readRoundOption(context, optionsObj, false);
             if (roundingMode == null) {
-                return TemporalError.INVALID_ROUNDING_MODE.undefined(context);
+                return JSUndefined.INSTANCE;
             }
             smallestUnitText = TemporalUtils.getStringOption(context, optionsObj, "smallestUnit", null);
             if (context.hasPendingException()) {

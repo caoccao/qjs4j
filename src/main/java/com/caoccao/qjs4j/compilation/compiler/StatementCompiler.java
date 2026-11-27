@@ -98,8 +98,7 @@ final class StatementCompiler extends AstNodeCompiler<Statement> {
 
     public void emitEvalReturnUndefinedIfNeeded() {
         if (compilerContext.evalReturnLocalIndex >= 0) {
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitUndefinedLocal(compilerContext.evalReturnLocalIndex);
         }
     }
 

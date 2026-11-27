@@ -18,8 +18,6 @@ package com.caoccao.qjs4j.builtins.temporal.zoned;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 public class TemporalZonedDateTimeTest extends BaseJavetTest {
 
@@ -101,12 +99,19 @@ public class TemporalZonedDateTimeTest extends BaseJavetTest {
         assertBooleanWithJavet("new Temporal.ZonedDateTime(0n, 'UTC').inLeapYear");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"day", "dayOfWeek", "dayOfYear", "daysInMonth", "daysInWeek", "daysInYear", "hour",
-            "hoursInDay", "microsecond", "millisecond", "minute", "month", "monthsInYear", "nanosecond",
-            "offsetNanoseconds", "second", "weekOfYear", "year", "yearOfWeek"})
-    void testIntegerProperties(String property) {
-        assertIntegerWithJavet("new Temporal.ZonedDateTime(0n, 'UTC')." + property);
+    @Test
+    void testIntegerProperties() {
+        assertIntegerWithJavet("new Temporal.ZonedDateTime(0n, 'UTC').day",
+                "new Temporal.ZonedDateTime(0n, 'UTC').dayOfWeek", "new Temporal.ZonedDateTime(0n, 'UTC').dayOfYear",
+                "new Temporal.ZonedDateTime(0n, 'UTC').daysInMonth", "new Temporal.ZonedDateTime(0n, 'UTC').daysInWeek",
+                "new Temporal.ZonedDateTime(0n, 'UTC').daysInYear", "new Temporal.ZonedDateTime(0n, 'UTC').hour",
+                "new Temporal.ZonedDateTime(0n, 'UTC').hoursInDay", "new Temporal.ZonedDateTime(0n, 'UTC').microsecond",
+                "new Temporal.ZonedDateTime(0n, 'UTC').millisecond", "new Temporal.ZonedDateTime(0n, 'UTC').minute",
+                "new Temporal.ZonedDateTime(0n, 'UTC').month", "new Temporal.ZonedDateTime(0n, 'UTC').monthsInYear",
+                "new Temporal.ZonedDateTime(0n, 'UTC').nanosecond",
+                "new Temporal.ZonedDateTime(0n, 'UTC').offsetNanoseconds",
+                "new Temporal.ZonedDateTime(0n, 'UTC').second", "new Temporal.ZonedDateTime(0n, 'UTC').weekOfYear",
+                "new Temporal.ZonedDateTime(0n, 'UTC').year", "new Temporal.ZonedDateTime(0n, 'UTC').yearOfWeek");
     }
 
     @Test
@@ -125,17 +130,22 @@ public class TemporalZonedDateTimeTest extends BaseJavetTest {
         assertStringWithJavet("new Temporal.ZonedDateTime(43200000000000n, 'UTC').startOfDay().toString()");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"toString()", "toInstant().toString()", "toJSON()", "toPlainDate().toString()",
-            "toPlainDateTime().toString()", "toPlainTime().toString()", "toString()"})
-    void testStringConversions(String operation) {
-        assertStringWithJavet("new Temporal.ZonedDateTime(0n, 'UTC')." + operation);
+    @Test
+    void testStringConversions() {
+        assertStringWithJavet("new Temporal.ZonedDateTime(0n, 'UTC').toString()",
+                "new Temporal.ZonedDateTime(0n, 'UTC').toInstant().toString()",
+                "new Temporal.ZonedDateTime(0n, 'UTC').toJSON()",
+                "new Temporal.ZonedDateTime(0n, 'UTC').toPlainDate().toString()",
+                "new Temporal.ZonedDateTime(0n, 'UTC').toPlainDateTime().toString()",
+                "new Temporal.ZonedDateTime(0n, 'UTC').toPlainTime().toString()",
+                "new Temporal.ZonedDateTime(0n, 'UTC').toString()");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"calendarId", "monthCode", "offset", "timeZoneId"})
-    void testStringProperties(String property) {
-        assertStringWithJavet("new Temporal.ZonedDateTime(0n, 'UTC')." + property);
+    @Test
+    void testStringProperties() {
+        assertStringWithJavet("new Temporal.ZonedDateTime(0n, 'UTC').calendarId",
+                "new Temporal.ZonedDateTime(0n, 'UTC').monthCode", "new Temporal.ZonedDateTime(0n, 'UTC').offset",
+                "new Temporal.ZonedDateTime(0n, 'UTC').timeZoneId");
     }
 
     @Test

@@ -38,7 +38,7 @@ final class ClassOpcodes {
         int sp = executionContext.sp;
         int classNameAtom = executionContext.bytecode.readU32(pc + 1);
         int classFlags = computed ? executionContext.bytecode.readU8(pc + 5) : 0;
-        String className = executionContext.bytecode.getAtoms()[classNameAtom];
+        String className = executionContext.bytecode.getAtom(classNameAtom);
         JSValue constructorValue = (JSValue) stack[--sp];
         JSValue superClassValue = (JSValue) stack[--sp];
         JSValue computedClassNameValue = computed ? (JSValue) stack[sp - 1] : JSUndefined.INSTANCE;
@@ -91,8 +91,7 @@ final class ClassOpcodes {
         int pc = executionContext.pc;
         JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
         int sp = executionContext.sp;
-        int methodNameAtom = executionContext.bytecode.readU32(pc + 1);
-        String methodName = executionContext.bytecode.getAtoms()[methodNameAtom];
+        String methodName = executionContext.bytecode.readAtom(pc + 1);
         JSValue methodValue = (JSValue) stack[--sp];
         JSValue objectValue = (JSValue) stack[--sp];
 
@@ -325,8 +324,7 @@ final class ClassOpcodes {
 
     static void handleSetName(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
-        String name = executionContext.bytecode.getAtoms()[atomIndex];
+        String name = executionContext.bytecode.readAtom(pc + 1);
         executionContext.virtualMachine.setObjectName(executionContext.peek(0), new JSString(name));
         executionContext.pc = pc + op.getSize();
     }

@@ -78,14 +78,8 @@ public record TemporalRoundSettings(TemporalUnit smallestUnit, long roundingIncr
             if (context.hasPendingException()) {
                 return null;
             }
-            String roundingModeText = TemporalUtils.getStringOption(context, optionsObject, "roundingMode",
-                    "halfExpand");
-            if (context.hasPendingException() || roundingModeText == null) {
-                return null;
-            }
-            roundingMode = TemporalRoundingMode.fromString(roundingModeText);
+            roundingMode = TemporalRoundingMode.readRoundOption(context, optionsObject, true);
             if (roundingMode == null) {
-                context.throwRangeError("Temporal error: Invalid roundingMode option: " + roundingModeText);
                 return null;
             }
             smallestUnitText = getRequiredStringOption(context, optionsObject, "smallestUnit",

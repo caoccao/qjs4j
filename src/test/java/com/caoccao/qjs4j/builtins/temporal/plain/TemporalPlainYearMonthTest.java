@@ -18,8 +18,6 @@ package com.caoccao.qjs4j.builtins.temporal.plain;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 public class TemporalPlainYearMonthTest extends BaseJavetTest {
 
@@ -131,10 +129,12 @@ public class TemporalPlainYearMonthTest extends BaseJavetTest {
         assertStringWithJavet("new Temporal.PlainYearMonth(2024, 6).since('2024-01').toString()");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"toString()", "toJSON()", "toPlainDate({day: 15}).toString()", "toString()"})
-    void testStringConversions(String operation) {
-        assertStringWithJavet("new Temporal.PlainYearMonth(2024, 3)." + operation);
+    @Test
+    void testStringConversions() {
+        assertStringWithJavet("new Temporal.PlainYearMonth(2024, 3).toString()",
+                "new Temporal.PlainYearMonth(2024, 3).toJSON()",
+                "new Temporal.PlainYearMonth(2024, 3).toPlainDate({day: 15}).toString()",
+                "new Temporal.PlainYearMonth(2024, 3).toString()");
     }
 
     @Test

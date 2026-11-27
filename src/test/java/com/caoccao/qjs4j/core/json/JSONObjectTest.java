@@ -19,8 +19,6 @@ package com.caoccao.qjs4j.core.json;
 import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -191,11 +189,12 @@ public class JSONObjectTest extends BaseJavetTest {
                 obj.users[0].name""");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"''", "'{invalid}'", "'01'", "", "'{\"a\":1,}'", "'[1,2,3'", "'{\"a\":1'",
-            "'\"unterminated'", "'{\"' + String.fromCharCode(1) + '\":1}'", "'\"' + String.fromCharCode(1) + '\"'"})
-    void testParseInvalidInputs(String arguments) {
-        assertErrorWithJavet("JSON.parse(" + arguments + ")");
+    @Test
+    void testParseInvalidInputs() {
+        assertErrorWithJavet("JSON.parse('')", "JSON.parse('{invalid}')", "JSON.parse('01')", "JSON.parse()",
+                "JSON.parse('{\"a\":1,}')", "JSON.parse('[1,2,3')", "JSON.parse('{\"a\":1')",
+                "JSON.parse('\"unterminated')", "JSON.parse('{\"' + String.fromCharCode(1) + '\":1}')",
+                "JSON.parse('\"' + String.fromCharCode(1) + '\"')");
     }
 
     @Test
@@ -228,22 +227,23 @@ public class JSONObjectTest extends BaseJavetTest {
         assertStringWithJavet("JSON.parse('{\"name\":\"test\",\"value\":42}').name");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"'\"hello\\\\nworld\"'", "'\"tab\\\\there\"'", "'\"hello\"'"})
-    void testParseStrings(String arguments) {
-        assertStringWithJavet("JSON.parse(" + arguments + ")");
+    @Test
+    void testParseStrings() {
+        assertStringWithJavet("JSON.parse('\"hello\\\\nworld\"')", "JSON.parse('\"tab\\\\there\"')",
+                "JSON.parse('\"hello\"')");
     }
 
     @Test
     public void testParseTrailingData() {
-        assertBooleanWithJavet(inArrowFunction("""
-                try {
-                  JSON.parse('1 2');
-                  return false;
-                } catch (e) {
-                  return e instanceof SyntaxError;
-                }
-                """));
+        assertBooleanWithJavet("""
+                (() => {
+                  try {
+                    JSON.parse('1 2');
+                    return false;
+                  } catch (e) {
+                    return e instanceof SyntaxError;
+                  }
+                })()""");
     }
 
     @Test
@@ -445,14 +445,15 @@ public class JSONObjectTest extends BaseJavetTest {
 
     @Test
     public void testParseWithWhitespaceFormFeed() {
-        assertBooleanWithJavet(inArrowFunction("""
-                try {
-                  JSON.parse('\\f1\\f');
-                  return false;
-                } catch (e) {
-                  return e instanceof SyntaxError;
-                }
-                """));
+        assertBooleanWithJavet("""
+                (() => {
+                  try {
+                    JSON.parse('\\f1\\f');
+                    return false;
+                  } catch (e) {
+                    return e instanceof SyntaxError;
+                  }
+                })()""");
     }
 
     @Test
@@ -462,10 +463,9 @@ public class JSONObjectTest extends BaseJavetTest {
                 JSON.isRawJSON(raw) && !JSON.isRawJSON(1) && !JSON.isRawJSON({rawJSON: '1'})""");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"''", "'1 2'", "", "' 1'"})
-    void testRawJSONInvalidInputs(String arguments) {
-        assertErrorWithJavet("JSON.rawJSON(" + arguments + ")");
+    @Test
+    void testRawJSONInvalidInputs() {
+        assertErrorWithJavet("JSON.rawJSON('')", "JSON.rawJSON('1 2')", "JSON.rawJSON()", "JSON.rawJSON(' 1')");
     }
 
     @Test
@@ -572,12 +572,12 @@ public class JSONObjectTest extends BaseJavetTest {
                 parsed.b""");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"[1, 'two', true, null]", "[[1, 2], [3, 4]]", "[1, 2, 3]",
-            "[1, 'two', true, null, {a: 5}, [6, 7]]", "[1, undefined, 3]", "[]",
-            "[JSON.rawJSON('1'), JSON.rawJSON('2'), 3]"})
-    void testStringifyArrays(String arguments) {
-        assertStringWithJavet("JSON.stringify(" + arguments + ")");
+    @Test
+    void testStringifyArrays() {
+        assertStringWithJavet("JSON.stringify([1, 'two', true, null])", "JSON.stringify([[1, 2], [3, 4]])",
+                "JSON.stringify([1, 2, 3])", "JSON.stringify([1, 'two', true, null, {a: 5}, [6, 7]])",
+                "JSON.stringify([1, undefined, 3])", "JSON.stringify([])",
+                "JSON.stringify([JSON.rawJSON('1'), JSON.rawJSON('2'), 3])");
     }
 
     @Test
@@ -781,34 +781,36 @@ public class JSONObjectTest extends BaseJavetTest {
                 })""");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"{}", "{name: 'test', value: 42, active: true}", "{a: 1, b: 2}",
-            "{a: 1, b: function() {}, c: 2}", "{a: 1, b: undefined, c: 3}",
-            "[new Number(1.5), new String('x'), new Boolean(false)]"})
-    void testStringifyObjects(String arguments) {
-        assertStringWithJavet("JSON.stringify(" + arguments + ")");
+    @Test
+    void testStringifyObjects() {
+        assertStringWithJavet("JSON.stringify({})", "JSON.stringify({name: 'test', value: 42, active: true})",
+                "JSON.stringify({a: 1, b: 2})", "JSON.stringify({a: 1, b: function() {}, c: 2})",
+                "JSON.stringify({a: 1, b: undefined, c: 3})",
+                "JSON.stringify([new Number(1.5), new String('x'), new Boolean(false)])");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"true", "0.1 + 0.2", "Infinity", "NaN", "-Infinity", "null", "42", "1e10", "1e-10",
-            "'hello'"})
-    void testStringifyPrimitives(String arguments) {
-        assertStringWithJavet("JSON.stringify(" + arguments + ")");
+    @Test
+    void testStringifyPrimitives() {
+        assertStringWithJavet("JSON.stringify(true)", "JSON.stringify(0.1 + 0.2)", "JSON.stringify(Infinity)",
+                "JSON.stringify(NaN)", "JSON.stringify(-Infinity)", "JSON.stringify(null)", "JSON.stringify(42)",
+                "JSON.stringify(1e10)", "JSON.stringify(1e-10)", "JSON.stringify('hello')");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"{'1.5': 'x', '1': 'y'}, [1.5]", "{0: 'a', 1: 'b', 2: 'c'}, [0, 2]",
-            "{a: 1, b: 2}, [{toString: function() { return 'a'; }}, 'b']", "{a: 1, b: 2, c: 3, d: 4}, ['a', 'c']"})
-    void testStringifyReplacers(String arguments) {
-        assertStringWithJavet("JSON.stringify(" + arguments + ")");
+    @Test
+    void testStringifyReplacers() {
+        assertStringWithJavet("JSON.stringify({'1.5': 'x', '1': 'y'}, [1.5])",
+                "JSON.stringify({0: 'a', 1: 'b', 2: 'c'}, [0, 2])",
+                "JSON.stringify({a: 1, b: 2}, [{toString: function() { return 'a'; }}, 'b'])",
+                "JSON.stringify({a: 1, b: 2, c: 3, d: 4}, ['a', 'c'])");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"[1, 2, 3], null, 4", "{a: 1}, null, {toString: function() { return '  '; }}",
-            "{a: 1, b: 2}, null, 2", "{a: 1}, null, 'abcdefghijklmnop'", "{a: 1}, null, new Number(2)",
-            "{a: 1, b: 2}, null, '  '", "{a: 1}, null, '\\t'"})
-    void testStringifySpacing(String arguments) {
-        assertStringWithJavet("JSON.stringify(" + arguments + ")");
+    @Test
+    void testStringifySpacing() {
+        assertStringWithJavet("JSON.stringify([1, 2, 3], null, 4)",
+                "JSON.stringify({a: 1}, null, {toString: function() { return '  '; }})",
+                "JSON.stringify({a: 1, b: 2}, null, 2)", "JSON.stringify({a: 1}, null, 'abcdefghijklmnop')",
+                "JSON.stringify({a: 1}, null, new Number(2))", "JSON.stringify({a: 1, b: 2}, null, '  ')",
+                "JSON.stringify({a: 1}, null, '\\t')");
     }
 
     @Test

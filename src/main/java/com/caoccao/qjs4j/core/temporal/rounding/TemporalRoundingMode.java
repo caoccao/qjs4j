@@ -16,6 +16,11 @@
 
 package com.caoccao.qjs4j.core.temporal.rounding;
 
+import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.JSObject;
+import com.caoccao.qjs4j.core.temporal.TemporalError;
+import com.caoccao.qjs4j.core.temporal.TemporalUtils;
+
 import java.math.BigInteger;
 
 /**
@@ -196,5 +201,23 @@ public enum TemporalRoundingMode {
      */
     public static boolean isValid(String text) {
         return fromString(text) != null;
+    }
+
+    /** Read the roundingMode option of a round() call, defaulting to halfExpand. */
+    public static TemporalRoundingMode readRoundOption(JSContext context, JSObject options,
+            boolean includeInvalidValue) {
+        String text = TemporalUtils.getStringOption(context, options, "roundingMode", "halfExpand");
+        if (context.hasPendingException() || text == null) {
+            return null;
+        }
+        TemporalRoundingMode mode = fromString(text);
+        if (mode == null) {
+            if (includeInvalidValue) {
+                context.throwRangeError("Temporal error: Invalid roundingMode option: " + text);
+            } else {
+                TemporalError.INVALID_ROUNDING_MODE.raise(context);
+            }
+        }
+        return mode;
     }
 }

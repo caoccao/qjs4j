@@ -30,19 +30,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * precision supports; and {@code toLocaleString()} without arguments skipped {@code Intl.NumberFormat}.
  */
 public class NumberToStringParityTest extends BaseJavetTest {
-    private static final String RANDOM_VALUES = """
-            var seed = 12345;
-            function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }
-            var view = new DataView(new ArrayBuffer(8));
-            var values = [];
-            for (var i = 0; i < 500; i++) {
-              view.setUint32(0, Math.floor(rnd() * 4294967296));
-              view.setUint32(4, Math.floor(rnd() * 4294967296));
-              var bits = view.getFloat64(0);
-              if (Number.isFinite(bits)) values.push(bits);
-              values.push(rnd() * 1000, Math.floor(rnd() * 1e6) / 1000, rnd() * 1e-10, rnd() * 1e25);
-            }
-            """;
 
     @Test
     public void testAutomaticExponentialUsesShortestDigitsAtPowersOfTwo() {
@@ -65,7 +52,18 @@ public class NumberToStringParityTest extends BaseJavetTest {
         assertStringWithJavet("(1e21).toString(36)", "(1/3).toString(36)", "(0.1).toString(36)", "(0.5).toString(2)",
                 "(-255.5).toString(16)", "(2 ** 53 + 2).toString(7)", "(1.7976931348623157e308).toString(36)",
                 "(5e-324).toString(2).length + ''", "(-0).toString(2)", "NaN.toString(16)", "(-Infinity).toString(3)",
-                "(0.9999999999999999).toString(3)", "(35.99999999999999).toString(36)", RANDOM_VALUES + """
+                "(0.9999999999999999).toString(3)", "(35.99999999999999).toString(36)", """
+                        var seed = 12345;
+                        function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }
+                        var view = new DataView(new ArrayBuffer(8));
+                        var values = [];
+                        for (var i = 0; i < 500; i++) {
+                          view.setUint32(0, Math.floor(rnd() * 4294967296));
+                          view.setUint32(4, Math.floor(rnd() * 4294967296));
+                          var bits = view.getFloat64(0);
+                          if (Number.isFinite(bits)) values.push(bits);
+                          values.push(rnd() * 1000, Math.floor(rnd() * 1e6) / 1000, rnd() * 1e-10, rnd() * 1e25);
+                        }
                         var out = [];
                         for (var v of values) {
                           for (var r of [2, 3, 7, 8, 16, 32, 36]) out.push(v.toString(r));
@@ -84,7 +82,19 @@ public class NumberToStringParityTest extends BaseJavetTest {
 
     @Test
     public void testShortestDecimal() {
-        assertStringWithJavet(RANDOM_VALUES + "values.map(String).join()",
+        assertStringWithJavet("""
+                var seed = 12345;
+                function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }
+                var view = new DataView(new ArrayBuffer(8));
+                var values = [];
+                for (var i = 0; i < 500; i++) {
+                  view.setUint32(0, Math.floor(rnd() * 4294967296));
+                  view.setUint32(4, Math.floor(rnd() * 4294967296));
+                  var bits = view.getFloat64(0);
+                  if (Number.isFinite(bits)) values.push(bits);
+                  values.push(rnd() * 1000, Math.floor(rnd() * 1e6) / 1000, rnd() * 1e-10, rnd() * 1e25);
+                }
+                values.map(String).join()""",
                 "[0.1, 0.2 + 0.1, 1e21, 1e-7, 123e-20, 5e-324, 1.7976931348623157e308, 2 ** 53 + 2].map(String).join()");
     }
 

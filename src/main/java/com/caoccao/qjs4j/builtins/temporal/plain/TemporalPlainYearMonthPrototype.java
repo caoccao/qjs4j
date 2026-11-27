@@ -48,8 +48,7 @@ public final class TemporalPlainYearMonthPrototype {
     }
 
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "calendarId",
-                plainYearMonth -> new JSString(plainYearMonth.getCalendarId().identifier()));
+        return TemporalDateProperty.calendarId(context, thisArg, RECEIVER);
     }
 
     public static JSValue daysInMonth(JSContext context, JSValue thisArg, JSValue[] args) {

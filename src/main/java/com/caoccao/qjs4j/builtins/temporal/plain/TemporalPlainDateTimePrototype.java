@@ -55,8 +55,7 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "calendarId",
-                plainDateTime -> new JSString(plainDateTime.getCalendarId().identifier()));
+        return TemporalDateProperty.calendarId(context, thisArg, RECEIVER);
     }
 
     public static JSValue day(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -76,7 +75,7 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     public static JSValue daysInWeek(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "daysInWeek", plainDateTime -> JSNumber.of(7));
+        return TemporalDateProperty.daysInWeek(context, thisArg, RECEIVER);
     }
 
     public static JSValue daysInYear(JSContext context, JSValue thisArg, JSValue[] args) {

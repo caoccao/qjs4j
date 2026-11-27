@@ -53,19 +53,27 @@ public class DeepSourceCompilationTest extends BaseJavetTest {
 
     @Test
     public void testDeeplyNestedSourceIsACatchableRangeError() {
-        assertErrorWithJavet(nested("(", "1", ")"), nested("true ? ", "1", " : 0"), nested("[", "1", "]"));
-        assertThatThrownBy(() -> new Compiler(nested("(", "1", ")"), "parens.js").parse(false))
-                .isInstanceOf(JSRangeErrorException.class).hasMessage("Maximum call stack size exceeded");
+        assertErrorWithJavet("(".repeat(NESTING_DEPTH) + "1" + ")".repeat(NESTING_DEPTH),
+                "true ? ".repeat(NESTING_DEPTH) + "1" + " : 0".repeat(NESTING_DEPTH),
+                "[".repeat(NESTING_DEPTH) + "1" + "]".repeat(NESTING_DEPTH));
+        assertThatThrownBy(() -> new Compiler("(".repeat(NESTING_DEPTH) + "1" + ")".repeat(NESTING_DEPTH), "parens.js")
+                .parse(false)).isInstanceOf(JSRangeErrorException.class).hasMessage("Maximum call stack size exceeded");
     }
 
     @Test
     public void testDeeplyNestedSourceThroughEvalAndFunctionIsCaughtByTheScript() {
         // The script's own catch sees the RangeError: the overflow happens inside a native call made
         // by an opcode handler, so it must surface as an ordinary engine error in the same frame.
-        String deep = nested("(", "1", ")");
-        assertStringWithJavet("try { eval('" + deep + "'); 'no error' } catch (e) { e.name + ': ' + e.message }",
-                "try { new Function('return " + deep + "'); 'no error' } catch (e) { e.name + ': ' + e.message }",
-                "try { (0, eval)('" + deep + "'); 'no error' } catch (e) { e.name + ': ' + e.message }");
+        assertStringWithJavet("""
+                const deep = '('.repeat(100_000) + '1' + ')'.repeat(100_000);
+                try { eval(deep); 'no error' } catch (e) { e.name + ': ' + e.message }
+                """, """
+                const deep = '('.repeat(100_000) + '1' + ')'.repeat(100_000);
+                try { new Function('return ' + deep); 'no error' } catch (e) { e.name + ': ' + e.message }
+                """, """
+                const deep = '('.repeat(100_000) + '1' + ')'.repeat(100_000);
+                try { (0, eval)(deep); 'no error' } catch (e) { e.name + ': ' + e.message }
+                """);
     }
 
     @Test
@@ -79,7 +87,8 @@ public class DeepSourceCompilationTest extends BaseJavetTest {
 
     @Test
     public void testDynamicImportOfADeeplyNestedModuleRejectsWithARangeError() throws IOException {
-        Files.writeString(moduleDirectory.resolve("deep.mjs"), "export default " + nested("(", "1", ")") + ";\n");
+        Files.writeString(moduleDirectory.resolve("deep.mjs"),
+                "export default " + "(".repeat(NESTING_DEPTH) + "1" + ")".repeat(NESTING_DEPTH) + ";\n");
         Path entry = moduleDirectory.resolve("entry.mjs");
         String entrySource = """
                 globalThis.result = 'pending';
@@ -100,15 +109,18 @@ public class DeepSourceCompilationTest extends BaseJavetTest {
     public void testLongChainsInDefaultParametersAreAnalysedWithoutRecursion() {
         // validateArrowParameters asks every default whether it contains yield or await; the
         // answer used to be computed by recursing down the left spine of the chain.
-        String sum = chain("1", " + ");
+        String sum = "1 + ".repeat(CHAIN_LENGTH - 1) + "1";
         assertIntegerWithJavet("((a = " + sum + ") => a)()", "(async (a = " + sum + ") => a)()");
         assertBooleanWithJavet("""
-                try { eval('async function f() { (a = %s + await 1) => a }'); false }
-                catch (e) { e instanceof SyntaxError }""".formatted(sum), """
-                try { eval('async function f() { (a = (await 1) + %s) => a }'); false }
-                catch (e) { e instanceof SyntaxError }""".formatted(sum), """
-                try { eval('function* g() { (a = %s + (yield)) => a }'); false }
-                catch (e) { e instanceof SyntaxError }""".formatted(sum));
+                const sum = '1 + '.repeat(99_999) + '1';
+                try { eval(`async function f() { (a = ${sum} + await 1) => a }`); false }
+                catch (e) { e instanceof SyntaxError }""", """
+                const sum = '1 + '.repeat(99_999) + '1';
+                try { eval(`async function f() { (a = (await 1) + ${sum}) => a }`); false }
+                catch (e) { e instanceof SyntaxError }""", """
+                const sum = '1 + '.repeat(99_999) + '1';
+                try { eval(`function* g() { (a = ${sum} + (yield)) => a }`); false }
+                catch (e) { e instanceof SyntaxError }""");
         // Direct eval of `var arguments` in a parameter default is detected through the same walk.
         assertStringWithJavet("""
                 try { ((a = %s + eval('var arguments = 1; 0'), b = typeof arguments) => b)() }
@@ -117,12 +129,15 @@ public class DeepSourceCompilationTest extends BaseJavetTest {
 
     @Test
     public void testLongLeftAssociativeChainsEvaluate() {
-        assertIntegerWithJavet(chain("1", " + "), chain("1", " - ") + " + " + (CHAIN_LENGTH - 1) * 2, chain("1", " * "),
-                chain("0", " || ") + " || 7", chain("1", " && "), chain("null", " ?? ") + " ?? 3",
-                "(" + chain("'a'", " + ") + ").length", "var x = 2; " + chain("x", " | "),
+        assertIntegerWithJavet("1 + ".repeat(CHAIN_LENGTH - 1) + "1",
+                "1 - ".repeat(CHAIN_LENGTH - 1) + "1" + " + " + (CHAIN_LENGTH - 1) * 2,
+                "1 * ".repeat(CHAIN_LENGTH - 1) + "1", "0 || ".repeat(CHAIN_LENGTH - 1) + "0" + " || 7",
+                "1 && ".repeat(CHAIN_LENGTH - 1) + "1", "null ?? ".repeat(CHAIN_LENGTH - 1) + "null" + " ?? 3",
+                "(" + "'a' + ".repeat(CHAIN_LENGTH - 1) + "'a'" + ").length",
+                "var x = 2; " + "x | ".repeat(CHAIN_LENGTH - 1) + "x",
                 "1" + " + 2 * 3 - 4 / 5 % 6 ** 1 | 7 & 8 ^ 9 << 1 >> 1 >>> 1".repeat(CHAIN_LENGTH / 10));
-        assertBooleanWithJavet("var o = {a: 1}; " + chain("'a' in o", " && "),
-                "var o = {}; " + chain("o instanceof Object", " && "));
+        assertBooleanWithJavet("var o = {a: 1}; " + "'a' in o && ".repeat(CHAIN_LENGTH - 1) + "'a' in o",
+                "var o = {}; " + "o instanceof Object && ".repeat(CHAIN_LENGTH - 1) + "o instanceof Object");
         // V8 compiles comparison chains recursively and gives up on them with a RangeError at about
         // ten thousand operands on Linux and macOS, and already at five thousand on Windows; that is
         // a V8 limit, not semantics. Compare at a length every platform's V8 accepts, then check
@@ -131,9 +146,9 @@ public class DeepSourceCompilationTest extends BaseJavetTest {
         String shortStrictEquality = String.join(" === ", Collections.nCopies(1_000, "1"));
         String shortLessThan = String.join(" < ", Collections.nCopies(1_000, "1")) + " < 2";
         assertBooleanWithJavet(shortEquality, shortStrictEquality, shortLessThan);
-        assertThat(context.eval(chain("1", " == ") + " == true")).isEqualTo(JSBoolean.TRUE);
-        assertThat(context.eval(chain("1", " === "))).isEqualTo(JSBoolean.FALSE);
-        assertThat(context.eval(chain("1", " < ") + " < 2")).isEqualTo(JSBoolean.TRUE);
+        assertThat(context.eval("1 == ".repeat(CHAIN_LENGTH - 1) + "1" + " == true")).isEqualTo(JSBoolean.TRUE);
+        assertThat(context.eval("1 === ".repeat(CHAIN_LENGTH - 1) + "1")).isEqualTo(JSBoolean.FALSE);
+        assertThat(context.eval("1 < ".repeat(CHAIN_LENGTH - 1) + "1" + " < 2")).isEqualTo(JSBoolean.TRUE);
     }
 
     @Test
@@ -161,10 +176,15 @@ public class DeepSourceCompilationTest extends BaseJavetTest {
         // Every operand but the last is a left operand of a short-circuit node, so none of them is in
         // tail position; the last one is, in strict mode. The counter proves the right operands that
         // must not run do not.
-        assertIntegerWithJavet("var n = 0; function hit() { n++; return 0; } " + chain("hit()", " || ") + "; n",
-                "var n = 0; function hit() { n++; return 0; } " + chain("hit()", " && ") + "; n",
-                "var n = 0; function hit() { n++; return null; } " + chain("hit()", " ?? ") + "; n",
-                "function f(k) { return k === 0 ? 5 : " + chain("0", " || ") + " || f(k - 1); } f(3)");
+        assertIntegerWithJavet(
+                "var n = 0; function hit() { n++; return 0; } " + "hit() || ".repeat(CHAIN_LENGTH - 1) + "hit()"
+                        + "; n",
+                "var n = 0; function hit() { n++; return 0; } " + "hit() && ".repeat(CHAIN_LENGTH - 1) + "hit()"
+                        + "; n",
+                "var n = 0; function hit() { n++; return null; } " + "hit() ?? ".repeat(CHAIN_LENGTH - 1) + "hit()"
+                        + "; n",
+                "function f(k) { return k === 0 ? 5 : " + "0 || ".repeat(CHAIN_LENGTH - 1) + "0"
+                        + " || f(k - 1); } f(3)");
     }
 
     @Test
@@ -173,11 +193,4 @@ public class DeepSourceCompilationTest extends BaseJavetTest {
                 "class C { #x; static m(o) { return #x in o || #x in o; } } C.m({})");
     }
 
-    private static String chain(String operand, String operator) {
-        return String.join(operator, Collections.nCopies(CHAIN_LENGTH, operand));
-    }
-
-    private static String nested(String open, String inner, String close) {
-        return open.repeat(NESTING_DEPTH) + inner + close.repeat(NESTING_DEPTH);
-    }
 }

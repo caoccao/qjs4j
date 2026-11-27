@@ -206,7 +206,7 @@ final class PropertyOpcodes {
         JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
         int sp = executionContext.sp;
         int fieldNameAtom = executionContext.bytecode.readU32(pc + 1);
-        String fieldName = executionContext.bytecode.getAtoms()[fieldNameAtom];
+        String fieldName = executionContext.bytecode.getAtom(fieldNameAtom);
         JSValue value = (JSValue) stack[--sp];
         JSValue objectValue = (JSValue) stack[--sp];
 
@@ -341,7 +341,7 @@ final class PropertyOpcodes {
     static void handleGetField(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int atomIndex = executionContext.bytecode.readU32(pc + 1);
-        String fieldName = executionContext.bytecode.getAtoms()[atomIndex];
+        String fieldName = executionContext.bytecode.getAtom(atomIndex);
         // GET_FIELD2 retains the receiver below the property value.
         JSValue objectValue = op == Opcode.GET_FIELD2 ? executionContext.peek(0) : executionContext.pop();
         if (objectValue instanceof JSString string && "length".equals(fieldName)) {
@@ -437,8 +437,7 @@ final class PropertyOpcodes {
 
     static void handlePrivateSymbol(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int fieldNameAtomIndex = executionContext.bytecode.readU32(pc + 1);
-        String fieldName = executionContext.bytecode.getAtoms()[fieldNameAtomIndex];
+        String fieldName = executionContext.bytecode.readAtom(pc + 1);
         executionContext.push(new JSSymbol(fieldName));
         executionContext.pc = pc + op.getSize();
     }
@@ -458,7 +457,7 @@ final class PropertyOpcodes {
     static void handlePutField(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int atomIndex = executionContext.bytecode.readU32(pc + 1);
-        String fieldName = executionContext.bytecode.getAtoms()[atomIndex];
+        String fieldName = executionContext.bytecode.getAtom(atomIndex);
         JSValue objectValue = executionContext.pop();
         JSValue fieldValue = executionContext.peek(0);
         PropertyKey propertyKey = executionContext.bytecode.getCachedPropertyKey(atomIndex);

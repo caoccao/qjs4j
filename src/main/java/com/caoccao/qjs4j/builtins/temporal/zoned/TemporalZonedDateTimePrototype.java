@@ -65,8 +65,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "calendarId",
-                zonedDateTime -> new JSString(zonedDateTime.getCalendarId().identifier()));
+        return TemporalDateProperty.calendarId(context, thisArg, RECEIVER);
     }
 
     public static JSValue day(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -87,7 +86,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue daysInWeek(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "daysInWeek", zonedDateTime -> JSNumber.of(7));
+        return TemporalDateProperty.daysInWeek(context, thisArg, RECEIVER);
     }
 
     public static JSValue daysInYear(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -95,11 +94,8 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue epochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "epochMilliseconds");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return JSNumber.of(TemporalUtils.epochMilliseconds(zonedDateTime.getEpochNanoseconds()));
+        return RECEIVER.read(context, thisArg, "epochMilliseconds",
+                value -> JSNumber.of(TemporalUtils.epochMilliseconds(value.getEpochNanoseconds())));
     }
 
     public static JSValue epochNanoseconds(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -33,16 +33,11 @@ public final class JSReferenceError extends JSError {
      * Create a ReferenceError with a message.
      */
     public JSReferenceError(JSContext context, String message) {
-        super(context, message);
+        this(context, message, null);
     }
 
     public JSReferenceError(JSContext context, String message, SourceLocation sourceLocation) {
-        super(context, message, sourceLocation);
-    }
-
-    @Override
-    public String getErrorName() {
-        return NAME;
+        super(context, NAME, message, sourceLocation);
     }
 
     public static JSValue create(JSContext context, JSValue... args) {

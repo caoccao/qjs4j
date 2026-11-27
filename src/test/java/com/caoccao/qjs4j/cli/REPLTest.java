@@ -23,6 +23,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -33,12 +34,17 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class REPLTest {
     private Output runRepl(String input) {
+        return runRepl(input, runtime -> {
+        });
+    }
+
+    private Output runRepl(String input, Consumer<JSRuntime> setup) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ByteArrayOutputStream err = new ByteArrayOutputStream();
         try (PrintStream outStream = new PrintStream(out, true, StandardCharsets.UTF_8);
                 PrintStream errStream = new PrintStream(err, true, StandardCharsets.UTF_8);
                 REPL repl = new REPL(new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)), outStream,
-                        errStream)) {
+                        errStream, setup)) {
             repl.run();
         }
         return new Output(out.toString(StandardCharsets.UTF_8), err.toString(StandardCharsets.UTF_8));
@@ -46,17 +52,10 @@ public class REPLTest {
 
     @Test
     public void testAnInterruptedEvaluationIsReportedAndTheLoopContinues() {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ByteArrayOutputStream err = new ByteArrayOutputStream();
-        try (PrintStream outStream = new PrintStream(out, true, StandardCharsets.UTF_8);
-                PrintStream errStream = new PrintStream(err, true, StandardCharsets.UTF_8);
-                REPL repl = new REPL(new ByteArrayInputStream("1 + 1\n6 * 7\nexit\n".getBytes(StandardCharsets.UTF_8)),
-                        outStream, errStream, JSRuntime::requestInterrupt)) {
-            repl.run();
-        }
+        Output output = runRepl("1 + 1\n6 * 7\nexit\n", JSRuntime::requestInterrupt);
         // The first line meets the pending interrupt; the loop reports it, clears it, and evaluates the next.
-        assertThat(err.toString(StandardCharsets.UTF_8)).contains("Error: execution interrupted");
-        assertThat(out.toString(StandardCharsets.UTF_8)).contains("42");
+        assertThat(output.err()).contains("Error: execution interrupted");
+        assertThat(output.out()).contains("42");
     }
 
     @Test

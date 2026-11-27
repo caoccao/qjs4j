@@ -18,8 +18,6 @@ package com.caoccao.qjs4j.compilation.lexer;
 
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +26,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class LexerTest {
+    private void assertTemplateLineComment(String source, String content) {
+        Lexer lexer = new Lexer(source);
+
+        Token template = lexer.nextToken();
+        assertThat(template.type()).isEqualTo(TokenType.TEMPLATE);
+        assertThat(template.value()).isEqualTo(content);
+        assertThat(lexer.nextToken().type()).isEqualTo(TokenType.SEMICOLON);
+        assertThat(lexer.nextToken().type()).isEqualTo(TokenType.EOF);
+    }
+
     @Test
     void testDefaultAsAPropertyNameIsFollowedByDivision() {
         // `default` is the one keyword that is also a legal property name, and there the '/' is
@@ -148,17 +156,11 @@ class LexerTest {
                 TokenType.REGEX, TokenType.SEMICOLON, TokenType.RBRACE);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"\n", "\r", "\r\n"})
-    void testTemplateLineCommentDoesNotCloseTheExpression(String lineEnding) {
-        String content = "${1 // } ` ${ ignored" + lineEnding + "+ 2}";
-        Lexer lexer = new Lexer("`" + content + "`;");
-
-        Token template = lexer.nextToken();
-        assertThat(template.type()).isEqualTo(TokenType.TEMPLATE);
-        assertThat(template.value()).isEqualTo(content);
-        assertThat(lexer.nextToken().type()).isEqualTo(TokenType.SEMICOLON);
-        assertThat(lexer.nextToken().type()).isEqualTo(TokenType.EOF);
+    @Test
+    void testTemplateLineCommentDoesNotCloseTheExpression() {
+        assertTemplateLineComment("`${1 // } ` ${ ignored\n+ 2}`;", "${1 // } ` ${ ignored\n+ 2}");
+        assertTemplateLineComment("`${1 // } ` ${ ignored\r+ 2}`;", "${1 // } ` ${ ignored\r+ 2}");
+        assertTemplateLineComment("`${1 // } ` ${ ignored\r\n+ 2}`;", "${1 // } ` ${ ignored\r\n+ 2}");
     }
 
     @Test

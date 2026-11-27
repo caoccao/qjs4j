@@ -29,55 +29,140 @@ import org.junit.jupiter.api.Timeout;
  * sides, because a cutoff that moves is still a cutoff.
  */
 public class JSDeepChainSemanticsTest extends BaseJavetTest {
-    private static final String BUILD_PROTOTYPE_CHAIN = """
-            function chainOf(depth, base) {
-              let object = base;
-              for (let i = 0; i < depth; i++) { object = Object.create(object); }
-              return object;
-            }
-            """;
-    private static final String BUILD_PROXY_CHAIN = """
-            function proxiesOf(depth, base) {
-              let value = base;
-              for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
-              return value;
-            }
-            """;
 
     @Test
     @Timeout(120)
     public void testDeepPrototypeChainAbsentPropertyReadsUndefined() {
-        for (int depth : new int[]{999, 1000, 1001, 20000}) {
-            assertStringWithJavet(BUILD_PROTOTYPE_CHAIN + "String(chainOf(" + depth + ", { x: 1 }).notThere);");
-        }
+        assertStringWithJavet("""
+                function chainOf(depth, base) {
+                  let object = base;
+                  for (let i = 0; i < depth; i++) { object = Object.create(object); }
+                  return object;
+                }
+                String(chainOf(999, { x: 1 }).notThere);""", """
+                function chainOf(depth, base) {
+                  let object = base;
+                  for (let i = 0; i < depth; i++) { object = Object.create(object); }
+                  return object;
+                }
+                String(chainOf(1000, { x: 1 }).notThere);""", """
+                function chainOf(depth, base) {
+                  let object = base;
+                  for (let i = 0; i < depth; i++) { object = Object.create(object); }
+                  return object;
+                }
+                String(chainOf(1001, { x: 1 }).notThere);""", """
+                function chainOf(depth, base) {
+                  let object = base;
+                  for (let i = 0; i < depth; i++) { object = Object.create(object); }
+                  return object;
+                }
+                String(chainOf(20000, { x: 1 }).notThere);""");
     }
 
     @Test
     @Timeout(120)
     public void testDeepPrototypeChainInOperator() {
-        for (int depth : new int[]{999, 1000, 1001, 20000}) {
-            assertBooleanWithJavet(BUILD_PROTOTYPE_CHAIN + "'x' in chainOf(" + depth + ", { x: 1 });");
-            assertBooleanWithJavet(BUILD_PROTOTYPE_CHAIN + "'y' in chainOf(" + depth + ", { x: 1 });");
-        }
+        assertBooleanWithJavet("""
+                function chainOf(depth, base) {
+                  let object = base;
+                  for (let i = 0; i < depth; i++) { object = Object.create(object); }
+                  return object;
+                }
+                'x' in chainOf(999, { x: 1 });""", """
+                function chainOf(depth, base) {
+                  let object = base;
+                  for (let i = 0; i < depth; i++) { object = Object.create(object); }
+                  return object;
+                }
+                'y' in chainOf(999, { x: 1 });""", """
+                function chainOf(depth, base) {
+                  let object = base;
+                  for (let i = 0; i < depth; i++) { object = Object.create(object); }
+                  return object;
+                }
+                'x' in chainOf(1000, { x: 1 });""", """
+                function chainOf(depth, base) {
+                  let object = base;
+                  for (let i = 0; i < depth; i++) { object = Object.create(object); }
+                  return object;
+                }
+                'y' in chainOf(1000, { x: 1 });""", """
+                function chainOf(depth, base) {
+                  let object = base;
+                  for (let i = 0; i < depth; i++) { object = Object.create(object); }
+                  return object;
+                }
+                'x' in chainOf(1001, { x: 1 });""", """
+                function chainOf(depth, base) {
+                  let object = base;
+                  for (let i = 0; i < depth; i++) { object = Object.create(object); }
+                  return object;
+                }
+                'y' in chainOf(1001, { x: 1 });""", """
+                function chainOf(depth, base) {
+                  let object = base;
+                  for (let i = 0; i < depth; i++) { object = Object.create(object); }
+                  return object;
+                }
+                'x' in chainOf(20000, { x: 1 });""", """
+                function chainOf(depth, base) {
+                  let object = base;
+                  for (let i = 0; i < depth; i++) { object = Object.create(object); }
+                  return object;
+                }
+                'y' in chainOf(20000, { x: 1 });""");
     }
 
     @Test
     @Timeout(120)
     public void testDeepPrototypeChainPropertyRead() {
         // The review's reproducer is depth 1001; 999 and 1000 pin the other side of the old cutoff.
-        for (int depth : new int[]{999, 1000, 1001, 20000}) {
-            assertIntegerWithJavet(BUILD_PROTOTYPE_CHAIN + "chainOf(" + depth + ", { x: 1 }).x;");
-        }
+        assertIntegerWithJavet("""
+                function chainOf(depth, base) {
+                  let object = base;
+                  for (let i = 0; i < depth; i++) { object = Object.create(object); }
+                  return object;
+                }
+                chainOf(999, { x: 1 }).x;""", """
+                function chainOf(depth, base) {
+                  let object = base;
+                  for (let i = 0; i < depth; i++) { object = Object.create(object); }
+                  return object;
+                }
+                chainOf(1000, { x: 1 }).x;""", """
+                function chainOf(depth, base) {
+                  let object = base;
+                  for (let i = 0; i < depth; i++) { object = Object.create(object); }
+                  return object;
+                }
+                chainOf(1001, { x: 1 }).x;""", """
+                function chainOf(depth, base) {
+                  let object = base;
+                  for (let i = 0; i < depth; i++) { object = Object.create(object); }
+                  return object;
+                }
+                chainOf(20000, { x: 1 }).x;""");
     }
 
     @Test
     @Timeout(120)
     public void testDeepPrototypeChainRunsInheritedAccessors() {
-        assertStringWithJavet(BUILD_PROTOTYPE_CHAIN + """
+        assertStringWithJavet("""
+                function chainOf(depth, base) {
+                  let object = base;
+                  for (let i = 0; i < depth; i++) { object = Object.create(object); }
+                  return object;
+                }
                 const base = { get probe() { return this === leaf ? 'receiver' : 'wrong' } };
                 const leaf = chainOf(5000, base);
                 leaf.probe;""");
-        assertStringWithJavet(BUILD_PROTOTYPE_CHAIN + """
+        assertStringWithJavet("""
+                function chainOf(depth, base) {
+                  let object = base;
+                  for (let i = 0; i < depth; i++) { object = Object.create(object); }
+                  return object;
+                }
                 let seen = 'none';
                 const base = { set probe(value) { seen = value } };
                 const leaf = chainOf(5000, base);
@@ -88,7 +173,12 @@ public class JSDeepChainSemanticsTest extends BaseJavetTest {
     @Test
     @Timeout(120)
     public void testDeepPrototypeChainStillEnumerates() {
-        assertStringWithJavet(BUILD_PROTOTYPE_CHAIN + """
+        assertStringWithJavet("""
+                function chainOf(depth, base) {
+                  let object = base;
+                  for (let i = 0; i < depth; i++) { object = Object.create(object); }
+                  return object;
+                }
                 const leaf = chainOf(5000, { inherited: 1 });
                 const keys = [];
                 for (const key in leaf) { keys.push(key); }
@@ -98,10 +188,67 @@ public class JSDeepChainSemanticsTest extends BaseJavetTest {
     @Test
     @Timeout(120)
     public void testDeepProxyChainIsArray() {
-        for (int depth : new int[]{999, 1000, 1001, 1002, 20000}) {
-            assertBooleanWithJavet(BUILD_PROXY_CHAIN + "Array.isArray(proxiesOf(" + depth + ", []));");
-            assertBooleanWithJavet(BUILD_PROXY_CHAIN + "Array.isArray(proxiesOf(" + depth + ", {}));");
-        }
+        assertBooleanWithJavet("""
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                Array.isArray(proxiesOf(999, []));""", """
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                Array.isArray(proxiesOf(999, {}));""", """
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                Array.isArray(proxiesOf(1000, []));""", """
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                Array.isArray(proxiesOf(1000, {}));""", """
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                Array.isArray(proxiesOf(1001, []));""", """
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                Array.isArray(proxiesOf(1001, {}));""", """
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                Array.isArray(proxiesOf(1002, []));""", """
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                Array.isArray(proxiesOf(1002, {}));""", """
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                Array.isArray(proxiesOf(20000, []));""", """
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                Array.isArray(proxiesOf(20000, {}));""");
     }
 
     @Test
@@ -111,7 +258,13 @@ public class JSDeepChainSemanticsTest extends BaseJavetTest {
         // proxy, so it is bounded by the interpreter's call-stack budget — a documented, now
         // configurable limit (JSRuntimeOptions.setMaxStackSize), not the classification cutoff this
         // class is about. Classification at 20,000 is covered by testDeepProxyChainTypeof.
-        assertIntegerWithJavet(BUILD_PROXY_CHAIN + "proxiesOf(200, function (a, b) { return a + b })(2, 3);");
+        assertIntegerWithJavet("""
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                proxiesOf(200, function (a, b) { return a + b })(2, 3);""");
     }
 
     @Test
@@ -124,27 +277,99 @@ public class JSDeepChainSemanticsTest extends BaseJavetTest {
         // classification. At 20,000 that budget is V8's, and how much of it is left depends on how
         // busy the suite is — the assertion held only while V8 happened not to run out first.
         // Classification at 20,000 is covered by testDeepProxyChainTypeof, which does not recurse.
-        for (int depth : new int[]{1001, 1002}) {
-            assertIntegerWithJavet(BUILD_PROXY_CHAIN + """
-                    function Point(x) { this.x = x }
-                    Reflect.construct(proxiesOf(DEPTH, Point), [7]).x;""".replace("DEPTH", String.valueOf(depth)));
-        }
+        assertIntegerWithJavet("""
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                function Point(x) { this.x = x }
+                Reflect.construct(proxiesOf(1001, Point), [7]).x;""", """
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                function Point(x) { this.x = x }
+                Reflect.construct(proxiesOf(1002, Point), [7]).x;""");
     }
 
     @Test
     @Timeout(120)
     public void testDeepProxyChainTypeof() {
         // The review's reproducer: typeof flipped from "function" to "object" at 1,001 wrappers.
-        for (int depth : new int[]{999, 1000, 1001, 1002, 20000}) {
-            assertStringWithJavet(BUILD_PROXY_CHAIN + "typeof proxiesOf(" + depth + ", function () {});");
-            assertStringWithJavet(BUILD_PROXY_CHAIN + "typeof proxiesOf(" + depth + ", {});");
-        }
+        assertStringWithJavet("""
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                typeof proxiesOf(999, function () {});""", """
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                typeof proxiesOf(999, {});""", """
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                typeof proxiesOf(1000, function () {});""", """
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                typeof proxiesOf(1000, {});""", """
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                typeof proxiesOf(1001, function () {});""", """
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                typeof proxiesOf(1001, {});""", """
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                typeof proxiesOf(1002, function () {});""", """
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                typeof proxiesOf(1002, {});""", """
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                typeof proxiesOf(20000, function () {});""", """
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
+                typeof proxiesOf(20000, {});""");
     }
 
     @Test
     @Timeout(120)
     public void testDeepProxyOverBoundFunctionIsConstructable() {
-        assertIntegerWithJavet(BUILD_PROXY_CHAIN + """
+        assertIntegerWithJavet("""
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
                 function Point(x) { this.x = x }
                 let bound = Point;
                 for (let i = 0; i < 100; i++) { bound = bound.bind(null); }
@@ -154,7 +379,12 @@ public class JSDeepChainSemanticsTest extends BaseJavetTest {
     @Test
     @Timeout(120)
     public void testRevokedProxyInADeepChainStillThrows() {
-        assertStringWithJavet(BUILD_PROXY_CHAIN + """
+        assertStringWithJavet("""
+                function proxiesOf(depth, base) {
+                  let value = base;
+                  for (let i = 0; i < depth; i++) { value = new Proxy(value, {}); }
+                  return value;
+                }
                 const revocable = Proxy.revocable([], {});
                 const deep = proxiesOf(1500, revocable.proxy);
                 revocable.revoke();

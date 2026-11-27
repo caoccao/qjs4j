@@ -432,8 +432,7 @@ final class JavaObjectConverter {
 
         @Override
         public boolean equals(Object other) {
-            return this == other || !(this instanceof JavaCollectionKeys.IdentityKey) && other instanceof List
-                    && JavaCollectionKeys.valueEquals(this, other);
+            return JavaCollectionKeys.collectionEquals(this, other, List.class);
         }
 
         @Override
@@ -456,8 +455,7 @@ final class JavaObjectConverter {
 
         @Override
         public boolean equals(Object other) {
-            return this == other || !(this instanceof JavaCollectionKeys.IdentityKey) && other instanceof Map
-                    && JavaCollectionKeys.valueEquals(this, other);
+            return JavaCollectionKeys.collectionEquals(this, other, Map.class);
         }
 
         @Override
@@ -478,8 +476,7 @@ final class JavaObjectConverter {
 
         @Override
         public boolean equals(Object other) {
-            return this == other || !(this instanceof JavaCollectionKeys.IdentityKey) && other instanceof Set
-                    && JavaCollectionKeys.valueEquals(this, other);
+            return JavaCollectionKeys.collectionEquals(this, other, Set.class);
         }
 
         @Override

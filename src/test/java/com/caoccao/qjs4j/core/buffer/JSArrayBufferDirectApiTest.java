@@ -129,23 +129,26 @@ public class JSArrayBufferDirectApiTest extends BaseJavetTest {
 
     @Test
     public void testScriptVisibleResizeErrorsAreUnchanged() {
-        assertStringWithJavet(inFunction("""
-                const b = new ArrayBuffer(8);
-                try { b.resize(4); return 'NO ERROR' } catch (e) { return e.name }
-                """));
-        assertStringWithJavet(inFunction("""
-                const r = new ArrayBuffer(8, { maxByteLength: 16 });
-                try { r.resize(32); return 'NO ERROR' } catch (e) { return e.name }
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  const b = new ArrayBuffer(8);
+                  try { b.resize(4); return 'NO ERROR' } catch (e) { return e.name }
+                })()""");
+        assertStringWithJavet("""
+                (function () {
+                  const r = new ArrayBuffer(8, { maxByteLength: 16 });
+                  try { r.resize(32); return 'NO ERROR' } catch (e) { return e.name }
+                })()""");
     }
 
     @Test
     public void testScriptVisibleTransferErrorsAreUnchanged() {
-        assertStringWithJavet(inFunction("""
-                const b = new ArrayBuffer(8);
-                b.transfer();
-                try { b.transfer(); return 'NO ERROR' } catch (e) { return e.name }
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  const b = new ArrayBuffer(8);
+                  b.transfer();
+                  try { b.transfer(); return 'NO ERROR' } catch (e) { return e.name }
+                })()""");
     }
 
     @Test

@@ -796,6 +796,23 @@ public final class JSTypeConversions {
         return toNumber(context, primitive);
     }
 
+    /** Coerces a numeric argument and rejects both primitive and boxed Symbol and BigInt values. */
+    public static JSNumber toNumberOrNull(JSContext context, JSValue value) {
+        if (value.isSymbol() || value.isSymbolObject()) {
+            context.throwTypeError("cannot convert symbol to number");
+            return null;
+        }
+        if (value.isBigInt() || value.isBigIntObject()) {
+            context.throwTypeError("cannot convert bigint to number");
+            return null;
+        }
+        JSNumber number = JSTypeConversions.toNumber(context, value);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        return number;
+    }
+
     /**
      * ToObject(argument) ES2024 7.1.18 Converts a value to an Object by auto-boxing primitives. Returns null for
      * null/undefined.

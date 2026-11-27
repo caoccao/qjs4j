@@ -116,18 +116,13 @@ public final class TemporalPlainDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        if (year == null || dayOfMonth == null || (month == null && parsedMonthCode == null)) {
-            return TemporalError.INVALID_DATE_TIME_ARGUMENT.undefined(context);
-        }
-
-        String overflow = TemporalUtils.getOverflowOption(context, options);
-        if (context.hasPendingException()) {
+        String overflow = TemporalCalendarFields.requiredDateOverflow(context, options, year, month, parsedMonthCode,
+                dayOfMonth, TemporalError.INVALID_DATE_TIME_ARGUMENT);
+        if (overflow == null) {
             return JSUndefined.INSTANCE;
         }
-
-        String monthCodeText = parsedMonthCode == null ? null : parsedMonthCode.monthCode();
-        IsoDate resultDate = IsoDate.calendarDateToIsoDate(context, calendarId, year, month, monthCodeText, dayOfMonth,
-                overflow);
+        IsoDate resultDate = TemporalCalendarFields.toIsoDate(context, calendarId, year, month, parsedMonthCode,
+                dayOfMonth, overflow);
         if (context.hasPendingException() || resultDate == null) {
             return JSUndefined.INSTANCE;
         }

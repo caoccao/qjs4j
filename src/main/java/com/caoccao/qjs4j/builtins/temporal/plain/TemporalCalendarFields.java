@@ -56,18 +56,12 @@ final class TemporalCalendarFields {
             return JSUndefined.INSTANCE;
         }
 
-        if (year == null || dayOfMonth == null || (month == null && parsedMonthCode == null)) {
-            return TemporalError.INVALID_DATE_ARGUMENT.undefined(context);
-        }
-
-        String overflow = TemporalUtils.getOverflowOption(context, options);
-        if (context.hasPendingException()) {
+        String overflow = requiredDateOverflow(context, options, year, month, parsedMonthCode, dayOfMonth,
+                TemporalError.INVALID_DATE_ARGUMENT);
+        if (overflow == null) {
             return JSUndefined.INSTANCE;
         }
-
-        String monthCodeText = parsedMonthCode == null ? null : parsedMonthCode.monthCode();
-        IsoDate convertedIsoDate = IsoDate.calendarDateToIsoDate(context, calendarId, year, month, monthCodeText,
-                dayOfMonth, overflow);
+        IsoDate convertedIsoDate = toIsoDate(context, calendarId, year, month, parsedMonthCode, dayOfMonth, overflow);
         if (context.hasPendingException() || convertedIsoDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -130,6 +124,15 @@ final class TemporalCalendarFields {
         return result == null ? JSUndefined.INSTANCE : result;
     }
 
+    static String requiredDateOverflow(JSContext context, JSValue options, Integer year, Integer month,
+            IsoMonth monthCode, Integer day, TemporalError invalidDate) {
+        if (year == null || day == null || (month == null && monthCode == null)) {
+            return invalidDate.reject(context);
+        }
+        String overflow = TemporalUtils.getOverflowOption(context, options);
+        return context.hasPendingException() ? null : overflow;
+    }
+
     static int resolveIsoMonth(JSContext context, Integer month, IsoMonth code, String overflow) {
         if (code != null) {
             if (code.leapMonth() || code.month() < 1 || code.month() > 12 || (month != null && month != code.month())) {
@@ -143,6 +146,12 @@ final class TemporalCalendarFields {
             return 0;
         }
         return Math.min(month, 12);
+    }
+
+    static IsoDate toIsoDate(JSContext context, TemporalCalendarId calendar, int year, Integer month,
+            IsoMonth monthCode, int day, String overflow) {
+        return IsoDate.calendarDateToIsoDate(context, calendar, year, month,
+                monthCode == null ? null : monthCode.monthCode(), day, overflow);
     }
 
     static JSValue yearMonth(JSContext context, TemporalCalendarId calendarId, int year, Integer monthFromProperty,

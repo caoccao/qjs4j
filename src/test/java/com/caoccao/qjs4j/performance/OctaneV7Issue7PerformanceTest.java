@@ -40,15 +40,8 @@ public class OctaneV7Issue7PerformanceTest extends BaseTest {
 
     @Test
     public void testOctaneV7Issue7ThroughContextEval() throws IOException {
-        String code = loadCode("performance/octane-v7-issue-7.js")
-                // Keep the issue's complete workloads while limiting the timing harness
-                // to one warm-up and one measured batch per benchmark.
-                .replace("elapsed < 1000", "elapsed < 1").replace("data.runs < 32", "data.runs < 1")
-                .replace("var print = (...args) => new Foo().print([...args]);",
-                        "var __octaneResults = [];\n" + "var print = (...args) => __octaneResults.push(args.join(''));")
-                + "\n[success, __octaneResults];";
-
-        JSValue value = context.eval(code);
+        // The fixture keeps all eight workloads and uses a short timing window for the regression test.
+        JSValue value = context.eval(loadCode("performance/octane-v7-issue-7.js"));
 
         assertThat(value).isInstanceOfSatisfying(JSArray.class, testResult -> {
             assertThat(testResult.get(0)).isEqualTo(JSBoolean.TRUE);

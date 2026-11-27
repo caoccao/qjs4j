@@ -1,52 +1,139 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 import com.caoccao.qjs4j.BaseJavetTest;
-import com.caoccao.qjs4j.core.JSString;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 public class WithIdentifierResolutionTest extends BaseJavetTest {
-    private void assertStringWithTest262Semantics(String expected, String code) {
+    private void assertStringWithTest262Semantics(String expected, String... scripts) {
         // Test262 requires HasProperty in both HasBinding and GetBindingValue.
         // The bundled V8 omits the second check, so it is not the oracle for these cases.
-        for (String normalizedCode : getNormalizedCodeStrings(code)) {
-            assertStringValue(resetContext().eval(normalizedCode), expected);
+        for (String code : scripts) {
+            assertStringValue(resetContext().eval(code), expected);
+            assertStringValue(resetContext().eval("'use strict';\n" + code), expected);
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"direct", "closure", "strictClosure"})
-    public void testAbruptGetBindingValueHasProperty(String mode) {
-        for (String expression : new String[]{"value", "value()"}) {
-            assertStringWithTest262Semantics("true|has,get:Symbol(Symbol.unscopables),has", """
-                    (() => {
-                      const log = [];
-                      const marker = {};
-                      let count = 0;
-                      const scope = new Proxy({}, {
-                        has(target, key) {
-                          if (key !== 'value') return false;
-                          log.push('has');
-                          if (++count === 2) throw marker;
-                          return true;
-                        },
-                        get(target, key) { log.push('get:' + String(key)); }
-                      });
-                      try { %s; }
-                      catch (e) { return (e === marker) + '|' + log.join(','); }
-                      return 'missing error';
-                    })()
-                    """.formatted(access(mode, expression, false)));
-        }
+    @Test
+    public void testAbruptGetBindingValueHasProperty() {
+        assertStringWithTest262Semantics("true|has,get:Symbol(Symbol.unscopables),has", """
+                (() => {
+                  const log = [];
+                  const marker = {};
+                  let count = 0;
+                  const scope = new Proxy({}, {
+                    has(target, key) {
+                      if (key !== 'value') return false;
+                      log.push('has');
+                      if (++count === 2) throw marker;
+                      return true;
+                    },
+                    get(target, key) { log.push('get:' + String(key)); }
+                  });
+                  try { Function('object', 'outer', "with (object) { return value; }")(scope, null); }
+                  catch (e) { return (e === marker) + '|' + log.join(','); }
+                  return 'missing error';
+                })()
+                """, """
+                (() => {
+                  const log = [];
+                  const marker = {};
+                  let count = 0;
+                  const scope = new Proxy({}, {
+                    has(target, key) {
+                      if (key !== 'value') return false;
+                      log.push('has');
+                      if (++count === 2) throw marker;
+                      return true;
+                    },
+                    get(target, key) { log.push('get:' + String(key)); }
+                  });
+                  try { Function('object', 'outer', "with (object) { return value(); }")(scope, null); }
+                  catch (e) { return (e === marker) + '|' + log.join(','); }
+                  return 'missing error';
+                })()
+                """,
+                """
+                        (() => {
+                          const log = [];
+                          const marker = {};
+                          let count = 0;
+                          const scope = new Proxy({}, {
+                            has(target, key) {
+                              if (key !== 'value') return false;
+                              log.push('has');
+                              if (++count === 2) throw marker;
+                              return true;
+                            },
+                            get(target, key) { log.push('get:' + String(key)); }
+                          });
+                          try { Function('object', 'outer', "with (object) { return function () { return value; }; }")(scope, null)(); }
+                          catch (e) { return (e === marker) + '|' + log.join(','); }
+                          return 'missing error';
+                        })()
+                        """,
+                """
+                        (() => {
+                          const log = [];
+                          const marker = {};
+                          let count = 0;
+                          const scope = new Proxy({}, {
+                            has(target, key) {
+                              if (key !== 'value') return false;
+                              log.push('has');
+                              if (++count === 2) throw marker;
+                              return true;
+                            },
+                            get(target, key) { log.push('get:' + String(key)); }
+                          });
+                          try { Function('object', 'outer', "with (object) { return function () { return value(); }; }")(scope, null)(); }
+                          catch (e) { return (e === marker) + '|' + log.join(','); }
+                          return 'missing error';
+                        })()
+                        """,
+                """
+                        (() => {
+                          const log = [];
+                          const marker = {};
+                          let count = 0;
+                          const scope = new Proxy({}, {
+                            has(target, key) {
+                              if (key !== 'value') return false;
+                              log.push('has');
+                              if (++count === 2) throw marker;
+                              return true;
+                            },
+                            get(target, key) { log.push('get:' + String(key)); }
+                          });
+                          try { Function('object', 'outer', "with (object) { return function () { 'use strict'; return value; }; }")(scope, null)(); }
+                          catch (e) { return (e === marker) + '|' + log.join(','); }
+                          return 'missing error';
+                        })()
+                        """,
+                """
+                        (() => {
+                          const log = [];
+                          const marker = {};
+                          let count = 0;
+                          const scope = new Proxy({}, {
+                            has(target, key) {
+                              if (key !== 'value') return false;
+                              log.push('has');
+                              if (++count === 2) throw marker;
+                              return true;
+                            },
+                            get(target, key) { log.push('get:' + String(key)); }
+                          });
+                          try { Function('object', 'outer', "with (object) { return function () { 'use strict'; return value(); }; }")(scope, null)(); }
+                          catch (e) { return (e === marker) + '|' + log.join(','); }
+                          return 'missing error';
+                        })()
+                        """);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"direct", "closure", "strictClosure"})
-    public void testAbruptUnscopablesLookup(String mode) {
+    @Test
+    public void testAbruptUnscopablesLookup() {
         assertStringWithJavet("""
                 (() => {
                   const log = [];
@@ -59,45 +146,172 @@ public class WithIdentifierResolutionTest extends BaseJavetTest {
                       return target[key];
                     }
                   });
-                  try { %s; }
+                  try { Function('object', 'outer', "with (object) { return value; }")(scope, null); }
                   catch (e) { return (e === marker) + '|' + log.join(','); }
                   return 'missing error';
                 })()
-                """.formatted(access(mode, "value", false)));
+                """,
+                """
+                        (() => {
+                          const log = [];
+                          const marker = {};
+                          const scope = new Proxy({ value: 7 }, {
+                            has(target, key) { log.push('has:' + String(key)); return Reflect.has(target, key); },
+                            get(target, key) {
+                              log.push('get:' + String(key));
+                              if (key === Symbol.unscopables) throw marker;
+                              return target[key];
+                            }
+                          });
+                          try { Function('object', 'outer', "with (object) { return function () { return value; }; }")(scope, null)(); }
+                          catch (e) { return (e === marker) + '|' + log.join(','); }
+                          return 'missing error';
+                        })()
+                        """,
+                """
+                        (() => {
+                          const log = [];
+                          const marker = {};
+                          const scope = new Proxy({ value: 7 }, {
+                            has(target, key) { log.push('has:' + String(key)); return Reflect.has(target, key); },
+                            get(target, key) {
+                              log.push('get:' + String(key));
+                              if (key === Symbol.unscopables) throw marker;
+                              return target[key];
+                            }
+                          });
+                          try { Function('object', 'outer', "with (object) { return function () { 'use strict'; return value; }; }")(scope, null)(); }
+                          catch (e) { return (e === marker) + '|' + log.join(','); }
+                          return 'missing error';
+                        })()
+                        """);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"direct", "closure", "strictClosure"})
-    public void testBindingDeletedByUnscopablesGetter(String mode) {
-        for (String expression : new String[]{"value", "value()"}) {
-            String result = "strictClosure".equals(mode)
-                    ? "ReferenceError|unchanged"
-                    : "value".equals(expression) ? "none|undefined" : "TypeError|unchanged";
-            assertStringWithTest262Semantics(String.join(";", Collections.nCopies(2, result + "|1")), """
-                    (() => [null, {}].map(unscopables => {
-                      let count = 0;
-                      const outer = { value() { return 'outer'; } };
-                      const scope = {
-                        value: 7,
-                        get [Symbol.unscopables]() {
-                          count++;
-                          delete this.value;
-                          return unscopables;
-                        }
-                      };
-                      let result = 'unchanged';
-                      let error = 'none';
-                      try { result = String(%s); }
-                      catch (e) { error = e.name; }
-                      return [error, result, count].join('|');
-                    }).join(';'))()
-                    """.formatted(access(mode, expression, true)));
-        }
+    @Test
+    public void testBindingDeletedByUnscopablesGetter() {
+        assertStringWithTest262Semantics("none|undefined|1;none|undefined|1",
+                """
+                        (() => [null, {}].map(unscopables => {
+                          let count = 0;
+                          const outer = { value() { return 'outer'; } };
+                          const scope = {
+                            value: 7,
+                            get [Symbol.unscopables]() {
+                              count++;
+                              delete this.value;
+                              return unscopables;
+                            }
+                          };
+                          let result = 'unchanged';
+                          let error = 'none';
+                          try { result = String(Function('object', 'outer', "with (outer) { with (object) { return value; } }")(scope, outer)); }
+                          catch (e) { error = e.name; }
+                          return [error, result, count].join('|');
+                        }).join(';'))()
+                        """);
+        assertStringWithTest262Semantics("TypeError|unchanged|1;TypeError|unchanged|1",
+                """
+                        (() => [null, {}].map(unscopables => {
+                          let count = 0;
+                          const outer = { value() { return 'outer'; } };
+                          const scope = {
+                            value: 7,
+                            get [Symbol.unscopables]() {
+                              count++;
+                              delete this.value;
+                              return unscopables;
+                            }
+                          };
+                          let result = 'unchanged';
+                          let error = 'none';
+                          try { result = String(Function('object', 'outer', "with (outer) { with (object) { return value(); } }")(scope, outer)); }
+                          catch (e) { error = e.name; }
+                          return [error, result, count].join('|');
+                        }).join(';'))()
+                        """);
+        assertStringWithTest262Semantics("none|undefined|1;none|undefined|1",
+                """
+                        (() => [null, {}].map(unscopables => {
+                          let count = 0;
+                          const outer = { value() { return 'outer'; } };
+                          const scope = {
+                            value: 7,
+                            get [Symbol.unscopables]() {
+                              count++;
+                              delete this.value;
+                              return unscopables;
+                            }
+                          };
+                          let result = 'unchanged';
+                          let error = 'none';
+                          try { result = String(Function('object', 'outer', "with (outer) { with (object) { return function () { return value; }; } }")(scope, outer)()); }
+                          catch (e) { error = e.name; }
+                          return [error, result, count].join('|');
+                        }).join(';'))()
+                        """);
+        assertStringWithTest262Semantics("TypeError|unchanged|1;TypeError|unchanged|1",
+                """
+                        (() => [null, {}].map(unscopables => {
+                          let count = 0;
+                          const outer = { value() { return 'outer'; } };
+                          const scope = {
+                            value: 7,
+                            get [Symbol.unscopables]() {
+                              count++;
+                              delete this.value;
+                              return unscopables;
+                            }
+                          };
+                          let result = 'unchanged';
+                          let error = 'none';
+                          try { result = String(Function('object', 'outer', "with (outer) { with (object) { return function () { return value(); }; } }")(scope, outer)()); }
+                          catch (e) { error = e.name; }
+                          return [error, result, count].join('|');
+                        }).join(';'))()
+                        """);
+        assertStringWithTest262Semantics("ReferenceError|unchanged|1;ReferenceError|unchanged|1",
+                """
+                        (() => [null, {}].map(unscopables => {
+                          let count = 0;
+                          const outer = { value() { return 'outer'; } };
+                          const scope = {
+                            value: 7,
+                            get [Symbol.unscopables]() {
+                              count++;
+                              delete this.value;
+                              return unscopables;
+                            }
+                          };
+                          let result = 'unchanged';
+                          let error = 'none';
+                          try { result = String(Function('object', 'outer', "with (outer) { with (object) { return function () { 'use strict'; return value; }; } }")(scope, outer)()); }
+                          catch (e) { error = e.name; }
+                          return [error, result, count].join('|');
+                        }).join(';'))()
+                        """,
+                """
+                        (() => [null, {}].map(unscopables => {
+                          let count = 0;
+                          const outer = { value() { return 'outer'; } };
+                          const scope = {
+                            value: 7,
+                            get [Symbol.unscopables]() {
+                              count++;
+                              delete this.value;
+                              return unscopables;
+                            }
+                          };
+                          let result = 'unchanged';
+                          let error = 'none';
+                          try { result = String(Function('object', 'outer', "with (outer) { with (object) { return function () { 'use strict'; return value(); }; } }")(scope, outer)()); }
+                          catch (e) { error = e.name; }
+                          return [error, result, count].join('|');
+                        }).join(';'))()
+                        """);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"direct", "closure"})
-    public void testBlockedNestedLookupAndDelete(String mode) {
+    @Test
+    public void testBlockedNestedLookupAndDelete() {
         assertStringWithJavet(
                 """
                         (() => {
@@ -112,53 +326,173 @@ public class WithIdentifierResolutionTest extends BaseJavetTest {
                             },
                             deleteProperty(target, key) { log.push('delete:' + key); return Reflect.deleteProperty(target, key); }
                           });
-                          const read = %s;
-                          const call = %s;
-                          const deleted = %s;
+                          const read = Function('object', 'outer', "with (outer) { with (object) { return value; } }")(scope, outer);
+                          const call = Function('object', 'outer', "with (outer) { with (object) { return method(); } }")(scope, outer);
+                          const deleted = Function('object', 'outer', "with (outer) { with (object) { return delete value; } }")(scope, outer);
                           return [read, call, deleted, 'value' in outer, inner.value, log.join(',')].join('|');
                         })()
-                        """
-                        .formatted(access(mode, "value", true), access(mode, "method()", true),
-                                access(mode, "delete value", true)));
+                        """,
+                """
+                        (() => {
+                          const outer = { value: 7, method() { return this === outer ? 'outer' : 'wrong'; } };
+                          const inner = { value: 9, method() { return 'inner'; },
+                            [Symbol.unscopables]: { value: true, method: true } };
+                          const log = [];
+                          const scope = new Proxy(inner, {
+                            has(target, key) { log.push('has:' + String(key)); return Reflect.has(target, key); },
+                            get(target, key, receiver) {
+                              log.push('get:' + String(key)); return Reflect.get(target, key, receiver);
+                            },
+                            deleteProperty(target, key) { log.push('delete:' + key); return Reflect.deleteProperty(target, key); }
+                          });
+                          const read = Function('object', 'outer', "with (outer) { with (object) { return function () { return value; }; } }")(scope, outer)();
+                          const call = Function('object', 'outer', "with (outer) { with (object) { return function () { return method(); }; } }")(scope, outer)();
+                          const deleted = Function('object', 'outer', "with (outer) { with (object) { return function () { return delete value; }; } }")(scope, outer)();
+                          return [read, call, deleted, 'value' in outer, inner.value, log.join(',')].join('|');
+                        })()
+                        """);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"direct", "closure", "strictClosure"})
-    public void testPropertyDisappearsAfterHasBinding(String mode) {
-        for (String expression : new String[]{"value", "value()"}) {
-            String result = "strictClosure".equals(mode)
-                    ? "ReferenceError"
-                    : "value".equals(expression) ? "undefined" : "TypeError";
-            String expected = result + "|has,get:Symbol(Symbol.unscopables),has";
-            assertStringWithTest262Semantics(expected + ";" + expected, """
-                    (() => [undefined, {}].map(unscopables => {
-                      const log = [];
-                      let count = 0;
-                      const scope = new Proxy({}, {
-                        has(target, key) {
-                          if (key !== 'value') return false;
-                          log.push('has'); return ++count === 1;
-                        },
-                        get(target, key) {
-                          log.push('get:' + String(key));
-                          return key === Symbol.unscopables ? unscopables : 7;
-                        }
-                      });
-                      let result;
-                      try { result = String(%s); }
-                      catch (e) { result = e.name; }
-                      return result + '|' + log.join(',');
-                    }).join(';'))()
-                    """.formatted(access(mode, expression, false)));
-        }
+    @Test
+    public void testPropertyDisappearsAfterHasBinding() {
+        assertStringWithTest262Semantics(
+                "undefined|has,get:Symbol(Symbol.unscopables),has;undefined|has,get:Symbol(Symbol.unscopables),has",
+                """
+                        (() => [undefined, {}].map(unscopables => {
+                          const log = [];
+                          let count = 0;
+                          const scope = new Proxy({}, {
+                            has(target, key) {
+                              if (key !== 'value') return false;
+                              log.push('has'); return ++count === 1;
+                            },
+                            get(target, key) {
+                              log.push('get:' + String(key));
+                              return key === Symbol.unscopables ? unscopables : 7;
+                            }
+                          });
+                          let result;
+                          try { result = String(Function('object', 'outer', "with (object) { return value; }")(scope, null)); }
+                          catch (e) { result = e.name; }
+                          return result + '|' + log.join(',');
+                        }).join(';'))()
+                        """);
+        assertStringWithTest262Semantics(
+                "TypeError|has,get:Symbol(Symbol.unscopables),has;TypeError|has,get:Symbol(Symbol.unscopables),has",
+                """
+                        (() => [undefined, {}].map(unscopables => {
+                          const log = [];
+                          let count = 0;
+                          const scope = new Proxy({}, {
+                            has(target, key) {
+                              if (key !== 'value') return false;
+                              log.push('has'); return ++count === 1;
+                            },
+                            get(target, key) {
+                              log.push('get:' + String(key));
+                              return key === Symbol.unscopables ? unscopables : 7;
+                            }
+                          });
+                          let result;
+                          try { result = String(Function('object', 'outer', "with (object) { return value(); }")(scope, null)); }
+                          catch (e) { result = e.name; }
+                          return result + '|' + log.join(',');
+                        }).join(';'))()
+                        """);
+        assertStringWithTest262Semantics(
+                "undefined|has,get:Symbol(Symbol.unscopables),has;undefined|has,get:Symbol(Symbol.unscopables),has",
+                """
+                        (() => [undefined, {}].map(unscopables => {
+                          const log = [];
+                          let count = 0;
+                          const scope = new Proxy({}, {
+                            has(target, key) {
+                              if (key !== 'value') return false;
+                              log.push('has'); return ++count === 1;
+                            },
+                            get(target, key) {
+                              log.push('get:' + String(key));
+                              return key === Symbol.unscopables ? unscopables : 7;
+                            }
+                          });
+                          let result;
+                          try { result = String(Function('object', 'outer', "with (object) { return function () { return value; }; }")(scope, null)()); }
+                          catch (e) { result = e.name; }
+                          return result + '|' + log.join(',');
+                        }).join(';'))()
+                        """);
+        assertStringWithTest262Semantics(
+                "TypeError|has,get:Symbol(Symbol.unscopables),has;TypeError|has,get:Symbol(Symbol.unscopables),has",
+                """
+                        (() => [undefined, {}].map(unscopables => {
+                          const log = [];
+                          let count = 0;
+                          const scope = new Proxy({}, {
+                            has(target, key) {
+                              if (key !== 'value') return false;
+                              log.push('has'); return ++count === 1;
+                            },
+                            get(target, key) {
+                              log.push('get:' + String(key));
+                              return key === Symbol.unscopables ? unscopables : 7;
+                            }
+                          });
+                          let result;
+                          try { result = String(Function('object', 'outer', "with (object) { return function () { return value(); }; }")(scope, null)()); }
+                          catch (e) { result = e.name; }
+                          return result + '|' + log.join(',');
+                        }).join(';'))()
+                        """);
+        assertStringWithTest262Semantics(
+                "ReferenceError|has,get:Symbol(Symbol.unscopables),has;ReferenceError|has,get:Symbol(Symbol.unscopables),has",
+                """
+                        (() => [undefined, {}].map(unscopables => {
+                          const log = [];
+                          let count = 0;
+                          const scope = new Proxy({}, {
+                            has(target, key) {
+                              if (key !== 'value') return false;
+                              log.push('has'); return ++count === 1;
+                            },
+                            get(target, key) {
+                              log.push('get:' + String(key));
+                              return key === Symbol.unscopables ? unscopables : 7;
+                            }
+                          });
+                          let result;
+                          try { result = String(Function('object', 'outer', "with (object) { return function () { 'use strict'; return value; }; }")(scope, null)()); }
+                          catch (e) { result = e.name; }
+                          return result + '|' + log.join(',');
+                        }).join(';'))()
+                        """,
+                """
+                        (() => [undefined, {}].map(unscopables => {
+                          const log = [];
+                          let count = 0;
+                          const scope = new Proxy({}, {
+                            has(target, key) {
+                              if (key !== 'value') return false;
+                              log.push('has'); return ++count === 1;
+                            },
+                            get(target, key) {
+                              log.push('get:' + String(key));
+                              return key === Symbol.unscopables ? unscopables : 7;
+                            }
+                          });
+                          let result;
+                          try { result = String(Function('object', 'outer', "with (object) { return function () { 'use strict'; return value(); }; }")(scope, null)()); }
+                          catch (e) { result = e.name; }
+                          return result + '|' + log.join(',');
+                        }).join(';'))()
+                        """);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"direct", "closure", "strictClosure"})
-    public void testReadAndCallTrapOrderAndReceiver(String mode) {
-        String expected = "7:receiver|has:value,get:Symbol(Symbol.unscopables),has:value,get:value,"
+    @Test
+    public void testReadAndCallTrapOrderAndReceiver() {
+        String trace = "7:receiver|has:value,get:Symbol(Symbol.unscopables),has:value,get:value,"
                 + "has:method,get:Symbol(Symbol.unscopables),has:method,get:method";
-        assertStringWithTest262Semantics(String.join(";", Collections.nCopies(5, expected)), """
+        String expected = String.join(";", Collections.nCopies(5, trace));
+        assertStringWithTest262Semantics(expected, """
                 (() => [undefined, null, 42, {}, function () {}].map(unscopables => {
                   const log = [];
                   const target = { value: 7, method() { return this === scope ? 'receiver' : 'wrong'; } };
@@ -169,24 +503,43 @@ public class WithIdentifierResolutionTest extends BaseJavetTest {
                       return key === Symbol.unscopables ? unscopables : Reflect.get(target, key, receiver);
                     }
                   });
-                  const read = %s;
-                  const call = %s;
+                  const read = Function('object', 'outer', "with (object) { return value; }")(scope, null);
+                  const call = Function('object', 'outer', "with (object) { return method(); }")(scope, null);
                   return read + ':' + call + '|' + log.join(',');
                 }).join(';'))()
-                """.formatted(access(mode, "value", false), access(mode, "method()", false)));
+                """,
+                """
+                        (() => [undefined, null, 42, {}, function () {}].map(unscopables => {
+                          const log = [];
+                          const target = { value: 7, method() { return this === scope ? 'receiver' : 'wrong'; } };
+                          const scope = new Proxy(target, {
+                            has(target, key) { log.push('has:' + String(key)); return Reflect.has(target, key); },
+                            get(target, key, receiver) {
+                              log.push('get:' + String(key));
+                              return key === Symbol.unscopables ? unscopables : Reflect.get(target, key, receiver);
+                            }
+                          });
+                          const read = Function('object', 'outer', "with (object) { return function () { return value; }; }")(scope, null)();
+                          const call = Function('object', 'outer', "with (object) { return function () { return method(); }; }")(scope, null)();
+                          return read + ':' + call + '|' + log.join(',');
+                        }).join(';'))()
+                        """,
+                """
+                        (() => [undefined, null, 42, {}, function () {}].map(unscopables => {
+                          const log = [];
+                          const target = { value: 7, method() { return this === scope ? 'receiver' : 'wrong'; } };
+                          const scope = new Proxy(target, {
+                            has(target, key) { log.push('has:' + String(key)); return Reflect.has(target, key); },
+                            get(target, key, receiver) {
+                              log.push('get:' + String(key));
+                              return key === Symbol.unscopables ? unscopables : Reflect.get(target, key, receiver);
+                            }
+                          });
+                          const read = Function('object', 'outer', "with (object) { return function () { 'use strict'; return value; }; }")(scope, null)();
+                          const call = Function('object', 'outer', "with (object) { return function () { 'use strict'; return method(); }; }")(scope, null)();
+                          return read + ':' + call + '|' + log.join(',');
+                        }).join(';'))()
+                        """);
     }
 
-    private static String access(String mode, String expression, boolean nested) {
-        String body = "return " + expression + ";";
-        if (!"direct".equals(mode)) {
-            body = "return function () { " + ("strictClosure".equals(mode) ? "'use strict'; " : "") + body + " };";
-        }
-        body = "with (object) { " + body + " }";
-        if (nested) {
-            body = "with (outer) { " + body + " }";
-        }
-        // Function keeps the with statement in sloppy code even when the parity harness is strict.
-        return "Function('object', 'outer', \"" + body + "\")(scope, " + (nested ? "outer" : "null") + ")"
-                + ("direct".equals(mode) ? "" : "()");
-    }
 }

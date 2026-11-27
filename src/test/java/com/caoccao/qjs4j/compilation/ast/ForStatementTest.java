@@ -19,8 +19,6 @@ package com.caoccao.qjs4j.compilation.ast;
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-
 public class ForStatementTest extends BaseJavetTest {
     @Test
     public void testForLetClosurePerIterationBinding() {
@@ -33,9 +31,27 @@ public class ForStatementTest extends BaseJavetTest {
     }
 
     @Test
-    public void testPrimeNumber() throws IOException {
-        String code = loadCode("performance/prime-number.js") + " JSON.stringify(primeNumbers);";
-        assertStringWithJavet(code);
+    public void testPrimeNumber() {
+        assertStringWithJavet("""
+                function isPrime(number) {
+                    let limit = Math.floor(number / 2);
+                    for (let i = 2; i <= limit; i++) {
+                        if (number % i === 0) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+
+                const primeNumbers = [];
+                const upperLimit = 100;
+                for (let number = 2; number < upperLimit; number++) {
+                    if (isPrime(number)) {
+                        primeNumbers.push(number);
+                    }
+                }
+                JSON.stringify(primeNumbers);
+                """);
     }
 
     @Test

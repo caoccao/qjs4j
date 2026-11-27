@@ -18,8 +18,6 @@ package com.caoccao.qjs4j.compilation.ast;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 public class DefaultParameterTest extends BaseJavetTest {
 
@@ -28,10 +26,10 @@ public class DefaultParameterTest extends BaseJavetTest {
         assertIntegerWithJavet("var f = (x = 10, y = 20) => x + y; f();");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"10", "", "undefined"})
-    void testArrowDefaultArgument(String arguments) {
-        assertIntegerWithJavet("var f = (x = 42) => x; f(%s);".formatted(arguments));
+    @Test
+    void testArrowDefaultArgument() {
+        assertIntegerWithJavet("var f = (x = 42) => x; f(10);", "var f = (x = 42) => x; f();",
+                "var f = (x = 42) => x; f(undefined);");
     }
 
     @Test
@@ -73,28 +71,28 @@ public class DefaultParameterTest extends BaseJavetTest {
         assertIntegerWithJavet("var f = (x, y = 10) => x + y; f.length;");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"1, 200", "1"})
-    void testArrowSecondDefaultArgument(String arguments) {
-        assertIntegerWithJavet("var f = (x, y = 100) => x + y; f(%s);".formatted(arguments));
+    @Test
+    void testArrowSecondDefaultArgument() {
+        assertIntegerWithJavet("var f = (x, y = 100) => x + y; f(1, 200);", "var f = (x, y = 100) => x + y; f(1);");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"0", "10", "", "undefined"})
-    void testDeclarationDefaultArgument(String arguments) {
-        assertIntegerWithJavet("function f(x = 42) { return x; } f(%s);".formatted(arguments));
+    @Test
+    void testDeclarationDefaultArgument() {
+        assertIntegerWithJavet("function f(x = 42) { return x; } f(0);", "function f(x = 42) { return x; } f(10);",
+                "function f(x = 42) { return x; } f();", "function f(x = 42) { return x; } f(undefined);");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"", "5, 15", "5"})
-    void testDeclarationMultipleDefaults(String arguments) {
-        assertIntegerWithJavet("function f(x = 10, y = 20) { return x + y; } f(%s);".formatted(arguments));
+    @Test
+    void testDeclarationMultipleDefaults() {
+        assertIntegerWithJavet("function f(x = 10, y = 20) { return x + y; } f();",
+                "function f(x = 10, y = 20) { return x + y; } f(5, 15);",
+                "function f(x = 10, y = 20) { return x + y; } f(5);");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"1", "1, 200"})
-    void testDeclarationSecondDefaultArgument(String arguments) {
-        assertIntegerWithJavet("function f(x, y = 100) { return y; } f(%s);".formatted(arguments));
+    @Test
+    void testDeclarationSecondDefaultArgument() {
+        assertIntegerWithJavet("function f(x, y = 100) { return y; } f(1);",
+                "function f(x, y = 100) { return y; } f(1, 200);");
     }
 
     @Test
@@ -116,16 +114,15 @@ public class DefaultParameterTest extends BaseJavetTest {
                 f();""");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"", "10"})
-    void testDefaultWithTrailingComma(String arguments) {
-        assertIntegerWithJavet("function f(x = 42,) { return x; } f(%s);".formatted(arguments));
+    @Test
+    void testDefaultWithTrailingComma() {
+        assertIntegerWithJavet("function f(x = 42,) { return x; } f();", "function f(x = 42,) { return x; } f(10);");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"10", ""})
-    void testExpressionDefaultArgument(String arguments) {
-        assertIntegerWithJavet("var f = function(x = 42) { return x; }; f(%s);".formatted(arguments));
+    @Test
+    void testExpressionDefaultArgument() {
+        assertIntegerWithJavet("var f = function(x = 42) { return x; }; f(10);",
+                "var f = function(x = 42) { return x; }; f();");
     }
 
     @Test
@@ -250,10 +247,11 @@ public class DefaultParameterTest extends BaseJavetTest {
         assertIntegerWithJavet("var f = function foo(x = 42) { return x; }; f();");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"x = 1, y = 2", "a, b = 10, c", "x, y", "x = 42", "x, y = 10"})
-    void testFunctionLength(String parameters) {
-        assertIntegerWithJavet("function f(%s) {} f.length;".formatted(parameters));
+    @Test
+    void testFunctionLength() {
+        assertIntegerWithJavet("function f(x = 1, y = 2) {} f.length;", "function f(a, b = 10, c) {} f.length;",
+                "function f(x, y) {} f.length;", "function f(x = 42) {} f.length;",
+                "function f(x, y = 10) {} f.length;");
     }
 
     @Test
@@ -274,10 +272,10 @@ public class DefaultParameterTest extends BaseJavetTest {
                 obj.add(5, 20);""");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"1", "1, 2"})
-    void testMixedDefaultArguments(String arguments) {
-        assertIntegerWithJavet("function f(a, b = 10, c = 20) { return a + b + c; } f(%s);".formatted(arguments));
+    @Test
+    void testMixedDefaultArguments() {
+        assertIntegerWithJavet("function f(a, b = 10, c = 20) { return a + b + c; } f(1);",
+                "function f(a, b = 10, c = 20) { return a + b + c; } f(1, 2);");
     }
 
     @Test

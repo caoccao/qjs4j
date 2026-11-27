@@ -48,9 +48,7 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                     // then a ReferenceError is thrown. Following QuickJS: emit super setup +
                     // property key evaluation, then THROW_ERROR instead of GET_SUPER_VALUE.
                     compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
-                    compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-                    compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
-                    compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
+                    compilerContext.emitter.emitSuperBase();
                     compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
                     compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "");
                     compilerContext.emitter.emitU8(3); // JS_THROW_ERROR_DELETE_SUPER
@@ -253,8 +251,7 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
             } else if (JSArguments.NAME.equals(name) && compilerContext.hasEnclosingArgumentsBinding
                     && compilerContext.scopeManager.findLocalInScopes(name) == null) {
-                compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-                compilerContext.emitter.emitU8(0);
+                compilerContext.emitter.emitOpcodeU8(Opcode.SPECIAL_OBJECT, 0);
             } else {
                 Integer localIndex = compilerContext.scopeManager.findLocalInScopes(name);
                 if (localIndex != null) {

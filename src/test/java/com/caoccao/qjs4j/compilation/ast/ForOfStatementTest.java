@@ -11,25 +11,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Simplest possible for-of test.
  */
 public class ForOfStatementTest extends BaseJavetTest {
-    private static final String CLOSABLE_GENERATOR = """
-            var closed = false;
-            function* g() {
-              try {
-                yield 1;
-                yield 2;
-              } finally {
-                closed = true;
-              }
-            }
-            """;
-    private static final String DESTRUCTURING_LOOP = """
-            var result = '';
-            for (var [k, v] of [[1, 'a'], [2, 'b']]) result += k + v;
-            result""";
-    private static final String GLOBAL_LOOP = """
-            var result = '';
-            for (var x of ['a', 'b', 'c']) result += x;
-            result""";
     @Override
     protected JSRuntime createRuntime() {
         return new JSRuntime();
@@ -47,12 +28,18 @@ public class ForOfStatementTest extends BaseJavetTest {
 
     @Test
     void testArrayOfArraysWithDestructuring() {
-        assertStringWithJavet(DESTRUCTURING_LOOP);
+        assertStringWithJavet("""
+                var result = '';
+                for (var [k, v] of [[1, 'a'], [2, 'b']]) result += k + v;
+                result""");
     }
 
     @Test
     void testForOfArrayDestructuring() {
-        assertThat(context.eval(DESTRUCTURING_LOOP).toString()).isEqualTo("1a2b");
+        assertThat(context.eval("""
+                var result = '';
+                for (var [k, v] of [[1, 'a'], [2, 'b']]) result += k + v;
+                result""").toString()).isEqualTo("1a2b");
     }
 
     @Test
@@ -71,7 +58,10 @@ public class ForOfStatementTest extends BaseJavetTest {
 
     @Test
     void testForOfInGlobalScope() {
-        assertThat(context.eval(GLOBAL_LOOP).toString()).isEqualTo("abc");
+        assertThat(context.eval("""
+                var result = '';
+                for (var x of ['a', 'b', 'c']) result += x;
+                result""").toString()).isEqualTo("abc");
     }
 
     @Test
@@ -86,12 +76,24 @@ public class ForOfStatementTest extends BaseJavetTest {
 
     @Test
     void testForOfSimpleArray() {
-        assertThat(context.eval(GLOBAL_LOOP).toString()).isEqualTo("abc");
+        assertThat(context.eval("""
+                var result = '';
+                for (var x of ['a', 'b', 'c']) result += x;
+                result""").toString()).isEqualTo("abc");
     }
 
     @Test
     void testIteratorCloseOnBreak() {
-        assertBooleanWithJavet(CLOSABLE_GENERATOR + """
+        assertBooleanWithJavet("""
+                var closed = false;
+                function* g() {
+                  try {
+                    yield 1;
+                    yield 2;
+                  } finally {
+                    closed = true;
+                  }
+                }
                 for (const x of g()) {
                   break;
                 }
@@ -100,7 +102,16 @@ public class ForOfStatementTest extends BaseJavetTest {
 
     @Test
     void testIteratorCloseOnReturn() {
-        assertBooleanWithJavet(CLOSABLE_GENERATOR + """
+        assertBooleanWithJavet("""
+                var closed = false;
+                function* g() {
+                  try {
+                    yield 1;
+                    yield 2;
+                  } finally {
+                    closed = true;
+                  }
+                }
                 (function () {
                   for (const x of g()) {
                     return;
@@ -111,7 +122,16 @@ public class ForOfStatementTest extends BaseJavetTest {
 
     @Test
     void testIteratorCloseOnThrow() {
-        assertBooleanWithJavet(CLOSABLE_GENERATOR + """
+        assertBooleanWithJavet("""
+                var closed = false;
+                function* g() {
+                  try {
+                    yield 1;
+                    yield 2;
+                  } finally {
+                    closed = true;
+                  }
+                }
                 try {
                   for (const x of g()) {
                     throw new Error('x');

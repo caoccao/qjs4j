@@ -46,8 +46,7 @@ final class IfStatementCompiler extends AstNodeCompiler<IfStatement> {
         if (compilerContext.evalReturnLocalIndex >= 0) {
             // IfStatement completion defaults to undefined before branch evaluation.
             // Branch statements that produce a completion value overwrite this slot.
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitUndefinedLocal(compilerContext.evalReturnLocalIndex);
         }
 
         // Compile condition

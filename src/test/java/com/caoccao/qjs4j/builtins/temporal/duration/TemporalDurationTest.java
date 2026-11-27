@@ -18,8 +18,6 @@ package com.caoccao.qjs4j.builtins.temporal.duration;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 public class TemporalDurationTest extends BaseJavetTest {
 
@@ -124,10 +122,10 @@ public class TemporalDurationTest extends BaseJavetTest {
         assertIntegerWithJavet("new Temporal.Duration(0, 0, 0, 0, 5).hours");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"months", "weeks", "years"})
-    void testIntegerProperties(String property) {
-        assertIntegerWithJavet("new Temporal.Duration(1, 2, 3)." + property);
+    @Test
+    void testIntegerProperties() {
+        assertIntegerWithJavet("new Temporal.Duration(1, 2, 3).months", "new Temporal.Duration(1, 2, 3).weeks",
+                "new Temporal.Duration(1, 2, 3).years");
     }
 
     @Test

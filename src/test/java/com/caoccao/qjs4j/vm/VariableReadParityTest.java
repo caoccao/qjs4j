@@ -2,54 +2,71 @@ package com.caoccao.qjs4j.vm;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 public class VariableReadParityTest extends BaseJavetTest {
-    @ParameterizedTest
-    @ValueSource(strings = {"binding", "typeof binding"})
-    public void testDirectEvalResolvesClassInnerName(String expression) {
+    @Test
+    public void testDirectEvalResolvesClassInnerName() {
         assertStringWithJavet("""
                 (() => {
                   const subject = class binding {
-                    static read() { return eval('%s'); }
-                    read() { return eval('%s'); }
+                    static read() { return eval('binding'); }
+                    read() { return eval('binding'); }
                   };
                   const normalize = value => value === subject ? 'class' : String(value);
                   return [normalize(subject.read()), normalize(new subject().read())].join('|');
                 })()
-                """.formatted(expression, expression));
+                """, """
+                (() => {
+                  const subject = class binding {
+                    static read() { return eval('typeof binding'); }
+                    read() { return eval('typeof binding'); }
+                  };
+                  const normalize = value => value === subject ? 'class' : String(value);
+                  return [normalize(subject.read()), normalize(new subject().read())].join('|');
+                })()
+                """);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"binding", "typeof binding"})
-    public void testDirectEvalResolvesDynamicBindings(String expression) {
+    @Test
+    public void testDirectEvalResolvesDynamicBindings() {
         assertStringWithJavet("""
                 globalThis.binding = 'global';
-                Function("eval('var binding = true'); return String(eval('%s'));")()
-                """.formatted(expression));
+                Function("eval('var binding = true'); return String(eval('binding'));")()
+                """, """
+                globalThis.binding = 'global';
+                Function("eval('var binding = true'); return String(eval('typeof binding'));")()
+                """);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"binding", "typeof binding"})
-    public void testDirectEvalResolvesShadowingBindings(String expression) {
+    @Test
+    public void testDirectEvalResolvesShadowingBindings() {
         assertStringWithJavet("""
                 (function (binding) {
                   const capture = () => binding;
                   return (function () {
-                    const results = [String(eval('%s'))];
-                    results.push((function (binding) { return String(eval('%s')); })(7));
-                    results.push(String(eval('%s')));
+                    const results = [String(eval('binding'))];
+                    results.push((function (binding) { return String(eval('binding')); })(7));
+                    results.push(String(eval('binding')));
                     results.push(capture());
                     return results.join('|');
                   })();
                 })('outer')
-                """.formatted(expression, expression, expression));
+                """, """
+                (function (binding) {
+                  const capture = () => binding;
+                  return (function () {
+                    const results = [String(eval('typeof binding'))];
+                    results.push((function (binding) { return String(eval('typeof binding')); })(7));
+                    results.push(String(eval('typeof binding')));
+                    results.push(capture());
+                    return results.join('|');
+                  })();
+                })('outer')
+                """);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"binding", "typeof binding"})
-    public void testGlobalGettersAndMissingNames(String expression) {
+    @Test
+    public void testGlobalGettersAndMissingNames() {
         assertStringWithJavet("""
                 (() => ['missing', 'undefined', 'value', 'throw'].map(mode => {
                   const log = [];
@@ -62,33 +79,57 @@ public class VariableReadParityTest extends BaseJavetTest {
                     } });
                   }
                   let result;
-                  try { result = String(%s); }
+                  try { result = String(binding); }
                   catch (e) { result = e === marker ? 'marker' : e.name; }
                   delete globalThis.binding;
                   return mode + ':' + result + ':' + log.join(',');
                 }).join('|'))()
-                """.formatted(expression));
+                """, """
+                (() => ['missing', 'undefined', 'value', 'throw'].map(mode => {
+                  const log = [];
+                  const marker = {};
+                  if (mode !== 'missing') {
+                    Object.defineProperty(globalThis, 'binding', { configurable: true, get() {
+                      log.push('get');
+                      if (mode === 'throw') throw marker;
+                      return mode === 'value' ? 7 : undefined;
+                    } });
+                  }
+                  let result;
+                  try { result = String(typeof binding); }
+                  catch (e) { result = e === marker ? 'marker' : e.name; }
+                  delete globalThis.binding;
+                  return mode + ':' + result + ':' + log.join(',');
+                }).join('|'))()
+                """);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"binding", "typeof binding"})
-    public void testGlobalLexicalBindingShadowsGlobalProperty(String expression) {
+    @Test
+    public void testGlobalLexicalBindingShadowsGlobalProperty() {
         assertStringWithJavet("""
                 globalThis.binding = 'property';
                 let binding = 17;
-                (() => String(%s) + '|' + globalThis.binding)()
-                """.formatted(expression));
+                (() => String(binding) + '|' + globalThis.binding)()
+                """, """
+                globalThis.binding = 'property';
+                let binding = 17;
+                (() => String(typeof binding) + '|' + globalThis.binding)()
+                """);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"binding", "typeof binding"})
-    public void testGlobalLexicalInitializationErrors(String expression) {
+    @Test
+    public void testGlobalLexicalInitializationErrors() {
         assertStringWithJavet("""
                 var before;
-                try { eval('%s'); } catch (e) { before = e.name; }
+                try { eval('binding'); } catch (e) { before = e.name; }
                 let binding = 9;
-                before + '|' + String(eval('%s'));
-                """.formatted(expression, expression));
+                before + '|' + String(eval('binding'));
+                """, """
+                var before;
+                try { eval('typeof binding'); } catch (e) { before = e.name; }
+                let binding = 9;
+                before + '|' + String(eval('typeof binding'));
+                """);
     }
 
     @Test

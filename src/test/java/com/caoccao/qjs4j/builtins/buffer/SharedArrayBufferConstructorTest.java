@@ -77,24 +77,27 @@ public class SharedArrayBufferConstructorTest extends BaseJavetTest {
 
         assertErrorWithJavet("SharedArrayBuffer()");
 
-        assertBooleanWithJavet(inArrowFunction("""
-                const d = Object.getOwnPropertyDescriptor(SharedArrayBuffer, Symbol.species);
-                return typeof d.get === "function"
-                  && d.set === undefined
-                  && d.enumerable === false
-                  && d.configurable === true
-                  && SharedArrayBuffer[Symbol.species] === SharedArrayBuffer;
-                """), inArrowFunction("""
-                const d = Object.getOwnPropertyDescriptor(SharedArrayBuffer, "prototype");
-                return d.value === SharedArrayBuffer.prototype
-                  && d.writable === false
-                  && d.enumerable === false
-                  && d.configurable === false;
-                """));
+        assertBooleanWithJavet("""
+                (() => {
+                  const d = Object.getOwnPropertyDescriptor(SharedArrayBuffer, Symbol.species);
+                  return typeof d.get === "function"
+                    && d.set === undefined
+                    && d.enumerable === false
+                    && d.configurable === true
+                    && SharedArrayBuffer[Symbol.species] === SharedArrayBuffer;
+                })()""", """
+                (() => {
+                  const d = Object.getOwnPropertyDescriptor(SharedArrayBuffer, "prototype");
+                  return d.value === SharedArrayBuffer.prototype
+                    && d.writable === false
+                    && d.enumerable === false
+                    && d.configurable === false;
+                })()""");
 
-        assertStringWithJavet(inArrowFunction("""
-                const names = Object.getOwnPropertyNames(SharedArrayBuffer.prototype).sort();
-                return JSON.stringify(names);
-                """));
+        assertStringWithJavet("""
+                (() => {
+                  const names = Object.getOwnPropertyNames(SharedArrayBuffer.prototype).sort();
+                  return JSON.stringify(names);
+                })()""");
     }
 }

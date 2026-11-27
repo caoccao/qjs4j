@@ -84,19 +84,7 @@ public final class AsyncGeneratorPrototype {
             }
 
             // Wait for the current promise and yield its value
-            JSPromise currentPromise = promises[currentIndex];
-            JSPromise resultPromise = context.createJSPromise();
-
-            currentPromise.addReactions(new JSPromise.ReactionRecord(
-                    new JSNativeFunction(context, "onFulfilled", 1, (childContext, thisArg, args) -> {
-                        JSValue value = JSValue.argumentOrUndefined(args, 0);
-                        JSObject result = JSIteratorHelper.createResult(context, value, false);
-                        resultPromise.fulfill(result);
-                        return JSUndefined.INSTANCE;
-                    }), resultPromise, context), new JSPromise.ReactionRecord(
-                            resultPromise.rejectHandler(context, "onRejected"), resultPromise, context));
-
-            return resultPromise;
+            return JSAsyncIterator.awaitIteratorValue(context, promises[currentIndex]);
         }, context);
     }
 

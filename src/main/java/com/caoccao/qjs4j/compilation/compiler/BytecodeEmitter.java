@@ -91,6 +91,12 @@ public final class BytecodeEmitter {
         return codeSize;
     }
 
+    /** Define the array element and advance the index for the next literal or spread element. */
+    void emitArrayElement() {
+        emitOpcode(Opcode.DEFINE_ARRAY_EL);
+        emitOpcode(Opcode.INC);
+    }
+
     /**
      * Emit an atom (interned string) reference. Returns the atom index.
      */
@@ -267,6 +273,12 @@ public final class BytecodeEmitter {
         sourcePositions[sourcePositionsSize++] = location.column();
     }
 
+    /** Push the prototype of the home object for a super property access. */
+    void emitSuperBase() {
+        emitOpcodeU8(Opcode.SPECIAL_OBJECT, 4); // SPECIAL_OBJECT_HOME_OBJECT
+        emitOpcode(Opcode.GET_SUPER);
+    }
+
     /**
      * Emit an unsigned 16-bit value (big-endian).
      */
@@ -290,6 +302,12 @@ public final class BytecodeEmitter {
      */
     public void emitU8(int value) {
         write(value);
+    }
+
+    /** Store undefined in a local without leaving a value on the operand stack. */
+    void emitUndefinedLocal(int localIndex) {
+        emitOpcode(Opcode.UNDEFINED);
+        emitPutLocal(localIndex);
     }
 
     /**

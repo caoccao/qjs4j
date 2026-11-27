@@ -75,6 +75,17 @@ public enum TemporalDateProperty {
         return calendar == TemporalCalendarId.ISO8601 ? date : date.toIsoCalendarDate(calendar).toIsoDate();
     }
 
+    /** Calendar identity and the constant week length do not require conversion to a local ISO date. */
+    public static <T extends JSObject & JSTemporalDateValue> JSValue calendarId(JSContext context, JSValue thisArg,
+            TemporalReceiver<T> receiver) {
+        return receiver.read(context, thisArg, "calendarId", value -> new JSString(value.getCalendarId().identifier()));
+    }
+
+    public static <T extends JSObject & JSTemporalDateValue> JSValue daysInWeek(JSContext context, JSValue thisArg,
+            TemporalReceiver<T> receiver) {
+        return receiver.read(context, thisArg, "daysInWeek", value -> JSNumber.of(7));
+    }
+
     private static JSValue era(TemporalEraYear fields) {
         return fields == null ? JSUndefined.INSTANCE : new JSString(fields.era().identifier());
     }

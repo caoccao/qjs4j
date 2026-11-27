@@ -32,10 +32,11 @@ class RegExpRegisterAllocationTest extends BaseJavetTest {
         // An alternation that may match nothing needs an advance check beside its counter.
         assertThat(compiler.compile("(?:a{1,2}b{1,2}|(?:c?)*){1,2}", "").registerCount()).isEqualTo(3);
         assertThat(compiler.compile("(?:a{2}){1,2}(?:ab){1,2}(?:a|b){1,2}", "").registerCount()).isEqualTo(2);
-        for (String pattern : new String[]{"a{1,2}".repeat(257), "(?:a?)*".repeat(300), "a{5000,6000}".repeat(300),
-                "(?:" + "a{1,2}".repeat(150) + "|" + "b{1,2}".repeat(150) + ")"}) {
-            assertStringWithJavet("JSON.stringify([/" + pattern + "/.test('a'.repeat(600)),/" + pattern
-                    + "/.test('b'.repeat(600))])");
-        }
+        assertStringWithJavet("""
+                JSON.stringify([
+                  'a{1,2}'.repeat(257), '(?:a?)*'.repeat(300), 'a{5000,6000}'.repeat(300),
+                  '(?:' + 'a{1,2}'.repeat(150) + '|' + 'b{1,2}'.repeat(150) + ')'
+                ].map(pattern => eval(`[/${pattern}/.test('a'.repeat(600)), /${pattern}/.test('b'.repeat(600))]`)))
+                """);
     }
 }

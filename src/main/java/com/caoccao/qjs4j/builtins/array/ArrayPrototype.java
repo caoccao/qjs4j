@@ -26,6 +26,12 @@ import com.caoccao.qjs4j.core.*;
  * @see <a href="https://tc39.es/ecma262/#sec-properties-of-the-array-prototype-object">ECMAScript Array.prototype</a>
  */
 public final class ArrayPrototype {
+    private static final PropertyKey[] UNSCOPABLE_KEYS = {PropertyKey.fromString("at"),
+            PropertyKey.fromString("copyWithin"), PropertyKey.fromString("entries"), PropertyKey.fromString("fill"),
+            PropertyKey.fromString("find"), PropertyKey.fromString("findIndex"), PropertyKey.fromString("findLast"),
+            PropertyKey.fromString("findLastIndex"), PropertyKey.fromString("flat"), PropertyKey.fromString("flatMap"),
+            PropertyKey.fromString("includes"), PropertyKey.fromString("keys"), PropertyKey.fromString("toReversed"),
+            PropertyKey.fromString("toSorted"), PropertyKey.fromString("toSpliced"), PropertyKey.fromString("values")};
 
     /**
      * Array.prototype.at(index) ES2022 23.1.3.1 Returns the element at the specified index, supporting negative
@@ -68,26 +74,9 @@ public final class ArrayPrototype {
         JSObject unscopables = context.createJSObject();
         unscopables.setPrototype(null);
 
-        // ES2022+ methods
-        unscopables.set("at", JSBoolean.TRUE);
-
-        // ES2015 methods
-        unscopables.set("copyWithin", JSBoolean.TRUE);
-        unscopables.set("entries", JSBoolean.TRUE);
-        unscopables.set("fill", JSBoolean.TRUE);
-        unscopables.set("find", JSBoolean.TRUE);
-        unscopables.set("findIndex", JSBoolean.TRUE);
-        unscopables.set("findLast", JSBoolean.TRUE);
-        unscopables.set("findLastIndex", JSBoolean.TRUE);
-        unscopables.set("flat", JSBoolean.TRUE);
-        unscopables.set("flatMap", JSBoolean.TRUE);
-        unscopables.set("includes", JSBoolean.TRUE);
-        unscopables.set("keys", JSBoolean.TRUE);
-        unscopables.set("toReversed", JSBoolean.TRUE);
-        unscopables.set("toSorted", JSBoolean.TRUE);
-        unscopables.set("toSpliced", JSBoolean.TRUE);
-        unscopables.set("values", JSBoolean.TRUE);
-
+        for (PropertyKey key : UNSCOPABLE_KEYS) {
+            unscopables.set(key, JSBoolean.TRUE);
+        }
         return unscopables;
     }
 

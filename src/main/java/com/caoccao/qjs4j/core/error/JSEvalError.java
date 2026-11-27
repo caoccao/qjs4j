@@ -31,16 +31,11 @@ public final class JSEvalError extends JSError {
      * Create an EvalError with a message.
      */
     public JSEvalError(JSContext context, String message) {
-        super(context, message);
+        this(context, message, null);
     }
 
     public JSEvalError(JSContext context, String message, SourceLocation sourceLocation) {
-        super(context, message, sourceLocation);
-    }
-
-    @Override
-    public String getErrorName() {
-        return NAME;
+        super(context, NAME, message, sourceLocation);
     }
 
     public static JSValue create(JSContext context, JSValue... args) {

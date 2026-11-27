@@ -26,8 +26,7 @@ final class ThrowStatementCompiler {
 
     static void compile(CompilerContext compilerContext, ThrowStatement throwStmt) {
         if (compilerContext.evalReturnLocalIndex >= 0) {
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitUndefinedLocal(compilerContext.evalReturnLocalIndex);
         }
         compilerContext.expressionCompiler.compile(throwStmt.getArgument());
 

@@ -433,26 +433,29 @@ public class RegExpConstructorTest extends BaseJavetTest {
         assertIntegerWithJavet("RegExp.escape.length");
         assertStringWithJavet("RegExp.escape.name");
 
-        assertBooleanWithJavet(inArrowFunction("""
-                  const desc = Object.getOwnPropertyDescriptor(RegExp, 'escape');
-                  return desc.writable === true
-                      && desc.enumerable === false
-                      && desc.configurable === true;
-                """));
-        assertBooleanWithJavet(inArrowFunction("""
-                  const lengthDesc = Object.getOwnPropertyDescriptor(RegExp.escape, 'length');
-                  return lengthDesc.value === 1
-                      && lengthDesc.writable === false
-                      && lengthDesc.enumerable === false
-                      && lengthDesc.configurable === true;
-                """));
-        assertBooleanWithJavet(inArrowFunction("""
-                  const nameDesc = Object.getOwnPropertyDescriptor(RegExp.escape, 'name');
-                  return nameDesc.value === 'escape'
-                      && nameDesc.writable === false
-                      && nameDesc.enumerable === false
-                      && nameDesc.configurable === true;
-                """));
+        assertBooleanWithJavet("""
+                (() => {
+                    const desc = Object.getOwnPropertyDescriptor(RegExp, 'escape');
+                    return desc.writable === true
+                        && desc.enumerable === false
+                        && desc.configurable === true;
+                })()""");
+        assertBooleanWithJavet("""
+                (() => {
+                    const lengthDesc = Object.getOwnPropertyDescriptor(RegExp.escape, 'length');
+                    return lengthDesc.value === 1
+                        && lengthDesc.writable === false
+                        && lengthDesc.enumerable === false
+                        && lengthDesc.configurable === true;
+                })()""");
+        assertBooleanWithJavet("""
+                (() => {
+                    const nameDesc = Object.getOwnPropertyDescriptor(RegExp.escape, 'name');
+                    return nameDesc.value === 'escape'
+                        && nameDesc.writable === false
+                        && nameDesc.enumerable === false
+                        && nameDesc.configurable === true;
+                })()""");
 
         assertStringWithJavet("RegExp.escape('')", "RegExp.escape('.')", "RegExp.escape('/')", "RegExp.escape('abc')",
                 "RegExp.escape('1+1')", "RegExp.escape('\\t\\n\\v\\f\\r')");

@@ -63,7 +63,15 @@ public class SymbolPrototypeTest extends BaseJavetTest {
         assertStringWithJavet("Symbol.prototype[Symbol.toStringTag];",
                 "Object.prototype.toString.call(Symbol('test'));", "Object.prototype.toString.call(Symbol.iterator);");
 
-        assertBooleanWithJavet(toStringTagDescriptor("Symbol.prototype", "Symbol"));
+        assertBooleanWithJavet("""
+                (() => {
+                    const d = Object.getOwnPropertyDescriptor(Symbol.prototype, Symbol.toStringTag);
+                    return d.value === "Symbol"
+                        && d.writable === false
+                        && d.enumerable === false
+                        && d.configurable === true;
+                })()
+                """);
     }
 
     @Test
@@ -79,16 +87,26 @@ public class SymbolPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testWellKnownPrototypeProperties() {
-        assertBooleanWithJavet(inArrowFunction("""
-                const d = Object.getOwnPropertyDescriptor(Symbol.prototype, Symbol.toPrimitive);
-                return typeof d.value === "function"
-                  && d.enumerable === false;
-                """), methodDescriptor("Symbol.prototype", "toString"), inArrowFunction("""
-                const d = Object.getOwnPropertyDescriptor(Symbol.prototype, "constructor");
-                return d.value === Symbol
-                  && d.writable === true
-                  && d.enumerable === false
-                  && d.configurable === true;
-                """));
+        assertBooleanWithJavet("""
+                (() => {
+                  const d = Object.getOwnPropertyDescriptor(Symbol.prototype, Symbol.toPrimitive);
+                  return typeof d.value === "function"
+                    && d.enumerable === false;
+                })()""", """
+                (() => {
+                    const d = Object.getOwnPropertyDescriptor(Symbol.prototype, "toString");
+                    return typeof d.value === "function"
+                        && d.writable === true
+                        && d.enumerable === false
+                        && d.configurable === true;
+                })()
+                """, """
+                (() => {
+                  const d = Object.getOwnPropertyDescriptor(Symbol.prototype, "constructor");
+                  return d.value === Symbol
+                    && d.writable === true
+                    && d.enumerable === false
+                    && d.configurable === true;
+                })()""");
     }
 }

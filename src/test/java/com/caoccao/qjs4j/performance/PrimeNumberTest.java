@@ -31,7 +31,6 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
-import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -88,15 +87,11 @@ public class PrimeNumberTest extends BaseJavetTest {
         tearDown();
     }
 
-    private void loadPrimeNumberCode() throws IOException {
-        code = loadCode("performance/prime-number.js").replace("upperLimit = 100", "upperLimit = 50000");
-    }
-
     @BeforeEach
     @Override
     public void setUp() throws Exception {
         super.setUp();
-        loadPrimeNumberCode();
+        code = loadCode("performance/prime-number.js");
     }
 
     /**

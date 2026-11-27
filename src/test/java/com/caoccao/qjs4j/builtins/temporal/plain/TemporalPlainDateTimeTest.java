@@ -18,8 +18,6 @@ package com.caoccao.qjs4j.builtins.temporal.plain;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 public class TemporalPlainDateTimeTest extends BaseJavetTest {
 
@@ -114,11 +112,20 @@ public class TemporalPlainDateTimeTest extends BaseJavetTest {
         assertBooleanWithJavet("new Temporal.PlainDateTime(2024, 3, 15, 12, 30).inLeapYear");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"day", "dayOfWeek", "dayOfYear", "daysInWeek", "daysInYear", "hour", "minute", "month",
-            "monthsInYear", "weekOfYear", "year", "yearOfWeek"})
-    void testIntegerProperties(String property) {
-        assertIntegerWithJavet("new Temporal.PlainDateTime(2024, 3, 15, 12, 30)." + property);
+    @Test
+    void testIntegerProperties() {
+        assertIntegerWithJavet("new Temporal.PlainDateTime(2024, 3, 15, 12, 30).day",
+                "new Temporal.PlainDateTime(2024, 3, 15, 12, 30).dayOfWeek",
+                "new Temporal.PlainDateTime(2024, 3, 15, 12, 30).dayOfYear",
+                "new Temporal.PlainDateTime(2024, 3, 15, 12, 30).daysInWeek",
+                "new Temporal.PlainDateTime(2024, 3, 15, 12, 30).daysInYear",
+                "new Temporal.PlainDateTime(2024, 3, 15, 12, 30).hour",
+                "new Temporal.PlainDateTime(2024, 3, 15, 12, 30).minute",
+                "new Temporal.PlainDateTime(2024, 3, 15, 12, 30).month",
+                "new Temporal.PlainDateTime(2024, 3, 15, 12, 30).monthsInYear",
+                "new Temporal.PlainDateTime(2024, 3, 15, 12, 30).weekOfYear",
+                "new Temporal.PlainDateTime(2024, 3, 15, 12, 30).year",
+                "new Temporal.PlainDateTime(2024, 3, 15, 12, 30).yearOfWeek");
     }
 
     @Test
@@ -161,10 +168,11 @@ public class TemporalPlainDateTimeTest extends BaseJavetTest {
         assertStringWithJavet("new Temporal.PlainDateTime(2024, 1, 2, 12, 0).since('2024-01-01').toString()");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"toString()", "toJSON()", "toString()"})
-    void testStringConversions(String operation) {
-        assertStringWithJavet("new Temporal.PlainDateTime(2024, 1, 15, 12, 30, 45)." + operation);
+    @Test
+    void testStringConversions() {
+        assertStringWithJavet("new Temporal.PlainDateTime(2024, 1, 15, 12, 30, 45).toString()",
+                "new Temporal.PlainDateTime(2024, 1, 15, 12, 30, 45).toJSON()",
+                "new Temporal.PlainDateTime(2024, 1, 15, 12, 30, 45).toString()");
     }
 
     @Test

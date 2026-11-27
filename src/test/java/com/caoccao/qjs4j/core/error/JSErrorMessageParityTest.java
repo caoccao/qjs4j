@@ -40,84 +40,97 @@ public class JSErrorMessageParityTest extends BaseJavetTest {
         // The delete is the operation that actually failed, so V8 reports that rather than the
         // length assignment. Both the strict-mode assignment and Object.defineProperty report it;
         // Reflect.defineProperty still just answers false.
-        assertStringWithJavet(inFunction("""
-                'use strict';
-                const a = [1, 2, 3];
-                Object.defineProperty(a, '1', { value: 9, configurable: false });
-                try { a.length = 0; return 'NO ERROR' } catch (e) { return e.name + ': ' + e.message }
-                """), inFunction("""
-                'use strict';
-                const a = [];
-                Object.defineProperty(a, '2147483648', { value: 1, configurable: false });
-                try { a.length = 0; return 'NO ERROR' } catch (e) { return e.name + ': ' + e.message }
-                """), inFunction("""
-                const a = [1, 2, 3];
-                Object.defineProperty(a, '1', { value: 9, configurable: false });
-                try { Object.defineProperty(a, 'length', { value: 0 }); return 'NO ERROR' }
-                catch (e) { return e.name + ': ' + e.message }
-                """), inFunction("""
-                const a = [1, 2, 3];
-                Object.defineProperty(a, '1', { value: 9, configurable: false });
-                return String(Reflect.defineProperty(a, 'length', { value: 0 })) + ',' + a.length;
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  'use strict';
+                  const a = [1, 2, 3];
+                  Object.defineProperty(a, '1', { value: 9, configurable: false });
+                  try { a.length = 0; return 'NO ERROR' } catch (e) { return e.name + ': ' + e.message }
+                })()""", """
+                (function () {
+                  'use strict';
+                  const a = [];
+                  Object.defineProperty(a, '2147483648', { value: 1, configurable: false });
+                  try { a.length = 0; return 'NO ERROR' } catch (e) { return e.name + ': ' + e.message }
+                })()""", """
+                (function () {
+                  const a = [1, 2, 3];
+                  Object.defineProperty(a, '1', { value: 9, configurable: false });
+                  try { Object.defineProperty(a, 'length', { value: 0 }); return 'NO ERROR' }
+                  catch (e) { return e.name + ': ' + e.message }
+                })()""", """
+                (function () {
+                  const a = [1, 2, 3];
+                  Object.defineProperty(a, '1', { value: 9, configurable: false });
+                  return String(Reflect.defineProperty(a, 'length', { value: 0 })) + ',' + a.length;
+                })()""");
     }
 
     @Test
     public void testFailedAssignmentNamesTheReceiverTheWayV8Does() {
-        assertStringWithJavet(inFunction("""
-                'use strict';
-                const o = { v: 1 };
-                Object.freeze(o);
-                try { o.v = 2; return 'NO ERROR' } catch (e) { return e.message }
-                """), inFunction("""
-                'use strict';
-                class Widget { constructor() { this.v = 1 } }
-                const o = new Widget();
-                Object.freeze(o);
-                try { o.v = 2; return 'NO ERROR' } catch (e) { return e.message }
-                """), inFunction("""
-                'use strict';
-                const a = [1, 2];
-                Object.freeze(a);
-                try { a[0] = 9; return 'NO ERROR' } catch (e) { return e.message }
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  'use strict';
+                  const o = { v: 1 };
+                  Object.freeze(o);
+                  try { o.v = 2; return 'NO ERROR' } catch (e) { return e.message }
+                })()""", """
+                (function () {
+                  'use strict';
+                  class Widget { constructor() { this.v = 1 } }
+                  const o = new Widget();
+                  Object.freeze(o);
+                  try { o.v = 2; return 'NO ERROR' } catch (e) { return e.message }
+                })()""", """
+                (function () {
+                  'use strict';
+                  const a = [1, 2];
+                  Object.freeze(a);
+                  try { a[0] = 9; return 'NO ERROR' } catch (e) { return e.message }
+                })()""");
     }
 
     @Test
     public void testFailedDeleteNamesTheReceiverTheWayV8Does() {
         // #<Ctor> for an ordinary object, [object Tag] for anything with its own toString.
-        assertStringWithJavet(inFunction("""
-                'use strict';
-                const o = {};
-                Object.defineProperty(o, 'x', { value: 1, configurable: false });
-                try { delete o.x; return 'NO ERROR' } catch (e) { return e.message }
-                """), inFunction("""
-                'use strict';
-                class Widget {}
-                const o = new Widget();
-                Object.defineProperty(o, 'x', { value: 1, configurable: false });
-                try { delete o.x; return 'NO ERROR' } catch (e) { return e.message }
-                """), inFunction("""
-                'use strict';
-                const a = [1, 2, 3];
-                Object.defineProperty(a, '1', { value: 9, configurable: false });
-                try { delete a[1]; return 'NO ERROR' } catch (e) { return e.message }
-                """), inFunction("""
-                'use strict';
-                const d = new Date();
-                Object.defineProperty(d, 'x', { value: 1, configurable: false });
-                try { delete d.x; return 'NO ERROR' } catch (e) { return e.message }
-                """), inFunction("""
-                'use strict';
-                const m = new Map();
-                Object.defineProperty(m, 'x', { value: 1, configurable: false });
-                try { delete m.x; return 'NO ERROR' } catch (e) { return e.message }
-                """), inFunction("""
-                'use strict';
-                const o = { [Symbol.toStringTag]: 'Custom', toString() { return 'c' } };
-                Object.defineProperty(o, 'x', { value: 1, configurable: false });
-                try { delete o.x; return 'NO ERROR' } catch (e) { return e.message }
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  'use strict';
+                  const o = {};
+                  Object.defineProperty(o, 'x', { value: 1, configurable: false });
+                  try { delete o.x; return 'NO ERROR' } catch (e) { return e.message }
+                })()""", """
+                (function () {
+                  'use strict';
+                  class Widget {}
+                  const o = new Widget();
+                  Object.defineProperty(o, 'x', { value: 1, configurable: false });
+                  try { delete o.x; return 'NO ERROR' } catch (e) { return e.message }
+                })()""", """
+                (function () {
+                  'use strict';
+                  const a = [1, 2, 3];
+                  Object.defineProperty(a, '1', { value: 9, configurable: false });
+                  try { delete a[1]; return 'NO ERROR' } catch (e) { return e.message }
+                })()""", """
+                (function () {
+                  'use strict';
+                  const d = new Date();
+                  Object.defineProperty(d, 'x', { value: 1, configurable: false });
+                  try { delete d.x; return 'NO ERROR' } catch (e) { return e.message }
+                })()""", """
+                (function () {
+                  'use strict';
+                  const m = new Map();
+                  Object.defineProperty(m, 'x', { value: 1, configurable: false });
+                  try { delete m.x; return 'NO ERROR' } catch (e) { return e.message }
+                })()""", """
+                (function () {
+                  'use strict';
+                  const o = { [Symbol.toStringTag]: 'Custom', toString() { return 'c' } };
+                  Object.defineProperty(o, 'x', { value: 1, configurable: false });
+                  try { delete o.x; return 'NO ERROR' } catch (e) { return e.message }
+                })()""");
     }
 
     @Test
@@ -128,17 +141,19 @@ public class JSErrorMessageParityTest extends BaseJavetTest {
 
     @Test
     public void testTemporalDeadZoneMessageForAssignment() {
-        assertStringWithJavet(inFunction("""
-                  try { assigned = 5; let assigned } catch (e) { return e.message }
-                """));
+        assertStringWithJavet("""
+                (function () {
+                    try { assigned = 5; let assigned } catch (e) { return e.message }
+                })()""");
     }
 
     @Test
     public void testTemporalDeadZoneMessageNamesTheVariable() {
         assertStringWithJavet("try { tz; let tz = 1 } catch (e) { e.message }",
-                "try { tc; const tc = 1 } catch (e) { e.message }", inFunction("""
-                          try { inner; let inner = 1 } catch (e) { return e.message }
-                        """));
+                "try { tc; const tc = 1 } catch (e) { e.message }", """
+                        (function () {
+                            try { inner; let inner = 1 } catch (e) { return e.message }
+                        })()""");
     }
 
     @Test

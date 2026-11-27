@@ -12,27 +12,97 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DirectEvalScopeTest extends BaseJavetTest {
     @Test
     void displacedBindingsKeepTheirWriteRestrictions() {
-        for (String assignment : new String[]{"x = 7", "x += 7", "x++", "[x] = [7]", "({x} = {x: 7})"}) {
-            assertStringWithJavet("""
-                    (() => {
-                        function outer() {
-                            const x = 1;
-                            return eval(`
-                                const write = () => {
-                                    try { %s; return 'accepted'; }
-                                    catch (error) { return error.name; }
-                                };
-                                const during = (function () {
-                                    let x = 2;
-                                    return eval('JSON.stringify([write(), x])');
-                                })();
-                                JSON.stringify([during, write(), x]);
-                            `);
-                        }
-                        return outer();
-                    })()
-                    """.formatted(assignment));
-        }
+        assertStringWithJavet("""
+                (() => {
+                    function outer() {
+                        const x = 1;
+                        return eval(`
+                            const write = () => {
+                                try { x = 7; return 'accepted'; }
+                                catch (error) { return error.name; }
+                            };
+                            const during = (function () {
+                                let x = 2;
+                                return eval('JSON.stringify([write(), x])');
+                            })();
+                            JSON.stringify([during, write(), x]);
+                        `);
+                    }
+                    return outer();
+                })()
+                """, """
+                (() => {
+                    function outer() {
+                        const x = 1;
+                        return eval(`
+                            const write = () => {
+                                try { x += 7; return 'accepted'; }
+                                catch (error) { return error.name; }
+                            };
+                            const during = (function () {
+                                let x = 2;
+                                return eval('JSON.stringify([write(), x])');
+                            })();
+                            JSON.stringify([during, write(), x]);
+                        `);
+                    }
+                    return outer();
+                })()
+                """, """
+                (() => {
+                    function outer() {
+                        const x = 1;
+                        return eval(`
+                            const write = () => {
+                                try { x++; return 'accepted'; }
+                                catch (error) { return error.name; }
+                            };
+                            const during = (function () {
+                                let x = 2;
+                                return eval('JSON.stringify([write(), x])');
+                            })();
+                            JSON.stringify([during, write(), x]);
+                        `);
+                    }
+                    return outer();
+                })()
+                """, """
+                (() => {
+                    function outer() {
+                        const x = 1;
+                        return eval(`
+                            const write = () => {
+                                try { [x] = [7]; return 'accepted'; }
+                                catch (error) { return error.name; }
+                            };
+                            const during = (function () {
+                                let x = 2;
+                                return eval('JSON.stringify([write(), x])');
+                            })();
+                            JSON.stringify([during, write(), x]);
+                        `);
+                    }
+                    return outer();
+                })()
+                """, """
+                (() => {
+                    function outer() {
+                        const x = 1;
+                        return eval(`
+                            const write = () => {
+                                try { ({x} = {x: 7}); return 'accepted'; }
+                                catch (error) { return error.name; }
+                            };
+                            const during = (function () {
+                                let x = 2;
+                                return eval('JSON.stringify([write(), x])');
+                            })();
+                            JSON.stringify([during, write(), x]);
+                        `);
+                    }
+                    return outer();
+                })()
+                """);
         assertStringWithJavet("""
                 (() => {
                     function outer() {

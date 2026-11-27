@@ -42,10 +42,8 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
             if (hasSpread) {
                 compilerContext.emitTailCalls = false;
             }
-            compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-            compilerContext.emitter.emitU8(3);
-            compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-            compilerContext.emitter.emitU8(2);
+            compilerContext.emitter.emitOpcodeU8(Opcode.SPECIAL_OBJECT, 3);
+            compilerContext.emitter.emitOpcodeU8(Opcode.SPECIAL_OBJECT, 2);
             compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
             compilerContext.emitHelpers.emitArgumentsArrayWithSpread(callExpr.getArguments());
             compilerContext.emitter.emitOpcodeU16(Opcode.APPLY, 1);

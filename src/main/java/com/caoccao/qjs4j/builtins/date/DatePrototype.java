@@ -357,7 +357,7 @@ public final class DatePrototype {
 
         int n = Math.min(args.length, endField - firstField);
         for (int i = 0; i < n; i++) {
-            JSNumber number = toNumberOrThrow(context, args[i]);
+            JSNumber number = toDateNumber(context, args[i]);
             if (number == null) {
                 return context.getPendingException();
             }
@@ -429,7 +429,7 @@ public final class DatePrototype {
                 return JSNumber.of(clippedValue);
             }
         }
-        JSNumber number = toNumberOrThrow(context, arg);
+        JSNumber number = toDateNumber(context, arg);
         if (number == null) {
             return context.getPendingException();
         }
@@ -473,7 +473,7 @@ public final class DatePrototype {
             return context.getPendingException();
         }
         JSValue arg = JSValue.argumentOrUndefined(args, 0);
-        JSNumber number = toNumberOrThrow(context, arg);
+        JSNumber number = toDateNumber(context, arg);
         if (number == null) {
             return context.getPendingException();
         }
@@ -503,6 +503,10 @@ public final class DatePrototype {
             case "string", "default" -> ordinaryToPrimitive(context, obj, true);
             default -> context.throwTypeError("invalid hint");
         };
+    }
+
+    private static JSNumber toDateNumber(JSContext context, JSValue value) {
+        return value instanceof JSNumber number ? number : JSTypeConversions.toNumberOrNull(context, value);
     }
 
     public static JSValue toDateString(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -565,25 +569,6 @@ public final class DatePrototype {
 
     public static JSValue toLocaleTimeString(JSContext context, JSValue thisArg, JSValue[] args) {
         return formatWithDateTimeFormat(context, thisArg, args, "toLocaleTimeString", "time", "time");
-    }
-
-    private static JSNumber toNumberOrThrow(JSContext context, JSValue value) {
-        if (value instanceof JSNumber number) {
-            return number;
-        }
-        if (value.isSymbol() || value.isSymbolObject()) {
-            context.throwTypeError("cannot convert symbol to number");
-            return null;
-        }
-        if (value.isBigInt() || value.isBigIntObject()) {
-            context.throwTypeError("cannot convert bigint to number");
-            return null;
-        }
-        JSNumber number = JSTypeConversions.toNumber(context, value);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        return number;
     }
 
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {

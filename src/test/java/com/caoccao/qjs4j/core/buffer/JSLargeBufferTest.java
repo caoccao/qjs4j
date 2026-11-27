@@ -25,48 +25,62 @@ class JSLargeBufferTest extends BaseJavetTest {
 
     @Test
     void atomicsRevalidateStorageAfterCoercion() {
-        for (String type : new String[]{"Int8Array", "Uint8Array", "Int16Array", "Uint16Array", "Int32Array",
-                "Uint32Array", "BigInt64Array", "BigUint64Array"}) {
-            String value = type.startsWith("Big") ? "1n" : "1";
-            for (String method : new String[]{"add", "and", "or", "xor", "sub", "exchange", "compareExchange", "store",
-                    "load"}) {
-                for (String effect : new String[]{"b.transfer()", "b.resize(0)", "b.resize(2**21)"}) {
-                    assertStringWithJavet("""
-                            (()=>{const b=new ArrayBuffer(16,{maxByteLength:2**21}),a=new %s(b),log=[];
-                              const index={valueOf(){log.push('index');%s;return 0}},
-                              value={valueOf(){log.push('value');return %s}};
-                              try {log.push(String(Atomics.%s(a,index,value,value)))}catch(e){log.push(e.name)}
-                              return JSON.stringify(log)})()
-                            """.formatted(type, effect, value, method));
-                    if (!method.equals("load")) {
-                        assertStringWithJavet("""
-                                (()=>{const b=new ArrayBuffer(16,{maxByteLength:2**21}),a=new %s(b),log=[];
-                                  const value={valueOf(){log.push('value');%s;return %s}};
-                                  try {log.push(String(Atomics.%s(a,0,value,value)))}catch(e){log.push(e.name)}
-                                  return JSON.stringify(log)})()
-                                """.formatted(type, effect, value, method));
-                        assertStringWithJavet("""
-                                (()=>{const a=new %s(4),log=[],v={valueOf(){log.push('value');throw 'stop'}};
-                                  try {Atomics.%s(a,0,v,v)}catch(e){log.push(String(e))}
-                                  return JSON.stringify([log,String(a[0])])})()
-                                """.formatted(type, method));
+        assertStringWithJavet("""
+                (() => {
+                  const results = [];
+                  const types = [Int8Array, Uint8Array, Int16Array, Uint16Array, Int32Array, Uint32Array,
+                    BigInt64Array, BigUint64Array];
+                  const methods = ['add', 'and', 'or', 'xor', 'sub', 'exchange', 'compareExchange', 'store', 'load'];
+                  const effects = [b => b.transfer(), b => b.resize(0), b => b.resize(2 ** 21)];
+                  for (const Type of types) {
+                    const one = Type === BigInt64Array || Type === BigUint64Array ? 1n : 1;
+                    for (const method of methods) {
+                      for (const effect of effects) {
+                        const buffer = new ArrayBuffer(16, { maxByteLength: 2 ** 21 });
+                        const array = new Type(buffer);
+                        const log = [];
+                        const index = { valueOf() { log.push('index'); effect(buffer); return 0; } };
+                        const value = { valueOf() { log.push('value'); return one; } };
+                        try { log.push(String(Atomics[method](array, index, value, value))); }
+                        catch (e) { log.push(e.name); }
+                        results.push(log);
+                        if (method === 'load') continue;
+
+                        const secondBuffer = new ArrayBuffer(16, { maxByteLength: 2 ** 21 });
+                        const secondArray = new Type(secondBuffer);
+                        const valueLog = [];
+                        const mutating = { valueOf() { valueLog.push('value'); effect(secondBuffer); return one; } };
+                        try { valueLog.push(String(Atomics[method](secondArray, 0, mutating, mutating))); }
+                        catch (e) { valueLog.push(e.name); }
+                        results.push(valueLog);
+
+                        const target = new Type(4);
+                        const throwLog = [];
+                        const throwing = { valueOf() { throwLog.push('value'); throw 'stop'; } };
+                        try { Atomics[method](target, 0, throwing, throwing); }
+                        catch (e) { throwLog.push(String(e)); }
+                        results.push([throwLog, String(target[0])]);
+                      }
                     }
-                }
-            }
-        }
+                  }
+                  return JSON.stringify(results);
+                })()
+                """);
     }
 
     @Test
     void bufferLimitsMatchSandboxedV8() {
-        for (String type : new String[]{"ArrayBuffer", "SharedArrayBuffer"}) {
-            assertStringWithJavet("""
-                    (()=>{const log=[];for (const n of [0,2**35-65536,2**35-65535,2**35-16384,2**35-4096,
-                      %d,%d,2**35-1,2**35,Number.MAX_SAFE_INTEGER,Infinity,-1]) {
-                      try {const b=new %s(0,{maxByteLength:n});log.push(b.maxByteLength)}catch(e){log.push(e.name)}
-                    }return JSON.stringify(log)})()
-                    """.formatted(JSArrayBuffer.MAX_RESIZABLE_DATA_BLOCK_BYTE_LENGTH,
-                    JSArrayBuffer.MAX_RESIZABLE_DATA_BLOCK_BYTE_LENGTH + 1, type));
-        }
+        assertStringWithJavet("""
+                (() => {
+                  const ceiling = 2 ** 35;
+                  const lengths = [0, ceiling - 65536, ceiling - 65535, ceiling - 16384, ceiling - 16383,
+                    ceiling - 4096, ceiling - 4095, ceiling - 1, ceiling, Number.MAX_SAFE_INTEGER, Infinity, -1];
+                  return JSON.stringify([ArrayBuffer, SharedArrayBuffer].map(Type => lengths.map(length => {
+                    try { return new Type(0, { maxByteLength: length }).maxByteLength; }
+                    catch (e) { return e.name; }
+                  })));
+                })()
+                """);
     }
 
     @Override
@@ -96,13 +110,28 @@ class JSLargeBufferTest extends BaseJavetTest {
                 b.grow(n+64);log.push(a.length,a[i],new Uint8Array(b.slice(n,n+4)).join(','));
                 return JSON.stringify(log);})()
                 """);
-        for (String type : new String[]{"Int8Array", "Uint8Array", "Int16Array", "Uint16Array", "Uint32Array",
-                "BigInt64Array", "BigUint64Array"}) {
-            assertStringWithJavet("""
-                    (()=>{const b=new SharedArrayBuffer(2**31+64),a=new %s(b,2**31,4);
-                    Atomics.store(a,1,%s);return [String(Atomics.add(a,1,%s)),String(Atomics.load(a,1))].join(',');})()
-                    """.formatted(type, type.startsWith("Big") ? "7n" : "7", type.startsWith("Big") ? "2n" : "2"));
-        }
+        assertStringWithJavet("""
+                (()=>{const b=new SharedArrayBuffer(2**31+64),a=new Int8Array(b,2**31,4);
+                Atomics.store(a,1,7);return [String(Atomics.add(a,1,2)),String(Atomics.load(a,1))].join(',');})()
+                """, """
+                (()=>{const b=new SharedArrayBuffer(2**31+64),a=new Uint8Array(b,2**31,4);
+                Atomics.store(a,1,7);return [String(Atomics.add(a,1,2)),String(Atomics.load(a,1))].join(',');})()
+                """, """
+                (()=>{const b=new SharedArrayBuffer(2**31+64),a=new Int16Array(b,2**31,4);
+                Atomics.store(a,1,7);return [String(Atomics.add(a,1,2)),String(Atomics.load(a,1))].join(',');})()
+                """, """
+                (()=>{const b=new SharedArrayBuffer(2**31+64),a=new Uint16Array(b,2**31,4);
+                Atomics.store(a,1,7);return [String(Atomics.add(a,1,2)),String(Atomics.load(a,1))].join(',');})()
+                """, """
+                (()=>{const b=new SharedArrayBuffer(2**31+64),a=new Uint32Array(b,2**31,4);
+                Atomics.store(a,1,7);return [String(Atomics.add(a,1,2)),String(Atomics.load(a,1))].join(',');})()
+                """, """
+                (()=>{const b=new SharedArrayBuffer(2**31+64),a=new BigInt64Array(b,2**31,4);
+                Atomics.store(a,1,7n);return [String(Atomics.add(a,1,2n)),String(Atomics.load(a,1))].join(',');})()
+                """, """
+                (()=>{const b=new SharedArrayBuffer(2**31+64),a=new BigUint64Array(b,2**31,4);
+                Atomics.store(a,1,7n);return [String(Atomics.add(a,1,2n)),String(Atomics.load(a,1))].join(',');})()
+                """);
     }
 
     @Test
@@ -129,28 +158,70 @@ class JSLargeBufferTest extends BaseJavetTest {
 
     @Test
     void typedArraySetRejectsOffsetsWithoutLongAdditionOverflow() {
-        for (String type : new String[]{"Int32Array", "BigInt64Array"}) {
-            assertStringWithJavet("""
-                    (()=>{const target=new %s(4),log=[];
-                    for(const offset of [4,5,2**31,2**32,Number.MAX_SAFE_INTEGER,1e100,Infinity,-Infinity]) {
-                      for(const source of [[],new %s(0),new %s(2)]) {
-                        try{target.set(source,offset);log.push('ok')}catch(e){log.push(e.name)}
-                      }
-                    }return JSON.stringify(log)})()
-                    """.formatted(type, type, type));
-        }
+        assertStringWithJavet("""
+                (()=>{const target=new Int32Array(4),log=[];
+                for(const offset of [4,5,2**31,2**32,Number.MAX_SAFE_INTEGER,1e100,Infinity,-Infinity]) {
+                  for(const source of [[],new Int32Array(0),new Int32Array(2)]) {
+                    try{target.set(source,offset);log.push('ok')}catch(e){log.push(e.name)}
+                  }
+                }return JSON.stringify(log)})()
+                """, """
+                (()=>{const target=new BigInt64Array(4),log=[];
+                for(const offset of [4,5,2**31,2**32,Number.MAX_SAFE_INTEGER,1e100,Infinity,-Infinity]) {
+                  for(const source of [[],new BigInt64Array(0),new BigInt64Array(2)]) {
+                    try{target.set(source,offset);log.push('ok')}catch(e){log.push(e.name)}
+                  }
+                }return JSON.stringify(log)})()
+                """);
     }
 
     @Test
     void wideViewsAndBigIntsCrossPageAndIntegerBoundaries() {
-        for (String type : new String[]{"Int8Array", "Uint8ClampedArray", "Int16Array", "Uint16Array", "Int32Array",
-                "Uint32Array", "Float16Array", "Float32Array", "Float64Array", "BigInt64Array", "BigUint64Array"}) {
-            assertStringWithJavet("""
-                    (()=>{const b=new ArrayBuffer(2**31+64),a=new %s(b,2**31,4);
-                    a[0]=%s;a[3]=%s;return JSON.stringify([a.byteOffset,a.byteLength,a.length,
-                      String(a[0]),String(a.at(-1)),a.subarray(1).byteOffset]);})()
-                    """.formatted(type, type.startsWith("Big") ? "123n" : "123", type.startsWith("Big") ? "7n" : "7"));
-        }
+        assertStringWithJavet("""
+                (()=>{const b=new ArrayBuffer(2**31+64),a=new Int8Array(b,2**31,4);
+                a[0]=123;a[3]=7;return JSON.stringify([a.byteOffset,a.byteLength,a.length,
+                  String(a[0]),String(a.at(-1)),a.subarray(1).byteOffset]);})()
+                """, """
+                (()=>{const b=new ArrayBuffer(2**31+64),a=new Uint8ClampedArray(b,2**31,4);
+                a[0]=123;a[3]=7;return JSON.stringify([a.byteOffset,a.byteLength,a.length,
+                  String(a[0]),String(a.at(-1)),a.subarray(1).byteOffset]);})()
+                """, """
+                (()=>{const b=new ArrayBuffer(2**31+64),a=new Int16Array(b,2**31,4);
+                a[0]=123;a[3]=7;return JSON.stringify([a.byteOffset,a.byteLength,a.length,
+                  String(a[0]),String(a.at(-1)),a.subarray(1).byteOffset]);})()
+                """, """
+                (()=>{const b=new ArrayBuffer(2**31+64),a=new Uint16Array(b,2**31,4);
+                a[0]=123;a[3]=7;return JSON.stringify([a.byteOffset,a.byteLength,a.length,
+                  String(a[0]),String(a.at(-1)),a.subarray(1).byteOffset]);})()
+                """, """
+                (()=>{const b=new ArrayBuffer(2**31+64),a=new Int32Array(b,2**31,4);
+                a[0]=123;a[3]=7;return JSON.stringify([a.byteOffset,a.byteLength,a.length,
+                  String(a[0]),String(a.at(-1)),a.subarray(1).byteOffset]);})()
+                """, """
+                (()=>{const b=new ArrayBuffer(2**31+64),a=new Uint32Array(b,2**31,4);
+                a[0]=123;a[3]=7;return JSON.stringify([a.byteOffset,a.byteLength,a.length,
+                  String(a[0]),String(a.at(-1)),a.subarray(1).byteOffset]);})()
+                """, """
+                (()=>{const b=new ArrayBuffer(2**31+64),a=new Float16Array(b,2**31,4);
+                a[0]=123;a[3]=7;return JSON.stringify([a.byteOffset,a.byteLength,a.length,
+                  String(a[0]),String(a.at(-1)),a.subarray(1).byteOffset]);})()
+                """, """
+                (()=>{const b=new ArrayBuffer(2**31+64),a=new Float32Array(b,2**31,4);
+                a[0]=123;a[3]=7;return JSON.stringify([a.byteOffset,a.byteLength,a.length,
+                  String(a[0]),String(a.at(-1)),a.subarray(1).byteOffset]);})()
+                """, """
+                (()=>{const b=new ArrayBuffer(2**31+64),a=new Float64Array(b,2**31,4);
+                a[0]=123;a[3]=7;return JSON.stringify([a.byteOffset,a.byteLength,a.length,
+                  String(a[0]),String(a.at(-1)),a.subarray(1).byteOffset]);})()
+                """, """
+                (()=>{const b=new ArrayBuffer(2**31+64),a=new BigInt64Array(b,2**31,4);
+                a[0]=123n;a[3]=7n;return JSON.stringify([a.byteOffset,a.byteLength,a.length,
+                  String(a[0]),String(a.at(-1)),a.subarray(1).byteOffset]);})()
+                """, """
+                (()=>{const b=new ArrayBuffer(2**31+64),a=new BigUint64Array(b,2**31,4);
+                a[0]=123n;a[3]=7n;return JSON.stringify([a.byteOffset,a.byteLength,a.length,
+                  String(a[0]),String(a.at(-1)),a.subarray(1).byteOffset]);})()
+                """);
         assertStringWithJavet("""
                 (()=>{const b=new ArrayBuffer(2**31+32),d=new DataView(b);
                 for(const p of [2**20-3,2**31-3])d.setFloat64(p,Math.PI,false);

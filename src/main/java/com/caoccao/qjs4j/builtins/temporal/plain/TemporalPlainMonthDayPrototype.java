@@ -39,8 +39,7 @@ public final class TemporalPlainMonthDayPrototype {
     }
 
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "calendarId",
-                plainMonthDay -> new JSString(plainMonthDay.getCalendarId().identifier()));
+        return TemporalDateProperty.calendarId(context, thisArg, RECEIVER);
     }
 
     private static void copyFieldIfPresent(JSContext context, JSObject sourceObject, JSObject targetObject,

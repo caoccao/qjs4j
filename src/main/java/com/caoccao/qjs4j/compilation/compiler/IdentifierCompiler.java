@@ -106,8 +106,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         if (JSArguments.NAME.equals(name) && compilerContext.hasEnclosingArgumentsBinding) {
             // Emit SPECIAL_OBJECT opcode with type 0 (SPECIAL_OBJECT_ARGUMENTS)
             // The VM will handle differently for arrow vs regular functions
-            compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-            compilerContext.emitter.emitU8(0); // Type 0 = arguments object
+            compilerContext.emitter.emitOpcodeU8(Opcode.SPECIAL_OBJECT, 0); // Type 0 = arguments object
             return;
         }
 

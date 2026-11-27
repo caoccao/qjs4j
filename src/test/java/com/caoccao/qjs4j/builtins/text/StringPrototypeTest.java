@@ -853,17 +853,31 @@ public class StringPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testStringMatchProtocolsAcceptCallableProxy() {
-        for (String method : new String[]{"match", "search", "matchAll"}) {
-            assertStringWithJavet("""
-                    (() => {
-                        const receiver = {toString() { throw new Error('unexpected coercion'); }};
-                        const pattern = {[Symbol.%1$s]: new Proxy(function (input) {
-                            return input === receiver && this === pattern ? 'matched' : 'wrong receiver';
-                        }, {})};
-                        return String.prototype.%1$s.call(receiver, pattern);
-                    })()
-                    """.formatted(method));
-        }
+        assertStringWithJavet("""
+                (() => {
+                    const receiver = {toString() { throw new Error('unexpected coercion'); }};
+                    const pattern = {[Symbol.match]: new Proxy(function (input) {
+                        return input === receiver && this === pattern ? 'matched' : 'wrong receiver';
+                    }, {})};
+                    return String.prototype.match.call(receiver, pattern);
+                })()
+                """, """
+                (() => {
+                    const receiver = {toString() { throw new Error('unexpected coercion'); }};
+                    const pattern = {[Symbol.search]: new Proxy(function (input) {
+                        return input === receiver && this === pattern ? 'matched' : 'wrong receiver';
+                    }, {})};
+                    return String.prototype.search.call(receiver, pattern);
+                })()
+                """, """
+                (() => {
+                    const receiver = {toString() { throw new Error('unexpected coercion'); }};
+                    const pattern = {[Symbol.matchAll]: new Proxy(function (input) {
+                        return input === receiver && this === pattern ? 'matched' : 'wrong receiver';
+                    }, {})};
+                    return String.prototype.matchAll.call(receiver, pattern);
+                })()
+                """);
     }
 
     @Test

@@ -65,8 +65,7 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
             savedEvalReturnLocalIndex = compilerContext.declareTemporary("#finally_eval_ret_");
             compilerContext.emitter.emitGetLocal(compilerContext.evalReturnLocalIndex);
             compilerContext.emitter.emitPutLocal(savedEvalReturnLocalIndex);
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitUndefinedLocal(compilerContext.evalReturnLocalIndex);
         }
         try {
             for (Statement stmt : block.getBody()) {
@@ -154,8 +153,7 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
             // The shared completion local handles every statement kind with net-zero stack effect.
             // Leave exactly one result above the catch marker, including when the last statement
             // is another try. A missing result here would make NIP_CATCH corrupt the handler stack.
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitUndefinedLocal(compilerContext.evalReturnLocalIndex);
             for (Statement statement : body) {
                 if (!(statement instanceof FunctionDeclaration)) {
                     compilerContext.statementCompiler.compile(statement);

@@ -18,8 +18,6 @@ package com.caoccao.qjs4j.builtins.temporal.plain;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 public class TemporalPlainTimeTest extends BaseJavetTest {
 
@@ -84,10 +82,10 @@ public class TemporalPlainTimeTest extends BaseJavetTest {
         assertStringWithJavet("Temporal.PlainTime.from({hour: 12, minute: 30}).toString()");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"hour", "minute", "second"})
-    void testIntegerProperties(String property) {
-        assertIntegerWithJavet("new Temporal.PlainTime(12, 30, 45)." + property);
+    @Test
+    void testIntegerProperties() {
+        assertIntegerWithJavet("new Temporal.PlainTime(12, 30, 45).hour", "new Temporal.PlainTime(12, 30, 45).minute",
+                "new Temporal.PlainTime(12, 30, 45).second");
     }
 
     @Test
@@ -120,10 +118,10 @@ public class TemporalPlainTimeTest extends BaseJavetTest {
         assertStringWithJavet("new Temporal.PlainTime(15, 30).since('12:00').toString()");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"toString()", "toJSON()", "toString()"})
-    void testStringConversions(String operation) {
-        assertStringWithJavet("new Temporal.PlainTime(12, 30, 45)." + operation);
+    @Test
+    void testStringConversions() {
+        assertStringWithJavet("new Temporal.PlainTime(12, 30, 45).toString()",
+                "new Temporal.PlainTime(12, 30, 45).toJSON()", "new Temporal.PlainTime(12, 30, 45).toString()");
     }
 
     @Test

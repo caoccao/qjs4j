@@ -20,16 +20,28 @@ class ClassEvaluationTest extends BaseJavetTest {
 
     @Test
     void reevaluatedClassesKeepTheirOwnPrivateMethods() {
-        for (String form : new String[]{"class C", "const C=class", "const C=class C"}) {
-            assertStringWithJavet("""
-                    (()=>{const classes=[];for(let i=0;i<3;i++){%s {#x=i;#m(){return this.#x}
-                    get #g(){return this.#m()+10} set #s(v){this.#x=v} read(){this.#s=this.#g;return this.#m()}
-                    method(){return this.#m}};classes.push(C)}
-                    const out=classes.map(C=>new C().read());
-                    out.push(new classes[0]().method()===new classes[1]().method());
-                    return JSON.stringify(out)})()
-                    """.formatted(form));
-        }
+        assertStringWithJavet("""
+                (()=>{const classes=[];for(let i=0;i<3;i++){class C {#x=i;#m(){return this.#x}
+                get #g(){return this.#m()+10} set #s(v){this.#x=v} read(){this.#s=this.#g;return this.#m()}
+                method(){return this.#m}};classes.push(C)}
+                const out=classes.map(C=>new C().read());
+                out.push(new classes[0]().method()===new classes[1]().method());
+                return JSON.stringify(out)})()
+                """, """
+                (()=>{const classes=[];for(let i=0;i<3;i++){const C=class {#x=i;#m(){return this.#x}
+                get #g(){return this.#m()+10} set #s(v){this.#x=v} read(){this.#s=this.#g;return this.#m()}
+                method(){return this.#m}};classes.push(C)}
+                const out=classes.map(C=>new C().read());
+                out.push(new classes[0]().method()===new classes[1]().method());
+                return JSON.stringify(out)})()
+                """, """
+                (()=>{const classes=[];for(let i=0;i<3;i++){const C=class C {#x=i;#m(){return this.#x}
+                get #g(){return this.#m()+10} set #s(v){this.#x=v} read(){this.#s=this.#g;return this.#m()}
+                method(){return this.#m}};classes.push(C)}
+                const out=classes.map(C=>new C().read());
+                out.push(new classes[0]().method()===new classes[1]().method());
+                return JSON.stringify(out)})()
+                """);
         assertStringWithJavet(
                 """
                         (()=>{const subs=[];for(let k=0;k<2;k++){class B{#b=k;#bm(){return this.#b}readBase(){return this.#bm()}}

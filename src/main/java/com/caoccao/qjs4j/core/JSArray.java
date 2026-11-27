@@ -1117,17 +1117,8 @@ public final class JSArray extends JSObject {
     }
 
     private Long toArrayLengthForLengthProperty(JSContext context, JSValue value) {
-        if (value.isSymbol() || value.isSymbolObject()) {
-            context.throwTypeError("cannot convert symbol to number");
-            return null;
-        }
-        if (value.isBigInt() || value.isBigIntObject()) {
-            context.throwTypeError("cannot convert bigint to number");
-            return null;
-        }
-
-        JSNumber uint32Source = JSTypeConversions.toNumber(context, value);
-        if (context.hasPendingException()) {
+        JSNumber uint32Source = JSTypeConversions.toNumberOrNull(context, value);
+        if (uint32Source == null) {
             return null;
         }
         long uint32Length = toUint32(uint32Source.value());

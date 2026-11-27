@@ -32,11 +32,11 @@ public final class JSSuppressedError extends JSError {
      * Create a SuppressedError with a message.
      */
     public JSSuppressedError(JSContext context, String message) {
-        super(context, message);
+        this(context, message, null);
     }
 
     public JSSuppressedError(JSContext context, String message, SourceLocation sourceLocation) {
-        super(context, message, sourceLocation);
+        super(context, NAME, message, sourceLocation);
     }
 
     /**
@@ -44,11 +44,6 @@ public final class JSSuppressedError extends JSError {
      */
     public JSValue getError() {
         return get(PropertyKey.ERROR);
-    }
-
-    @Override
-    public String getErrorName() {
-        return NAME;
     }
 
     /**

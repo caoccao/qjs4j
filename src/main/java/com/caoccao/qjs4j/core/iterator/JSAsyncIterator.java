@@ -111,6 +111,19 @@ public class JSAsyncIterator extends JSObject {
         return "[object AsyncIterator]";
     }
 
+    public static JSPromise awaitIteratorValue(JSContext context, JSPromise promise) {
+        JSPromise resultPromise = context.createJSPromise();
+        JSNativeFunction onFulfilled = new JSNativeFunction(context, "onFulfilled", 1, (ctx, receiver, args) -> {
+            JSValue value = JSValue.argumentOrUndefined(args, 0);
+            resultPromise.fulfill(JSIteratorHelper.createResult(ctx, value, false));
+            return JSUndefined.INSTANCE;
+        });
+        promise.addReactions(new JSPromise.ReactionRecord(onFulfilled, resultPromise, context),
+                new JSPromise.ReactionRecord(resultPromise.rejectHandler(context, "onRejected"), resultPromise,
+                        context));
+        return resultPromise;
+    }
+
     /**
      * The iterator a {@code for await} loop over a sync iterable keeps, for closing: an object whose {@code return} is
      * %AsyncFromSyncIteratorPrototype%.return, so a {@code break} or {@code return} awaits a promise exactly as it
@@ -335,16 +348,7 @@ public class JSAsyncIterator extends JSObject {
                 consumed = true;
 
                 // Return a promise that waits for the input promise
-                JSPromise resultPromise = context.createJSPromise();
-                promise.addReactions(new JSPromise.ReactionRecord(
-                        new JSNativeFunction(context, "onFulfilled", 1, (childContext, thisArg, args) -> {
-                            JSValue value = JSValue.argumentOrUndefined(args, 0);
-                            JSObject result = JSIteratorHelper.createResult(childContext, value, false);
-                            resultPromise.fulfill(result);
-                            return JSUndefined.INSTANCE;
-                        }), resultPromise, context), new JSPromise.ReactionRecord(
-                                resultPromise.rejectHandler(context, "onRejected"), resultPromise, context));
-                return resultPromise;
+                return awaitIteratorValue(context, promise);
             }
         }, context);
     }

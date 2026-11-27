@@ -30,27 +30,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Java implementation, are compared against V8 directly.
  */
 public class JSObjectIntegrityLevelTest extends BaseJavetTest {
-    private static final String TRAP_LOG = """
-            var log = [];
-            var handler = {
-              ownKeys(t) {
-                log.push('ownKeys');
-                return Reflect.ownKeys(t);
-              },
-              getOwnPropertyDescriptor(t, k) {
-                log.push('gopd ' + String(k));
-                return Reflect.getOwnPropertyDescriptor(t, k);
-              },
-              defineProperty(t, k, d) {
-                log.push('define ' + String(k) + ' ' + JSON.stringify(d));
-                return Reflect.defineProperty(t, k, d);
-              },
-              preventExtensions(t) {
-                log.push('preventExtensions');
-                return Reflect.preventExtensions(t);
-              },
-            };
-            """;
 
     private JSObject createObject() {
         JSObject object = context.createJSObject();
@@ -125,7 +104,27 @@ public class JSObjectIntegrityLevelTest extends BaseJavetTest {
                 var d = Object.getOwnPropertyDescriptor(o, 'a');
                 Object.isFrozen(o) + ':' + ('writable' in d) + ':' + d.configurable""")).isEqualTo("true:false:false");
 
-        JSObject proxy = (JSObject) context.eval(TRAP_LOG + "new Proxy({ a: 1 }, handler)");
+        JSObject proxy = (JSObject) context.eval("""
+                var log = [];
+                var handler = {
+                  ownKeys(t) {
+                    log.push('ownKeys');
+                    return Reflect.ownKeys(t);
+                  },
+                  getOwnPropertyDescriptor(t, k) {
+                    log.push('gopd ' + String(k));
+                    return Reflect.getOwnPropertyDescriptor(t, k);
+                  },
+                  defineProperty(t, k, d) {
+                    log.push('define ' + String(k) + ' ' + JSON.stringify(d));
+                    return Reflect.defineProperty(t, k, d);
+                  },
+                  preventExtensions(t) {
+                    log.push('preventExtensions');
+                    return Reflect.preventExtensions(t);
+                  },
+                };
+                new Proxy({ a: 1 }, handler)""");
         assertThat(proxy.freeze()).isTrue();
         assertThat(context.eval("log.join('|')").toString())
                 .isEqualTo("preventExtensions|ownKeys|gopd a|define a {\"writable\":false,\"configurable\":false}");
@@ -157,8 +156,66 @@ public class JSObjectIntegrityLevelTest extends BaseJavetTest {
     @Test
     public void testTrapOrderMatchesV8() {
         // Sealing defines { configurable: false } without reading the descriptor first; freezing reads it.
-        assertStringWithJavet(TRAP_LOG + "Object.seal(new Proxy({ a: 1 }, handler)); log.join('|')",
-                TRAP_LOG + "Object.freeze(new Proxy({ a: 1, get b() { return 1 } }, handler)); log.join('|')",
-                TRAP_LOG + "Object.isFrozen(Object.freeze(new Proxy([1], handler))) + log.join('|')");
+        assertStringWithJavet("""
+                var log = [];
+                var handler = {
+                  ownKeys(t) {
+                    log.push('ownKeys');
+                    return Reflect.ownKeys(t);
+                  },
+                  getOwnPropertyDescriptor(t, k) {
+                    log.push('gopd ' + String(k));
+                    return Reflect.getOwnPropertyDescriptor(t, k);
+                  },
+                  defineProperty(t, k, d) {
+                    log.push('define ' + String(k) + ' ' + JSON.stringify(d));
+                    return Reflect.defineProperty(t, k, d);
+                  },
+                  preventExtensions(t) {
+                    log.push('preventExtensions');
+                    return Reflect.preventExtensions(t);
+                  },
+                };
+                Object.seal(new Proxy({ a: 1 }, handler)); log.join('|')""", """
+                var log = [];
+                var handler = {
+                  ownKeys(t) {
+                    log.push('ownKeys');
+                    return Reflect.ownKeys(t);
+                  },
+                  getOwnPropertyDescriptor(t, k) {
+                    log.push('gopd ' + String(k));
+                    return Reflect.getOwnPropertyDescriptor(t, k);
+                  },
+                  defineProperty(t, k, d) {
+                    log.push('define ' + String(k) + ' ' + JSON.stringify(d));
+                    return Reflect.defineProperty(t, k, d);
+                  },
+                  preventExtensions(t) {
+                    log.push('preventExtensions');
+                    return Reflect.preventExtensions(t);
+                  },
+                };
+                Object.freeze(new Proxy({ a: 1, get b() { return 1 } }, handler)); log.join('|')""", """
+                var log = [];
+                var handler = {
+                  ownKeys(t) {
+                    log.push('ownKeys');
+                    return Reflect.ownKeys(t);
+                  },
+                  getOwnPropertyDescriptor(t, k) {
+                    log.push('gopd ' + String(k));
+                    return Reflect.getOwnPropertyDescriptor(t, k);
+                  },
+                  defineProperty(t, k, d) {
+                    log.push('define ' + String(k) + ' ' + JSON.stringify(d));
+                    return Reflect.defineProperty(t, k, d);
+                  },
+                  preventExtensions(t) {
+                    log.push('preventExtensions');
+                    return Reflect.preventExtensions(t);
+                  },
+                };
+                Object.isFrozen(Object.freeze(new Proxy([1], handler))) + log.join('|')""");
     }
 }

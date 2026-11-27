@@ -26,13 +26,22 @@ public class JSErrorTest extends BaseJavetTest {
 
     @Test
     public void testNativeErrorPrototypeChains() {
-        for (JSErrorType type : JSErrorType.values()) {
-            if (type == JSErrorType.Error) {
-                continue;
-            }
-            assertBooleanWithJavet("Object.getPrototypeOf(" + type.name() + ") === Error",
-                    "Object.getPrototypeOf(" + type.name() + ".prototype) === Error.prototype");
-        }
+        assertBooleanWithJavet("Object.getPrototypeOf(AggregateError) === Error",
+                "Object.getPrototypeOf(AggregateError.prototype) === Error.prototype",
+                "Object.getPrototypeOf(EvalError) === Error",
+                "Object.getPrototypeOf(EvalError.prototype) === Error.prototype",
+                "Object.getPrototypeOf(RangeError) === Error",
+                "Object.getPrototypeOf(RangeError.prototype) === Error.prototype",
+                "Object.getPrototypeOf(ReferenceError) === Error",
+                "Object.getPrototypeOf(ReferenceError.prototype) === Error.prototype",
+                "Object.getPrototypeOf(SuppressedError) === Error",
+                "Object.getPrototypeOf(SuppressedError.prototype) === Error.prototype",
+                "Object.getPrototypeOf(SyntaxError) === Error",
+                "Object.getPrototypeOf(SyntaxError.prototype) === Error.prototype",
+                "Object.getPrototypeOf(TypeError) === Error",
+                "Object.getPrototypeOf(TypeError.prototype) === Error.prototype",
+                "Object.getPrototypeOf(URIError) === Error",
+                "Object.getPrototypeOf(URIError.prototype) === Error.prototype");
         assertBooleanWithJavet("AggregateError.prototype.hasOwnProperty('errors')");
         assertStringWithJavet("new AggregateError([], 'message').toString()");
     }

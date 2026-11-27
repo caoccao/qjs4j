@@ -73,8 +73,11 @@ public class JSModuleDefaultExportExtentTest extends BaseJavetTest {
 
     @Test
     public void testADefaultExportOfATaggedTemplateSpanningLines() {
-        assertStringWithJavet("const tag = (strings) => strings.raw[0];\n" + "export default tag`first\nsecond`;\n"
-                + "String('ok');");
+        assertStringWithJavet("""
+                const tag = (strings) => strings.raw[0];
+                export default tag`first
+                second`;
+                String('ok');""");
     }
 
     @Test

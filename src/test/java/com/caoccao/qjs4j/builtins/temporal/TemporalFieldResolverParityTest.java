@@ -22,15 +22,16 @@ import org.junit.jupiter.api.Test;
 public class TemporalFieldResolverParityTest extends BaseJavetTest {
     @Test
     public void testCalendarDifferenceReadsInternalSlots() {
-        assertStringWithJavet(inArrowFunction("""
-                const start = Temporal.PlainDate.from('2024-01-31');
-                const end = Temporal.PlainDate.from('2024-02-29');
-                const jan = start.toPlainYearMonth(), feb = end.toPlainYearMonth();
-                for (const key of ['PlainDate', 'PlainYearMonth']) {
-                  Object.defineProperty(Temporal, key, { get() { throw new Error(key); } });
-                }
-                return [start.until(end).days, feb.since(jan).months].join(',');
-                """));
+        assertStringWithJavet("""
+                (() => {
+                  const start = Temporal.PlainDate.from('2024-01-31');
+                  const end = Temporal.PlainDate.from('2024-02-29');
+                  const jan = start.toPlainYearMonth(), feb = end.toPlainYearMonth();
+                  for (const key of ['PlainDate', 'PlainYearMonth']) {
+                    Object.defineProperty(Temporal, key, { get() { throw new Error(key); } });
+                  }
+                  return [start.until(end).days, feb.since(jan).months].join(',');
+                })()""");
     }
 
     @Test
@@ -41,13 +42,14 @@ public class TemporalFieldResolverParityTest extends BaseJavetTest {
 
     @Test
     public void testDatePropertiesReadInternalSlots() {
-        assertStringWithJavet(inArrowFunction(
+        assertStringWithJavet(
                 """
-                        const plain = Temporal.PlainDateTime.from('2024-02-29T12:00');
-                        const zoned = Temporal.ZonedDateTime.from('2024-02-29T12:00+01:00[Europe/Berlin]');
-                        Object.defineProperty(Temporal, 'PlainDate', { get() { throw new Error('observable constructor lookup'); } });
-                        return [plain.year, plain.monthCode, zoned.day, zoned.daysInMonth].join(',');
-                        """));
+                        (() => {
+                          const plain = Temporal.PlainDateTime.from('2024-02-29T12:00');
+                          const zoned = Temporal.ZonedDateTime.from('2024-02-29T12:00+01:00[Europe/Berlin]');
+                          Object.defineProperty(Temporal, 'PlainDate', { get() { throw new Error('observable constructor lookup'); } });
+                          return [plain.year, plain.monthCode, zoned.day, zoned.daysInMonth].join(',');
+                        })()""");
     }
 
     @Test

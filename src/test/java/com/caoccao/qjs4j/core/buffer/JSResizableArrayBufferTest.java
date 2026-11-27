@@ -38,10 +38,11 @@ public class JSResizableArrayBufferTest extends BaseJavetTest {
         // with the host budget explicitly disabled and compares the result with V8.
         try (JSRuntime runtime = new JSRuntime()) {
             JSContext context = runtime.createContext();
-            for (String length : new String[]{"2147483647", "2147483646", "2147483645", "2147483644"}) {
-                assertThat(context.eval("try { new ArrayBuffer(" + length + "); 'allocated'; } catch (e) { e.name; }",
-                        "b.js", false).toString()).as(length).isEqualTo("RangeError");
-            }
+            assertThat(context.eval("""
+                    [2147483647, 2147483646, 2147483645, 2147483644].map(length => {
+                      try { new ArrayBuffer(length); return 'allocated'; } catch (e) { return e.name; }
+                    }).join(',')
+                    """, "b.js", false).toString()).isEqualTo("RangeError,RangeError,RangeError,RangeError");
         }
     }
 

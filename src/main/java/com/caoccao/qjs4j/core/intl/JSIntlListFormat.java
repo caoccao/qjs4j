@@ -28,78 +28,56 @@ import java.util.Map;
  * Intl.ListFormat instance object. Uses CLDR-based patterns for locale-specific list formatting.
  */
 public final class JSIntlListFormat extends JSObject {
+    private static final ListPatterns COMMA = ListPatterns.uniform(", ");
+    private static final ListPatterns EMPTY = ListPatterns.uniform("");
+
+    private static final ListPatterns IDEOGRAPHIC_COMMA = ListPatterns.uniform("\u3001");
     public static final String NAME = "Intl.ListFormat";
     private static final Map<String, ListPatterns> PATTERNS = new HashMap<>();
+    private static final ListPatterns SPACE = ListPatterns.uniform(" ");
 
     static {
-        // English patterns
-        PATTERNS.put("en|conjunction|long", new ListPatterns(" and ", ", ", ", ", ", and "));
-        PATTERNS.put("en|conjunction|short", new ListPatterns(" & ", ", ", ", ", ", & "));
-        PATTERNS.put("en|conjunction|narrow", new ListPatterns(", ", ", ", ", ", ", "));
-        PATTERNS.put("en|disjunction|long", new ListPatterns(" or ", ", ", ", ", ", or "));
-        PATTERNS.put("en|disjunction|short", new ListPatterns(" or ", ", ", ", ", ", or "));
-        PATTERNS.put("en|disjunction|narrow", new ListPatterns(" or ", ", ", ", ", ", or "));
-        PATTERNS.put("en|unit|long", new ListPatterns(", ", ", ", ", ", ", "));
-        PATTERNS.put("en|unit|short", new ListPatterns(", ", ", ", ", ", ", "));
-        PATTERNS.put("en|unit|narrow", new ListPatterns(" ", " ", " ", " "));
+        // English
+        ListPatterns enDisjunction = new ListPatterns(" or ", ", ", ", ", ", or ");
+        registerStyles("en|conjunction", new ListPatterns(" and ", ", ", ", ", ", and "),
+                new ListPatterns(" & ", ", ", ", ", ", & "), COMMA);
+        registerStyles("en|disjunction", enDisjunction, enDisjunction, enDisjunction);
+        registerStyles("en|unit", COMMA, COMMA, SPACE);
 
-        // Spanish patterns
-        PATTERNS.put("es|conjunction|long", new ListPatterns(" y ", ", ", ", ", " y "));
-        PATTERNS.put("es|conjunction|short", new ListPatterns(" y ", ", ", ", ", " y "));
-        PATTERNS.put("es|conjunction|narrow", new ListPatterns(", ", ", ", ", ", ", "));
-        PATTERNS.put("es|disjunction|long", new ListPatterns(" o ", ", ", ", ", " o "));
-        PATTERNS.put("es|disjunction|short", new ListPatterns(" o ", ", ", ", ", " o "));
-        PATTERNS.put("es|disjunction|narrow", new ListPatterns(" o ", ", ", ", ", " o "));
-        PATTERNS.put("es|unit|long", new ListPatterns(" y ", ", ", ", ", " y "));
-        PATTERNS.put("es|unit|short", new ListPatterns(" y ", ", ", ", ", ", "));
-        PATTERNS.put("es|unit|narrow", new ListPatterns(" ", " ", " ", " "));
+        // Spanish
+        ListPatterns esConjunction = new ListPatterns(" y ", ", ", ", ", " y ");
+        ListPatterns esDisjunction = new ListPatterns(" o ", ", ", ", ", " o ");
+        registerStyles("es|conjunction", esConjunction, esConjunction, COMMA);
+        registerStyles("es|disjunction", esDisjunction, esDisjunction, esDisjunction);
+        registerStyles("es|unit", esConjunction, new ListPatterns(" y ", ", ", ", ", ", "), SPACE);
 
-        // German patterns
-        PATTERNS.put("de|conjunction|long", new ListPatterns(" und ", ", ", ", ", " und "));
-        PATTERNS.put("de|conjunction|short", new ListPatterns(" und ", ", ", ", ", " und "));
-        PATTERNS.put("de|conjunction|narrow", new ListPatterns(", ", ", ", ", ", ", "));
-        PATTERNS.put("de|disjunction|long", new ListPatterns(" oder ", ", ", ", ", " oder "));
-        PATTERNS.put("de|disjunction|short", new ListPatterns(" oder ", ", ", ", ", " oder "));
-        PATTERNS.put("de|disjunction|narrow", new ListPatterns(" oder ", ", ", ", ", " oder "));
-        PATTERNS.put("de|unit|long", new ListPatterns(", ", ", ", ", ", " und "));
-        PATTERNS.put("de|unit|short", new ListPatterns(", ", ", ", ", ", ", "));
-        PATTERNS.put("de|unit|narrow", new ListPatterns(" ", " ", " ", " "));
+        // German
+        ListPatterns deConjunction = new ListPatterns(" und ", ", ", ", ", " und ");
+        ListPatterns deDisjunction = new ListPatterns(" oder ", ", ", ", ", " oder ");
+        registerStyles("de|conjunction", deConjunction, deConjunction, COMMA);
+        registerStyles("de|disjunction", deDisjunction, deDisjunction, deDisjunction);
+        registerStyles("de|unit", new ListPatterns(", ", ", ", ", ", " und "), COMMA, SPACE);
 
-        // Japanese patterns
-        PATTERNS.put("ja|conjunction|long", new ListPatterns("\u3001", "\u3001", "\u3001", "\u3001"));
-        PATTERNS.put("ja|conjunction|short", new ListPatterns("\u3001", "\u3001", "\u3001", "\u3001"));
-        PATTERNS.put("ja|conjunction|narrow", new ListPatterns("\u3001", "\u3001", "\u3001", "\u3001"));
-        PATTERNS.put("ja|disjunction|long",
-                new ListPatterns("\u307E\u305F\u306F", "\u3001", "\u3001", "\u3001\u307E\u305F\u306F"));
-        PATTERNS.put("ja|disjunction|short",
-                new ListPatterns("\u307E\u305F\u306F", "\u3001", "\u3001", "\u3001\u307E\u305F\u306F"));
-        PATTERNS.put("ja|disjunction|narrow",
-                new ListPatterns("\u307E\u305F\u306F", "\u3001", "\u3001", "\u3001\u307E\u305F\u306F"));
-        PATTERNS.put("ja|unit|long", new ListPatterns(" ", " ", " ", " "));
-        PATTERNS.put("ja|unit|short", new ListPatterns(" ", " ", " ", " "));
-        PATTERNS.put("ja|unit|narrow", new ListPatterns("", "", "", ""));
+        // Japanese
+        ListPatterns jaDisjunction = new ListPatterns("\u307E\u305F\u306F", "\u3001", "\u3001",
+                "\u3001\u307E\u305F\u306F");
+        registerStyles("ja|conjunction", IDEOGRAPHIC_COMMA, IDEOGRAPHIC_COMMA, IDEOGRAPHIC_COMMA);
+        registerStyles("ja|disjunction", jaDisjunction, jaDisjunction, jaDisjunction);
+        registerStyles("ja|unit", SPACE, SPACE, EMPTY);
 
-        // Chinese patterns
-        PATTERNS.put("zh|conjunction|long", new ListPatterns("\u548C", "\u3001", "\u3001", "\u548C"));
-        PATTERNS.put("zh|conjunction|short", new ListPatterns("\u548C", "\u3001", "\u3001", "\u548C"));
-        PATTERNS.put("zh|conjunction|narrow", new ListPatterns("\u3001", "\u3001", "\u3001", "\u3001"));
-        PATTERNS.put("zh|disjunction|long", new ListPatterns("\u6216", "\u3001", "\u3001", "\u6216"));
-        PATTERNS.put("zh|disjunction|short", new ListPatterns("\u6216", "\u3001", "\u3001", "\u6216"));
-        PATTERNS.put("zh|disjunction|narrow", new ListPatterns("\u6216", "\u3001", "\u3001", "\u6216"));
-        PATTERNS.put("zh|unit|long", new ListPatterns("", "", "", ""));
-        PATTERNS.put("zh|unit|short", new ListPatterns("", "", "", ""));
-        PATTERNS.put("zh|unit|narrow", new ListPatterns("", "", "", ""));
+        // Chinese
+        ListPatterns zhConjunction = new ListPatterns("\u548C", "\u3001", "\u3001", "\u548C");
+        ListPatterns zhDisjunction = new ListPatterns("\u6216", "\u3001", "\u3001", "\u6216");
+        registerStyles("zh|conjunction", zhConjunction, zhConjunction, IDEOGRAPHIC_COMMA);
+        registerStyles("zh|disjunction", zhDisjunction, zhDisjunction, zhDisjunction);
+        registerStyles("zh|unit", EMPTY, EMPTY, EMPTY);
 
-        // French patterns
-        PATTERNS.put("fr|conjunction|long", new ListPatterns(" et ", ", ", ", ", " et "));
-        PATTERNS.put("fr|conjunction|short", new ListPatterns(" et ", ", ", ", ", " et "));
-        PATTERNS.put("fr|conjunction|narrow", new ListPatterns(", ", ", ", ", ", ", "));
-        PATTERNS.put("fr|disjunction|long", new ListPatterns(" ou ", ", ", ", ", " ou "));
-        PATTERNS.put("fr|disjunction|short", new ListPatterns(" ou ", ", ", ", ", " ou "));
-        PATTERNS.put("fr|disjunction|narrow", new ListPatterns(" ou ", ", ", ", ", " ou "));
-        PATTERNS.put("fr|unit|long", new ListPatterns(", ", ", ", ", ", " et "));
-        PATTERNS.put("fr|unit|short", new ListPatterns(", ", ", ", ", ", ", "));
-        PATTERNS.put("fr|unit|narrow", new ListPatterns(" ", " ", " ", " "));
+        // French
+        ListPatterns frConjunction = new ListPatterns(" et ", ", ", ", ", " et ");
+        ListPatterns frDisjunction = new ListPatterns(" ou ", ", ", ", ", " ou ");
+        registerStyles("fr|conjunction", frConjunction, frConjunction, COMMA);
+        registerStyles("fr|disjunction", frDisjunction, frDisjunction, frDisjunction);
+        registerStyles("fr|unit", new ListPatterns(", ", ", ", ", ", " et "), COMMA, SPACE);
     }
 
     private final Locale locale;
@@ -148,7 +126,7 @@ public final class JSIntlListFormat extends JSObject {
             return patterns;
         }
         // Ultimate fallback
-        return new ListPatterns(", ", ", ", ", ", ", ");
+        return COMMA;
     }
 
     public String getStyle() {
@@ -159,10 +137,21 @@ public final class JSIntlListFormat extends JSObject {
         return type;
     }
 
+    private static void registerStyles(String key, ListPatterns longStyle, ListPatterns shortStyle,
+            ListPatterns narrowStyle) {
+        PATTERNS.put(key + "|long", longStyle);
+        PATTERNS.put(key + "|short", shortStyle);
+        PATTERNS.put(key + "|narrow", narrowStyle);
+    }
+
     /**
      * CLDR list format patterns: pair, start, middle, end separators.
      */
     public record ListPatterns(String pairSep, String startSep, String middleSep, String endSep) {
+        private static ListPatterns uniform(String separator) {
+            return new ListPatterns(separator, separator, separator, separator);
+        }
+
         String separator(int index, int count) {
             if (count == 2) {
                 return pairSep;

@@ -93,10 +93,12 @@ public class AtomicsWaitListTest extends BaseTest {
         try {
             JSContext firstContext = first.createContext();
             JSContext secondContext = second.createContext();
-            firstContext.eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
-                    + "globalThis.r = Atomics.waitAsync(i, 0, 0);", "atomics.js", false);
-            secondContext.eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
-                    + "globalThis.r = Atomics.waitAsync(i, 0, 0);", "atomics.js", false);
+            firstContext.eval(
+                    "globalThis.i = new Int32Array(new SharedArrayBuffer(8));globalThis.r = Atomics.waitAsync(i, 0, 0);",
+                    "atomics.js", false);
+            secondContext.eval(
+                    "globalThis.i = new Int32Array(new SharedArrayBuffer(8));globalThis.r = Atomics.waitAsync(i, 0, 0);",
+                    "atomics.js", false);
             assertThat(sharedAtomics.getPendingAsyncWaitCount(first)).isEqualTo(1);
             assertThat(sharedAtomics.getPendingAsyncWaitCount(second)).isEqualTo(1);
 
@@ -128,9 +130,11 @@ public class AtomicsWaitListTest extends BaseTest {
             options.setAtomicsObject(replacement);
             JSContext after = runtime.createContext();
 
-            JSTypedArray array = sharedInt32Array(before, 2);
-            before.eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
-                    + "globalThis.r = Atomics.waitAsync(i, 0, 0);", "atomics.js", false);
+            JSTypedArray array = (JSTypedArray) before.eval("new Int32Array(new SharedArrayBuffer(8))", "atomics.js",
+                    false);
+            before.eval(
+                    "globalThis.i = new Int32Array(new SharedArrayBuffer(8));globalThis.r = Atomics.waitAsync(i, 0, 0);",
+                    "atomics.js", false);
             assertThat(runtime.getAtomicsObject().getPendingAsyncWaitCount(runtime)).isEqualTo(1);
 
             // The second context's Atomics has to be able to see the first context's waiters.
@@ -159,8 +163,9 @@ public class AtomicsWaitListTest extends BaseTest {
         JSRuntime runtime = new JSRuntime();
         AtomicsObject atomics = runtime.getAtomicsObject();
         JSContext context = runtime.createContext();
-        context.eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
-                + "globalThis.r = Atomics.waitAsync(i, 0, 0);", "atomics.js", false);
+        context.eval(
+                "globalThis.i = new Int32Array(new SharedArrayBuffer(8));globalThis.r = Atomics.waitAsync(i, 0, 0);",
+                "atomics.js", false);
         assertThat(atomics.getPendingAsyncWaitCount(runtime)).isEqualTo(1);
         assertThat(atomics.isWaitExecutorTerminated()).isFalse();
 
@@ -178,10 +183,12 @@ public class AtomicsWaitListTest extends BaseTest {
         try (AtomicsObject clusterAtomics = new AtomicsObject()) {
             JSRuntime first = new JSRuntime(new JSRuntimeOptions().setAtomicsObject(clusterAtomics));
             try (JSRuntime second = new JSRuntime(new JSRuntimeOptions().setAtomicsObject(clusterAtomics))) {
-                first.createContext().eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
-                        + "globalThis.r = Atomics.waitAsync(i, 0, 0);", "atomics.js", false);
-                second.createContext().eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
-                        + "globalThis.r = Atomics.waitAsync(i, 0, 0);", "atomics.js", false);
+                first.createContext().eval(
+                        "globalThis.i = new Int32Array(new SharedArrayBuffer(8));globalThis.r = Atomics.waitAsync(i, 0, 0);",
+                        "atomics.js", false);
+                second.createContext().eval(
+                        "globalThis.i = new Int32Array(new SharedArrayBuffer(8));globalThis.r = Atomics.waitAsync(i, 0, 0);",
+                        "atomics.js", false);
 
                 first.close();
 
@@ -221,7 +228,8 @@ public class AtomicsWaitListTest extends BaseTest {
         // chosen its targets could take the lock first and spend the token — leaving the agent the
         // notification was meant for still blocked.
         JSRuntime runtime = context.getRuntime();
-        JSTypedArray array = sharedInt32Array(context, 2);
+        JSTypedArray array = (JSTypedArray) context.eval("new Int32Array(new SharedArrayBuffer(8))", "atomics.js",
+                false);
         AtomicsObject atomics = runtime.getAtomicsObject();
 
         CountDownLatch firstWaiterStarted = new CountDownLatch(1);
@@ -248,7 +256,8 @@ public class AtomicsWaitListTest extends BaseTest {
     @Timeout(60)
     public void testNotifyOnADifferentIndexOfTheSameBufferDoesNotWake() throws InterruptedException {
         JSRuntime runtime = context.getRuntime();
-        JSTypedArray array = sharedInt32Array(context, 4);
+        JSTypedArray array = (JSTypedArray) context.eval("new Int32Array(new SharedArrayBuffer(16))", "atomics.js",
+                false);
         assertNotifyMissesWaiter(runtime, context, array, array, 2);
     }
 
@@ -256,8 +265,10 @@ public class AtomicsWaitListTest extends BaseTest {
     @Timeout(60)
     public void testNotifyOnOneBufferDoesNotWakeAnother() throws InterruptedException {
         JSRuntime runtime = context.getRuntime();
-        JSTypedArray waited = sharedInt32Array(context, 2);
-        JSTypedArray other = sharedInt32Array(context, 2);
+        JSTypedArray waited = (JSTypedArray) context.eval("new Int32Array(new SharedArrayBuffer(8))", "atomics.js",
+                false);
+        JSTypedArray other = (JSTypedArray) context.eval("new Int32Array(new SharedArrayBuffer(8))", "atomics.js",
+                false);
         assertNotifyMissesWaiter(runtime, context, waited, other, 0);
     }
 
@@ -265,7 +276,8 @@ public class AtomicsWaitListTest extends BaseTest {
     @Timeout(60)
     public void testNotifyWithNoWaitersReportsZero() {
         JSRuntime runtime = context.getRuntime();
-        JSTypedArray array = sharedInt32Array(context, 2);
+        JSTypedArray array = (JSTypedArray) context.eval("new Int32Array(new SharedArrayBuffer(8))", "atomics.js",
+                false);
         AtomicsObject atomics = runtime.getAtomicsObject();
         assertThat(atomics.notify(context, JSUndefined.INSTANCE, new JSValue[]{array, JSNumber.of(0), JSNumber.of(1)})
                 .toString()).isEqualTo("0");
@@ -281,8 +293,9 @@ public class AtomicsWaitListTest extends BaseTest {
         for (int index = 0; index < instances.length; index++) {
             try (JSRuntime runtime = new JSRuntime(options)) {
                 instances[index] = runtime.getAtomicsObject();
-                runtime.createContext().eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
-                        + "globalThis.r = Atomics.waitAsync(i, 0, 0);", "atomics.js", false);
+                runtime.createContext().eval(
+                        "globalThis.i = new Int32Array(new SharedArrayBuffer(8));globalThis.r = Atomics.waitAsync(i, 0, 0);",
+                        "atomics.js", false);
             }
             assertThat(instances[index].isWaitExecutorTerminated())
                     .as("runtime " + index + " owns and closes its own instance").isTrue();
@@ -311,8 +324,9 @@ public class AtomicsWaitListTest extends BaseTest {
             assertThat(second.getAtomicsObject().isWaitExecutorTerminated())
                     .as("a runtime that is still open keeps its own executor").isFalse();
             // And it still works, which is the part an embedder would actually notice.
-            second.createContext().eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
-                    + "globalThis.r = Atomics.waitAsync(i, 0, 0);", "atomics.js", false);
+            second.createContext().eval(
+                    "globalThis.i = new Int32Array(new SharedArrayBuffer(8));globalThis.r = Atomics.waitAsync(i, 0, 0);",
+                    "atomics.js", false);
             assertThat(second.getAtomicsObject().getPendingAsyncWaitCount(second)).isEqualTo(1);
         } finally {
             second.close();
@@ -328,7 +342,8 @@ public class AtomicsWaitListTest extends BaseTest {
         // the agent try to join. Joining the reclaimed list would put it somewhere Atomics.notify
         // can no longer look, so it must be refused and the agent given the live list instead.
         JSRuntime runtime = context.getRuntime();
-        JSTypedArray array = sharedInt32Array(context, 2);
+        JSTypedArray array = (JSTypedArray) context.eval("new Int32Array(new SharedArrayBuffer(8))", "atomics.js",
+                false);
         AtomicsObject atomics = runtime.getAtomicsObject();
 
         AtomicsObject.WaitRegistration first = atomics.registerWaiter(array, 0);
@@ -352,9 +367,9 @@ public class AtomicsWaitListTest extends BaseTest {
     @Test
     @Timeout(60)
     public void testWaitAsyncSettlesOnNotify() throws InterruptedException {
-        context.eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
-                + "globalThis.r = Atomics.waitAsync(i, 0, 0);" + "globalThis.settled = 'pending';"
-                + "r.value.then(v => { globalThis.settled = v; });", "atomics.js", false);
+        context.eval(
+                "globalThis.i = new Int32Array(new SharedArrayBuffer(8));globalThis.r = Atomics.waitAsync(i, 0, 0);globalThis.settled = 'pending';r.value.then(v => { globalThis.settled = v; });",
+                "atomics.js", false);
         assertThat(context.eval("r.async").toString()).isEqualTo("true");
 
         context.eval("Atomics.notify(i, 0);", "atomics.js", false);
@@ -372,7 +387,8 @@ public class AtomicsWaitListTest extends BaseTest {
     @Timeout(60)
     public void testWaitListsOfDifferentOffsetsAreIndependent() {
         JSRuntime runtime = context.getRuntime();
-        JSTypedArray array = sharedInt32Array(context, 4);
+        JSTypedArray array = (JSTypedArray) context.eval("new Int32Array(new SharedArrayBuffer(16))", "atomics.js",
+                false);
         AtomicsObject atomics = runtime.getAtomicsObject();
 
         AtomicsObject.WaitRegistration atZero = atomics.registerWaiter(array, 0);
@@ -390,7 +406,8 @@ public class AtomicsWaitListTest extends BaseTest {
     @Timeout(60)
     public void testWaitListWithAWaiterIsNotReclaimed() {
         JSRuntime runtime = context.getRuntime();
-        JSTypedArray array = sharedInt32Array(context, 2);
+        JSTypedArray array = (JSTypedArray) context.eval("new Int32Array(new SharedArrayBuffer(8))", "atomics.js",
+                false);
         AtomicsObject atomics = runtime.getAtomicsObject();
 
         AtomicsObject.WaitRegistration first = atomics.registerWaiter(array, 0);
@@ -406,9 +423,4 @@ public class AtomicsWaitListTest extends BaseTest {
         assertThat(second.waitList().notifyWaiters(2)).isEqualTo(2);
     }
 
-    private static JSTypedArray sharedInt32Array(JSContext context, int elementCount) {
-        JSValue array = context.eval("new Int32Array(new SharedArrayBuffer(" + (elementCount * 4) + "))", "atomics.js",
-                false);
-        return (JSTypedArray) array;
-    }
 }

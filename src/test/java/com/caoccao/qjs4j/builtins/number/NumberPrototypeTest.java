@@ -21,8 +21,9 @@ import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
+import com.caoccao.javet.exceptions.JavetException;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -36,23 +37,18 @@ public class NumberPrototypeTest extends BaseJavetTest {
                 .hasMessageContaining("SyntaxError");
     }
 
-    private void assertNumberFormat(String method, JSNativeCallback callback, int firstDigit) {
-        List<Double> testNumbers = List.of(0D, 1D, -1D, 123.456D, -123.456D, 123456789.123456789D,
-                -123456789.123456789D, Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
-        testNumbers.forEach(number -> {
-            IntStream.range(firstDigit, 101)
-                    .forEach(
-                            fractionDigits -> assertWithJavet(
-                                    () -> v8Runtime
-                                            .getExecutor(
-                                                    "Number(" + number + ")." + method + "(" + fractionDigits + ")")
-                                            .executeString(),
-                                    () -> callback.call(context, new JSNumber(number), numberArgs(fractionDigits))
-                                            .asString().map(JSString::value).orElseThrow()));
-            assertWithJavet(() -> v8Runtime.getExecutor("Number(" + number + ")." + method + "()").executeString(),
-                    () -> callback.call(context, new JSNumber(number), JSValue.NO_ARGS).asString().map(JSString::value)
-                            .orElseThrow());
-        });
+    private void assertNumberFormat(String code, JSNativeCallback callback, int firstDigit) throws JavetException {
+        List<String> expected = v8Runtime.getExecutor(code).executeObject();
+        List<String> actual = new ArrayList<>();
+        for (double number : List.of(0D, 1D, -1D, 123.456D, -123.456D, 123456789.123456789D, -123456789.123456789D,
+                Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY)) {
+            JSNumber value = new JSNumber(number);
+            for (int digits = firstDigit; digits <= 100; digits++) {
+                actual.add(callback.call(context, value, numberArgs(digits)).asString().orElseThrow().value());
+            }
+            actual.add(callback.call(context, value, JSValue.NO_ARGS).asString().orElseThrow().value());
+        }
+        assertThat(actual).isEqualTo(expected);
     }
 
     @Test
@@ -381,8 +377,13 @@ public class NumberPrototypeTest extends BaseJavetTest {
     }
 
     @Test
-    public void testToExponentialWithJavet() {
-        assertNumberFormat("toExponential", NumberPrototype::toExponential, 0);
+    public void testToExponentialWithJavet() throws JavetException {
+        assertNumberFormat("""
+                [0, 1, -1, 123.456, -123.456, 123456789.123456789, -123456789.123456789,
+                  NaN, Infinity, -Infinity].flatMap(number => [
+                    ...Array.from({ length: 101 }, (_, index) => number.toExponential(index)),
+                    number.toExponential()
+                  ])""", NumberPrototype::toExponential, 0);
     }
 
     @Test
@@ -439,8 +440,13 @@ public class NumberPrototypeTest extends BaseJavetTest {
     }
 
     @Test
-    public void testToFixedWithJavet() {
-        assertNumberFormat("toFixed", NumberPrototype::toFixed, 0);
+    public void testToFixedWithJavet() throws JavetException {
+        assertNumberFormat("""
+                [0, 1, -1, 123.456, -123.456, 123456789.123456789, -123456789.123456789,
+                  NaN, Infinity, -Infinity].flatMap(number => [
+                    ...Array.from({ length: 101 }, (_, index) => number.toFixed(index)),
+                    number.toFixed()
+                  ])""", NumberPrototype::toFixed, 0);
     }
 
     @Test
@@ -502,8 +508,13 @@ public class NumberPrototypeTest extends BaseJavetTest {
     }
 
     @Test
-    public void testToPrecisionWithJavet() {
-        assertNumberFormat("toPrecision", NumberPrototype::toPrecision, 1);
+    public void testToPrecisionWithJavet() throws JavetException {
+        assertNumberFormat("""
+                [0, 1, -1, 123.456, -123.456, 123456789.123456789, -123456789.123456789,
+                  NaN, Infinity, -Infinity].flatMap(number => [
+                    ...Array.from({ length: 100 }, (_, index) => number.toPrecision(index + 1)),
+                    number.toPrecision()
+                  ])""", NumberPrototype::toPrecision, 1);
     }
 
     @Test
@@ -590,14 +601,20 @@ public class NumberPrototypeTest extends BaseJavetTest {
     }
 
     @Test
-    public void testToStringWithJavet() {
-        List<Double> testNumbers = List.of(0D, 1D, -1D, 123.456D, -123.456D, 123456789.123456789D,
-                -123456789.123456789D, Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
-        testNumbers.forEach(number -> IntStream.range(2, 37)
-                .forEach(radix -> assertWithJavet(
-                        () -> v8Runtime.getExecutor("Number(" + number + ").toString(" + radix + ")").executeString(),
-                        () -> NumberPrototype.toString(context, new JSNumber(number), numberArgs(radix)).asString()
-                                .map(JSString::value).orElseThrow())));
+    public void testToStringWithJavet() throws JavetException {
+        List<String> expected = v8Runtime.getExecutor("""
+                [0, 1, -1, 123.456, -123.456, 123456789.123456789, -123456789.123456789, NaN, Infinity, -Infinity]
+                  .flatMap(number => Array.from({ length: 35 }, (_, index) => number.toString(index + 2)))
+                """).executeObject();
+        List<String> actual = new ArrayList<>();
+        for (double number : List.of(0D, 1D, -1D, 123.456D, -123.456D, 123456789.123456789D, -123456789.123456789D,
+                Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY)) {
+            for (int radix = 2; radix <= 36; radix++) {
+                actual.add(NumberPrototype.toString(context, new JSNumber(number), numberArgs(radix)).asString()
+                        .orElseThrow().value());
+            }
+        }
+        assertThat(actual).isEqualTo(expected);
     }
 
     @Test

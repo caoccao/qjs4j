@@ -37,8 +37,7 @@ final class ArrayExpressionCompiler {
             compilerContext.emitter.emitOpcodeU32(Opcode.PUSH_I32, 0);
             for (Expression element : arrayExpr.getElements()) {
                 compilerContext.expressionCompiler.compile(element);
-                compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
-                compilerContext.emitter.emitOpcode(Opcode.INC);
+                compilerContext.emitter.emitArrayElement();
             }
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         } else {
@@ -69,8 +68,7 @@ final class ArrayExpressionCompiler {
                     if (needsIndex) {
                         // We have index on stack, use DEFINE_ARRAY_EL
                         compilerContext.expressionCompiler.compile(element);
-                        compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
-                        compilerContext.emitter.emitOpcode(Opcode.INC);
+                        compilerContext.emitter.emitArrayElement();
                         needsLength = false;
                     } else {
                         // No index on stack yet
@@ -78,8 +76,7 @@ final class ArrayExpressionCompiler {
                         compilerContext.emitter.emitOpcodeU32(Opcode.PUSH_I32, idx);
                         needsIndex = true;
                         compilerContext.expressionCompiler.compile(element);
-                        compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
-                        compilerContext.emitter.emitOpcode(Opcode.INC);
+                        compilerContext.emitter.emitArrayElement();
                         needsLength = false;
                     }
                 } else {

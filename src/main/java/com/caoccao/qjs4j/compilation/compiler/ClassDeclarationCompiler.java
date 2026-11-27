@@ -467,8 +467,7 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
             if (field.isStatic()) {
                 ctx.emitter.emitOpcode(Opcode.PUSH_THIS);
             } else {
-                ctx.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-                ctx.emitter.emitU8(2);
+                ctx.emitter.emitOpcodeU8(Opcode.SPECIAL_OBJECT, 2);
             }
             ctx.emitter.emitPushConstant(symbol);
             ctx.emitter.emitOpcode(Opcode.GET_ARRAY_EL);

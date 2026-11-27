@@ -29,33 +29,31 @@ import org.junit.jupiter.api.Test;
  * log with V8's.
  */
 public class ForAwaitCloseOrderTest extends BaseJavetTest {
-    private static final String HARNESS = """
-            var log = [];
-            function ticker(n) {
-              var p = Promise.resolve();
-              for (let i = 0; i < n; i++) { const k = i; p = p.then(() => log.push('t' + k)); }
-              return p;
-            }
-            function makeIter(tag, kind) {
-              var i = 0;
-              return {
-                [Symbol.asyncIterator]() { return this; },
-                next() { log.push(tag + '-next' + i); return Promise.resolve({ value: i++, done: false }); },
-                return() {
-                  log.push(tag + '-return');
-                  if (kind === 'sync') return { done: true };
-                  if (kind === 'thenable') return { then(r) { log.push(tag + '-then'); r({ done: true }); } };
-                  if (kind === 'primitive') return 1;
-                  if (kind === 'missing') return undefined;
-                  return Promise.resolve({ done: true });
-                },
-              };
-            }
-            """;
 
     @Test
     public void testBreakAndReturnAwaitTheClose() {
-        assertStringWithJavet(HARNESS + """
+        assertStringWithJavet("""
+                var log = [];
+                function ticker(n) {
+                  var p = Promise.resolve();
+                  for (let i = 0; i < n; i++) { const k = i; p = p.then(() => log.push('t' + k)); }
+                  return p;
+                }
+                function makeIter(tag, kind) {
+                  var i = 0;
+                  return {
+                    [Symbol.asyncIterator]() { return this; },
+                    next() { log.push(tag + '-next' + i); return Promise.resolve({ value: i++, done: false }); },
+                    return() {
+                      log.push(tag + '-return');
+                      if (kind === 'sync') return { done: true };
+                      if (kind === 'thenable') return { then(r) { log.push(tag + '-then'); r({ done: true }); } };
+                      if (kind === 'primitive') return 1;
+                      if (kind === 'missing') return undefined;
+                      return Promise.resolve({ done: true });
+                    },
+                  };
+                }
                 (async () => {
                   ticker(12);
                   var runs = ['promise', 'sync', 'thenable'].map(async kind => {
@@ -69,7 +67,28 @@ public class ForAwaitCloseOrderTest extends BaseJavetTest {
                   await Promise.all([...runs, arrays]);
                   await ticker(14);
                   return log.join(' ');
-                })()""", HARNESS + """
+                })()""", """
+                var log = [];
+                function ticker(n) {
+                  var p = Promise.resolve();
+                  for (let i = 0; i < n; i++) { const k = i; p = p.then(() => log.push('t' + k)); }
+                  return p;
+                }
+                function makeIter(tag, kind) {
+                  var i = 0;
+                  return {
+                    [Symbol.asyncIterator]() { return this; },
+                    next() { log.push(tag + '-next' + i); return Promise.resolve({ value: i++, done: false }); },
+                    return() {
+                      log.push(tag + '-return');
+                      if (kind === 'sync') return { done: true };
+                      if (kind === 'thenable') return { then(r) { log.push(tag + '-then'); r({ done: true }); } };
+                      if (kind === 'primitive') return 1;
+                      if (kind === 'missing') return undefined;
+                      return Promise.resolve({ done: true });
+                    },
+                  };
+                }
                 (async () => {
                   ticker(10);
                   async function early() {
@@ -88,13 +107,55 @@ public class ForAwaitCloseOrderTest extends BaseJavetTest {
 
     @Test
     public void testCloseResults() {
-        assertStringWithJavet(HARNESS + """
+        assertStringWithJavet("""
+                var log = [];
+                function ticker(n) {
+                  var p = Promise.resolve();
+                  for (let i = 0; i < n; i++) { const k = i; p = p.then(() => log.push('t' + k)); }
+                  return p;
+                }
+                function makeIter(tag, kind) {
+                  var i = 0;
+                  return {
+                    [Symbol.asyncIterator]() { return this; },
+                    next() { log.push(tag + '-next' + i); return Promise.resolve({ value: i++, done: false }); },
+                    return() {
+                      log.push(tag + '-return');
+                      if (kind === 'sync') return { done: true };
+                      if (kind === 'thenable') return { then(r) { log.push(tag + '-then'); r({ done: true }); } };
+                      if (kind === 'primitive') return 1;
+                      if (kind === 'missing') return undefined;
+                      return Promise.resolve({ done: true });
+                    },
+                  };
+                }
                 (async () => {
                   try {
                     for await (const v of makeIter('p', 'primitive')) { break; }
                     return 'no error';
                   } catch (e) { return e.constructor.name; }
-                })()""", HARNESS + """
+                })()""", """
+                var log = [];
+                function ticker(n) {
+                  var p = Promise.resolve();
+                  for (let i = 0; i < n; i++) { const k = i; p = p.then(() => log.push('t' + k)); }
+                  return p;
+                }
+                function makeIter(tag, kind) {
+                  var i = 0;
+                  return {
+                    [Symbol.asyncIterator]() { return this; },
+                    next() { log.push(tag + '-next' + i); return Promise.resolve({ value: i++, done: false }); },
+                    return() {
+                      log.push(tag + '-return');
+                      if (kind === 'sync') return { done: true };
+                      if (kind === 'thenable') return { then(r) { log.push(tag + '-then'); r({ done: true }); } };
+                      if (kind === 'primitive') return 1;
+                      if (kind === 'missing') return undefined;
+                      return Promise.resolve({ done: true });
+                    },
+                  };
+                }
                 (async () => {
                   var messages = [];
                   for (const kind of ['missing', 'primitive']) {

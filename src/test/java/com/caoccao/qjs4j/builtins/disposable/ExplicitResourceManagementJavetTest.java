@@ -63,27 +63,28 @@ public class ExplicitResourceManagementJavetTest extends BaseJavetTest {
 
     @Test
     public void testDisposableStackMove() {
-        assertStringWithJavet(inArrowFunction("""
-                  globalThis.__counter = 0;
-                  const stack1 = new DisposableStack();
-                  stack1.defer(() => {
-                      globalThis.__counter += 1;
-                  });
-                  const stack2 = stack1.move();
-                  let movedThrows = false;
-                  try {
-                      stack1.defer(() => {});
-                  } catch (e) {
-                      movedThrows = e instanceof TypeError;
-                  }
-                  stack2.dispose();
-                  return String(
-                      stack1.disposed
-                      && stack2.disposed
-                      && movedThrows
-                      && globalThis.__counter === 1
-                  );
-                """));
+        assertStringWithJavet("""
+                (() => {
+                    globalThis.__counter = 0;
+                    const stack1 = new DisposableStack();
+                    stack1.defer(() => {
+                        globalThis.__counter += 1;
+                    });
+                    const stack2 = stack1.move();
+                    let movedThrows = false;
+                    try {
+                        stack1.defer(() => {});
+                    } catch (e) {
+                        movedThrows = e instanceof TypeError;
+                    }
+                    stack2.dispose();
+                    return String(
+                        stack1.disposed
+                        && stack2.disposed
+                        && movedThrows
+                        && globalThis.__counter === 1
+                    );
+                })()""");
     }
 
     @Test
@@ -115,25 +116,26 @@ public class ExplicitResourceManagementJavetTest extends BaseJavetTest {
 
     @Test
     public void testSuppressedErrorShape() {
-        assertStringWithJavet(inArrowFunction("""
-                  const stack = new DisposableStack();
-                  stack.defer(() => {
-                      throw new Error("first");
-                  });
-                  stack.defer(() => {
-                      throw new Error("second");
-                  });
-                  try {
-                      stack.dispose();
-                      return "false";
-                  } catch (e) {
-                      return String(
-                          e.name === "SuppressedError"
-                          && typeof e.error === "object"
-                          && typeof e.suppressed === "object"
-                      );
-                  }
-                """));
+        assertStringWithJavet("""
+                (() => {
+                    const stack = new DisposableStack();
+                    stack.defer(() => {
+                        throw new Error("first");
+                    });
+                    stack.defer(() => {
+                        throw new Error("second");
+                    });
+                    try {
+                        stack.dispose();
+                        return "false";
+                    } catch (e) {
+                        return String(
+                            e.name === "SuppressedError"
+                            && typeof e.error === "object"
+                            && typeof e.suppressed === "object"
+                        );
+                    }
+                })()""");
     }
 
     @Test
@@ -155,18 +157,19 @@ public class ExplicitResourceManagementJavetTest extends BaseJavetTest {
 
     @Test
     public void testTypeErrorPropagationFromDisposer() {
-        assertStringWithJavet(inArrowFunction("""
-                  const stack = new DisposableStack();
-                  stack.defer(() => {
-                      globalThis.__missing();
-                  });
-                  try {
-                      stack.dispose();
-                      return "false";
-                  } catch (e) {
-                      return String(e instanceof TypeError);
-                  }
-                """));
+        assertStringWithJavet("""
+                (() => {
+                    const stack = new DisposableStack();
+                    stack.defer(() => {
+                        globalThis.__missing();
+                    });
+                    try {
+                        stack.dispose();
+                        return "false";
+                    } catch (e) {
+                        return String(e instanceof TypeError);
+                    }
+                })()""");
     }
 
     @Test

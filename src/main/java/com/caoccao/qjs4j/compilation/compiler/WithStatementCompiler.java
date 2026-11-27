@@ -35,8 +35,7 @@ final class WithStatementCompiler {
 
         if (compilerContext.evalReturnLocalIndex >= 0) {
             // Default with completion value is undefined.
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitUndefinedLocal(compilerContext.evalReturnLocalIndex);
         }
 
         compilerContext.scopeManager.enterScope();

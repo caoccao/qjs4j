@@ -29,26 +29,24 @@ import org.junit.jupiter.api.Test;
  * now records each call's callee name, so property reads do no bookkeeping at all.
  */
 public class CallDescriptionTest extends BaseJavetTest {
-    private static final String SETUP = """
-            const attempt = action => {
-              try {
-                action();
-                return 'no error';
-              } catch (e) {
-                return e.message;
-              }
-            };
-            const o = { a: { b: {} }, list: [{}], 'a b': 1, 3: 0, s: 'str', n: null, f() { return o; } };
-            const sym = Symbol('custom');
-            const k = 'a';
-            let u;
-            const n = 5;
-            """;
 
     @Test
     public void testCallees() {
         assertStringWithJavet(
-                SETUP + """
+                """
+                        const attempt = action => {
+                          try {
+                            action();
+                            return 'no error';
+                          } catch (e) {
+                            return e.message;
+                          }
+                        };
+                        const o = { a: { b: {} }, list: [{}], 'a b': 1, 3: 0, s: 'str', n: null, f() { return o; } };
+                        const sym = Symbol('custom');
+                        const k = 'a';
+                        let u;
+                        const n = 5;
                         [
                           attempt(() => o.a.b.c()), attempt(() => o['a b']()), attempt(() => o[3]()), attempt(() => o[k].b()),
                           attempt(() => o[sym]()), attempt(() => o[Symbol.iterator]()), attempt(() => o.f().a.b()),
@@ -95,7 +93,20 @@ public class CallDescriptionTest extends BaseJavetTest {
 
     @Test
     public void testConstructors() {
-        assertStringWithJavet(SETUP + """
+        assertStringWithJavet("""
+                const attempt = action => {
+                  try {
+                    action();
+                    return 'no error';
+                  } catch (e) {
+                    return e.message;
+                  }
+                };
+                const o = { a: { b: {} }, list: [{}], 'a b': 1, 3: 0, s: 'str', n: null, f() { return o; } };
+                const sym = Symbol('custom');
+                const k = 'a';
+                let u;
+                const n = 5;
                 const plain = { m() {}, arrow: () => 1 };
                 const arrow = () => 1;
                 [
@@ -109,7 +120,20 @@ public class CallDescriptionTest extends BaseJavetTest {
     @Test
     public void testUnaryKeysAndTaggedTemplates() {
         assertStringWithJavet(
-                SETUP + """
+                """
+                        const attempt = action => {
+                          try {
+                            action();
+                            return 'no error';
+                          } catch (e) {
+                            return e.message;
+                          }
+                        };
+                        const o = { a: { b: {} }, list: [{}], 'a b': 1, 3: 0, s: 'str', n: null, f() { return o; } };
+                        const sym = Symbol('custom');
+                        const k = 'a';
+                        let u;
+                        const n = 5;
                               const x = 1;
                               const tag = {};
                               [

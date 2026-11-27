@@ -34,69 +34,90 @@ import org.junit.jupiter.api.Timeout;
  */
 public class JSArrayDeepPrototypeSetTest extends BaseJavetTest {
 
-    /**
-     * Build source that puts a setter for index 0 at the far end of a prototype chain, assigns through it, and reports
-     * whether the setter ran and whether an own element appeared.
-     *
-     * @param depth
-     *            links between the array and the object holding the setter
-     * @return source evaluating to {@code "<setterCalls>,<hasOwnProperty>"}
-     */
-    private String assignThroughChain(int depth) {
-        // An IIFE, so repeated calls in one test do not redeclare bindings in the global scope.
-        return """
-                (function () {
-                  let setterCalls = 0;
-                  let terminal = {};
-                  Object.defineProperty(terminal, '0', { set(v) { setterCalls++ } });
-                  let head = terminal;
-                  for (let i = 0; i < %d; i++) head = Object.create(head);
-                  let array = [];
-                  Object.setPrototypeOf(array, head);
-                  array[0] = 1;
-                  return setterCalls + ',' + Object.prototype.hasOwnProperty.call(array, '0');
-                })()""".formatted(depth);
-    }
-
     @Test
     @Timeout(60)
     public void testDeepNonWritableInheritedPropertyBlocksTheWrite() {
         // The same false negative could bypass a distant non-writable property.
-        assertStringWithJavet(inFunction("""
-                'use strict';
-                let terminal = {};
-                Object.defineProperty(terminal, '0', { value: 7, writable: false });
-                let head = terminal;
-                for (let i = 0; i < 1001; i++) head = Object.create(head);
-                let array = [];
-                Object.setPrototypeOf(array, head);
-                try { array[0] = 1; return 'ASSIGNED' } catch (e) { return e.name }
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  'use strict';
+                  let terminal = {};
+                  Object.defineProperty(terminal, '0', { value: 7, writable: false });
+                  let head = terminal;
+                  for (let i = 0; i < 1001; i++) head = Object.create(head);
+                  let array = [];
+                  Object.setPrototypeOf(array, head);
+                  try { array[0] = 1; return 'ASSIGNED' } catch (e) { return e.name }
+                })()""");
     }
 
     @Test
     @Timeout(60)
     public void testInheritedSetterRunsAtShallowDepth() {
-        assertStringWithJavet(assignThroughChain(0));
+        assertStringWithJavet("""
+                (function () {
+                  let setterCalls = 0;
+                  let terminal = {};
+                  Object.defineProperty(terminal, '0', { set(v) { setterCalls++ } });
+                  let head = terminal;
+                  for (let i = 0; i < 0; i++) head = Object.create(head);
+                  let array = [];
+                  Object.setPrototypeOf(array, head);
+                  array[0] = 1;
+                  return setterCalls + ',' + Object.prototype.hasOwnProperty.call(array, '0');
+                })()""");
     }
 
     @Test
     @Timeout(60)
     public void testInheritedSetterRunsFarBeyondTheCutoff() {
-        assertStringWithJavet(assignThroughChain(3000));
+        assertStringWithJavet("""
+                (function () {
+                  let setterCalls = 0;
+                  let terminal = {};
+                  Object.defineProperty(terminal, '0', { set(v) { setterCalls++ } });
+                  let head = terminal;
+                  for (let i = 0; i < 3000; i++) head = Object.create(head);
+                  let array = [];
+                  Object.setPrototypeOf(array, head);
+                  array[0] = 1;
+                  return setterCalls + ',' + Object.prototype.hasOwnProperty.call(array, '0');
+                })()""");
     }
 
     @Test
     @Timeout(60)
     public void testInheritedSetterRunsJustBelowTheCutoff() {
-        assertStringWithJavet(assignThroughChain(998));
+        assertStringWithJavet("""
+                (function () {
+                  let setterCalls = 0;
+                  let terminal = {};
+                  Object.defineProperty(terminal, '0', { set(v) { setterCalls++ } });
+                  let head = terminal;
+                  for (let i = 0; i < 998; i++) head = Object.create(head);
+                  let array = [];
+                  Object.setPrototypeOf(array, head);
+                  array[0] = 1;
+                  return setterCalls + ',' + Object.prototype.hasOwnProperty.call(array, '0');
+                })()""");
     }
 
     @Test
     @Timeout(60)
     public void testInheritedSetterRunsJustBeyondTheCutoff() {
         // 1,001 links is the depth at which the bounded walk answered "no interference".
-        assertStringWithJavet(assignThroughChain(1001));
+        assertStringWithJavet("""
+                (function () {
+                  let setterCalls = 0;
+                  let terminal = {};
+                  Object.defineProperty(terminal, '0', { set(v) { setterCalls++ } });
+                  let head = terminal;
+                  for (let i = 0; i < 1001; i++) head = Object.create(head);
+                  let array = [];
+                  Object.setPrototypeOf(array, head);
+                  array[0] = 1;
+                  return setterCalls + ',' + Object.prototype.hasOwnProperty.call(array, '0');
+                })()""");
     }
 
     @Test
@@ -104,25 +125,27 @@ public class JSArrayDeepPrototypeSetTest extends BaseJavetTest {
     public void testOrdinaryArrayWriteStillTakesTheFastPath() {
         // The complement: a plain array with the ordinary prototype chain must still store
         // elements densely and keep length in step.
-        assertStringWithJavet(inFunction("""
-                let array = [];
-                for (let i = 0; i < 100; i++) array[i] = i * 2;
-                return array.length + ',' + array[99] + ','
-                    + Object.prototype.hasOwnProperty.call(array, '50');
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  let array = [];
+                  for (let i = 0; i < 100; i++) array[i] = i * 2;
+                  return array.length + ',' + array[99] + ','
+                      + Object.prototype.hasOwnProperty.call(array, '50');
+                })()""");
     }
 
     @Test
     @Timeout(60)
     public void testProxyInTheChainForcesTheSlowPath() {
-        assertStringWithJavet(inFunction("""
-                let trapped = 'no';
-                const proxy = new Proxy({}, { set(t, k, v) { trapped = k; return true } });
-                const array = [];
-                Object.setPrototypeOf(array, proxy);
-                array[0] = 1;
-                return trapped;
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  let trapped = 'no';
+                  const proxy = new Proxy({}, { set(t, k, v) { trapped = k; return true } });
+                  const array = [];
+                  Object.setPrototypeOf(array, proxy);
+                  array[0] = 1;
+                  return trapped;
+                })()""");
     }
 
     @Test
@@ -130,11 +153,12 @@ public class JSArrayDeepPrototypeSetTest extends BaseJavetTest {
     public void testTypedArrayInTheChainForcesTheSlowPath() {
         // A TypedArray has exotic [[Set]] for canonical numeric indices, so the fast path must
         // defer to it rather than writing an own element.
-        assertStringWithJavet(inFunction("""
-                const array = [];
-                Object.setPrototypeOf(array, new Int8Array(4));
-                array[0] = 1;
-                return array[0] + ',' + Object.prototype.hasOwnProperty.call(array, '0');
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  const array = [];
+                  Object.setPrototypeOf(array, new Int8Array(4));
+                  array[0] = 1;
+                  return array[0] + ',' + Object.prototype.hasOwnProperty.call(array, '0');
+                })()""");
     }
 }

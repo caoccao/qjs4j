@@ -33,16 +33,11 @@ public final class JSRangeError extends JSError {
      * Create a RangeError with a message.
      */
     public JSRangeError(JSContext context, String message) {
-        super(context, message);
+        this(context, message, null);
     }
 
     public JSRangeError(JSContext context, String message, SourceLocation sourceLocation) {
-        super(context, message, sourceLocation);
-    }
-
-    @Override
-    public String getErrorName() {
-        return NAME;
+        super(context, NAME, message, sourceLocation);
     }
 
     public static JSValue create(JSContext context, JSValue... args) {

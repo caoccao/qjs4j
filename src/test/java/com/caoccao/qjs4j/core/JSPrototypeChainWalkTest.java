@@ -47,17 +47,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 public class JSPrototypeChainWalkTest extends BaseJavetTest {
 
-    private void assertDeepChain(String link, String result) {
-        assertStringWithJavet("""
-                let o = { x: 'found' };
-                for (let i = 0; i < 1002; i++) {
-                  const link = %s;
-                  Object.setPrototypeOf(link, o);
-                  o = link;
-                }
-                %s""".formatted(link, result));
-    }
-
     private JSObject buildChain(int depth) {
         JSObject object = context.createJSObject();
         for (int index = 0; index < depth; index++) {
@@ -107,7 +96,14 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
     @Test
     @Timeout(120)
     public void testDeepChainOfAlternatingObjectsAndArrays() {
-        assertDeepChain("i % 2 === 0 ? [] : {}", "[o.x, 'x' in o, 'absent' in o, String(o.absent)].join(',');");
+        assertStringWithJavet("""
+                let o = { x: 'found' };
+                for (let i = 0; i < 1002; i++) {
+                  const link = i % 2 === 0 ? [] : {};
+                  Object.setPrototypeOf(link, o);
+                  o = link;
+                }
+                [o.x, 'x' in o, 'absent' in o, String(o.absent)].join(',');""");
     }
 
     @Test
@@ -115,19 +111,40 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
     public void testDeepChainOfArrays() {
         // The review's reproducer. Every link is a JSArray, which used to mean one Java frame and
         // one unit of the thousand-link budget each.
-        assertDeepChain("[]", "[o.x, 'x' in o, 'absent' in o].join(',');");
+        assertStringWithJavet("""
+                let o = { x: 'found' };
+                for (let i = 0; i < 1002; i++) {
+                  const link = [];
+                  Object.setPrototypeOf(link, o);
+                  o = link;
+                }
+                [o.x, 'x' in o, 'absent' in o].join(',');""");
     }
 
     @Test
     @Timeout(120)
     public void testDeepChainOfFunctions() {
-        assertDeepChain("function () {}", "[o.x, 'x' in o, 'absent' in o].join(',');");
+        assertStringWithJavet("""
+                let o = { x: 'found' };
+                for (let i = 0; i < 1002; i++) {
+                  const link = function () {};
+                  Object.setPrototypeOf(link, o);
+                  o = link;
+                }
+                [o.x, 'x' in o, 'absent' in o].join(',');""");
     }
 
     @Test
     @Timeout(120)
     public void testDeepChainOfTypedArrays() {
-        assertDeepChain("new Uint8Array(0)", "[o.x, 'x' in o, 'absent' in o].join(',');");
+        assertStringWithJavet("""
+                let o = { x: 'found' };
+                for (let i = 0; i < 1002; i++) {
+                  const link = new Uint8Array(0);
+                  Object.setPrototypeOf(link, o);
+                  o = link;
+                }
+                [o.x, 'x' in o, 'absent' in o].join(',');""");
     }
 
     @Test
@@ -166,38 +183,41 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
     public void testInstanceofInvokesTheGetPrototypeOfTrap() {
         // OrdinaryHasInstance step 4.b calls O.[[GetPrototypeOf]] on each step, so a Proxy in the
         // chain must be consulted rather than traversed as its target.
-        assertStringWithJavet(inFunction("""
-                let trapCalls = 0;
-                function Ctor() {}
-                const proxyProto = new Proxy({}, {
-                  getPrototypeOf() { trapCalls++; return Ctor.prototype },
-                });
-                const obj = Object.create(proxyProto);
-                const result = obj instanceof Ctor;
-                return 'result=' + result + ' trapCalls=' + trapCalls;
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  let trapCalls = 0;
+                  function Ctor() {}
+                  const proxyProto = new Proxy({}, {
+                    getPrototypeOf() { trapCalls++; return Ctor.prototype },
+                  });
+                  const obj = Object.create(proxyProto);
+                  const result = obj instanceof Ctor;
+                  return 'result=' + result + ' trapCalls=' + trapCalls;
+                })()""");
     }
 
     @Test
     public void testProxyInThePrototypeChainStillSeesTheHasTrap() {
-        assertStringWithJavet(inFunction("""
-                let trapKeys = [];
-                const proxyProto = new Proxy({}, {
-                  has(target, key) { trapKeys.push(key); return key === 'viaTrap' },
-                });
-                const obj = Object.create(proxyProto);
-                return ('viaTrap' in obj) + ',' + ('absent' in obj) + ',' + trapKeys.join('|');
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  let trapKeys = [];
+                  const proxyProto = new Proxy({}, {
+                    has(target, key) { trapKeys.push(key); return key === 'viaTrap' },
+                  });
+                  const obj = Object.create(proxyProto);
+                  return ('viaTrap' in obj) + ',' + ('absent' in obj) + ',' + trapKeys.join('|');
+                })()""");
     }
 
     @Test
     public void testSetPrototypeOfStillRejectsACycle() {
-        assertStringWithJavet(inFunction("""
-                const a = {};
-                const b = Object.create(a);
-                try { Object.setPrototypeOf(a, b); return 'NO ERROR' }
-                catch (e) { return 'CAUGHT ' + e.name }
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  const a = {};
+                  const b = Object.create(a);
+                  try { Object.setPrototypeOf(a, b); return 'NO ERROR' }
+                  catch (e) { return 'CAUGHT ' + e.name }
+                })()""");
     }
 
     @Test
@@ -232,9 +252,10 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
     @Test
     public void testTypedArrayInheritsTheDepthBoundedWalk() {
         // JSTypedArray overrides the walk; it must carry the depth through to super.
-        assertStringWithJavet(inFunction("""
-                const a = new Int32Array([1, 2, 3]);
-                return (0 in a) + ',' + (3 in a) + ',' + ('length' in a) + ',' + ('map' in a);
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  const a = new Int32Array([1, 2, 3]);
+                  return (0 in a) + ',' + (3 in a) + ',' + ('length' in a) + ',' + ('map' in a);
+                })()""");
     }
 }

@@ -37,29 +37,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class JSPrototypeCycleTest extends BaseJavetTest {
 
-    /**
-     * Build source that proposes a prototype chain of {@code depth} links ending back at the target.
-     *
-     * @param depth
-     *            links between the target and the proposed prototype
-     * @return source evaluating to {@code 'ALLOWED'} or the error name
-     */
-    private String cycleAttempt(int depth) {
-        // An IIFE, so repeated calls in one test do not redeclare `a` in the same global scope.
-        return """
-                (function () {
-                  let a = {};
-                  let proposed = a;
-                  for (let i = 0; i < %d; i++) proposed = Object.create(proposed);
-                  try {
-                    Object.setPrototypeOf(a, proposed);
-                    return 'ALLOWED';
-                  } catch (e) {
-                    return e.name;
-                  }
-                })()""".formatted(depth);
-    }
-
     @Test
     @Timeout(60)
     public void testAPreExistingCycleContainingTheTargetIsRejected() {
@@ -91,64 +68,133 @@ public class JSPrototypeCycleTest extends BaseJavetTest {
     @Test
     @Timeout(60)
     public void testCycleRejectedAtDepthOne() {
-        assertStringWithJavet(cycleAttempt(1));
+        assertStringWithJavet("""
+                (function () {
+                  let a = {};
+                  let proposed = a;
+                  for (let i = 0; i < 1; i++) proposed = Object.create(proposed);
+                  try {
+                    Object.setPrototypeOf(a, proposed);
+                    return 'ALLOWED';
+                  } catch (e) {
+                    return e.name;
+                  }
+                })()""");
     }
 
     @Test
     @Timeout(60)
     public void testCycleRejectedAtTheOldCutoff() {
-        assertStringWithJavet(cycleAttempt(1000));
+        assertStringWithJavet("""
+                (function () {
+                  let a = {};
+                  let proposed = a;
+                  for (let i = 0; i < 1000; i++) proposed = Object.create(proposed);
+                  try {
+                    Object.setPrototypeOf(a, proposed);
+                    return 'ALLOWED';
+                  } catch (e) {
+                    return e.name;
+                  }
+                })()""");
     }
 
     @Test
     @Timeout(60)
     public void testCycleRejectedFarBeyondTheOldCutoff() {
-        assertStringWithJavet(cycleAttempt(5000));
+        assertStringWithJavet("""
+                (function () {
+                  let a = {};
+                  let proposed = a;
+                  for (let i = 0; i < 5000; i++) proposed = Object.create(proposed);
+                  try {
+                    Object.setPrototypeOf(a, proposed);
+                    return 'ALLOWED';
+                  } catch (e) {
+                    return e.name;
+                  }
+                })()""");
     }
 
     @Test
     @Timeout(60)
     public void testCycleRejectedJustBelowTheOldCutoff() {
-        assertStringWithJavet(cycleAttempt(999));
+        assertStringWithJavet("""
+                (function () {
+                  let a = {};
+                  let proposed = a;
+                  for (let i = 0; i < 999; i++) proposed = Object.create(proposed);
+                  try {
+                    Object.setPrototypeOf(a, proposed);
+                    return 'ALLOWED';
+                  } catch (e) {
+                    return e.name;
+                  }
+                })()""");
     }
 
     @Test
     @Timeout(60)
     public void testCycleRejectedJustBeyondTheOldCutoff() {
         // 1,001 and 1,002 are the depths the bounded walk reported as acyclic.
-        assertStringWithJavet(cycleAttempt(1001));
-        assertStringWithJavet(cycleAttempt(1002));
+        assertStringWithJavet("""
+                (function () {
+                  let a = {};
+                  let proposed = a;
+                  for (let i = 0; i < 1001; i++) proposed = Object.create(proposed);
+                  try {
+                    Object.setPrototypeOf(a, proposed);
+                    return 'ALLOWED';
+                  } catch (e) {
+                    return e.name;
+                  }
+                })()""");
+        assertStringWithJavet("""
+                (function () {
+                  let a = {};
+                  let proposed = a;
+                  for (let i = 0; i < 1002; i++) proposed = Object.create(proposed);
+                  try {
+                    Object.setPrototypeOf(a, proposed);
+                    return 'ALLOWED';
+                  } catch (e) {
+                    return e.name;
+                  }
+                })()""");
     }
 
     @Test
     @Timeout(60)
     public void testDeepAcyclicChainIsStillAccepted() {
         // The complement: removing the cutoff must not start rejecting legitimate deep chains.
-        assertStringWithJavet(inFunction("""
-                let a = {};
-                let proposed = {};
-                for (let i = 0; i < 5000; i++) proposed = Object.create(proposed);
-                try { Object.setPrototypeOf(a, proposed); return 'ALLOWED' } catch (e) { return e.name }
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  let a = {};
+                  let proposed = {};
+                  for (let i = 0; i < 5000; i++) proposed = Object.create(proposed);
+                  try { Object.setPrototypeOf(a, proposed); return 'ALLOWED' } catch (e) { return e.name }
+                })()""");
     }
 
     @Test
     @Timeout(60)
     public void testDirectSelfAssignmentIsRejected() {
-        assertStringWithJavet(inFunction("""
-                let a = {};
-                try { Object.setPrototypeOf(a, a); return 'ALLOWED' } catch (e) { return e.name }
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  let a = {};
+                  try { Object.setPrototypeOf(a, a); return 'ALLOWED' } catch (e) { return e.name }
+                })()""");
     }
 
     @Test
     @Timeout(60)
     public void testNullPrototypeIsNeverCircular() {
-        assertStringWithJavet(inFunction("""
-                let a = { x: 1 };
-                try { Object.setPrototypeOf(a, null); return String(Object.getPrototypeOf(a)) }
-                catch (e) { return e.name }
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  let a = { x: 1 };
+                  try { Object.setPrototypeOf(a, null); return String(Object.getPrototypeOf(a)) }
+                  catch (e) { return e.name }
+                })()""");
     }
 
     @Test
@@ -156,12 +202,13 @@ public class JSPrototypeCycleTest extends BaseJavetTest {
     public void testProxyInTheChainStopsTheWalk() {
         // ES2024 10.1.2 step 8.c: the walk stops at a non-ordinary object rather than running its
         // getPrototypeOf trap.
-        assertStringWithJavet(inFunction("""
-                let a = {};
-                let p = new Proxy({}, { getPrototypeOf() { return a } });
-                let child = Object.create(p);
-                try { Object.setPrototypeOf(a, child); return 'ALLOWED' } catch (e) { return e.name }
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  let a = {};
+                  let p = new Proxy({}, { getPrototypeOf() { return a } });
+                  let child = Object.create(p);
+                  try { Object.setPrototypeOf(a, child); return 'ALLOWED' } catch (e) { return e.name }
+                })()""");
     }
 
     @Test
@@ -180,9 +227,10 @@ public class JSPrototypeCycleTest extends BaseJavetTest {
         assertThat(sealed.setPrototypeChecked(proto)).isEqualTo(JSObject.SetPrototypeResult.NOT_EXTENSIBLE);
 
         // Immutable prototype exotic object: Object.prototype.
-        assertStringWithJavet(inFunction("""
-                try { Object.setPrototypeOf(Object.prototype, {}); return 'ALLOWED' }
-                catch (e) { return e.name }
-                """));
+        assertStringWithJavet("""
+                (function () {
+                  try { Object.setPrototypeOf(Object.prototype, {}); return 'ALLOWED' }
+                  catch (e) { return e.name }
+                })()""");
     }
 }

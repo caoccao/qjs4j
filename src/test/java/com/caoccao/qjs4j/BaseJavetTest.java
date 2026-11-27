@@ -39,7 +39,6 @@ import java.math.BigInteger;
 import java.util.List;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -86,16 +85,18 @@ public class BaseJavetTest extends BaseTest {
     }
 
     protected void assertErrorWithJavet(String... codeArray) {
-        for (String code : getNormalizedCodeStrings(codeArray)) {
-            try {
-                v8Runtime.resetContext();
-            } catch (JavetException e) {
+        for (String source : codeArray) {
+            for (String code : List.of(source, "'use strict';\n" + source)) {
+                try {
+                    v8Runtime.resetContext();
+                } catch (JavetException e) {
+                }
+                String expectedMessage = assertThatThrownBy(
+                        () -> v8Runtime.getExecutor(code).setModule(moduleMode).executeVoid())
+                        .isInstanceOf(JavetException.class).actual().getMessage();
+                assertThatThrownBy(() -> resetContext().eval(code, FILE_NAME, moduleMode), expectedMessage)
+                        .isInstanceOf(JSException.class).hasMessage(expectedMessage);
             }
-            String expectedMessage = assertThatThrownBy(
-                    () -> v8Runtime.getExecutor(code).setModule(moduleMode).executeVoid())
-                    .isInstanceOf(JavetException.class).actual().getMessage();
-            assertThatThrownBy(() -> resetContext().eval(code, FILE_NAME, moduleMode), expectedMessage)
-                    .isInstanceOf(JSException.class).hasMessage(expectedMessage);
         }
     }
 
@@ -121,27 +122,29 @@ public class BaseJavetTest extends BaseTest {
             IJavetUniFunction<V, Object, JavetException> readValue,
             IJavetUniFunction<V8ValuePromise, Object, JavetException> readPromise,
             Function<JSValue, Object> readJSValue) {
-        for (String code : getNormalizedCodeStrings(codeArray)) {
-            printCode(code);
-            assertWithJavet(() -> {
-                v8Runtime.resetContext();
-                try (V8Value value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
-                    if (value instanceof V8ValuePromise promise) {
-                        v8Runtime.await();
-                        assertThat(promise.getState()).as(code).isNotEqualTo(V8ValuePromise.STATE_PENDING);
-                        return readPromise.apply(promise);
+        for (String source : codeArray) {
+            for (String code : List.of(source, "'use strict';\n" + source)) {
+                printCode(code);
+                assertWithJavet(() -> {
+                    v8Runtime.resetContext();
+                    try (V8Value value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
+                        if (value instanceof V8ValuePromise promise) {
+                            v8Runtime.await();
+                            assertThat(promise.getState()).as(code).isNotEqualTo(V8ValuePromise.STATE_PENDING);
+                            return readPromise.apply(promise);
+                        }
+                        assertThat(value).as(code).isInstanceOf(expectedType);
+                        return readValue.apply(expectedType.cast(value));
                     }
-                    assertThat(value).as(code).isInstanceOf(expectedType);
-                    return readValue.apply(expectedType.cast(value));
-                }
-            }, () -> {
-                JSValue value = resetContext().eval(code, FILE_NAME, moduleMode);
-                if (value instanceof JSPromise promise) {
-                    awaitPromise(promise);
-                    value = promise.getResult();
-                }
-                return readJSValue.apply(value);
-            });
+                }, () -> {
+                    JSValue value = resetContext().eval(code, FILE_NAME, moduleMode);
+                    if (value instanceof JSPromise promise) {
+                        awaitPromise(promise);
+                        value = promise.getResult();
+                    }
+                    return readJSValue.apply(value);
+                });
+            }
         }
     }
 
@@ -177,10 +180,6 @@ public class BaseJavetTest extends BaseTest {
         }
     }
 
-    protected List<String> getNormalizedCodeStrings(String... codeArray) {
-        return Stream.of(codeArray).flatMap(code -> Stream.of(code, "'use strict';\n" + code)).toList();
-    }
-
     protected void printCode(String code) {
         if (debugMode) {
             System.out.println(code);
@@ -208,49 +207,4 @@ public class BaseJavetTest extends BaseTest {
         super.tearDown();
     }
 
-    protected static String getterDescriptor(String owner, String key) {
-        return """
-                (() => {
-                    const d = Object.getOwnPropertyDescriptor(%s, "%s");
-                    return typeof d.get === "function"
-                        && d.set === undefined
-                        && d.enumerable === false
-                        && d.configurable === true;
-                })()
-                """.formatted(owner, key);
-    }
-
-    /** Evaluate a test body with lexical this and its own local declarations. */
-    protected static String inArrowFunction(String body) {
-        return "(() => {\n" + body.indent(2) + "})()";
-    }
-
-    /** Evaluate a test body with an ordinary function's this and arguments bindings. */
-    protected static String inFunction(String body) {
-        return "(function () {\n" + body.indent(2) + "})()";
-    }
-
-    protected static String methodDescriptor(String owner, String key) {
-        return """
-                (() => {
-                    const d = Object.getOwnPropertyDescriptor(%s, "%s");
-                    return typeof d.value === "function"
-                        && d.writable === true
-                        && d.enumerable === false
-                        && d.configurable === true;
-                })()
-                """.formatted(owner, key);
-    }
-
-    protected static String toStringTagDescriptor(String owner, String tag) {
-        return """
-                (() => {
-                    const d = Object.getOwnPropertyDescriptor(%s, Symbol.toStringTag);
-                    return d.value === "%s"
-                        && d.writable === false
-                        && d.enumerable === false
-                        && d.configurable === true;
-                })()
-                """.formatted(owner, tag);
-    }
 }

@@ -41,25 +41,13 @@ public class JSTextModuleImportTest extends ModuleFileTest {
         assertThat(context.eval("globalThis.result", "probe.js", false).toString()).isEqualTo(payload);
     }
 
-    /**
-     * Import a payload as text and return what the default export was.
-     *
-     * @param payloadName
-     *            the payload's file name
-     * @param payload
-     *            the exact bytes of the payload
-     * @return the imported string
-     */
-    private String importAsText(String payloadName, String payload) throws IOException {
-        writeModule(payloadName, payload);
-        String entrySource = "import value from './" + payloadName + "' with { type: 'text' };\n"
-                + "globalThis.result = value;\n";
-        return evaluateModuleResult(payloadName + ".importer.mjs", entrySource, "globalThis.result");
-    }
-
     @Test
     public void testAnEmptyPayloadIsTheEmptyString() throws IOException {
-        assertThat(importAsText("empty.txt", "")).isEmpty();
+        writeModule("empty.txt", "");
+        assertThat(evaluateModuleResult("empty.txt.importer.mjs", """
+                import value from './empty.txt' with { type: 'text' };
+                globalThis.result = value;
+                """, "globalThis.result")).isEmpty();
     }
 
     @Test
@@ -83,26 +71,42 @@ public class JSTextModuleImportTest extends ModuleFileTest {
     @Test
     public void testAPayloadOfOnlyACommentIsStillText() throws IOException {
         String payload = "// not a comment, just text\n";
-        assertThat(importAsText("comment.txt", payload)).isEqualTo(payload);
+        writeModule("comment.txt", payload);
+        assertThat(evaluateModuleResult("comment.txt.importer.mjs", """
+                import value from './comment.txt' with { type: 'text' };
+                globalThis.result = value;
+                """, "globalThis.result")).isEqualTo(payload);
     }
 
     @Test
     public void testAPayloadThatIsInvalidJavaScriptIsStillText() throws IOException {
         String payload = "function ( { ] not javascript at all\n";
-        assertThat(importAsText("invalid.txt", payload)).isEqualTo(payload);
+        writeModule("invalid.txt", payload);
+        assertThat(evaluateModuleResult("invalid.txt.importer.mjs", """
+                import value from './invalid.txt' with { type: 'text' };
+                globalThis.result = value;
+                """, "globalThis.result")).isEqualTo(payload);
     }
 
     @Test
     public void testAPayloadThatIsValidJavaScriptIsNotExecuted() throws IOException {
         String payload = "globalThis.executed = true;\nexport const v = 1;\n";
-        assertThat(importAsText("valid-js.txt", payload)).isEqualTo(payload);
+        writeModule("valid-js.txt", payload);
+        assertThat(evaluateModuleResult("valid-js.txt.importer.mjs", """
+                import value from './valid-js.txt' with { type: 'text' };
+                globalThis.result = value;
+                """, "globalThis.result")).isEqualTo(payload);
     }
 
     @Test
     public void testAPayloadThatLooksLikeAModuleDeclarationIsStillText() throws IOException {
         // The review's reproduction.
         String payload = "export {}; this is arbitrary text\n";
-        assertThat(importAsText("declaration-like.txt", payload)).isEqualTo(payload);
+        writeModule("declaration-like.txt", payload);
+        assertThat(evaluateModuleResult("declaration-like.txt.importer.mjs", """
+                import value from './declaration-like.txt' with { type: 'text' };
+                globalThis.result = value;
+                """, "globalThis.result")).isEqualTo(payload);
     }
 
     @Test
@@ -114,6 +118,10 @@ public class JSTextModuleImportTest extends ModuleFileTest {
         String payload = "first\r\nsecond\r\né中文\0tail";
         assertThat(payload).as("the payload really does carry a NUL, whatever the source spells it as")
                 .contains("文\0tail");
-        assertThat(importAsText("crlf-unicode.txt", payload)).isEqualTo(payload);
+        writeModule("crlf-unicode.txt", payload);
+        assertThat(evaluateModuleResult("crlf-unicode.txt.importer.mjs", """
+                import value from './crlf-unicode.txt' with { type: 'text' };
+                globalThis.result = value;
+                """, "globalThis.result")).isEqualTo(payload);
     }
 }

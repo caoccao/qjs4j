@@ -173,8 +173,7 @@ final class EmitHelpers {
                 compilerContext.emitter.emitOpcode(Opcode.APPEND);
             } else {
                 compilerContext.expressionCompiler.compile(arg);
-                compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
-                compilerContext.emitter.emitOpcode(Opcode.INC);
+                compilerContext.emitter.emitArrayElement();
             }
         }
         compilerContext.emitter.emitOpcode(Opcode.DROP);
@@ -473,16 +472,12 @@ final class EmitHelpers {
             // (e.g. modifying the prototype chain) are visible when the super base
             // is resolved. Stack: [this] -> [this, key, superBase] -> SWAP -> [this, superBase, key]
             emitSuperPropertyKey(memberExpr);
-            compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-            compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
-            compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
+            compilerContext.emitter.emitSuperBase();
             compilerContext.emitter.emitOpcode(Opcode.SWAP);
         } else {
             // For non-computed super.prop, the key is a static identifier with no side effects.
             // Resolve super base first, then push key.
-            compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-            compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
-            compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
+            compilerContext.emitter.emitSuperBase();
             emitSuperPropertyKey(memberExpr);
         }
         compilerContext.emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
@@ -523,8 +518,7 @@ final class EmitHelpers {
         int loopStart = compilerContext.emitter.currentOffset();
         compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 2 + targetDepth);
         int doneJump = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
-        compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
-        compilerContext.emitter.emitOpcode(Opcode.INC);
+        compilerContext.emitter.emitArrayElement();
         compilerContext.emitter.emitOpcode(Opcode.GOTO);
         compilerContext.emitter.emitU32(loopStart - (compilerContext.emitter.currentOffset() + 4));
         compilerContext.emitter.patchJumpToHere(doneJump);
@@ -725,9 +719,7 @@ final class EmitHelpers {
         if (member.isComputed()) {
             emitSuperPropertyKey(member);
         }
-        compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-        compilerContext.emitter.emitU8(4);
-        compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
+        compilerContext.emitter.emitSuperBase();
         if (member.isComputed()) {
             compilerContext.emitter.emitOpcode(Opcode.SWAP);
         } else {
