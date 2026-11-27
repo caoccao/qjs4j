@@ -266,8 +266,7 @@ public final class PromiseConstructor {
             return null;
         }
         if (!JSTypeChecking.isCallable(value)) {
-            context.throwTypeError(methodName + error);
-            return null;
+            return context.rejectTypeError(methodName + error);
         }
         return value;
     }
@@ -325,13 +324,11 @@ public final class PromiseConstructor {
             return null;
         }
         if (!(promise instanceof JSObject)) {
-            context.throwTypeError("Promise constructor did not return an object");
-            return null;
+            return context.rejectTypeError("Promise constructor did not return an object");
         }
         if (!JSTypeChecking.isCallable(promiseCapability.resolve())
                 || !JSTypeChecking.isCallable(promiseCapability.reject())) {
-            context.throwTypeError("Promise constructor returned non-callable resolve or reject");
-            return null;
+            return context.rejectTypeError("Promise constructor returned non-callable resolve or reject");
         }
         promiseCapability.setPromise(promise);
         return promiseCapability;
@@ -350,8 +347,7 @@ public final class PromiseConstructor {
             return null;
         }
         if (result == null) {
-            context.throwTypeError("iterator result is not an object");
-            return null;
+            return context.rejectTypeError("iterator result is not an object");
         }
         JSValue done = callGet(context, result, PropertyKey.DONE);
         return context.hasPendingException() || JSTypeConversions.toBoolean(done).isBooleanTrue() ? null : result;
@@ -457,16 +453,14 @@ public final class PromiseConstructor {
 
     private static JSArray toArray(JSContext context, JSValue[] args, String methodName) {
         if (args.length == 0) {
-            context.throwTypeError(methodName + " requires an iterable");
-            return null;
+            return context.rejectTypeError(methodName + " requires an iterable");
         }
         JSValue iterable = args[0];
         if (iterable instanceof JSArray jsArray) {
             return jsArray;
         }
         if (!JSIteratorHelper.isIterable(iterable)) {
-            context.throwTypeError(methodName + " requires an iterable");
-            return null;
+            return context.rejectTypeError(methodName + " requires an iterable");
         }
         return JSIteratorHelper.toArray(context, iterable);
     }

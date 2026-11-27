@@ -109,8 +109,7 @@ public class RegExpLargeCharacterClassTest extends BaseJavetTest {
                   for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
                   return p + ']';
                 }
-                new RegExp(classOf(8192, false), 'ui').test(String.fromCodePoint(0));""");
-        assertBooleanWithJavet("""
+                new RegExp(classOf(8192, false), 'ui').test(String.fromCodePoint(0));""", """
                 function classOf(count, negated) {
                   var p = negated ? '[^' : '[';
                   for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
@@ -163,8 +162,7 @@ public class RegExpLargeCharacterClassTest extends BaseJavetTest {
                   for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }
                   return p + ']';
                 }
-                new RegExp(classOf(9000, false), 'v').test(String.fromCodePoint(0));""");
-        assertBooleanWithJavet("""
+                new RegExp(classOf(9000, false), 'v').test(String.fromCodePoint(0));""", """
                 function classOf(count, negated) {
                   var p = negated ? '[^' : '[';
                   for (var i = 0; i < count; i++) { p += '\\\\u{' + (i * 2).toString(16) + '}'; }

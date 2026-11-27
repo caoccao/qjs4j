@@ -53,7 +53,7 @@ final class BlockStatementCompiler {
                         if (vd.getKind().isImmutable()) {
                             compilerContext.scopeManager.currentScope().markConstLocal(name);
                         }
-                        compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                        compilerContext.emitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                         compilerContext.tdzLocals.add(name);
                     }
                 }
@@ -63,7 +63,7 @@ final class BlockStatementCompiler {
                 if (localIndex == null) {
                     localIndex = compilerContext.scopeManager.currentScope().declareLocal(className);
                 }
-                compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                compilerContext.emitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                 compilerContext.tdzLocals.add(className);
             }
         }

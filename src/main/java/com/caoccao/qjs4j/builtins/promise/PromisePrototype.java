@@ -120,7 +120,7 @@ public final class PromisePrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        if (species instanceof JSUndefined || species instanceof JSNull) {
+        if (JSTypeChecking.isNullish(species)) {
             return defaultConstructor;
         }
         if (!JSTypeChecking.isConstructor(species)) {

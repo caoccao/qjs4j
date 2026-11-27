@@ -187,9 +187,8 @@ public final class JSTypeConversions {
      * Check if a value is primitive.
      */
     public static boolean isPrimitive(JSValue value) {
-        return value instanceof JSUndefined || value instanceof JSNull || value instanceof JSBoolean
-                || value instanceof JSNumber || value instanceof JSString || value instanceof JSSymbol
-                || value instanceof JSBigInt;
+        return JSTypeChecking.isNullish(value) || value instanceof JSBoolean || value instanceof JSNumber
+                || value instanceof JSString || value instanceof JSSymbol || value instanceof JSBigInt;
     }
 
     private static boolean isValidBigIntDigits(String digits, int radix) {
@@ -470,7 +469,7 @@ public final class JSTypeConversions {
         }
 
         // Undefined and null
-        if (x instanceof JSUndefined || x instanceof JSNull) {
+        if (JSTypeChecking.isNullish(x)) {
             return true;
         }
 
@@ -799,12 +798,10 @@ public final class JSTypeConversions {
     /** Coerces a numeric argument and rejects both primitive and boxed Symbol and BigInt values. */
     public static JSNumber toNumberOrNull(JSContext context, JSValue value) {
         if (value.isSymbol() || value.isSymbolObject()) {
-            context.throwTypeError("cannot convert symbol to number");
-            return null;
+            return context.rejectTypeError("cannot convert symbol to number");
         }
         if (value.isBigInt() || value.isBigIntObject()) {
-            context.throwTypeError("cannot convert bigint to number");
-            return null;
+            return context.rejectTypeError("cannot convert bigint to number");
         }
         JSNumber number = JSTypeConversions.toNumber(context, value);
         if (context.hasPendingException()) {
@@ -821,7 +818,7 @@ public final class JSTypeConversions {
         if (value instanceof JSObject jsObj) {
             return jsObj;
         }
-        if (value instanceof JSNull || value instanceof JSUndefined) {
+        if (JSTypeChecking.isNullish(value)) {
             return null;
         }
         if (value instanceof JSString str) {
@@ -940,13 +937,13 @@ public final class JSTypeConversions {
             if (context != null) {
                 context.throwTypeError("Cannot convert a Symbol value to a string");
             }
-            return new JSString("");
+            return JSString.EMPTY;
         }
 
         // For objects, call ToPrimitive with STRING hint
         JSValue primitive = toPrimitive(context, value, PreferredType.STRING);
         if (context != null && context.hasPendingException()) {
-            return new JSString("");
+            return JSString.EMPTY;
         }
         if (primitive == value) {
             return new JSString("[object Object]");

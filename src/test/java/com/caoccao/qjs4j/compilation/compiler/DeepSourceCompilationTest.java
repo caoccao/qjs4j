@@ -146,9 +146,9 @@ public class DeepSourceCompilationTest extends BaseJavetTest {
         String shortStrictEquality = String.join(" === ", Collections.nCopies(1_000, "1"));
         String shortLessThan = String.join(" < ", Collections.nCopies(1_000, "1")) + " < 2";
         assertBooleanWithJavet(shortEquality, shortStrictEquality, shortLessThan);
-        assertThat(context.eval("1 == ".repeat(CHAIN_LENGTH - 1) + "1" + " == true")).isEqualTo(JSBoolean.TRUE);
-        assertThat(context.eval("1 === ".repeat(CHAIN_LENGTH - 1) + "1")).isEqualTo(JSBoolean.FALSE);
-        assertThat(context.eval("1 < ".repeat(CHAIN_LENGTH - 1) + "1" + " < 2")).isEqualTo(JSBoolean.TRUE);
+        assertEvalValue("1 == ".repeat(CHAIN_LENGTH - 1) + "1" + " == true", JSBoolean.TRUE);
+        assertEvalValue("1 === ".repeat(CHAIN_LENGTH - 1) + "1", JSBoolean.FALSE);
+        assertEvalValue("1 < ".repeat(CHAIN_LENGTH - 1) + "1" + " < 2", JSBoolean.TRUE);
     }
 
     @Test

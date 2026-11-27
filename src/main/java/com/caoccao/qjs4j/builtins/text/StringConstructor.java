@@ -30,7 +30,7 @@ public final class StringConstructor {
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         // ES2020: If no argument is passed, return empty string
         if (args.length == 0) {
-            return new JSString("");
+            return JSString.EMPTY;
         }
 
         // Get the value to convert to string
@@ -59,7 +59,7 @@ public final class StringConstructor {
      */
     public static JSValue fromCharCode(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSString("");
+            return JSString.EMPTY;
         }
 
         StringBuilder result = new StringBuilder();
@@ -78,7 +78,7 @@ public final class StringConstructor {
      */
     public static JSValue fromCodePoint(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
-            return new JSString("");
+            return JSString.EMPTY;
         }
 
         StringBuilder result = new StringBuilder();
@@ -125,7 +125,7 @@ public final class StringConstructor {
         JSObject cooked;
         if (template instanceof JSObject) {
             cooked = (JSObject) template;
-        } else if (template instanceof JSUndefined || template instanceof JSNull) {
+        } else if (JSTypeChecking.isNullish(template)) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         } else {
             // For primitives, we need to convert to object
@@ -138,7 +138,7 @@ public final class StringConstructor {
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        if (rawValue instanceof JSUndefined || rawValue instanceof JSNull) {
+        if (JSTypeChecking.isNullish(rawValue)) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
@@ -159,7 +159,7 @@ public final class StringConstructor {
 
         // If length is 0, return empty string
         if (literalSegments <= 0) {
-            return new JSString("");
+            return JSString.EMPTY;
         }
 
         StringBuilder result = new StringBuilder();

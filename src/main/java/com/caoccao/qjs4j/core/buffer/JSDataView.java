@@ -351,12 +351,10 @@ public final class JSDataView extends JSObject {
             return null;
         }
         if (Double.isNaN(index) || index < 0 || Double.isInfinite(index)) {
-            context.throwRangeError("Invalid " + name);
-            return null;
+            return context.rejectRangeError("Invalid " + name);
         }
         if (index > JSArrayBuffer.MAX_DATA_BLOCK_BYTE_LENGTH) {
-            context.throwRangeError(name + " out of range");
-            return null;
+            return context.rejectRangeError(name + " out of range");
         }
         return index;
     }

@@ -16,9 +16,10 @@
 
 package com.caoccao.qjs4j.core.temporal.timezone;
 
+import com.caoccao.qjs4j.core.JSTypeChecking;
+
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSObject;
-import com.caoccao.qjs4j.core.JSUndefined;
 import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.core.temporal.TemporalError;
 import com.caoccao.qjs4j.core.temporal.TemporalOverflow;
@@ -42,7 +43,7 @@ public record TemporalZonedDateTimeOptions(String disambiguation, String offset,
     }
 
     public static TemporalZonedDateTimeOptions parse(JSContext context, JSValue optionsValue, String defaultOffset) {
-        if (optionsValue instanceof JSUndefined || optionsValue == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(optionsValue)) {
             return createCanonical("compatible", defaultOffset, "constrain");
         }
         if (!(optionsValue instanceof JSObject optionsObject)) {

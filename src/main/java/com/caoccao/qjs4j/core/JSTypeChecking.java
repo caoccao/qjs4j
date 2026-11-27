@@ -193,8 +193,6 @@ public final class JSTypeChecking {
         return value instanceof JSObject;
     }
 
-    // Number-specific checks
-
     /**
      * Check if value is a primitive (not an object).
      */
@@ -203,6 +201,8 @@ public final class JSTypeChecking {
                 || value instanceof JSNumber || value instanceof JSString || value instanceof JSSymbol
                 || value instanceof JSBigInt;
     }
+
+    // Number-specific checks
 
     /** ECMAScript IsRegExp, returning -1 if reading Symbol.match throws. */
     public static int isRegExp(JSContext context, JSValue value) {
@@ -219,8 +219,6 @@ public final class JSTypeChecking {
         return value instanceof JSRegExp ? 1 : 0;
     }
 
-    // Boolean value checks
-
     /**
      * Check if value is a safe integer (-(2^53 - 1) to 2^53 - 1).
      */
@@ -232,6 +230,8 @@ public final class JSTypeChecking {
         return Double.isFinite(d) && d == Math.floor(d) && Math.abs(d) <= NumberPrototype.MAX_SAFE_INTEGER;
     }
 
+    // Boolean value checks
+
     /**
      * Check if two values have the same type.
      */
@@ -242,14 +242,14 @@ public final class JSTypeChecking {
         return a.type() == b.type();
     }
 
-    // Type equality checks
-
     /**
      * Check if value is a string.
      */
     public static boolean isString(JSValue value) {
         return value instanceof JSString;
     }
+
+    // Type equality checks
 
     /**
      * Check if value is a symbol.
@@ -258,8 +258,6 @@ public final class JSTypeChecking {
         return value instanceof JSSymbol;
     }
 
-    // Validation helpers
-
     /**
      * Check if value is truthy (converts to true in boolean context).
      */
@@ -267,11 +265,18 @@ public final class JSTypeChecking {
         return JSTypeConversions.toBoolean(value).value();
     }
 
+    // Validation helpers
+
     /**
      * Check if value is undefined.
      */
     public static boolean isUndefined(JSValue value) {
         return value instanceof JSUndefined;
+    }
+
+    /** Native option and conversion APIs use Java null for a missing value. */
+    public static boolean isUndefinedOrMissing(JSValue value) {
+        return value == null || value instanceof JSUndefined;
     }
 
     /**

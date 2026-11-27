@@ -311,7 +311,7 @@ public final class JSProxy extends JSObject {
 
     private JSValue getCallableTrap(String trapName, JSContext executionContext) {
         JSValue trap = getTrapMethod(trapName, executionContext);
-        if (trap == null || trap instanceof JSUndefined) {
+        if (JSTypeChecking.isUndefinedOrMissing(trap)) {
             return null;
         }
         if (JSTypeChecking.isCallable(trap)) {
@@ -902,8 +902,7 @@ public final class JSProxy extends JSObject {
         if (trap instanceof JSProxy trapProxy) {
             return trapProxy.apply(context, thisArg, args);
         }
-        context.throwTypeError("trap is not a function");
-        return null;
+        return context.rejectTypeError("trap is not a function");
     }
 
     public static JSObject create(JSContext context, JSValue... args) {

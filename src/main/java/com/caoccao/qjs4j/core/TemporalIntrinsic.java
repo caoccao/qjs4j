@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.BuiltinFunctionList.Method;
 import com.caoccao.qjs4j.builtins.temporal.duration.TemporalDurationConstructor;
 import com.caoccao.qjs4j.builtins.temporal.duration.TemporalDurationPrototype;
 import com.caoccao.qjs4j.builtins.temporal.instant.TemporalInstantConstructor;
@@ -29,8 +30,8 @@ import java.util.function.Consumer;
 /** The constructor and prototype properties installed for each Temporal type, in observable property order. */
 enum TemporalIntrinsic {
     DURATION("Duration", 0, TemporalDurationConstructor::construct, constructor -> {
-        constructor.method("from", 1, TemporalDurationConstructor::from);
-        constructor.method("compare", 2, TemporalDurationConstructor::compare);
+        constructor.method(Method.FROM, TemporalDurationConstructor::from);
+        constructor.method(Method.COMPARE, TemporalDurationConstructor::compare);
     }, prototype -> {
         prototype.getter("years", TemporalDurationPrototype::years);
         prototype.getter("months", TemporalDurationPrototype::months);
@@ -44,41 +45,41 @@ enum TemporalIntrinsic {
         prototype.getter("nanoseconds", TemporalDurationPrototype::nanoseconds);
         prototype.getter("sign", TemporalDurationPrototype::sign);
         prototype.getter("blank", TemporalDurationPrototype::blank);
-        prototype.method("with", 1, TemporalDurationPrototype::with);
+        prototype.method(Method.WITH, TemporalDurationPrototype::with);
         prototype.method("negated", 0, TemporalDurationPrototype::negated);
         prototype.method("abs", 0, TemporalDurationPrototype::abs);
-        prototype.method("add", 1, TemporalDurationPrototype::add);
-        prototype.method("subtract", 1, TemporalDurationPrototype::subtract);
-        prototype.method("round", 1, TemporalDurationPrototype::round);
+        prototype.method(Method.ADD, TemporalDurationPrototype::add);
+        prototype.method(Method.SUBTRACT, TemporalDurationPrototype::subtract);
+        prototype.method(Method.ROUND, TemporalDurationPrototype::round);
         prototype.method("total", 1, TemporalDurationPrototype::total);
         prototype.method("toString", 0, TemporalDurationPrototype::toStringMethod);
         prototype.method("toJSON", 0, TemporalDurationPrototype::toJSON);
-        prototype.method("toLocaleString", 0, TemporalDurationPrototype::toLocaleString);
-        prototype.method("valueOf", 0, TemporalDurationPrototype::valueOf);
+        prototype.method(Method.TO_LOCALE_STRING, TemporalDurationPrototype::toLocaleString);
+        prototype.method(Method.VALUE_OF, TemporalDurationPrototype::valueOf);
     }),
     INSTANT("Instant", 1, TemporalInstantConstructor::construct, constructor -> {
-        constructor.method("from", 1, TemporalInstantConstructor::from);
+        constructor.method(Method.FROM, TemporalInstantConstructor::from);
         constructor.method("fromEpochMilliseconds", 1, TemporalInstantConstructor::fromEpochMilliseconds);
         constructor.method("fromEpochNanoseconds", 1, TemporalInstantConstructor::fromEpochNanoseconds);
-        constructor.method("compare", 2, TemporalInstantConstructor::compare);
+        constructor.method(Method.COMPARE, TemporalInstantConstructor::compare);
     }, prototype -> {
         prototype.getter("epochMilliseconds", TemporalInstantPrototype::epochMilliseconds);
         prototype.getter("epochNanoseconds", TemporalInstantPrototype::epochNanoseconds);
-        prototype.method("add", 1, TemporalInstantPrototype::add);
-        prototype.method("subtract", 1, TemporalInstantPrototype::subtract);
-        prototype.method("until", 1, TemporalInstantPrototype::until);
-        prototype.method("since", 1, TemporalInstantPrototype::since);
-        prototype.method("round", 1, TemporalInstantPrototype::round);
-        prototype.method("equals", 1, TemporalInstantPrototype::equals);
+        prototype.method(Method.ADD, TemporalInstantPrototype::add);
+        prototype.method(Method.SUBTRACT, TemporalInstantPrototype::subtract);
+        prototype.method(Method.UNTIL, TemporalInstantPrototype::until);
+        prototype.method(Method.SINCE, TemporalInstantPrototype::since);
+        prototype.method(Method.ROUND, TemporalInstantPrototype::round);
+        prototype.method(Method.EQUALS, TemporalInstantPrototype::equals);
         prototype.method("toString", 0, TemporalInstantPrototype::toStringMethod);
         prototype.method("toJSON", 0, TemporalInstantPrototype::toJSON);
-        prototype.method("toLocaleString", 0, TemporalInstantPrototype::toLocaleString);
-        prototype.method("valueOf", 0, TemporalInstantPrototype::valueOf);
+        prototype.method(Method.TO_LOCALE_STRING, TemporalInstantPrototype::toLocaleString);
+        prototype.method(Method.VALUE_OF, TemporalInstantPrototype::valueOf);
         prototype.method("toZonedDateTimeISO", 1, TemporalInstantPrototype::toZonedDateTimeISO);
     }),
     PLAIN_DATE("PlainDate", 3, TemporalPlainDateConstructor::construct, constructor -> {
-        constructor.method("compare", 2, TemporalPlainDateConstructor::compare);
-        constructor.method("from", 1, TemporalPlainDateConstructor::from);
+        constructor.method(Method.COMPARE, TemporalPlainDateConstructor::compare);
+        constructor.method(Method.FROM, TemporalPlainDateConstructor::from);
     }, prototype -> {
         prototype.getter("calendarId", TemporalPlainDatePrototype::calendarId);
         prototype.getter("day", TemporalPlainDatePrototype::day);
@@ -96,25 +97,25 @@ enum TemporalIntrinsic {
         prototype.getter("weekOfYear", TemporalPlainDatePrototype::weekOfYear);
         prototype.getter("year", TemporalPlainDatePrototype::year);
         prototype.getter("yearOfWeek", TemporalPlainDatePrototype::yearOfWeek);
-        prototype.method("add", 1, TemporalPlainDatePrototype::add);
-        prototype.method("equals", 1, TemporalPlainDatePrototype::equals);
-        prototype.method("since", 1, TemporalPlainDatePrototype::since);
-        prototype.method("subtract", 1, TemporalPlainDatePrototype::subtract);
+        prototype.method(Method.ADD, TemporalPlainDatePrototype::add);
+        prototype.method(Method.EQUALS, TemporalPlainDatePrototype::equals);
+        prototype.method(Method.SINCE, TemporalPlainDatePrototype::since);
+        prototype.method(Method.SUBTRACT, TemporalPlainDatePrototype::subtract);
         prototype.method("toJSON", 0, TemporalPlainDatePrototype::toJSON);
-        prototype.method("toLocaleString", 0, TemporalPlainDatePrototype::toLocaleString);
-        prototype.method("toPlainDateTime", 0, TemporalPlainDatePrototype::toPlainDateTime);
+        prototype.method(Method.TO_LOCALE_STRING, TemporalPlainDatePrototype::toLocaleString);
+        prototype.method(Method.TO_PLAIN_DATE_TIME, TemporalPlainDatePrototype::toPlainDateTime);
         prototype.method("toPlainMonthDay", 0, TemporalPlainDatePrototype::toPlainMonthDay);
         prototype.method("toPlainYearMonth", 0, TemporalPlainDatePrototype::toPlainYearMonth);
         prototype.method("toString", 0, TemporalPlainDatePrototype::toStringMethod);
-        prototype.method("toZonedDateTime", 1, TemporalPlainDatePrototype::toZonedDateTime);
-        prototype.method("until", 1, TemporalPlainDatePrototype::until);
-        prototype.method("valueOf", 0, TemporalPlainDatePrototype::valueOf);
-        prototype.method("with", 1, TemporalPlainDatePrototype::with);
-        prototype.method("withCalendar", 1, TemporalPlainDatePrototype::withCalendar);
+        prototype.method(Method.TO_ZONED_DATE_TIME, TemporalPlainDatePrototype::toZonedDateTime);
+        prototype.method(Method.UNTIL, TemporalPlainDatePrototype::until);
+        prototype.method(Method.VALUE_OF, TemporalPlainDatePrototype::valueOf);
+        prototype.method(Method.WITH, TemporalPlainDatePrototype::with);
+        prototype.method(Method.WITH_CALENDAR, TemporalPlainDatePrototype::withCalendar);
     }),
     PLAIN_DATE_TIME("PlainDateTime", 3, TemporalPlainDateTimeConstructor::construct, constructor -> {
-        constructor.method("from", 1, TemporalPlainDateTimeConstructor::from);
-        constructor.method("compare", 2, TemporalPlainDateTimeConstructor::compare);
+        constructor.method(Method.FROM, TemporalPlainDateTimeConstructor::from);
+        constructor.method(Method.COMPARE, TemporalPlainDateTimeConstructor::compare);
     }, prototype -> {
         prototype.getter("calendarId", TemporalPlainDateTimePrototype::calendarId);
         prototype.getter("day", TemporalPlainDateTimePrototype::day);
@@ -138,41 +139,41 @@ enum TemporalIntrinsic {
         prototype.getter("weekOfYear", TemporalPlainDateTimePrototype::weekOfYear);
         prototype.getter("year", TemporalPlainDateTimePrototype::year);
         prototype.getter("yearOfWeek", TemporalPlainDateTimePrototype::yearOfWeek);
-        prototype.method("add", 1, TemporalPlainDateTimePrototype::add);
-        prototype.method("equals", 1, TemporalPlainDateTimePrototype::equals);
-        prototype.method("round", 1, TemporalPlainDateTimePrototype::round);
-        prototype.method("since", 1, TemporalPlainDateTimePrototype::since);
-        prototype.method("subtract", 1, TemporalPlainDateTimePrototype::subtract);
+        prototype.method(Method.ADD, TemporalPlainDateTimePrototype::add);
+        prototype.method(Method.EQUALS, TemporalPlainDateTimePrototype::equals);
+        prototype.method(Method.ROUND, TemporalPlainDateTimePrototype::round);
+        prototype.method(Method.SINCE, TemporalPlainDateTimePrototype::since);
+        prototype.method(Method.SUBTRACT, TemporalPlainDateTimePrototype::subtract);
         prototype.method("toJSON", 0, TemporalPlainDateTimePrototype::toJSON);
-        prototype.method("toLocaleString", 0, TemporalPlainDateTimePrototype::toLocaleString);
+        prototype.method(Method.TO_LOCALE_STRING, TemporalPlainDateTimePrototype::toLocaleString);
         prototype.method("toPlainDate", 0, TemporalPlainDateTimePrototype::toPlainDate);
-        prototype.method("toPlainTime", 0, TemporalPlainDateTimePrototype::toPlainTime);
+        prototype.method(Method.TO_PLAIN_TIME, TemporalPlainDateTimePrototype::toPlainTime);
         prototype.method("toString", 0, TemporalPlainDateTimePrototype::toStringMethod);
-        prototype.method("toZonedDateTime", 1, TemporalPlainDateTimePrototype::toZonedDateTime);
-        prototype.method("until", 1, TemporalPlainDateTimePrototype::until);
-        prototype.method("valueOf", 0, TemporalPlainDateTimePrototype::valueOf);
-        prototype.method("with", 1, TemporalPlainDateTimePrototype::with);
-        prototype.method("withCalendar", 1, TemporalPlainDateTimePrototype::withCalendar);
-        prototype.method("withPlainTime", 0, TemporalPlainDateTimePrototype::withPlainTime);
+        prototype.method(Method.TO_ZONED_DATE_TIME, TemporalPlainDateTimePrototype::toZonedDateTime);
+        prototype.method(Method.UNTIL, TemporalPlainDateTimePrototype::until);
+        prototype.method(Method.VALUE_OF, TemporalPlainDateTimePrototype::valueOf);
+        prototype.method(Method.WITH, TemporalPlainDateTimePrototype::with);
+        prototype.method(Method.WITH_CALENDAR, TemporalPlainDateTimePrototype::withCalendar);
+        prototype.method(Method.WITH_PLAIN_TIME, TemporalPlainDateTimePrototype::withPlainTime);
     }),
     PLAIN_MONTH_DAY("PlainMonthDay", 2, TemporalPlainMonthDayConstructor::construct, constructor -> {
-        constructor.method("from", 1, TemporalPlainMonthDayConstructor::from);
+        constructor.method(Method.FROM, TemporalPlainMonthDayConstructor::from);
     }, prototype -> {
         prototype.getter("calendarId", TemporalPlainMonthDayPrototype::calendarId);
         prototype.getter("day", TemporalPlainMonthDayPrototype::day);
         prototype.getter("monthCode", TemporalPlainMonthDayPrototype::monthCode);
         prototype.getter("referenceISOYear", TemporalPlainMonthDayPrototype::referenceISOYear);
-        prototype.method("equals", 1, TemporalPlainMonthDayPrototype::equals);
+        prototype.method(Method.EQUALS, TemporalPlainMonthDayPrototype::equals);
         prototype.method("toJSON", 0, TemporalPlainMonthDayPrototype::toJSON);
-        prototype.method("toLocaleString", 0, TemporalPlainMonthDayPrototype::toLocaleString);
+        prototype.method(Method.TO_LOCALE_STRING, TemporalPlainMonthDayPrototype::toLocaleString);
         prototype.method("toPlainDate", 1, TemporalPlainMonthDayPrototype::toPlainDate);
         prototype.method("toString", 0, TemporalPlainMonthDayPrototype::toStringMethod);
-        prototype.method("valueOf", 0, TemporalPlainMonthDayPrototype::valueOf);
-        prototype.method("with", 1, TemporalPlainMonthDayPrototype::with);
+        prototype.method(Method.VALUE_OF, TemporalPlainMonthDayPrototype::valueOf);
+        prototype.method(Method.WITH, TemporalPlainMonthDayPrototype::with);
     }),
     PLAIN_TIME("PlainTime", 0, TemporalPlainTimeConstructor::construct, constructor -> {
-        constructor.method("compare", 2, TemporalPlainTimeConstructor::compare);
-        constructor.method("from", 1, TemporalPlainTimeConstructor::from);
+        constructor.method(Method.COMPARE, TemporalPlainTimeConstructor::compare);
+        constructor.method(Method.FROM, TemporalPlainTimeConstructor::from);
     }, prototype -> {
         prototype.getter("hour", TemporalPlainTimePrototype::hour);
         prototype.getter("microsecond", TemporalPlainTimePrototype::microsecond);
@@ -180,21 +181,21 @@ enum TemporalIntrinsic {
         prototype.getter("minute", TemporalPlainTimePrototype::minute);
         prototype.getter("nanosecond", TemporalPlainTimePrototype::nanosecond);
         prototype.getter("second", TemporalPlainTimePrototype::second);
-        prototype.method("add", 1, TemporalPlainTimePrototype::add);
-        prototype.method("equals", 1, TemporalPlainTimePrototype::equals);
-        prototype.method("round", 1, TemporalPlainTimePrototype::round);
-        prototype.method("since", 1, TemporalPlainTimePrototype::since);
-        prototype.method("subtract", 1, TemporalPlainTimePrototype::subtract);
+        prototype.method(Method.ADD, TemporalPlainTimePrototype::add);
+        prototype.method(Method.EQUALS, TemporalPlainTimePrototype::equals);
+        prototype.method(Method.ROUND, TemporalPlainTimePrototype::round);
+        prototype.method(Method.SINCE, TemporalPlainTimePrototype::since);
+        prototype.method(Method.SUBTRACT, TemporalPlainTimePrototype::subtract);
         prototype.method("toJSON", 0, TemporalPlainTimePrototype::toJSON);
-        prototype.method("toLocaleString", 0, TemporalPlainTimePrototype::toLocaleString);
+        prototype.method(Method.TO_LOCALE_STRING, TemporalPlainTimePrototype::toLocaleString);
         prototype.method("toString", 0, TemporalPlainTimePrototype::toStringMethod);
-        prototype.method("until", 1, TemporalPlainTimePrototype::until);
-        prototype.method("valueOf", 0, TemporalPlainTimePrototype::valueOf);
-        prototype.method("with", 1, TemporalPlainTimePrototype::with);
+        prototype.method(Method.UNTIL, TemporalPlainTimePrototype::until);
+        prototype.method(Method.VALUE_OF, TemporalPlainTimePrototype::valueOf);
+        prototype.method(Method.WITH, TemporalPlainTimePrototype::with);
     }),
     PLAIN_YEAR_MONTH("PlainYearMonth", 2, TemporalPlainYearMonthConstructor::construct, constructor -> {
-        constructor.method("compare", 2, TemporalPlainYearMonthConstructor::compare);
-        constructor.method("from", 1, TemporalPlainYearMonthConstructor::from);
+        constructor.method(Method.COMPARE, TemporalPlainYearMonthConstructor::compare);
+        constructor.method(Method.FROM, TemporalPlainYearMonthConstructor::from);
     }, prototype -> {
         prototype.getter("calendarId", TemporalPlainYearMonthPrototype::calendarId);
         prototype.getter("daysInMonth", TemporalPlainYearMonthPrototype::daysInMonth);
@@ -207,21 +208,21 @@ enum TemporalIntrinsic {
         prototype.getter("monthsInYear", TemporalPlainYearMonthPrototype::monthsInYear);
         prototype.getter("referenceISODay", TemporalPlainYearMonthPrototype::referenceISODay);
         prototype.getter("year", TemporalPlainYearMonthPrototype::year);
-        prototype.method("add", 1, TemporalPlainYearMonthPrototype::add);
-        prototype.method("equals", 1, TemporalPlainYearMonthPrototype::equals);
-        prototype.method("since", 1, TemporalPlainYearMonthPrototype::since);
-        prototype.method("subtract", 1, TemporalPlainYearMonthPrototype::subtract);
+        prototype.method(Method.ADD, TemporalPlainYearMonthPrototype::add);
+        prototype.method(Method.EQUALS, TemporalPlainYearMonthPrototype::equals);
+        prototype.method(Method.SINCE, TemporalPlainYearMonthPrototype::since);
+        prototype.method(Method.SUBTRACT, TemporalPlainYearMonthPrototype::subtract);
         prototype.method("toJSON", 0, TemporalPlainYearMonthPrototype::toJSON);
-        prototype.method("toLocaleString", 0, TemporalPlainYearMonthPrototype::toLocaleString);
+        prototype.method(Method.TO_LOCALE_STRING, TemporalPlainYearMonthPrototype::toLocaleString);
         prototype.method("toPlainDate", 1, TemporalPlainYearMonthPrototype::toPlainDate);
         prototype.method("toString", 0, TemporalPlainYearMonthPrototype::toStringMethod);
-        prototype.method("until", 1, TemporalPlainYearMonthPrototype::until);
-        prototype.method("valueOf", 0, TemporalPlainYearMonthPrototype::valueOf);
-        prototype.method("with", 1, TemporalPlainYearMonthPrototype::with);
+        prototype.method(Method.UNTIL, TemporalPlainYearMonthPrototype::until);
+        prototype.method(Method.VALUE_OF, TemporalPlainYearMonthPrototype::valueOf);
+        prototype.method(Method.WITH, TemporalPlainYearMonthPrototype::with);
     }),
     ZONED_DATE_TIME("ZonedDateTime", 2, TemporalZonedDateTimeConstructor::construct, constructor -> {
-        constructor.method("compare", 2, TemporalZonedDateTimeConstructor::compare);
-        constructor.method("from", 1, TemporalZonedDateTimeConstructor::from);
+        constructor.method(Method.COMPARE, TemporalZonedDateTimeConstructor::compare);
+        constructor.method(Method.FROM, TemporalZonedDateTimeConstructor::from);
     }, prototype -> {
         prototype.getter("calendar", TemporalZonedDateTimePrototype::calendar);
         prototype.getter("calendarId", TemporalZonedDateTimePrototype::calendarId);
@@ -252,25 +253,25 @@ enum TemporalIntrinsic {
         prototype.getter("weekOfYear", TemporalZonedDateTimePrototype::weekOfYear);
         prototype.getter("year", TemporalZonedDateTimePrototype::year);
         prototype.getter("yearOfWeek", TemporalZonedDateTimePrototype::yearOfWeek);
-        prototype.method("add", 1, TemporalZonedDateTimePrototype::add);
-        prototype.method("equals", 1, TemporalZonedDateTimePrototype::equals);
+        prototype.method(Method.ADD, TemporalZonedDateTimePrototype::add);
+        prototype.method(Method.EQUALS, TemporalZonedDateTimePrototype::equals);
         prototype.method("getTimeZoneTransition", 1, TemporalZonedDateTimePrototype::getTimeZoneTransition);
-        prototype.method("round", 1, TemporalZonedDateTimePrototype::round);
-        prototype.method("since", 1, TemporalZonedDateTimePrototype::since);
+        prototype.method(Method.ROUND, TemporalZonedDateTimePrototype::round);
+        prototype.method(Method.SINCE, TemporalZonedDateTimePrototype::since);
         prototype.method("startOfDay", 0, TemporalZonedDateTimePrototype::startOfDay);
-        prototype.method("subtract", 1, TemporalZonedDateTimePrototype::subtract);
+        prototype.method(Method.SUBTRACT, TemporalZonedDateTimePrototype::subtract);
         prototype.method("toInstant", 0, TemporalZonedDateTimePrototype::toInstant);
         prototype.method("toJSON", 0, TemporalZonedDateTimePrototype::toJSON);
-        prototype.method("toLocaleString", 0, TemporalZonedDateTimePrototype::toLocaleString);
+        prototype.method(Method.TO_LOCALE_STRING, TemporalZonedDateTimePrototype::toLocaleString);
         prototype.method("toPlainDate", 0, TemporalZonedDateTimePrototype::toPlainDate);
-        prototype.method("toPlainDateTime", 0, TemporalZonedDateTimePrototype::toPlainDateTime);
-        prototype.method("toPlainTime", 0, TemporalZonedDateTimePrototype::toPlainTime);
+        prototype.method(Method.TO_PLAIN_DATE_TIME, TemporalZonedDateTimePrototype::toPlainDateTime);
+        prototype.method(Method.TO_PLAIN_TIME, TemporalZonedDateTimePrototype::toPlainTime);
         prototype.method("toString", 0, TemporalZonedDateTimePrototype::toStringMethod);
-        prototype.method("until", 1, TemporalZonedDateTimePrototype::until);
-        prototype.method("valueOf", 0, TemporalZonedDateTimePrototype::valueOf);
-        prototype.method("with", 1, TemporalZonedDateTimePrototype::with);
-        prototype.method("withCalendar", 1, TemporalZonedDateTimePrototype::withCalendar);
-        prototype.method("withPlainTime", 0, TemporalZonedDateTimePrototype::withPlainTime);
+        prototype.method(Method.UNTIL, TemporalZonedDateTimePrototype::until);
+        prototype.method(Method.VALUE_OF, TemporalZonedDateTimePrototype::valueOf);
+        prototype.method(Method.WITH, TemporalZonedDateTimePrototype::with);
+        prototype.method(Method.WITH_CALENDAR, TemporalZonedDateTimePrototype::withCalendar);
+        prototype.method(Method.WITH_PLAIN_TIME, TemporalZonedDateTimePrototype::withPlainTime);
         prototype.method("withTimeZone", 1, TemporalZonedDateTimePrototype::withTimeZone);
     });
 

@@ -56,8 +56,7 @@ final class IsoDateTimeParser extends IsoParsingState {
     }
 
     private ParsedAnnotations invalidAnnotation() {
-        context.throwRangeError(INVALID_DATE);
-        return null;
+        return context.rejectRangeError(INVALID_DATE);
     }
 
     private int invalidDigits(String field) {
@@ -98,8 +97,7 @@ final class IsoDateTimeParser extends IsoParsingState {
             return IsoOffset.ZERO;
         }
         if (!hasTime || zulu && !allowZulu) {
-            context.throwRangeError(INVALID_DATE);
-            return null;
+            return context.rejectRangeError(INVALID_DATE);
         }
         return parseOffset();
     }
@@ -115,8 +113,7 @@ final class IsoDateTimeParser extends IsoParsingState {
             return null;
         }
         if (yearMonth && (month < 1 || month > 12)) {
-            context.throwRangeError(INVALID_DATE);
-            return null;
+            return context.rejectRangeError(INVALID_DATE);
         }
         int day = 1;
         if (separated ? take('-') : atDigit()) {
@@ -133,8 +130,7 @@ final class IsoDateTimeParser extends IsoParsingState {
             return null;
         }
         if (yearMonth && !separated && at('-')) {
-            context.throwRangeError(INVALID_DATE);
-            return null;
+            return context.rejectRangeError(INVALID_DATE);
         }
         IsoDate parsed = new IsoDate(year, month, day);
         boolean valid = yearMonth
@@ -142,24 +138,21 @@ final class IsoDateTimeParser extends IsoParsingState {
                 : month >= 1 && month <= 12 && day >= 1 && day <= IsoDate.daysInMonth(year, month)
                         && (!enforceRange || parsed.isWithinSupportedRange());
         if (!valid) {
-            context.throwRangeError(INVALID_DATE);
-            return null;
+            return context.rejectRangeError(INVALID_DATE);
         }
         return parsed;
     }
 
     private IsoOffset parseOffset() {
         if (position == input.length()) {
-            context.throwRangeError(INVALID_INSTANT);
-            return null;
+            return context.rejectRangeError(INVALID_INSTANT);
         }
         char sign = input.charAt(position++);
         if (sign == 'Z' || sign == 'z') {
             return IsoOffset.ZERO;
         }
         if (sign != '+' && sign != '-') {
-            context.throwRangeError(INVALID_INSTANT);
-            return null;
+            return context.rejectRangeError(INVALID_INSTANT);
         }
         int hour = readOffsetPair("offset hour", 23);
         if (hour < 0) {
@@ -217,8 +210,7 @@ final class IsoDateTimeParser extends IsoParsingState {
             return null;
         }
         if (hour > 23 || minute > 59 || second > 60) {
-            context.throwRangeError(INVALID_TIME);
-            return null;
+            return context.rejectRangeError(INVALID_TIME);
         }
         return new IsoTime(hour, minute, Math.min(59, Math.max(0, second)), fraction / 1_000_000,
                 fraction / 1000 % 1000, fraction % 1000);
@@ -326,8 +318,7 @@ final class IsoDateTimeParser extends IsoParsingState {
         }
         boolean hasTime = takeTimeSeparator();
         if (instant && !hasTime) {
-            context.throwRangeError(INVALID_INSTANT);
-            return null;
+            return context.rejectRangeError(INVALID_INSTANT);
         }
         IsoTime time = hasTime ? parseTime() : IsoTime.MIDNIGHT;
         if (time == null) {
@@ -419,8 +410,7 @@ final class IsoDateTimeParser extends IsoParsingState {
         }
         String timeZoneId = annotations.timeZoneAnnotation();
         if (zoned && timeZoneId == null) {
-            context.throwRangeError("Temporal error: Must specify time zone.");
-            return null;
+            return context.rejectRangeError("Temporal error: Must specify time zone.");
         }
 
         TemporalCalendarId calendarId = TemporalCalendarId.ISO8601;
@@ -444,8 +434,7 @@ final class IsoDateTimeParser extends IsoParsingState {
 
     static IsoDate parseMonthDayString(JSContext context, String input) {
         if (input == null || input.isEmpty()) {
-            context.throwRangeError("Temporal error: Invalid character while parsing month value.");
-            return null;
+            return context.rejectRangeError("Temporal error: Invalid character while parsing month value.");
         }
 
         int start = input.startsWith("--") ? 2 : 0;
@@ -474,15 +463,13 @@ final class IsoDateTimeParser extends IsoParsingState {
         if (!state.take('T') && !state.take('t')) {
             if (state.parseDate(true, false) != null && !context.hasPendingException()) {
                 if (!state.takeTimeSeparator()) {
-                    context.throwRangeError(INVALID_DATE);
-                    return null;
+                    return context.rejectRangeError(INVALID_DATE);
                 }
             } else {
                 context.clearPendingException();
                 state.position = 0;
                 if (isAmbiguousTimeStringWithoutDesignator(input)) {
-                    context.throwRangeError(INVALID_DATE);
-                    return null;
+                    return context.rejectRangeError(INVALID_DATE);
                 }
             }
         }
@@ -510,12 +497,10 @@ final class IsoDateTimeParser extends IsoParsingState {
 
     private static IsoDateTimeParser start(JSContext context, String input, String emptyError) {
         if (input == null || input.isEmpty()) {
-            context.throwRangeError(emptyError);
-            return null;
+            return context.rejectRangeError(emptyError);
         }
         if (input.indexOf('\u2212') >= 0) {
-            context.throwRangeError(INVALID_DATE);
-            return null;
+            return context.rejectRangeError(INVALID_DATE);
         }
         return new IsoDateTimeParser(context, input);
     }

@@ -134,7 +134,7 @@ public final class FunctionPrototype {
     }
 
     private static JSValue[] buildArgumentList(JSContext context, JSValue arrayArg) {
-        if (arrayArg == null || arrayArg instanceof JSUndefined || arrayArg instanceof JSNull) {
+        if (arrayArg == null || JSTypeChecking.isNullish(arrayArg)) {
             return JSValue.NO_ARGS;
         }
         return JSCall.argumentsFromArrayLike(context, arrayArg);

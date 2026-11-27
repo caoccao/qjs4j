@@ -121,8 +121,7 @@ public final class TypedArrayConstructor {
                 return constructorType;
             }
         }
-        context.throwTypeError(methodName + " called on non-TypedArray constructor");
-        return null;
+        return context.rejectTypeError(methodName + " called on non-TypedArray constructor");
     }
 
     public static JSValue of(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -151,20 +150,17 @@ public final class TypedArrayConstructor {
     private static JSTypedArray typedArrayCreate(JSContext context, JSValue constructor, long length,
             String methodName) {
         if (length > Integer.MAX_VALUE) {
-            context.throwRangeError("invalid array length");
-            return null;
+            return context.rejectRangeError("invalid array length");
         }
         JSValue target = JSReflectObject.constructSimple(context, constructor, new JSValue[]{JSNumber.of(length)});
         if (context.hasPendingException()) {
             return null;
         }
         if (!(target instanceof JSTypedArray typedArray)) {
-            context.throwTypeError(methodName + " constructor must return a TypedArray");
-            return null;
+            return context.rejectTypeError(methodName + " constructor must return a TypedArray");
         }
         if (typedArray.getLength() < length) {
-            context.throwTypeError("TypedArray length is too small");
-            return null;
+            return context.rejectTypeError("TypedArray length is too small");
         }
         return typedArray;
     }

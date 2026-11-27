@@ -49,14 +49,14 @@ public class JSPropertyDescriptorAliasingTest extends BaseJavetTest {
     public void testArgumentsDescriptorViewDoesNotCorruptTheStoredDescriptor() {
         // JSArguments adjusts the descriptor it returns to reflect the mapped argument. That
         // adjustment must apply to the returned view, not to the object's stored descriptor.
-        assertThat(context.eval("""
+        assertEvalText("""
                 function f(a) {
                     const first = Object.getOwnPropertyDescriptor(arguments, '0');
                     a = 99;
                     const second = Object.getOwnPropertyDescriptor(arguments, '0');
                     return first.value + ',' + second.value;
                 }
-                f(1)""").toString()).isEqualTo("1,99");
+                f(1)""", "1,99");
     }
 
     @Test
@@ -65,21 +65,20 @@ public class JSPropertyDescriptorAliasingTest extends BaseJavetTest {
         // Splitting getOwnPropertyDescriptor into a public copying method and an overridable raw
         // one made `super.getOwnPropertyDescriptor(...)` dispatch straight back into the override,
         // so any such index recursed until the stack was exhausted.
-        assertThat(context.eval("""
+        assertEvalText("""
                 const a = [];
                 a[4294967294] = 'far';
                 a.length + ',' + a[4294967294]
-                        + ',' + Object.getOwnPropertyDescriptor(a, '4294967294').value""").toString())
-                .isEqualTo("4294967295,far,far");
+                        + ',' + Object.getOwnPropertyDescriptor(a, '4294967294').value""", "4294967295,far,far");
     }
 
     @Test
     public void testArrayIndexAtTheIntegerBoundaryIsDescribable() {
-        assertThat(context.eval("""
+        assertEvalText("""
                 const a = [];
                 a[2147483647] = 'low';
                 a[2147483648] = 'high';
-                a.length + ',' + a[2147483647] + ',' + a[2147483648]""").toString()).isEqualTo("2147483649,low,high");
+                a.length + ',' + a[2147483647] + ',' + a[2147483648]""", "2147483649,low,high");
     }
 
     @Test
@@ -94,8 +93,7 @@ public class JSPropertyDescriptorAliasingTest extends BaseJavetTest {
 
     @Test
     public void testMissingPropertyStillReturnsNull() {
-        JSObject object = context.createJSObject();
-        assertThat(object.getOwnPropertyDescriptor(PropertyKey.fromString("absent"))).isNull();
+        assertThat(context.createJSObject().getOwnPropertyDescriptor(PropertyKey.fromString("absent"))).isNull();
     }
 
     @Test
@@ -156,6 +154,30 @@ public class JSPropertyDescriptorAliasingTest extends BaseJavetTest {
                       o, 'a', { value: 1, writable: false, enumerable: true, configurable: false });
                   return JSON.stringify(Object.getOwnPropertyDescriptor(o, 'a'));
                 })()""");
+    }
+
+    @Test
+    public void testPartialDescriptorsMatchOnlyTheirSpecifiedAttributes() {
+        PropertyDescriptor unspecified = new PropertyDescriptor();
+        PropertyDescriptor accessor = new PropertyDescriptor();
+        accessor.setGetter(null); // An explicitly undefined getter is still an accessor.
+        for (PropertyDescriptor.DataState state : PropertyDescriptor.DataState.values()) {
+            assertThat(unspecified.acceptsDataAttributes(state)).isTrue();
+            assertThat(accessor.acceptsDataAttributes(state)).isFalse();
+            for (boolean attribute : new boolean[]{false, true}) {
+                PropertyDescriptor configurable = new PropertyDescriptor();
+                configurable.setConfigurable(attribute);
+                assertThat(configurable.acceptsDataAttributes(state)).isEqualTo(attribute == state.isConfigurable());
+
+                PropertyDescriptor enumerable = new PropertyDescriptor();
+                enumerable.setEnumerable(attribute);
+                assertThat(enumerable.acceptsDataAttributes(state)).isEqualTo(attribute == state.isEnumerable());
+
+                PropertyDescriptor writable = new PropertyDescriptor();
+                writable.setWritable(attribute);
+                assertThat(writable.acceptsDataAttributes(state)).isEqualTo(attribute == state.isWritable());
+            }
+        }
     }
 
     @Test

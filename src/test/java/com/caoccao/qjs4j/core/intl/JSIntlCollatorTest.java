@@ -1,7 +1,6 @@
 package com.caoccao.qjs4j.core.intl;
 
 import com.caoccao.qjs4j.BaseJavetTest;
-import com.caoccao.qjs4j.core.JSContext;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -88,8 +87,7 @@ class JSIntlCollatorTest extends BaseJavetTest {
 
     @Test
     void forwardFrenchCollatorsShareOneCachedRuleSet() {
-        JSContext context = resetContext();
-        assertThat(context.eval("""
+        assertThat(resetContext().eval("""
                 ['fr', 'fr-FR', 'fr-BE', 'fr-x-a', 'fr-x-b', 'fr-x-c', 'fr-CA']
                   .map(tag => new Intl.Collator(tag).compare('éa', 'eá')).join(',')
                 """).toString()).isEqualTo("1,1,1,1,1,1,-1");

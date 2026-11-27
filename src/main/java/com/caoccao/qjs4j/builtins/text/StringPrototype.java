@@ -58,7 +58,7 @@ public final class StringPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        return new JSString(String.valueOf(s.charAt((int) index)));
+        return JSString.of(s.charAt((int) index));
     }
 
     /**
@@ -94,14 +94,14 @@ public final class StringPrototype {
         long position = integerArgument(context, args, 0, 0);
         if (position < 0 || position >= value.length()) {
             return switch (kind) {
-                case CHARACTER -> new JSString("");
+                case CHARACTER -> JSString.EMPTY;
                 case CODE_UNIT -> JSNumber.of(Double.NaN);
                 case CODE_POINT -> JSUndefined.INSTANCE;
             };
         }
         int index = (int) position;
         return switch (kind) {
-            case CHARACTER -> new JSString(String.valueOf(value.charAt(index)));
+            case CHARACTER -> JSString.of(value.charAt(index));
             case CODE_UNIT -> JSNumber.of(value.charAt(index));
             case CODE_POINT -> JSNumber.of(value.codePointAt(index));
         };
@@ -559,7 +559,7 @@ public final class StringPrototype {
         long count = (long) countDouble;
 
         if (count == 0 || s.isEmpty()) {
-            return new JSString("");
+            return JSString.EMPTY;
         }
 
         // Check the resulting length before allocating. Pre-sizing the builder to
@@ -573,7 +573,7 @@ public final class StringPrototype {
         if (count > JSString.MAX_LENGTH / s.length()) {
             return context.throwRangeError("Invalid string length");
         }
-        JSString result = new JSString("");
+        JSString result = JSString.EMPTY;
         JSString block = new JSString(s);
         while (count != 0) {
             context.getVirtualMachine().checkExecutionInterruptForNative();
@@ -827,7 +827,7 @@ public final class StringPrototype {
             // Split into individual characters
             for (int i = 0; i < s.length() && i < limit; i++) {
                 context.getVirtualMachine().checkExecutionInterruptForNative();
-                arr.push(new JSString(String.valueOf(s.charAt(i))));
+                arr.push(JSString.of(s.charAt(i)));
             }
             return arr;
         }
@@ -959,7 +959,7 @@ public final class StringPrototype {
     private static JSString toStringCheckObject(JSContext context, JSValue value) {
         if (value == null || value.isNullOrUndefined()) {
             context.throwTypeError("null or undefined are forbidden");
-            return new JSString("");
+            return JSString.EMPTY;
         }
         return JSTypeConversions.toString(context, value);
     }

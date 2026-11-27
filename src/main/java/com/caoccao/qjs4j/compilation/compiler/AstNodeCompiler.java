@@ -20,9 +20,11 @@ import com.caoccao.qjs4j.compilation.ast.ASTNode;
 
 abstract class AstNodeCompiler<T extends ASTNode> {
     protected final CompilerContext compilerContext;
+    protected final BytecodeEmitter emitter;
 
     public AstNodeCompiler(CompilerContext compilerContext) {
         this.compilerContext = compilerContext;
+        emitter = compilerContext.emitter;
     }
 
     abstract void compile(T astNode);

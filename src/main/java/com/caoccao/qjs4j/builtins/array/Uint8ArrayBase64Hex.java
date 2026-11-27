@@ -328,7 +328,7 @@ public final class Uint8ArrayBase64Hex {
      * Parse the "omitPadding" option from the options argument.
      */
     private static boolean getOmitPaddingOption(JSContext context, JSValue options) {
-        if (options instanceof JSUndefined || options == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(options)) {
             return false;
         }
         JSObject optionsObj = JSTypeConversions.toObject(context, options);
@@ -344,7 +344,7 @@ public final class Uint8ArrayBase64Hex {
 
     private static String getStringOption(JSContext context, JSValue options, String key, String fallback,
             Set<String> allowed) {
-        if (options instanceof JSUndefined || options == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(options)) {
             return fallback;
         }
         JSObject optionsObj = JSTypeConversions.toObject(context, options);
@@ -359,13 +359,11 @@ public final class Uint8ArrayBase64Hex {
             return fallback;
         }
         if (!(raw instanceof JSString str)) {
-            context.throwTypeError("invalid option " + raw.toJavaObject());
-            return null;
+            return context.rejectTypeError("invalid option " + raw.toJavaObject());
         }
         String value = str.value();
         if (!allowed.contains(value)) {
-            context.throwTypeError("invalid option " + value);
-            return null;
+            return context.rejectTypeError("invalid option " + value);
         }
         return value;
     }

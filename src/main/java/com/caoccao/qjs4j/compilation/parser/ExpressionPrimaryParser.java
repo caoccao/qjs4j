@@ -131,9 +131,7 @@ final class ExpressionPrimaryParser {
     Expression parseMemberExpression() {
         if (parserContext.match(TokenType.NEW)) {
             SourceLocation location = parserContext.getLocation();
-            if (parserContext.currentToken.escaped()) {
-                throw new JSSyntaxErrorException("Unexpected token NEW");
-            }
+            parserContext.requireUnescapedToken("Unexpected token NEW");
             parserContext.advance();
 
             // Handle new.target meta-property
@@ -352,23 +350,17 @@ final class ExpressionPrimaryParser {
             }
             case TEMPLATE -> delegates.literals.parseTemplateLiteral(false);
             case TRUE -> {
-                if (parserContext.currentToken.escaped()) {
-                    throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
-                }
+                parserContext.requireUnescapedToken("Keyword must not contain escaped characters");
                 parserContext.advance();
                 yield new Literal(true, location);
             }
             case FALSE -> {
-                if (parserContext.currentToken.escaped()) {
-                    throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
-                }
+                parserContext.requireUnescapedToken("Keyword must not contain escaped characters");
                 parserContext.advance();
                 yield new Literal(false, location);
             }
             case NULL -> {
-                if (parserContext.currentToken.escaped()) {
-                    throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
-                }
+                parserContext.requireUnescapedToken("Keyword must not contain escaped characters");
                 parserContext.advance();
                 yield new Literal(null, location);
             }
@@ -537,9 +529,7 @@ final class ExpressionPrimaryParser {
                 yield delegates.functions.parseClassExpression();
             }
             case IMPORT -> {
-                if (parserContext.currentToken.escaped()) {
-                    throw new JSSyntaxErrorException("Unexpected token IMPORT");
-                }
+                parserContext.requireUnescapedToken("Unexpected token IMPORT");
                 parserContext.advance(); // consume 'import'
                 if (parserContext.match(TokenType.DOT)) {
                     if (parserContext.nextToken.type() == TokenType.IDENTIFIER
@@ -636,9 +626,7 @@ final class ExpressionPrimaryParser {
     Expression parseUnaryExpression() {
         if (parserContext.match(TokenType.ASYNC) && parserContext.nextToken.type() == TokenType.FUNCTION
                 && parserContext.nextToken.line() == parserContext.currentToken.line()) {
-            if (parserContext.currentToken.escaped()) {
-                throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
-            }
+            parserContext.requireUnescapedToken("Keyword must not contain escaped characters");
             SourceLocation asyncLocation = parserContext.consumeLocation();
             Expression asyncFunctionExpression = delegates.functions.parseFunctionExpression(true, asyncLocation);
             return expressions.parsePostPrimaryExpression(asyncFunctionExpression, asyncLocation);

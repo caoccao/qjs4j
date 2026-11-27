@@ -66,11 +66,11 @@ final class ExpressionDestructuringAssignmentCompiler extends AstNodeCompiler<Ex
 
     void compileIterationTarget(Expression leftExpression) {
         if (leftExpression instanceof CallExpression) {
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            emitter.emitOpcode(Opcode.DROP);
             compilerContext.expressionCompiler.compile(leftExpression);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
-            compilerContext.emitter.emitU8(5);
+            emitter.emitOpcode(Opcode.DROP);
+            emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
+            emitter.emitU8(5);
             return;
         }
         compile(leftExpression);

@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.compilation.compiler;
 
+import com.caoccao.qjs4j.vm.Opcode;
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 
@@ -75,6 +76,19 @@ final class ExpressionCompiler extends AstNodeCompiler<Expression> {
         }
     }
 
+    void compileNamed(Expression value, String name) {
+        compile(value);
+        if (value.isAnonymousFunction()) {
+            emitter.emitOpcodeAtom(Opcode.SET_NAME, name);
+        }
+    }
+
+    /** Evaluate a computed property name and perform ToPropertyKey before evaluating its value. */
+    void compilePropertyKey(Expression key) {
+        compile(key);
+        emitter.emitOpcode(Opcode.TO_PROPKEY);
+    }
+
     /**
      * Extract the actual assignment target from an element, unwrapping default values.
      */
@@ -117,4 +131,5 @@ final class ExpressionCompiler extends AstNodeCompiler<Expression> {
         // Identifiers and nested patterns: no pre-evaluation needed
         return 0;
     }
+
 }

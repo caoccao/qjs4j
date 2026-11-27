@@ -1129,8 +1129,7 @@ public final class JSArray extends JSObject {
         }
         Long exactLength = toArrayLengthFromNumber(numericValue.value());
         if (exactLength == null || exactLength != uint32Length) {
-            context.throwRangeError("Invalid array length");
-            return null;
+            return context.rejectRangeError("Invalid array length");
         }
         return exactLength;
     }

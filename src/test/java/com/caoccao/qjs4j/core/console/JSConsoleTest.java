@@ -38,24 +38,24 @@ public class JSConsoleTest extends ConsoleOutputTestBase {
 
     @Test
     public void testAllMethodsReturnUndefined() {
-        assertThat(context.eval("console.log('x')")).isInstanceOf(JSUndefined.class);
-        assertThat(context.eval("console.info('x')")).isInstanceOf(JSUndefined.class);
-        assertThat(context.eval("console.debug('x')")).isInstanceOf(JSUndefined.class);
-        assertThat(context.eval("console.warn('x')")).isInstanceOf(JSUndefined.class);
-        assertThat(context.eval("console.error('x')")).isInstanceOf(JSUndefined.class);
-        assertThat(context.eval("console.assert(true)")).isInstanceOf(JSUndefined.class);
-        assertThat(context.eval("console.trace()")).isInstanceOf(JSUndefined.class);
-        assertThat(context.eval("console.dir('x')")).isInstanceOf(JSUndefined.class);
-        assertThat(context.eval("console.dirxml('x')")).isInstanceOf(JSUndefined.class);
-        assertThat(context.eval("console.clear()")).isInstanceOf(JSUndefined.class);
-        assertThat(context.eval("console.count()")).isInstanceOf(JSUndefined.class);
-        assertThat(context.eval("console.countReset()")).isInstanceOf(JSUndefined.class);
-        assertThat(context.eval("console.time()")).isInstanceOf(JSUndefined.class);
-        assertThat(context.eval("console.timeEnd()")).isInstanceOf(JSUndefined.class);
-        assertThat(context.eval("console.table([])")).isInstanceOf(JSUndefined.class);
-        assertThat(context.eval("console.group()")).isInstanceOf(JSUndefined.class);
-        assertThat(context.eval("console.groupCollapsed()")).isInstanceOf(JSUndefined.class);
-        assertThat(context.eval("console.groupEnd()")).isInstanceOf(JSUndefined.class);
+        assertEvalType("console.log('x')", JSUndefined.class);
+        assertEvalType("console.info('x')", JSUndefined.class);
+        assertEvalType("console.debug('x')", JSUndefined.class);
+        assertEvalType("console.warn('x')", JSUndefined.class);
+        assertEvalType("console.error('x')", JSUndefined.class);
+        assertEvalType("console.assert(true)", JSUndefined.class);
+        assertEvalType("console.trace()", JSUndefined.class);
+        assertEvalType("console.dir('x')", JSUndefined.class);
+        assertEvalType("console.dirxml('x')", JSUndefined.class);
+        assertEvalType("console.clear()", JSUndefined.class);
+        assertEvalType("console.count()", JSUndefined.class);
+        assertEvalType("console.countReset()", JSUndefined.class);
+        assertEvalType("console.time()", JSUndefined.class);
+        assertEvalType("console.timeEnd()", JSUndefined.class);
+        assertEvalType("console.table([])", JSUndefined.class);
+        assertEvalType("console.group()", JSUndefined.class);
+        assertEvalType("console.groupCollapsed()", JSUndefined.class);
+        assertEvalType("console.groupEnd()", JSUndefined.class);
     }
 
     @Test
@@ -121,31 +121,31 @@ public class JSConsoleTest extends ConsoleOutputTestBase {
 
     @Test
     public void testConsoleHasAllMethods() {
-        assertThat(context.eval("typeof console.log").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("console.log.length").toJavaObject()).isEqualTo(1.0);
-        assertThat(context.eval("typeof console.info").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("typeof console.debug").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("typeof console.warn").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("typeof console.error").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("typeof console.assert").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("typeof console.trace").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("typeof console.dir").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("typeof console.dirxml").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("typeof console.clear").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("typeof console.count").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("typeof console.countReset").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("typeof console.time").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("typeof console.timeLog").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("typeof console.timeEnd").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("typeof console.table").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("typeof console.group").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("typeof console.groupCollapsed").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("typeof console.groupEnd").toJavaObject()).isEqualTo("function");
+        assertEvalJavaValue("typeof console.log", "function");
+        assertEvalJavaValue("console.log.length", 1.0);
+        assertEvalJavaValue("typeof console.info", "function");
+        assertEvalJavaValue("typeof console.debug", "function");
+        assertEvalJavaValue("typeof console.warn", "function");
+        assertEvalJavaValue("typeof console.error", "function");
+        assertEvalJavaValue("typeof console.assert", "function");
+        assertEvalJavaValue("typeof console.trace", "function");
+        assertEvalJavaValue("typeof console.dir", "function");
+        assertEvalJavaValue("typeof console.dirxml", "function");
+        assertEvalJavaValue("typeof console.clear", "function");
+        assertEvalJavaValue("typeof console.count", "function");
+        assertEvalJavaValue("typeof console.countReset", "function");
+        assertEvalJavaValue("typeof console.time", "function");
+        assertEvalJavaValue("typeof console.timeLog", "function");
+        assertEvalJavaValue("typeof console.timeEnd", "function");
+        assertEvalJavaValue("typeof console.table", "function");
+        assertEvalJavaValue("typeof console.group", "function");
+        assertEvalJavaValue("typeof console.groupCollapsed", "function");
+        assertEvalJavaValue("typeof console.groupEnd", "function");
     }
 
     @Test
     public void testConsoleIsObject() {
-        assertThat(context.eval("typeof console").toJavaObject()).isEqualTo("object");
+        assertEvalJavaValue("typeof console", "object");
     }
 
     @Test
@@ -386,8 +386,7 @@ public class JSConsoleTest extends ConsoleOutputTestBase {
     @Test
     public void testGroupWithLabel() {
         context.eval("console.group('label')");
-        String output = out();
-        assertThat(output).isEqualTo("label\n");
+        assertThat(out()).isEqualTo("label\n");
         outStream.reset();
         assertStdout("console.log('indented')", "  indented\n");
     }

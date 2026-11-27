@@ -72,11 +72,7 @@ public final class JSTemporalZonedDateTime extends JSObject implements JSTempora
 
     public static JSTemporalZonedDateTime create(JSContext context, BigInteger epochNanoseconds, String timeZoneId,
             TemporalCalendarId calendarId, JSObject prototype) {
-        JSTemporalZonedDateTime zonedDateTime = new JSTemporalZonedDateTime(context, epochNanoseconds, timeZoneId,
-                calendarId);
-        if (prototype != null) {
-            zonedDateTime.setPrototype(prototype);
-        }
-        return zonedDateTime;
+        return TemporalUtils.withPrototype(
+                new JSTemporalZonedDateTime(context, epochNanoseconds, timeZoneId, calendarId), prototype);
     }
 }

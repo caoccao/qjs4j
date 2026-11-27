@@ -169,10 +169,10 @@ public class JSONDeepNestingAndJavaObjectTest extends BaseJavetTest {
             depth++;
         }
         assertThat(depth).isEqualTo(200000);
-        JSValue deepObject = context.eval("var o = {}; for (var i = 0; i < 200000; i++) o = { o }; o");
-        assertThat(deepObject.toJavaObject()).isInstanceOf(Map.class);
-        JSValue deepMap = context.eval("var m = new Map(); for (var i = 0; i < 200000; i++) m = new Map([[i, m]]); m");
-        assertThat(deepMap.toJavaObject()).isInstanceOf(Map.class);
+        assertThat(context.eval("var o = {}; for (var i = 0; i < 200000; i++) o = { o }; o").toJavaObject())
+                .isInstanceOf(Map.class);
+        assertThat(context.eval("var m = new Map(); for (var i = 0; i < 200000; i++) m = new Map([[i, m]]); m")
+                .toJavaObject()).isInstanceOf(Map.class);
     }
 
     @Test

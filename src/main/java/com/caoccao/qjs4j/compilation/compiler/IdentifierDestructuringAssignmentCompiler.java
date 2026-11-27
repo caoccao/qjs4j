@@ -44,9 +44,9 @@ final class IdentifierDestructuringAssignmentCompiler extends AstNodeCompiler<Id
                 return;
             }
             if (compilerContext.tdzLocals.contains(name)) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC_CHECK, localIndex);
+                emitter.emitIntOperand(Opcode.PUT_LOC_CHECK, localIndex);
             } else {
-                compilerContext.emitter.emitPutLocal(localIndex);
+                emitter.emitPutLocal(localIndex);
             }
         } else {
             Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
@@ -55,11 +55,10 @@ final class IdentifierDestructuringAssignmentCompiler extends AstNodeCompiler<Id
                     compilerContext.emitHelpers.emitConstAssignmentErrorForCaptured(name, capturedIndex);
                     return;
                 }
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_VAR_REF_CHECK, capturedIndex);
+                emitter.emitIntOperand(Opcode.PUT_VAR_REF_CHECK, capturedIndex);
             } else {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.MAKE_VAR_REF, name);
-                compilerContext.emitter.emitOpcode(Opcode.ROT3L);
-                compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
+                emitter.emitOpcodeAtom(Opcode.MAKE_VAR_REF, name);
+                emitter.emitStoreValueBelowReference();
             }
         }
     }

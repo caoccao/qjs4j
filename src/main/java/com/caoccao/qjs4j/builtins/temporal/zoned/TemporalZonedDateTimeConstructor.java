@@ -293,7 +293,7 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     private static Long toRequiredIntegralLong(JSContext context, JSValue value) {
-        if (value instanceof JSUndefined || value == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(value)) {
             return TemporalError.INVALID_DATE_TIME_ARGUMENT.reject(context);
         }
 
@@ -305,7 +305,7 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     private static String toTemporalTimeZoneId(JSContext context, JSValue timeZoneValue) {
-        if (timeZoneValue instanceof JSUndefined || timeZoneValue == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(timeZoneValue)) {
             return TemporalError.INVALID_DATE_TIME_ARGUMENT.reject(context);
         }
 
@@ -318,16 +318,14 @@ public final class TemporalZonedDateTimeConstructor {
                 return null;
             }
         } else {
-            context.throwTypeError("Temporal error: Time zone must be string.");
-            return null;
+            return context.rejectTypeError("Temporal error: Time zone must be string.");
         }
 
         if (!TemporalOffsetInterpretation.isOffsetTimeZoneIdentifier(timeZoneId)) {
             try {
                 TemporalTimeZone.resolveTimeZone(timeZoneId);
             } catch (DateTimeException invalidTimeZoneException) {
-                context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
-                return null;
+                return context.rejectRangeError("Temporal error: Invalid time zone: " + timeZoneId);
             }
         }
 

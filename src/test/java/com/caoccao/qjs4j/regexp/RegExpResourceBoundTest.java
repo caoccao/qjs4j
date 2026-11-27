@@ -25,8 +25,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
  * A guest-supplied pattern must not choose how much memory the matcher claims — and the ceiling it runs into has to be
  * V8's, not one picked for tidiness.
@@ -155,7 +153,7 @@ public class RegExpResourceBoundTest extends BaseJavetTest {
         }
         for (int[] sequence : property.sequences())
             expected.add(new String(sequence, 0, sequence.length));
-        assertThat(context.eval("candidates").toJavaObject()).isEqualTo(expected);
+        assertEvalJavaValue("candidates", expected);
     }
 
 }

@@ -28,6 +28,7 @@ import java.util.Objects;
  * of a rope is known without flattening it, so a loop that reads {@code s.length} as it appends stays linear too.
  */
 public final class JSString implements JSValue {
+    public static final JSString EMPTY = new JSString("");
     /**
      * Maximum length of a JavaScript string, in UTF-16 code units.
      * <p>
@@ -39,10 +40,12 @@ public final class JSString implements JSValue {
      */
     public static final int MAX_LENGTH = (1 << 29) - 24;
     public static final String NAME = "String";
+
     /**
      * Concatenations shorter than this are copied at once: a rope node costs more than copying a short string.
      */
     static final int ROPE_MIN_LENGTH = 256;
+
     private final int atomIndex;
     private JSString left;
     private final int length;
@@ -52,7 +55,6 @@ public final class JSString implements JSValue {
      * consistently on another.
      */
     private volatile String value;
-
     private JSString(JSString left, JSString right, int length) {
         this.value = null;
         this.atomIndex = -1;
@@ -186,5 +188,19 @@ public final class JSString implements JSValue {
             return new JSString(leftLeft, new JSString(leftRight.value + right.value()), length);
         }
         return new JSString(left, right, length);
+    }
+
+    /** The ordinary, non-interned primitive string for one UTF-16 code unit. */
+    public static JSString of(char codeUnit) {
+        return codeUnit < Ascii.STRINGS.length ? Ascii.STRINGS[codeUnit] : new JSString(String.valueOf(codeUnit));
+    }
+
+    private static final class Ascii {
+        private static final JSString[] STRINGS = new JSString[128];
+        static {
+            for (char i = 0; i < STRINGS.length; i++) {
+                STRINGS[i] = new JSString(String.valueOf(i));
+            }
+        }
     }
 }

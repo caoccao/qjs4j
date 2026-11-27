@@ -46,9 +46,9 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
 
         if (left instanceof CallExpression) {
             compilerContext.expressionCompiler.compile(left);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
-            compilerContext.emitter.emitU8(5);
+            emitter.emitOpcode(Opcode.DROP);
+            emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
+            emitter.emitU8(5);
             return;
         }
 
@@ -66,10 +66,10 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
             emitCompoundOperator(operator);
         }
         if (left instanceof ArrayExpression arrayExpr) {
-            compilerContext.emitter.emitOpcode(Opcode.DUP);
+            emitter.emitOpcode(Opcode.DUP);
             compilerContext.arrayExpressionDestructuringAssignmentCompiler.compile(arrayExpr);
         } else if (left instanceof ObjectExpression objExpr) {
-            compilerContext.emitter.emitOpcode(Opcode.DUP);
+            emitter.emitOpcode(Opcode.DUP);
             ObjectExpressionDestructuringAssignmentCompiler.compile(compilerContext, objExpr);
         }
     }
@@ -84,7 +84,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         compilerContext.inferredClassName = null;
         if (operator == AssignmentOperator.ASSIGN && assignExpr.isLhsIdentifierRef()
                 && assignExpr.getRight().isAnonymousFunction()) {
-            compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, name);
+            emitter.emitOpcodeAtom(Opcode.SET_NAME, name);
         }
         if (operator != AssignmentOperator.ASSIGN) {
             emitCompoundOperator(operator);
@@ -110,17 +110,17 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         AssignmentOperator operator = assignExpr.getOperator();
         if (operator != AssignmentOperator.ASSIGN) {
             if (localIndex != null) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
+                emitter.emitIntOperand(Opcode.GET_LOC_CHECK, localIndex);
             } else {
-                compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, capturedIndex);
+                emitter.emitIntOperand(Opcode.GET_VAR_REF_CHECK, capturedIndex);
             }
         }
         compileAssignmentValue(assignExpr, name);
         if (localIndex != null) {
-            compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_CHECK, localIndex);
+            emitter.emitIntOperand(Opcode.SET_LOC_CHECK, localIndex);
         } else {
-            compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_VAR_REF_CHECK, capturedIndex);
+            emitter.emitOpcode(Opcode.DUP);
+            emitter.emitIntOperand(Opcode.PUT_VAR_REF_CHECK, capturedIndex);
         }
     }
 
@@ -142,15 +142,15 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         if (isFunctionNameLocal || isFunctionNameCaptured) {
             if (operator != AssignmentOperator.ASSIGN) {
                 if (isFunctionNameLocal) {
-                    compilerContext.emitter.emitGetLocal(localIndex);
+                    emitter.emitGetLocal(localIndex);
                 } else {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
+                    emitter.emitIntOperand(Opcode.GET_VAR_REF, capturedIndex);
                 }
             }
             compilerContext.expressionCompiler.compile(assignExpr.getRight());
             if (operator == AssignmentOperator.ASSIGN && assignExpr.isLhsIdentifierRef()
                     && assignExpr.getRight().isAnonymousFunction()) {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, name);
+                emitter.emitOpcodeAtom(Opcode.SET_NAME, name);
             }
             if (operator != AssignmentOperator.ASSIGN) {
                 emitCompoundOperator(operator);
@@ -161,9 +161,9 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         if (isConstLocalBinding || isConstCapturedBinding) {
             if (operator != AssignmentOperator.ASSIGN) {
                 if (localIndex != null) {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
+                    emitter.emitIntOperand(Opcode.GET_LOC_CHECK, localIndex);
                 } else {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, capturedIndex);
+                    emitter.emitIntOperand(Opcode.GET_VAR_REF_CHECK, capturedIndex);
                 }
             }
 
@@ -190,12 +190,12 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
 
         emitIdentifierReference(name);
         if (operator != AssignmentOperator.ASSIGN) {
-            compilerContext.emitter.emitOpcode(Opcode.GET_REF_VALUE);
+            emitter.emitOpcode(Opcode.GET_REF_VALUE);
         }
 
         compileAssignmentValue(assignExpr, name);
-        compilerContext.emitter.emitOpcode(Opcode.INSERT3);
-        compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
+        emitter.emitOpcode(Opcode.INSERT3);
+        emitter.emitOpcode(Opcode.PUT_REF_VALUE);
     }
 
     private void compileLogicalAssignment(AssignmentExpression assignExpr) {
@@ -210,16 +210,16 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
             Integer localIndex = compilerContext.scopeManager.findLocalInScopes(name);
             if (localIndex != null) {
                 if (compilerContext.tdzLocals.contains(name)) {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
+                    emitter.emitIntOperand(Opcode.GET_LOC_CHECK, localIndex);
                 } else {
-                    compilerContext.emitter.emitGetLocal(localIndex);
+                    emitter.emitGetLocal(localIndex);
                 }
             } else {
                 Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
                 if (capturedIndex != null) {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, capturedIndex);
+                    emitter.emitIntOperand(Opcode.GET_VAR_REF_CHECK, capturedIndex);
                 } else {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
+                    emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
                 }
             }
         } else if (left instanceof MemberExpression member) {
@@ -230,30 +230,30 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
             throw new JSCompilerException("Invalid left-hand side in logical assignment", assignExpr);
         }
 
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        emitter.emitOpcode(Opcode.DUP);
 
         int jumpToCleanup;
         if (operator == AssignmentOperator.NULLISH_ASSIGN) {
-            compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
-            jumpToCleanup = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
+            emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
+            jumpToCleanup = emitter.emitJump(Opcode.IF_FALSE);
         } else if (operator == AssignmentOperator.LOGICAL_OR_ASSIGN) {
-            jumpToCleanup = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+            jumpToCleanup = emitter.emitJump(Opcode.IF_TRUE);
         } else {
-            jumpToCleanup = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
+            jumpToCleanup = emitter.emitJump(Opcode.IF_FALSE);
         }
 
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        emitter.emitOpcode(Opcode.DROP);
         compilerContext.expressionCompiler.compile(assignExpr.getRight());
         if (left instanceof Identifier identifier && assignExpr.isLhsIdentifierRef()
                 && assignExpr.getRight().isAnonymousFunction()) {
-            compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
+            emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
         }
 
         if (depthLvalue == 1) {
-            compilerContext.emitter.emitOpcode(Opcode.SWAP);
+            emitter.emitOpcode(Opcode.SWAP);
         }
         if (privateMemberAssignment) {
-            compilerContext.emitter.emitOpcode(Opcode.SWAP);
+            emitter.emitOpcode(Opcode.SWAP);
         }
 
         if (left instanceof Identifier id) {
@@ -267,9 +267,9 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                 } else if (compilerContext.scopeManager.isLocalBindingConst(name)) {
                     compilerContext.emitHelpers.emitConstAssignmentErrorForLocal(name, localIndex);
                 } else if (compilerContext.tdzLocals.contains(name)) {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_CHECK, localIndex);
+                    emitter.emitIntOperand(Opcode.SET_LOC_CHECK, localIndex);
                 } else {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC, localIndex);
+                    emitter.emitIntOperand(Opcode.SET_LOC, localIndex);
                 }
             } else {
                 Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
@@ -281,34 +281,34 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                     } else if (compilerContext.captureResolver.isCapturedBindingImmutable(name)) {
                         compilerContext.emitHelpers.emitConstAssignmentErrorForCaptured(name, capturedIndex);
                     } else {
-                        compilerContext.emitter.emitOpcode(Opcode.DUP);
-                        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_VAR_REF_CHECK, capturedIndex);
+                        emitter.emitOpcode(Opcode.DUP);
+                        emitter.emitIntOperand(Opcode.PUT_VAR_REF_CHECK, capturedIndex);
                     }
                 } else {
-                    compilerContext.emitter.emitOpcode(Opcode.DUP);
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, name);
+                    emitter.emitOpcode(Opcode.DUP);
+                    emitter.emitOpcodeAtom(Opcode.PUT_VAR, name);
                 }
             }
         } else if (left instanceof MemberExpression memberExpr) {
             if (memberExpr.getObject().isSuperIdentifier()) {
-                compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
+                emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
             } else if (memberExpr.isComputed()) {
-                compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+                emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
             } else if (privateMemberAssignment) {
-                compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
+                emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
             } else if (memberExpr.getProperty() instanceof Identifier propId) {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.getName());
+                emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.getName());
             }
         }
 
-        int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
-        compilerContext.emitter.patchJumpToHere(jumpToCleanup);
+        int jumpToEnd = emitter.emitJump(Opcode.GOTO);
+        emitter.patchJumpToHere(jumpToCleanup);
 
         for (int i = 0; i < depthLvalue; i++) {
-            compilerContext.emitter.emitOpcode(Opcode.NIP);
+            emitter.emitOpcode(Opcode.NIP);
         }
 
-        compilerContext.emitter.patchJumpToHere(jumpToEnd);
+        emitter.patchJumpToHere(jumpToEnd);
     }
 
     private void compileMemberAssignment(MemberExpression member, AssignmentOperator operator, Expression right) {
@@ -329,25 +329,25 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
             compilerContext.expressionCompiler.compile(member.getObject());
         }
         if (superProperty) {
-            compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
+            emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
         } else if (member.isComputed()) {
-            compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+            emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
         } else if (member.getProperty() instanceof PrivateIdentifier id) {
             JSSymbol symbol = compilerContext.privateSymbol(id);
             if (symbol == null) {
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
+                emitter.emitOpcode(Opcode.DROP);
             } else {
                 if (!compound) {
-                    compilerContext.emitter.emitOpcode(Opcode.SWAP);
+                    emitter.emitOpcode(Opcode.SWAP);
                 }
-                compilerContext.emitter.emitPushConstant(symbol);
-                compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
+                emitter.emitPushConstant(symbol);
+                emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
             }
         } else if (member.getProperty() instanceof Identifier id) {
             if (compound) {
-                compilerContext.emitter.emitOpcode(Opcode.SWAP);
+                emitter.emitOpcode(Opcode.SWAP);
             }
-            compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, id.getName());
+            emitter.emitOpcodeAtom(Opcode.PUT_FIELD, id.getName());
         }
     }
 
@@ -356,7 +356,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
      * hands them to compileLogicalAssignment first.
      */
     private void emitCompoundOperator(AssignmentOperator operator) {
-        compilerContext.emitter.emitOpcode(operator.getOpcode());
+        emitter.emitOpcode(operator.getOpcode());
     }
 
     private void emitDirectIdentifierReference(String name) {
@@ -372,7 +372,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
             return;
         }
 
-        compilerContext.emitter.emitOpcodeAtom(Opcode.MAKE_VAR_REF, name);
+        emitter.emitOpcodeAtom(Opcode.MAKE_VAR_REF, name);
     }
 
     void emitIdentifierReference(String name) {
@@ -388,20 +388,20 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
     private int emitMemberReadForAssignment(MemberExpression member, boolean logical) {
         if (member.getObject().isSuperIdentifier()) {
             compilerContext.emitHelpers.emitSuperPropertyReference(member);
-            compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
-            compilerContext.emitter.emitOpcode(Opcode.DUP3);
-            compilerContext.emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
+            emitter.emitOpcode(Opcode.TO_PROPKEY);
+            emitter.emitOpcode(Opcode.DUP3);
+            emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
             return 3;
         }
         compilerContext.expressionCompiler.compile(member.getObject());
         if (member.isComputed()) {
             compilerContext.expressionCompiler.compile(member.getProperty());
             if (logical) {
-                compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
-                compilerContext.emitter.emitOpcode(Opcode.DUP2);
-                compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+                emitter.emitOpcode(Opcode.TO_PROPKEY);
+                emitter.emitOpcode(Opcode.DUP2);
+                emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             } else {
-                compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL3);
+                emitter.emitOpcode(Opcode.GET_ARRAY_EL3);
             }
             return 2;
         }
@@ -411,28 +411,28 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                 if (symbol == null) {
                     throw new JSCompilerException("undefined private field '#" + id.getName() + "'", id);
                 }
-                compilerContext.emitter.emitPushConstant(symbol);
-                compilerContext.emitter.emitOpcode(Opcode.DUP2);
+                emitter.emitPushConstant(symbol);
+                emitter.emitOpcode(Opcode.DUP2);
             } else if (symbol != null) {
-                compilerContext.emitter.emitOpcode(Opcode.DUP);
-                compilerContext.emitter.emitPushConstant(symbol);
+                emitter.emitOpcode(Opcode.DUP);
+                emitter.emitPushConstant(symbol);
             } else {
-                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                emitter.emitOpcode(Opcode.UNDEFINED);
                 return 1;
             }
-            compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
+            emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
             return logical ? 2 : 1;
         }
         if (member.getProperty() instanceof Identifier id) {
-            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, id.getName());
+            emitter.emitOpcodeAtom(Opcode.GET_FIELD2, id.getName());
         }
         return 1;
     }
 
     private void emitScopedReference(Opcode makeReferenceOpcode, String name, int referenceIndex) {
-        compilerContext.emitter.emitOpcode(makeReferenceOpcode);
-        compilerContext.emitter.emitAtom(name);
-        compilerContext.emitter.emitU16(referenceIndex);
+        emitter.emitOpcode(makeReferenceOpcode);
+        emitter.emitAtom(name);
+        emitter.emitU16(referenceIndex);
     }
 
     private void emitWithAwareIdentifierReference(String name) {
@@ -440,7 +440,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
 
         List<Integer> withObjectLocals = compilerContext.withObjectManager.getActiveLocals();
         for (int withObjectLocalIndex : withObjectLocals) {
-            compilerContext.emitter.emitGetLocal(withObjectLocalIndex);
+            emitter.emitGetLocal(withObjectLocalIndex);
             emitWithCandidateReference(name, jumpToResolvedOffsets);
         }
 
@@ -451,15 +451,15 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         }
 
         emitDirectIdentifierReference(name);
-        int resolveEndOffset = compilerContext.emitter.currentOffset();
-        compilerContext.emitter.patchJumps(jumpToResolvedOffsets, resolveEndOffset);
+        int resolveEndOffset = emitter.currentOffset();
+        emitter.patchJumps(jumpToResolvedOffsets, resolveEndOffset);
     }
 
     private void emitWithCandidateReference(String name, List<Integer> resolved) {
         var fallback = WithBindingCompiler.emitHasBinding(compilerContext, name);
-        compilerContext.emitter.emitPushConstant(new JSString(name));
-        resolved.add(compilerContext.emitter.emitJump(Opcode.GOTO));
-        fallback.begin(compilerContext.emitter);
+        emitter.emitPushConstant(new JSString(name));
+        resolved.add(emitter.emitJump(Opcode.GOTO));
+        fallback.begin(emitter);
     }
 
 }

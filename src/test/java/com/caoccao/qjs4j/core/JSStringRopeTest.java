@@ -95,6 +95,16 @@ public class JSStringRopeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testIndexedCharactersPreserveUtf16CodeUnits() {
+        for (char unit : new char[]{0, 127, 128, 'é', Character.MIN_HIGH_SURROGATE, Character.MAX_LOW_SURROGATE}) {
+            JSString character = JSString.of(unit);
+            assertThat(character.value()).isEqualTo(String.valueOf(unit));
+            assertThat(character.atomIndex()).isEqualTo(-1);
+        }
+        assertThat(JSString.of('a')).isSameAs(JSString.of('a'));
+    }
+
+    @Test
     public void testOnlyAShortLastLeafIsRebuilt() {
         String big = "b".repeat(JSString.ROPE_MIN_LENGTH);
         JSString x = new JSString("x");
@@ -115,11 +125,11 @@ public class JSStringRopeTest extends BaseJavetTest {
 
     @Test
     public void testReadingTheLengthDoesNotFlatten() {
-        JSValue result = context.eval("var s = ''; for (var i = 0; i < 1000; i++) { s += 'x'; s.length } s");
-        assertThat(result).isInstanceOfSatisfying(JSString.class, string -> {
-            assertThat(string.isRope()).isTrue();
-            assertThat(string.length()).isEqualTo(1000);
-        });
+        assertThat(context.eval("var s = ''; for (var i = 0; i < 1000; i++) { s += 'x'; s.length } s"))
+                .isInstanceOfSatisfying(JSString.class, string -> {
+                    assertThat(string.isRope()).isTrue();
+                    assertThat(string.length()).isEqualTo(1000);
+                });
         assertIntegerWithJavet("'abc'.length", "var s = 'abc'; s.length",
                 "var s = '0123456789'.repeat(30) + 'x'; s.length", "var s = ''; s.length", "String.prototype.length");
         assertErrorWithJavet("var s = 'abc'; s.length()");

@@ -86,7 +86,7 @@ public sealed class JSError extends JSObject permits JSAggregateError, JSRangeEr
     public JSString getMessage() {
         JSValue msgValue = get(PropertyKey.MESSAGE);
         if (msgValue.isUndefined()) {
-            return new JSString("");
+            return JSString.EMPTY;
         }
         return JSTypeConversions.toString(context, msgValue);
     }
@@ -373,7 +373,7 @@ public sealed class JSError extends JSObject permits JSAggregateError, JSRangeEr
 
         errorPrototype.defineProperty(PropertyKey.NAME, new JSString(name),
                 PropertyDescriptor.DataState.ConfigurableWritable);
-        errorPrototype.defineProperty(PropertyKey.MESSAGE, new JSString(""),
+        errorPrototype.defineProperty(PropertyKey.MESSAGE, JSString.EMPTY,
                 PropertyDescriptor.DataState.ConfigurableWritable);
         return errorPrototype;
     }

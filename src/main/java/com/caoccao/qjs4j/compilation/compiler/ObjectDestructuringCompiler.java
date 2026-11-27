@@ -30,14 +30,13 @@ final class ObjectDestructuringCompiler {
     static void copyRest(BytecodeEmitter emitter, boolean hasExclusions) {
         emitter.emitOpcode(Opcode.OBJECT);
         if (hasExclusions) {
-            emitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 68);
+            emitter.emitIntOperand(Opcode.COPY_DATA_PROPERTIES, 68);
         } else {
             emitter.emitOpcode(Opcode.DUP);
             emitter.emitOpcode(Opcode.ROT3L);
             emitter.emitOpcode(Opcode.NULL);
-            emitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 7);
-            emitter.emitOpcode(Opcode.DROP);
-            emitter.emitOpcode(Opcode.DROP);
+            emitter.emitIntOperand(Opcode.COPY_DATA_PROPERTIES, 7);
+            emitter.emitDrops(2);
         }
     }
 
@@ -57,7 +56,7 @@ final class ObjectDestructuringCompiler {
                 && (literal.getValue() instanceof Integer || literal.getValue() instanceof Long)) {
             long index = ((Number) literal.getValue()).longValue();
             if (index == (int) index) {
-                context.emitter.emitOpcodeU32(Opcode.PUSH_I32, (int) index);
+                context.emitter.emitIntOperand(Opcode.PUSH_I32, (int) index);
             } else {
                 context.emitter.emitPushConstant(JSNumber.of(index));
             }
@@ -66,8 +65,7 @@ final class ObjectDestructuringCompiler {
             if (name != null) {
                 return name;
             }
-            context.expressionCompiler.compile(key);
-            context.emitter.emitOpcode(Opcode.TO_PROPKEY);
+            context.expressionCompiler.compilePropertyKey(key);
         }
         return null;
     }

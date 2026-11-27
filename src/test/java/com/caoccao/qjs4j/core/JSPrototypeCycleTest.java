@@ -61,8 +61,7 @@ public class JSPrototypeCycleTest extends BaseJavetTest {
         first.setPrototype(second);
         second.setPrototype(first);
 
-        JSObject target = context.createJSObject();
-        assertThat(target.setPrototypeChecked(first)).isEqualTo(JSObject.SetPrototypeResult.SUCCESS);
+        assertThat(context.createJSObject().setPrototypeChecked(first)).isEqualTo(JSObject.SetPrototypeResult.SUCCESS);
     }
 
     @Test
@@ -148,8 +147,7 @@ public class JSPrototypeCycleTest extends BaseJavetTest {
                   } catch (e) {
                     return e.name;
                   }
-                })()""");
-        assertStringWithJavet("""
+                })()""", """
                 (function () {
                   let a = {};
                   let proposed = a;

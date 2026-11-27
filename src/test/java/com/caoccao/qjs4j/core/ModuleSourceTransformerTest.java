@@ -67,8 +67,8 @@ public class ModuleSourceTransformerTest extends BaseTest {
     @Test
     public void testNormalizeModuleDeclarationLinesGivesEachDeclarationItsOwnLine() {
         // A declaration sharing a line with other code was invisible to the line-oriented scan.
-        String normalized = transformer().normalizeModuleDeclarationLines("const t = 1; export const v = 15;\n");
-        assertThat(normalized).isEqualTo("const t = 1; \nexport const v = 15;\n");
+        assertThat(transformer().normalizeModuleDeclarationLines("const t = 1; export const v = 15;\n"))
+                .isEqualTo("const t = 1; \nexport const v = 15;\n");
     }
 
     @Test

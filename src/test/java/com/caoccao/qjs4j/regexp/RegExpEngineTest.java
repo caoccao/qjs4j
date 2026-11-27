@@ -268,46 +268,45 @@ public class RegExpEngineTest extends RegExpTestBase {
     @Test
     public void testOptionalGroupWithAlternationInStarLoop() {
         // Basic: alternation without star, without optional
-        assertThat(patternMatches("^(a|b)$", "", "a")).as("basic alt a").isTrue();
-        assertThat(patternMatches("^(a|b)$", "", "b")).as("basic alt b").isTrue();
+        assertMatches("^(a|b)$", "", "a", "basic alt a");
+        assertMatches("^(a|b)$", "", "b", "basic alt b");
 
         // Optional alternation (no star)
-        assertThat(patternMatches("^(a|b)?$", "", "")).as("opt alt empty").isTrue();
-        assertThat(patternMatches("^(a|b)?$", "", "a")).as("opt alt a").isTrue();
+        assertMatches("^(a|b)?$", "", "", "opt alt empty");
+        assertMatches("^(a|b)?$", "", "a", "opt alt a");
 
         // Star without alternation
-        assertThat(patternMatches("^(x)?$", "", "")).as("opt x empty").isTrue();
-        assertThat(patternMatches("^(xa?)*$", "", "x")).as("star xa? x").isTrue();
-        assertThat(patternMatches("^(xa?)*$", "", "xa")).as("star xa? xa").isTrue();
+        assertMatches("^(x)?$", "", "", "opt x empty");
+        assertMatches("^(xa?)*$", "", "x", "star xa? x");
+        assertMatches("^(xa?)*$", "", "xa", "star xa? xa");
 
         // Non-capturing optional alternation in star - simplest case
-        assertThat(patternMatches("^(?:a|b)*$", "", "a")).as("nc star alt a").isTrue();
-        assertThat(patternMatches("^(?:a|b)+$", "", "a")).as("nc plus alt a").isTrue();
+        assertMatches("^(?:a|b)*$", "", "a", "nc star alt a");
+        assertMatches("^(?:a|b)+$", "", "a", "nc plus alt a");
 
         // Optional alternation - no star
-        assertThat(patternMatches("^x(?:a|b)?$", "", "x")).as("nc x opt alt").isTrue();
-        assertThat(patternMatches("^x(?:a|b)?$", "", "xa")).as("nc xa opt alt").isTrue();
+        assertMatches("^x(?:a|b)?$", "", "x", "nc x opt alt");
+        assertMatches("^x(?:a|b)?$", "", "xa", "nc xa opt alt");
 
         // Star of simple optional
-        assertThat(patternMatches("^(?:xa?)*$", "", "x")).as("nc star xa?").isTrue();
+        assertMatches("^(?:xa?)*$", "", "x", "nc star xa?");
 
         // Star of alternation without optional
-        assertThat(patternMatches("^(?:x(?:a|b))*$", "", "xa")).as("nc star x-alt xa").isTrue();
+        assertMatches("^(?:x(?:a|b))*$", "", "xa", "nc star x-alt xa");
 
         // Now the previously-failing combo: optional alternation in star
-        assertThat(patternMatches("^(?:x(?:a|b)?)*$", "", "x")).as("nc star x opt-alt x").isTrue();
-        assertThat(patternMatches("^(?:x(?:a|b)?)*$", "", "xa")).as("nc star x opt-alt xa").isTrue();
+        assertMatches("^(?:x(?:a|b)?)*$", "", "x", "nc star x opt-alt x");
+        assertMatches("^(?:x(?:a|b)?)*$", "", "xa", "nc star x opt-alt xa");
 
         // Capturing optional alternation in star
-        assertThat(patternMatches("^(x(a|b)?)*$", "", "x")).as("star x matches").isTrue();
-        assertThat(patternMatches("^(x(a|b)?)*$", "", "xa")).as("star xa matches").isTrue();
-        assertThat(patternMatches("^(x(a|b)?)*$", "", "xaxb")).as("star xaxb matches").isTrue();
+        assertMatches("^(x(a|b)?)*$", "", "x", "star x matches");
+        assertMatches("^(x(a|b)?)*$", "", "xa", "star xa matches");
+        assertMatches("^(x(a|b)?)*$", "", "xaxb", "star xaxb matches");
 
         // Original failing patterns from the bug report
-        assertThat(patternMatches("^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$", "i", "ab-t-cd"))
-                .as("pattern with alternation in star").isTrue();
-        assertThat(patternMatches("^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$", "i", "ab-t-cd-ab"))
-                .as("pattern with alternation in star, matching alternation").isTrue();
+        assertMatches("^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$", "i", "ab-t-cd", "pattern with alternation in star");
+        assertMatches("^([a-z]{2})(-t-([a-z]{2})(-(ab|cd))?)*$", "i", "ab-t-cd-ab",
+                "pattern with alternation in star, matching alternation");
     }
 
     @Test

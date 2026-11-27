@@ -234,7 +234,7 @@ public final class ArrayBufferPrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        if (species instanceof JSUndefined || species instanceof JSNull) {
+        if (JSTypeChecking.isNullish(species)) {
             return JSUndefined.INSTANCE;
         }
         if (shared ? species instanceof JSFunction : JSTypeChecking.isConstructor(species)) {

@@ -98,31 +98,24 @@ public class StringConstructorTest extends BaseJavetTest {
     @Test
     public void testStringFromCharCode() {
         // Test basic ASCII characters
-        JSValue result1 = context.eval("String.fromCharCode(65);");
-        assertStringValue(result1, "A");
+        assertEvalString("String.fromCharCode(65);", "A");
 
-        JSValue result2 = context.eval("String.fromCharCode(72, 101, 108, 108, 111);");
-        assertStringValue(result2, "Hello");
+        assertEvalString("String.fromCharCode(72, 101, 108, 108, 111);", "Hello");
 
         // Test with no arguments
-        JSValue result3 = context.eval("String.fromCharCode();");
-        assertStringValue(result3, "");
+        assertEvalString("String.fromCharCode();", "");
 
         // Test with Unicode characters (BMP) - using decimal values
-        JSValue result4 = context.eval("String.fromCharCode(20013, 25991);");
-        assertStringValue(result4, "中文");
+        assertEvalString("String.fromCharCode(20013, 25991);", "中文");
 
         // Test with values > 65535 (should be taken modulo 65536)
-        JSValue result5 = context.eval("String.fromCharCode(65536 + 65);");
-        assertStringValue(result5, "A");
+        assertEvalString("String.fromCharCode(65536 + 65);", "A");
 
         // Test with negative numbers (converted to uint16)
-        JSValue result6 = context.eval("String.fromCharCode(-1);");
-        assertStringValue(result6, String.valueOf((char) 65535));
+        assertStringValue(context.eval("String.fromCharCode(-1);"), String.valueOf((char) 65535));
 
         // Test with floating point numbers (truncated to integer)
-        JSValue result7 = context.eval("String.fromCharCode(65.9);");
-        assertStringValue(result7, "A");
+        assertEvalString("String.fromCharCode(65.9);", "A");
 
         assertStringWithJavet("String.fromCharCode(72, 101, 108, 108, 111)");
     }
@@ -130,111 +123,88 @@ public class StringConstructorTest extends BaseJavetTest {
     @Test
     public void testStringFromCodePoint() {
         // Test basic ASCII characters
-        JSValue result1 = context.eval("String.fromCodePoint(65);");
-        assertStringValue(result1, "A");
+        assertEvalString("String.fromCodePoint(65);", "A");
 
-        JSValue result2 = context.eval("String.fromCodePoint(72, 101, 108, 108, 111);");
-        assertStringValue(result2, "Hello");
+        assertEvalString("String.fromCodePoint(72, 101, 108, 108, 111);", "Hello");
 
         // Test with no arguments
-        JSValue result3 = context.eval("String.fromCodePoint();");
-        assertStringValue(result3, "");
+        assertEvalString("String.fromCodePoint();", "");
 
         // Test with Unicode characters (BMP) - using decimal values
-        JSValue result4 = context.eval("String.fromCodePoint(20013, 25991);");
-        assertStringValue(result4, "中文");
+        assertEvalString("String.fromCodePoint(20013, 25991);", "中文");
 
         // Test with supplementary characters (outside BMP) - using decimal values
-        JSValue result5 = context.eval("String.fromCodePoint(128512);");
-        assertStringValue(result5, "😀");
+        assertEvalString("String.fromCodePoint(128512);", "😀");
 
-        JSValue result6 = context.eval("String.fromCodePoint(128077);");
-        assertStringValue(result6, "👍");
+        assertEvalString("String.fromCodePoint(128077);", "👍");
 
         // Test error cases - invalid code points
-        JSValue error1 = context.eval("try { String.fromCodePoint(-1); 'no error'; } catch(e) { e.name; }");
-        assertStringValue(error1, "RangeError");
+        assertEvalString("try { String.fromCodePoint(-1); 'no error'; } catch(e) { e.name; }", "RangeError");
 
-        JSValue error2 = context.eval("try { String.fromCodePoint(1114112); 'no error'; } catch(e) { e.name; }");
-        assertStringValue(error2, "RangeError");
+        assertEvalString("try { String.fromCodePoint(1114112); 'no error'; } catch(e) { e.name; }", "RangeError");
 
-        JSValue error3 = context.eval("try { String.fromCodePoint(3.14); 'no error'; } catch(e) { e.name; }");
-        assertStringValue(error3, "RangeError");
+        assertEvalString("try { String.fromCodePoint(3.14); 'no error'; } catch(e) { e.name; }", "RangeError");
 
         assertStringWithJavet("String.fromCodePoint(72, 101, 108, 108, 111)", "String.fromCodePoint(128512)");
     }
 
     @Test
     public void testStringObjectCharAt() {
-        JSValue result = context.eval("(new String('hello')).charAt(1);");
-        assertStringValue(result, "e");
+        assertEvalString("(new String('hello')).charAt(1);", "e");
     }
 
     @Test
     public void testStringObjectConcat() {
-        JSValue result = context.eval("(new String('hello')).concat(' ', 'world');");
-        assertStringValue(result, "hello world");
+        assertEvalString("(new String('hello')).concat(' ', 'world');", "hello world");
     }
 
     @Test
     public void testStringObjectIndexOf() {
-        JSValue result = context.eval("(new String('hello')).indexOf('l');");
-        assertNumberValue(result, 2.0);
+        assertEvalNumber("(new String('hello')).indexOf('l');", 2.0);
     }
 
     @Test
     public void testStringObjectLength() {
         // Test that String object has length property
-        JSValue result = context.eval("(new String('hello')).length;");
-        assertNumberValue(result, 5.0);
+        assertEvalNumber("(new String('hello')).length;", 5.0);
 
-        JSValue result2 = context.eval("(new String('')).length;");
-        assertNumberValue(result2, 0.0);
+        assertEvalNumber("(new String('')).length;", 0.0);
 
-        JSValue result3 = context.eval("(new String('test123')).length;");
-        assertNumberValue(result3, 7.0);
+        assertEvalNumber("(new String('test123')).length;", 7.0);
     }
 
     @Test
     public void testStringObjectReplace() {
-        JSValue result = context.eval("(new String('hello world')).replace('world', 'there');");
-        assertStringValue(result, "hello there");
+        assertEvalString("(new String('hello world')).replace('world', 'there');", "hello there");
     }
 
     @Test
     public void testStringObjectSlice() {
-        JSValue result = context.eval("(new String('hello world')).slice(0, 5);");
-        assertStringValue(result, "hello");
+        assertEvalString("(new String('hello world')).slice(0, 5);", "hello");
     }
 
     @Test
     public void testStringObjectToLowerCase() {
-        JSValue result = context.eval("(new String('HELLO')).toLowerCase();");
-        assertStringValue(result, "hello");
+        assertEvalString("(new String('HELLO')).toLowerCase();", "hello");
     }
 
     @Test
     public void testStringObjectToString() {
-        JSValue result1 = context.eval("(new String('hello')).toString();");
-        assertStringValue(result1, "hello");
+        assertEvalString("(new String('hello')).toString();", "hello");
 
-        JSValue result2 = context.eval("(new String('world')).toString();");
-        assertStringValue(result2, "world");
+        assertEvalString("(new String('world')).toString();", "world");
 
-        JSValue result3 = context.eval("(new String('')).toString();");
-        assertStringValue(result3, "");
+        assertEvalString("(new String('')).toString();", "");
     }
 
     @Test
     public void testStringObjectToUpperCase() {
-        JSValue result = context.eval("(new String('hello')).toUpperCase();");
-        assertStringValue(result, "HELLO");
+        assertEvalString("(new String('hello')).toUpperCase();", "HELLO");
     }
 
     @Test
     public void testStringObjectTypeof() {
-        JSValue result = context.eval("typeof new String('hello');");
-        assertStringValue(result, "object");
+        assertEvalString("typeof new String('hello');", "object");
     }
 
     @Test
@@ -248,45 +218,34 @@ public class StringConstructorTest extends BaseJavetTest {
     @Test
     public void testStringRaw() {
         // Test basic usage with template object
-        JSValue result1 = context.eval("String.raw({ raw: ['Hello', ' ', 'World'] }, 'beautiful');");
-        assertStringValue(result1, "Hellobeautiful World");
+        assertEvalString("String.raw({ raw: ['Hello', ' ', 'World'] }, 'beautiful');", "Hellobeautiful World");
 
         // Test with template object containing escape sequences
         // In JavaScript string literals, '\\n' becomes a newline character, not the literal \n
-        JSValue result2 = context.eval("String.raw({ raw: ['Hello\\nWorld'] });");
-        assertStringValue(result2, "Hello\nWorld");
+        assertEvalString("String.raw({ raw: ['Hello\\nWorld'] });", "Hello\nWorld");
 
-        JSValue result3 = context.eval("String.raw({ raw: ['Line 1\\n', '\\tTabbed'] }, 'Line 2');");
-        assertStringValue(result3, "Line 1\nLine 2\tTabbed");
+        assertEvalString("String.raw({ raw: ['Line 1\\n', '\\tTabbed'] }, 'Line 2');", "Line 1\nLine 2\tTabbed");
 
         // Test with substitutions
-        JSValue result4 = context.eval("String.raw({ raw: ['Hello ', '!'] }, 'World');");
-        assertStringValue(result4, "Hello World!");
+        assertEvalString("String.raw({ raw: ['Hello ', '!'] }, 'World');", "Hello World!");
 
-        JSValue result5 = context.eval("String.raw({ raw: ['', '+', '=', ''] }, 1, 2, 3);");
-        assertStringValue(result5, "1+2=3");
+        assertEvalString("String.raw({ raw: ['', '+', '=', ''] }, 1, 2, 3);", "1+2=3");
 
         // Test with empty raw array
-        JSValue result6 = context.eval("String.raw({ raw: [] });");
-        assertStringValue(result6, "");
+        assertEvalString("String.raw({ raw: [] });", "");
 
         // Test with single element
-        JSValue result7 = context.eval("String.raw({ raw: ['Hello'] });");
-        assertStringValue(result7, "Hello");
+        assertEvalString("String.raw({ raw: ['Hello'] });", "Hello");
 
         // Test error cases
-        JSValue error1 = context.eval("try { String.raw(); 'no error'; } catch(e) { e.name; }");
-        assertStringValue(error1, "TypeError");
+        assertEvalString("try { String.raw(); 'no error'; } catch(e) { e.name; }", "TypeError");
 
-        JSValue error2 = context.eval("try { String.raw(null); 'no error'; } catch(e) { e.name; }");
-        assertStringValue(error2, "TypeError");
+        assertEvalString("try { String.raw(null); 'no error'; } catch(e) { e.name; }", "TypeError");
 
-        JSValue error3 = context.eval("try { String.raw({}); 'no error'; } catch(e) { e.name; }");
-        assertStringValue(error3, "TypeError");
+        assertEvalString("try { String.raw({}); 'no error'; } catch(e) { e.name; }", "TypeError");
 
         // Test with unicode escape sequences in raw strings
-        JSValue result8 = context.eval("String.raw({ raw: ['\\u4E2D\\u6587'] });");
-        assertStringValue(result8, "中文");
+        assertEvalString("String.raw({ raw: ['\\u4E2D\\u6587'] });", "中文");
 
         assertStringWithJavet("String.raw({ raw: ['Hello', ' ', 'World'] }, 'beautiful')");
     }
@@ -314,16 +273,13 @@ public class StringConstructorTest extends BaseJavetTest {
     @Test
     public void testTaggedTemplateLiterals() {
         // Test String.raw with template literal
-        JSValue result1 = context.eval("String.raw`Hello\nWorld`");
-        assertStringValue(result1, "Hello\nWorld");
+        assertEvalString("String.raw`Hello\nWorld`", "Hello\nWorld");
 
         // Test String.raw with expressions
-        JSValue result2 = context.eval("String.raw`Hello ${'beautiful'} World`");
-        assertStringValue(result2, "Hello beautiful World");
+        assertEvalString("String.raw`Hello ${'beautiful'} World`", "Hello beautiful World");
 
         // Test String.raw with multiple expressions
-        JSValue result3 = context.eval("String.raw`${1}+${2}=${3}`");
-        assertStringValue(result3, "1+2=3");
+        assertEvalString("String.raw`${1}+${2}=${3}`", "1+2=3");
 
         assertStringWithJavet("String.raw`Hello\nWorld`", "String.raw`Value: ${42}`");
     }
@@ -331,28 +287,22 @@ public class StringConstructorTest extends BaseJavetTest {
     @Test
     public void testTemplateLiterals() {
         // Test basic template literal without expressions
-        JSValue result1 = context.eval("`hello world`");
-        assertStringValue(result1, "hello world");
+        assertEvalString("`hello world`", "hello world");
 
         // Test template literal with single expression
-        JSValue result2 = context.eval("const name = 'Alice'; `Hello ${name}!`");
-        assertStringValue(result2, "Hello Alice!");
+        assertEvalString("const name = 'Alice'; `Hello ${name}!`", "Hello Alice!");
 
         // Test template literal with multiple expressions
-        JSValue result3 = context.eval("`${1} + ${2} = ${1 + 2}`");
-        assertStringValue(result3, "1 + 2 = 3");
+        assertEvalString("`${1} + ${2} = ${1 + 2}`", "1 + 2 = 3");
 
         // Test template literal with expressions and text
-        JSValue result4 = context.eval("const x = 10; const y = 20; `x=${x}, y=${y}, sum=${x+y}`");
-        assertStringValue(result4, "x=10, y=20, sum=30");
+        assertEvalString("const x = 10; const y = 20; `x=${x}, y=${y}, sum=${x+y}`", "x=10, y=20, sum=30");
 
         // Test empty template literal
-        JSValue result5 = context.eval("``");
-        assertStringValue(result5, "");
+        assertEvalString("``", "");
 
         // Test template literal with newlines
-        JSValue result6 = context.eval("`line1\\nline2`");
-        assertStringValue(result6, "line1\nline2");
+        assertEvalString("`line1\\nline2`", "line1\nline2");
 
         assertStringWithJavet("`Hello ${'World'}!`");
     }

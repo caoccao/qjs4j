@@ -179,7 +179,7 @@ public final class JSBytecodeFunction extends JSFunction {
 
         // OrdinaryCallBindThis: in non-strict mode, coerce this value
         if (!strict && !(thisArg instanceof JSObject)) {
-            if (thisArg instanceof JSUndefined || thisArg instanceof JSNull) {
+            if (JSTypeChecking.isNullish(thisArg)) {
                 thisArg = executionContext.getGlobalObject();
             } else {
                 // Auto-box primitives to wrapper objects (String, Number, Boolean, etc.)

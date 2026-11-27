@@ -48,7 +48,7 @@ public class JSArrayStorageTest extends BaseJavetTest {
         JSValue reached = context
                 .eval("var d = []; d[20000] = 'far'; for (var i = 0; i < 20001; i++) d[i] = d[i] || i; d");
         assertThat(sparseOf(reached)).isNull();
-        assertThat(context.eval("d[20000] + ':' + d.length + ':' + d[19999]").toString()).isEqualTo("far:20001:19999");
+        assertEvalText("d[20000] + ':' + d.length + ':' + d[19999]", "far:20001:19999");
     }
 
     @Test
@@ -67,8 +67,7 @@ public class JSArrayStorageTest extends BaseJavetTest {
         context.eval("var t = [1, 2]; t[1000000] = 'far'; var u = []; u[1000000] = 'only'");
         ((JSArray) context.getGlobalObject().get(PropertyKey.fromString("t"))).shift();
         ((JSArray) context.getGlobalObject().get(PropertyKey.fromString("u"))).shift();
-        assertThat(context.eval("[t[999999], t.length, u[999999], u.length].join()").toString())
-                .isEqualTo("far,1000000,only,1000000");
+        assertEvalText("[t[999999], t.length, u[999999], u.length].join()", "far,1000000,only,1000000");
         JSArray single = (JSArray) context.eval("['only']");
         assertThat(single.shift().toJavaObject()).isEqualTo("only");
         assertThat(single.getLength()).isZero();

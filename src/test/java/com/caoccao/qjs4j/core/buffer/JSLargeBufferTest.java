@@ -109,8 +109,7 @@ class JSLargeBufferTest extends BaseJavetTest {
                  Atomics.load(a,i),Atomics.wait(a,i,999,0),Atomics.notify(a,i)];
                 b.grow(n+64);log.push(a.length,a[i],new Uint8Array(b.slice(n,n+4)).join(','));
                 return JSON.stringify(log);})()
-                """);
-        assertStringWithJavet("""
+                """, """
                 (()=>{const b=new SharedArrayBuffer(2**31+64),a=new Int8Array(b,2**31,4);
                 Atomics.store(a,1,7);return [String(Atomics.add(a,1,2)),String(Atomics.load(a,1))].join(',');})()
                 """, """
@@ -221,8 +220,7 @@ class JSLargeBufferTest extends BaseJavetTest {
                 (()=>{const b=new ArrayBuffer(2**31+64),a=new BigUint64Array(b,2**31,4);
                 a[0]=123n;a[3]=7n;return JSON.stringify([a.byteOffset,a.byteLength,a.length,
                   String(a[0]),String(a.at(-1)),a.subarray(1).byteOffset]);})()
-                """);
-        assertStringWithJavet("""
+                """, """
                 (()=>{const b=new ArrayBuffer(2**31+32),d=new DataView(b);
                 for(const p of [2**20-3,2**31-3])d.setFloat64(p,Math.PI,false);
                 return JSON.stringify([d.getFloat64(2**20-3,false),d.getFloat64(2**31-3,false)]);})()

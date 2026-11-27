@@ -69,8 +69,8 @@ public class JSArrayBufferDirectApiTest extends BaseJavetTest {
             assertThat(runtime.getMemoryAccounting().getReservedBytes())
                     .as("a block that never allocated must not stay charged").isEqualTo(chargedBefore);
             // The successful path still binds its reservation, so the two are not confusable.
-            JSByteBuffer allocated = buffer.accountBlock(context, 2048, () -> JSByteBuffer.allocate(2048));
-            assertThat(allocated.capacity()).isEqualTo(2048);
+            assertThat(buffer.accountBlock(context, 2048, () -> JSByteBuffer.allocate(2048)).capacity())
+                    .isEqualTo(2048);
             assertThat(runtime.getMemoryAccounting().getReservedBytes()).isEqualTo(1024 + 2048);
         }
     }
@@ -133,8 +133,7 @@ public class JSArrayBufferDirectApiTest extends BaseJavetTest {
                 (function () {
                   const b = new ArrayBuffer(8);
                   try { b.resize(4); return 'NO ERROR' } catch (e) { return e.name }
-                })()""");
-        assertStringWithJavet("""
+                })()""", """
                 (function () {
                   const r = new ArrayBuffer(8, { maxByteLength: 16 });
                   try { r.resize(32); return 'NO ERROR' } catch (e) { return e.name }
@@ -202,8 +201,7 @@ public class JSArrayBufferDirectApiTest extends BaseJavetTest {
     @Test
     public void testTransferStillWorksForAValidLength() {
         JSArrayBuffer buffer = fixedBuffer(8);
-        JSArrayBuffer transferred = buffer.transfer(context, 4);
-        assertThat(transferred.getByteLength()).isEqualTo(4);
+        assertThat(buffer.transfer(context, 4).getByteLength()).isEqualTo(4);
         assertThat(buffer.isDetached()).isTrue();
     }
 
@@ -224,11 +222,9 @@ public class JSArrayBufferDirectApiTest extends BaseJavetTest {
 
     @Test
     public void testTransferToZeroLengthCopiesNothing() {
-        JSArrayBuffer buffer = fixedBuffer(8);
-        assertThat(buffer.transfer(context, 0).getByteLength()).isZero();
+        assertThat(fixedBuffer(8).transfer(context, 0).getByteLength()).isZero();
 
-        JSArrayBuffer other = fixedBuffer(8);
-        assertThat(other.transferToFixedLength(context, 0).getByteLength()).isZero();
+        assertThat(fixedBuffer(8).transferToFixedLength(context, 0).getByteLength()).isZero();
     }
 
     @Test
@@ -240,10 +236,8 @@ public class JSArrayBufferDirectApiTest extends BaseJavetTest {
 
     @Test
     public void testTransferWithTheDefaultLengthKeepsTheCurrentSize() {
-        JSArrayBuffer buffer = fixedBuffer(8);
-        assertThat(buffer.transfer(context, -1).getByteLength()).isEqualTo(8);
+        assertThat(fixedBuffer(8).transfer(context, -1).getByteLength()).isEqualTo(8);
 
-        JSArrayBuffer other = fixedBuffer(8);
-        assertThat(other.transferToFixedLength(context, -1).getByteLength()).isEqualTo(8);
+        assertThat(fixedBuffer(8).transferToFixedLength(context, -1).getByteLength()).isEqualTo(8);
     }
 }

@@ -138,8 +138,7 @@ public class JSONObjectTest extends BaseJavetTest {
         assertStringValue(parse("\"hello world\""), "hello world");
         assertStringValue(parse("\"hello\\nworld\""), "hello\nworld");
 
-        JSArray emptyArr = parse("[]").asArray().orElseThrow();
-        assertThat(emptyArr.getLength()).isEqualTo(0);
+        assertThat(parse("[]").asArray().orElseThrow().getLength()).isEqualTo(0);
 
         JSArray arr = parse("[1, \"two\", true]").asArray().orElseThrow();
         assertThat(arr.getLength()).isEqualTo(3);
@@ -154,8 +153,7 @@ public class JSONObjectTest extends BaseJavetTest {
         assertNumberValue(obj.get("value"), 123.0);
 
         obj = parse("{\"data\": {\"nested\": true}}").asObject().orElseThrow();
-        JSObject data = obj.get("data").asObject().orElseThrow();
-        assertThat(data.get("nested")).isEqualTo(JSBoolean.TRUE);
+        assertThat(obj.get("data").asObject().orElseThrow().get("nested")).isEqualTo(JSBoolean.TRUE);
 
         obj = parse("  {  \"key\"  :  \"value\"  }  ").asObject().orElseThrow();
         assertStringValue(obj.get("key"), "value");
@@ -361,9 +359,7 @@ public class JSONObjectTest extends BaseJavetTest {
 
         JSValue result = parse(new JSString(json), reviver);
         JSObject obj = result.asObject().orElseThrow();
-        JSObject user = obj.get("user").asObject().orElseThrow();
-
-        assertStringValue(user.get("age"), "25 years");
+        assertStringValue(obj.get("user").asObject().orElseThrow().get("age"), "25 years");
     }
 
     @Test
@@ -1004,9 +1000,7 @@ public class JSONObjectTest extends BaseJavetTest {
         obj.set("toJSON", toJSON);
 
         JSValue result = stringify(obj);
-        String jsonStr = result.asString().map(JSString::value).orElseThrow();
-
-        assertThat(jsonStr).isEqualTo("\"custom\"");
+        assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("\"custom\"");
     }
 
     @Test

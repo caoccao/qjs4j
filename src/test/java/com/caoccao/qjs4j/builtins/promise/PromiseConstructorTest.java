@@ -17,7 +17,6 @@
 package com.caoccao.qjs4j.builtins.promise;
 
 import com.caoccao.qjs4j.BaseJavetTest;
-import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.core.promise.JSPromise;
 import org.junit.jupiter.api.Test;
 
@@ -31,8 +30,7 @@ public class PromiseConstructorTest extends BaseJavetTest {
     @Test
     public void testArrayHasSymbolIterator() {
         // First, verify that arrays have Symbol.iterator
-        JSValue result = context.eval("const arr = [1,2,3]; typeof arr[Symbol.iterator]");
-        assertStringValue(result, "function");
+        assertEvalString("const arr = [1,2,3]; typeof arr[Symbol.iterator]", "function");
     }
 
     @Test
@@ -149,16 +147,14 @@ public class PromiseConstructorTest extends BaseJavetTest {
                 Promise.resolve(42)
                     .finally(0)
                     .then(v => v === 42)
-                """);
-        assertBooleanWithJavet("""
+                """, """
                 Promise.reject('x')
                     .finally(0)
                     .then(
                         () => false,
                         e => e === 'x'
                     )
-                """);
-        assertBooleanWithJavet("""
+                """, """
                 Promise.resolve('ok')
                     .finally(() => Promise.reject('boom'))
                     .then(
@@ -225,7 +221,7 @@ public class PromiseConstructorTest extends BaseJavetTest {
 
     @Test
     public void testPromiseTryQuickJSExtension() {
-        assertThat(context.eval("typeof Promise.try").toJavaObject()).isEqualTo("function");
+        assertEvalJavaValue("typeof Promise.try", "function");
         JSPromise fulfilledPromise = (JSPromise) context.eval("Promise.try(x => x + 1, 41)");
         assertThat(awaitPromise(fulfilledPromise)).isTrue();
         assertThat(fulfilledPromise.getResult().toJavaObject()).isEqualTo(42.0);
@@ -259,8 +255,7 @@ public class PromiseConstructorTest extends BaseJavetTest {
                 Promise.withResolvers()
                     .promise
                     .constructor === Promise
-                """);
-        assertBooleanWithJavet("""
+                """, """
                 (() => {
                   const cap = Promise.withResolvers();
                   cap.resolve(Promise.resolve(1));

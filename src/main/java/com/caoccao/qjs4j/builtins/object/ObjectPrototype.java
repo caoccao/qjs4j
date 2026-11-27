@@ -327,7 +327,7 @@ public final class ObjectPrototype {
     private static JSValue enumerableProperties(JSContext context, JSValue[] args, Enumeration kind) {
         JSValue arg = JSValue.argumentOrUndefined(args, 0);
 
-        if (arg instanceof JSNull || arg instanceof JSUndefined) {
+        if (JSTypeChecking.isNullish(arg)) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
@@ -498,7 +498,7 @@ public final class ObjectPrototype {
      */
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
         // QuickJS semantics: Invoke(this, "toString")
-        if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
+        if (JSTypeChecking.isNullish(thisArg)) {
             return context.throwTypeError("Object.prototype.toLocaleString called on null or undefined");
         }
         JSObject obj = JSTypeConversions.toObject(context, thisArg);

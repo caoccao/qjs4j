@@ -43,11 +43,11 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
         // Try statements produce a value on the stack (the try/catch result).
         // When eval_ret_idx is active, store the completion value first.
         if (compilerContext.evalReturnLocalIndex >= 0) {
-            compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            emitter.emitOpcode(Opcode.DUP);
+            emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
+            emitter.emitOpcode(Opcode.DROP);
         } else if (!compilerContext.isLastInProgram) {
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            emitter.emitOpcode(Opcode.DROP);
         }
     }
 
@@ -63,9 +63,9 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
         int savedEvalReturnLocalIndex = -1;
         if (compilerContext.evalReturnLocalIndex >= 0) {
             savedEvalReturnLocalIndex = compilerContext.declareTemporary("#finally_eval_ret_");
-            compilerContext.emitter.emitGetLocal(compilerContext.evalReturnLocalIndex);
-            compilerContext.emitter.emitPutLocal(savedEvalReturnLocalIndex);
-            compilerContext.emitter.emitUndefinedLocal(compilerContext.evalReturnLocalIndex);
+            emitter.emitGetLocal(compilerContext.evalReturnLocalIndex);
+            emitter.emitPutLocal(savedEvalReturnLocalIndex);
+            emitter.emitUndefinedLocal(compilerContext.evalReturnLocalIndex);
         }
         try {
             for (Statement stmt : block.getBody()) {
@@ -75,8 +75,8 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
             compilerContext.finallySubroutineDepth--;
         }
         if (savedEvalReturnLocalIndex >= 0) {
-            compilerContext.emitter.emitGetLocal(savedEvalReturnLocalIndex);
-            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
+            emitter.emitGetLocal(savedEvalReturnLocalIndex);
+            emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
         }
         compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.scopeManager.exitScope();
@@ -99,19 +99,19 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
     private void compileTryCatchWithoutFinally(TryStatement tryStmt) {
         int catchJump = -1;
         if (tryStmt.getHandler() != null) {
-            catchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
+            catchJump = emitter.emitJump(Opcode.CATCH);
         }
 
         compileTryBlock(tryStmt.getBlock());
 
         if (tryStmt.getHandler() != null) {
-            compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+            emitter.emitOpcode(Opcode.NIP_CATCH);
         }
 
-        int jumpOverCatch = compilerContext.emitter.emitJump(Opcode.GOTO);
+        int jumpOverCatch = emitter.emitJump(Opcode.GOTO);
 
         if (tryStmt.getHandler() != null) {
-            compilerContext.emitter.patchJumpToHere(catchJump);
+            emitter.patchJumpToHere(catchJump);
             TryStatement.CatchClause handler = tryStmt.getHandler();
 
             if (handler.getParam() != null) {
@@ -123,7 +123,7 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
             }
         }
 
-        compilerContext.emitter.patchJumpToHere(jumpOverCatch);
+        emitter.patchJumpToHere(jumpOverCatch);
     }
 
     private void compileTryFinallyBlock(BlockStatement block) {
@@ -153,13 +153,13 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
             // The shared completion local handles every statement kind with net-zero stack effect.
             // Leave exactly one result above the catch marker, including when the last statement
             // is another try. A missing result here would make NIP_CATCH corrupt the handler stack.
-            compilerContext.emitter.emitUndefinedLocal(compilerContext.evalReturnLocalIndex);
+            emitter.emitUndefinedLocal(compilerContext.evalReturnLocalIndex);
             for (Statement statement : body) {
                 if (!(statement instanceof FunctionDeclaration)) {
                     compilerContext.statementCompiler.compile(statement);
                 }
             }
-            compilerContext.emitter.emitGetLocal(compilerContext.evalReturnLocalIndex);
+            emitter.emitGetLocal(compilerContext.evalReturnLocalIndex);
         } else {
             // Phase 3: compile non-function statements and preserve block completion value.
             int effectiveLastIndex = -1;
@@ -178,19 +178,19 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
                 boolean isLast = index == effectiveLastIndex;
 
                 if (statement instanceof ExpressionStatement expressionStatement) {
-                    compilerContext.emitter.emitSourcePosition(statement.getLocation());
+                    emitter.emitSourcePosition(statement.getLocation());
                     compilerContext.expressionCompiler.compile(expressionStatement.getExpression());
                     if (compilerContext.evalReturnLocalIndex >= 0) {
-                        compilerContext.emitter.emitOpcode(Opcode.DUP);
-                        compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
+                        emitter.emitOpcode(Opcode.DUP);
+                        emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
                     }
                     if (!isLast) {
-                        compilerContext.emitter.emitOpcode(Opcode.DROP);
+                        emitter.emitOpcode(Opcode.DROP);
                     }
                 } else if (statement instanceof TryStatement tryStatement) {
                     boolean saved = compilerContext.isLastInProgram;
                     compilerContext.isLastInProgram = isLast;
-                    compilerContext.emitter.emitSourcePosition(statement.getLocation());
+                    emitter.emitSourcePosition(statement.getLocation());
                     compile(tryStatement);
                     compilerContext.isLastInProgram = saved;
                 } else {
@@ -221,80 +221,80 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
         int finallyCatchJump = -1;
         int catchFromTryJump;
         if (tryStmt.getHandler() != null) {
-            finallyCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
-            catchFromTryJump = compilerContext.emitter.emitJump(Opcode.CATCH);
+            finallyCatchJump = emitter.emitJump(Opcode.CATCH);
+            catchFromTryJump = emitter.emitJump(Opcode.CATCH);
         } else {
-            catchFromTryJump = compilerContext.emitter.emitJump(Opcode.CATCH);
+            catchFromTryJump = emitter.emitJump(Opcode.CATCH);
         }
 
         compileTryBlock(tryStmt.getBlock());
-        compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+        emitter.emitOpcode(Opcode.NIP_CATCH);
         if (tryStmt.getHandler() != null) {
-            compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+            emitter.emitOpcode(Opcode.NIP_CATCH);
         }
-        int tryNormalGosub = compilerContext.emitter.emitJump(Opcode.GOSUB);
+        int tryNormalGosub = emitter.emitJump(Opcode.GOSUB);
         List<Integer> jumpsToEnd = new ArrayList<>();
-        jumpsToEnd.add(compilerContext.emitter.emitJump(Opcode.GOTO));
+        jumpsToEnd.add(emitter.emitJump(Opcode.GOTO));
 
         int catchNormalGosub = -1;
         int catchExceptionGosub = -1;
         int finallyExceptionGosub = -1;
 
         if (tryStmt.getHandler() != null) {
-            compilerContext.emitter.patchJumpToHere(catchFromTryJump);
+            emitter.patchJumpToHere(catchFromTryJump);
 
             TryStatement.CatchClause handler = tryStmt.getHandler();
             if (handler.getParam() != null) {
                 enterCatchScope(handler.getParam());
             } else {
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
+                emitter.emitOpcode(Opcode.DROP);
             }
-            int catchBodyCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
+            int catchBodyCatchJump = emitter.emitJump(Opcode.CATCH);
             compileTryFinallyBlock(handler.getBody());
-            compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
-            compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
-            catchNormalGosub = compilerContext.emitter.emitJump(Opcode.GOSUB);
-            jumpsToEnd.add(compilerContext.emitter.emitJump(Opcode.GOTO));
-            compilerContext.emitter.patchJumpToHere(catchBodyCatchJump);
-            compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
-            catchExceptionGosub = compilerContext.emitter.emitJump(Opcode.GOSUB);
-            compilerContext.emitter.emitOpcode(Opcode.THROW);
+            emitter.emitOpcode(Opcode.NIP_CATCH);
+            emitter.emitOpcode(Opcode.NIP_CATCH);
+            catchNormalGosub = emitter.emitJump(Opcode.GOSUB);
+            jumpsToEnd.add(emitter.emitJump(Opcode.GOTO));
+            emitter.patchJumpToHere(catchBodyCatchJump);
+            emitter.emitOpcode(Opcode.NIP_CATCH);
+            catchExceptionGosub = emitter.emitJump(Opcode.GOSUB);
+            emitter.emitOpcode(Opcode.THROW);
             if (handler.getParam() != null) {
                 exitCatchScope();
             }
-            compilerContext.emitter.patchJumpToHere(finallyCatchJump);
-            compilerContext.emitter.markCatchAsFinally(finallyCatchJump);
-            finallyExceptionGosub = compilerContext.emitter.emitJump(Opcode.GOSUB);
-            compilerContext.emitter.emitOpcode(Opcode.THROW);
+            emitter.patchJumpToHere(finallyCatchJump);
+            emitter.markCatchAsFinally(finallyCatchJump);
+            finallyExceptionGosub = emitter.emitJump(Opcode.GOSUB);
+            emitter.emitOpcode(Opcode.THROW);
         } else {
-            compilerContext.emitter.patchJumpToHere(catchFromTryJump);
-            compilerContext.emitter.markCatchAsFinally(catchFromTryJump);
-            finallyExceptionGosub = compilerContext.emitter.emitJump(Opcode.GOSUB);
-            compilerContext.emitter.emitOpcode(Opcode.THROW);
+            emitter.patchJumpToHere(catchFromTryJump);
+            emitter.markCatchAsFinally(catchFromTryJump);
+            finallyExceptionGosub = emitter.emitJump(Opcode.GOSUB);
+            emitter.emitOpcode(Opcode.THROW);
         }
 
         compilerContext.activeFinallyGosubPatches.pop();
         compilerContext.activeFinallyNipCatchCounts.pop();
 
-        int finallyOffset = compilerContext.emitter.currentOffset();
+        int finallyOffset = emitter.currentOffset();
         compileFinallyBlockBody(tryStmt.getFinalizer());
-        compilerContext.emitter.emitOpcode(Opcode.RET);
+        emitter.emitOpcode(Opcode.RET);
 
-        compilerContext.emitter.patchJump(tryNormalGosub, finallyOffset);
+        emitter.patchJump(tryNormalGosub, finallyOffset);
         if (catchNormalGosub >= 0) {
-            compilerContext.emitter.patchJump(catchNormalGosub, finallyOffset);
+            emitter.patchJump(catchNormalGosub, finallyOffset);
         }
         if (catchExceptionGosub >= 0) {
-            compilerContext.emitter.patchJump(catchExceptionGosub, finallyOffset);
+            emitter.patchJump(catchExceptionGosub, finallyOffset);
         }
         if (finallyExceptionGosub >= 0) {
-            compilerContext.emitter.patchJump(finallyExceptionGosub, finallyOffset);
+            emitter.patchJump(finallyExceptionGosub, finallyOffset);
         }
-        compilerContext.emitter.patchJumps(gosubPatches, finallyOffset);
+        emitter.patchJumps(gosubPatches, finallyOffset);
 
-        int endOffset = compilerContext.emitter.currentOffset();
+        int endOffset = emitter.currentOffset();
         for (int jumpToEnd : jumpsToEnd) {
-            compilerContext.emitter.patchJump(jumpToEnd, endOffset);
+            emitter.patchJump(jumpToEnd, endOffset);
         }
     }
 
@@ -308,16 +308,16 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
         // declarePatternVariables has just declared every one of these names in the catch scope.
         for (String name : names) {
             int localIndex = compilerContext.scopeManager.currentScope().getLocal(name);
-            compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+            emitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, localIndex);
             compilerContext.tdzLocals.add(name);
         }
     }
 
     private void emitUndefinedCompletion() {
-        compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+        emitter.emitOpcode(Opcode.UNDEFINED);
         if (compilerContext.evalReturnLocalIndex >= 0) {
-            compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
+            emitter.emitOpcode(Opcode.DUP);
+            emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
         }
     }
 
@@ -331,8 +331,8 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
             compilerContext.scopeManager.currentScope().markSimpleCatchParam(id.getName());
             // A new binding on every entry, so a closure from an earlier pass through this catch, in a loop,
             // keeps its own exception.
-            compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
-            compilerContext.emitter.emitPutLocal(localIndex);
+            emitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+            emitter.emitPutLocal(localIndex);
         } else {
             compilerContext.patternCompiler.declarePatternVariables(catchParam);
             emitFreshCatchBindings(catchParam);

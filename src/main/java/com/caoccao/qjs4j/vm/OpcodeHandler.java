@@ -41,9 +41,9 @@ public final class OpcodeHandler {
 
     static void handleArrayFrom(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int count = executionContext.bytecode.readU16(pc + 1);
+        int count = executionContext.operandU16();
         JSArray array = executionContext.virtualMachine.context.createJSArray();
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
 
         JSValue[] elements = new JSValue[count];
@@ -70,8 +70,8 @@ public final class OpcodeHandler {
 
     static void handleCopyDataProperties(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int mask = executionContext.bytecode.readU8(pc + 1);
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        int mask = executionContext.operandU8();
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue targetValue = (JSValue) stack[sp - 1 - (mask & 3)];
         JSValue sourceValue = (JSValue) stack[sp - 1 - ((mask >> 2) & 7)];
@@ -86,7 +86,7 @@ public final class OpcodeHandler {
     }
 
     static void handleDup(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         stack[sp] = stack[sp - 1];
         executionContext.sp = sp + 1;
@@ -94,7 +94,7 @@ public final class OpcodeHandler {
     }
 
     static void handleDup1(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         stack[sp] = stack[sp - 2];
         executionContext.sp = sp + 1;
@@ -102,7 +102,7 @@ public final class OpcodeHandler {
     }
 
     static void handleDup2(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         stack[sp] = stack[sp - 2];
         stack[sp + 1] = stack[sp - 1];
@@ -112,7 +112,7 @@ public final class OpcodeHandler {
 
     // a b c -> a b c a b c
     static void handleDup3(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         stack[sp] = stack[sp - 3];
         stack[sp + 1] = stack[sp - 2];
@@ -131,7 +131,7 @@ public final class OpcodeHandler {
 
     static void handleGosub(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int offset = executionContext.bytecode.readU32(pc + 1);
+        int offset = executionContext.operandI32();
         // Push return address (instruction after this GOSUB) onto the stack
         int returnAddress = pc + op.getSize();
         executionContext.pushStackValue(new JSInternalValue(returnAddress));
@@ -141,7 +141,7 @@ public final class OpcodeHandler {
 
     static void handleGoto(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int offset = executionContext.bytecode.readU32(pc + 1);
+        int offset = executionContext.operandI32();
         executionContext.pc = pc + op.getSize() + offset;
     }
 
@@ -177,9 +177,7 @@ public final class OpcodeHandler {
         JSValue right = operandStack.pop();
         JSValue left = operandStack.pop();
         if (!(right instanceof JSObject jsObj)) {
-            executionContext.raiseTypeError("invalid 'in' operand");
-            operandStack.push(JSUndefined.INSTANCE);
-            executionContext.finishStackOpcode(op);
+            executionContext.failStackTypeError(op, "invalid 'in' operand");
             return;
         }
         PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, left);
@@ -215,9 +213,7 @@ public final class OpcodeHandler {
 
         // Per ECMAScript spec, right must be an object
         if (!(right instanceof JSObject constructor)) {
-            executionContext.raiseTypeError("Right-hand side of instanceof is not an object");
-            operandStack.push(JSUndefined.INSTANCE);
-            executionContext.finishStackOpcode(op);
+            executionContext.failStackTypeError(op, "Right-hand side of instanceof is not an object");
             return;
         }
 
@@ -229,9 +225,7 @@ public final class OpcodeHandler {
         }
         if (!(hasInstanceMethod instanceof JSUndefined) && !(hasInstanceMethod instanceof JSNull)) {
             if (!(hasInstanceMethod instanceof JSFunction hasInstanceFunction)) {
-                executionContext.raiseTypeError("@@hasInstance is not callable");
-                operandStack.push(JSUndefined.INSTANCE);
-                executionContext.finishStackOpcode(op);
+                executionContext.failStackTypeError(op, "@@hasInstance is not callable");
                 return;
             }
             JSValue result = hasInstanceFunction.call(executionContext.virtualMachine.context, right,
@@ -248,9 +242,7 @@ public final class OpcodeHandler {
                 callable = true;
             }
             if (!callable) {
-                executionContext.raiseTypeError("Right-hand side of instanceof is not callable");
-                operandStack.push(JSUndefined.INSTANCE);
-                executionContext.finishStackOpcode(op);
+                executionContext.failStackTypeError(op, "Right-hand side of instanceof is not callable");
                 return;
             }
             try {
@@ -283,7 +275,7 @@ public final class OpcodeHandler {
 
     static void handleIsNull(Opcode op, ExecutionContext executionContext) {
         int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         JSValue value = (JSValue) stack[sp - 1];
         stack[sp - 1] = JSBoolean.valueOf(value.isNull());
         executionContext.advance(op);
@@ -291,7 +283,7 @@ public final class OpcodeHandler {
 
     static void handleIsUndefined(Opcode op, ExecutionContext executionContext) {
         int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         JSValue value = (JSValue) stack[sp - 1];
         stack[sp - 1] = JSBoolean.valueOf(value.isUndefined());
         executionContext.advance(op);
@@ -299,9 +291,9 @@ public final class OpcodeHandler {
 
     static void handleIsUndefinedOrNull(Opcode op, ExecutionContext executionContext) {
         int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         JSValue value = (JSValue) stack[sp - 1];
-        stack[sp - 1] = JSBoolean.valueOf(value instanceof JSNull || value instanceof JSUndefined);
+        stack[sp - 1] = JSBoolean.valueOf(JSTypeChecking.isNullish(value));
         executionContext.advance(op);
     }
 
@@ -314,7 +306,7 @@ public final class OpcodeHandler {
     }
 
     static void handleNip(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         stack[sp - 2] = stack[sp - 1];
         executionContext.sp = sp - 1;
@@ -322,7 +314,7 @@ public final class OpcodeHandler {
     }
 
     static void handleNipCatch(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue returnValue = (JSValue) stack[--sp];
         boolean foundCatchMarker = false;
@@ -356,7 +348,7 @@ public final class OpcodeHandler {
     }
 
     static void handlePerm3(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSStackValue temporaryValue = stack[sp - 3];
         stack[sp - 3] = stack[sp - 2];
@@ -365,7 +357,7 @@ public final class OpcodeHandler {
     }
 
     static void handlePerm4(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSStackValue firstValue = stack[sp - 4];
         stack[sp - 4] = stack[sp - 2];
@@ -375,7 +367,7 @@ public final class OpcodeHandler {
     }
 
     static void handlePerm5(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSStackValue firstValue = stack[sp - 5];
         stack[sp - 5] = stack[sp - 2];
@@ -387,7 +379,7 @@ public final class OpcodeHandler {
 
     static void handlePushAtomValue(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
+        int atomIndex = executionContext.operandI32();
         executionContext.push(new JSString(executionContext.bytecode.getAtoms()[atomIndex]));
         executionContext.pc = pc + op.getSize();
     }
@@ -419,7 +411,7 @@ public final class OpcodeHandler {
     }
 
     static void handlePushEmptyString(Opcode op, ExecutionContext executionContext) {
-        executionContext.push(new JSString(""));
+        executionContext.push(JSString.EMPTY);
         executionContext.pc += 1;
     }
 
@@ -436,7 +428,7 @@ public final class OpcodeHandler {
 
     static void handlePushI32(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int intValue = executionContext.bytecode.readU32(pc + 1);
+        int intValue = executionContext.operandI32();
         executionContext.push(JSNumber.of(intValue));
         executionContext.pc = pc + 5;
     }
@@ -491,7 +483,7 @@ public final class OpcodeHandler {
 
     static void handleRest(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int firstRestArgumentIndex = executionContext.bytecode.readU16(pc + 1);
+        int firstRestArgumentIndex = executionContext.operandU16();
         JSValue[] functionArguments = executionContext.frame.getArguments();
         int argumentCount = functionArguments.length;
         int restStartIndex = Math.min(firstRestArgumentIndex, argumentCount);
@@ -541,7 +533,7 @@ public final class OpcodeHandler {
     }
 
     static void handleRot3r(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSStackValue thirdValue = stack[sp - 1];
         stack[sp - 1] = stack[sp - 2];
@@ -562,14 +554,14 @@ public final class OpcodeHandler {
 
     static void handleSpecialObject(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int objectType = executionContext.bytecode.readU8(pc + 1);
+        int objectType = executionContext.operandU8();
         JSValue specialObject = executionContext.virtualMachine.createSpecialObject(objectType, executionContext.frame);
         executionContext.push(specialObject);
         executionContext.pc = pc + op.getSize();
     }
 
     static void handleSwap(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSStackValue temporaryValue = stack[sp - 1];
         stack[sp - 1] = stack[sp - 2];
@@ -578,7 +570,7 @@ public final class OpcodeHandler {
     }
 
     static void handleSwap2(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSStackValue firstPairLeft = stack[sp - 4];
         JSStackValue firstPairRight = stack[sp - 3];
@@ -598,7 +590,7 @@ public final class OpcodeHandler {
 
     static void handleThrowError(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int throwAtom = executionContext.bytecode.readU32(pc + 1);
+        int throwAtom = executionContext.operandI32();
         int throwType = executionContext.bytecode.readU8(pc + 5);
         String throwName = executionContext.bytecode.getAtoms()[throwAtom];
         switch (throwType) {
@@ -621,7 +613,7 @@ public final class OpcodeHandler {
     static void handleToObject(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         JSValue value = (JSValue) stack[sp - 1];
         JSObject object = executionContext.virtualMachine.toObject(value);
         if (object == null) {
@@ -638,7 +630,7 @@ public final class OpcodeHandler {
 
     static void handleToPropKey(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue rawKey = (JSValue) stack[--sp];
         try {
@@ -662,7 +654,7 @@ public final class OpcodeHandler {
 
     static void handleTypeofIsFunction(Opcode op, ExecutionContext executionContext) {
         int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         JSValue value = (JSValue) stack[sp - 1];
         stack[sp - 1] = JSBoolean.valueOf(JSKeyword.FUNCTION.equals(JSTypeChecking.typeof(value)));
         executionContext.advance(op);
@@ -670,7 +662,7 @@ public final class OpcodeHandler {
 
     static void handleTypeofIsUndefined(Opcode op, ExecutionContext executionContext) {
         int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         JSValue value = (JSValue) stack[sp - 1];
         stack[sp - 1] = JSBoolean.valueOf(JSKeyword.UNDEFINED.equals(JSTypeChecking.typeof(value)));
         executionContext.advance(op);
@@ -683,7 +675,7 @@ public final class OpcodeHandler {
 
     /** Duplicate the top value below the last depth operands. */
     private static void insertTop(ExecutionContext execution, int depth) {
-        JSStackValue[] stack = execution.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = execution.stack();
         int first = execution.sp - depth;
         JSStackValue value = stack[execution.sp - 1];
         System.arraycopy(stack, first, stack, first + 1, depth);
@@ -720,7 +712,7 @@ public final class OpcodeHandler {
 
     private static IdentityHashMap<JSSymbol, JSSymbol> internalGetActivePrivateSymbolRemap(
             ExecutionContext executionContext, int sp) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         for (int i = sp - 1; i >= 0; i--) {
             if (stack[i] instanceof JSBytecodeFunction stackFunction) {
                 IdentityHashMap<JSSymbol, JSSymbol> stackRemap = stackFunction.getClassPrivateSymbolRemap();
@@ -886,7 +878,7 @@ public final class OpcodeHandler {
 
     private static void pushClosure(Opcode op, ExecutionContext executionContext, int functionIndex, boolean bindSelf) {
         int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue functionValue = executionContext.bytecode.getConstants()[functionIndex];
         if (functionValue instanceof JSBytecodeFunction templateFunction) {
@@ -934,7 +926,7 @@ public final class OpcodeHandler {
     }
 
     private static void rotateLeft(ExecutionContext execution, int depth) {
-        JSStackValue[] stack = execution.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = execution.stack();
         int first = execution.sp - depth;
         JSStackValue value = stack[first];
         System.arraycopy(stack, first + 1, stack, first, depth - 1);

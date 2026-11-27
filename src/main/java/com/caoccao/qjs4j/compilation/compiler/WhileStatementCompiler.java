@@ -32,7 +32,7 @@ final class WhileStatementCompiler extends AstNodeCompiler<WhileLoop> {
     void compile(WhileLoop statement) {
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 
-        int loopStart = compilerContext.emitter.currentOffset();
+        int loopStart = emitter.currentOffset();
         LoopContext loop = compilerContext.loopManager.createLoopContext(loopStart,
                 compilerContext.scopeManager.getScopeDepth(), compilerContext.scopeManager.getScopeDepth());
         compilerContext.loopManager.pushLoop(loop);
@@ -41,20 +41,20 @@ final class WhileStatementCompiler extends AstNodeCompiler<WhileLoop> {
         if (testAfterBody) {
             compileBody(statement);
         }
-        int testStart = compilerContext.emitter.currentOffset();
+        int testStart = emitter.currentOffset();
         compilerContext.expressionCompiler.compile(statement.getTest());
-        int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
+        int jumpToEnd = emitter.emitJump(Opcode.IF_FALSE);
         if (!testAfterBody) {
             compileBody(statement);
         }
 
-        compilerContext.emitter.emitGoto(loopStart);
+        emitter.emitGoto(loopStart);
 
-        int loopEnd = compilerContext.emitter.currentOffset();
-        compilerContext.emitter.patchJump(jumpToEnd, loopEnd);
+        int loopEnd = emitter.currentOffset();
+        emitter.patchJump(jumpToEnd, loopEnd);
 
-        compilerContext.emitter.patchJumps(loop.breakPositions, loopEnd);
-        compilerContext.emitter.patchJumps(loop.continuePositions, testStart);
+        emitter.patchJumps(loop.breakPositions, loopEnd);
+        emitter.patchJumps(loop.continuePositions, testStart);
 
         compilerContext.loopManager.popLoop();
     }

@@ -208,15 +208,12 @@ public class JSFloat16ArrayTest extends BaseTest {
         JSFloat16Array array = new JSFloat16Array(context, 10);
 
         // subarray with negative begin
-        JSTypedArray sub1 = array.subarray(-5, 10);
-        assertThat(sub1.getLength()).isEqualTo(5);
+        assertThat(array.subarray(-5, 10).getLength()).isEqualTo(5);
 
         // subarray with negative end
-        JSTypedArray sub2 = array.subarray(0, -2);
-        assertThat(sub2.getLength()).isEqualTo(8);
+        assertThat(array.subarray(0, -2).getLength()).isEqualTo(8);
 
         // subarray with both negative
-        JSTypedArray sub3 = array.subarray(-7, -2);
-        assertThat(sub3.getLength()).isEqualTo(5);
+        assertThat(array.subarray(-7, -2).getLength()).isEqualTo(5);
     }
 }

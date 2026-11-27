@@ -70,7 +70,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
     }
 
     static TemporalRelativeTo parseRelativeToOption(JSContext context, JSValue optionsValue) {
-        if (optionsValue instanceof JSUndefined || optionsValue == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(optionsValue)) {
             return null;
         }
         if (!(optionsValue instanceof JSObject optionsObject)) {
@@ -80,7 +80,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
         if (context.hasPendingException()) {
             return null;
         }
-        if (relativeToValue instanceof JSUndefined || relativeToValue == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(relativeToValue)) {
             return null;
         }
         return parseRelativeToValue(context, relativeToValue);
@@ -130,7 +130,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
         Long second = toOptionalIntegralLong(context, bag.value("second"), 0L);
         JSValue timeZoneValue = bag.value("timeZone");
         JSValue yearValue = bag.value("year");
-        if (yearValue instanceof JSUndefined || yearValue == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(yearValue)) {
             toOptionalIntegralLong(context, bag.value("eraYear"), null);
         }
         Long year = toRequiredIntegralLong(context, yearValue);
@@ -176,12 +176,11 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
             return TemporalError.INVALID_TIME.reject(context);
         }
         IsoDateTime relativeDateTime = isoDate.atTime(relativeTime);
-        if (timeZoneValue instanceof JSUndefined || timeZoneValue == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(timeZoneValue)) {
             return new TemporalRelativeTo(isoDate, relativeTime, null, null, null);
         }
         if (!(timeZoneValue instanceof JSString timeZoneString)) {
-            context.throwTypeError("Temporal error: Time zone must be string.");
-            return null;
+            return context.rejectTypeError("Temporal error: Time zone must be string.");
         }
         String timeZoneText = timeZoneString.value();
         String normalizedTimeZoneId = TemporalTimeZone.parseTimeZoneIdentifierString(context, timeZoneText);
@@ -193,8 +192,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
             try {
                 TemporalTimeZone.resolveTimeZone(normalizedTimeZoneId);
             } catch (DateTimeException invalidTimeZoneException) {
-                context.throwRangeError("Temporal error: Invalid time zone: " + normalizedTimeZoneId);
-                return null;
+                return context.rejectRangeError("Temporal error: Invalid time zone: " + normalizedTimeZoneId);
             }
         }
 
@@ -212,8 +210,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
                     zoneOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(guessedEpochNanoseconds,
                             normalizedTimeZoneId);
                 } catch (DateTimeException invalidTimeZoneException) {
-                    context.throwRangeError("Temporal error: Invalid time zone: " + normalizedTimeZoneId);
-                    return null;
+                    return context.rejectRangeError("Temporal error: Invalid time zone: " + normalizedTimeZoneId);
                 }
             }
             if (zoneOffsetSeconds != offsetSeconds) {
@@ -272,8 +269,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
                 try {
                     TemporalTimeZone.resolveTimeZone(timeZoneId);
                 } catch (DateTimeException invalidTimeZoneException) {
-                    context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
-                    return null;
+                    return context.rejectRangeError("Temporal error: Invalid time zone: " + timeZoneId);
                 }
             }
             boolean hasSecondOrFractionOffset = offsetText != null
@@ -299,8 +295,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
                         ? TemporalTimeZone.parseOffsetSeconds(timeZoneId)
                         : TemporalTimeZone.getOffsetSecondsFor(epochNanoseconds, timeZoneId);
             } catch (DateTimeException exception) {
-                context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
-                return null;
+                return context.rejectRangeError("Temporal error: Invalid time zone: " + timeZoneId);
             }
             if (!TemporalUtils.isValidEpochNanoseconds(epochNanoseconds)) {
                 return TemporalError.DURATION_FIELD_OUT_OF_RANGE.reject(context);
@@ -367,7 +362,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
         if (context.hasPendingException()) {
             return null;
         }
-        if (value instanceof JSUndefined || value == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(value)) {
             return defaultValue;
         }
         if (value instanceof JSFunction) {
@@ -384,7 +379,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
         if (context.hasPendingException()) {
             return null;
         }
-        if (value instanceof JSUndefined || value == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(value)) {
             return TemporalError.INVALID_RELATIVE_TO.reject(context);
         }
         return toOptionalIntegralLong(context, value, null);
@@ -431,7 +426,7 @@ record TemporalRelativeTo(IsoDate relativeDate, IsoTime relativeTime, BigInteger
     }
 
     static TemporalRelativeToOption parseRoundRelativeToOption(JSContext context, JSValue relativeToValue) {
-        if (relativeToValue instanceof JSUndefined || relativeToValue == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(relativeToValue)) {
             return null;
         }
         TemporalRelativeTo relativeToReference = parseRelativeToValue(context, relativeToValue);

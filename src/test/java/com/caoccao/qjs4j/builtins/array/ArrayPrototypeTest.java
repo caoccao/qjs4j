@@ -414,8 +414,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         // Edge case: empty array
         JSArray emptyArr = new JSArray(context);
         result = ArrayPrototype.flat(context, emptyArr, JSValue.NO_ARGS);
-        JSArray arr1 = result.asArray().orElseThrow();
-        assertThat(arr1.getLength()).isEqualTo(0);
+        assertThat(result.asArray().orElseThrow().getLength()).isEqualTo(0);
 
         // Edge case: flat on null/undefined
         assertPendingTypeError(context, ArrayPrototype.flat(context, JSNull.INSTANCE, JSValue.NO_ARGS));
@@ -456,8 +455,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         // Edge case: empty array
         JSArray emptyArr = new JSArray(context);
         result = ArrayPrototype.flatMap(context, emptyArr, new JSValue[]{doubleAndWrapFn});
-        JSArray arr1 = result.asArray().orElseThrow();
-        assertThat(arr1.getLength()).isEqualTo(0);
+        assertThat(result.asArray().orElseThrow().getLength()).isEqualTo(0);
 
         // Edge case: flatMap on null/undefined
         assertPendingTypeError(context,
@@ -661,18 +659,16 @@ public class ArrayPrototypeTest extends BaseJavetTest {
 
         // Edge case: join on a primitive, which ToObject makes an array-like of its characters (as in V8)
         JSValue nonArray = new JSString("not an array");
-        assertThat(
-                ArrayPrototype.join(context, nonArray, JSValue.NO_ARGS).asString().map(JSString::value).orElseThrow())
-                .isEqualTo("n,o,t, ,a,n, ,a,r,r,a,y");
+        assertStringValue(ArrayPrototype.join(context, nonArray, JSValue.NO_ARGS), "n,o,t, ,a,n, ,a,r,r,a,y");
 
         // Edge case: join called on array-like object
-        assertThat(context
-                .eval("Array.prototype.join.call({ 0: 'a', 1: null, 2: undefined, 3: 'd', 4: 'e', length: 5 }, ',')")
-                .asString().map(JSString::value).orElseThrow()).isEqualTo("a,,,d,e");
-        assertThat(
-                context.eval("Array.prototype.join.call({ 0: 'a', 1: null, 2: undefined, 3: 'd', 4: 'e', length: 5 })")
-                        .asString().map(JSString::value).orElseThrow())
-                .isEqualTo("a,,,d,e");
+        assertStringValue(
+                context.eval(
+                        "Array.prototype.join.call({ 0: 'a', 1: null, 2: undefined, 3: 'd', 4: 'e', length: 5 }, ',')"),
+                "a,,,d,e");
+        assertStringValue(
+                context.eval("Array.prototype.join.call({ 0: 'a', 1: null, 2: undefined, 3: 'd', 4: 'e', length: 5 })"),
+                "a,,,d,e");
         assertThat(context.eval("Array.prototype.join.call({ 0: 'a', 0.1: 'b', length: 5 }, '-')").asString()
                 .map(JSString::value).orElseThrow()).isEqualTo("a----");
     }
@@ -733,8 +729,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         // Edge case: empty array
         JSArray emptyArr = new JSArray(context);
         result = ArrayPrototype.map(context, emptyArr, new JSValue[]{doubleFn});
-        JSArray mappedEmpty = result.asArray().orElseThrow();
-        assertThat(mappedEmpty.getLength()).isEqualTo(0);
+        assertThat(result.asArray().orElseThrow().getLength()).isEqualTo(0);
 
         // Edge case: no callback
         assertPendingTypeError(context, mapMethod.call());
@@ -762,8 +757,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         pop.expectNumber(1.0);
         assertThat(arr.getLength()).isEqualTo(0);
 
-        JSValue result = ArrayPrototype.pop(context, arr, JSValue.NO_ARGS);
-        assertThat(result.isUndefined()).isTrue();
+        assertThat(ArrayPrototype.pop(context, arr, JSValue.NO_ARGS).isUndefined()).isTrue();
 
         // Edge case: pop from null/undefined
         assertPendingTypeError(context, ArrayPrototype.pop(context, JSNull.INSTANCE, JSValue.NO_ARGS));
@@ -1109,15 +1103,15 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         JSIterator iterator = (JSIterator) iteratorResult;
         JSObject result1 = iterator.next();
         assertThat(result1.get("done").isBooleanFalse()).isTrue();
-        assertThat(result1.get("value").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
+        assertNumberValue(result1.get("value"), 1.0);
 
         JSObject result2 = iterator.next();
         assertThat(result2.get("done").isBooleanFalse()).isTrue();
-        assertThat(result2.get("value").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
+        assertNumberValue(result2.get("value"), 2.0);
 
         JSObject result3 = iterator.next();
         assertThat(result3.get("done").isBooleanFalse()).isTrue();
-        assertThat(result3.get("value").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(3.0);
+        assertNumberValue(result3.get("value"), 3.0);
 
         JSObject result4 = iterator.next();
         assertThat(result4.get("done").isBooleanTrue()).isTrue();
@@ -1174,8 +1168,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         // Edge case: empty array
         JSArray emptyArr = new JSArray(context);
         result = ArrayPrototype.toReversed(context, emptyArr, JSValue.NO_ARGS);
-        JSArray emptyReversed = result.asArray().orElseThrow();
-        assertThat(emptyReversed.getLength()).isEqualTo(0);
+        assertThat(result.asArray().orElseThrow().getLength()).isEqualTo(0);
 
         // Edge case: single element
         JSArray singleArr = new JSArray(context, numberArgs(42));
@@ -1223,8 +1216,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         // Edge case: empty array
         JSArray emptyArr = new JSArray(context);
         result = ArrayPrototype.toSorted(context, emptyArr, JSValue.NO_ARGS);
-        JSArray emptySorted = result.asArray().orElseThrow();
-        assertThat(emptySorted.getLength()).isEqualTo(0);
+        assertThat(result.asArray().orElseThrow().getLength()).isEqualTo(0);
 
         // Edge case: single element
         JSArray singleArr = new JSArray(context, numberArgs(42));
@@ -1326,8 +1318,7 @@ public class ArrayPrototypeTest extends BaseJavetTest {
         jsArray.push(new JSString("c"));
 
         // Normal case
-        JSValue result = ArrayPrototype.toString(context, jsArray, JSValue.NO_ARGS);
-        assertStringValue(result, "a,1,c");
+        assertStringValue(ArrayPrototype.toString(context, jsArray, JSValue.NO_ARGS), "a,1,c");
 
         // An array with no join method — here one built without Array.prototype — is not joined
         JSArray withoutPrototype = new JSArray(context, new JSString("a"));

@@ -102,8 +102,8 @@ class Review02BuiltinsTest extends BaseJavetTest {
                           const result=[1,2].reduceRight(callback,{tag:'this'});
                           return JSON.stringify([result,log]);
                         })()
-                        """);
-        assertStringWithJavet(
+                        """,
+
                 """
                         (() => {
                           const log=[];
@@ -117,10 +117,10 @@ class Review02BuiltinsTest extends BaseJavetTest {
                 "new Promise(new Proxy(resolve=>resolve('ok'),{}))",
                 "JSON.stringify(JSON.parse('{\"x\":1}',new Proxy((k,v)=>k==='x'?2:v,{})))",
                 "JSON.stringify({x:1},new Proxy((k,v)=>k==='x'?2:v,{}))",
-                "JSON.stringify({toJSON:new Proxy(()=>({x:2}),{})})", "JSON.stringify([new Proxy(()=>0,{})])");
-        assertStringWithJavet("""
-                (()=>{const r=Proxy.revocable(x=>x,{});r.revoke();try{[1].map(r.proxy)}catch(e){return e.name}})()
-                """);
+                "JSON.stringify({toJSON:new Proxy(()=>({x:2}),{})})", "JSON.stringify([new Proxy(()=>0,{})])",
+                """
+                        (()=>{const r=Proxy.revocable(x=>x,{});r.revoke();try{[1].map(r.proxy)}catch(e){return e.name}})()
+                        """);
     }
 
     @Test
@@ -128,23 +128,25 @@ class Review02BuiltinsTest extends BaseJavetTest {
         assertStringWithJavet("'aba'.replaceAll('a',new Proxy((x,i)=>String(i),{}))",
                 "'aba'.replace(/a/g,new Proxy((x,i)=>String(i),{}))",
                 "'aba'.replace('a',new Proxy((x,i)=>String(i),{}))",
-                "'a'.replace({[Symbol.replace]:new Proxy(()=> 'custom',{})},'b')");
-        assertStringWithJavet("""
-                (()=>{const values=new Set([2,3]);const other={size:2,
-                has:new Proxy(k=>values.has(k),{}), keys:new Proxy(()=>{
-                  const i=values.keys();return {next:new Proxy(()=>i.next(),{}),return:new Proxy(()=>({done:true}),{})};
-                },{})};const r=new Set([1,2]).union(other);return JSON.stringify(r instanceof Set?[...r]:r)})()
-                """, """
-                (()=>{const values=new Set([2,3]);const other={size:2,
-                has:new Proxy(k=>values.has(k),{}), keys:new Proxy(()=>{
-                  const i=values.keys();return {next:new Proxy(()=>i.next(),{}),return:new Proxy(()=>({done:true}),{})};
-                },{})};const r=new Set([1,2]).intersection(other);return JSON.stringify(r instanceof Set?[...r]:r)})()
-                """, """
-                (()=>{const values=new Set([2,3]);const other={size:2,
-                has:new Proxy(k=>values.has(k),{}), keys:new Proxy(()=>{
-                  const i=values.keys();return {next:new Proxy(()=>i.next(),{}),return:new Proxy(()=>({done:true}),{})};
-                },{})};const r=new Set([1,2]).difference(other);return JSON.stringify(r instanceof Set?[...r]:r)})()
-                """,
+                "'a'.replace({[Symbol.replace]:new Proxy(()=> 'custom',{})},'b')",
+                """
+                        (()=>{const values=new Set([2,3]);const other={size:2,
+                        has:new Proxy(k=>values.has(k),{}), keys:new Proxy(()=>{
+                          const i=values.keys();return {next:new Proxy(()=>i.next(),{}),return:new Proxy(()=>({done:true}),{})};
+                        },{})};const r=new Set([1,2]).union(other);return JSON.stringify(r instanceof Set?[...r]:r)})()
+                        """,
+                """
+                        (()=>{const values=new Set([2,3]);const other={size:2,
+                        has:new Proxy(k=>values.has(k),{}), keys:new Proxy(()=>{
+                          const i=values.keys();return {next:new Proxy(()=>i.next(),{}),return:new Proxy(()=>({done:true}),{})};
+                        },{})};const r=new Set([1,2]).intersection(other);return JSON.stringify(r instanceof Set?[...r]:r)})()
+                        """,
+                """
+                        (()=>{const values=new Set([2,3]);const other={size:2,
+                        has:new Proxy(k=>values.has(k),{}), keys:new Proxy(()=>{
+                          const i=values.keys();return {next:new Proxy(()=>i.next(),{}),return:new Proxy(()=>({done:true}),{})};
+                        },{})};const r=new Set([1,2]).difference(other);return JSON.stringify(r instanceof Set?[...r]:r)})()
+                        """,
                 """
                         (()=>{const values=new Set([2,3]);const other={size:2,
                         has:new Proxy(k=>values.has(k),{}), keys:new Proxy(()=>{
@@ -231,8 +233,8 @@ class Review02BuiltinsTest extends BaseJavetTest {
                 """
                         (()=>{const a=new Int32Array([3,1,2]);let calls=0;try{a.toSorted(()=>{calls++;return {valueOf(){a[0]=99;throw 'stop'}}})}
                         catch(e){return JSON.stringify([e,calls,Array.from(a)])}})()
-                        """);
-        assertStringWithJavet(
+                        """,
+
                 """
                         (()=>{const log=[];const a=[{toString(){log.push('first');throw 'stop'}},{toString(){log.push('second');throw 'stop'}}];
                         try{a.sort()}catch(e){return JSON.stringify([e,log.length])}})()
@@ -263,12 +265,11 @@ class Review02BuiltinsTest extends BaseJavetTest {
                         """, """
                         (()=>{let calls=0;const comparator={toString(){calls++;throw 'unexpected'}};
                         try{[1,2].toSorted(comparator)}catch(e){return JSON.stringify([e.name,calls])}})()
+                        """, """
+                        (()=>{let seed=1;const random=()=>seed=(Math.imul(seed,1664525)+1013904223)>>>0;
+                        for(let i=0;i<100;i++)Array.from({length:100},(_,k)=>k).sort(()=>random()%3-1);
+                        return 'completed'})()
                         """);
-        assertStringWithJavet("""
-                (()=>{let seed=1;const random=()=>seed=(Math.imul(seed,1664525)+1013904223)>>>0;
-                for(let i=0;i<100;i++)Array.from({length:100},(_,k)=>k).sort(()=>random()%3-1);
-                return 'completed'})()
-                """);
     }
 
     @Test

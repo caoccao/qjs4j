@@ -36,10 +36,10 @@ public class ForOfStatementTest extends BaseJavetTest {
 
     @Test
     void testForOfArrayDestructuring() {
-        assertThat(context.eval("""
+        assertEvalText("""
                 var result = '';
                 for (var [k, v] of [[1, 'a'], [2, 'b']]) result += k + v;
-                result""").toString()).isEqualTo("1a2b");
+                result""", "1a2b");
     }
 
     @Test
@@ -52,16 +52,15 @@ public class ForOfStatementTest extends BaseJavetTest {
                 }
                 test()""";
         JSValue value = context.eval(code);
-        String result = value.toString();
-        assertThat(result).isEqualTo("abc");
+        assertThat(value.toString()).isEqualTo("abc");
     }
 
     @Test
     void testForOfInGlobalScope() {
-        assertThat(context.eval("""
+        assertEvalText("""
                 var result = '';
                 for (var x of ['a', 'b', 'c']) result += x;
-                result""").toString()).isEqualTo("abc");
+                result""", "abc");
     }
 
     @Test
@@ -76,10 +75,10 @@ public class ForOfStatementTest extends BaseJavetTest {
 
     @Test
     void testForOfSimpleArray() {
-        assertThat(context.eval("""
+        assertEvalText("""
                 var result = '';
                 for (var x of ['a', 'b', 'c']) result += x;
-                result""").toString()).isEqualTo("abc");
+                result""", "abc");
     }
 
     @Test

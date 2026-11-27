@@ -173,7 +173,7 @@ final class CompilerAnalysis {
             if (constLexicalNames.contains(lexicalName)) {
                 compilerContext.scopeManager.currentScope().markConstLocal(lexicalName);
             }
-            compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+            compilerContext.emitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, localIndex);
             compilerContext.tdzLocals.add(lexicalName);
         }
     }

@@ -44,8 +44,7 @@ final class LiteralCompiler {
             // Match QuickJS: emit PUSH_BIGINT_I32 when the literal fits in signed i32.
             if (bigInt.compareTo(BigInteger.valueOf(Integer.MIN_VALUE)) >= 0
                     && bigInt.compareTo(BigInteger.valueOf(Integer.MAX_VALUE)) <= 0) {
-                compilerContext.emitter.emitOpcode(Opcode.PUSH_BIGINT_I32);
-                compilerContext.emitter.emitI32(bigInt.intValue());
+                compilerContext.emitter.emitIntOperand(Opcode.PUSH_BIGINT_I32, bigInt.intValue());
             } else {
                 compilerContext.emitter.emitPushConstant(new JSBigInt(bigInt));
             }
@@ -54,8 +53,7 @@ final class LiteralCompiler {
             if (num instanceof Integer || num instanceof Long) {
                 long longValue = num.longValue();
                 if (longValue >= Integer.MIN_VALUE && longValue <= Integer.MAX_VALUE) {
-                    compilerContext.emitter.emitOpcode(Opcode.PUSH_I32);
-                    compilerContext.emitter.emitI32((int) longValue);
+                    compilerContext.emitter.emitIntOperand(Opcode.PUSH_I32, (int) longValue);
                     return;
                 }
             }

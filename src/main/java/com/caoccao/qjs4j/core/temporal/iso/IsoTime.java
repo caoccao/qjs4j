@@ -172,8 +172,7 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
         }
         IsoTime time = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
         if (!time.isValid()) {
-            context.throwRangeError(invalidTimeMessage);
-            return null;
+            return context.rejectRangeError(invalidTimeMessage);
         }
         return time;
     }

@@ -59,7 +59,7 @@ public class TemporalPropertyBag {
             return null;
         }
         JSValue value = fields.get(PropertyKey.fromString(name));
-        if (context.hasPendingException() || value == null || value instanceof JSUndefined) {
+        if (context.hasPendingException() || JSTypeChecking.isUndefinedOrMissing(value)) {
             return null;
         }
         long result = TemporalUtils.toLongIfIntegral(context, value);
@@ -81,7 +81,7 @@ public class TemporalPropertyBag {
 
     public String offset() {
         JSValue value = value("offset");
-        if (context.hasPendingException() || value == null || value instanceof JSUndefined) {
+        if (context.hasPendingException() || JSTypeChecking.isUndefinedOrMissing(value)) {
             return null;
         }
         if (value instanceof JSString string) {
@@ -90,8 +90,7 @@ public class TemporalPropertyBag {
         if (value instanceof JSObject) {
             return JSTypeConversions.toString(context, value).value();
         }
-        context.throwTypeError("Temporal error: Offset must be string.");
-        return null;
+        return context.rejectTypeError("Temporal error: Offset must be string.");
     }
 
     public Integer positiveDateField(String name) {

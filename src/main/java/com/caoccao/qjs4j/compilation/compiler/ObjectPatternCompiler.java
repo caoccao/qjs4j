@@ -37,61 +37,59 @@ final class ObjectPatternCompiler extends AstNodeCompiler<ObjectPattern> {
         boolean hasRest = objPattern.getRestElement() != null;
 
         // RequireObjectCoercible(value) even for empty patterns.
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcode(Opcode.TO_OBJECT);
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        emitter.emitRequireObjectCoercible();
 
         if (hasRest && !objPattern.getProperties().isEmpty()) {
             // Create exclude list object and put it under source on stack
             // Stack: [source] -> [excludeList, source]
-            compilerContext.emitter.emitOpcode(Opcode.OBJECT);
-            compilerContext.emitter.emitOpcode(Opcode.SWAP);
+            emitter.emitOpcode(Opcode.OBJECT);
+            emitter.emitOpcode(Opcode.SWAP);
         }
 
         for (ObjectPatternProperty prop : objPattern.getProperties()) {
-            compilerContext.emitter.emitOpcode(Opcode.DUP);
+            emitter.emitOpcode(Opcode.DUP);
             String atom = ObjectDestructuringCompiler.prepareRead(compilerContext, prop, -1);
             maybePreResolveBindingIdentifierReference(getBindingIdentifierForPreResolve(prop.getValue()));
-            ObjectDestructuringCompiler.read(compilerContext.emitter, atom);
+            ObjectDestructuringCompiler.read(emitter, atom);
             // Assign to the pattern (could be nested)
             compilerContext.patternCompiler.compile(prop.getValue());
 
             if (hasRest) {
                 // Add the property key to the exclude list
                 // Stack: [excludeList, source]
-                compilerContext.emitter.emitOpcode(Opcode.SWAP);
+                emitter.emitOpcode(Opcode.SWAP);
                 // Stack: [source, excludeList]
-                compilerContext.emitter.emitOpcode(Opcode.DUP);
+                emitter.emitOpcode(Opcode.DUP);
                 // Stack: [source, excludeList, excludeList]
-                compilerContext.emitter.emitOpcode(Opcode.NULL);
+                emitter.emitOpcode(Opcode.NULL);
                 // Stack: [source, excludeList, excludeList, null]
                 String name = ObjectDestructuringCompiler.staticKey(prop);
                 if (name != null) {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, name);
-                    compilerContext.emitter.emitOpcode(Opcode.DROP);
+                    emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, name);
+                    emitter.emitOpcode(Opcode.DROP);
                 } else {
                     // Computed property key: re-evaluate expression to get the key name
-                    compilerContext.emitter.emitOpcode(Opcode.DROP); // drop null
+                    emitter.emitOpcode(Opcode.DROP); // drop null
                     compilerContext.expressionCompiler.compile(prop.getKey());
-                    compilerContext.emitter.emitOpcode(Opcode.NULL);
-                    compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
-                    compilerContext.emitter.emitOpcode(Opcode.DROP); // drop null value
+                    emitter.emitOpcode(Opcode.NULL);
+                    emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+                    emitter.emitOpcode(Opcode.DROP); // drop null value
                 }
                 // DEFINE_FIELD leaves excludeList on stack, so normalize both paths to:
                 // Stack: [source, excludeList]
-                compilerContext.emitter.emitOpcode(Opcode.SWAP);
+                emitter.emitOpcode(Opcode.SWAP);
                 // Stack: [excludeList, source]
             }
         }
 
         if (hasRest) {
             boolean hasExclusions = !objPattern.getProperties().isEmpty();
-            ObjectDestructuringCompiler.copyRest(compilerContext.emitter, hasExclusions);
+            ObjectDestructuringCompiler.copyRest(emitter, hasExclusions);
             compilerContext.patternCompiler.compile(objPattern.getRestElement().getArgument());
-            ObjectDestructuringCompiler.finishRest(compilerContext.emitter, hasExclusions);
+            ObjectDestructuringCompiler.finishRest(emitter, hasExclusions);
         } else {
             // Drop the original object
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            emitter.emitOpcode(Opcode.DROP);
         }
     }
 
@@ -113,7 +111,7 @@ final class ObjectPatternCompiler extends AstNodeCompiler<ObjectPattern> {
 
         if (!compilerContext.withObjectManager.hasActiveWithObject()) {
             compilerContext.identifierCompiler.compile(bindingIdentifier);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            emitter.emitOpcode(Opcode.DROP);
             return;
         }
 

@@ -149,8 +149,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         call.expectNumber(0.0);
 
         // Edge case: called on non-function
-        JSValue result = FunctionPrototype.call(context, new JSString("not a function"), JSValue.NO_ARGS);
-        assertTypeError(result);
+        assertTypeError(FunctionPrototype.call(context, new JSString("not a function"), JSValue.NO_ARGS));
         assertThat(context.getPendingException()).isNotNull();
     }
 

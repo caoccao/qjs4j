@@ -56,7 +56,7 @@ public class CommandLineHostTest extends BaseTest {
         } finally {
             Thread.interrupted();
         }
-        assertThat(context.eval("String(ran)")).isEqualTo(new JSString("false"));
+        assertEvalValue("String(ran)", new JSString("false"));
     }
 
     @Test
@@ -98,6 +98,6 @@ public class CommandLineHostTest extends BaseTest {
                 globalThis.order = [];
                 for (const name of ['a', 'b', 'c']) setTimeout(() => order.push(name), 1);""");
         assertThat(host.runTimers(() -> true)).isTrue();
-        assertThat(context.eval("order.join()")).isEqualTo(new JSString("a,b,c"));
+        assertEvalValue("order.join()", new JSString("a,b,c"));
     }
 }

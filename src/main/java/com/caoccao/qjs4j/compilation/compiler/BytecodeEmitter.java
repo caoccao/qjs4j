@@ -149,8 +149,14 @@ public final class BytecodeEmitter {
         return index;
     }
 
+    void emitDrops(int count) {
+        for (int i = 0; i < count; i++) {
+            emitOpcode(Opcode.DROP);
+        }
+    }
+
     public void emitGetLocal(int localIndex) {
-        emitOpcodeU16(Opcode.GET_LOC, localIndex);
+        emitIntOperand(Opcode.GET_LOC, localIndex);
     }
 
     void emitGoto(int target) {
@@ -163,6 +169,16 @@ public final class BytecodeEmitter {
      */
     public void emitI32(int value) {
         emitU32(value);
+    }
+
+    /** Emit an instruction whose only operand is an integer of the width specified by the opcode table. */
+    public void emitIntOperand(Opcode op, int value) {
+        switch (op.getSize()) {
+            case 2 -> emitOpcodeU8(op, value);
+            case 3 -> emitOpcodeU16(op, value);
+            case 5 -> emitOpcodeU32(op, value);
+            default -> throw new IllegalArgumentException("Expected a single integer operand for " + op);
+        }
     }
 
     /**
@@ -241,7 +257,14 @@ public final class BytecodeEmitter {
     }
 
     public void emitPutLocal(int localIndex) {
-        emitOpcodeU16(Opcode.PUT_LOC, localIndex);
+        emitIntOperand(Opcode.PUT_LOC, localIndex);
+    }
+
+    /** Reject null and undefined while leaving the original value on the stack. */
+    void emitRequireObjectCoercible() {
+        emitOpcode(Opcode.DUP);
+        emitOpcode(Opcode.TO_OBJECT);
+        emitOpcode(Opcode.DROP);
     }
 
     /**
@@ -273,9 +296,15 @@ public final class BytecodeEmitter {
         sourcePositions[sourcePositionsSize++] = location.column();
     }
 
+    /** Store a value emitted before its object and property key. */
+    void emitStoreValueBelowReference() {
+        emitOpcode(Opcode.ROT3L);
+        emitOpcode(Opcode.PUT_REF_VALUE);
+    }
+
     /** Push the prototype of the home object for a super property access. */
     void emitSuperBase() {
-        emitOpcodeU8(Opcode.SPECIAL_OBJECT, 4); // SPECIAL_OBJECT_HOME_OBJECT
+        emitIntOperand(Opcode.SPECIAL_OBJECT, 4); // SPECIAL_OBJECT_HOME_OBJECT
         emitOpcode(Opcode.GET_SUPER);
     }
 

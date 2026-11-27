@@ -30,7 +30,7 @@ final class CallOpcodes {
 
     private static void call(ExecutionContext executionContext, int argCount, boolean directEvalSyntax) {
         VirtualMachine virtualMachine = executionContext.virtualMachine;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
 
         // Stack layout (bottom to top): method, receiver, arg1, arg2, ...
@@ -98,10 +98,16 @@ final class CallOpcodes {
         return JSAsyncIterator.describeIteratorResult(callee);
     }
 
+    private static JSValue guestException(VirtualMachine vm, JSException exception) {
+        vm.pendingException = exception.getErrorValue();
+        vm.context.clearPendingException();
+        return JSUndefined.INSTANCE;
+    }
+
     static void handleApply(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int isConstructorCall = executionContext.bytecode.readU16(pc + 1);
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        int isConstructorCall = executionContext.operandU16();
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue argsArrayValue = (JSValue) stack[--sp];
         JSValue functionValue = (JSValue) stack[--sp];
@@ -152,7 +158,7 @@ final class CallOpcodes {
     }
 
     static void handleApplyEval(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue argsArrayValue = (JSValue) stack[--sp];
         JSValue callee = (JSValue) stack[--sp];
@@ -176,7 +182,7 @@ final class CallOpcodes {
 
     static void handleCall(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int argumentCount = executionContext.bytecode.readU16(pc + 1);
+        int argumentCount = executionContext.operandU16();
         call(executionContext, argumentCount, false);
         executionContext.advance(op);
     }
@@ -203,7 +209,7 @@ final class CallOpcodes {
 
     static void handleCallConstructor(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int argumentCount = executionContext.bytecode.readU16(pc + 1);
+        int argumentCount = executionContext.operandU16();
         VirtualMachine virtualMachine = executionContext.virtualMachine;
         JSContext context = virtualMachine.context;
         JSStackValue[] stack = virtualMachine.valueStack.stack;
@@ -266,7 +272,7 @@ final class CallOpcodes {
 
     static void handleEval(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int argumentCount = executionContext.bytecode.readU16(pc + 1);
+        int argumentCount = executionContext.operandU16();
         int evalFlags = executionContext.bytecode.readU16(pc + 3);
         boolean inClassFieldInitializer = (evalFlags & 2) != 0;
         int tailFlag = evalFlags & 1;
@@ -285,7 +291,7 @@ final class CallOpcodes {
     }
 
     static void handleTailCall(Opcode op, ExecutionContext ctx) {
-        tailCall(op, ctx, ctx.bytecode.readU16(ctx.pc + 1), false);
+        tailCall(op, ctx, ctx.operandU16(), false);
     }
 
     private static JSValue invoke(ExecutionContext executionContext, JSValue callee, JSValue receiver, JSValue[] args,
@@ -335,9 +341,7 @@ final class CallOpcodes {
                 JSValue result = bytecodeFunc.call(context, receiver, args, argCount);
                 return callResult(virtualMachine, result);
             } catch (JSException e) {
-                virtualMachine.pendingException = e.getErrorValue();
-                context.clearPendingException();
-                return JSUndefined.INSTANCE;
+                return guestException(virtualMachine, e);
             } catch (JSVirtualMachineException e) {
                 virtualMachine.captureVMException(e);
                 return JSUndefined.INSTANCE;
@@ -392,9 +396,7 @@ final class CallOpcodes {
             }
             return callResult(virtualMachine, result);
         } catch (JSException e) {
-            virtualMachine.pendingException = e.getErrorValue();
-            context.clearPendingException();
-            return JSUndefined.INSTANCE;
+            return guestException(virtualMachine, e);
         } catch (JSVirtualMachineException e) {
             virtualMachine.captureVMException(e);
             return JSUndefined.INSTANCE;

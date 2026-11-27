@@ -3,6 +3,7 @@ package com.caoccao.qjs4j.vm;
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSStackValue;
 import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.JSUndefined;
 
 final class ExecutionContext {
     final Bytecode bytecode;
@@ -60,6 +61,12 @@ final class ExecutionContext {
         return false;
     }
 
+    void failStackTypeError(Opcode op, String message) {
+        raiseTypeError(message);
+        virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+        finishStackOpcode(op);
+    }
+
     /** Publish the next instruction and the operand stack depth after a handler completes. */
     void finishOpcode(int nextPc, int stackPointer) {
         sp = stackPointer;
@@ -85,27 +92,32 @@ final class ExecutionContext {
         finishOpcode(op, resultSlot + 1);
     }
 
+    int operandI32() {
+        return bytecode.readU32(pc + 1);
+    }
+
+    int operandU16() {
+        return bytecode.readU16(pc + 1);
+    }
+
+    int operandU8() {
+        return bytecode.readU8(pc + 1);
+    }
+
     JSValue peek(int offset) {
-        return (JSValue) virtualMachine.valueStack.stack[sp - 1 - offset];
+        return (JSValue) stack()[sp - 1 - offset];
     }
 
     JSValue pop() {
-        return (JSValue) virtualMachine.valueStack.stack[--sp];
+        return (JSValue) stack()[--sp];
     }
 
     JSStackValue popStackValue() {
-        return virtualMachine.valueStack.stack[--sp];
+        return stack()[--sp];
     }
 
     void push(JSValue value) {
-        CallStack valueStack = virtualMachine.valueStack;
-        if (sp >= valueStack.stack.length) {
-            valueStack.stackTop = sp;
-            valueStack.push(value);
-            sp = valueStack.stackTop;
-        } else {
-            valueStack.stack[sp++] = value;
-        }
+        pushStackValue(value);
     }
 
     void pushStackValue(JSStackValue value) {
@@ -134,5 +146,9 @@ final class ExecutionContext {
     void setErrorAsPending(JSValue errorValue) {
         virtualMachine.pendingException = errorValue;
         virtualMachine.context.clearPendingException();
+    }
+
+    JSStackValue[] stack() {
+        return virtualMachine.valueStack.stack;
     }
 }

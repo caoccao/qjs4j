@@ -81,14 +81,13 @@ public class JSModuleLoaderHookTest extends ModuleFileTest {
         };
         try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setModuleLoader(memoryLoader));
                 JSContext moduleContext = runtime.createContext()) {
-            String result = evalAndSettle(moduleContext, """
+            assertThat(evalAndSettle(moduleContext, """
                     import { value } from './dep.mjs';
                     import data from './data.json' with { type: 'json' };
                     import note from './note.txt' with { type: 'text' };
                     import raw from './raw.bin' with { type: 'bytes' };
                     globalThis.result = [value + 1, data.n, note, raw.length].join(',');
-                    """, "/virtual/main.mjs");
-            assertThat(result).isEqualTo("42,2,hello,3");
+                    """, "/virtual/main.mjs")).isEqualTo("42,2,hello,3");
             assertThat(requests).contains("resolve ./dep.mjs", "load /virtual/dep.mjs", "resolve ./data.json",
                     "load /virtual/data.json", "load /virtual/note.txt", "load /virtual/raw.bin");
 

@@ -19,7 +19,6 @@ package com.caoccao.qjs4j.vm;
 import com.caoccao.qjs4j.BaseTest;
 import com.caoccao.qjs4j.core.JSObject;
 import com.caoccao.qjs4j.core.JSRuntime;
-import com.caoccao.qjs4j.core.JSValue;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
@@ -82,21 +81,20 @@ public class VirtualMachineConstantObjectTest extends BaseTest {
     @Test
     public void testConstantObjectPrototypeIsStillTransferred() {
         // The side table existed to make the transfer happen exactly once. That must still hold.
-        assertThat(context.eval("""
+        assertEvalText("""
                 function tag(strings) { return Object.getPrototypeOf(strings) === Array.prototype }
-                tag`a ${1} b`""").toString()).isEqualTo("true");
-        assertThat(context.eval("Object.getPrototypeOf(/x/g) === RegExp.prototype").toString()).isEqualTo("true");
-        assertThat(context.eval("""
+                tag`a ${1} b`""", "true");
+        assertEvalText("Object.getPrototypeOf(/x/g) === RegExp.prototype", "true");
+        assertEvalText("""
                 function tag(strings) { return Object.getPrototypeOf(strings.raw) === Array.prototype }
-                tag`a ${1} b`""").toString()).isEqualTo("true");
+                tag`a ${1} b`""", "true");
     }
 
     @Test
     public void testConstantObjectRecordsItsPrototypeInitialization() {
-        JSValue templateObject = context.eval("""
+        assertThat(context.eval("""
                 function tag(strings) { return strings }
-                tag`a ${1} b`""");
-        assertThat(templateObject).isInstanceOfSatisfying(JSObject.class,
+                tag`a ${1} b`""")).isInstanceOfSatisfying(JSObject.class,
                 object -> assertThat(object.isConstantPrototypeInitialized()).isTrue());
         // A plain runtime object is not a bytecode constant and carries no such marking.
         assertThat(context.eval("({})")).isInstanceOfSatisfying(JSObject.class,

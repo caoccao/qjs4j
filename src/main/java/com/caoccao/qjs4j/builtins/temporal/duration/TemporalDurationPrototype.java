@@ -243,8 +243,7 @@ public final class TemporalDurationPrototype {
         }
 
         if (canonicalLargestUnit == null && canonicalSmallestUnit == null && !largestUnitProvided) {
-            context.throwRangeError("Temporal error: Must specify either smallestUnit or largestUnit.");
-            return null;
+            return context.rejectRangeError("Temporal error: Must specify either smallestUnit or largestUnit.");
         }
 
         if (canonicalSmallestUnit == null) {
@@ -281,7 +280,7 @@ public final class TemporalDurationPrototype {
         if (context.hasPendingException()) {
             return null;
         }
-        if (value instanceof JSUndefined || value == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(value)) {
             return new TemporalPartialDurationFieldValue(false, 0L);
         }
         double numericValue = JSTypeConversions.toNumber(context, value).value();
@@ -452,7 +451,7 @@ public final class TemporalDurationPrototype {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            if (unitValue instanceof JSUndefined || unitValue == null) {
+            if (JSTypeChecking.isUndefinedOrMissing(unitValue)) {
                 context.throwRangeError("Temporal error: Must specify a totalOf parameter");
                 return JSUndefined.INSTANCE;
             }

@@ -34,7 +34,7 @@ final class ClassOpcodes {
      */
     private static void handleDefineClass(Opcode op, ExecutionContext executionContext, boolean computed) {
         int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         int classNameAtom = executionContext.bytecode.readU32(pc + 1);
         int classFlags = computed ? executionContext.bytecode.readU8(pc + 5) : 0;
@@ -89,7 +89,7 @@ final class ClassOpcodes {
 
     static void handleDefineMethod(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         String methodName = executionContext.bytecode.readAtom(pc + 1);
         JSValue methodValue = (JSValue) stack[--sp];
@@ -114,7 +114,7 @@ final class ClassOpcodes {
 
     static void handleDefineMethodComputed(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         int methodFlags = executionContext.bytecode.readU8(pc + 1);
         boolean enumerable = (methodFlags & 4) != 0;
@@ -250,9 +250,7 @@ final class ClassOpcodes {
         if (operandStack.getStackTop() > executionContext.virtualMachine.currentFrame.getStackBase()) {
             JSValue thisValue = operandStack.pop();
             if (!(thisValue instanceof JSObject jsObject)) {
-                executionContext.raiseTypeError("super() returned non-object");
-                operandStack.push(JSUndefined.INSTANCE);
-                executionContext.finishStackOpcode(op);
+                executionContext.failStackTypeError(op, "super() returned non-object");
                 return;
             }
             initializeDerivedThis(executionContext.virtualMachine.currentFrame, jsObject);
@@ -279,9 +277,7 @@ final class ClassOpcodes {
             // constructor(...args) { super(...args); }
             JSObject superConstructorObject = currentFunction.getPrototype();
             if (!JSTypeChecking.isConstructor(superConstructorObject)) {
-                executionContext.raiseTypeError("parent class must be constructor");
-                operandStack.push(JSUndefined.INSTANCE);
-                executionContext.finishStackOpcode(op);
+                executionContext.failStackTypeError(op, "parent class must be constructor");
                 return;
             }
 
@@ -293,9 +289,7 @@ final class ClassOpcodes {
                 superResult = executionContext.virtualMachine.constructFunction(superConstructor,
                         executionContext.frame.getArguments(), frameNewTarget);
             } else {
-                executionContext.raiseTypeError("parent class must be constructor");
-                operandStack.push(JSUndefined.INSTANCE);
-                executionContext.finishStackOpcode(op);
+                executionContext.failStackTypeError(op, "parent class must be constructor");
                 return;
             }
             if (executionContext.capturePendingException()) {
@@ -312,7 +306,7 @@ final class ClassOpcodes {
     }
 
     static void handleSetHomeObject(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue homeObjectValue = (JSValue) stack[sp - 2];
         JSValue methodValue = (JSValue) stack[sp - 1];
@@ -330,7 +324,7 @@ final class ClassOpcodes {
     }
 
     static void handleSetNameComputed(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue nameValue = (JSValue) stack[sp - 2];
         executionContext.virtualMachine.setObjectName((JSValue) stack[sp - 1],
@@ -339,7 +333,7 @@ final class ClassOpcodes {
     }
 
     static void handleSetProto(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue prototypeValue = (JSValue) stack[--sp];
         JSValue objectValue = (JSValue) stack[sp - 1];

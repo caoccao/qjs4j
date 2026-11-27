@@ -270,8 +270,7 @@ public final class JSRegExp extends JSObject {
         } else if (patternIsRegExp) {
             // ES2024 22.2.3.1 step 5: patternIsRegExp but no [[RegExpMatcher]]
             if (!(patternArg instanceof JSObject patternObject)) {
-                context.throwTypeError("Invalid RegExp pattern");
-                return null;
+                return context.rejectTypeError("Invalid RegExp pattern");
             }
             patternValue = patternObject.get(PropertyKey.fromString("source"));
             if (context.hasPendingException()) {
@@ -286,8 +285,8 @@ public final class JSRegExp extends JSObject {
                 flagsValue = flagsArg;
             }
         } else {
-            patternValue = patternArg instanceof JSUndefined ? new JSString("") : patternArg;
-            flagsValue = flagsArg instanceof JSUndefined ? new JSString("") : flagsArg;
+            patternValue = patternArg instanceof JSUndefined ? JSString.EMPTY : patternArg;
+            flagsValue = flagsArg instanceof JSUndefined ? JSString.EMPTY : flagsArg;
         }
 
         return new JSValue[]{patternValue, flagsValue};

@@ -18,7 +18,6 @@ package com.caoccao.qjs4j.compilation.ast;
 
 import com.caoccao.qjs4j.BaseTest;
 import com.caoccao.qjs4j.core.JSBytecodeFunction;
-import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.vm.Bytecode;
 import com.caoccao.qjs4j.vm.Opcode;
 import org.junit.jupiter.api.Test;
@@ -52,13 +51,12 @@ public class FunctionExpressionCompilerTest extends BaseTest {
 
     @Test
     void testAsyncFunctionExpressionImplicitReturnUsesReturnAsync() {
-        JSValue value = context.eval("""
+        assertThat(context.eval("""
                 const f = async function () {
                     const answer = 42;
                 };
                 f;
-                """);
-        assertThat(value).isInstanceOfSatisfying(JSBytecodeFunction.class, function -> {
+                """)).isInstanceOfSatisfying(JSBytecodeFunction.class, function -> {
             assertThat(function.isAsync()).isTrue();
             assertThat(decodeOpcodes(function.getBytecode())).contains(Opcode.RETURN_ASYNC);
         });
@@ -66,13 +64,12 @@ public class FunctionExpressionCompilerTest extends BaseTest {
 
     @Test
     void testAsyncFunctionExpressionReturnUsesReturnAsync() {
-        JSValue value = context.eval("""
+        assertThat(context.eval("""
                 const f = async function () {
                     return 42;
                 };
                 f;
-                """);
-        assertThat(value).isInstanceOfSatisfying(JSBytecodeFunction.class, function -> {
+                """)).isInstanceOfSatisfying(JSBytecodeFunction.class, function -> {
             assertThat(function.isAsync()).isTrue();
             assertThat(decodeOpcodes(function.getBytecode())).contains(Opcode.RETURN_ASYNC);
         });
@@ -80,13 +77,12 @@ public class FunctionExpressionCompilerTest extends BaseTest {
 
     @Test
     void testAsyncGeneratorFunctionExpressionYieldStarUsesAsyncYieldStarOpcode() {
-        JSValue value = context.eval("""
+        assertThat(context.eval("""
                 const g = async function* () {
                     yield* [1, 2];
                 };
                 g;
-                """);
-        assertThat(value).isInstanceOfSatisfying(JSBytecodeFunction.class, function -> {
+                """)).isInstanceOfSatisfying(JSBytecodeFunction.class, function -> {
             assertThat(function.isAsync()).isTrue();
             assertThat(function.isGenerator()).isTrue();
             List<Opcode> opcodes = decodeOpcodes(function.getBytecode());
@@ -97,17 +93,15 @@ public class FunctionExpressionCompilerTest extends BaseTest {
 
     @Test
     void testAsyncIdentifierCanBeUsedAsBindingName() {
-        JSValue value = context.eval("""
+        assertEvalNumber("""
                 let async = 3;
                 async;
-                """);
-        assertNumberValue(value, 3);
+                """, 3);
     }
 
     @Test
     void testAsyncSingleParamArrowExpressionStatementParses() {
-        JSValue value = context.eval("async x => x;");
-        assertThat(value).isInstanceOfSatisfying(JSBytecodeFunction.class, function -> {
+        assertThat(context.eval("async x => x;")).isInstanceOfSatisfying(JSBytecodeFunction.class, function -> {
             assertThat(function.isAsync()).isTrue();
             assertThat(function.isArrow()).isTrue();
         });

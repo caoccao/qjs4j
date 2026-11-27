@@ -81,8 +81,7 @@ public final class JSIntlDisplayNames extends JSObject {
      */
     public JSValue of(JSContext context, String code) {
         if (code == null || code.isEmpty()) {
-            context.throwRangeError("invalid code for DisplayNames: " + code);
-            return null;
+            return context.rejectRangeError("invalid code for DisplayNames: " + code);
         }
         return switch (type) {
             case "language" -> ofLanguage(context, code);
@@ -100,13 +99,11 @@ public final class JSIntlDisplayNames extends JSObject {
 
     private JSValue ofCalendar(JSContext context, String code) {
         if (!CALENDAR_KEY.matcher(code).matches()) {
-            context.throwRangeError("invalid calendar code for DisplayNames: " + code);
-            return null;
+            return context.rejectRangeError("invalid calendar code for DisplayNames: " + code);
         }
         // Reject underscore separator
         if (code.contains("_")) {
-            context.throwRangeError("invalid calendar code for DisplayNames: " + code);
-            return null;
+            return context.rejectRangeError("invalid calendar code for DisplayNames: " + code);
         }
         String lowerCode = code.toLowerCase(java.util.Locale.ROOT);
         if (KNOWN_CALENDARS.contains(lowerCode)) {
@@ -121,8 +118,7 @@ public final class JSIntlDisplayNames extends JSObject {
 
     private JSValue ofCurrency(JSContext context, String code) {
         if (!CURRENCY_CODE.matcher(code).matches()) {
-            context.throwRangeError("invalid currency code for DisplayNames: " + code);
-            return null;
+            return context.rejectRangeError("invalid currency code for DisplayNames: " + code);
         }
         try {
             Currency currency = Currency.getInstance(code.toUpperCase(java.util.Locale.ROOT));
@@ -142,8 +138,7 @@ public final class JSIntlDisplayNames extends JSObject {
 
     private JSValue ofDateTimeField(JSContext context, String code) {
         if (!VALID_DATE_TIME_FIELDS.contains(code)) {
-            context.throwRangeError("invalid dateTimeField code for DisplayNames: " + code);
-            return null;
+            return context.rejectRangeError("invalid dateTimeField code for DisplayNames: " + code);
         }
         // dateTimeField display names not available via standard Java APIs, use fallback
         if ("none".equals(fallback)) {
@@ -157,8 +152,7 @@ public final class JSIntlDisplayNames extends JSObject {
         // unicode_language_id = unicode_language_subtag ("-" unicode_script_subtag)? ("-" unicode_region_subtag)? ("-"
         // unicode_variant_subtag)*
         if (!isStructurallyValidLanguageTag(code)) {
-            context.throwRangeError("invalid language code for DisplayNames: " + code);
-            return null;
+            return context.rejectRangeError("invalid language code for DisplayNames: " + code);
         }
         Locale codeLocale = Locale.forLanguageTag(code);
         String displayName;
@@ -179,8 +173,7 @@ public final class JSIntlDisplayNames extends JSObject {
 
     private JSValue ofRegion(JSContext context, String code) {
         if (!REGION_SUBTAG.matcher(code).matches()) {
-            context.throwRangeError("invalid region code for DisplayNames: " + code);
-            return null;
+            return context.rejectRangeError("invalid region code for DisplayNames: " + code);
         }
         String upperCode = code.toUpperCase(java.util.Locale.ROOT);
         Locale regionLocale = new Locale.Builder().setRegion(upperCode).build();
@@ -196,8 +189,7 @@ public final class JSIntlDisplayNames extends JSObject {
 
     private JSValue ofScript(JSContext context, String code) {
         if (!SCRIPT_SUBTAG.matcher(code).matches()) {
-            context.throwRangeError("invalid script code for DisplayNames: " + code);
-            return null;
+            return context.rejectRangeError("invalid script code for DisplayNames: " + code);
         }
         String titleCode = code.substring(0, 1).toUpperCase(java.util.Locale.ROOT)
                 + code.substring(1).toLowerCase(java.util.Locale.ROOT);

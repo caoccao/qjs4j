@@ -143,7 +143,7 @@ final class IteratorOpcodes {
     }
 
     static void handleAppend(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue enumerableObject = (JSValue) stack[--sp];
         JSValue positionValue = (JSValue) stack[--sp];
@@ -519,8 +519,8 @@ final class IteratorOpcodes {
 
     static void handleIteratorCall(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int flags = executionContext.bytecode.readU8(pc + 1);
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        int flags = executionContext.operandU8();
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue argumentValue = (JSValue) stack[sp - 1];
         JSValue iteratorValue = (JSValue) stack[sp - 4];
@@ -564,7 +564,7 @@ final class IteratorOpcodes {
     }
 
     static void handleIteratorClose(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue originalPendingException = executionContext.virtualMachine.pendingException;
         int markerIndex = findIteratorCloseMarker(stack, sp, executionContext.frameStackBase);
@@ -628,7 +628,7 @@ final class IteratorOpcodes {
     }
 
     static void handleIteratorGetValueDone(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue iteratorResult = (JSValue) stack[sp - 1];
         if (!(iteratorResult instanceof JSObject iteratorResultObject)) {
@@ -650,7 +650,7 @@ final class IteratorOpcodes {
     }
 
     static void handleIteratorNext(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue argumentValue = (JSValue) stack[sp - 1];
         JSValue catchOffsetValue = (JSValue) stack[sp - 2];

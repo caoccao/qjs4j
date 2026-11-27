@@ -36,10 +36,6 @@ public final class JSTemporalPlainDate extends JSTemporalCalendarDate {
 
     public static JSTemporalPlainDate create(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId,
             JSObject prototype) {
-        JSTemporalPlainDate plainDate = new JSTemporalPlainDate(context, isoDate, calendarId);
-        if (prototype != null) {
-            plainDate.setPrototype(prototype);
-        }
-        return plainDate;
+        return TemporalUtils.withPrototype(new JSTemporalPlainDate(context, isoDate, calendarId), prototype);
     }
 }

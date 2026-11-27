@@ -66,7 +66,7 @@ final class ThrowStatementCompiler {
         compilerContext.emitter.emitGetLocal(disposalErrorIndex);
         compilerContext.emitter.emitGetLocal(throwValueIndex);
         compilerContext.emitter.emitPushConstant(new JSString("An error was suppressed during disposal"));
-        compilerContext.emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, 3);
+        compilerContext.emitter.emitIntOperand(Opcode.CALL_CONSTRUCTOR, 3);
         compilerContext.emitter.emitOpcode(Opcode.THROW);
     }
 }

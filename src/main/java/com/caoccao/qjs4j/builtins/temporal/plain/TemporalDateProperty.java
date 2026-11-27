@@ -44,7 +44,7 @@ public enum TemporalDateProperty {
         this.key = key;
     }
 
-    JSValue read(IsoDate date, TemporalCalendarId calendar) {
+    private JSValue read(IsoDate date, TemporalCalendarId calendar) {
         return switch (this) {
             case DAY -> JSNumber.of(calendarDate(date, calendar).day());
             case MONTH -> JSNumber.of(calendarDate(date, calendar).month());
@@ -56,10 +56,8 @@ public enum TemporalDateProperty {
             case IN_LEAP_YEAR -> JSBoolean.valueOf(calendar.isCalendarLeapYear(calendarDate(date, calendar).year()));
             case MONTHS_IN_YEAR -> JSNumber.of(TemporalUtils.monthsInYear(date, calendar));
             case MONTH_CODE -> new JSString(date.toIsoCalendarDate(calendar).monthCode());
-            case WEEK_OF_YEAR ->
-                calendar == TemporalCalendarId.ISO8601 ? JSNumber.of(date.weekOfYear()) : JSUndefined.INSTANCE;
-            case YEAR_OF_WEEK ->
-                calendar == TemporalCalendarId.ISO8601 ? JSNumber.of(date.yearOfWeek()) : JSUndefined.INSTANCE;
+            case WEEK_OF_YEAR -> JSNumber.of(date.weekOfYear());
+            case YEAR_OF_WEEK -> JSNumber.of(date.yearOfWeek());
             case ERA -> era(date.toTemporalEraYear(calendar));
             case ERA_YEAR -> eraYear(date.toTemporalEraYear(calendar));
         };
@@ -68,7 +66,14 @@ public enum TemporalDateProperty {
     public <T extends JSObject & JSTemporalDateValue> JSValue read(JSContext context, JSValue receiver,
             TemporalReceiver<T> type) {
         T value = type.require(context, receiver, key);
-        return value == null ? JSUndefined.INSTANCE : read(value.getIsoDate(), value.getCalendarId());
+        if (value == null) {
+            return JSUndefined.INSTANCE;
+        }
+        TemporalCalendarId calendar = value.getCalendarId();
+        if ((this == WEEK_OF_YEAR || this == YEAR_OF_WEEK) && calendar != TemporalCalendarId.ISO8601) {
+            return JSUndefined.INSTANCE;
+        }
+        return read(value.getIsoDate(), calendar);
     }
 
     private static IsoDate calendarDate(IsoDate date, TemporalCalendarId calendar) {

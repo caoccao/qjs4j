@@ -74,8 +74,7 @@ final class ReturnStatementCompiler {
         if (compilerContext.finallySubroutineDepth > 0) {
             // Return from a finally subroutine must discard the caller completion value
             // and GOSUB return address after nested finally chains are processed.
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitDrops(2);
         }
 
         if (compilerContext.loopManager.hasActiveIteratorLoops()) {

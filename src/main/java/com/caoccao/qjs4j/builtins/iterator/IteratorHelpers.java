@@ -93,7 +93,7 @@ final class IteratorHelpers {
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        if (returnMethod instanceof JSUndefined || returnMethod instanceof JSNull) {
+        if (JSTypeChecking.isNullish(returnMethod)) {
             return completed(context);
         }
         if (!(returnMethod instanceof JSFunction returnFunctionValue)) {
@@ -118,20 +118,17 @@ final class IteratorHelpers {
             return null;
         }
         if (Double.isNaN(number)) {
-            context.throwRangeError("must be positive");
-            return null;
+            return context.rejectRangeError("must be positive");
         }
         if (Double.isInfinite(number)) {
             if (number < 0) {
-                context.throwRangeError("must be positive");
-                return null;
+                return context.rejectRangeError("must be positive");
             }
             return NumberPrototype.MAX_SAFE_INTEGER;
         }
         long limit = (long) JSTypeConversions.toInteger(context, JSNumber.of(number));
         if (limit < 0) {
-            context.throwRangeError("must be positive");
-            return null;
+            return context.rejectRangeError("must be positive");
         }
         return limit;
     }

@@ -19,8 +19,6 @@ package com.caoccao.qjs4j.builtins.collection;
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 public class WeakMapConstructorTest extends BaseJavetTest {
 
     @Test
@@ -51,7 +49,7 @@ public class WeakMapConstructorTest extends BaseJavetTest {
 
     @Test
     void testWeakMapConstructorIteratorCloseAndAdderLookup() {
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 (() => {
                   const original = WeakMap.prototype.set;
                   try {
@@ -65,9 +63,9 @@ public class WeakMapConstructorTest extends BaseJavetTest {
                   } finally {
                     WeakMap.prototype.set = original;
                   }
-                })()""").toJavaObject()).isEqualTo(true);
+                })()""", true);
 
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 (() => {
                   const original = WeakMap.prototype.set;
                   try {
@@ -79,7 +77,7 @@ public class WeakMapConstructorTest extends BaseJavetTest {
                   } finally {
                     WeakMap.prototype.set = original;
                   }
-                })()""").toJavaObject()).isEqualTo(true);
+                })()""", true);
     }
 
     @Test
@@ -100,7 +98,7 @@ public class WeakMapConstructorTest extends BaseJavetTest {
                     && typeof tagDesc.get === 'undefined';
                 })()""");
 
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 (() => {
                   const d1 = Object.getOwnPropertyDescriptor(WeakMap.prototype, 'getOrInsert');
                   const d2 = Object.getOwnPropertyDescriptor(WeakMap.prototype, 'getOrInsertComputed');
@@ -112,12 +110,12 @@ public class WeakMapConstructorTest extends BaseJavetTest {
                     && d2.writable
                     && !d2.enumerable
                     && d2.configurable;
-                })()""").toJavaObject()).isEqualTo(true);
+                })()""", true);
     }
 
     @Test
     void testWeakMapSymbolKeys() {
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 (() => {
                   const weakMap = new WeakMap();
                   const symbolKey = Symbol('k');
@@ -126,7 +124,7 @@ public class WeakMapConstructorTest extends BaseJavetTest {
                     && weakMap.has(symbolKey)
                     && weakMap.delete(symbolKey)
                     && !weakMap.has(symbolKey);
-                })()""").toJavaObject()).isEqualTo(true);
+                })()""", true);
     }
 
 }

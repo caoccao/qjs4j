@@ -151,12 +151,11 @@ public class DatePrototypeTest extends BaseJavetTest {
     @Test
     public void testDateToStringOnNonDate() {
         // Calling toString on non-Date should throw TypeError
-        JSValue result = DatePrototype.toStringMethod(context, new JSString("not a date"), JSValue.NO_ARGS);
-        assertThat(result).isInstanceOf(JSError.class);
+        assertThat(DatePrototype.toStringMethod(context, new JSString("not a date"), JSValue.NO_ARGS))
+                .isInstanceOf(JSError.class);
         assertThat(context.hasPendingException()).isTrue();
 
-        JSValue exception = context.getPendingException();
-        assertThat(exception).isInstanceOf(JSError.class);
+        assertThat(context.getPendingException()).isInstanceOf(JSError.class);
     }
 
     @Test
@@ -213,8 +212,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         JSValue result = DatePrototype.getDay(context, date, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
-            double day = jsNum.value();
-            assertThat(day).isBetween(0.0, 6.0);
+            assertThat(jsNum.value()).isBetween(0.0, 6.0);
         });
 
         // Edge case: called on non-Date
@@ -229,8 +227,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         JSValue result = DatePrototype.getHours(context, date, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
-            double hours = jsNum.value();
-            assertThat(hours).isBetween(0.0, 23.0);
+            assertThat(jsNum.value()).isBetween(0.0, 23.0);
         });
 
         // Edge case: called on non-Date
@@ -267,8 +264,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         JSValue result = DatePrototype.toISOString(context, date, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> {
-            String isoString = jsStr.value();
-            assertThat(isoString).startsWith("2024-01-01T00:00:00");
+            assertThat(jsStr.value()).startsWith("2024-01-01T00:00:00");
         });
 
         // Edge case: called on non-Date
@@ -283,8 +279,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
         JSValue result = DatePrototype.toJSON(context, date, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> {
-            String jsonString = jsStr.value();
-            assertThat(jsonString).startsWith("2024-01-01T00:00:00");
+            assertThat(jsStr.value()).startsWith("2024-01-01T00:00:00");
         });
 
         // Edge case: called on non-Date
@@ -308,11 +303,10 @@ public class DatePrototypeTest extends BaseJavetTest {
     public void testToString() {
         JSDate date = new JSDate(context, 1735689600000L);
 
-        JSValue result = DatePrototype.toStringMethod(context, date, JSValue.NO_ARGS);
-        assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> {
-            String str = jsStr.value();
-            assertThat(str).isNotEmpty();
-        });
+        assertThat(DatePrototype.toStringMethod(context, date, JSValue.NO_ARGS)).isInstanceOfSatisfying(JSString.class,
+                jsStr -> {
+                    assertThat(jsStr.value()).isNotEmpty();
+                });
 
         // Edge case: called on non-Date
         assertPendingTypeError(context,

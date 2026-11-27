@@ -102,8 +102,7 @@ class DirectEvalScopeTest extends BaseJavetTest {
                     }
                     return outer();
                 })()
-                """);
-        assertStringWithJavet("""
+                """, """
                 (() => {
                     function outer() {
                         let x = 1;

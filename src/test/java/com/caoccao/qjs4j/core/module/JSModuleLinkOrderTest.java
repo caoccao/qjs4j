@@ -150,8 +150,7 @@ public class JSModuleLinkOrderTest extends ModuleFileTest {
         assertThat(location).isNotNull();
         assertThat(location.line()).isEqualTo(1);
         assertThat(location.column()).isEqualTo(10);
-        String dependencySource = Files.readString(mid);
-        assertThat(dependencySource.substring(location.offset(), location.endOffset()))
+        assertThat(Files.readString(mid).substring(location.offset(), location.endOffset()))
                 .as("the offsets select the imported name in the dependency's own source").isEqualTo("missing");
     }
 

@@ -29,8 +29,7 @@ final class JumpStatementCompiler extends AstNodeCompiler<JumpStatement> {
     @Override
     void compile(JumpStatement statement) {
         if (compilerContext.finallySubroutineDepth > 0) {
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            emitter.emitDrops(2);
         }
         boolean continuing = statement instanceof ContinueStatement;
         String label = statement.getLabel() == null ? null : statement.getLabel().getName();
@@ -41,7 +40,7 @@ final class JumpStatementCompiler extends AstNodeCompiler<JumpStatement> {
         int scopeDepth = continuing ? target.continueTargetScopeDepth : target.breakTargetScopeDepth;
         compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(scopeDepth);
         compilerContext.emitHelpers.emitActiveFinallyGosubs();
-        int jump = compilerContext.emitter.emitJump(Opcode.GOTO);
+        int jump = emitter.emitJump(Opcode.GOTO);
         if (continuing) {
             target.continuePositions.add(jump);
         } else {

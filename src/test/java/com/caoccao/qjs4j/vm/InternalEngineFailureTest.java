@@ -74,9 +74,8 @@ public class InternalEngineFailureTest extends BaseTest {
                             .hasMessage("host defect");
                 });
         // The context is still usable afterwards.
-        assertThat(context.eval("1 + 1")).isEqualTo(JSNumber.of(2));
-        assertThat(context.eval("try { null.x } catch (e) { e.constructor.name }"))
-                .isEqualTo(new JSString("TypeError"));
+        assertEvalValue("1 + 1", JSNumber.of(2));
+        assertEvalValue("try { null.x } catch (e) { e.constructor.name }", new JSString("TypeError"));
     }
 
     @Test
@@ -86,7 +85,7 @@ public class InternalEngineFailureTest extends BaseTest {
         assertThatThrownBy(() -> context.eval(
                 "globalThis.seen = 'none'; Promise.resolve().then(() => hostBug()).catch(() => { seen = 'caught' })"))
                 .isInstanceOf(JSTerminationException.class).hasCauseInstanceOf(NullPointerException.class);
-        assertThat(context.eval("seen")).isEqualTo(new JSString("none"));
+        assertEvalValue("seen", new JSString("none"));
     }
 
     @Test

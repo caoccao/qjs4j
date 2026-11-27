@@ -57,9 +57,33 @@ public abstract class BaseTest {
         });
     }
 
+    protected void assertEvalJavaValue(String source, Object expected) {
+        assertThat(context.eval(source).toJavaObject()).isEqualTo(expected);
+    }
+
+    protected void assertEvalNumber(String source, double expected) {
+        assertNumberValue(context.eval(source), expected);
+    }
+
+    protected void assertEvalString(String source, String expected) {
+        assertStringValue(context.eval(source), expected);
+    }
+
+    protected void assertEvalText(String source, String expected) {
+        assertThat(context.eval(source).toString()).isEqualTo(expected);
+    }
+
     protected void assertEvalThrows(String source, String expectedMessage) {
         assertThatThrownBy(() -> context.eval(source)).as(source).isInstanceOf(JSException.class)
                 .hasMessageContaining(expectedMessage);
+    }
+
+    protected void assertEvalType(String source, Class<?> expected) {
+        assertThat(context.eval(source)).isInstanceOf(expected);
+    }
+
+    protected void assertEvalValue(String source, JSValue expected) {
+        assertThat(context.eval(source)).isEqualTo(expected);
     }
 
     protected void assertHostInterrupt(JSContext interruptedContext, String script) throws InterruptedException {

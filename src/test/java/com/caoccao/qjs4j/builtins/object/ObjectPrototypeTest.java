@@ -40,9 +40,9 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         var assignMethod = builtin(ObjectPrototype::assign, JSUndefined.INSTANCE);
         JSValue result = assignMethod.call(target, source);
         assertThat(result).isEqualTo(target);
-        assertThat(target.get("a").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
-        assertThat(target.get("b").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
-        assertThat(target.get("c").asString().map(JSString::value).orElseThrow()).isEqualTo("hello");
+        assertNumberValue(target.get("a"), 1.0);
+        assertNumberValue(target.get("b"), 2.0);
+        assertStringValue(target.get("c"), "hello");
 
         // Normal case: multiple sources
         JSObject source2 = new JSObject(context);
@@ -83,7 +83,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         assertThat(result).isInstanceOfSatisfying(JSObject.class, obj2 -> {
             assertThat(obj2.getPrototype()).isEqualTo(proto);
             // Should inherit property
-            assertThat(obj2.get("testProp").asString().map(JSString::value).orElseThrow()).isEqualTo("testValue");
+            assertStringValue(obj2.get("testProp"), "testValue");
         });
 
         // Edge case: invalid prototype
@@ -139,7 +139,7 @@ public class ObjectPrototypeTest extends BaseJavetTest {
         var defineProperty = builtin(ObjectPrototype::defineProperty, JSUndefined.INSTANCE);
         JSValue result = defineProperty.call(obj, new JSString("testProp"), descriptor);
         assertThat(result).isEqualTo(obj);
-        assertThat(obj.get("testProp").asString().map(JSString::value).orElseThrow()).isEqualTo("test");
+        assertStringValue(obj.get("testProp"), "test");
 
         // Edge case: not enough arguments
         result = defineProperty.call(obj, new JSString("prop"));

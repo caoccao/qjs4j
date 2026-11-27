@@ -41,8 +41,8 @@ class ClassEvaluationTest extends BaseJavetTest {
                 const out=classes.map(C=>new C().read());
                 out.push(new classes[0]().method()===new classes[1]().method());
                 return JSON.stringify(out)})()
-                """);
-        assertStringWithJavet(
+                """,
+
                 """
                         (()=>{const subs=[];for(let k=0;k<2;k++){class B{#b=k;#bm(){return this.#b}readBase(){return this.#bm()}}
                         class S extends B{#s=k+100;#sm(){return this.#s}readSub(){return this.#sm()+this.readBase()}}subs.push(S)}

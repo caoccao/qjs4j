@@ -387,8 +387,7 @@ public final class TemporalTimeZone {
 
     public static String parseTimeZoneIdentifierString(JSContext context, String timeZoneText) {
         if (timeZoneText.isEmpty()) {
-            context.throwRangeError("Temporal error: Invalid time zone.");
-            return null;
+            return context.rejectRangeError("Temporal error: Invalid time zone.");
         }
         char firstCharacter = timeZoneText.charAt(0);
         boolean startsWithDateCharacter = Character.isDigit(firstCharacter) || firstCharacter == '+'
@@ -417,8 +416,7 @@ public final class TemporalTimeZone {
         }
 
         if (!hasOffsetDesignator(timeZoneText)) {
-            context.throwRangeError("Temporal error: Invalid time zone.");
-            return null;
+            return context.rejectRangeError("Temporal error: Invalid time zone.");
         }
         String offsetText = extractOffsetText(timeZoneText);
         if (offsetText != null && !isValidTimeZoneOffsetWithoutSeconds(offsetText)) {
@@ -437,8 +435,7 @@ public final class TemporalTimeZone {
 
     public static String requireTimeZoneIdentifier(JSContext context, JSValue timeZoneLike) {
         if (!(timeZoneLike instanceof JSString timeZoneString)) {
-            context.throwTypeError("Temporal error: Time zone must be string.");
-            return null;
+            return context.rejectTypeError("Temporal error: Time zone must be string.");
         }
         return parseTimeZoneIdentifierString(context, timeZoneString.value());
     }

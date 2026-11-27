@@ -590,14 +590,14 @@ final class EvalRunner {
                     if (callerFunction.getModuleEnvironment() != null) {
                         func.setModuleEnvironment(callerFunction.getModuleEnvironment().forDirectEval());
                     }
-                    if (evalNewTarget == null || evalNewTarget instanceof JSUndefined) {
+                    if (JSTypeChecking.isUndefinedOrMissing(evalNewTarget)) {
                         if (callerFunction instanceof JSBytecodeFunction callerBf && callerBf.isArrow()) {
                             JSValue capturedNewTarget = callerBf.getCapturedNewTarget();
                             if (capturedNewTarget != null) {
                                 evalNewTarget = capturedNewTarget;
                             }
                         }
-                        if (evalNewTarget == null || evalNewTarget instanceof JSUndefined) {
+                        if (JSTypeChecking.isUndefinedOrMissing(evalNewTarget)) {
                             evalNewTarget = directEvalCallerFrame.getNewTarget();
                         }
                     }

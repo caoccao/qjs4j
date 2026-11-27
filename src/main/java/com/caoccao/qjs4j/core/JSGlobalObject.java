@@ -463,7 +463,7 @@ public final class JSGlobalObject {
         throwTypeError.defineProperty(PropertyKey.LENGTH,
                 PropertyDescriptor.dataDescriptor(JSNumber.of(0), PropertyDescriptor.DataState.None));
         throwTypeError.defineProperty(PropertyKey.NAME,
-                PropertyDescriptor.dataDescriptor(new JSString(""), PropertyDescriptor.DataState.None));
+                PropertyDescriptor.dataDescriptor(JSString.EMPTY, PropertyDescriptor.DataState.None));
         throwTypeError.preventExtensions();
         // Store as the %ThrowTypeError% intrinsic for sharing with strict arguments.callee
         context.setThrowTypeErrorIntrinsic(throwTypeError);
@@ -482,7 +482,7 @@ public final class JSGlobalObject {
 
         // Add 'length' and 'name' data properties
         functionPrototype.defineProperty(PropertyKey.LENGTH, JSNumber.of(0), PropertyDescriptor.DataState.Configurable);
-        functionPrototype.defineProperty(PropertyKey.NAME, new JSString(""), PropertyDescriptor.DataState.Configurable);
+        functionPrototype.defineProperty(PropertyKey.NAME, JSString.EMPTY, PropertyDescriptor.DataState.Configurable);
 
         // Per ECMAScript spec, Function.prototype's [[Prototype]] is Object.prototype
         context.transferPrototype(functionPrototype, JSObject.NAME);
@@ -716,7 +716,7 @@ public final class JSGlobalObject {
                     if (childContext.hasPendingException()) {
                         return childContext.getPendingException();
                     }
-                    if (returnMethod instanceof JSUndefined || returnMethod instanceof JSNull) {
+                    if (JSTypeChecking.isNullish(returnMethod)) {
                         return JSUndefined.INSTANCE;
                     }
                     if (!(returnMethod instanceof JSFunction returnFunction)) {

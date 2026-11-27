@@ -47,19 +47,17 @@ public record TemporalFractionalSecondDigitsOption(boolean auto, int digits) {
 
     public static TemporalFractionalSecondDigitsOption parse(JSContext context, JSValue fractionalSecondDigitsValue,
             String invalidOptionMessage) {
-        if (fractionalSecondDigitsValue instanceof JSUndefined || fractionalSecondDigitsValue == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(fractionalSecondDigitsValue)) {
             return autoOption();
         }
         if (fractionalSecondDigitsValue instanceof JSNumber fractionalSecondDigitsNumberValue) {
             double numericValue = fractionalSecondDigitsNumberValue.value();
             if (!Double.isFinite(numericValue) || Double.isNaN(numericValue)) {
-                context.throwRangeError(invalidOptionMessage);
-                return null;
+                return context.rejectRangeError(invalidOptionMessage);
             }
             int flooredValue = (int) Math.floor(numericValue);
             if (flooredValue < 0 || flooredValue > 9) {
-                context.throwRangeError(invalidOptionMessage);
-                return null;
+                return context.rejectRangeError(invalidOptionMessage);
             }
             return ofDigits(flooredValue);
         }
@@ -72,8 +70,7 @@ public record TemporalFractionalSecondDigitsOption(boolean auto, int digits) {
             return autoOption();
         }
 
-        context.throwRangeError(invalidOptionMessage);
-        return null;
+        return context.rejectRangeError(invalidOptionMessage);
     }
 
     public long roundingIncrementNanoseconds() {

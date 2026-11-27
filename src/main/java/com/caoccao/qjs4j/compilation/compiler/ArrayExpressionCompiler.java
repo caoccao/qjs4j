@@ -26,7 +26,7 @@ final class ArrayExpressionCompiler {
     }
 
     static void compile(CompilerContext compilerContext, ArrayExpression arrayExpr) {
-        compilerContext.emitter.emitOpcodeU16(Opcode.ARRAY_FROM, 0);
+        compilerContext.emitter.emitIntOperand(Opcode.ARRAY_FROM, 0);
 
         // Check if we have any spread elements or holes
         boolean hasSpread = arrayExpr.getElements().stream().anyMatch(e -> e instanceof SpreadElement);
@@ -34,7 +34,7 @@ final class ArrayExpressionCompiler {
 
         if (!hasSpread && !hasHoles) {
             // Simple case: no spread elements, no holes
-            compilerContext.emitter.emitOpcodeU32(Opcode.PUSH_I32, 0);
+            compilerContext.emitter.emitIntOperand(Opcode.PUSH_I32, 0);
             for (Expression element : arrayExpr.getElements()) {
                 compilerContext.expressionCompiler.compile(element);
                 compilerContext.emitter.emitArrayElement();
@@ -52,7 +52,7 @@ final class ArrayExpressionCompiler {
                 if (element instanceof SpreadElement spreadElement) {
                     // Emit index if not already on stack
                     if (!needsIndex) {
-                        compilerContext.emitter.emitOpcodeU32(Opcode.PUSH_I32, idx);
+                        compilerContext.emitter.emitIntOperand(Opcode.PUSH_I32, idx);
                         needsIndex = true;
                     }
                     // Compile the iterable expression
@@ -73,7 +73,7 @@ final class ArrayExpressionCompiler {
                     } else {
                         // No index on stack yet
                         // Start using index-based assignment since we have holes or spread
-                        compilerContext.emitter.emitOpcodeU32(Opcode.PUSH_I32, idx);
+                        compilerContext.emitter.emitIntOperand(Opcode.PUSH_I32, idx);
                         needsIndex = true;
                         compilerContext.expressionCompiler.compile(element);
                         compilerContext.emitter.emitArrayElement();
@@ -106,7 +106,7 @@ final class ArrayExpressionCompiler {
                     // Stack: array (idx is compile-time constant)
                     // QuickJS pattern: dup, push idx, swap, put_field "length", drop
                     compilerContext.emitter.emitOpcode(Opcode.DUP); // array array
-                    compilerContext.emitter.emitOpcodeU32(Opcode.PUSH_I32, idx); // array array idx
+                    compilerContext.emitter.emitIntOperand(Opcode.PUSH_I32, idx); // array array idx
                     compilerContext.emitter.emitOpcode(Opcode.SWAP); // array idx array
                     compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, "length"); // array idx
                     compilerContext.emitter.emitOpcode(Opcode.DROP); // array

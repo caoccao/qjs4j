@@ -480,7 +480,7 @@ public enum TemporalCalendarId {
     }
 
     public static TemporalCalendarId createFromCalendarString(JSContext context, JSValue calendarValue) {
-        if (calendarValue instanceof JSUndefined || calendarValue == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(calendarValue)) {
             return TemporalCalendarId.ISO8601;
         }
         if (!(calendarValue instanceof JSString calendarString)) {
@@ -494,7 +494,7 @@ public enum TemporalCalendarId {
     }
 
     public static TemporalCalendarId createFromCalendarValue(JSContext context, JSValue calendarValue) {
-        if (calendarValue instanceof JSUndefined || calendarValue == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(calendarValue)) {
             return TemporalCalendarId.ISO8601;
         }
         if (calendarValue instanceof JSTemporalDateValue date) {

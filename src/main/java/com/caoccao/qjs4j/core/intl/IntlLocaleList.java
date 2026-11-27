@@ -41,7 +41,7 @@ final class IntlLocaleList {
     }
 
     static List<String> canonicalizeLocaleList(JSContext context, JSValue localeValue) {
-        if (localeValue == null || localeValue instanceof JSUndefined) {
+        if (JSTypeChecking.isUndefinedOrMissing(localeValue)) {
             return List.of();
         }
         if (localeValue instanceof JSNull) {
@@ -71,7 +71,7 @@ final class IntlLocaleList {
             return localeTags;
         }
         long length;
-        if (lengthValue == null || lengthValue instanceof JSUndefined) {
+        if (JSTypeChecking.isUndefinedOrMissing(lengthValue)) {
             length = 0;
         } else {
             double lenNum = JSTypeConversions.toNumber(context, lengthValue).value();
@@ -105,7 +105,7 @@ final class IntlLocaleList {
             if (context.hasPendingException()) {
                 return localeTags;
             }
-            if (element == null || element instanceof JSUndefined) {
+            if (JSTypeChecking.isUndefinedOrMissing(element)) {
                 context.throwTypeError("undefined is not a well-formed locale value");
                 return localeTags;
             }
@@ -139,8 +139,7 @@ final class IntlLocaleList {
         try {
             return IntlLocaleTag.canonicalizeLocaleTag(tag);
         } catch (IllegalArgumentException e) {
-            context.throwRangeError("Invalid language tag: " + tag);
-            return null;
+            return context.rejectRangeError("Invalid language tag: " + tag);
         }
     }
 
@@ -163,8 +162,7 @@ final class IntlLocaleList {
         }
         // Per ECMA-402 CanonicalizeLocaleList: null → TypeError
         if (args[index] instanceof JSNull) {
-            context.throwTypeError("Cannot convert null to object");
-            return null;
+            return context.rejectTypeError("Cannot convert null to object");
         }
         List<String> canonicalLocales = canonicalizeLocaleList(context, args[index]);
         if (context.hasPendingException()) {

@@ -37,8 +37,7 @@ public class JSResizableArrayBufferTest extends BaseJavetTest {
         // Budget refusals must remain catchable by JavaScript. JSLargeBufferTest covers allocation
         // with the host budget explicitly disabled and compares the result with V8.
         try (JSRuntime runtime = new JSRuntime()) {
-            JSContext context = runtime.createContext();
-            assertThat(context.eval("""
+            assertThat(runtime.createContext().eval("""
                     [2147483647, 2147483646, 2147483645, 2147483644].map(length => {
                       try { new ArrayBuffer(length); return 'allocated'; } catch (e) { return e.name; }
                     }).join(',')

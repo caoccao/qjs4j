@@ -64,8 +64,8 @@ final class BinaryExpressionCompiler extends AstNodeCompiler<BinaryExpression> {
                 compilerContext.expressionCompiler.compile(binaryExpression.getRight());
                 // An operator can call valueOf, toString or Symbol.hasInstance; a frame stopped there reports
                 // the operator's position, as V8 does.
-                compilerContext.emitter.emitSourcePosition(binaryExpression.getLocation());
-                compilerContext.emitter.emitOpcode(binaryExpression.getOperator().getOpcode());
+                emitter.emitSourcePosition(binaryExpression.getLocation());
+                emitter.emitOpcode(binaryExpression.getOperator().getOpcode());
             } else {
                 compilerContext.popState();
                 compileShortCircuitTail(binaryExpression);
@@ -77,26 +77,26 @@ final class BinaryExpressionCompiler extends AstNodeCompiler<BinaryExpression> {
         compilerContext.expressionCompiler.compile(right);
 
         compilerContext.emitHelpers.emitPrivateSymbol(privateIdentifier);
-        compilerContext.emitter.emitOpcode(Opcode.PRIVATE_IN);
+        emitter.emitOpcode(Opcode.PRIVATE_IN);
     }
 
     private void compileShortCircuitTail(BinaryExpression binExpr) {
         // Stack: left
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        emitter.emitOpcode(Opcode.DUP);
         int jumpEnd = switch (binExpr.getOperator()) {
             // left && right: if left is falsy, return left; otherwise evaluate and return right
-            case LOGICAL_AND -> compilerContext.emitter.emitJump(Opcode.IF_FALSE);
+            case LOGICAL_AND -> emitter.emitJump(Opcode.IF_FALSE);
             // left || right: if left is truthy, return left; otherwise evaluate and return right
-            case LOGICAL_OR -> compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+            case LOGICAL_OR -> emitter.emitJump(Opcode.IF_TRUE);
             // left ?? right: if left is not null/undefined, return left; otherwise evaluate and return right
             default -> {
-                compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
-                yield compilerContext.emitter.emitJump(Opcode.IF_FALSE);
+                emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
+                yield emitter.emitJump(Opcode.IF_FALSE);
             }
         };
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        emitter.emitOpcode(Opcode.DROP);
         compilerContext.expressionCompiler.compile(binExpr.getRight());
-        compilerContext.emitter.patchJumpToHere(jumpEnd);
+        emitter.patchJumpToHere(jumpEnd);
     }
 
     private static boolean isPrivateIn(BinaryExpression binExpr) {

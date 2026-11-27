@@ -51,7 +51,7 @@ public final class JSStringObject extends JSObject {
     private final JSString value;
 
     public JSStringObject(JSContext context) {
-        this(context, new JSString(""));
+        this(context, JSString.EMPTY);
     }
 
     /**
@@ -121,7 +121,7 @@ public final class JSStringObject extends JSObject {
     @Override
     public JSValue get(int index) {
         if (index >= 0 && index < value.value().length()) {
-            return new JSString(String.valueOf(value.value().charAt(index)));
+            return JSString.of(value.value().charAt(index));
         }
         return super.get(index);
     }
@@ -138,7 +138,7 @@ public final class JSStringObject extends JSObject {
     public JSValue get(String propertyName) {
         int index = PropertyKey.fromString(propertyName).toIndex();
         if (index >= 0 && index < value.value().length()) {
-            return new JSString(String.valueOf(value.value().charAt(index)));
+            return JSString.of(value.value().charAt(index));
         }
         return super.get(propertyName);
     }
@@ -159,7 +159,7 @@ public final class JSStringObject extends JSObject {
     protected PropertyDescriptor getOwnPropertyDescriptorRaw(PropertyKey key) {
         int charIndex = key.toIndex();
         if (charIndex >= 0 && charIndex < value.value().length()) {
-            JSValue charValue = new JSString(String.valueOf(value.value().charAt(charIndex)));
+            JSValue charValue = JSString.of(value.value().charAt(charIndex));
             return PropertyDescriptor.dataDescriptor(charValue, PropertyDescriptor.DataState.Enumerable);
         }
 
@@ -247,7 +247,7 @@ public final class JSStringObject extends JSObject {
     public static JSObject create(JSContext context, JSValue... args) {
         JSString strValue;
         if (args.length == 0) {
-            strValue = new JSString("");
+            strValue = JSString.EMPTY;
         } else {
             strValue = JSTypeConversions.toString(context, args[0]);
         }

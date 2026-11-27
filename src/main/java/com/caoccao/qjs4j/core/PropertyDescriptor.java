@@ -46,6 +46,13 @@ public final class PropertyDescriptor {
         this.writable = Optional.empty();
     }
 
+    /** Whether a partial descriptor can describe a data property with these fixed attributes. */
+    public boolean acceptsDataAttributes(DataState state) {
+        return !isAccessorDescriptor() && (!hasConfigurable() || isConfigurable() == state.isConfigurable())
+                && (!hasEnumerable() || isEnumerable() == state.isEnumerable())
+                && (!hasWritable() || isWritable() == state.isWritable());
+    }
+
     /**
      * Complete this descriptor with default values for accessor.
      */
@@ -115,11 +122,11 @@ public final class PropertyDescriptor {
         return setter instanceof JSFunction f ? f : null;
     }
 
+    // Getters
+
     public JSValue getValue() {
         return value.orElse(null);
     }
-
-    // Getters
 
     public boolean hasConfigurable() {
         return configurable.isPresent();
@@ -417,9 +424,8 @@ public final class PropertyDescriptor {
 
         // Step 8: If accessor and data properties are both present, throw TypeError
         if (hasAccessor && hasData) {
-            context.throwTypeError(
+            return context.rejectTypeError(
                     "Invalid property descriptor. Cannot both specify accessors and a value or writable attribute, #<Object>");
-            return null;
         }
 
         return desc;
@@ -477,8 +483,7 @@ public final class PropertyDescriptor {
         if (descriptorObject.has(PropertyKey.GET)) {
             JSValue get = descriptorObject.get(PropertyKey.GET);
             if (!(get instanceof JSUndefined) && !(get instanceof JSFunction)) {
-                context.throwTypeError(reflect ? "invalid getter" : "Getter must be a function");
-                return null;
+                return context.rejectTypeError(reflect ? "invalid getter" : "Getter must be a function");
             }
             descriptor.setGetter(get instanceof JSFunction getter ? getter : null);
         }
@@ -486,16 +491,14 @@ public final class PropertyDescriptor {
         if (descriptorObject.has(PropertyKey.SET)) {
             JSValue set = descriptorObject.get(PropertyKey.SET);
             if (!(set instanceof JSUndefined) && !(set instanceof JSFunction)) {
-                context.throwTypeError(reflect ? "invalid setter" : "Setter must be a function");
-                return null;
+                return context.rejectTypeError(reflect ? "invalid setter" : "Setter must be a function");
             }
             descriptor.setSetter(set instanceof JSFunction setter ? setter : null);
         }
 
         if (descriptor.isAccessorDescriptor() && descriptor.isDataDescriptor()) {
             String message = "Invalid property descriptor. Cannot both specify accessors and a value or writable attribute";
-            context.throwTypeError(reflect ? message : message + ", #<Object>");
-            return null;
+            return context.rejectTypeError(reflect ? message : message + ", #<Object>");
         }
 
         return descriptor;

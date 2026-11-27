@@ -37,10 +37,6 @@ public final class JSTemporalDuration extends JSObject {
     }
 
     public static JSTemporalDuration create(JSContext context, TemporalDuration duration, JSObject prototype) {
-        JSTemporalDuration temporalDuration = new JSTemporalDuration(context, duration);
-        if (prototype != null) {
-            temporalDuration.setPrototype(prototype);
-        }
-        return temporalDuration;
+        return TemporalUtils.withPrototype(new JSTemporalDuration(context, duration), prototype);
     }
 }

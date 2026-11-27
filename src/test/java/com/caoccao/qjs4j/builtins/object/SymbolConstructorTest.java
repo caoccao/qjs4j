@@ -61,50 +61,43 @@ public class SymbolConstructorTest extends BaseJavetTest {
     @Test
     public void testGetAsyncDispose() {
         JSValue result = SymbolConstructor.getAsyncDispose(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        JSSymbol symbol = result.asSymbol().orElseThrow();
-        assertThat(symbol).isEqualTo(JSSymbol.ASYNC_DISPOSE);
+        assertThat(result.asSymbol().orElseThrow()).isEqualTo(JSSymbol.ASYNC_DISPOSE);
     }
 
     @Test
     public void testGetDispose() {
         JSValue result = SymbolConstructor.getDispose(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        JSSymbol symbol = result.asSymbol().orElseThrow();
-        assertThat(symbol).isEqualTo(JSSymbol.DISPOSE);
+        assertThat(result.asSymbol().orElseThrow()).isEqualTo(JSSymbol.DISPOSE);
     }
 
     @Test
     public void testGetHasInstance() {
         JSValue result = SymbolConstructor.getHasInstance(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        JSSymbol symbol = result.asSymbol().orElseThrow();
-        assertThat(symbol).isEqualTo(JSSymbol.HAS_INSTANCE);
+        assertThat(result.asSymbol().orElseThrow()).isEqualTo(JSSymbol.HAS_INSTANCE);
     }
 
     @Test
     public void testGetIsConcatSpreadable() {
         JSValue result = SymbolConstructor.getIsConcatSpreadable(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        JSSymbol symbol = result.asSymbol().orElseThrow();
-        assertThat(symbol).isEqualTo(JSSymbol.IS_CONCAT_SPREADABLE);
+        assertThat(result.asSymbol().orElseThrow()).isEqualTo(JSSymbol.IS_CONCAT_SPREADABLE);
     }
 
     @Test
     public void testGetIterator() {
         JSValue result = SymbolConstructor.getIterator(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        JSSymbol symbol = result.asSymbol().orElseThrow();
-        assertThat(symbol).isEqualTo(JSSymbol.ITERATOR);
+        assertThat(result.asSymbol().orElseThrow()).isEqualTo(JSSymbol.ITERATOR);
     }
 
     @Test
     public void testGetToPrimitive() {
         JSValue result = SymbolConstructor.getToPrimitive(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        JSSymbol symbol = result.asSymbol().orElseThrow();
-        assertThat(symbol).isEqualTo(JSSymbol.TO_PRIMITIVE);
+        assertThat(result.asSymbol().orElseThrow()).isEqualTo(JSSymbol.TO_PRIMITIVE);
     }
 
     @Test
     public void testGetToStringTag() {
         JSValue result = SymbolConstructor.getToStringTag(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-        JSSymbol symbol = result.asSymbol().orElseThrow();
-        assertThat(symbol).isEqualTo(JSSymbol.TO_STRING_TAG);
+        assertThat(result.asSymbol().orElseThrow()).isEqualTo(JSSymbol.TO_STRING_TAG);
     }
 
     @Test
@@ -149,8 +142,7 @@ public class SymbolConstructorTest extends BaseJavetTest {
 
         // Normal case: get existing symbol from registry
         result = symbolFor.call(stringArgs("test"));
-        JSSymbol symbol2 = result.asSymbol().orElseThrow();
-        assertThat(symbol2).isEqualTo(symbol1); // Same symbol instance
+        assertThat(result.asSymbol().orElseThrow()).isEqualTo(symbol1); // Same symbol instance
 
         // Normal case: different keys create different symbols
         result = symbolFor.call(stringArgs("other"));
@@ -160,8 +152,7 @@ public class SymbolConstructorTest extends BaseJavetTest {
 
         // Normal case: numeric key
         result = symbolFor.call(numberArgs(123));
-        JSSymbol symbol4 = result.asSymbol().orElseThrow();
-        assertThat(symbol4.getDescription()).isEqualTo("123");
+        assertThat(result.asSymbol().orElseThrow().getDescription()).isEqualTo("123");
 
         // Edge case: no arguments coerces undefined to "undefined" key
         result = symbolFor.call();
@@ -169,8 +160,7 @@ public class SymbolConstructorTest extends BaseJavetTest {
         assertThat(symbol5.getDescription()).isEqualTo("undefined");
 
         result = symbolFor.call(JSUndefined.INSTANCE);
-        JSSymbol symbol6 = result.asSymbol().orElseThrow();
-        assertThat(symbol6).isEqualTo(symbol5);
+        assertThat(result.asSymbol().orElseThrow()).isEqualTo(symbol5);
     }
 
     @Test

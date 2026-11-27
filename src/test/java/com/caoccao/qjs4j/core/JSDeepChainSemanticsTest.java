@@ -156,8 +156,7 @@ public class JSDeepChainSemanticsTest extends BaseJavetTest {
                 }
                 const base = { get probe() { return this === leaf ? 'receiver' : 'wrong' } };
                 const leaf = chainOf(5000, base);
-                leaf.probe;""");
-        assertStringWithJavet("""
+                leaf.probe;""", """
                 function chainOf(depth, base) {
                   let object = base;
                   for (let i = 0; i < depth; i++) { object = Object.create(object); }

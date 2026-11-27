@@ -127,8 +127,7 @@ public enum TypedArrayKind {
         long count;
         if (source instanceof JSTypedArray array) {
             if (array.isOutOfBounds()) {
-                context.throwTypeError("source TypedArray is out of bounds");
-                return null;
+                return context.rejectTypeError("source TypedArray is out of bounds");
             }
             count = array.getLength();
         } else if (source instanceof JSArray array) {

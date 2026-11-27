@@ -41,8 +41,8 @@ public class JSErrorTest extends BaseJavetTest {
                 "Object.getPrototypeOf(TypeError) === Error",
                 "Object.getPrototypeOf(TypeError.prototype) === Error.prototype",
                 "Object.getPrototypeOf(URIError) === Error",
-                "Object.getPrototypeOf(URIError.prototype) === Error.prototype");
-        assertBooleanWithJavet("AggregateError.prototype.hasOwnProperty('errors')");
+                "Object.getPrototypeOf(URIError.prototype) === Error.prototype",
+                "AggregateError.prototype.hasOwnProperty('errors')");
         assertStringWithJavet("new AggregateError([], 'message').toString()");
     }
 

@@ -120,8 +120,7 @@ final class ArraySpecies {
         if (result instanceof JSObject object) {
             return object;
         }
-        context.throwTypeError("ArraySpeciesCreate did not return an object");
-        return null;
+        return context.rejectTypeError("ArraySpeciesCreate did not return an object");
     }
 
     static boolean define(JSContext context, JSObject target, long index, JSValue value) {

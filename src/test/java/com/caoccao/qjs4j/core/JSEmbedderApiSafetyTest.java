@@ -77,8 +77,7 @@ public class JSEmbedderApiSafetyTest extends BaseTest {
 
     @Test
     public void testCreateArrayWithMaximumUint32Length() {
-        JSArray array = context.createJSArray(4294967295L);
-        assertThat(array.getLength()).isEqualTo(4294967295L);
+        assertThat(context.createJSArray(4294967295L).getLength()).isEqualTo(4294967295L);
     }
 
     @Test
@@ -106,8 +105,8 @@ public class JSEmbedderApiSafetyTest extends BaseTest {
         assertThat(object.get(PropertyKey.fromIndex(500))).isEqualTo(JSUndefined.INSTANCE);
 
         context.getGlobalObject().set("probe", object);
-        assertThat(context.eval("JSON.stringify(Object.keys(probe))").toString()).isEqualTo("[]");
-        assertThat(context.eval("Object.isFrozen(probe)")).isEqualTo(JSBoolean.TRUE);
+        assertEvalText("JSON.stringify(Object.keys(probe))", "[]");
+        assertEvalValue("Object.isFrozen(probe)", JSBoolean.TRUE);
     }
 
     @Test
@@ -117,8 +116,8 @@ public class JSEmbedderApiSafetyTest extends BaseTest {
         object.set(500, new JSString("leaked"));
 
         context.getGlobalObject().set("probe", object);
-        assertThat(context.eval("JSON.stringify(Object.keys(probe))").toString()).isEqualTo("[]");
-        assertThat(context.eval("Object.isExtensible(probe)")).isEqualTo(JSBoolean.FALSE);
+        assertEvalText("JSON.stringify(Object.keys(probe))", "[]");
+        assertEvalValue("Object.isExtensible(probe)", JSBoolean.FALSE);
     }
 
     @Test
@@ -128,9 +127,9 @@ public class JSEmbedderApiSafetyTest extends BaseTest {
         object.set(500, new JSString("large"));
 
         context.getGlobalObject().set("probe", object);
-        assertThat(context.eval("probe[5]").toString()).isEqualTo("small");
-        assertThat(context.eval("probe[500]").toString()).isEqualTo("large");
-        assertThat(context.eval("JSON.stringify(Object.keys(probe))").toString()).isEqualTo("[\"5\",\"500\"]");
+        assertEvalText("probe[5]", "small");
+        assertEvalText("probe[500]", "large");
+        assertEvalText("JSON.stringify(Object.keys(probe))", "[\"5\",\"500\"]");
     }
 
     @Test

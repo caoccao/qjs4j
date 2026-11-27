@@ -40,7 +40,7 @@ final class TemplateLiteralCompiler {
 
         if (quasis.isEmpty()) {
             // Empty template literal
-            compilerContext.emitter.emitPushConstant(new JSString(""));
+            compilerContext.emitter.emitPushConstant(JSString.EMPTY);
             return;
         }
 
@@ -76,6 +76,6 @@ final class TemplateLiteralCompiler {
             }
         }
 
-        compilerContext.emitter.emitOpcodeU16(Opcode.CALL_METHOD, argumentCount);
+        compilerContext.emitter.emitIntOperand(Opcode.CALL_METHOD, argumentCount);
     }
 }

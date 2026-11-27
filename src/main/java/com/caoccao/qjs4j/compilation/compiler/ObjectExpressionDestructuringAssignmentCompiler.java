@@ -55,9 +55,7 @@ final class ObjectExpressionDestructuringAssignmentCompiler {
                 return;
             }
             // {...rest} = val → explicit coercibility check
-            compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.emitter.emitOpcode(Opcode.TO_OBJECT);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitRequireObjectCoercible();
         }
 
         int sourceLocalIndex = compilerContext.storeTemporary("#objectAssignSource");
@@ -73,8 +71,7 @@ final class ObjectExpressionDestructuringAssignmentCompiler {
         for (ObjectExpressionProperty property : regularProperties) {
             int propertyKeyLocalIndex = -1;
             if (property.isComputed()) {
-                compilerContext.expressionCompiler.compile(property.getKey());
-                compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
+                compilerContext.expressionCompiler.compilePropertyKey(property.getKey());
                 propertyKeyLocalIndex = compilerContext.declareTemporary("#objectAssignKey");
                 compilerContext.emitter.emitPutLocal(propertyKeyLocalIndex);
             }

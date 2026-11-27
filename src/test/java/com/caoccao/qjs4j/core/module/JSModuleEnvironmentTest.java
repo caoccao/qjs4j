@@ -9,7 +9,6 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Regressions for the module environment defects originally documented in review 02. */
@@ -68,7 +67,7 @@ class JSModuleEnvironmentTest extends BaseJavetTest {
         Files.writeString(moduleDirectory.resolve("main.mjs"), source);
         context.eval(source, moduleDirectory.resolve("main.mjs").toString(), true);
         context.processMicrotasks();
-        assertThat(context.eval("JSON.stringify([runs,read()])").toString()).isEqualTo("[1,42]");
+        assertEvalText("JSON.stringify([runs,read()])", "[1,42]");
     }
 
     @Test
@@ -168,6 +167,6 @@ class JSModuleEnvironmentTest extends BaseJavetTest {
         // Import attributes are a host contract: the native V8 resolver leaves validation to its embedder.
         assertThatThrownBy(() -> context.eval(source, entry.toString(), true)).hasMessageContaining("Import attribute")
                 .hasMessageContaining("not supported");
-        assertThat(context.eval("typeof ran+','+typeof depRan").toString()).isEqualTo("undefined,undefined");
+        assertEvalText("typeof ran+','+typeof depRan", "undefined,undefined");
     }
 }

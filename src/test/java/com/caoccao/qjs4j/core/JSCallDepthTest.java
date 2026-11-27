@@ -52,20 +52,17 @@ public class JSCallDepthTest extends BaseJavetTest {
     public void testDeprecatedAliasesStillWork() {
         JSRuntimeOptions options = new JSRuntimeOptions().setMaxStackSize(20 * JSRuntimeOptions.BYTES_PER_STACK_FRAME);
         assertThat(options.getMaxCallDepth()).isEqualTo(20);
-        int depth = options.getMaxStackDepth();
-        assertThat(depth).isEqualTo(20);
+        assertThat(options.getMaxStackDepth()).isEqualTo(20);
         long size = options.getMaxStackSize();
         assertThat(size).isEqualTo(20 * 256);
         long defaultSize = JSRuntimeOptions.DEFAULT_MAX_STACK_SIZE;
         assertThat(defaultSize).isEqualTo(JSRuntimeOptions.DEFAULT_MAX_CALL_DEPTH * 256L);
-        int clampedLow = new JSRuntimeOptions().setMaxStackSize(-5).getMaxCallDepth();
-        assertThat(clampedLow).isEqualTo(1);
-        int clampedHigh = new JSRuntimeOptions().setMaxStackSize(Long.MAX_VALUE).getMaxCallDepth();
-        assertThat(clampedHigh).isEqualTo(Integer.MAX_VALUE);
+        assertThat(new JSRuntimeOptions().setMaxStackSize(-5).getMaxCallDepth()).isEqualTo(1);
+        assertThat(new JSRuntimeOptions().setMaxStackSize(Long.MAX_VALUE).getMaxCallDepth())
+                .isEqualTo(Integer.MAX_VALUE);
 
         context.setMaxStackDepth(30);
-        int contextDepth = context.getMaxStackDepth();
-        assertThat(contextDepth).isEqualTo(30);
+        assertThat(context.getMaxStackDepth()).isEqualTo(30);
     }
 
     @Test
@@ -76,16 +73,15 @@ public class JSCallDepthTest extends BaseJavetTest {
                 .hasMessage("maxCallDepth must be at least 1: -5");
         context.setMaxCallDepth(1);
         assertThat(context.eval("1 + 1").toString()).as("one frame is the top-level code").isEqualTo("2");
-        assertThat(context.eval("try { (function f() { return 1 })() } catch (e) { e.name }").toString())
-                .isEqualTo("RangeError");
+        assertEvalText("try { (function f() { return 1 })() } catch (e) { e.name }", "RangeError");
     }
 
     @Test
     public void testEvalCountsAgainstTheDepth() {
         // An indirect eval runs as one more activation, refused like a call once the depth is spent.
         context.setMaxCallDepth(1);
-        assertThat(context.eval("try { (0, eval)('3') } catch (e) { e.name + ': ' + e.message }").toJavaObject())
-                .isEqualTo("RangeError: Maximum call stack size exceeded");
+        assertEvalJavaValue("try { (0, eval)('3') } catch (e) { e.name + ': ' + e.message }",
+                "RangeError: Maximum call stack size exceeded");
     }
 
     @Test

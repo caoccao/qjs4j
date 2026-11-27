@@ -23,7 +23,7 @@ import com.caoccao.qjs4j.exceptions.JSException;
 /** Builds string results as ropes, checking their length before each append. */
 public final class StringResultBuilder {
     private final JSContext context;
-    private JSString value = new JSString("");
+    private JSString value = JSString.EMPTY;
 
     public StringResultBuilder(JSContext context) {
         this.context = context;

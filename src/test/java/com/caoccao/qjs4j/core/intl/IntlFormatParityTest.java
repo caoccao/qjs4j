@@ -21,8 +21,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledForJreRange;
 import org.junit.jupiter.api.condition.JRE;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
  * Intl output matches V8 where the review found it did not.
  * <p>
@@ -143,9 +141,9 @@ public class IntlFormatParityTest extends BaseJavetTest {
                 ].join('\\n')""");
         // V8 keeps U+202F in formatToParts(); qjs4j replaces it there too, so that format(), formatToParts() and
         // formatRange() agree, as test262 requires.
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 new Intl.DateTimeFormat('en', { timeZone: 'UTC', timeStyle: 'short' }).formatToParts(0)
-                  .map(part => part.value).join('|')""").toJavaObject()).isEqualTo("12|:|00| |AM");
+                  .map(part => part.value).join('|')""", "12|:|00| |AM");
     }
 
     @Test

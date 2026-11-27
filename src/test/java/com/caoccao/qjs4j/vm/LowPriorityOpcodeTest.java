@@ -56,29 +56,27 @@ public class LowPriorityOpcodeTest extends BaseTest {
             JSBytecodeFunction closure = (JSBytecodeFunction) result;
             assertThat(closure.getCapturedThisArg()).isSameAs(receiver);
             assertThat(closure.getPrototype()).isSameAs(template.getPrototype());
-            JSValue value = closure.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-            assertNumberValue(value, 42);
+            assertNumberValue(closure.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS), 42);
         }
     }
 
     @Test
     public void testLowLocAndArrayOpcodes() {
         BytecodeEmitter locEmitter = new BytecodeEmitter();
-        locEmitter.emitOpcodeU32(Opcode.PUSH_I32, 1);
+        locEmitter.emitIntOperand(Opcode.PUSH_I32, 1);
         locEmitter.emitPutLocal(0);
         locEmitter.emitOpcode(Opcode.INC_LOC);
         locEmitter.emitU8(0);
         locEmitter.emitOpcode(Opcode.DEC_LOC);
         locEmitter.emitU8(0);
-        locEmitter.emitOpcodeU32(Opcode.PUSH_I32, 5);
+        locEmitter.emitIntOperand(Opcode.PUSH_I32, 5);
         locEmitter.emitOpcode(Opcode.ADD_LOC);
         locEmitter.emitU8(0);
         locEmitter.emitOpcode(Opcode.NOP);
         locEmitter.emitGetLocal(0);
         locEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue locResult = execute(locEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertNumberValue(locResult, 6);
+        assertNumberValue(execute(locEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE), 6);
 
         BytecodeEmitter stringAddLocEmitter = new BytecodeEmitter();
         stringAddLocEmitter.emitPushConstant(new JSString("a"));
@@ -89,20 +87,18 @@ public class LowPriorityOpcodeTest extends BaseTest {
         stringAddLocEmitter.emitGetLocal(0);
         stringAddLocEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue stringAddLocResult = execute(stringAddLocEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertStringValue(stringAddLocResult, "ab");
+        assertStringValue(execute(stringAddLocEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE), "ab");
 
         JSArray array = context.createJSArray(new JSNumber(9), new JSNumber(4));
         BytecodeEmitter getArrayEl3Emitter = new BytecodeEmitter();
         getArrayEl3Emitter.emitPushConstant(array);
-        getArrayEl3Emitter.emitOpcodeU32(Opcode.PUSH_I32, 1);
+        getArrayEl3Emitter.emitIntOperand(Opcode.PUSH_I32, 1);
         getArrayEl3Emitter.emitOpcode(Opcode.GET_ARRAY_EL3);
         getArrayEl3Emitter.emitOpcode(Opcode.ADD);
         getArrayEl3Emitter.emitOpcode(Opcode.NIP);
         getArrayEl3Emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue getArrayEl3Result = execute(getArrayEl3Emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertNumberValue(getArrayEl3Result, 5);
+        assertNumberValue(execute(getArrayEl3Emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE), 5);
 
         BytecodeEmitter getArrayEl3ErrorEmitter = new BytecodeEmitter();
         getArrayEl3ErrorEmitter.emitOpcode(Opcode.UNDEFINED);
@@ -120,24 +116,24 @@ public class LowPriorityOpcodeTest extends BaseTest {
         argEmitter.emitOpcode(Opcode.GET_ARG0);
         argEmitter.emitOpcode(Opcode.GET_ARG1);
         argEmitter.emitOpcode(Opcode.ADD);
-        argEmitter.emitOpcodeU32(Opcode.PUSH_I32, 10);
+        argEmitter.emitIntOperand(Opcode.PUSH_I32, 10);
         argEmitter.emitOpcode(Opcode.PUT_ARG2);
-        argEmitter.emitOpcodeU32(Opcode.PUSH_I32, 11);
+        argEmitter.emitIntOperand(Opcode.PUSH_I32, 11);
         argEmitter.emitOpcode(Opcode.PUT_ARG0);
-        argEmitter.emitOpcodeU32(Opcode.PUSH_I32, 12);
+        argEmitter.emitIntOperand(Opcode.PUSH_I32, 12);
         argEmitter.emitOpcode(Opcode.PUT_ARG1);
-        argEmitter.emitOpcodeU32(Opcode.PUSH_I32, 13);
+        argEmitter.emitIntOperand(Opcode.PUSH_I32, 13);
         argEmitter.emitOpcode(Opcode.PUT_ARG3);
-        argEmitter.emitOpcodeU32(Opcode.PUSH_I32, 20);
+        argEmitter.emitIntOperand(Opcode.PUSH_I32, 20);
         argEmitter.emitOpcode(Opcode.SET_ARG0);
         argEmitter.emitOpcode(Opcode.DROP);
-        argEmitter.emitOpcodeU32(Opcode.PUSH_I32, 21);
+        argEmitter.emitIntOperand(Opcode.PUSH_I32, 21);
         argEmitter.emitOpcode(Opcode.SET_ARG1);
         argEmitter.emitOpcode(Opcode.DROP);
-        argEmitter.emitOpcodeU32(Opcode.PUSH_I32, 22);
+        argEmitter.emitIntOperand(Opcode.PUSH_I32, 22);
         argEmitter.emitOpcode(Opcode.SET_ARG2);
         argEmitter.emitOpcode(Opcode.DROP);
-        argEmitter.emitOpcodeU32(Opcode.PUSH_I32, 23);
+        argEmitter.emitIntOperand(Opcode.PUSH_I32, 23);
         argEmitter.emitOpcode(Opcode.SET_ARG3);
         argEmitter.emitOpcode(Opcode.DROP);
         argEmitter.emitOpcode(Opcode.GET_ARG2);
@@ -150,12 +146,12 @@ public class LowPriorityOpcodeTest extends BaseTest {
         argEmitter.emitU16(1);
         argEmitter.emitOpcode(Opcode.ADD);
         argEmitter.emitOpcode(Opcode.ADD);
-        argEmitter.emitOpcodeU32(Opcode.PUSH_I32, 100);
+        argEmitter.emitIntOperand(Opcode.PUSH_I32, 100);
         argEmitter.emitOpcode(Opcode.PUT_ARG);
         argEmitter.emitU16(1);
         argEmitter.emitGetLocal(1);
         argEmitter.emitOpcode(Opcode.ADD);
-        argEmitter.emitOpcodeU32(Opcode.PUSH_I32, 200);
+        argEmitter.emitIntOperand(Opcode.PUSH_I32, 200);
         argEmitter.emitOpcode(Opcode.SET_ARG);
         argEmitter.emitU16(0);
         argEmitter.emitOpcode(Opcode.DROP);
@@ -172,38 +168,38 @@ public class LowPriorityOpcodeTest extends BaseTest {
         varRefEmitter.emitOpcode(Opcode.GET_VAR_REF0);
         varRefEmitter.emitOpcode(Opcode.GET_VAR_REF1);
         varRefEmitter.emitOpcode(Opcode.ADD);
-        varRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 30);
+        varRefEmitter.emitIntOperand(Opcode.PUSH_I32, 30);
         varRefEmitter.emitOpcode(Opcode.PUT_VAR_REF2);
-        varRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 40);
+        varRefEmitter.emitIntOperand(Opcode.PUSH_I32, 40);
         varRefEmitter.emitOpcode(Opcode.PUT_VAR_REF0);
-        varRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 50);
+        varRefEmitter.emitIntOperand(Opcode.PUSH_I32, 50);
         varRefEmitter.emitOpcode(Opcode.PUT_VAR_REF1);
-        varRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 60);
+        varRefEmitter.emitIntOperand(Opcode.PUSH_I32, 60);
         varRefEmitter.emitOpcode(Opcode.PUT_VAR_REF3);
-        varRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 70);
+        varRefEmitter.emitIntOperand(Opcode.PUSH_I32, 70);
         varRefEmitter.emitOpcode(Opcode.SET_VAR_REF0);
         varRefEmitter.emitOpcode(Opcode.DROP);
-        varRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 71);
+        varRefEmitter.emitIntOperand(Opcode.PUSH_I32, 71);
         varRefEmitter.emitOpcode(Opcode.SET_VAR_REF1);
         varRefEmitter.emitOpcode(Opcode.DROP);
-        varRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 72);
+        varRefEmitter.emitIntOperand(Opcode.PUSH_I32, 72);
         varRefEmitter.emitOpcode(Opcode.SET_VAR_REF2);
         varRefEmitter.emitOpcode(Opcode.DROP);
-        varRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 73);
+        varRefEmitter.emitIntOperand(Opcode.PUSH_I32, 73);
         varRefEmitter.emitOpcode(Opcode.SET_VAR_REF3);
         varRefEmitter.emitOpcode(Opcode.DROP);
         varRefEmitter.emitOpcode(Opcode.GET_VAR_REF2);
         varRefEmitter.emitOpcode(Opcode.GET_VAR_REF3);
         varRefEmitter.emitOpcode(Opcode.ADD);
         varRefEmitter.emitOpcode(Opcode.ADD);
-        varRefEmitter.emitOpcodeU16(Opcode.GET_VAR_REF, 0);
-        varRefEmitter.emitOpcodeU16(Opcode.GET_VAR_REF, 1);
+        varRefEmitter.emitIntOperand(Opcode.GET_VAR_REF, 0);
+        varRefEmitter.emitIntOperand(Opcode.GET_VAR_REF, 1);
         varRefEmitter.emitOpcode(Opcode.ADD);
         varRefEmitter.emitOpcode(Opcode.ADD);
-        varRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 90);
-        varRefEmitter.emitOpcodeU16(Opcode.PUT_VAR_REF, 1);
-        varRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 80);
-        varRefEmitter.emitOpcodeU16(Opcode.SET_VAR_REF, 0);
+        varRefEmitter.emitIntOperand(Opcode.PUSH_I32, 90);
+        varRefEmitter.emitIntOperand(Opcode.PUT_VAR_REF, 1);
+        varRefEmitter.emitIntOperand(Opcode.PUSH_I32, 80);
+        varRefEmitter.emitIntOperand(Opcode.SET_VAR_REF, 0);
         varRefEmitter.emitOpcode(Opcode.DROP);
         varRefEmitter.emitOpcode(Opcode.GET_VAR_REF0);
         varRefEmitter.emitOpcode(Opcode.GET_VAR_REF1);
@@ -211,8 +207,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         varRefEmitter.emitOpcode(Opcode.ADD);
         varRefEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue varRefResult = execute(varRefEmitter, 0, closureVars, JSUndefined.INSTANCE);
-        assertNumberValue(varRefResult, 459);
+        assertNumberValue(execute(varRefEmitter, 0, closureVars, JSUndefined.INSTANCE), 459);
         assertThat(((JSNumber) closureVars[0]).value()).isEqualTo(80);
         assertThat(((JSNumber) closureVars[1]).value()).isEqualTo(90);
         assertThat(((JSNumber) closureVars[2]).value()).isEqualTo(72);
@@ -232,21 +227,21 @@ public class LowPriorityOpcodeTest extends BaseTest {
         BytecodeEmitter emitter = new BytecodeEmitter();
         emitter.emitPushConstant(sum);
         emitter.emitOpcode(Opcode.UNDEFINED);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 1);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 1);
         emitter.emitOpcode(Opcode.CALL1);
 
         emitter.emitPushConstant(sum);
         emitter.emitOpcode(Opcode.UNDEFINED);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 2);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 3);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 2);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 3);
         emitter.emitOpcode(Opcode.CALL2);
         emitter.emitOpcode(Opcode.ADD);
 
         emitter.emitPushConstant(sum);
         emitter.emitOpcode(Opcode.UNDEFINED);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 4);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 5);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 6);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 4);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 5);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 6);
         emitter.emitOpcode(Opcode.CALL3);
         emitter.emitOpcode(Opcode.ADD);
 
@@ -271,71 +266,63 @@ public class LowPriorityOpcodeTest extends BaseTest {
         emitter.emitOpcode(Opcode.ADD);
         emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue result = execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertNumberValue(result, 25);
+        assertNumberValue(execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE), 25);
     }
 
     @Test
     public void testShortJumpOpcodes() {
         BytecodeEmitter emitter = new BytecodeEmitter();
         emitter.emitOpcode(Opcode.PUSH_TRUE);
-        emitter.emitOpcode(Opcode.IF_TRUE8);
-        emitter.emitU8(5);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 100);
+        emitter.emitIntOperand(Opcode.IF_TRUE8, 5);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 100);
 
         emitter.emitOpcode(Opcode.PUSH_FALSE);
-        emitter.emitOpcode(Opcode.IF_FALSE8);
-        emitter.emitU8(5);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 200);
+        emitter.emitIntOperand(Opcode.IF_FALSE8, 5);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 200);
 
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 1);
-        emitter.emitOpcode(Opcode.GOTO8);
-        emitter.emitU8(5);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 999);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 2);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 1);
+        emitter.emitIntOperand(Opcode.GOTO8, 5);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 999);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 2);
         emitter.emitOpcode(Opcode.ADD);
 
-        emitter.emitOpcode(Opcode.GOTO16);
-        emitter.emitU16(5);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 888);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 4);
+        emitter.emitIntOperand(Opcode.GOTO16, 5);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 888);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 4);
         emitter.emitOpcode(Opcode.ADD);
         emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue result = execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertNumberValue(result, 7);
+        assertNumberValue(execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE), 7);
     }
 
     @Test
     public void testShortLocOpcodes() {
         BytecodeEmitter emitter = new BytecodeEmitter();
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 10);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 10);
         emitter.emitOpcode(Opcode.PUT_LOC0);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 20);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 20);
         emitter.emitOpcode(Opcode.PUT_LOC1);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 25);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 25);
         emitter.emitOpcode(Opcode.PUT_LOC2);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 30);
-        emitter.emitOpcode(Opcode.PUT_LOC8);
-        emitter.emitU8(2);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 40);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 30);
+        emitter.emitIntOperand(Opcode.PUT_LOC8, 2);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 40);
         emitter.emitOpcode(Opcode.PUT_LOC3);
 
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 60);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 60);
         emitter.emitOpcode(Opcode.SET_LOC0);
         emitter.emitOpcode(Opcode.DROP);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 70);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 70);
         emitter.emitOpcode(Opcode.SET_LOC1);
         emitter.emitOpcode(Opcode.DROP);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 80);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 80);
         emitter.emitOpcode(Opcode.SET_LOC2);
         emitter.emitOpcode(Opcode.DROP);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 90);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 90);
         emitter.emitOpcode(Opcode.SET_LOC3);
         emitter.emitOpcode(Opcode.DROP);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 50);
-        emitter.emitOpcode(Opcode.SET_LOC8);
-        emitter.emitU8(0);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 50);
+        emitter.emitIntOperand(Opcode.SET_LOC8, 0);
         emitter.emitOpcode(Opcode.DROP);
 
         emitter.emitOpcode(Opcode.GET_LOC0);
@@ -345,13 +332,11 @@ public class LowPriorityOpcodeTest extends BaseTest {
         emitter.emitOpcode(Opcode.ADD);
         emitter.emitOpcode(Opcode.GET_LOC3);
         emitter.emitOpcode(Opcode.ADD);
-        emitter.emitOpcode(Opcode.GET_LOC8);
-        emitter.emitU8(0);
+        emitter.emitIntOperand(Opcode.GET_LOC8, 0);
         emitter.emitOpcode(Opcode.ADD);
         emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue result = execute(emitter, 4, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertNumberValue(result, 340);
+        assertNumberValue(execute(emitter, 4, JSValue.NO_ARGS, JSUndefined.INSTANCE), 340);
     }
 
     @Test
@@ -368,8 +353,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         shortPushEmitter.emitOpcode(Opcode.ADD);
         shortPushEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue shortPushResult = execute(shortPushEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertNumberValue(shortPushResult, -999);
+        assertNumberValue(execute(shortPushEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE), -999);
 
         BytecodeEmitter const8Emitter = new BytecodeEmitter();
         const8Emitter.emitPushConstant(new JSNumber(42));
@@ -378,8 +362,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         const8Emitter.emitU8(0);
         const8Emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue const8Result = execute(const8Emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertNumberValue(const8Result, 42);
+        assertNumberValue(execute(const8Emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE), 42);
 
         JSNativeFunction callable = new JSNativeFunction(context, "c", 0, (ctx, thisArg, args) -> new JSNumber(77),
                 false);
@@ -394,7 +377,6 @@ public class LowPriorityOpcodeTest extends BaseTest {
         closure8Emitter.emitOpcode(Opcode.CALL0);
         closure8Emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue closure8Result = execute(closure8Emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertNumberValue(closure8Result, 77);
+        assertNumberValue(execute(closure8Emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE), 77);
     }
 }

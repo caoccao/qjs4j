@@ -105,7 +105,7 @@ public final class IteratorPrototype {
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        if (returnMethod instanceof JSUndefined || returnMethod instanceof JSNull) {
+        if (JSTypeChecking.isNullish(returnMethod)) {
             return JSUndefined.INSTANCE;
         }
         if (!(returnMethod instanceof JSFunction returnFunction)) {
@@ -217,7 +217,7 @@ public final class IteratorPrototype {
                     if (childContext.hasPendingException()) {
                         return childContext.getPendingException();
                     }
-                    if (returnMethod instanceof JSUndefined || returnMethod instanceof JSNull) {
+                    if (JSTypeChecking.isNullish(returnMethod)) {
                         return iteratorResult(childContext, JSUndefined.INSTANCE, true);
                     }
                     if (!(returnMethod instanceof JSFunction returnFunc)) {
@@ -408,16 +408,14 @@ public final class IteratorPrototype {
 
     static IteratorStep iteratorStep(JSContext context, JSObject iteratorObject, JSValue methodValue) {
         if (!(methodValue instanceof JSFunction function)) {
-            context.throwTypeError("not a function");
-            return null;
+            return context.rejectTypeError("not a function");
         }
         JSValue resultValue = callSafe(context, function, iteratorObject, JSValue.NO_ARGS);
         if (context.hasPendingException()) {
             return null;
         }
         if (!(resultValue instanceof JSObject resultObject)) {
-            context.throwTypeError("not an object");
-            return null;
+            return context.rejectTypeError("not an object");
         }
         JSValue doneValue = resultObject.get(PropertyKey.DONE);
         if (context.hasPendingException()) {
@@ -545,16 +543,14 @@ public final class IteratorPrototype {
         if (value instanceof JSFunction function) {
             return function;
         }
-        context.throwTypeError("not a function");
-        return null;
+        return context.rejectTypeError("not a function");
     }
 
     static JSObject requireObject(JSContext context, JSValue value) {
         if (value instanceof JSObject jsObject) {
             return jsObject;
         }
-        context.throwTypeError("not an object");
-        return null;
+        return context.rejectTypeError("not an object");
     }
 
     /**
@@ -598,7 +594,7 @@ public final class IteratorPrototype {
     public static JSValue stringIterator(JSContext context, JSValue thisArg, JSValue[] args) {
         // ES2024 22.1.5.1: String.prototype[@@iterator]()
         // Step 1: Let O be ? RequireObjectCoercible(this value).
-        if (thisArg instanceof JSUndefined || thisArg instanceof JSNull) {
+        if (JSTypeChecking.isNullish(thisArg)) {
             return context.throwTypeError("String.prototype[Symbol.iterator] called on null or undefined");
         }
         // Step 2: Let S be ? ToString(O).

@@ -23,8 +23,7 @@ public final class JSCall {
 
     public static JSValue[] argumentsFromArrayLike(JSContext context, JSValue arrayArg) {
         if (!(arrayArg instanceof JSObject arrayLike)) {
-            context.throwTypeError("CreateListFromArrayLike called on non-object");
-            return null;
+            return context.rejectTypeError("CreateListFromArrayLike called on non-object");
         }
 
         JSValue lengthValue = arrayLike.get(PropertyKey.LENGTH);
@@ -37,8 +36,7 @@ public final class JSCall {
             return null;
         }
         if (length > Integer.MAX_VALUE) {
-            context.throwRangeError("too many arguments in function call");
-            return null;
+            return context.rejectRangeError("too many arguments in function call");
         }
 
         JSValue[] callArgs = new JSValue[(int) length];

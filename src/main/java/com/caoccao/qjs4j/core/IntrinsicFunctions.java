@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.BuiltinFunctionList.Method;
 import com.caoccao.qjs4j.builtins.array.ArrayConstructor;
 import com.caoccao.qjs4j.builtins.array.ArrayPrototype;
 import com.caoccao.qjs4j.builtins.array.TypedArrayPrototype;
@@ -50,7 +51,7 @@ import java.util.function.Consumer;
 enum IntrinsicFunctions {
     ARRAY_BUFFER_PROTOTYPE(properties -> {
         properties.method("resize", 1, ArrayBufferPrototype::resize);
-        properties.method("slice", 2, ArrayBufferPrototype::slice);
+        properties.method(Method.SLICE, ArrayBufferPrototype::slice);
         properties.method("transfer", 0, ArrayBufferPrototype::transfer);
         properties.method("transferToFixedLength", 0, ArrayBufferPrototype::transferToFixedLength);
         properties.method("transferToImmutable", 0, ArrayBufferPrototype::transferToImmutable);
@@ -61,53 +62,53 @@ enum IntrinsicFunctions {
         properties.getter("resizable", ArrayBufferPrototype::getResizable);
     }),
     ARRAY_CONSTRUCTOR(properties -> {
-        properties.method("from", 1, ArrayConstructor::from);
+        properties.method(Method.FROM, ArrayConstructor::from);
         properties.method("fromAsync", 1, ArrayConstructor::fromAsync);
         properties.method("isArray", 1, ArrayConstructor::isArray);
         properties.method("of", 0, ArrayConstructor::of);
     }),
     ARRAY_PROTOTYPE(properties -> {
-        properties.method("at", 1, ArrayPrototype::at);
+        properties.method(Method.AT, ArrayPrototype::at);
         properties.method("concat", 1, ArrayPrototype::concat);
-        properties.method("copyWithin", 2, ArrayPrototype::copyWithin);
+        properties.method(Method.COPY_WITHIN, ArrayPrototype::copyWithin);
         properties.method("entries", 0, IteratorPrototype::arrayEntries);
-        properties.method("every", 1, ArrayPrototype::every);
-        properties.method("fill", 1, ArrayPrototype::fill);
-        properties.method("filter", 1, ArrayPrototype::filter);
-        properties.method("find", 1, ArrayPrototype::find);
-        properties.method("findIndex", 1, ArrayPrototype::findIndex);
-        properties.method("findLast", 1, ArrayPrototype::findLast);
-        properties.method("findLastIndex", 1, ArrayPrototype::findLastIndex);
+        properties.method(Method.EVERY, ArrayPrototype::every);
+        properties.method(Method.FILL, ArrayPrototype::fill);
+        properties.method(Method.FILTER, ArrayPrototype::filter);
+        properties.method(Method.FIND, ArrayPrototype::find);
+        properties.method(Method.FIND_INDEX, ArrayPrototype::findIndex);
+        properties.method(Method.FIND_LAST, ArrayPrototype::findLast);
+        properties.method(Method.FIND_LAST_INDEX, ArrayPrototype::findLastIndex);
         properties.method("flat", 0, ArrayPrototype::flat);
-        properties.method("flatMap", 1, ArrayPrototype::flatMap);
-        properties.method("forEach", 1, ArrayPrototype::forEach);
-        properties.method("includes", 1, ArrayPrototype::includes);
-        properties.method("indexOf", 1, ArrayPrototype::indexOf);
-        properties.method("join", 1, ArrayPrototype::join);
+        properties.method(Method.FLAT_MAP, ArrayPrototype::flatMap);
+        properties.method(Method.FOR_EACH, ArrayPrototype::forEach);
+        properties.method(Method.INCLUDES, ArrayPrototype::includes);
+        properties.method(Method.INDEX_OF, ArrayPrototype::indexOf);
+        properties.method(Method.JOIN, ArrayPrototype::join);
         properties.method("keys", 0, IteratorPrototype::arrayKeys);
-        properties.method("lastIndexOf", 1, ArrayPrototype::lastIndexOf);
-        properties.method("map", 1, ArrayPrototype::map);
+        properties.method(Method.LAST_INDEX_OF, ArrayPrototype::lastIndexOf);
+        properties.method(Method.MAP, ArrayPrototype::map);
         properties.method("pop", 0, ArrayPrototype::pop);
         properties.method("push", 1, ArrayPrototype::push);
-        properties.method("reduce", 1, ArrayPrototype::reduce);
-        properties.method("reduceRight", 1, ArrayPrototype::reduceRight);
-        properties.method("reverse", 0, ArrayPrototype::reverse);
+        properties.method(Method.REDUCE, ArrayPrototype::reduce);
+        properties.method(Method.REDUCE_RIGHT, ArrayPrototype::reduceRight);
+        properties.method(Method.REVERSE, ArrayPrototype::reverse);
         properties.method("shift", 0, ArrayPrototype::shift);
-        properties.method("slice", 2, ArrayPrototype::slice);
-        properties.method("some", 1, ArrayPrototype::some);
-        properties.method("sort", 1, ArrayPrototype::sort);
+        properties.method(Method.SLICE, ArrayPrototype::slice);
+        properties.method(Method.SOME, ArrayPrototype::some);
+        properties.method(Method.SORT, ArrayPrototype::sort);
         properties.method("splice", 2, ArrayPrototype::splice);
-        properties.method("toLocaleString", 0, ArrayPrototype::toLocaleString);
-        properties.method("toReversed", 0, ArrayPrototype::toReversed);
-        properties.method("toSorted", 1, ArrayPrototype::toSorted);
+        properties.method(Method.TO_LOCALE_STRING, ArrayPrototype::toLocaleString);
+        properties.method(Method.TO_REVERSED, ArrayPrototype::toReversed);
+        properties.method(Method.TO_SORTED, ArrayPrototype::toSorted);
         properties.method("toSpliced", 2, ArrayPrototype::toSpliced);
         properties.method("toString", 0, ArrayPrototype::toString);
         properties.method("unshift", 1, ArrayPrototype::unshift);
     }),
     BIG_INT_PROTOTYPE(properties -> {
-        properties.method("toLocaleString", 0, BigIntPrototype::toLocaleString);
+        properties.method(Method.TO_LOCALE_STRING, BigIntPrototype::toLocaleString);
         properties.method("toString", 0, BigIntPrototype::toString);
-        properties.method("valueOf", 0, BigIntPrototype::valueOf);
+        properties.method(Method.VALUE_OF, BigIntPrototype::valueOf);
     }),
     DATA_VIEW_ACCESSORS(properties -> {
         properties.getter("buffer", DataViewPrototype::getBuffer);
@@ -185,22 +186,22 @@ enum IntrinsicFunctions {
         properties.method("toISOString", 0, DatePrototype::toISOString);
         properties.method("toJSON", 1, DatePrototype::toJSON);
         properties.method("toLocaleDateString", 0, DatePrototype::toLocaleDateString);
-        properties.method("toLocaleString", 0, DatePrototype::toLocaleString);
+        properties.method(Method.TO_LOCALE_STRING, DatePrototype::toLocaleString);
         properties.method("toLocaleTimeString", 0, DatePrototype::toLocaleTimeString);
         properties.method("toString", 0, DatePrototype::toStringMethod);
         properties.method("toTimeString", 0, DatePrototype::toTimeString);
     }),
     DATE_TIME_FORMAT_PROTOTYPE(properties -> {
         properties.getter("format", JSIntlObject::dateTimeFormatFormatGetter);
-        properties.method("resolvedOptions", 0, JSIntlObject::dateTimeFormatResolvedOptions);
+        properties.method(Method.RESOLVED_OPTIONS, JSIntlObject::dateTimeFormatResolvedOptions);
         properties.method("formatToParts", 1, JSIntlObject::dateTimeFormatFormatToParts);
-        properties.method("formatRange", 2, JSIntlObject::dateTimeFormatFormatRange);
-        properties.method("formatRangeToParts", 2, JSIntlObject::dateTimeFormatFormatRangeToParts);
+        properties.method(Method.FORMAT_RANGE, JSIntlObject::dateTimeFormatFormatRange);
+        properties.method(Method.FORMAT_RANGE_TO_PARTS, JSIntlObject::dateTimeFormatFormatRangeToParts);
     }),
     DURATION_FORMAT_PROTOTYPE(properties -> {
         properties.method("format", 1, JSIntlObject::durationFormatFormat);
         properties.method("formatToParts", 1, JSIntlObject::durationFormatFormatToParts);
-        properties.method("resolvedOptions", 0, JSIntlObject::durationFormatResolvedOptions);
+        properties.method(Method.RESOLVED_OPTIONS, JSIntlObject::durationFormatResolvedOptions);
     }),
     FUNCTION_PROTOTYPE(properties -> {
         properties.method("apply", 2, FunctionPrototype::apply);
@@ -214,8 +215,8 @@ enum IntrinsicFunctions {
         properties.method("throw", 1, GeneratorPrototype::throwMethod);
     }),
     GLOBAL_OBJECT(properties -> {
-        properties.method("isFinite", 1, GlobalFunction::isFinite);
-        properties.method("isNaN", 1, GlobalFunction::isNaN);
+        properties.method(Method.IS_FINITE, GlobalFunction::isFinite);
+        properties.method(Method.IS_NA_N, GlobalFunction::isNaN);
         properties.method("parseFloat", 1, GlobalFunction::parseFloat);
         properties.method("parseInt", 2, GlobalFunction::parseInt);
         properties.method("decodeURI", 1, GlobalFunction::decodeURI);
@@ -227,28 +228,28 @@ enum IntrinsicFunctions {
     }),
     ITERATOR_CONSTRUCTOR(properties -> {
         properties.method("concat", 0, IteratorPrototype::concat);
-        properties.method("from", 1, IteratorPrototype::from);
+        properties.method(Method.FROM, IteratorPrototype::from);
         properties.method("zip", 1, IteratorPrototype::zip);
         properties.method("zipKeyed", 1, IteratorPrototype::zipKeyed);
     }),
     ITERATOR_PROTOTYPE(properties -> {
         properties.method("drop", 1, IteratorPrototype::drop);
-        properties.method("every", 1, IteratorPrototype::every);
-        properties.method("filter", 1, IteratorPrototype::filter);
-        properties.method("find", 1, IteratorPrototype::find);
-        properties.method("flatMap", 1, IteratorPrototype::flatMap);
-        properties.method("forEach", 1, IteratorPrototype::forEach);
-        properties.method("map", 1, IteratorPrototype::map);
+        properties.method(Method.EVERY, IteratorPrototype::every);
+        properties.method(Method.FILTER, IteratorPrototype::filter);
+        properties.method(Method.FIND, IteratorPrototype::find);
+        properties.method(Method.FLAT_MAP, IteratorPrototype::flatMap);
+        properties.method(Method.FOR_EACH, IteratorPrototype::forEach);
+        properties.method(Method.MAP, IteratorPrototype::map);
         properties.method("next", 0, IteratorPrototype::next);
-        properties.method("reduce", 1, IteratorPrototype::reduce);
-        properties.method("some", 1, IteratorPrototype::some);
+        properties.method(Method.REDUCE, IteratorPrototype::reduce);
+        properties.method(Method.SOME, IteratorPrototype::some);
         properties.method("take", 1, IteratorPrototype::take);
         properties.method("toArray", 0, IteratorPrototype::toArray);
     }),
     LIST_FORMAT_PROTOTYPE(properties -> {
         properties.method("format", 1, JSIntlObject::listFormatFormat);
         properties.method("formatToParts", 1, JSIntlObject::listFormatFormatToParts);
-        properties.method("resolvedOptions", 0, JSIntlObject::listFormatResolvedOptions);
+        properties.method(Method.RESOLVED_OPTIONS, JSIntlObject::listFormatResolvedOptions);
     }),
     LOCALE_PROTOTYPE(properties -> {
         properties.method("toString", 0, JSIntlObject::localeToString);
@@ -275,12 +276,12 @@ enum IntrinsicFunctions {
         properties.method("getWeekInfo", 0, JSIntlObject::localeGetWeekInfo);
     }),
     MAP_PROTOTYPE(properties -> {
-        properties.method("clear", 0, MapPrototype::clear);
-        properties.method("delete", 1, MapPrototype::delete);
-        properties.method("forEach", 1, MapPrototype::forEach);
+        properties.method(Method.CLEAR, MapPrototype::clear);
+        properties.method(Method.DELETE, MapPrototype::delete);
+        properties.method(Method.FOR_EACH, MapPrototype::forEach);
         properties.method("get", 1, MapPrototype::get);
-        properties.method("getOrInsert", 2, MapPrototype::getOrInsert);
-        properties.method("getOrInsertComputed", 2, MapPrototype::getOrInsertComputed);
+        properties.method(Method.GET_OR_INSERT, MapPrototype::getOrInsert);
+        properties.method(Method.GET_OR_INSERT_COMPUTED, MapPrototype::getOrInsertComputed);
         properties.method("has", 1, MapPrototype::has);
         properties.method("set", 2, MapPrototype::set);
     }),
@@ -313,7 +314,7 @@ enum IntrinsicFunctions {
         properties.method("min", 2, MathObject::min);
         properties.method("pow", 2, MathObject::pow);
         properties.method("random", 0, MathObject::random);
-        properties.method("round", 1, MathObject::round);
+        properties.method(Method.ROUND, MathObject::round);
         properties.method("sign", 1, MathObject::sign);
         properties.method("sin", 1, MathObject::sin);
         properties.method("sinh", 1, MathObject::sinh);
@@ -324,49 +325,49 @@ enum IntrinsicFunctions {
         properties.method("trunc", 1, MathObject::trunc);
     }),
     NUMBER_CONSTRUCTOR(properties -> {
-        properties.method("isFinite", 1, NumberPrototype::isFinite);
+        properties.method(Method.IS_FINITE, NumberPrototype::isFinite);
         properties.method("isInteger", 1, NumberPrototype::isInteger);
-        properties.method("isNaN", 1, NumberPrototype::isNaN);
+        properties.method(Method.IS_NA_N, NumberPrototype::isNaN);
         properties.method("isSafeInteger", 1, NumberPrototype::isSafeInteger);
     }),
     NUMBER_FORMAT_PROTOTYPE(properties -> {
         properties.getter("format", JSIntlObject::numberFormatFormatGetter);
-        properties.method("formatRange", 2, JSIntlObject::numberFormatFormatRange);
-        properties.method("formatRangeToParts", 2, JSIntlObject::numberFormatFormatRangeToParts);
+        properties.method(Method.FORMAT_RANGE, JSIntlObject::numberFormatFormatRange);
+        properties.method(Method.FORMAT_RANGE_TO_PARTS, JSIntlObject::numberFormatFormatRangeToParts);
         properties.method("formatToParts", 1, JSIntlObject::numberFormatFormatToParts);
-        properties.method("resolvedOptions", 0, JSIntlObject::numberFormatResolvedOptions);
+        properties.method(Method.RESOLVED_OPTIONS, JSIntlObject::numberFormatResolvedOptions);
     }),
     NUMBER_PROTOTYPE(properties -> {
         properties.method("toExponential", 1, NumberPrototype::toExponential);
         properties.method("toFixed", 1, NumberPrototype::toFixed);
-        properties.method("toLocaleString", 0, NumberPrototype::toLocaleString);
+        properties.method(Method.TO_LOCALE_STRING, NumberPrototype::toLocaleString);
         properties.method("toPrecision", 1, NumberPrototype::toPrecision);
         properties.method("toString", 1, NumberPrototype::toString);
-        properties.method("valueOf", 0, NumberPrototype::valueOf);
+        properties.method(Method.VALUE_OF, NumberPrototype::valueOf);
     }),
     OBJECT_CONSTRUCTOR(properties -> {
         properties.method("assign", 2, ObjectConstructor::assign);
         properties.method("create", 2, ObjectConstructor::create);
         properties.method("defineProperties", 2, ObjectConstructor::defineProperties);
-        properties.method("defineProperty", 3, ObjectPrototype::defineProperty);
+        properties.method(Method.DEFINE_PROPERTY, ObjectPrototype::defineProperty);
         properties.method("entries", 1, ObjectConstructor::entries);
         properties.method("freeze", 1, ObjectConstructor::freeze);
         properties.method("fromEntries", 1, ObjectConstructor::fromEntries);
-        properties.method("getOwnPropertyDescriptor", 2, ObjectConstructor::getOwnPropertyDescriptor);
+        properties.method(Method.GET_OWN_PROPERTY_DESCRIPTOR, ObjectConstructor::getOwnPropertyDescriptor);
         properties.method("getOwnPropertyDescriptors", 1, ObjectConstructor::getOwnPropertyDescriptors);
         properties.method("getOwnPropertyNames", 1, ObjectConstructor::getOwnPropertyNames);
         properties.method("getOwnPropertySymbols", 1, ObjectConstructor::getOwnPropertySymbols);
-        properties.method("getPrototypeOf", 1, ObjectConstructor::getPrototypeOf);
+        properties.method(Method.GET_PROTOTYPE_OF, ObjectConstructor::getPrototypeOf);
         properties.method("groupBy", 2, ObjectConstructor::groupBy);
         properties.method("hasOwn", 2, ObjectConstructor::hasOwn);
         properties.method("is", 2, ObjectConstructor::is);
-        properties.method("isExtensible", 1, ObjectConstructor::isExtensible);
+        properties.method(Method.IS_EXTENSIBLE, ObjectConstructor::isExtensible);
         properties.method("isFrozen", 1, ObjectConstructor::isFrozen);
         properties.method("isSealed", 1, ObjectConstructor::isSealed);
         properties.method("keys", 1, ObjectConstructor::keys);
-        properties.method("preventExtensions", 1, ObjectConstructor::preventExtensions);
+        properties.method(Method.PREVENT_EXTENSIONS, ObjectConstructor::preventExtensions);
         properties.method("seal", 1, ObjectConstructor::seal);
-        properties.method("setPrototypeOf", 2, ObjectConstructor::setPrototypeOf);
+        properties.method(Method.SET_PROTOTYPE_OF, ObjectConstructor::setPrototypeOf);
         properties.method("values", 1, ObjectConstructor::values);
     }),
     OBJECT_PROTOTYPE(properties -> {
@@ -377,14 +378,14 @@ enum IntrinsicFunctions {
         properties.method("hasOwnProperty", 1, ObjectPrototype::hasOwnProperty);
         properties.method("isPrototypeOf", 1, ObjectPrototype::isPrototypeOf);
         properties.method("propertyIsEnumerable", 1, ObjectPrototype::propertyIsEnumerable);
-        properties.method("toLocaleString", 0, ObjectPrototype::toLocaleString);
+        properties.method(Method.TO_LOCALE_STRING, ObjectPrototype::toLocaleString);
         properties.method("toString", 0, ObjectPrototype::toString);
-        properties.method("valueOf", 0, ObjectPrototype::valueOf);
+        properties.method(Method.VALUE_OF, ObjectPrototype::valueOf);
     }),
     PLURAL_RULES_PROTOTYPE(properties -> {
         properties.method("select", 1, JSIntlObject::pluralRulesSelect);
         properties.method("selectRange", 2, JSIntlObject::pluralRulesSelectRange);
-        properties.method("resolvedOptions", 0, JSIntlObject::pluralRulesResolvedOptions);
+        properties.method(Method.RESOLVED_OPTIONS, JSIntlObject::pluralRulesResolvedOptions);
     }),
     PROMISE_CONSTRUCTOR(properties -> {
         properties.method("all", 1, PromiseConstructor::all);
@@ -406,17 +407,17 @@ enum IntrinsicFunctions {
     REFLECT(properties -> {
         properties.method("apply", 3, JSReflectObject::apply);
         properties.method("construct", 2, JSReflectObject::construct);
-        properties.method("defineProperty", 3, JSReflectObject::defineProperty);
+        properties.method(Method.DEFINE_PROPERTY, JSReflectObject::defineProperty);
         properties.method("deleteProperty", 2, JSReflectObject::deleteProperty);
         properties.method("get", 2, JSReflectObject::get);
-        properties.method("getOwnPropertyDescriptor", 2, JSReflectObject::getOwnPropertyDescriptor);
-        properties.method("getPrototypeOf", 1, JSReflectObject::getPrototypeOf);
+        properties.method(Method.GET_OWN_PROPERTY_DESCRIPTOR, JSReflectObject::getOwnPropertyDescriptor);
+        properties.method(Method.GET_PROTOTYPE_OF, JSReflectObject::getPrototypeOf);
         properties.method("has", 2, JSReflectObject::has);
-        properties.method("isExtensible", 1, JSReflectObject::isExtensible);
+        properties.method(Method.IS_EXTENSIBLE, JSReflectObject::isExtensible);
         properties.method("ownKeys", 1, JSReflectObject::ownKeys);
-        properties.method("preventExtensions", 1, JSReflectObject::preventExtensions);
+        properties.method(Method.PREVENT_EXTENSIONS, JSReflectObject::preventExtensions);
         properties.method("set", 3, JSReflectObject::set);
-        properties.method("setPrototypeOf", 2, JSReflectObject::setPrototypeOf);
+        properties.method(Method.SET_PROTOTYPE_OF, JSReflectObject::setPrototypeOf);
     }),
     REGEXP_PROTOTYPE(properties -> {
         properties.getter("dotAll", RegExpPrototype::getDotAllAccessor);
@@ -433,15 +434,15 @@ enum IntrinsicFunctions {
     RELATIVE_TIME_FORMAT_PROTOTYPE(properties -> {
         properties.method("format", 2, JSIntlObject::relativeTimeFormatFormat);
         properties.method("formatToParts", 2, JSIntlObject::relativeTimeFormatFormatToParts);
-        properties.method("resolvedOptions", 0, JSIntlObject::relativeTimeFormatResolvedOptions);
+        properties.method(Method.RESOLVED_OPTIONS, JSIntlObject::relativeTimeFormatResolvedOptions);
     }),
     SET_PROTOTYPE(properties -> {
-        properties.method("add", 1, SetPrototype::add);
-        properties.method("clear", 0, SetPrototype::clear);
-        properties.method("delete", 1, SetPrototype::delete);
+        properties.method(Method.ADD, SetPrototype::add);
+        properties.method(Method.CLEAR, SetPrototype::clear);
+        properties.method(Method.DELETE, SetPrototype::delete);
         properties.method("difference", 1, SetPrototype::difference);
         properties.method("entries", 0, SetPrototype::entries);
-        properties.method("forEach", 1, SetPrototype::forEach);
+        properties.method(Method.FOR_EACH, SetPrototype::forEach);
         properties.method("has", 1, SetPrototype::has);
         properties.method("intersection", 1, SetPrototype::intersection);
         properties.method("isDisjointFrom", 1, SetPrototype::isDisjointFrom);
@@ -452,7 +453,7 @@ enum IntrinsicFunctions {
     }),
     SHARED_ARRAY_BUFFER_PROTOTYPE(properties -> {
         properties.method("grow", 1, SharedArrayBufferPrototype::grow);
-        properties.method("slice", 2, SharedArrayBufferPrototype::slice);
+        properties.method(Method.SLICE, SharedArrayBufferPrototype::slice);
         properties.getter("byteLength", SharedArrayBufferPrototype::getByteLength);
         properties.getter("growable", SharedArrayBufferPrototype::getGrowable);
         properties.getter("maxByteLength", SharedArrayBufferPrototype::getMaxByteLength);
@@ -463,15 +464,15 @@ enum IntrinsicFunctions {
         properties.method("raw", 1, StringConstructor::raw);
     }),
     STRING_PROTOTYPE(properties -> {
-        properties.method("at", 1, StringPrototype::at);
+        properties.method(Method.AT, StringPrototype::at);
         properties.method("charAt", 1, StringPrototype::charAt);
         properties.method("charCodeAt", 1, StringPrototype::charCodeAt);
         properties.method("codePointAt", 1, StringPrototype::codePointAt);
         properties.method("concat", 1, StringPrototype::concat);
         properties.method("endsWith", 1, StringPrototype::endsWith);
-        properties.method("includes", 1, StringPrototype::includes);
-        properties.method("indexOf", 1, StringPrototype::indexOf);
-        properties.method("lastIndexOf", 1, StringPrototype::lastIndexOf);
+        properties.method(Method.INCLUDES, StringPrototype::includes);
+        properties.method(Method.INDEX_OF, StringPrototype::indexOf);
+        properties.method(Method.LAST_INDEX_OF, StringPrototype::lastIndexOf);
         properties.method("localeCompare", 1, StringPrototype::localeCompare);
         properties.method("match", 1, StringPrototype::match);
         properties.method("matchAll", 1, StringPrototype::matchAll);
@@ -481,7 +482,7 @@ enum IntrinsicFunctions {
         properties.method("replace", 2, StringPrototype::replace);
         properties.method("replaceAll", 2, StringPrototype::replaceAll);
         properties.method("search", 1, StringPrototype::search);
-        properties.method("slice", 2, StringPrototype::slice);
+        properties.method(Method.SLICE, StringPrototype::slice);
         properties.method("split", 2, StringPrototype::split);
         properties.method("startsWith", 1, StringPrototype::startsWith);
         properties.method("substr", 2, StringPrototype::substr);
@@ -492,7 +493,7 @@ enum IntrinsicFunctions {
         properties.method("trim", 0, StringPrototype::trim);
     }),
     STRING_PROTOTYPE_AFTER_TRIM(properties -> {
-        properties.method("valueOf", 0, StringPrototype::valueOf);
+        properties.method(Method.VALUE_OF, StringPrototype::valueOf);
 
     // Legacy HTML methods from Annex B.
         properties.method("anchor", 1, StringPrototype::anchor);
@@ -521,34 +522,34 @@ enum IntrinsicFunctions {
         properties.getter("length", TypedArrayPrototype::getLength);
     }),
     TYPED_ARRAY_PROTOTYPE(properties -> {
-        properties.method("at", 1, TypedArrayPrototype::at);
-        properties.method("copyWithin", 2, TypedArrayPrototype::copyWithin);
+        properties.method(Method.AT, TypedArrayPrototype::at);
+        properties.method(Method.COPY_WITHIN, TypedArrayPrototype::copyWithin);
         properties.method("entries", 0, TypedArrayPrototype::entries);
-        properties.method("every", 1, TypedArrayPrototype::every);
-        properties.method("fill", 1, TypedArrayPrototype::fill);
-        properties.method("filter", 1, TypedArrayPrototype::filter);
-        properties.method("find", 1, TypedArrayPrototype::find);
-        properties.method("findIndex", 1, TypedArrayPrototype::findIndex);
-        properties.method("findLast", 1, TypedArrayPrototype::findLast);
-        properties.method("findLastIndex", 1, TypedArrayPrototype::findLastIndex);
-        properties.method("forEach", 1, TypedArrayPrototype::forEach);
-        properties.method("includes", 1, TypedArrayPrototype::includes);
-        properties.method("indexOf", 1, TypedArrayPrototype::indexOf);
-        properties.method("join", 1, TypedArrayPrototype::join);
+        properties.method(Method.EVERY, TypedArrayPrototype::every);
+        properties.method(Method.FILL, TypedArrayPrototype::fill);
+        properties.method(Method.FILTER, TypedArrayPrototype::filter);
+        properties.method(Method.FIND, TypedArrayPrototype::find);
+        properties.method(Method.FIND_INDEX, TypedArrayPrototype::findIndex);
+        properties.method(Method.FIND_LAST, TypedArrayPrototype::findLast);
+        properties.method(Method.FIND_LAST_INDEX, TypedArrayPrototype::findLastIndex);
+        properties.method(Method.FOR_EACH, TypedArrayPrototype::forEach);
+        properties.method(Method.INCLUDES, TypedArrayPrototype::includes);
+        properties.method(Method.INDEX_OF, TypedArrayPrototype::indexOf);
+        properties.method(Method.JOIN, TypedArrayPrototype::join);
         properties.method("keys", 0, TypedArrayPrototype::keys);
-        properties.method("lastIndexOf", 1, TypedArrayPrototype::lastIndexOf);
-        properties.method("map", 1, TypedArrayPrototype::map);
-        properties.method("reduce", 1, TypedArrayPrototype::reduce);
-        properties.method("reduceRight", 1, TypedArrayPrototype::reduceRight);
-        properties.method("reverse", 0, TypedArrayPrototype::reverse);
+        properties.method(Method.LAST_INDEX_OF, TypedArrayPrototype::lastIndexOf);
+        properties.method(Method.MAP, TypedArrayPrototype::map);
+        properties.method(Method.REDUCE, TypedArrayPrototype::reduce);
+        properties.method(Method.REDUCE_RIGHT, TypedArrayPrototype::reduceRight);
+        properties.method(Method.REVERSE, TypedArrayPrototype::reverse);
         properties.method("set", 1, TypedArrayPrototype::set);
-        properties.method("slice", 2, TypedArrayPrototype::slice);
-        properties.method("some", 1, TypedArrayPrototype::some);
-        properties.method("sort", 1, TypedArrayPrototype::sort);
+        properties.method(Method.SLICE, TypedArrayPrototype::slice);
+        properties.method(Method.SOME, TypedArrayPrototype::some);
+        properties.method(Method.SORT, TypedArrayPrototype::sort);
         properties.method("subarray", 2, TypedArrayPrototype::subarray);
-        properties.method("toLocaleString", 0, TypedArrayPrototype::toLocaleString);
-        properties.method("toReversed", 0, TypedArrayPrototype::toReversed);
-        properties.method("toSorted", 1, TypedArrayPrototype::toSorted);
+        properties.method(Method.TO_LOCALE_STRING, TypedArrayPrototype::toLocaleString);
+        properties.method(Method.TO_REVERSED, TypedArrayPrototype::toReversed);
+        properties.method(Method.TO_SORTED, TypedArrayPrototype::toSorted);
     }),
     UINT8_ARRAY_PROTOTYPE(properties -> {
         properties.method("toBase64", 0, Uint8ArrayBase64Hex::toBase64);
@@ -559,15 +560,15 @@ enum IntrinsicFunctions {
     WEAK_MAP_PROTOTYPE(properties -> {
         properties.method("set", 2, WeakMapPrototype::set);
         properties.method("get", 1, WeakMapPrototype::get);
-        properties.method("getOrInsert", 2, WeakMapPrototype::getOrInsert);
-        properties.method("getOrInsertComputed", 2, WeakMapPrototype::getOrInsertComputed);
+        properties.method(Method.GET_OR_INSERT, WeakMapPrototype::getOrInsert);
+        properties.method(Method.GET_OR_INSERT_COMPUTED, WeakMapPrototype::getOrInsertComputed);
         properties.method("has", 1, WeakMapPrototype::has);
-        properties.method("delete", 1, WeakMapPrototype::delete);
+        properties.method(Method.DELETE, WeakMapPrototype::delete);
     }),
     WEAK_SET_PROTOTYPE(properties -> {
-        properties.method("add", 1, WeakSetPrototype::add);
+        properties.method(Method.ADD, WeakSetPrototype::add);
         properties.method("has", 1, WeakSetPrototype::has);
-        properties.method("delete", 1, WeakSetPrototype::delete);
+        properties.method(Method.DELETE, WeakSetPrototype::delete);
     });
 
     private final BuiltinFunctionList functions;

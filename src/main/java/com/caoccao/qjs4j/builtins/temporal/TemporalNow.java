@@ -46,8 +46,7 @@ public final class TemporalNow {
         }
         JSValue timeZoneValue = args[0];
         if (!(timeZoneValue instanceof JSString timeZoneString)) {
-            context.throwTypeError("Temporal error: Time zone must be string");
-            return null;
+            return context.rejectTypeError("Temporal error: Time zone must be string");
         }
 
         String normalizedTimeZoneId = TemporalTimeZone.parseTimeZoneIdentifierString(context, timeZoneString.value());
@@ -57,8 +56,7 @@ public final class TemporalNow {
         try {
             TemporalTimeZone.resolveTimeZone(normalizedTimeZoneId);
         } catch (Exception ignored) {
-            context.throwRangeError("Temporal error: Invalid time zone: " + normalizedTimeZoneId);
-            return null;
+            return context.rejectRangeError("Temporal error: Invalid time zone: " + normalizedTimeZoneId);
         }
         return normalizedTimeZoneId;
     }

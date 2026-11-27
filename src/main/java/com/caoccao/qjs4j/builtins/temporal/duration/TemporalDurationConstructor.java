@@ -171,7 +171,7 @@ public final class TemporalDurationConstructor {
     private static BigInteger getDurationLikeField(JSContext context, JSObject durationLikeObject,
             PropertyKey fieldKey) {
         JSValue value = durationLikeObject.get(fieldKey);
-        if (value instanceof JSUndefined || value == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(value)) {
             return null;
         }
         double numericValueAsDouble = JSTypeConversions.toNumber(context, value).value();

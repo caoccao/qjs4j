@@ -283,8 +283,7 @@ public class JSMemoryAccountingTest extends BaseTest {
         JSRuntimeOptions options = new JSRuntimeOptions().setMaxCallDepth(20);
         assertThat(options.getMaxCallDepth()).isEqualTo(20);
         try (JSRuntime runtime = new JSRuntime(options)) {
-            JSContext context = runtime.createContext();
-            assertThat(context.getMaxCallDepth()).isEqualTo(20);
+            assertThat(runtime.createContext().getMaxCallDepth()).isEqualTo(20);
             assertThat(evalToString(runtime, """
                     function recurse(n) { return n === 0 ? 0 : recurse(n - 1); }
                     try { recurse(200); 'completed'; } catch (e) { e.name; }""")).isEqualTo("RangeError");

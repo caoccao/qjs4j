@@ -31,8 +31,7 @@ public final class IsoDurationParser {
     }
 
     private static TemporalDuration invalid(JSContext context) {
-        context.throwRangeError(INVALID);
-        return null;
+        return context.rejectRangeError(INVALID);
     }
 
     public static TemporalDuration parse(JSContext context, String input) {

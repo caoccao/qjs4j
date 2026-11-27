@@ -220,16 +220,7 @@ public final class JSImportNamespaceObject extends JSModuleNamespace {
     }
 
     private boolean validateExportDefine(PropertyKey key, PropertyDescriptor descriptor) {
-        if (descriptor.isAccessorDescriptor()) {
-            return false;
-        }
-        if (descriptor.hasConfigurable() && descriptor.isConfigurable()) {
-            return false;
-        }
-        if (descriptor.hasEnumerable() && !descriptor.isEnumerable()) {
-            return false;
-        }
-        if (descriptor.hasWritable() && !descriptor.isWritable()) {
+        if (!descriptor.acceptsDataAttributes(PropertyDescriptor.DataState.EnumerableWritable)) {
             return false;
         }
         if (descriptor.hasValue()) {

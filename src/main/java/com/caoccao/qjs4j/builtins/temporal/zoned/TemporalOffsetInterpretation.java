@@ -61,8 +61,7 @@ public final class TemporalOffsetInterpretation {
             return selectMatchingEpochNanosecondsForExplicitOffset(isoDate, isoTime, timeZoneId, explicitOffsetSeconds,
                     allowMinuteRounding);
         } catch (DateTimeException dateTimeException) {
-            context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
-            return null;
+            return context.rejectRangeError("Temporal error: Invalid time zone: " + timeZoneId);
         }
     }
 
@@ -191,8 +190,7 @@ public final class TemporalOffsetInterpretation {
             try {
                 TemporalTimeZone.resolveTimeZone(timeZoneId);
             } catch (DateTimeException invalidTimeZoneException) {
-                context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
-                return null;
+                return context.rejectRangeError("Temporal error: Invalid time zone: " + timeZoneId);
             }
         }
         return timeZoneId;

@@ -56,7 +56,7 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
             for (String name : pattern.getBoundNames()) {
                 Integer local = compilerContext.scopeManager.currentScope().getLocal(name);
                 if (local != null) {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, local);
+                    emitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, local);
                     compilerContext.tdzLocals.add(name);
                 }
             }
@@ -107,37 +107,37 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
         }
         compilerContext.expressionCompiler.compile(initializer);
         if (pattern instanceof Identifier id && initializer.isAnonymousFunction()) {
-            compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, id.getName());
+            emitter.emitOpcodeAtom(Opcode.SET_NAME, id.getName());
         }
         compilerContext.inferredClassName = null;
         compilerContext.patternCompiler.compileForOfValueAssignment(pattern, true);
     }
 
     private void compileForInLoop(ForEachStatement forInStmt, Pattern pattern, boolean lexical) {
-        int loopStart = compilerContext.emitter.currentOffset();
+        int loopStart = emitter.currentOffset();
         LoopContext loop = compilerContext.loopManager.createLoopContext(loopStart,
                 compilerContext.scopeManager.getScopeDepth() - 1, compilerContext.scopeManager.getScopeDepth());
         compilerContext.loopManager.pushLoop(loop);
 
-        compilerContext.emitter.emitOpcode(Opcode.FOR_IN_NEXT);
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
-        int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+        emitter.emitOpcode(Opcode.FOR_IN_NEXT);
+        emitter.emitOpcode(Opcode.DUP);
+        emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
+        int jumpToEnd = emitter.emitJump(Opcode.IF_TRUE);
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 
         compileBody(forInStmt, pattern, lexical);
 
-        compilerContext.emitter.emitGoto(loopStart);
+        emitter.emitGoto(loopStart);
 
-        compilerContext.emitter.patchJumpToHere(jumpToEnd);
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        emitter.patchJumpToHere(jumpToEnd);
+        emitter.emitOpcode(Opcode.DROP);
 
         for (int breakPos : loop.breakPositions) {
-            compilerContext.emitter.patchJumpToHere(breakPos);
+            emitter.patchJumpToHere(breakPos);
         }
-        compilerContext.emitter.patchJumps(loop.continuePositions, loopStart);
+        emitter.patchJumps(loop.continuePositions, loopStart);
 
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        emitter.emitOpcode(Opcode.DROP);
 
         compilerContext.loopManager.popLoop();
         compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
@@ -161,13 +161,12 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
         int asyncIteratorLocal = -1;
         if (forOfStmt.isAsync()) {
             asyncIteratorLocal = compilerContext.declareTemporary("#for_await_iterator_");
-            compilerContext.emitter.emitOpcode(Opcode.DUP3);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitPutLocal(asyncIteratorLocal);
+            emitter.emitOpcode(Opcode.DUP3);
+            emitter.emitDrops(2);
+            emitter.emitPutLocal(asyncIteratorLocal);
         }
 
-        int loopStart = compilerContext.emitter.currentOffset();
+        int loopStart = emitter.currentOffset();
         LoopContext loop = compilerContext.loopManager.createLoopContext(loopStart,
                 compilerContext.scopeManager.getScopeDepth() - 1, compilerContext.scopeManager.getScopeDepth());
         loop.hasIterator = true;
@@ -177,35 +176,33 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
         int jumpToEnd;
 
         if (forOfStmt.isAsync()) {
-            compilerContext.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_NEXT);
+            emitter.emitOpcode(Opcode.FOR_AWAIT_OF_NEXT);
             // An error from awaiting next(), or reading its result, does not close the iterator.
             // Catch it above the iterator marker, discard that record, and rethrow. Body errors
             // still reach the marker and perform AsyncIteratorClose.
-            int nextError = compilerContext.emitter.emitJump(Opcode.CATCH);
-            compilerContext.emitter.emitOpcode(Opcode.SWAP);
-            compilerContext.emitter.emitOpcode(Opcode.AWAIT);
-            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, "done");
-            int doneJump = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
-            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, "value");
-            compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
-            int bodyJump = compilerContext.emitter.emitJump(Opcode.GOTO);
+            int nextError = emitter.emitJump(Opcode.CATCH);
+            emitter.emitOpcode(Opcode.SWAP);
+            emitter.emitOpcode(Opcode.AWAIT);
+            emitter.emitOpcodeAtom(Opcode.GET_FIELD2, "done");
+            int doneJump = emitter.emitJump(Opcode.IF_TRUE);
+            emitter.emitOpcodeAtom(Opcode.GET_FIELD, "value");
+            emitter.emitOpcode(Opcode.NIP_CATCH);
+            int bodyJump = emitter.emitJump(Opcode.GOTO);
 
-            compilerContext.emitter.patchJumpToHere(nextError);
+            emitter.patchJumpToHere(nextError);
             int errorLocal = compilerContext.storeTemporary("#for_await_next_error_");
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitGetLocal(errorLocal);
-            compilerContext.emitter.emitOpcode(Opcode.THROW);
+            emitter.emitDrops(3);
+            emitter.emitGetLocal(errorLocal);
+            emitter.emitOpcode(Opcode.THROW);
 
-            compilerContext.emitter.patchJumpToHere(doneJump);
-            compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
-            jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
-            compilerContext.emitter.patchJumpToHere(bodyJump);
+            emitter.patchJumpToHere(doneJump);
+            emitter.emitOpcode(Opcode.NIP_CATCH);
+            jumpToEnd = emitter.emitJump(Opcode.GOTO);
+            emitter.patchJumpToHere(bodyJump);
             compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
         } else {
-            compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
-            jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+            emitter.emitIntOperand(Opcode.FOR_OF_NEXT, 0);
+            jumpToEnd = emitter.emitJump(Opcode.IF_TRUE);
             compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
         }
 
@@ -213,9 +210,9 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
             // Create a NEW DisposableStack for each iteration
             boolean useAsyncStack = isAwaitUsingForOf || compilerContext.isInAsyncFunction;
             String constructorName = useAsyncStack ? JSAsyncDisposableStack.NAME : JSDisposableStack.NAME;
-            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, constructorName);
-            compilerContext.emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, 0);
-            compilerContext.emitter.emitPutLocal(forOfUsingStackLocal);
+            emitter.emitOpcodeAtom(Opcode.GET_VAR, constructorName);
+            emitter.emitIntOperand(Opcode.CALL_CONSTRUCTOR, 0);
+            emitter.emitPutLocal(forOfUsingStackLocal);
 
             // Call stack.use(value) - value is on the stack
             compilerContext.emitHelpers.emitMethodCallWithSingleArgOnLocalObject(forOfUsingStackLocal, "use");
@@ -228,28 +225,28 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
             compilerContext.emitHelpers.emitScopeUsingDisposal(compilerContext.scopeManager.currentScope());
         }
 
-        compilerContext.emitter.emitGoto(loopStart);
+        emitter.emitGoto(loopStart);
 
-        int loopEnd = compilerContext.emitter.currentOffset();
-        compilerContext.emitter.patchJump(jumpToEnd, loopEnd);
+        int loopEnd = emitter.currentOffset();
+        emitter.patchJump(jumpToEnd, loopEnd);
 
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        emitter.emitOpcode(Opcode.DROP);
 
         // A for-await loop that ran to the end has nothing to close; one left by a break awaits its iterator's
         // return(). Stack: iter next marker -> (empty)
         int jumpOverBreakTarget = -1;
         if (asyncIteratorLocal >= 0) {
-            compilerContext.emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
-            jumpOverBreakTarget = compilerContext.emitter.emitJump(Opcode.GOTO);
+            emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
+            jumpOverBreakTarget = emitter.emitJump(Opcode.GOTO);
         }
-        int breakTarget = compilerContext.emitter.currentOffset();
+        int breakTarget = emitter.currentOffset();
         compilerContext.emitHelpers.emitLoopIteratorClose(loop);
         if (jumpOverBreakTarget >= 0) {
-            compilerContext.emitter.patchJumpToHere(jumpOverBreakTarget);
+            emitter.patchJumpToHere(jumpOverBreakTarget);
         }
 
-        compilerContext.emitter.patchJumps(loop.breakPositions, breakTarget);
-        compilerContext.emitter.patchJumps(loop.continuePositions, loopStart);
+        emitter.patchJumps(loop.breakPositions, breakTarget);
+        emitter.patchJumps(loop.continuePositions, loopStart);
 
         compilerContext.loopManager.popLoop();
 
@@ -267,49 +264,47 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
 
         // FOR_OF_START to get iterator
         if (forOfStmt.isAsync()) {
-            compilerContext.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_START);
+            emitter.emitOpcode(Opcode.FOR_AWAIT_OF_START);
         } else {
-            compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
+            emitter.emitOpcode(Opcode.FOR_OF_START);
         }
 
         // Stack: iter, next, catch_offset
-        int loopStart = compilerContext.emitter.currentOffset();
+        int loopStart = emitter.currentOffset();
 
         // FOR_OF_NEXT to get next value
         if (forOfStmt.isAsync()) {
-            compilerContext.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_NEXT);
-            compilerContext.emitter.emitOpcode(Opcode.AWAIT);
-            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, "done");
+            emitter.emitOpcode(Opcode.FOR_AWAIT_OF_NEXT);
+            emitter.emitOpcode(Opcode.AWAIT);
+            emitter.emitOpcodeAtom(Opcode.GET_FIELD2, "done");
         } else {
-            compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
+            emitter.emitIntOperand(Opcode.FOR_OF_NEXT, 0);
         }
 
         // Stack: iter, next, catch_offset, value, done
-        int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+        int jumpToEnd = emitter.emitJump(Opcode.IF_TRUE);
         // Stack: iter, next, catch_offset, value (or result for async)
 
         if (forOfStmt.isAsync()) {
-            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, "value");
+            emitter.emitOpcodeAtom(Opcode.GET_FIELD, "value");
         }
 
         // Drop the value - we can't assign it
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        emitter.emitOpcode(Opcode.DROP);
         // Evaluate the call expression (f() is called at runtime)
         compilerContext.expressionCompiler.compile(callExpr);
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        emitter.emitOpcode(Opcode.DROP);
         // Throw ReferenceError
-        compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
-        compilerContext.emitter.emitU8(5); // JS_THROW_ERROR_INVALID_LVALUE
+        emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
+        emitter.emitU8(5); // JS_THROW_ERROR_INVALID_LVALUE
 
         // End label (when done=true)
-        compilerContext.emitter.patchJumpToHere(jumpToEnd);
+        emitter.patchJumpToHere(jumpToEnd);
         // Drop remaining value on stack
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        emitter.emitOpcode(Opcode.DROP);
 
         // Clean up iterator: drop catch_offset, next, iter
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        emitter.emitDrops(3);
 
         compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.scopeManager.exitScope();
@@ -318,10 +313,10 @@ final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
     private void startIteration(ForEachStatement statement) {
         compilerContext.expressionCompiler.compile(statement.getRight());
         if (statement instanceof ForInStatement) {
-            compilerContext.emitter.emitOpcode(Opcode.FOR_IN_START);
+            emitter.emitOpcode(Opcode.FOR_IN_START);
         } else {
-            compilerContext.emitter.emitSourcePosition(statement.getRight().getLocation());
-            compilerContext.emitter.emitOpcode(statement.isAsync() ? Opcode.FOR_AWAIT_OF_START : Opcode.FOR_OF_START);
+            emitter.emitSourcePosition(statement.getRight().getLocation());
+            emitter.emitOpcode(statement.isAsync() ? Opcode.FOR_AWAIT_OF_START : Opcode.FOR_OF_START);
         }
     }
 }

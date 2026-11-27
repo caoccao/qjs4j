@@ -127,15 +127,20 @@ public final class TemporalPlainDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        IsoTime resultTime = bag.regulate(IsoTime.MIDNIGHT, overflow, TemporalError.INVALID_TIME.message());
-        if (resultTime == null) {
+        return dateTimeFromRegulatedFields(context, bag, resultDate, IsoTime.MIDNIGHT, overflow,
+                TemporalError.INVALID_TIME, calendarId);
+    }
+
+    static JSValue dateTimeFromRegulatedFields(JSContext context, TemporalTimeFields fields, IsoDate date,
+            IsoTime defaultTime, String overflow, TemporalError timeError, TemporalCalendarId calendar) {
+        IsoTime time = fields.regulate(defaultTime, overflow, timeError.message());
+        if (time == null) {
             return JSUndefined.INSTANCE;
         }
-
-        if (!resultDate.isWithinPlainDateTimeRange(resultTime)) {
+        if (!date.isWithinPlainDateTimeRange(time)) {
             return TemporalError.INVALID_ISO_DATE.undefined(context);
         }
-        return JSTemporalPlainDateTime.create(context, resultDate.atTime(resultTime), calendarId);
+        return JSTemporalPlainDateTime.create(context, date.atTime(time), calendar);
     }
 
     static JSValue dateTimeFromString(JSContext context, String input) {

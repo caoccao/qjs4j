@@ -41,8 +41,8 @@ public class MathObjectTest extends BaseJavetTest {
     }
 
     private void assertMathClose(JSNativeCallback operation, double expected, double... inputs) {
-        JSValue result = operation.call(context, JSUndefined.INSTANCE, numberArgs(inputs));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(expected, offset(1e-10));
+        assertThat(operation.call(context, JSUndefined.INSTANCE, numberArgs(inputs)).asNumber().map(JSNumber::value)
+                .orElseThrow()).isCloseTo(expected, offset(1e-10));
     }
 
     @Test
@@ -66,8 +66,7 @@ public class MathObjectTest extends BaseJavetTest {
         assertMath(MathObject::abs, Double.NaN);
 
         // Edge case: string coercion
-        JSValue result = MathObject.abs(context, JSUndefined.INSTANCE, stringArgs("-42"));
-        assertNumberValue(result, 42.0);
+        assertNumberValue(MathObject.abs(context, JSUndefined.INSTANCE, stringArgs("-42")), 42.0);
     }
 
     @Test
@@ -148,11 +147,11 @@ public class MathObjectTest extends BaseJavetTest {
 
     @Test
     public void testF16Round() {
-        assertThat(context.eval("typeof Math.f16round").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("Math.f16round.length").toJavaObject()).isEqualTo(1.0);
-        assertThat(context.eval("Math.f16round(1.337)").toJavaObject()).isEqualTo(1.3369140625);
-        assertThat(context.eval("Object.is(Math.f16round(-0), -0)").toJavaObject()).isEqualTo(true);
-        assertThat(context.eval("Math.f16round(Infinity)").toJavaObject()).isEqualTo(Double.POSITIVE_INFINITY);
+        assertEvalJavaValue("typeof Math.f16round", "function");
+        assertEvalJavaValue("Math.f16round.length", 1.0);
+        assertEvalJavaValue("Math.f16round(1.337)", 1.3369140625);
+        assertEvalJavaValue("Object.is(Math.f16round(-0), -0)", true);
+        assertEvalJavaValue("Math.f16round(Infinity)", Double.POSITIVE_INFINITY);
     }
 
     @Test
@@ -367,8 +366,8 @@ public class MathObjectTest extends BaseJavetTest {
         assertMath(MathObject::clz32, 31.0, 1);
 
         // Test fround
-        JSValue result = MathObject.fround(context, JSUndefined.INSTANCE, numberArgs(1.5));
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(1.5, offset(1e-6));
+        assertThat(MathObject.fround(context, JSUndefined.INSTANCE, numberArgs(1.5)).asNumber().map(JSNumber::value)
+                .orElseThrow()).isCloseTo(1.5, offset(1e-6));
 
         // Test hypot
         assertMathClose(MathObject::hypot, 5.0, 3, 4);
@@ -405,14 +404,14 @@ public class MathObjectTest extends BaseJavetTest {
 
     @Test
     public void testSumPrecise() {
-        assertThat(context.eval("typeof Math.sumPrecise").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("Math.sumPrecise.length").toJavaObject()).isEqualTo(1.0);
-        assertThat(context.eval("Math.sumPrecise([1e100, 1, -1e100])").toJavaObject()).isEqualTo(1.0);
-        assertThat(context.eval("Object.is(Math.sumPrecise([]), -0)").toJavaObject()).isEqualTo(true);
-        assertThat(context.eval("Object.is(Math.sumPrecise([0]), +0)").toJavaObject()).isEqualTo(true);
-        assertThat(context.eval("Object.is(Math.sumPrecise([-0]), -0)").toJavaObject()).isEqualTo(true);
-        assertThat(context.eval("Number.isNaN(Math.sumPrecise([Infinity, -Infinity]))").toJavaObject()).isEqualTo(true);
-        assertThat(context.eval("""
+        assertEvalJavaValue("typeof Math.sumPrecise", "function");
+        assertEvalJavaValue("Math.sumPrecise.length", 1.0);
+        assertEvalJavaValue("Math.sumPrecise([1e100, 1, -1e100])", 1.0);
+        assertEvalJavaValue("Object.is(Math.sumPrecise([]), -0)", true);
+        assertEvalJavaValue("Object.is(Math.sumPrecise([0]), +0)", true);
+        assertEvalJavaValue("Object.is(Math.sumPrecise([-0]), -0)", true);
+        assertEvalJavaValue("Number.isNaN(Math.sumPrecise([Infinity, -Infinity]))", true);
+        assertEvalJavaValue("""
                 (() => {
                   const iterable = {
                     [Symbol.iterator]() {
@@ -450,7 +449,7 @@ public class MathObjectTest extends BaseJavetTest {
                       && it.closed === 1;
                   }
                 })()
-                """).toJavaObject()).isEqualTo(true);
+                """, true);
     }
 
     @Test
@@ -463,8 +462,8 @@ public class MathObjectTest extends BaseJavetTest {
         assertMathClose(MathObject::tan, 0.0, 0);
 
         // Test with PI/2
-        JSValue result = MathObject.sin(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(Math.PI / 2)});
-        assertThat(result.asNumber().map(JSNumber::value).orElseThrow()).isCloseTo(1.0, offset(1e-10));
+        assertThat(MathObject.sin(context, JSUndefined.INSTANCE, new JSValue[]{new JSNumber(Math.PI / 2)}).asNumber()
+                .map(JSNumber::value).orElseThrow()).isCloseTo(1.0, offset(1e-10));
 
         // Edge case: no arguments
         assertMath(MathObject::sin, Double.NaN);

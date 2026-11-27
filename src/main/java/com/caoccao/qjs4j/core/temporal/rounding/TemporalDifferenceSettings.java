@@ -68,8 +68,7 @@ public record TemporalDifferenceSettings(TemporalUnit largestUnit, TemporalUnit 
             if (optionsArg instanceof JSObject castedOptionsObject) {
                 optionsObject = castedOptionsObject;
             } else {
-                context.throwTypeError("Temporal error: Options must be an object.");
-                return null;
+                return context.rejectTypeError("Temporal error: Options must be an object.");
             }
         }
 
@@ -109,8 +108,7 @@ public record TemporalDifferenceSettings(TemporalUnit largestUnit, TemporalUnit 
             Optional<TemporalUnit> parsed = TemporalUnit.fromString(largestUnitText)
                     .filter(u -> u.rank() >= allowedMin.rank() && u.rank() <= allowedMax.rank());
             if (parsed.isEmpty()) {
-                context.throwRangeError("Temporal error: Invalid largest unit.");
-                return null;
+                return context.rejectRangeError("Temporal error: Invalid largest unit.");
             }
             largestUnit = parsed.get();
         }
@@ -123,8 +121,7 @@ public record TemporalDifferenceSettings(TemporalUnit largestUnit, TemporalUnit 
             Optional<TemporalUnit> parsed = TemporalUnit.fromString(smallestUnitText)
                     .filter(u -> u.rank() >= allowedMin.rank() && u.rank() <= allowedMax.rank());
             if (parsed.isEmpty()) {
-                context.throwRangeError("Temporal error: Invalid smallest unit.");
-                return null;
+                return context.rejectRangeError("Temporal error: Invalid smallest unit.");
             }
             smallestUnit = parsed.get();
         }

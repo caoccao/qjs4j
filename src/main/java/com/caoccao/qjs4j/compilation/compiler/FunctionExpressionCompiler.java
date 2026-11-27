@@ -61,10 +61,8 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         }
 
         int argumentsLocalIndex = functionContext.scopeManager.currentScope().declareLocal(JSArguments.NAME);
-        functionContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-        functionContext.emitter.emitU8(0);
-        functionContext.emitter.emitOpcode(Opcode.PUT_LOC);
-        functionContext.emitter.emitU16(argumentsLocalIndex);
+        functionContext.emitter.emitIntOperand(Opcode.SPECIAL_OBJECT, 0);
+        functionContext.emitter.emitIntOperand(Opcode.PUT_LOC, argumentsLocalIndex);
     }
 
     /**
@@ -119,8 +117,7 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
             // Simple rest: ...args → declare local and store
             String restParamName = restId.getName();
             int restLocalIndex = functionContext.scopeManager.currentScope().declareLocal(restParamName);
-            functionContext.emitter.emitOpcode(Opcode.PUT_LOC);
-            functionContext.emitter.emitU16(restLocalIndex);
+            functionContext.emitter.emitIntOperand(Opcode.PUT_LOC, restLocalIndex);
         } else {
             // Destructured rest: ...[a, b] or ...{a, b} → compile pattern assignment
             functionContext.patternCompiler.compile(restParameter.getArgument());
@@ -166,9 +163,9 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
                 JSValue.NO_ARGS, null, false, false, false, false, true, null);
         compilerContext.emitHelpers.emitCapturedValues(wrapperCompiler, wrapperFunction);
 
-        compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, wrapperFunction);
-        compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-        compilerContext.emitter.emitOpcodeU16(Opcode.CALL, 0);
+        emitter.emitOpcodeConstant(Opcode.FCLOSURE, wrapperFunction);
+        emitter.emitOpcode(Opcode.UNDEFINED);
+        emitter.emitIntOperand(Opcode.CALL, 0);
     }
 
     void inheritClassInnerNameCapture(CompilerContext targetContext) {
@@ -237,8 +234,7 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         compilerContext.emitHelpers.emitDefaultParameterInit(functionCompiler, node.getFunctionParams(), parameterSlots,
                 node);
         if (node.getRestParameter() != null) {
-            functionContext.emitter.emitOpcode(Opcode.REST);
-            functionContext.emitter.emitU16(node.getParams().size());
+            functionContext.emitter.emitIntOperand(Opcode.REST, node.getParams().size());
             emitRestParameterBinding(node.getRestParameter(), functionContext);
         }
         emitParameterDestructuring(node.getParams(), destructuringParams, functionContext);

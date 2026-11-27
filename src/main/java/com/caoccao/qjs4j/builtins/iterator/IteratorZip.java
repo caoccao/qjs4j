@@ -223,13 +223,11 @@ final class IteratorZip {
         }
         // Must be a string primitive (not a String wrapper), no coercion
         if (!(modeValue instanceof JSString modeStr)) {
-            context.throwTypeError("mode must be a string");
-            return null;
+            return context.rejectTypeError("mode must be a string");
         }
         String mode = modeStr.value();
         if (!"shortest".equals(mode) && !"longest".equals(mode) && !"strict".equals(mode)) {
-            context.throwTypeError("mode must be 'shortest', 'longest', or 'strict'");
-            return null;
+            return context.rejectTypeError("mode must be 'shortest', 'longest', or 'strict'");
         }
         return mode;
     }
@@ -240,16 +238,14 @@ final class IteratorZip {
             return null;
         }
         if (!(method instanceof JSFunction function)) {
-            context.throwTypeError(missing);
-            return null;
+            return context.rejectTypeError(missing);
         }
         JSValue result = callSafe(context, function, iterable, JSValue.NO_ARGS);
         if (context.hasPendingException()) {
             return null;
         }
         if (!(result instanceof JSObject iterator)) {
-            context.throwTypeError(invalid);
-            return null;
+            return context.rejectTypeError(invalid);
         }
         JSValue next = iterator.get(PropertyKey.NEXT);
         return context.hasPendingException() ? null : new IteratorRecord(iterator, next);
@@ -260,8 +256,7 @@ final class IteratorZip {
      */
     private static IteratorRecord getIteratorFlattenable(JSContext context, JSValue obj) {
         if (!(obj instanceof JSObject objObject)) {
-            context.throwTypeError("value is not an object");
-            return null;
+            return context.rejectTypeError("value is not an object");
         }
 
         JSValue iteratorMethod = objObject.get(PropertyKey.SYMBOL_ITERATOR);
@@ -270,21 +265,19 @@ final class IteratorZip {
         }
 
         JSObject iterator;
-        if (iteratorMethod instanceof JSUndefined || iteratorMethod instanceof JSNull) {
+        if (JSTypeChecking.isNullish(iteratorMethod)) {
             // Use the object itself as the iterator
             iterator = objObject;
         } else {
             if (!(iteratorMethod instanceof JSFunction iterFunc)) {
-                context.throwTypeError("Symbol.iterator is not a function");
-                return null;
+                return context.rejectTypeError("Symbol.iterator is not a function");
             }
             JSValue iterValue = callSafe(context, iterFunc, objObject, JSValue.NO_ARGS);
             if (context.hasPendingException()) {
                 return null;
             }
             if (!(iterValue instanceof JSObject iterObj)) {
-                context.throwTypeError("iterator is not an object");
-                return null;
+                return context.rejectTypeError("iterator is not an object");
             }
             iterator = iterObj;
         }
@@ -308,8 +301,7 @@ final class IteratorZip {
         if (options instanceof JSObject obj) {
             return obj;
         }
-        context.throwTypeError("options must be an object or undefined");
-        return null;
+        return context.rejectTypeError("options must be an object or undefined");
     }
 
     static JSValue zipIterables(JSContext context, JSValue[] args, boolean keyed) {

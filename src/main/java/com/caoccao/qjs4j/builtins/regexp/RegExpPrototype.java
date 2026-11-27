@@ -287,7 +287,7 @@ public final class RegExpPrototype {
      */
     public static JSValue getFlags(JSContext context, JSValue thisArg, JSValue[] args) {
         if (isRegExpPrototypeObject(context, thisArg)) {
-            return new JSString("");
+            return JSString.EMPTY;
         }
         if (!(thisArg instanceof JSRegExp regexpObject)) {
             return context.throwTypeError("RegExp.prototype.flags called on non-RegExp");
@@ -307,7 +307,7 @@ public final class RegExpPrototype {
             return context.throwTypeError("RegExp.prototype.flags called on non-object");
         }
         if (isRegExpPrototypeObject(context, thisArg)) {
-            return new JSString("");
+            return JSString.EMPTY;
         }
         String flags = RegExpFlag.readFlags(context, regexpObject);
         if (context.hasPendingException()) {

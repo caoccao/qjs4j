@@ -19,8 +19,6 @@ package com.caoccao.qjs4j.builtins.collection;
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 public class SetConstructorTest extends BaseJavetTest {
 
     @Test
@@ -34,7 +32,7 @@ public class SetConstructorTest extends BaseJavetTest {
                 && Set[Symbol.species] === Set
                 """);
 
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 (() => {
                   const grouped = Set.groupBy([1, 2, 3, 4], v => v % 2);
                   const iterable = {
@@ -62,7 +60,7 @@ public class SetConstructorTest extends BaseJavetTest {
                     && desc.configurable === true
                     && desc.writable === true;
                 })()
-                """).toJavaObject()).isEqualTo(true);
+                """, true);
     }
 
     @Test
@@ -116,7 +114,7 @@ public class SetConstructorTest extends BaseJavetTest {
                 """);
         try {
             assertEvalThrows("new Set(__setIterable)", "boom");
-            assertThat(context.eval("__setAddCallCount + ':' + __setReturnCallCount").toJavaObject()).isEqualTo("2:1");
+            assertEvalJavaValue("__setAddCallCount + ':' + __setReturnCallCount", "2:1");
         } finally {
             context.eval("""
                     Set.prototype.add = __setOriginalAdd;

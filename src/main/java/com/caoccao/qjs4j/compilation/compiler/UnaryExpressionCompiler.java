@@ -47,11 +47,11 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                     // Per spec, the property expression must be evaluated for side effects,
                     // then a ReferenceError is thrown. Following QuickJS: emit super setup +
                     // property key evaluation, then THROW_ERROR instead of GET_SUPER_VALUE.
-                    compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
-                    compilerContext.emitter.emitSuperBase();
+                    emitter.emitOpcode(Opcode.PUSH_THIS);
+                    emitter.emitSuperBase();
                     compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "");
-                    compilerContext.emitter.emitU8(3); // JS_THROW_ERROR_DELETE_SUPER
+                    emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "");
+                    emitter.emitU8(3); // JS_THROW_ERROR_DELETE_SUPER
                 } else {
                     if (memberExpr.isPartOfOptionalChain()) {
                         compileDeleteOptionalMemberExpression(memberExpr);
@@ -65,10 +65,10 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                         compilerContext.expressionCompiler.compile(memberExpr.getProperty());
                     } else if (memberExpr.getProperty() instanceof Identifier propId) {
                         // obj.prop
-                        compilerContext.emitter.emitPushConstant(new JSString(propId.getName()));
+                        emitter.emitPushConstant(new JSString(propId.getName()));
                     }
 
-                    compilerContext.emitter.emitOpcode(Opcode.DELETE);
+                    emitter.emitOpcode(Opcode.DELETE);
                 }
             } else if (operand instanceof Identifier id) {
                 // Match QuickJS scope_delete_var lowering:
@@ -91,16 +91,16 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                         compilerContext.identifierCompiler.emitInheritedWithAwareDeleteIdentifier(identifierName,
                                 inheritedWithBindingNames, 0, fallsBackToNonDeletableBinding);
                     } else if (fallsBackToNonDeletableBinding) {
-                        compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
+                        emitter.emitOpcode(Opcode.PUSH_FALSE);
                     } else {
-                        compilerContext.emitter.emitOpcodeAtom(Opcode.DELETE_VAR, identifierName);
+                        emitter.emitOpcodeAtom(Opcode.DELETE_VAR, identifierName);
                     }
                 }
             } else {
                 // delete non-reference expression => evaluate for side effects, then true
                 compilerContext.expressionCompiler.compile(operand);
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
-                compilerContext.emitter.emitOpcode(Opcode.PUSH_TRUE);
+                emitter.emitOpcode(Opcode.DROP);
+                emitter.emitOpcode(Opcode.PUSH_TRUE);
             }
             return;
         }
@@ -125,18 +125,18 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                     // Super property update follows super-reference semantics:
                     // [this, superObj, key] + GET_SUPER_VALUE -> old value -> update -> PUT_SUPER_VALUE
                     compilerContext.emitHelpers.emitSuperPropertyReference(memberExpr);
-                    compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
-                    compilerContext.emitter.emitOpcode(Opcode.DUP3);
-                    compilerContext.emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
+                    emitter.emitOpcode(Opcode.TO_PROPKEY);
+                    emitter.emitOpcode(Opcode.DUP3);
+                    emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
 
                     if (isPrefix) {
-                        compilerContext.emitter.emitOpcode(isInc ? Opcode.INC : Opcode.DEC);
-                        compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
+                        emitter.emitOpcode(isInc ? Opcode.INC : Opcode.DEC);
+                        emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
                     } else {
-                        compilerContext.emitter.emitOpcode(isInc ? Opcode.POST_INC : Opcode.POST_DEC);
-                        compilerContext.emitter.emitOpcode(Opcode.PERM5); // old this superObj key new
-                        compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE); // old new
-                        compilerContext.emitter.emitOpcode(Opcode.DROP); // old
+                        emitter.emitOpcode(isInc ? Opcode.POST_INC : Opcode.POST_DEC);
+                        emitter.emitOpcode(Opcode.PERM5); // old this superObj key new
+                        emitter.emitOpcode(Opcode.PUT_SUPER_VALUE); // old new
+                        emitter.emitOpcode(Opcode.DROP); // old
                     }
                     return;
                 }
@@ -144,23 +144,23 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                     // Array element: obj[prop]
                     compilerContext.expressionCompiler.compile(memberExpr.getObject());
                     compilerContext.expressionCompiler.compile(memberExpr.getProperty());
-                    compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL3);
+                    emitter.emitOpcode(Opcode.GET_ARRAY_EL3);
 
                     if (isPrefix) {
                         // Prefix: ++arr[i] - returns new value
-                        compilerContext.emitter.emitOpcode(isInc ? Opcode.INC : Opcode.DEC);
+                        emitter.emitOpcode(isInc ? Opcode.INC : Opcode.DEC);
                         // Stack: [obj, prop, new_val] — already in QuickJS order
-                        compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+                        emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                     } else {
                         // Postfix: arr[i]++ - returns old value
-                        compilerContext.emitter.emitOpcode(isInc ? Opcode.POST_INC : Opcode.POST_DEC); // obj prop
-                                                                                                       // old_val
-                                                                                                       // new_val
+                        emitter.emitOpcode(isInc ? Opcode.POST_INC : Opcode.POST_DEC); // obj prop
+                                                                                       // old_val
+                                                                                       // new_val
                         // PERM4 to rearrange: [obj, prop, old_val, new_val] -> [old_val, obj, prop, new_val]
-                        compilerContext.emitter.emitOpcode(Opcode.PERM4); // old_val obj prop new_val
+                        emitter.emitOpcode(Opcode.PERM4); // old_val obj prop new_val
                         // PUT_ARRAY_EL leaves assigned value on stack, so drop it to preserve old value result.
-                        compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL); // old_val new_val
-                        compilerContext.emitter.emitOpcode(Opcode.DROP); // old_val
+                        emitter.emitOpcode(Opcode.PUT_ARRAY_EL); // old_val new_val
+                        emitter.emitOpcode(Opcode.DROP); // old_val
                     }
                 } else {
                     // Object property: obj.prop or obj.#field
@@ -169,25 +169,25 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
 
                         if (isPrefix) {
                             // Prefix: ++obj.prop - returns new value
-                            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.getName());
-                            compilerContext.emitter.emitOpcode(isInc ? Opcode.INC : Opcode.DEC);
+                            emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.getName());
+                            emitter.emitOpcode(isInc ? Opcode.INC : Opcode.DEC);
                             // Stack: [obj, new_val] -> need [new_val, obj] for PUT_FIELD
-                            compilerContext.emitter.emitOpcode(Opcode.SWAP);
+                            emitter.emitOpcode(Opcode.SWAP);
                             // PUT_FIELD pops obj, peeks new_val, leaves [new_val]
-                            compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.getName());
+                            emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.getName());
                         } else {
                             // Postfix: obj.prop++ - returns old value
-                            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.getName()); // obj old_val
-                            compilerContext.emitter.emitOpcode(isInc ? Opcode.POST_INC : Opcode.POST_DEC); // obj
-                                                                                                           // old_val
-                                                                                                           // new_val
+                            emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.getName()); // obj old_val
+                            emitter.emitOpcode(isInc ? Opcode.POST_INC : Opcode.POST_DEC); // obj
+                                                                                           // old_val
+                                                                                           // new_val
                             // Stack: [obj, old_val, new_val] - need [old_val, new_val, obj] for PUT_FIELD
                             // ROT3L: [old_val, new_val, obj]
-                            compilerContext.emitter.emitOpcode(Opcode.ROT3L); // old_val new_val obj
+                            emitter.emitOpcode(Opcode.ROT3L); // old_val new_val obj
                             // PUT_FIELD pops obj, peeks new_val, leaves [old_val, new_val]
-                            compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.getName()); // old_val
-                                                                                                        // new_val
-                            compilerContext.emitter.emitOpcode(Opcode.DROP); // old_val
+                            emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.getName()); // old_val
+                                                                                        // new_val
+                            emitter.emitOpcode(Opcode.DROP); // old_val
                         }
                     } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
                         // Private field: obj.#field
@@ -201,26 +201,26 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
 
                         if (isPrefix) {
                             // Prefix: ++obj.#field - returns new value
-                            compilerContext.emitter.emitOpcode(Opcode.DUP); // obj obj
-                            compilerContext.emitter.emitPushConstant(symbol);
-                            compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD); // obj old_val
-                            compilerContext.emitter.emitOpcode(isInc ? Opcode.INC : Opcode.DEC); // obj new_val
-                            compilerContext.emitter.emitPushConstant(symbol); // obj new_val symbol
-                            compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD); // new_val
+                            emitter.emitOpcode(Opcode.DUP); // obj obj
+                            emitter.emitPushConstant(symbol);
+                            emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD); // obj old_val
+                            emitter.emitOpcode(isInc ? Opcode.INC : Opcode.DEC); // obj new_val
+                            emitter.emitPushConstant(symbol); // obj new_val symbol
+                            emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD); // new_val
                         } else {
                             // Postfix: obj.#field++ - returns old value
-                            compilerContext.emitter.emitOpcode(Opcode.DUP); // obj obj
-                            compilerContext.emitter.emitPushConstant(symbol);
-                            compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD); // obj old_val
-                            compilerContext.emitter.emitOpcode(isInc ? Opcode.POST_INC : Opcode.POST_DEC); // obj
-                                                                                                           // old_val
-                                                                                                           // new_val
-                            compilerContext.emitter.emitOpcode(Opcode.ROT3L); // old_val new_val obj
-                            compilerContext.emitter.emitPushConstant(symbol); // old_val new_val
-                                                                              // obj symbol
-                            compilerContext.emitter.emitOpcode(Opcode.ROT3L); // old_val obj symbol new_val
-                            compilerContext.emitter.emitOpcode(Opcode.SWAP); // old_val obj new_val symbol
-                            compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD); // old_val
+                            emitter.emitOpcode(Opcode.DUP); // obj obj
+                            emitter.emitPushConstant(symbol);
+                            emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD); // obj old_val
+                            emitter.emitOpcode(isInc ? Opcode.POST_INC : Opcode.POST_DEC); // obj
+                                                                                           // old_val
+                                                                                           // new_val
+                            emitter.emitOpcode(Opcode.ROT3L); // old_val new_val obj
+                            emitter.emitPushConstant(symbol); // old_val new_val
+                                                              // obj symbol
+                            emitter.emitOpcode(Opcode.ROT3L); // old_val obj symbol new_val
+                            emitter.emitOpcode(Opcode.SWAP); // old_val obj new_val symbol
+                            emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD); // old_val
                         }
                     } else {
                         throw new JSCompilerException("Invalid member expression property for increment/decrement",
@@ -230,9 +230,9 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
             } else if (operand instanceof CallExpression) {
                 // Annex B: CallExpression as increment/decrement target throws ReferenceError at runtime.
                 compilerContext.expressionCompiler.compile(operand);
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
-                compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid increment/decrement operand");
-                compilerContext.emitter.emitU8(5); // JS_THROW_ERROR_INVALID_LVALUE
+                emitter.emitOpcode(Opcode.DROP);
+                emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid increment/decrement operand");
+                emitter.emitU8(5); // JS_THROW_ERROR_INVALID_LVALUE
             } else {
                 throw new JSCompilerException("Invalid operand for increment/decrement operator", operand);
             }
@@ -244,14 +244,14 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
             String name = id.getName();
             if ("import.meta".equals(name) || "new.target".equals(name)) {
                 compilerContext.expressionCompiler.compile(unaryExpr.getOperand());
-                compilerContext.emitter.emitOpcode(Opcode.TYPEOF);
+                emitter.emitOpcode(Opcode.TYPEOF);
                 return;
             }
             if (JSKeyword.THIS.equals(name)) {
-                compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
+                emitter.emitOpcode(Opcode.PUSH_THIS);
             } else if (JSArguments.NAME.equals(name) && compilerContext.hasEnclosingArgumentsBinding
                     && compilerContext.scopeManager.findLocalInScopes(name) == null) {
-                compilerContext.emitter.emitOpcodeU8(Opcode.SPECIAL_OBJECT, 0);
+                emitter.emitIntOperand(Opcode.SPECIAL_OBJECT, 0);
             } else {
                 Integer localIndex = compilerContext.scopeManager.findLocalInScopes(name);
                 if (localIndex != null) {
@@ -260,7 +260,7 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                     compilerContext.identifierCompiler.emitCapturedOrGlobalIdentifierLookup(name, Opcode.GET_VAR_UNDEF);
                 }
             }
-            compilerContext.emitter.emitOpcode(Opcode.TYPEOF);
+            emitter.emitOpcode(Opcode.TYPEOF);
             return;
         }
 
@@ -273,13 +273,13 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
             case PLUS -> Opcode.PLUS;
             case TYPEOF -> Opcode.TYPEOF;
             case VOID -> {
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
+                emitter.emitOpcode(Opcode.DROP);
                 yield Opcode.UNDEFINED;
             }
             default -> throw new JSCompilerException("Unknown unary operator: " + unaryExpr.getOperator(), unaryExpr);
         };
 
-        compilerContext.emitter.emitOpcode(op);
+        emitter.emitOpcode(op);
     }
 
     private void compileDeleteOptionalMemberExpression(MemberExpression memberExpression) {
@@ -293,13 +293,12 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                 compilerContext.expressionCompiler.compile(memberExpression.getProperty());
             } else {
                 // The parser rejects `delete a?.#x`, so a non-computed property is an identifier.
-                compilerContext.emitter
-                        .emitPushConstant(new JSString(((Identifier) memberExpression.getProperty()).getName()));
+                emitter.emitPushConstant(new JSString(((Identifier) memberExpression.getProperty()).getName()));
             }
-            compilerContext.emitter.emitOpcode(Opcode.DELETE);
+            emitter.emitOpcode(Opcode.DELETE);
         }, () -> {
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcode(Opcode.PUSH_TRUE);
+            emitter.emitOpcode(Opcode.DROP);
+            emitter.emitOpcode(Opcode.PUSH_TRUE);
         });
     }
 
@@ -310,11 +309,11 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
             if (localIndex != null) {
                 // Local binding.
                 compilerContext.expressionCompiler.compile(id);
-                compilerContext.emitter.emitOpcode(update);
+                emitter.emitOpcode(update);
                 if (compilerContext.scopeManager.isLocalBindingConst(id.getName())) {
                     compilerContext.emitHelpers.emitConstAssignmentErrorForLocal(id.getName(), localIndex);
                 } else {
-                    compilerContext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_LOC : Opcode.PUT_LOC, localIndex);
+                    emitter.emitOpcodeU16(isPrefix ? Opcode.SET_LOC : Opcode.PUT_LOC, localIndex);
                 }
                 return;
             }
@@ -323,21 +322,20 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
             if (capturedIndex != null) {
                 // Captured binding.
                 compilerContext.expressionCompiler.compile(id);
-                compilerContext.emitter.emitOpcode(update);
+                emitter.emitOpcode(update);
                 if (compilerContext.captureResolver.isCapturedBindingImmutable(id.getName())) {
                     compilerContext.emitHelpers.emitConstAssignmentErrorForCaptured(id.getName(), capturedIndex);
                 } else {
-                    compilerContext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_VAR_REF : Opcode.PUT_VAR_REF,
-                            capturedIndex);
+                    emitter.emitOpcodeU16(isPrefix ? Opcode.SET_VAR_REF : Opcode.PUT_VAR_REF, capturedIndex);
                 }
                 return;
             }
         }
         // The reference determines the receiver before either reading or updating its value.
         compilerContext.assignmentExpressionCompiler.emitIdentifierReference(id.getName());
-        compilerContext.emitter.emitOpcode(Opcode.GET_REF_VALUE);
-        compilerContext.emitter.emitOpcode(update);
-        compilerContext.emitter.emitOpcode(isPrefix ? Opcode.INSERT3 : Opcode.PERM4);
-        compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
+        emitter.emitOpcode(Opcode.GET_REF_VALUE);
+        emitter.emitOpcode(update);
+        emitter.emitOpcode(isPrefix ? Opcode.INSERT3 : Opcode.PERM4);
+        emitter.emitOpcode(Opcode.PUT_REF_VALUE);
     }
 }

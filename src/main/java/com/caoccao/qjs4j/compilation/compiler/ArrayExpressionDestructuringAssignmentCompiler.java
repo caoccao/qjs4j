@@ -41,7 +41,7 @@ final class ArrayExpressionDestructuringAssignmentCompiler extends AstNodeCompil
             int depth = compilerContext.expressionCompiler.preEvaluateAssignmentTarget(element);
             compilerContext.emitHelpers.emitNextDestructuringValue(depth, doneLocal);
             if (element == null) {
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
+                emitter.emitOpcode(Opcode.DROP);
             } else {
                 compilerContext.expressionDestructuringAssignmentCompiler.compileFromPreEvaluated(element, depth);
             }
@@ -62,15 +62,15 @@ final class ArrayExpressionDestructuringAssignmentCompiler extends AstNodeCompil
         int[] preservedLocalIndexes = new int[preservedValueCount];
         for (int valueIndex = preservedValueCount - 1; valueIndex >= 0; valueIndex--) {
             int localIndex = compilerContext.scopeManager.currentScope()
-                    .declareLocal("#iter_preserve_" + valueIndex + "_" + compilerContext.emitter.currentOffset());
-            compilerContext.emitter.emitPutLocal(localIndex);
+                    .declareLocal("#iter_preserve_" + valueIndex + "_" + emitter.currentOffset());
+            emitter.emitPutLocal(localIndex);
             preservedLocalIndexes[valueIndex] = localIndex;
         }
 
         compilerContext.emitHelpers.emitDropIteratorState();
 
         for (int valueIndex = 0; valueIndex < preservedValueCount; valueIndex++) {
-            compilerContext.emitter.emitGetLocal(preservedLocalIndexes[valueIndex]);
+            emitter.emitGetLocal(preservedLocalIndexes[valueIndex]);
         }
     }
 }

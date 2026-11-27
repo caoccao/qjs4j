@@ -94,7 +94,7 @@ final class ArrayJoin {
         // A separator can call join on the same receiver. Only register it after coercion.
         Set<JSObject> stack = context.getArrayJoinStack();
         if (!stack.add(elements.object)) {
-            return new JSString("");
+            return JSString.EMPTY;
         }
         try {
             ArrayJoin result = new ArrayJoin(context);

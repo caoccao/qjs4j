@@ -104,8 +104,7 @@ public record TemporalDuration(long years, long months, long weeks, long days, l
 
     public static TemporalDuration parseDurationString(JSContext context, String input) {
         if (input == null || input.isEmpty()) {
-            context.throwRangeError("Temporal error: Invalid duration string.");
-            return null;
+            return context.rejectRangeError("Temporal error: Invalid duration string.");
         }
         return IsoDurationParser.parse(context, input);
     }

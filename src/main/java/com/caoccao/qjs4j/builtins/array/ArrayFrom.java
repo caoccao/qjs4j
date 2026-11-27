@@ -36,8 +36,7 @@ final class ArrayFrom {
         if (target instanceof JSObject object) {
             return object;
         }
-        context.throwTypeError(method + " constructor must return an object");
-        return null;
+        return context.rejectTypeError(method + " constructor must return an object");
     }
 
     static boolean copyMapped(JSContext context, JSObject source, JSObject target, long length, JSFunction mapper,
@@ -185,8 +184,7 @@ final class ArrayFrom {
         if (method instanceof JSFunction function) {
             return function;
         }
-        context.throwTypeError(error);
-        return null;
+        return context.rejectTypeError(error);
     }
 
     static JSValue map(JSContext context, JSFunction mapper, JSValue thisArg, JSValue value, long index) {

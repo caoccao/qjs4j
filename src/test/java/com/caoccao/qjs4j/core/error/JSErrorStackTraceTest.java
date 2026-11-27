@@ -42,8 +42,7 @@ public class JSErrorStackTraceTest extends BaseJavetTest {
         for (String code : codeArray) {
             v8Runtime.resetContext();
             String expected = v8Runtime.getExecutor(code).setResourceName("test.js").executeString();
-            String actual = resetContext().eval(code, "test.js", false).toString();
-            assertThat(actual).as(code).isEqualTo(expected);
+            assertThat(resetContext().eval(code, "test.js", false).toString()).as(code).isEqualTo(expected);
         }
     }
 
@@ -296,8 +295,7 @@ public class JSErrorStackTraceTest extends BaseJavetTest {
     @Test
     public void testThrownErrorsPrintTheirStackInTheConsole() {
         JSValue error = context.eval("function boom() { return new Error('printed') } boom()", "test.js", false);
-        String printed = context.getJSGlobalObject().getConsole().formatValue(context, error);
-        assertThat(printed).isEqualTo("""
+        assertThat(context.getJSGlobalObject().getConsole().formatValue(context, error)).isEqualTo("""
                 Error: printed
                     at boom (test.js:1:26)
                     at test.js:1:49""");

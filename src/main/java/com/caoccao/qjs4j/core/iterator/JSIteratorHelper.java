@@ -218,15 +218,14 @@ public final class JSIteratorHelper {
             JSArray result = context.createJSArray();
             String s = jsString.value();
             for (int i = 0; i < s.length(); i++) {
-                result.push(new JSString(String.valueOf(s.charAt(i))));
+                result.push(JSString.of(s.charAt(i)));
             }
             return result;
         }
 
         // Step 1-2: GetIterator(items, sync)
         if (!(items instanceof JSObject itemsObj)) {
-            context.throwTypeError("Value is not iterable");
-            return null;
+            return context.rejectTypeError("Value is not iterable");
         }
 
         // GetMethod(items, @@iterator) — get the Symbol.iterator property
@@ -235,13 +234,11 @@ public final class JSIteratorHelper {
             return null;
         }
 
-        if (iteratorMethod == null || iteratorMethod instanceof JSUndefined || iteratorMethod instanceof JSNull) {
-            context.throwTypeError("object is not iterable");
-            return null;
+        if (iteratorMethod == null || JSTypeChecking.isNullish(iteratorMethod)) {
+            return context.rejectTypeError("object is not iterable");
         }
         if (!(iteratorMethod instanceof JSFunction iteratorFunc)) {
-            context.throwTypeError("object is not iterable");
-            return null;
+            return context.rejectTypeError("object is not iterable");
         }
 
         // Call(method, items) to get the iterator
@@ -250,8 +247,7 @@ public final class JSIteratorHelper {
             return null;
         }
         if (!(iterator instanceof JSObject iteratorObj)) {
-            context.throwTypeError("iterator must return an object");
-            return null;
+            return context.rejectTypeError("iterator must return an object");
         }
 
         // GetV(iterator, "next")
@@ -260,8 +256,7 @@ public final class JSIteratorHelper {
             return null;
         }
         if (!(nextMethod instanceof JSFunction nextFunc)) {
-            context.throwTypeError("iterator next is not a function");
-            return null;
+            return context.rejectTypeError("iterator next is not a function");
         }
 
         // Iterate
@@ -273,8 +268,7 @@ public final class JSIteratorHelper {
                 return null;
             }
             if (!(nextResult instanceof JSObject nextResultObj)) {
-                context.throwTypeError("iterator result is not an object");
-                return null;
+                return context.rejectTypeError("iterator result is not an object");
             }
 
             // IteratorComplete: Get "done"
@@ -339,8 +333,7 @@ public final class JSIteratorHelper {
             return resultObj;
         }
 
-        context.throwTypeError("iterator.next() returned a non-object value");
-        return null;
+        return context.rejectTypeError("iterator.next() returned a non-object value");
     }
 
     /**

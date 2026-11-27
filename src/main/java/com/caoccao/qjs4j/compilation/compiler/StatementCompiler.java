@@ -39,7 +39,7 @@ final class StatementCompiler extends AstNodeCompiler<Statement> {
             return;
         }
         // The fallback position of everything the statement emits, for stack traces.
-        compilerContext.emitter.emitSourcePosition(stmt.getLocation());
+        emitter.emitSourcePosition(stmt.getLocation());
         if (stmt instanceof ExpressionStatement exprStmt) {
             compileExpressionStatement(exprStmt.getExpression());
         } else if (stmt instanceof BlockStatement block) {
@@ -80,9 +80,9 @@ final class StatementCompiler extends AstNodeCompiler<Statement> {
     private void compileExpressionStatement(Expression expr) {
         compilerContext.expressionCompiler.compile(expr);
         if (compilerContext.evalReturnLocalIndex >= 0) {
-            compilerContext.emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
+            emitter.emitPutLocal(compilerContext.evalReturnLocalIndex);
         } else if (!compilerContext.isLastInProgram) {
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            emitter.emitOpcode(Opcode.DROP);
         }
     }
 
@@ -98,7 +98,7 @@ final class StatementCompiler extends AstNodeCompiler<Statement> {
 
     public void emitEvalReturnUndefinedIfNeeded() {
         if (compilerContext.evalReturnLocalIndex >= 0) {
-            compilerContext.emitter.emitUndefinedLocal(compilerContext.evalReturnLocalIndex);
+            emitter.emitUndefinedLocal(compilerContext.evalReturnLocalIndex);
         }
     }
 
@@ -111,7 +111,7 @@ final class StatementCompiler extends AstNodeCompiler<Statement> {
         if (immutable) {
             scope.markConstLocal(name);
         }
-        compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, index);
+        emitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, index);
         compilerContext.tdzLocals.add(name);
     }
 

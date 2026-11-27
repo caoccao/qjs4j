@@ -109,7 +109,7 @@ final class IntlFormatOptions {
         if (context.hasPendingException()) {
             return null;
         }
-        if (rawValue == null || rawValue instanceof JSUndefined) {
+        if (JSTypeChecking.isUndefinedOrMissing(rawValue)) {
             return null;
         }
         double numberValue = JSTypeConversions.toNumber(context, rawValue).value();
@@ -117,10 +117,9 @@ final class IntlFormatOptions {
             return null;
         }
         if (numberValue < minimum || numberValue > maximum || numberValue != (int) numberValue) {
-            context.throwRangeError(rangeError != null
+            return context.rejectRangeError(rangeError != null
                     ? rangeError
                     : "Value " + numberValue + " out of range for Intl.NumberFormat options property " + key);
-            return null;
         }
         return (int) numberValue;
     }
@@ -130,7 +129,7 @@ final class IntlFormatOptions {
      * object - object → return as-is - anything else (null, boolean, number, string, symbol, bigint) → TypeError
      */
     static JSValue getOptionsObject(JSContext context, JSValue options) {
-        if (options instanceof JSUndefined || options == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(options)) {
             // Create null-prototype object to avoid triggering Object.prototype getters
             return emptyOptions(context);
         }
@@ -197,7 +196,7 @@ final class IntlFormatOptions {
         if (context.hasPendingException()) {
             return null;
         }
-        if (rawValue == null || rawValue instanceof JSUndefined) {
+        if (JSTypeChecking.isUndefinedOrMissing(rawValue)) {
             return null;
         }
         return JSTypeConversions.toString(context, rawValue).value();
@@ -221,8 +220,7 @@ final class IntlFormatOptions {
                 return stringValue;
             }
         }
-        context.throwRangeError("Value " + stringValue + " out of range for property " + key);
-        return null;
+        return context.rejectRangeError("Value " + stringValue + " out of range for property " + key);
     }
 
     /**

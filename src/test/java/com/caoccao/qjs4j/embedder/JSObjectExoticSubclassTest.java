@@ -87,9 +87,9 @@ public class JSObjectExoticSubclassTest extends BaseTest {
     @Test
     public void testForInSeesTheOverride() {
         install("exotic");
-        assertThat(context.eval(
-                "(function () { const seen = []; for (const k in exotic) seen.push(k); return seen.join(',') })()")
-                .toString()).isEqualTo("virtual");
+        assertEvalText(
+                "(function () { const seen = []; for (const k in exotic) seen.push(k); return seen.join(',') })()",
+                "virtual");
     }
 
     @Test
@@ -98,38 +98,37 @@ public class JSObjectExoticSubclassTest extends BaseTest {
         JSObject child = context.createJSObject();
         child.setPrototype(exotic);
         context.getGlobalObject().set(PropertyKey.fromString("child"), child);
-        assertThat(context.eval("('virtual' in child) + ',' + ('absent' in child)").toString()).isEqualTo("true,false");
+        assertEvalText("('virtual' in child) + ',' + ('absent' in child)", "true,false");
     }
 
     @Test
     public void testInOperatorSeesTheOverride() {
         install("exotic");
-        assertThat(context.eval("('virtual' in exotic) + ',' + ('absent' in exotic)").toString())
-                .isEqualTo("true,false");
+        assertEvalText("('virtual' in exotic) + ',' + ('absent' in exotic)", "true,false");
     }
 
     @Test
     public void testObjectAssignSeesTheOverride() {
         install("exotic");
-        assertThat(context.eval("JSON.stringify(Object.assign({}, exotic))").toString()).isEqualTo("{\"virtual\":42}");
+        assertEvalText("JSON.stringify(Object.assign({}, exotic))", "{\"virtual\":42}");
     }
 
     @Test
     public void testObjectGetOwnPropertyDescriptorSeesTheOverride() {
         install("exotic");
-        assertThat(context.eval("Object.getOwnPropertyDescriptor(exotic, 'virtual').value").toString()).isEqualTo("42");
+        assertEvalText("Object.getOwnPropertyDescriptor(exotic, 'virtual').value", "42");
     }
 
     @Test
     public void testObjectKeysSeesTheOverride() {
         install("exotic");
-        assertThat(context.eval("JSON.stringify(Object.keys(exotic))").toString()).isEqualTo("[\"virtual\"]");
+        assertEvalText("JSON.stringify(Object.keys(exotic))", "[\"virtual\"]");
     }
 
     @Test
     public void testPropertyReadSeesTheOverride() {
         install("exotic");
-        assertThat(context.eval("exotic.virtual").toString()).isEqualTo("42");
+        assertEvalText("exotic.virtual", "42");
     }
 
     /**

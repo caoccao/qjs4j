@@ -42,8 +42,7 @@ record TemporalTimeStringOptions(String roundingMode, String smallestUnit) {
         }
         TemporalUnit unit = TemporalUnit.fromString(smallestUnit).orElse(null);
         if (smallestUnit != null && (unit == null || !unit.isSmallerOrEqual(largest))) {
-            context.throwRangeError(invalidUnit);
-            return null;
+            return context.rejectRangeError(invalidUnit);
         }
         if (unit != null) {
             return new TemporalPlainTimeToStringSettings(unit, mode, false, unit.getStringFractionalSecondDigits(),

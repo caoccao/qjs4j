@@ -21,7 +21,6 @@ import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
 /**
@@ -45,11 +44,9 @@ public class IteratorConstructorTest extends BaseJavetTest {
 
     @Test
     void testIteratorConcat() {
-        assertThat(context.eval("typeof Iterator.concat").toJavaObject()).isEqualTo("function");
-        assertThat(context.eval("Iterator.concat([1, 2], new Set([3, 4])).toArray().join(',')").toJavaObject())
-                .isEqualTo("1,2,3,4");
-        assertThat(context.eval("Object.prototype.toString.call(Iterator.concat([1]))").toJavaObject())
-                .isEqualTo("[object Iterator Concat]");
+        assertEvalJavaValue("typeof Iterator.concat", "function");
+        assertEvalJavaValue("Iterator.concat([1, 2], new Set([3, 4])).toArray().join(',')", "1,2,3,4");
+        assertEvalJavaValue("Object.prototype.toString.call(Iterator.concat([1]))", "[object Iterator Concat]");
     }
 
     @Test
@@ -81,12 +78,12 @@ public class IteratorConstructorTest extends BaseJavetTest {
 
     @Test
     void testIteratorToStringTagSemantics() {
-        assertThat(context.eval(
-                "(() => { try { Iterator.prototype[Symbol.toStringTag] = 'X'; return 'OK'; } catch (e) { return e.name; } })();")
-                .toJavaObject()).isEqualTo("TypeError");
-        assertThat(context.eval(
-                "(() => { const it = Iterator.from([1]).map(v => v); it[Symbol.toStringTag] = 'X'; return Object.prototype.toString.call(it); })();")
-                .toJavaObject()).isEqualTo("[object Iterator Helper]");
+        assertEvalJavaValue(
+                "(() => { try { Iterator.prototype[Symbol.toStringTag] = 'X'; return 'OK'; } catch (e) { return e.name; } })();",
+                "TypeError");
+        assertEvalJavaValue(
+                "(() => { const it = Iterator.from([1]).map(v => v); it[Symbol.toStringTag] = 'X'; return Object.prototype.toString.call(it); })();",
+                "[object Iterator Helper]");
     }
 
     @Test
@@ -99,7 +96,7 @@ public class IteratorConstructorTest extends BaseJavetTest {
 
     @Test
     public void testZipRowsKeepTheirOwnValuesAndProperties() {
-        JSValue result = context.eval("""
+        assertEvalText("""
                 (() => {
                     const rows = Iterator.zip([[1, 2, 3], [4, 5, 6]]);
                     const first = rows.next().value;
@@ -111,7 +108,6 @@ public class IteratorConstructorTest extends BaseJavetTest {
                     const after = keyed.next().value;
                     return JSON.stringify([first, rest, before, after]);
                 })()
-                """);
-        assertThat(result.toString()).isEqualTo("[[9,4],[[2,5],[3,6]],{\"a\":1},{\"a\":2,\"b\":4}]");
+                """, "[[9,4],[[2,5],[3,6]],{\"a\":1},{\"a\":2,\"b\":4}]");
     }
 }

@@ -61,8 +61,7 @@ enum DisposableStackMethods {
             return type.cast(value);
         }
         String prefix = "disposed".equals(method) ? "get " : "";
-        context.throwTypeError(prefix + name + ".prototype." + method + " called on non-" + name);
-        return null;
+        return context.rejectTypeError(prefix + name + ".prototype." + method + " called on non-" + name);
     }
 
     JSValue use(JSContext context, JSValue receiver, JSValue[] args) {

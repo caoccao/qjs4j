@@ -59,7 +59,7 @@ final class MemberExpressionCompiler extends AstNodeCompiler<MemberExpression> {
         }
         if (memberExpr.isComputed() || memberExpr.getProperty() instanceof PrivateIdentifier) {
             if (keepReceiver) {
-                compilerContext.emitter.emitOpcode(Opcode.DUP);
+                emitter.emitOpcode(Opcode.DUP);
             }
             Opcode read;
             if (memberExpr.isComputed()) {
@@ -71,18 +71,18 @@ final class MemberExpressionCompiler extends AstNodeCompiler<MemberExpression> {
                 if (symbol == null) {
                     throw new JSSyntaxErrorException("Unexpected private field", id.getLocation());
                 }
-                compilerContext.emitter.emitPushConstant(symbol);
+                emitter.emitPushConstant(symbol);
                 read = Opcode.GET_PRIVATE_FIELD;
             }
             if (!keepReceiver) {
                 compilerContext.emitHelpers.emitMemberSourcePosition(memberExpr);
             }
-            compilerContext.emitter.emitOpcode(read);
+            emitter.emitOpcode(read);
         } else if (memberExpr.getProperty() instanceof Identifier id) {
             if (!keepReceiver) {
                 compilerContext.emitHelpers.emitMemberSourcePosition(memberExpr);
             }
-            compilerContext.emitter.emitOpcodeAtom(keepReceiver ? Opcode.GET_FIELD2 : Opcode.GET_FIELD, id.getName());
+            emitter.emitOpcodeAtom(keepReceiver ? Opcode.GET_FIELD2 : Opcode.GET_FIELD, id.getName());
         }
     }
 }

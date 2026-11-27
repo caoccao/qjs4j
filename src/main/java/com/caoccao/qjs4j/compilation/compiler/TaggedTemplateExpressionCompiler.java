@@ -47,19 +47,19 @@ final class TaggedTemplateExpressionCompiler extends AstNodeCompiler<TaggedTempl
             compilerContext.callExpressionCompiler.emitMemberCalleeWithReceiver(memberExpr, false);
 
             // SWAP converts obj/func to func/obj for internalHandleCall and locks property chain
-            compilerContext.emitter.emitOpcode(Opcode.SWAP);
+            emitter.emitOpcode(Opcode.SWAP);
         } else {
             // Regular function call: func`template`
             // Compile the tag function first (will be the callee)
             compilerContext.expressionCompiler.compile(taggedTemplate.getTag());
 
             // Add undefined as receiver/thisArg
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            emitter.emitOpcode(Opcode.UNDEFINED);
         }
 
         // QuickJS behavior: each call site uses a stable, frozen template object.
         // Build it once in the constant pool and pass it as the first argument.
-        compilerContext.emitter.emitPushConstant(createTaggedTemplateObject(template));
+        emitter.emitPushConstant(createTaggedTemplateObject(template));
 
         // Add substitution expressions as additional arguments
         for (Expression expr : expressions) {
@@ -69,12 +69,12 @@ final class TaggedTemplateExpressionCompiler extends AstNodeCompiler<TaggedTempl
         // Call the tag function
         // argCount = 1 (template array) + number of expressions
         int argCount = 1 + expressions.size();
-        compilerContext.emitter.emitCallDescription(CallPrinter.describeCallee(taggedTemplate.getTag()));
+        emitter.emitCallDescription(CallPrinter.describeCallee(taggedTemplate.getTag()));
         boolean isMethodCall = taggedTemplate.getTag() instanceof MemberExpression;
         if (isMethodCall) {
-            compilerContext.emitter.emitOpcodeU16(isTailCall ? Opcode.TAIL_CALL_METHOD : Opcode.CALL_METHOD, argCount);
+            emitter.emitOpcodeU16(isTailCall ? Opcode.TAIL_CALL_METHOD : Opcode.CALL_METHOD, argCount);
         } else {
-            compilerContext.emitter.emitOpcodeU16(isTailCall ? Opcode.TAIL_CALL : Opcode.CALL, argCount);
+            emitter.emitOpcodeU16(isTailCall ? Opcode.TAIL_CALL : Opcode.CALL, argCount);
         }
     }
 

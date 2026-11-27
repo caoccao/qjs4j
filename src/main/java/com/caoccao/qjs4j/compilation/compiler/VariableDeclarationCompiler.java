@@ -97,14 +97,10 @@ final class VariableDeclarationCompiler {
                 int preResolvedPropertyLocalIndex = compilerContext.storeTemporary("#preResolvedVarProperty_");
                 int preResolvedObjectLocalIndex = compilerContext.storeTemporary("#preResolvedVarObject_");
 
-                compilerContext.expressionCompiler.compile(declarator.getInit());
-                if (declarator.getInit().isAnonymousFunction()) {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
-                }
+                compilerContext.expressionCompiler.compileNamed(declarator.getInit(), identifier.getName());
                 compilerContext.emitter.emitGetLocal(preResolvedObjectLocalIndex);
                 compilerContext.emitter.emitGetLocal(preResolvedPropertyLocalIndex);
-                compilerContext.emitter.emitOpcode(Opcode.ROT3L);
-                compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
+                compilerContext.emitter.emitStoreValueBelowReference();
                 continue;
             }
 

@@ -87,7 +87,7 @@ final class IntlNumberFormatBuiltins {
             }
             JSValue optionsArgument = JSValue.argumentOrUndefined(args, 1);
             JSObject optionsObject;
-            if (optionsArgument instanceof JSUndefined || optionsArgument == null) {
+            if (JSTypeChecking.isUndefinedOrMissing(optionsArgument)) {
                 optionsObject = IntlFormatOptions.emptyOptions(context);
             } else {
                 optionsObject = JSTypeConversions.toObject(context, optionsArgument);
@@ -543,7 +543,7 @@ final class IntlNumberFormatBuiltins {
 
     private static String parseUseGroupingOption(JSContext context, JSValue useGroupingValue, String notation) {
         String defaultValue = "compact".equals(notation) ? "min2" : "auto";
-        if (useGroupingValue == null || useGroupingValue instanceof JSUndefined) {
+        if (JSTypeChecking.isUndefinedOrMissing(useGroupingValue)) {
             return defaultValue;
         }
         if (useGroupingValue instanceof JSBoolean jsBoolean) {

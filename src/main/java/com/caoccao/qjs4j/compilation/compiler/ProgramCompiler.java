@@ -52,7 +52,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
                 String className = classDeclaration.getId().getName();
                 if (compilerContext.scopeManager.currentScope().getLocal(className) == null) {
                     int localIndex = compilerContext.scopeManager.currentScope().declareLocal(className);
-                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                    emitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                 }
                 // ES2024: Class declarations in modules create let-like bindings (mutable),
                 // not const-like. Do NOT call markConstLocal here.
@@ -85,7 +85,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
             }
             if (compilerContext.scopeManager.currentScope().getLocal(variableName) == null) {
                 int localIndex = compilerContext.scopeManager.currentScope().declareLocal(variableName);
-                compilerContext.emitter.emitUndefinedLocal(localIndex);
+                emitter.emitUndefinedLocal(localIndex);
             }
         }
 
@@ -113,7 +113,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
         }
 
         if (!lastProducesValue) {
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            emitter.emitOpcode(Opcode.UNDEFINED);
         }
 
         finishProgram();
@@ -137,7 +137,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
             if (stmt instanceof ClassDeclaration classDecl && classDecl.getId() != null) {
                 String className = classDecl.getId().getName();
                 int localIndex = compilerContext.scopeManager.currentScope().declareLocal(className);
-                compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                emitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                 compilerContext.tdzLocals.add(className);
                 compilerContext.nonDeletableGlobalBindings.add(className);
             } else if (stmt instanceof VariableDeclaration variableDeclaration) {
@@ -186,7 +186,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
                     if (localIndex == null) {
                         localIndex = compilerContext.scopeManager.currentScope().declareLocal(varName);
                     }
-                    compilerContext.emitter.emitUndefinedLocal(localIndex);
+                    emitter.emitUndefinedLocal(localIndex);
                 } else {
                     compilerContext.emitHelpers.emitConditionalVarInit(varName);
                 }
@@ -213,12 +213,12 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
         {
             // Scripts and eval share ECMAScript statement completion semantics.
             if (!body.isEmpty()) {
-                compilerContext.emitter.emitSourcePosition(body.get(0).getLocation());
+                emitter.emitSourcePosition(body.get(0).getLocation());
             }
             // Every expression statement stores its result here (like QuickJS's eval_ret_idx).
             int evalRetLocalIndex = compilerContext.scopeManager.currentScope().declareLocal("#eval_ret");
             compilerContext.evalReturnLocalIndex = evalRetLocalIndex;
-            compilerContext.emitter.emitUndefinedLocal(evalRetLocalIndex);
+            emitter.emitUndefinedLocal(evalRetLocalIndex);
 
             // Phase 2: Compile all non-FunctionDeclaration statements in source order.
             for (int i = 0; i < body.size(); i++) {
@@ -231,7 +231,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
 
             compilerContext.evalReturnLocalIndex = -1;
 
-            compilerContext.emitter.emitGetLocal(evalRetLocalIndex);
+            emitter.emitGetLocal(evalRetLocalIndex);
         }
         finishProgram();
     }
@@ -244,7 +244,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
         }
         for (String name : names) {
             if (!onlyInitializeNew || scope.getLocal(name) == null) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, scope.declareLocal(name));
+                emitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, scope.declareLocal(name));
             }
             if (declaration.getKind().isImmutable()) {
                 scope.markConstLocal(name);
@@ -256,8 +256,8 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
     private void finishProgram() {
         int programResultLocalIndex = compilerContext.storeTemporary("#program_result_");
         compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
-        compilerContext.emitter.emitGetLocal(programResultLocalIndex);
-        compilerContext.emitter.emitOpcode(Opcode.RETURN);
+        emitter.emitGetLocal(programResultLocalIndex);
+        emitter.emitOpcode(Opcode.RETURN);
 
         int localCount = compilerContext.scopeManager.currentScope().getLocalCount();
         compilerContext.scopeManager.updateMaxLocalCount(localCount);

@@ -125,7 +125,7 @@ final class PropertyOpcodes {
         if (objectValue instanceof JSString string && indexValue instanceof JSNumber number) {
             int index = (int) number.value();
             if (index == number.value() && index >= 0 && index < string.value().length()) {
-                stack[resultIndex] = new JSString(String.valueOf(string.value().charAt(index)));
+                stack[resultIndex] = JSString.of(string.value().charAt(index));
                 executionContext.finishOpcode(op, resultIndex + 1);
                 return;
             }
@@ -182,7 +182,7 @@ final class PropertyOpcodes {
     }
 
     static void handleDefineArrayEl(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue value = (JSValue) stack[--sp];
         JSValue indexValue = (JSValue) stack[sp - 1];
@@ -203,7 +203,7 @@ final class PropertyOpcodes {
 
     static void handleDefineField(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         int fieldNameAtom = executionContext.bytecode.readU32(pc + 1);
         String fieldName = executionContext.bytecode.getAtom(fieldNameAtom);
@@ -225,7 +225,7 @@ final class PropertyOpcodes {
     }
 
     static void handleDefinePrivateField(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue value = (JSValue) stack[--sp];
         JSValue privateSymbolValue = (JSValue) stack[--sp];
@@ -298,7 +298,7 @@ final class PropertyOpcodes {
 
     static void handleGetArrayEl3(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue indexValue = (JSValue) stack[sp - 1];
         JSValue arrayObjectValue = (JSValue) stack[sp - 2];
@@ -340,7 +340,7 @@ final class PropertyOpcodes {
 
     static void handleGetField(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
+        int atomIndex = executionContext.operandI32();
         String fieldName = executionContext.bytecode.getAtom(atomIndex);
         // GET_FIELD2 retains the receiver below the property value.
         JSValue objectValue = op == Opcode.GET_FIELD2 ? executionContext.peek(0) : executionContext.pop();
@@ -369,7 +369,7 @@ final class PropertyOpcodes {
     }
 
     static void handleGetPrivateField(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue privateSymbolValue = (JSValue) stack[--sp];
         JSValue objectValue = (JSValue) stack[--sp];
@@ -380,7 +380,7 @@ final class PropertyOpcodes {
 
     static void handleGetSuper(Opcode op, ExecutionContext executionContext) {
         int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         JSValue objectValue = (JSValue) stack[sp - 1];
         JSObject object = executionContext.virtualMachine.toObject(objectValue);
         if (object == null) {
@@ -394,7 +394,7 @@ final class PropertyOpcodes {
     }
 
     static void handleGetSuperValue(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue keyValue = (JSValue) stack[--sp];
         JSValue superObjectValue = (JSValue) stack[--sp];
@@ -422,9 +422,7 @@ final class PropertyOpcodes {
         JSValue privateField = operandStack.pop();
         JSValue object = operandStack.pop();
         if (!(object instanceof JSObject jsObj)) {
-            executionContext.raiseTypeError("invalid 'in' operand");
-            operandStack.push(JSUndefined.INSTANCE);
-            executionContext.finishStackOpcode(op);
+            executionContext.failStackTypeError(op, "invalid 'in' operand");
             return;
         }
         boolean result = false;
@@ -443,7 +441,7 @@ final class PropertyOpcodes {
     }
 
     static void handlePutArrayEl(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue assignedValue = (JSValue) stack[--sp];
         JSValue indexValue = (JSValue) stack[--sp];
@@ -456,7 +454,7 @@ final class PropertyOpcodes {
 
     static void handlePutField(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
+        int atomIndex = executionContext.operandI32();
         String fieldName = executionContext.bytecode.getAtom(atomIndex);
         JSValue objectValue = executionContext.pop();
         JSValue fieldValue = executionContext.peek(0);
@@ -467,7 +465,7 @@ final class PropertyOpcodes {
     }
 
     static void handlePutPrivateField(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue privateSymbolValue = (JSValue) stack[--sp];
         JSValue value = (JSValue) stack[--sp];
@@ -478,7 +476,7 @@ final class PropertyOpcodes {
 
     // Stack: this obj key val -> val (QuickJS order: value at top)
     static void handlePutSuperValue(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue assignedValue = (JSValue) stack[--sp];
         JSValue keyValue = (JSValue) stack[--sp];
@@ -511,7 +509,7 @@ final class PropertyOpcodes {
     private static void putPrimitiveProperty(ExecutionContext execution, JSValue receiver, PropertyKey key,
             String fieldName, JSValue index, JSValue value) {
         VirtualMachine vm = execution.virtualMachine;
-        if (receiver instanceof JSNull || receiver instanceof JSUndefined) {
+        if (JSTypeChecking.isNullish(receiver)) {
             Object name = fieldName != null ? fieldName : PropertyKey.fromValue(vm.context, index);
             vm.context.throwTypeError(
                     "cannot set property '" + name + "' of " + (receiver instanceof JSNull ? "null" : "undefined"));

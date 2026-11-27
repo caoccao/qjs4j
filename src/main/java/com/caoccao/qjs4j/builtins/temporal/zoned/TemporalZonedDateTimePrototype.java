@@ -73,8 +73,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue dayOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
-        return RECEIVER.read(context, thisArg, "dayOfWeek",
-                zonedDateTime -> JSNumber.of(zonedDateTime.toLocalDateTime().date().dayOfWeek()));
+        return TemporalDateProperty.DAY_OF_WEEK.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue dayOfYear(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -164,8 +163,7 @@ public final class TemporalZonedDateTimePrototype {
             if ("next".equals(direction) || "previous".equals(direction)) {
                 return direction;
             }
-            context.throwRangeError("Temporal error: Invalid direction: " + direction);
-            return null;
+            return context.rejectRangeError("Temporal error: Invalid direction: " + direction);
         }
 
         if (directionParam instanceof JSObject directionObject) {
@@ -173,9 +171,8 @@ public final class TemporalZonedDateTimePrototype {
             if (context.hasPendingException()) {
                 return null;
             }
-            if (directionValue instanceof JSUndefined || directionValue == null) {
-                context.throwRangeError("Temporal error: Invalid direction: undefined");
-                return null;
+            if (JSTypeChecking.isUndefinedOrMissing(directionValue)) {
+                return context.rejectRangeError("Temporal error: Invalid direction: undefined");
             }
             JSString directionString = JSTypeConversions.toString(context, directionValue);
             if (context.hasPendingException() || directionString == null) {
@@ -185,17 +182,14 @@ public final class TemporalZonedDateTimePrototype {
             if ("next".equals(direction) || "previous".equals(direction)) {
                 return direction;
             }
-            context.throwRangeError("Temporal error: Invalid direction: " + direction);
-            return null;
+            return context.rejectRangeError("Temporal error: Invalid direction: " + direction);
         }
 
-        if (directionParam instanceof JSUndefined || directionParam == null) {
-            context.throwTypeError("Temporal error: direction is required.");
-            return null;
+        if (JSTypeChecking.isUndefinedOrMissing(directionParam)) {
+            return context.rejectTypeError("Temporal error: direction is required.");
         }
 
-        context.throwTypeError("Temporal error: direction must be a string or an object.");
-        return null;
+        return context.rejectTypeError("Temporal error: direction must be a string or an object.");
     }
 
     public static JSValue getTimeZoneTransition(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -473,15 +467,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue weekOfYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "weekOfYear");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        if (zonedDateTime.getCalendarId() != TemporalCalendarId.ISO8601) {
-            return JSUndefined.INSTANCE;
-        }
-        IsoDateTime localDateTime = zonedDateTime.toLocalDateTime();
-        return JSNumber.of(localDateTime.date().weekOfYear());
+        return TemporalDateProperty.WEEK_OF_YEAR.read(context, thisArg, RECEIVER);
     }
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -611,14 +597,6 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     public static JSValue yearOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = RECEIVER.require(context, thisArg, "yearOfWeek");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        if (zonedDateTime.getCalendarId() != TemporalCalendarId.ISO8601) {
-            return JSUndefined.INSTANCE;
-        }
-        IsoDateTime localDateTime = zonedDateTime.toLocalDateTime();
-        return JSNumber.of(localDateTime.date().yearOfWeek());
+        return TemporalDateProperty.YEAR_OF_WEEK.read(context, thisArg, RECEIVER);
     }
 }

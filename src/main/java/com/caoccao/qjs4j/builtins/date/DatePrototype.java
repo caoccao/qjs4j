@@ -341,8 +341,7 @@ public final class DatePrototype {
         if (thisArg instanceof JSDate date) {
             return date;
         }
-        context.throwTypeError("Date.prototype." + method + " called on non-Date");
-        return null;
+        return context.rejectTypeError("Date.prototype." + method + " called on non-Date");
     }
 
     public static JSValue setDate(JSContext context, JSValue thisArg, JSValue[] args) {

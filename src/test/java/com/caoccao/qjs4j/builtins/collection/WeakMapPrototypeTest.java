@@ -19,8 +19,6 @@ package com.caoccao.qjs4j.builtins.collection;
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
  * Unit tests for WeakMap.prototype methods.
  */
@@ -155,16 +153,16 @@ public class WeakMapPrototypeTest extends BaseJavetTest {
 
     @Test
     void testWeakMapGetOrInsertMethods() {
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 (() => {
                   const wm = new WeakMap();
                   const key = {};
                   return wm.getOrInsert(key, 1) === 1
                     && wm.getOrInsert(key, 2) === 1
                     && wm.get(key) === 1;
-                })()""").toJavaObject()).isEqualTo(true);
+                })()""", true);
 
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 (() => {
                   const wm = new WeakMap();
                   const key = {};
@@ -173,9 +171,9 @@ public class WeakMapPrototypeTest extends BaseJavetTest {
                     return 7;
                   });
                   return value === 7 && wm.get(key) === 7 && wm.__callbackRan === true;
-                })()""").toJavaObject()).isEqualTo(true);
+                })()""", true);
 
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 (() => {
                   const wm = new WeakMap();
                   const key = {};
@@ -184,9 +182,9 @@ public class WeakMapPrototypeTest extends BaseJavetTest {
                     throw new Error('should not be called');
                   });
                   return value === 1 && wm.get(key) === 1;
-                })()""").toJavaObject()).isEqualTo(true);
+                })()""", true);
 
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 (() => {
                   try {
                     new WeakMap().getOrInsertComputed({}, 1);
@@ -194,9 +192,9 @@ public class WeakMapPrototypeTest extends BaseJavetTest {
                   } catch (e) {
                     return e instanceof TypeError;
                   }
-                })()""").toJavaObject()).isEqualTo(true);
+                })()""", true);
 
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 (() => {
                   try {
                     new WeakMap().getOrInsert(1, 'x');
@@ -204,7 +202,7 @@ public class WeakMapPrototypeTest extends BaseJavetTest {
                   } catch (e) {
                     return e instanceof TypeError;
                   }
-                })()""").toJavaObject()).isEqualTo(true);
+                })()""", true);
     }
 
     @Test

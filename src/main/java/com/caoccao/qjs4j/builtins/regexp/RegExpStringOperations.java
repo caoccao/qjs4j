@@ -86,8 +86,7 @@ final class RegExpStringOperations {
             return null;
         }
         if (!(constructed instanceof JSObject constructedObject)) {
-            context.throwTypeError("RegExp species constructor did not return an object");
-            return null;
+            return context.rejectTypeError("RegExp species constructor did not return an object");
         }
         return constructedObject;
     }
@@ -130,7 +129,7 @@ final class RegExpStringOperations {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        if (speciesValue instanceof JSUndefined || speciesValue instanceof JSNull) {
+        if (JSTypeChecking.isNullish(speciesValue)) {
             return defaultConstructor;
         }
         if (!JSTypeChecking.isConstructor(speciesValue)) {
@@ -486,7 +485,7 @@ final class RegExpStringOperations {
             return context.throwTypeError("RegExp.prototype[@@split] called on non-object");
         }
 
-        JSString input = args.length > 0 ? JSTypeConversions.toString(context, args[0]) : new JSString("");
+        JSString input = args.length > 0 ? JSTypeConversions.toString(context, args[0]) : JSString.EMPTY;
         String s = input.value();
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;

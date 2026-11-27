@@ -67,13 +67,11 @@ public class DataViewConstructorTest extends BaseJavetTest {
                 const dv = new DataView(new ArrayBuffer(8));
                 dv.setBigInt64(0, '1');
                 dv.getBigInt64(0).toString();
-                """);
-        assertStringWithJavet("""
+                """, """
                 const dv = new DataView(new ArrayBuffer(8));
                 dv.setBigInt64(0, true);
                 dv.getBigInt64(0).toString();
-                """);
-        assertStringWithJavet("""
+                """, """
                 const dv = new DataView(new ArrayBuffer(8));
                 dv.setBigUint64(0, '-1');
                 dv.getBigUint64(0).toString();
@@ -278,7 +276,7 @@ public class DataViewConstructorTest extends BaseJavetTest {
 
     @Test
     public void testMethodDescriptorsAndLengths() {
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 (() => {
                   const proto = DataView.prototype;
                   const methods = [
@@ -305,7 +303,7 @@ public class DataViewConstructorTest extends BaseJavetTest {
                   }
                   return true;
                 })();
-                """).toJavaObject()).isEqualTo(true);
+                """, true);
         assertStringWithJavet("""
                 Object.getOwnPropertyDescriptor(DataView.prototype, Symbol.toStringTag).value;
                 """);

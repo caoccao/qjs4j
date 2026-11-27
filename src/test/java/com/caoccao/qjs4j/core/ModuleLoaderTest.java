@@ -109,12 +109,12 @@ public class ModuleLoaderTest extends ModuleFileTest {
                 Map.of("type", "bytes"));
 
         assertThat(moduleRecord.status()).isEqualTo(JSDynamicImportModule.Status.EVALUATED);
-        JSValue defaultExport = moduleRecord.namespace().get(PropertyKey.fromString("default"));
-        assertThat(defaultExport).isInstanceOfSatisfying(JSUint8Array.class, uint8Array -> {
-            assertThat(uint8Array.getLength()).isEqualTo(2);
-            assertThat(uint8Array.getBuffer().isImmutable())
-                    .as("a bytes payload is read-only, so a module cannot rewrite what it imported").isTrue();
-        });
+        assertThat(moduleRecord.namespace().get(PropertyKey.fromString("default")))
+                .isInstanceOfSatisfying(JSUint8Array.class, uint8Array -> {
+                    assertThat(uint8Array.getLength()).isEqualTo(2);
+                    assertThat(uint8Array.getBuffer().isImmutable())
+                            .as("a bytes payload is read-only, so a module cannot rewrite what it imported").isTrue();
+                });
         assertThat(moduleRecord.rawSource()).as("bytes are not source").isEmpty();
     }
 
@@ -277,8 +277,8 @@ public class ModuleLoaderTest extends ModuleFileTest {
 
         assertThat(moduleRecord.status()).isEqualTo(JSDynamicImportModule.Status.EVALUATED);
         assertThat(moduleRecord.explicitExportNames()).containsExactly("default");
-        JSValue defaultExport = moduleRecord.namespace().get(PropertyKey.fromString("default"));
-        assertThat(defaultExport).isInstanceOfSatisfying(JSObject.class,
+        assertThat(moduleRecord.namespace().get(PropertyKey.fromString("default"))).isInstanceOfSatisfying(
+                JSObject.class,
                 jsObject -> assertThat(jsObject.get(PropertyKey.fromString("answer"))).hasToString("42"));
     }
 

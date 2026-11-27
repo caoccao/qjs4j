@@ -62,10 +62,9 @@ public class VirtualMachineExceptionStateTest extends BaseTest {
 
     @Test
     public void testOrdinaryEvaluationLeavesNoPendingException() {
-        assertThat(context.eval("1 + 1")).isEqualTo(JSNumber.of(2));
+        assertEvalValue("1 + 1", JSNumber.of(2));
         assertThat(context.hasPendingException()).isFalse();
-        assertThat(context.eval("(function () { try { null.x } catch (e) { return 'caught' } })()").toString())
-                .isEqualTo("caught");
+        assertEvalText("(function () { try { null.x } catch (e) { return 'caught' } })()", "caught");
         assertThat(context.hasPendingException()).as("a caught error must not leave the context in an exception state")
                 .isFalse();
     }
@@ -94,10 +93,9 @@ public class VirtualMachineExceptionStateTest extends BaseTest {
         // the specifier speculatively. That failure is expected, and catching only the Java
         // exception used to leave the matching error pending on the context, where a later
         // activation reported it as its own failure.
-        JSValue result = context.eval("""
+        assertThat(context.eval("""
                 const f = async () => await Promise.resolve(5);
-                await f();""", "not-a-real-module.js", true);
-        assertThat(result).isNotNull();
+                await f();""", "not-a-real-module.js", true)).isNotNull();
         context.processMicrotasks();
         assertThat(context.hasPendingException()).as("a speculative module resolution failure must not linger")
                 .isFalse();

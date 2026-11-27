@@ -370,7 +370,7 @@ public class AtomicsWaitListTest extends BaseTest {
         context.eval(
                 "globalThis.i = new Int32Array(new SharedArrayBuffer(8));globalThis.r = Atomics.waitAsync(i, 0, 0);globalThis.settled = 'pending';r.value.then(v => { globalThis.settled = v; });",
                 "atomics.js", false);
-        assertThat(context.eval("r.async").toString()).isEqualTo("true");
+        assertEvalText("r.async", "true");
 
         context.eval("Atomics.notify(i, 0);", "atomics.js", false);
         for (int attempt = 0; attempt < 200; attempt++) {
@@ -380,7 +380,7 @@ public class AtomicsWaitListTest extends BaseTest {
             }
             Thread.sleep(10);
         }
-        assertThat(context.eval("String(settled)").toString()).isEqualTo("ok");
+        assertEvalText("String(settled)", "ok");
     }
 
     @Test

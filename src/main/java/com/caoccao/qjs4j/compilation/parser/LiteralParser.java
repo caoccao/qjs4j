@@ -118,9 +118,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                     // { async: value }, { async, ... }, { async }, { async() {} }, { async = x }
                     // async is a property name, not a modifier
                 } else if (parserContext.nextToken.line() == parserContext.currentToken.line()) {
-                    if (parserContext.currentToken.escaped()) {
-                        throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
-                    }
+                    parserContext.requireUnescapedToken("Unexpected token IDENTIFIER");
                     // async is likely a modifier for method
                     isAsync = true;
                     parserContext.advance();

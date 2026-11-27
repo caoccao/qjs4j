@@ -41,10 +41,6 @@ public final class JSTemporalPlainTime extends JSObject implements JSTemporalTim
     }
 
     public static JSTemporalPlainTime create(JSContext context, IsoTime isoTime, JSObject prototype) {
-        JSTemporalPlainTime plainTime = new JSTemporalPlainTime(context, isoTime);
-        if (prototype != null) {
-            plainTime.setPrototype(prototype);
-        }
-        return plainTime;
+        return TemporalUtils.withPrototype(new JSTemporalPlainTime(context, isoTime), prototype);
     }
 }

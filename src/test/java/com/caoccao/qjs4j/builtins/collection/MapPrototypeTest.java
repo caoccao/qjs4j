@@ -92,8 +92,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         JSMap map = newStringMap();
 
         // Normal case: clear map
-        JSValue result = MapPrototype.clear(context, map, JSValue.NO_ARGS);
-        assertThat(result.isUndefined()).isTrue();
+        assertThat(MapPrototype.clear(context, map, JSValue.NO_ARGS).isUndefined()).isTrue();
         assertThat(map.size()).isEqualTo(0);
 
         // Edge case: called on non-Map
@@ -542,8 +541,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         });
 
         var forEachMethod = builtin(MapPrototype::forEach, map);
-        JSValue forEachResult = forEachMethod.call(callback);
-        assertThat(forEachResult.isUndefined()).isTrue();
+        assertThat(forEachMethod.call(callback).isUndefined()).isTrue();
         // Note: Order might vary, but both entries should be present
         String resultStr = result.toString();
         assertThat(resultStr.contains("key1:value1")).isTrue();
@@ -812,16 +810,15 @@ public class MapPrototypeTest extends BaseJavetTest {
 
     @Test
     void testGetOrInsertMethods() {
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 const m = new Map();
                 const v1 = m.getOrInsert('x', 1);
                 const v2 = m.getOrInsert('x', 2);
                 let calls = 0;
                 const v3 = m.getOrInsertComputed('x', () => { calls++; return 3; });
                 const v4 = m.getOrInsertComputed('y', () => { calls++; m.set('y', 99); return 4; });
-                v1 === 1 && v2 === 1 && v3 === 1 && v4 === 4 && m.get('y') === 4 && calls === 1""").toJavaObject())
-                .isEqualTo(true);
-        assertThat(context.eval("""
+                v1 === 1 && v2 === 1 && v3 === 1 && v4 === 4 && m.get('y') === 4 && calls === 1""", true);
+        assertEvalJavaValue("""
                 (() => {
                   try {
                     new Map().getOrInsertComputed('x', 1);
@@ -829,7 +826,7 @@ public class MapPrototypeTest extends BaseJavetTest {
                   } catch (e) {
                     return e instanceof TypeError;
                   }
-                })()""").toJavaObject()).isEqualTo(true);
+                })()""", true);
     }
 
     @Test
@@ -1203,7 +1200,7 @@ public class MapPrototypeTest extends BaseJavetTest {
                     && Object.prototype.toString.call(new Map()) === '[object Map]';
                 })()""");
 
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 (() => {
                   const d1 = Object.getOwnPropertyDescriptor(Map.prototype, 'getOrInsert');
                   const d2 = Object.getOwnPropertyDescriptor(Map.prototype, 'getOrInsertComputed');
@@ -1217,7 +1214,7 @@ public class MapPrototypeTest extends BaseJavetTest {
                     && d2.enumerable === false
                     && d2.configurable === true
                     && d2.value.length === 2;
-                })()""").toJavaObject()).isEqualTo(true);
+                })()""", true);
     }
 
     @Test
@@ -1364,13 +1361,13 @@ public class MapPrototypeTest extends BaseJavetTest {
         JSValue result = setMethod.call(stringArgs("key", "value"));
         assertThat(result).isEqualTo(map); // Should return the map
         assertThat(map.size()).isEqualTo(1);
-        assertThat(map.mapGet(new JSString("key")).asString().map(JSString::value).orElseThrow()).isEqualTo("value");
+        assertStringValue(map.mapGet(new JSString("key")), "value");
 
         // Normal case: update existing key
         result = setMethod.call(stringArgs("key", "newValue"));
         assertThat(result).isEqualTo(map);
         assertThat(map.size()).isEqualTo(1);
-        assertThat(map.mapGet(new JSString("key")).asString().map(JSString::value).orElseThrow()).isEqualTo("newValue");
+        assertStringValue(map.mapGet(new JSString("key")), "newValue");
 
         // Normal case: set with undefined value
         result = setMethod.call(stringArgs("key2"));

@@ -39,8 +39,7 @@ public final class TemporalLocaleFormat {
                 return null;
             }
             if (style != null && !(style instanceof JSUndefined)) {
-                context.throwTypeError("Invalid date/time formatting options");
-                return null;
+                return context.rejectTypeError("Invalid date/time formatting options");
             }
         }
         JSValue formatter = JSIntlObject.createDateTimeFormat(context, null, new JSValue[]{locales, options});
@@ -63,8 +62,7 @@ public final class TemporalLocaleFormat {
                 return null;
             }
             if (!(timeZoneOption instanceof JSUndefined) && timeZoneOption != null) {
-                context.throwTypeError("Temporal error: timeZone option is not allowed.");
-                return null;
+                return context.rejectTypeError("Temporal error: timeZone option is not allowed.");
             }
 
             PropertyKey[] ownPropertyKeys = optionsObject.ownPropertyKeys();
@@ -90,7 +88,7 @@ public final class TemporalLocaleFormat {
             if (context.hasPendingException()) {
                 return null;
             }
-            if (timeZoneNameOption instanceof JSUndefined || timeZoneNameOption == null) {
+            if (JSTypeChecking.isUndefinedOrMissing(timeZoneNameOption)) {
                 String defaultTimeZoneNameOption = TemporalUtils.isOffsetTimeZoneIdentifier(timeZoneId)
                         ? "shortOffset"
                         : "short";

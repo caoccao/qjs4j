@@ -19,8 +19,6 @@ package com.caoccao.qjs4j.builtins.object;
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
  * Writing a sloppy function's legacy {@code caller} or {@code arguments} property does nothing, as in V8.
  * <p>
@@ -49,14 +47,14 @@ public class LegacyFunctionPropertyWriteTest extends BaseJavetTest {
     public void testThrowTypeErrorElsewhereStillThrows() {
         // Only caller and arguments are ignored. V8 15 copies its own "set caller" function into such a descriptor,
         // which accepts a sloppy function under any key; qjs4j's is %ThrowTypeError%, which keeps throwing.
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 const thrower = Object.getOwnPropertyDescriptor(Function.prototype, 'caller');
                 Object.defineProperty(Function.prototype, 'other', thrower);
                 const sloppy = new Function('return 1');
                 let result;
                 try { sloppy.other = 1; result = 'no error'; } catch (e) { result = e.name; }
                 delete Function.prototype.other;
-                result""").toJavaObject()).isEqualTo("TypeError");
+                result""", "TypeError");
     }
 
     @Test

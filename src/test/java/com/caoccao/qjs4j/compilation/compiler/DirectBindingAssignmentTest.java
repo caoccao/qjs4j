@@ -37,7 +37,7 @@ public class DirectBindingAssignmentTest extends BaseJavetTest {
         // test262 S11.13.1_A6_T1 and S11.13.2_A6.*: the assignment goes to the binding resolved before the
         // right-hand side declared a nearer one. V8 assigns to the nearer one, against the specification, so these
         // are asserted directly rather than against V8.
-        assertThat(context.eval("""
+        assertEvalText("""
                 function testAssignment() {
                   var x = 0;
                   var innerX = (function () {
@@ -46,8 +46,8 @@ public class DirectBindingAssignmentTest extends BaseJavetTest {
                   })();
                   return innerX + ':' + x;
                 }
-                testAssignment()""").toString()).isEqualTo("undefined:1");
-        assertThat(context.eval("""
+                testAssignment()""", "undefined:1");
+        assertEvalText("""
                 function testCompound() {
                   var x = 1;
                   var innerX = (function () {
@@ -56,7 +56,7 @@ public class DirectBindingAssignmentTest extends BaseJavetTest {
                   })();
                   return innerX + ':' + x;
                 }
-                testCompound()""").toString()).isEqualTo("2:4");
+                testCompound()""", "2:4");
         assertThat(usesReferences("function f() { var x = 0; (function () { x = (eval('var x;'), 1) })() }")).isTrue();
         assertThat(usesReferences("function f() { let s = 0; for (let i = 0; i < 3; i++) { s += i } return s }"))
                 .isFalse();

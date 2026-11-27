@@ -195,8 +195,8 @@ public class AtomicsObjectTest extends BaseJavetTest {
         }
         assertThat(context.eval("[1, 2, 4, 8].map(size => Atomics.isLockFree(size))").toJavaObject())
                 .isEqualTo(List.of(lockFree, lockFree, lockFree, lockFree));
-        assertThat(context.eval("Atomics.isLockFree(3)").toString()).isEqualTo("false");
-        assertThat(context.eval("Atomics.isLockFree(0)").toString()).isEqualTo("false");
+        assertEvalText("Atomics.isLockFree(3)", "false");
+        assertEvalText("Atomics.isLockFree(0)", "false");
     }
 
     @Test
@@ -349,8 +349,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testPause() {
         // Atomics.pause() should return undefined
-        JSValue result = atomics().pause(context, null, JSValue.NO_ARGS);
-        assertThat(result.isUndefined()).isTrue();
+        assertThat(atomics().pause(context, null, JSValue.NO_ARGS).isUndefined()).isTrue();
     }
 
     @Test

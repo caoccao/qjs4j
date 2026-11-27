@@ -173,14 +173,14 @@ class Review02LanguageTest extends BaseJavetTest {
                         return(){log.push('return');return {done:true}}};
                         try{for await(const x of it){log.push('body')}}catch(e){log.push(String(e))}
                         return JSON.stringify(log)})()
+                        """,
+                """
+                        (()=>{const log=[];async function f(){const p=Promise.resolve(0);
+                        Object.defineProperty(p,'constructor',{get(){throw 'constructor'}});
+                        log.push('start');for await(const x of [p]);}
+                        const done=Promise.resolve().then(()=>log.push('tick1')).then(()=>log.push('tick2'))
+                          .then(()=>JSON.stringify(log));f().catch(()=>log.push('catch'));return done})()
                         """);
-        assertStringWithJavet("""
-                (()=>{const log=[];async function f(){const p=Promise.resolve(0);
-                Object.defineProperty(p,'constructor',{get(){throw 'constructor'}});
-                log.push('start');for await(const x of [p]);}
-                const done=Promise.resolve().then(()=>log.push('tick1')).then(()=>log.push('tick2'))
-                  .then(()=>JSON.stringify(log));f().catch(()=>log.push('catch'));return done})()
-                """);
     }
 
     @Test
@@ -320,14 +320,13 @@ class Review02LanguageTest extends BaseJavetTest {
                           return(){log.push('return');return 1}
                         };try{for await(const x of it){throw 'body'}}catch(e){log.push('catch:'+e)}
                         return JSON.stringify(log)})()
+                        """, """
+                        (async()=>{const log=[];function it(n){return {
+                        [Symbol.asyncIterator](){return this},next(){return Promise.resolve({value:1,done:false})},
+                        return(){return {then(r){log.push(n);r({done:true})}}}}}
+                        try{for await(const x of it('outer'))for await(const y of it('inner'))throw 'body'}
+                        catch(e){log.push(e)}return JSON.stringify(log)})()
                         """);
-        assertStringWithJavet("""
-                (async()=>{const log=[];function it(n){return {
-                [Symbol.asyncIterator](){return this},next(){return Promise.resolve({value:1,done:false})},
-                return(){return {then(r){log.push(n);r({done:true})}}}}}
-                try{for await(const x of it('outer'))for await(const y of it('inner'))throw 'body'}
-                catch(e){log.push(e)}return JSON.stringify(log)})()
-                """);
     }
 
     @Test
@@ -336,7 +335,7 @@ class Review02LanguageTest extends BaseJavetTest {
                 "(()=>{try{Object.getPrototypeOf(async function(){}).constructor('switch(1){case 1:using x=null;}');return 'accepted'}catch(e){return e.name}})()",
                 "(()=>{try{Object.getPrototypeOf(async function(){}).constructor('switch(1){case 1:await using x=null;}');return 'accepted'}catch(e){return e.name}})()",
                 "(()=>{try{Object.getPrototypeOf(async function(){}).constructor('// $DONOTEVALUATE\\nswitch(1){case 1:using x=null;}');return 'accepted'}catch(e){return e.name}})()",
-                "(()=>{try{Object.getPrototypeOf(async function(){}).constructor('// $DONOTEVALUATE\\nswitch(1){case 1:await using x=null;}');return 'accepted'}catch(e){return e.name}})()");
-        assertStringWithJavet("(()=>{switch(1){case 1:{using x=null;return 'ok'}}})()");
+                "(()=>{try{Object.getPrototypeOf(async function(){}).constructor('// $DONOTEVALUATE\\nswitch(1){case 1:await using x=null;}');return 'accepted'}catch(e){return e.name}})()",
+                "(()=>{switch(1){case 1:{using x=null;return 'ok'}}})()");
     }
 }

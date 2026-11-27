@@ -189,8 +189,7 @@ public class DateParseTest extends BaseJavetTest {
                   'Jan 1 2000 1:2',
                   'Jan 1 2000 10:20:30.',
                   'Jan 1 2000 10.20'
-                ].map(s => new Date(s).getTime()))""");
-        assertStringWithJavet("""
+                ].map(s => new Date(s).getTime()))""", """
                 JSON.stringify([
                   '2000-1-1',
                   '2000-13-01',
@@ -256,8 +255,7 @@ public class DateParseTest extends BaseJavetTest {
                   ' 2000-01-01',
                   '-000000-01-01',
                   '+002000-01-01'
-                ].map(s => new Date(s).getTime()))""");
-        assertStringWithJavet("""
+                ].map(s => new Date(s).getTime()))""", """
                 JSON.stringify([
                   '12/31/1999 10:00',
                   '2000 Jan 5',
@@ -552,8 +550,7 @@ public class DateParseTest extends BaseJavetTest {
     public void testMoreLegacyTimesAndZones() {
         // A line terminator is white space. V8 caches a failed parse in a way that can change the next result, so this
         // string is parsed on its own.
-        assertStringWithJavet("String(Date.parse('Jan\\n1 2000 10:00') === Date.parse('Jan 1 2000 10:00'))");
-        assertStringWithJavet("""
+        assertStringWithJavet("String(Date.parse('Jan\\n1 2000 10:00') === Date.parse('Jan 1 2000 10:00'))", """
                 JSON.stringify([
                   '-271821-04-05 00:00',
                   'Jan 1 2000 10:20:30:400',

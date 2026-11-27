@@ -53,8 +53,7 @@ public class JSTerminationSignalTest extends BaseTest {
         JSNativeFunction fail = new JSNativeFunction(context, "fail", 0,
                 (ctx, thisArg, args) -> ctx.throwTypeError("host failure"));
         context.getGlobalObject().set(PropertyKey.fromString("fail"), fail);
-        assertThat(context.eval("try { fail() } catch (e) { e.name + ': ' + e.message }").toString())
-                .isEqualTo("TypeError: host failure");
+        assertEvalText("try { fail() } catch (e) { e.name + ': ' + e.message }", "TypeError: host failure");
     }
 
     @Test
@@ -63,12 +62,12 @@ public class JSTerminationSignalTest extends BaseTest {
         JSNativeFunction fail = new JSNativeFunction(context, "fail", 0,
                 (ctx, thisArg, args) -> ctx.throwTypeError("host failure"));
         context.getGlobalObject().set(PropertyKey.fromString("fail"), fail);
-        assertThat(context.eval("""
+        assertEvalText("""
                 globalThis.outcome = 'PENDING';
                 new Promise(() => fail()).catch((e) => { globalThis.outcome = e.name });
-                'STARTED'""").toString()).isEqualTo("STARTED");
+                'STARTED'""", "STARTED");
         context.processMicrotasks();
-        assertThat(context.eval("outcome").toString()).isEqualTo("TypeError");
+        assertEvalText("outcome", "TypeError");
     }
 
     @Test

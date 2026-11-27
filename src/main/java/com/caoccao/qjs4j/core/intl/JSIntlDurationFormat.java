@@ -569,8 +569,7 @@ public final class JSIntlDurationFormat extends JSObject {
 
         // Step 2: If Type(input) is not Object, throw TypeError
         if (!(input instanceof JSObject inputObj)) {
-            context.throwTypeError("Invalid duration value");
-            return null;
+            return context.rejectTypeError("Invalid duration value");
         }
 
         Map<String, Double> result = new LinkedHashMap<>();
@@ -582,7 +581,7 @@ public final class JSIntlDurationFormat extends JSObject {
                 return null;
             }
 
-            if (val == null || val instanceof JSUndefined) {
+            if (JSTypeChecking.isUndefinedOrMissing(val)) {
                 result.put(unitName, 0.0);
             } else {
                 anyDefined = true;
@@ -591,13 +590,11 @@ public final class JSIntlDurationFormat extends JSObject {
                     return null;
                 }
                 if (Double.isNaN(numericValue) || Double.isInfinite(numericValue)) {
-                    context.throwRangeError("Invalid duration value for " + unitName);
-                    return null;
+                    return context.rejectRangeError("Invalid duration value for " + unitName);
                 }
                 // Duration values must be integers
                 if (numericValue != Math.floor(numericValue)) {
-                    context.throwRangeError("Duration " + unitName + " must be an integer");
-                    return null;
+                    return context.rejectRangeError("Duration " + unitName + " must be an integer");
                 }
                 // Convert -0 to 0
                 if (numericValue == 0.0) {
@@ -609,8 +606,7 @@ public final class JSIntlDurationFormat extends JSObject {
 
         // If no properties were defined, throw TypeError
         if (!anyDefined) {
-            context.throwTypeError("Invalid duration value");
-            return null;
+            return context.rejectTypeError("Invalid duration value");
         }
 
         // Validate: IsValidDurationRecord

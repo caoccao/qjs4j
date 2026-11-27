@@ -87,8 +87,7 @@ public final class TypedArrayPrototype {
             return null;
         }
         if (!(result instanceof JSTypedArray resultArray)) {
-            context.throwTypeError("TypedArray constructor did not return a TypedArray");
-            return null;
+            return context.rejectTypeError("TypedArray constructor did not return a TypedArray");
         }
         return resultArray;
     }
@@ -357,7 +356,7 @@ public final class TypedArrayPrototype {
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        if (species instanceof JSNull || species instanceof JSUndefined) {
+        if (JSTypeChecking.isNullish(species)) {
             return fallback;
         }
         if (requireFunction && !(species instanceof JSFunction)) {
@@ -432,8 +431,7 @@ public final class TypedArrayPrototype {
 
     static JSTypedArray toTypedArray(JSContext context, JSValue thisArg, String methodName) {
         if (!(thisArg instanceof JSTypedArray typedArray)) {
-            context.throwTypeError(methodName + " called on non-TypedArray");
-            return null;
+            return context.rejectTypeError(methodName + " called on non-TypedArray");
         }
         return typedArray;
     }
@@ -448,10 +446,9 @@ public final class TypedArrayPrototype {
             return null;
         }
         if (args.length == 0 || !JSTypeChecking.isCallable(args[0])) {
-            context.throwTypeError(args.length == 0 || args[0].isUndefined()
+            return context.rejectTypeError(args.length == 0 || args[0].isUndefined()
                     ? "undefined is not a function"
                     : JSTypeConversions.toString(context, args[0]).value() + " is not a function");
-            return null;
         }
         return typedArray;
     }
@@ -488,9 +485,8 @@ public final class TypedArrayPrototype {
             return null;
         }
         if (typedArray.isOutOfBounds()) {
-            context.throwTypeError(
+            return context.rejectTypeError(
                     "Cannot perform " + methodName + " on a typed array backed by a detached or out-of-bounds buffer");
-            return null;
         }
         return typedArray;
     }

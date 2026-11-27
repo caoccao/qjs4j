@@ -41,9 +41,9 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "'text'.anchor('')");
 
         // Test quote escaping
-        JSValue result = StringPrototype.anchor(context, new JSString("test"), stringArgs("my\"anchor"));
-        assertThat(result).isInstanceOfSatisfying(JSString.class,
-                jsStr -> assertThat(jsStr.value()).isEqualTo("<a name=\"my&quot;anchor\">test</a>"));
+        assertThat(StringPrototype.anchor(context, new JSString("test"), stringArgs("my\"anchor")))
+                .isInstanceOfSatisfying(JSString.class,
+                        jsStr -> assertThat(jsStr.value()).isEqualTo("<a name=\"my&quot;anchor\">test</a>"));
     }
 
     @Test
@@ -108,8 +108,8 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Empty string
         JSString empty = new JSString("");
-        JSValue result = StringPrototype.charCodeAt(context, empty, numberArgs(0));
-        assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> assertThat(jsNum.value()).isNaN());
+        assertThat(StringPrototype.charCodeAt(context, empty, numberArgs(0))).isInstanceOfSatisfying(JSNumber.class,
+                jsNum -> assertThat(jsNum.value()).isNaN());
     }
 
     @Test
@@ -120,8 +120,7 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Surrogate pair (if applicable)
         JSString surrogate = new JSString("😀");
-        JSValue result = StringPrototype.codePointAt(context, surrogate, numberArgs(0));
-        assertNumberValue(result, 128512.0);
+        assertNumberValue(StringPrototype.codePointAt(context, surrogate, numberArgs(0)), 128512.0);
 
         // Out of bounds
         codePointAt.expectValue(JSUndefined.INSTANCE, numberArgs(-1));
@@ -146,8 +145,7 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Empty string
         JSString empty = new JSString("");
-        JSValue result = StringPrototype.concat(context, empty, new JSValue[]{str});
-        assertStringValue(result, "hello world");
+        assertStringValue(StringPrototype.concat(context, empty, new JSValue[]{str}), "hello world");
     }
 
     @Test
@@ -178,8 +176,7 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Empty string
         JSString empty = new JSString("");
-        JSValue result = StringPrototype.endsWith(context, empty, stringArgs(""));
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        assertThat(StringPrototype.endsWith(context, empty, stringArgs(""))).isEqualTo(JSBoolean.TRUE);
     }
 
     @Test
@@ -215,9 +212,9 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "'text'.fontcolor('')");
 
         // Test quote escaping
-        JSValue result = StringPrototype.fontcolor(context, new JSString("test"), stringArgs("\"red\""));
-        assertThat(result).isInstanceOfSatisfying(JSString.class,
-                jsStr -> assertThat(jsStr.value()).isEqualTo("<font color=\"&quot;red&quot;\">test</font>"));
+        assertThat(StringPrototype.fontcolor(context, new JSString("test"), stringArgs("\"red\"")))
+                .isInstanceOfSatisfying(JSString.class,
+                        jsStr -> assertThat(jsStr.value()).isEqualTo("<font color=\"&quot;red&quot;\">test</font>"));
     }
 
     @Test
@@ -228,8 +225,7 @@ public class StringPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testFullLowercaseMappingAlongsideFinalSigma() {
-        assertStringWithJavet("'İΟΣ'.toLowerCase()");
-        assertStringWithJavet("'İΟΣ'.toLocaleLowerCase('en')");
+        assertStringWithJavet("'İΟΣ'.toLowerCase()", "'İΟΣ'.toLocaleLowerCase('en')");
     }
 
     @Test
@@ -302,8 +298,7 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Empty string
         JSString empty = new JSString("");
-        JSValue result = StringPrototype.includes(context, empty, stringArgs("test"));
-        assertThat(result).isEqualTo(JSBoolean.FALSE);
+        assertThat(StringPrototype.includes(context, empty, stringArgs("test"))).isEqualTo(JSBoolean.FALSE);
     }
 
     @Test
@@ -325,8 +320,7 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Empty string
         JSString empty = new JSString("");
-        JSValue result = StringPrototype.indexOf(context, empty, stringArgs("test"));
-        assertNumberValue(result, -1.0);
+        assertNumberValue(StringPrototype.indexOf(context, empty, stringArgs("test")), -1.0);
     }
 
     @Test
@@ -369,8 +363,7 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Empty string
         JSString empty = new JSString("");
-        JSValue result = StringPrototype.lastIndexOf(context, empty, stringArgs("test"));
-        assertNumberValue(result, -1.0);
+        assertNumberValue(StringPrototype.lastIndexOf(context, empty, stringArgs("test")), -1.0);
     }
 
     @Test
@@ -528,8 +521,8 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Empty string
         JSString empty = new JSString("");
-        JSValue result = StringPrototype.padEnd(context, empty, new JSValue[]{new JSNumber(5), new JSString("*")});
-        assertStringValue(result, "*****");
+        assertStringValue(StringPrototype.padEnd(context, empty, new JSValue[]{new JSNumber(5), new JSString("*")}),
+                "*****");
     }
 
     @Test
@@ -552,8 +545,8 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Empty string
         JSString empty = new JSString("");
-        JSValue result = StringPrototype.padStart(context, empty, new JSValue[]{new JSNumber(5), new JSString("*")});
-        assertStringValue(result, "*****");
+        assertStringValue(StringPrototype.padStart(context, empty, new JSValue[]{new JSNumber(5), new JSString("*")}),
+                "*****");
     }
 
     @Test
@@ -579,8 +572,7 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Empty string
         JSString empty = new JSString("");
-        JSValue result = StringPrototype.repeat(context, empty, numberArgs(3));
-        assertStringValue(result, "");
+        assertStringValue(StringPrototype.repeat(context, empty, numberArgs(3)), "");
     }
 
     @Test
@@ -597,8 +589,7 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Empty string
         JSString empty = new JSString("");
-        JSValue result = StringPrototype.replace(context, empty, stringArgs("", "test"));
-        assertStringValue(result, "test");
+        assertStringValue(StringPrototype.replace(context, empty, stringArgs("", "test")), "test");
     }
 
     @Test
@@ -668,8 +659,7 @@ public class StringPrototypeTest extends BaseJavetTest {
                   const result = 'xay'.replace(re, '$<word>:$<missing>:$<word>:$<unterminated');
                   return result + '|' + log.join(',');
                 })()
-                """);
-        assertStringWithJavet("""
+                """, """
                 (() => {
                   const log = [];
                   const marker = {};
@@ -749,8 +739,7 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Empty string
         JSString empty = new JSString("");
-        JSValue result = StringPrototype.slice(context, empty, numberArgs(0));
-        assertStringValue(result, "");
+        assertStringValue(StringPrototype.slice(context, empty, numberArgs(0)), "");
     }
 
     @Test
@@ -842,8 +831,7 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         // Empty string
         JSString empty = new JSString("");
-        JSValue result = StringPrototype.startsWith(context, empty, stringArgs(""));
-        assertThat(result).isEqualTo(JSBoolean.TRUE);
+        assertThat(StringPrototype.startsWith(context, empty, stringArgs(""))).isEqualTo(JSBoolean.TRUE);
     }
 
     @Test
@@ -1031,8 +1019,8 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "'ABC123'.toLocaleLowerCase()");
 
         // Test with locale parameter (currently ignored, but should work)
-        JSValue result = StringPrototype.toLocaleLowerCase(context, new JSString("HELLO"), stringArgs("en-US"));
-        assertStringValue(result, "hello");
+        assertStringValue(StringPrototype.toLocaleLowerCase(context, new JSString("HELLO"), stringArgs("en-US")),
+                "hello");
     }
 
     @Test
@@ -1042,8 +1030,8 @@ public class StringPrototypeTest extends BaseJavetTest {
                 "'abc123'.toLocaleUpperCase()");
 
         // Test with locale parameter (currently ignored, but should work)
-        JSValue result = StringPrototype.toLocaleUpperCase(context, new JSString("hello"), stringArgs("en-US"));
-        assertStringValue(result, "HELLO");
+        assertStringValue(StringPrototype.toLocaleUpperCase(context, new JSString("hello"), stringArgs("en-US")),
+                "HELLO");
     }
 
     @Test

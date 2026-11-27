@@ -138,7 +138,7 @@ public final class RegExpConstructor {
 
         String input = jsString.value();
         if (input.isEmpty()) {
-            return new JSString("");
+            return JSString.EMPTY;
         }
 
         StringBuilder escapedBuilder = new StringBuilder(input.length() * 2);

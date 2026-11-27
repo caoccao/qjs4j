@@ -92,8 +92,7 @@ public class AtomTableTest extends BaseTest {
         AtomTable table = new AtomTable();
 
         int atom1 = table.intern("world");
-        int atom2 = table.intern("world");
-        assertThat(atom2).isEqualTo(atom1);
+        assertThat(table.intern("world")).isEqualTo(atom1);
         assertThat(table.getString(atom1)).isEqualTo("world");
     }
 
@@ -110,8 +109,7 @@ public class AtomTableTest extends BaseTest {
     public void testInternNull() {
         AtomTable table = new AtomTable();
 
-        int atom = table.intern(null);
-        assertThat(atom).isEqualTo(-1);
+        assertThat(table.intern(null)).isEqualTo(-1);
     }
 
     @Test

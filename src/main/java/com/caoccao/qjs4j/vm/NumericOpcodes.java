@@ -125,7 +125,7 @@ final class NumericOpcodes {
     }
 
     private static void compareRelational(Opcode op, ExecutionContext ctx, boolean reverse, boolean inclusive) {
-        JSStackValue[] stack = ctx.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = ctx.stack();
         int sp = ctx.sp;
         if (stack[sp - 2] instanceof JSNumber left && stack[sp - 1] instanceof JSNumber right) {
             double x = reverse ? right.value() : left.value();
@@ -179,7 +179,7 @@ final class NumericOpcodes {
 
     static void handleAbstractEquality(Opcode op, ExecutionContext executionContext) {
         int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         if (stack[sp - 2] instanceof JSNumber x && stack[sp - 1] instanceof JSNumber y
                 && !executionContext.virtualMachine.context.hasPendingException()) {
             boolean equal = x.value() == y.value();
@@ -261,7 +261,7 @@ final class NumericOpcodes {
 
     static void handleDivisionOrRemainder(Opcode op, ExecutionContext executionContext) {
         int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         if (stack[sp - 2] instanceof JSNumber dividend && stack[sp - 1] instanceof JSNumber divisor
                 && executionContext.virtualMachine.pendingException == null
                 && !executionContext.virtualMachine.context.hasPendingException()) {

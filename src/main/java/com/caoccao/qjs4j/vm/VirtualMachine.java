@@ -1185,7 +1185,7 @@ public final class VirtualMachine {
             applyTrap = JSUndefined.INSTANCE;
         }
 
-        if (applyTrap == JSUndefined.INSTANCE || applyTrap == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(applyTrap)) {
             if (target instanceof JSProxy targetProxy) {
                 return proxyApply(targetProxy, thisArg, args);
             }
@@ -1237,7 +1237,7 @@ public final class VirtualMachine {
             constructTrap = JSUndefined.INSTANCE;
         }
 
-        if (constructTrap == JSUndefined.INSTANCE || constructTrap == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(constructTrap)) {
             // ES2024 10.5.13 step 7: If trap is undefined, return ? Construct(target, args, newTarget)
             if (target instanceof JSProxy targetProxy) {
                 return proxyConstruct(targetProxy, args, newTarget);
@@ -1659,7 +1659,7 @@ public final class VirtualMachine {
         if (value instanceof JSString stringValue) {
             return stringValue.value();
         }
-        if (value == null || value instanceof JSUndefined) {
+        if (JSTypeChecking.isUndefinedOrMissing(value)) {
             return null;
         }
         return value.toString();
@@ -1675,7 +1675,7 @@ public final class VirtualMachine {
             return new JSString(description);
         }
         if (description == null) {
-            return new JSString("");
+            return JSString.EMPTY;
         }
         return new JSString("[" + description + "]");
     }

@@ -51,23 +51,22 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         emitter.emitPushConstant(source);
         emitter.emitPushConstant(excludeList);
         // target offset=2, source offset=1, exclude offset=0 => 0b00000110
-        emitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 6);
+        emitter.emitIntOperand(Opcode.COPY_DATA_PROPERTIES, 6);
         emitter.emitOpcode(Opcode.DROP);
         emitter.emitOpcode(Opcode.DROP);
         emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue copied = execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(copied).isSameAs(target);
+        assertThat(execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE)).isSameAs(target);
         assertThat(target.get("a")).isSameAs(JSUndefined.INSTANCE);
         assertNumberValue(target.get("b"), 2);
         assertThat(target.get("hidden")).isSameAs(JSUndefined.INSTANCE);
         assertThat(target.get(PropertyKey.fromSymbol(symbol))).isSameAs(JSUndefined.INSTANCE);
 
         BytecodeEmitter typeErrorEmitter = new BytecodeEmitter();
-        typeErrorEmitter.emitOpcodeU32(Opcode.PUSH_I32, 1);
+        typeErrorEmitter.emitIntOperand(Opcode.PUSH_I32, 1);
         typeErrorEmitter.emitPushConstant(source);
         typeErrorEmitter.emitOpcode(Opcode.NULL);
-        typeErrorEmitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 6);
+        typeErrorEmitter.emitIntOperand(Opcode.COPY_DATA_PROPERTIES, 6);
         typeErrorEmitter.emitOpcode(Opcode.RETURN_UNDEF);
 
         assertThatThrownBy(() -> execute(typeErrorEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE))
@@ -164,19 +163,18 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         emitter.emitPushConstant(target);
         emitter.emitPushConstant(new JSString("m"));
         emitter.emitPushConstant(method);
-        emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
+        emitter.emitIntOperand(Opcode.DEFINE_METHOD_COMPUTED, 4);
         emitter.emitPushConstant(new JSString("x"));
         emitter.emitPushConstant(getter);
-        emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 1);
+        emitter.emitIntOperand(Opcode.DEFINE_METHOD_COMPUTED, 1);
         emitter.emitPushConstant(new JSString("x"));
         emitter.emitPushConstant(setter);
-        emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 2);
+        emitter.emitIntOperand(Opcode.DEFINE_METHOD_COMPUTED, 2);
         emitter.emitPushConstant(new JSString("x"));
         emitter.emitOpcode(Opcode.GET_ARRAY_EL);
         emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue getterValue = execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertNumberValue(getterValue, 42);
+        assertNumberValue(execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE), 42);
 
         PropertyDescriptor methodDescriptor = target.getOwnPropertyDescriptor(PropertyKey.fromString("m"));
         assertThat(methodDescriptor).isNotNull();
@@ -201,46 +199,43 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
 
         BytecodeEmitter getArrayEl2Emitter = new BytecodeEmitter();
         getArrayEl2Emitter.emitPushConstant(array);
-        getArrayEl2Emitter.emitOpcodeU32(Opcode.PUSH_I32, 1);
+        getArrayEl2Emitter.emitIntOperand(Opcode.PUSH_I32, 1);
         getArrayEl2Emitter.emitOpcode(Opcode.GET_ARRAY_EL2);
         getArrayEl2Emitter.emitOpcode(Opcode.SWAP);
         getArrayEl2Emitter.emitOpcode(Opcode.GET_LENGTH);
         getArrayEl2Emitter.emitOpcode(Opcode.ADD);
         getArrayEl2Emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue getArrayEl2Result = execute(getArrayEl2Emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertNumberValue(getArrayEl2Result, 22);
+        assertNumberValue(execute(getArrayEl2Emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE), 22);
 
         BytecodeEmitter getLengthStringEmitter = new BytecodeEmitter();
         getLengthStringEmitter.emitPushConstant(new JSString("abcd"));
         getLengthStringEmitter.emitOpcode(Opcode.GET_LENGTH);
         getLengthStringEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue getLengthStringResult = execute(getLengthStringEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertNumberValue(getLengthStringResult, 4);
+        assertNumberValue(execute(getLengthStringEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE), 4);
     }
 
     @Test
     public void testMakeRefOpcodes() {
         BytecodeEmitter locRefEmitter = new BytecodeEmitter();
-        locRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 3);
+        locRefEmitter.emitIntOperand(Opcode.PUSH_I32, 3);
         locRefEmitter.emitPutLocal(0);
         locRefEmitter.emitOpcode(Opcode.MAKE_LOC_REF);
         locRefEmitter.emitAtom("x");
         locRefEmitter.emitU16(0);
-        locRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 9);
+        locRefEmitter.emitIntOperand(Opcode.PUSH_I32, 9);
         locRefEmitter.emitOpcode(Opcode.PUT_REF_VALUE);
         locRefEmitter.emitGetLocal(0);
         locRefEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue locRefResult = execute(locRefEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertNumberValue(locRefResult, 9);
+        assertNumberValue(execute(locRefEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE), 9);
 
         BytecodeEmitter argRefEmitter = new BytecodeEmitter();
         argRefEmitter.emitOpcode(Opcode.MAKE_ARG_REF);
         argRefEmitter.emitAtom("arg0");
         argRefEmitter.emitU16(0);
-        argRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 12);
+        argRefEmitter.emitIntOperand(Opcode.PUSH_I32, 12);
         argRefEmitter.emitOpcode(Opcode.PUT_REF_VALUE);
         argRefEmitter.emitOpcode(Opcode.MAKE_ARG_REF);
         argRefEmitter.emitAtom("arg0");
@@ -248,49 +243,44 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         argRefEmitter.emitOpcode(Opcode.GET_REF_VALUE);
         argRefEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue argRefResult = execute(argRefEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE, new JSNumber(5));
-        assertNumberValue(argRefResult, 12);
+        assertNumberValue(execute(argRefEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE, new JSNumber(5)), 12);
 
         BytecodeEmitter varRefRefEmitter = new BytecodeEmitter();
         varRefRefEmitter.emitOpcode(Opcode.MAKE_VAR_REF_REF);
         varRefRefEmitter.emitAtom("v");
         varRefRefEmitter.emitU16(0);
-        varRefRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 15);
+        varRefRefEmitter.emitIntOperand(Opcode.PUSH_I32, 15);
         varRefRefEmitter.emitOpcode(Opcode.PUT_REF_VALUE);
-        varRefRefEmitter.emitOpcodeU16(Opcode.GET_VAR_REF, 0);
+        varRefRefEmitter.emitIntOperand(Opcode.GET_VAR_REF, 0);
         varRefRefEmitter.emitOpcode(Opcode.RETURN);
 
         JSValue[] closureVars = numberArgs(1);
-        JSValue varRefRefResult = execute(varRefRefEmitter, 0, closureVars, JSUndefined.INSTANCE);
-        assertNumberValue(varRefRefResult, 15);
+        assertNumberValue(execute(varRefRefEmitter, 0, closureVars, JSUndefined.INSTANCE), 15);
 
         context.getGlobalObject().set("g", new JSNumber(0));
         BytecodeEmitter varRefEmitter = new BytecodeEmitter();
         varRefEmitter.emitOpcodeAtom(Opcode.MAKE_VAR_REF, "g");
-        varRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 7);
+        varRefEmitter.emitIntOperand(Opcode.PUSH_I32, 7);
         varRefEmitter.emitOpcode(Opcode.PUT_REF_VALUE);
         varRefEmitter.emitOpcodeAtom(Opcode.GET_VAR, "g");
         varRefEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue varRefResult = execute(varRefEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertNumberValue(varRefResult, 7);
+        assertNumberValue(execute(varRefEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE), 7);
     }
 
     @Test
     public void testNipCatch() {
         BytecodeEmitter emitter = new BytecodeEmitter();
-        emitter.emitOpcode(Opcode.CATCH);
-        emitter.emitI32(0);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 1);
-        emitter.emitOpcodeU32(Opcode.PUSH_I32, 2);
+        emitter.emitIntOperand(Opcode.CATCH, 0);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 1);
+        emitter.emitIntOperand(Opcode.PUSH_I32, 2);
         emitter.emitOpcode(Opcode.NIP_CATCH);
         emitter.emitOpcode(Opcode.RETURN);
 
-        JSValue result = execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertNumberValue(result, 2);
+        assertNumberValue(execute(emitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE), 2);
 
         BytecodeEmitter noCatchEmitter = new BytecodeEmitter();
-        noCatchEmitter.emitOpcodeU32(Opcode.PUSH_I32, 1);
+        noCatchEmitter.emitIntOperand(Opcode.PUSH_I32, 1);
         noCatchEmitter.emitOpcode(Opcode.NIP_CATCH);
         noCatchEmitter.emitOpcode(Opcode.RETURN);
 
@@ -309,25 +299,23 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         getRefEmitter.emitOpcode(Opcode.GET_REF_VALUE);
         getRefEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue getRefResult = execute(getRefEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertNumberValue(getRefResult, 1);
+        assertNumberValue(execute(getRefEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE), 1);
 
         BytecodeEmitter putRefEmitter = new BytecodeEmitter();
         putRefEmitter.emitPushConstant(obj);
         putRefEmitter.emitPushConstant(new JSString("x"));
-        putRefEmitter.emitOpcodeU32(Opcode.PUSH_I32, 5);
+        putRefEmitter.emitIntOperand(Opcode.PUSH_I32, 5);
         putRefEmitter.emitOpcode(Opcode.PUT_REF_VALUE);
         putRefEmitter.emitPushConstant(obj);
         putRefEmitter.emitOpcodeAtom(Opcode.GET_FIELD, "x");
         putRefEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue putRefResult = execute(putRefEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertNumberValue(putRefResult, 5);
+        assertNumberValue(execute(putRefEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE), 5);
 
         BytecodeEmitter nonStrictGlobalEmitter = new BytecodeEmitter();
         nonStrictGlobalEmitter.emitOpcode(Opcode.UNDEFINED);
         nonStrictGlobalEmitter.emitPushConstant(new JSString("newGlobalRef"));
-        nonStrictGlobalEmitter.emitOpcodeU32(Opcode.PUSH_I32, 11);
+        nonStrictGlobalEmitter.emitIntOperand(Opcode.PUSH_I32, 11);
         nonStrictGlobalEmitter.emitOpcode(Opcode.PUT_REF_VALUE);
         nonStrictGlobalEmitter.emitOpcodeAtom(Opcode.GET_VAR, "newGlobalRef");
         nonStrictGlobalEmitter.emitOpcode(Opcode.RETURN);
@@ -348,7 +336,7 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         BytecodeEmitter strictMissingPutEmitter = new BytecodeEmitter();
         strictMissingPutEmitter.emitPushConstant(context.createJSObject());
         strictMissingPutEmitter.emitPushConstant(new JSString("missing"));
-        strictMissingPutEmitter.emitOpcodeU32(Opcode.PUSH_I32, 1);
+        strictMissingPutEmitter.emitIntOperand(Opcode.PUSH_I32, 1);
         strictMissingPutEmitter.emitOpcode(Opcode.PUT_REF_VALUE);
         strictMissingPutEmitter.emitOpcode(Opcode.RETURN_UNDEF);
 
@@ -381,8 +369,8 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         deleteVarEmitter.emitOpcodeAtom(Opcode.DELETE_VAR, "tmpDeleteVar");
         deleteVarEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue deletedResult = executeWithStrict(false, deleteVarEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(deletedResult).isEqualTo(JSBoolean.TRUE);
+        assertThat(executeWithStrict(false, deleteVarEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE))
+                .isEqualTo(JSBoolean.TRUE);
         assertThat(context.getGlobalObject().get("tmpDeleteVar")).isSameAs(JSUndefined.INSTANCE);
 
         BytecodeEmitter deleteMissingVarEmitter = new BytecodeEmitter();
@@ -414,8 +402,7 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         setNameEmitter.emitOpcodeAtom(Opcode.GET_FIELD, "name");
         setNameEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue setNameResult = execute(setNameEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertStringValue(setNameResult, "renamed");
+        assertStringValue(execute(setNameEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE), "renamed");
 
         JSNativeFunction f2 = new JSNativeFunction(context, "", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
         BytecodeEmitter setNameComputedEmitter = new BytecodeEmitter();
@@ -425,8 +412,7 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         setNameComputedEmitter.emitOpcodeAtom(Opcode.GET_FIELD, "name");
         setNameComputedEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue setNameComputedResult = execute(setNameComputedEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertStringValue(setNameComputedResult, "dynamic");
+        assertStringValue(execute(setNameComputedEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE), "dynamic");
 
         JSNativeFunction f3 = new JSNativeFunction(context, "", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
         BytecodeEmitter setNameSymbolEmitter = new BytecodeEmitter();
@@ -436,52 +422,51 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         setNameSymbolEmitter.emitOpcodeAtom(Opcode.GET_FIELD, "name");
         setNameSymbolEmitter.emitOpcode(Opcode.RETURN);
 
-        JSValue setNameSymbolResult = execute(setNameSymbolEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertStringValue(setNameSymbolResult, "[s]");
+        assertStringValue(execute(setNameSymbolEmitter, 0, JSValue.NO_ARGS, JSUndefined.INSTANCE), "[s]");
     }
 
     @Test
     public void testTdzCheckOpcodes() {
         BytecodeEmitter getLocCheckEmitter = new BytecodeEmitter();
-        getLocCheckEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
-        getLocCheckEmitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, 0);
+        getLocCheckEmitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, 0);
+        getLocCheckEmitter.emitIntOperand(Opcode.GET_LOC_CHECK, 0);
         getLocCheckEmitter.emitOpcode(Opcode.RETURN);
 
         assertThatThrownBy(() -> execute(getLocCheckEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("before initialization");
 
         BytecodeEmitter getLocCheckThisEmitter = new BytecodeEmitter();
-        getLocCheckThisEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
-        getLocCheckThisEmitter.emitOpcodeU16(Opcode.GET_LOC_CHECKTHIS, 0);
+        getLocCheckThisEmitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, 0);
+        getLocCheckThisEmitter.emitIntOperand(Opcode.GET_LOC_CHECKTHIS, 0);
         getLocCheckThisEmitter.emitOpcode(Opcode.RETURN);
 
         assertThatThrownBy(() -> execute(getLocCheckThisEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("before initialization");
 
         BytecodeEmitter putLocCheckEmitter = new BytecodeEmitter();
-        putLocCheckEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
-        putLocCheckEmitter.emitOpcodeU32(Opcode.PUSH_I32, 1);
-        putLocCheckEmitter.emitOpcodeU16(Opcode.PUT_LOC_CHECK, 0);
+        putLocCheckEmitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, 0);
+        putLocCheckEmitter.emitIntOperand(Opcode.PUSH_I32, 1);
+        putLocCheckEmitter.emitIntOperand(Opcode.PUT_LOC_CHECK, 0);
         putLocCheckEmitter.emitOpcode(Opcode.RETURN_UNDEF);
 
         assertThatThrownBy(() -> execute(putLocCheckEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("before initialization");
 
         BytecodeEmitter setLocCheckEmitter = new BytecodeEmitter();
-        setLocCheckEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
-        setLocCheckEmitter.emitOpcodeU32(Opcode.PUSH_I32, 1);
-        setLocCheckEmitter.emitOpcodeU16(Opcode.SET_LOC_CHECK, 0);
+        setLocCheckEmitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, 0);
+        setLocCheckEmitter.emitIntOperand(Opcode.PUSH_I32, 1);
+        setLocCheckEmitter.emitIntOperand(Opcode.SET_LOC_CHECK, 0);
         setLocCheckEmitter.emitOpcode(Opcode.RETURN_UNDEF);
 
         assertThatThrownBy(() -> execute(setLocCheckEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("before initialization");
 
         BytecodeEmitter putLocCheckInitEmitter = new BytecodeEmitter();
-        putLocCheckInitEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
-        putLocCheckInitEmitter.emitOpcodeU32(Opcode.PUSH_I32, 2);
-        putLocCheckInitEmitter.emitOpcodeU16(Opcode.PUT_LOC_CHECK_INIT, 0);
-        putLocCheckInitEmitter.emitOpcodeU32(Opcode.PUSH_I32, 3);
-        putLocCheckInitEmitter.emitOpcodeU16(Opcode.PUT_LOC_CHECK_INIT, 0);
+        putLocCheckInitEmitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, 0);
+        putLocCheckInitEmitter.emitIntOperand(Opcode.PUSH_I32, 2);
+        putLocCheckInitEmitter.emitIntOperand(Opcode.PUT_LOC_CHECK_INIT, 0);
+        putLocCheckInitEmitter.emitIntOperand(Opcode.PUSH_I32, 3);
+        putLocCheckInitEmitter.emitIntOperand(Opcode.PUT_LOC_CHECK_INIT, 0);
         putLocCheckInitEmitter.emitOpcode(Opcode.RETURN_UNDEF);
 
         assertThatThrownBy(() -> execute(putLocCheckInitEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE))
@@ -489,9 +474,9 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
                 .hasMessageContaining("'this' can be initialized only once");
 
         BytecodeEmitter varRefCheckEmitter = new BytecodeEmitter();
-        varRefCheckEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
-        varRefCheckEmitter.emitOpcodeU16(Opcode.CLOSE_LOC, 0);
-        varRefCheckEmitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, 0);
+        varRefCheckEmitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, 0);
+        varRefCheckEmitter.emitIntOperand(Opcode.CLOSE_LOC, 0);
+        varRefCheckEmitter.emitIntOperand(Opcode.GET_VAR_REF_CHECK, 0);
         varRefCheckEmitter.emitOpcode(Opcode.RETURN);
 
         assertThatThrownBy(
@@ -499,10 +484,10 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
                 .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("before initialization");
 
         BytecodeEmitter putVarRefCheckEmitter = new BytecodeEmitter();
-        putVarRefCheckEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
-        putVarRefCheckEmitter.emitOpcodeU16(Opcode.CLOSE_LOC, 0);
-        putVarRefCheckEmitter.emitOpcodeU32(Opcode.PUSH_I32, 1);
-        putVarRefCheckEmitter.emitOpcodeU16(Opcode.PUT_VAR_REF_CHECK, 0);
+        putVarRefCheckEmitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, 0);
+        putVarRefCheckEmitter.emitIntOperand(Opcode.CLOSE_LOC, 0);
+        putVarRefCheckEmitter.emitIntOperand(Opcode.PUSH_I32, 1);
+        putVarRefCheckEmitter.emitIntOperand(Opcode.PUT_VAR_REF_CHECK, 0);
         putVarRefCheckEmitter.emitOpcode(Opcode.RETURN_UNDEF);
 
         assertThatThrownBy(
@@ -510,11 +495,11 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
                 .isInstanceOf(JSVirtualMachineException.class).hasMessageContaining("before initialization");
 
         BytecodeEmitter putVarRefCheckInitEmitter = new BytecodeEmitter();
-        putVarRefCheckInitEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
-        putVarRefCheckInitEmitter.emitOpcodeU16(Opcode.CLOSE_LOC, 0);
-        putVarRefCheckInitEmitter.emitOpcodeU32(Opcode.PUSH_I32, 10);
-        putVarRefCheckInitEmitter.emitOpcodeU16(Opcode.PUT_VAR_REF_CHECK_INIT, 0);
-        putVarRefCheckInitEmitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, 0);
+        putVarRefCheckInitEmitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, 0);
+        putVarRefCheckInitEmitter.emitIntOperand(Opcode.CLOSE_LOC, 0);
+        putVarRefCheckInitEmitter.emitIntOperand(Opcode.PUSH_I32, 10);
+        putVarRefCheckInitEmitter.emitIntOperand(Opcode.PUT_VAR_REF_CHECK_INIT, 0);
+        putVarRefCheckInitEmitter.emitIntOperand(Opcode.GET_VAR_REF_CHECK, 0);
         putVarRefCheckInitEmitter.emitOpcode(Opcode.RETURN);
 
         JSValue putVarRefCheckInitResult = execute(putVarRefCheckInitEmitter, 1, new JSValue[]{JSUndefined.INSTANCE},
@@ -522,12 +507,12 @@ public class MediumPriorityOpcodeTest extends OpcodeTest {
         assertNumberValue(putVarRefCheckInitResult, 10);
 
         BytecodeEmitter putVarRefCheckInitTwiceEmitter = new BytecodeEmitter();
-        putVarRefCheckInitTwiceEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
-        putVarRefCheckInitTwiceEmitter.emitOpcodeU16(Opcode.CLOSE_LOC, 0);
-        putVarRefCheckInitTwiceEmitter.emitOpcodeU32(Opcode.PUSH_I32, 10);
-        putVarRefCheckInitTwiceEmitter.emitOpcodeU16(Opcode.PUT_VAR_REF_CHECK_INIT, 0);
-        putVarRefCheckInitTwiceEmitter.emitOpcodeU32(Opcode.PUSH_I32, 11);
-        putVarRefCheckInitTwiceEmitter.emitOpcodeU16(Opcode.PUT_VAR_REF_CHECK_INIT, 0);
+        putVarRefCheckInitTwiceEmitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, 0);
+        putVarRefCheckInitTwiceEmitter.emitIntOperand(Opcode.CLOSE_LOC, 0);
+        putVarRefCheckInitTwiceEmitter.emitIntOperand(Opcode.PUSH_I32, 10);
+        putVarRefCheckInitTwiceEmitter.emitIntOperand(Opcode.PUT_VAR_REF_CHECK_INIT, 0);
+        putVarRefCheckInitTwiceEmitter.emitIntOperand(Opcode.PUSH_I32, 11);
+        putVarRefCheckInitTwiceEmitter.emitIntOperand(Opcode.PUT_VAR_REF_CHECK_INIT, 0);
         putVarRefCheckInitTwiceEmitter.emitOpcode(Opcode.RETURN_UNDEF);
 
         assertThatThrownBy(() -> execute(putVarRefCheckInitTwiceEmitter, 1, new JSValue[]{JSUndefined.INSTANCE},

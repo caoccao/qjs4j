@@ -151,12 +151,10 @@ public class RegExpConstructorTest extends BaseJavetTest {
             assertStringValue(arr.get(0), "hello");
 
             // Check index property
-            JSValue indexValue = arr.get("index");
-            assertNumberValue(indexValue, 0.0);
+            assertNumberValue(arr.get("index"), 0.0);
 
             // Check input property
-            JSValue inputValue = arr.get("input");
-            assertStringValue(inputValue, "hello world");
+            assertStringValue(arr.get("input"), "hello world");
         });
 
         // Normal case: no match
@@ -278,8 +276,7 @@ public class RegExpConstructorTest extends BaseJavetTest {
     public void testGetSource() {
         JSRegExp regexp = new JSRegExp(context, "hello", "");
 
-        JSValue result = RegExpPrototype.getSource(context, regexp, JSValue.NO_ARGS);
-        assertStringValue(result, "hello");
+        assertStringValue(RegExpPrototype.getSource(context, regexp, JSValue.NO_ARGS), "hello");
 
         // Edge case: called on non-RegExp
         assertPendingTypeError(context, RegExpPrototype.getSource(context, JSUndefined.INSTANCE, JSValue.NO_ARGS));
@@ -439,16 +436,14 @@ public class RegExpConstructorTest extends BaseJavetTest {
                     return desc.writable === true
                         && desc.enumerable === false
                         && desc.configurable === true;
-                })()""");
-        assertBooleanWithJavet("""
+                })()""", """
                 (() => {
                     const lengthDesc = Object.getOwnPropertyDescriptor(RegExp.escape, 'length');
                     return lengthDesc.value === 1
                         && lengthDesc.writable === false
                         && lengthDesc.enumerable === false
                         && lengthDesc.configurable === true;
-                })()""");
-        assertBooleanWithJavet("""
+                })()""", """
                 (() => {
                     const nameDesc = Object.getOwnPropertyDescriptor(RegExp.escape, 'name');
                     return nameDesc.value === 'escape'
@@ -458,9 +453,9 @@ public class RegExpConstructorTest extends BaseJavetTest {
                 })()""");
 
         assertStringWithJavet("RegExp.escape('')", "RegExp.escape('.')", "RegExp.escape('/')", "RegExp.escape('abc')",
-                "RegExp.escape('1+1')", "RegExp.escape('\\t\\n\\v\\f\\r')");
-        assertStringWithJavet("RegExp.escape(' ,-')", "RegExp.escape(' ,-')", "RegExp.escape('\\u2028\\u2029')",
-                "RegExp.escape('\\uD800')", "RegExp.escape('hello_world')", "RegExp.escape('Γειά σου')");
+                "RegExp.escape('1+1')", "RegExp.escape('\\t\\n\\v\\f\\r')", "RegExp.escape(' ,-')",
+                "RegExp.escape(' ,-')", "RegExp.escape('\\u2028\\u2029')", "RegExp.escape('\\uD800')",
+                "RegExp.escape('hello_world')", "RegExp.escape('Γειά σου')");
 
         assertErrorWithJavet("RegExp.escape(123)", "RegExp.escape({})", "RegExp.escape([])", "RegExp.escape(null)",
                 "RegExp.escape(undefined)");

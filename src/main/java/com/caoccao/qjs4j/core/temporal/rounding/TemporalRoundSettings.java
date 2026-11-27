@@ -40,9 +40,8 @@ public record TemporalRoundSettings(TemporalUnit smallestUnit, long roundingIncr
         if (context.hasPendingException()) {
             return null;
         }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            context.throwRangeError(missingMessage);
-            return null;
+        if (JSTypeChecking.isUndefinedOrMissing(optionValue)) {
+            return context.rejectRangeError(missingMessage);
         }
         JSString optionText = JSTypeConversions.toString(context, optionValue);
         if (context.hasPendingException() || optionText == null) {
@@ -94,19 +93,16 @@ public record TemporalRoundSettings(TemporalUnit smallestUnit, long roundingIncr
         TemporalUnit smallestUnit = TemporalUnit.fromString(smallestUnitText).orElse(null);
         if (smallestUnit == null || smallestUnit.rank() < allowedMin.rank()
                 || smallestUnit.rank() > allowedMax.rank()) {
-            context.throwRangeError("Temporal error: Invalid unit for rounding: " + smallestUnitText);
-            return null;
+            return context.rejectRangeError("Temporal error: Invalid unit for rounding: " + smallestUnitText);
         }
 
         // Validate rounding increment: DAY requires increment=1, time units have per-unit maximum
         if (smallestUnit == TemporalUnit.DAY) {
             if (roundingIncrement != 1L) {
-                context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
-                return null;
+                return context.rejectRangeError("Temporal error: Invalid roundingIncrement option.");
             }
         } else if (!smallestUnit.isValidIncrement(roundingIncrement)) {
-            context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
-            return null;
+            return context.rejectRangeError("Temporal error: Invalid roundingIncrement option.");
         }
 
         return new TemporalRoundSettings(smallestUnit, roundingIncrement, roundingMode);

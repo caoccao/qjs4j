@@ -172,8 +172,7 @@ enum SetOperation {
             return null;
         }
         if (!(iteratorValue instanceof JSObject iteratorObject)) {
-            context.throwTypeError("Iterator is not an object");
-            return null;
+            return context.rejectTypeError("Iterator is not an object");
         }
         // Cache the next method per ES2024 GetIteratorDirect
         JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
@@ -181,8 +180,7 @@ enum SetOperation {
             return null;
         }
         if (!JSTypeChecking.isCallable(nextMethod)) {
-            context.throwTypeError("Iterator next is not a function");
-            return null;
+            return context.rejectTypeError("Iterator next is not a function");
         }
         return new IteratorRecord(iteratorObject, nextMethod);
     }
@@ -193,17 +191,15 @@ enum SetOperation {
             return null;
         }
         if (!JSTypeChecking.isCallable(method)) {
-            context.throwTypeError("." + key.toPropertyString()
+            return context.rejectTypeError("." + key.toPropertyString()
                     + (method instanceof JSUndefined ? " is undefined" : " is not a function"));
-            return null;
         }
         return method;
     }
 
     private static SetRecord getSetRecord(JSContext context, JSValue value) {
-        if (value instanceof JSNull || value instanceof JSUndefined) {
-            context.throwTypeError("Cannot convert undefined or null to object");
-            return null;
+        if (JSTypeChecking.isNullish(value)) {
+            return context.rejectTypeError("Cannot convert undefined or null to object");
         }
 
         JSObject object = value instanceof JSObject jsObject ? jsObject : null;
@@ -220,12 +216,10 @@ enum SetOperation {
                 return null;
             }
             if (Double.isNaN(sizeDouble)) {
-                context.throwTypeError(".size is not a number");
-                return null;
+                return context.rejectTypeError(".size is not a number");
             }
             if (sizeDouble < 0) {
-                context.throwRangeError(".size must be positive");
-                return null;
+                return context.rejectRangeError(".size must be positive");
             }
             if (sizeDouble >= Long.MAX_VALUE) {
                 size = Long.MAX_VALUE;

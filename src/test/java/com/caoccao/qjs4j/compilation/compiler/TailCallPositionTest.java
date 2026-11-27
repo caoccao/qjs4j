@@ -19,8 +19,6 @@ package com.caoccao.qjs4j.compilation.compiler;
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
  * Only a call in tail position becomes a tail call.
  * <p>
@@ -53,7 +51,7 @@ public class TailCallPositionTest extends BaseJavetTest {
     @Test
     public void testDeepRecursionAfterTryStatementStillUsesTailCalls() {
         // 100,000 frames would overflow without the tail call; V8 has no proper tail calls, so it is not compared.
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 'use strict';
                 function count(n) {
                   try {
@@ -63,6 +61,6 @@ public class TailCallPositionTest extends BaseJavetTest {
                   }
                   return count(n - 1);
                 }
-                count(100000)""").toJavaObject()).isEqualTo("bottom");
+                count(100000)""", "bottom");
     }
 }

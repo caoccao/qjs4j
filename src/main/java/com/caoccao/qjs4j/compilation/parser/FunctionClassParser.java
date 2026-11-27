@@ -85,9 +85,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             boolean treatAsStaticModifier = nextType != TokenType.SEMICOLON && nextType != TokenType.RBRACE
                     && nextType != TokenType.LPAREN && nextType != TokenType.ASSIGN;
             if (treatAsStaticModifier) {
-                if (parserContext.currentToken.escaped()) {
-                    throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
-                }
+                parserContext.requireUnescapedToken("Keyword must not contain escaped characters");
                 parserContext.advance();
                 isStatic = true;
                 methodStartLocation = parserContext.getLocation();
@@ -167,9 +165,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             if ((JSKeyword.GET.equals(name) || JSKeyword.SET.equals(name)) && hasNoLineTerminatorAfterGetSet
                     && peekNext.type() != TokenType.LPAREN && peekNext.type() != TokenType.ASSIGN
                     && peekNext.type() != TokenType.SEMICOLON) {
-                if (parserContext.currentToken.escaped()) {
-                    throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
-                }
+                parserContext.requireUnescapedToken("Keyword must not contain escaped characters");
                 String kind = name;
                 parserContext.advance(); // consume 'get' or 'set'
 

@@ -23,7 +23,7 @@ import java.util.*;
 /** A single JSON.stringify invocation, including its replacer and active object path. */
 final class JSONStringifier {
     private static final PropertyKey ROOT = PropertyKey.fromString("");
-    private static final JSString ROOT_NAME = new JSString("");
+    private static final JSString ROOT_NAME = JSString.EMPTY;
     private static final PropertyKey TO_JSON = PropertyKey.fromString("toJSON");
     private final JSContext context;
     private List<CycleEntry> cyclePath;

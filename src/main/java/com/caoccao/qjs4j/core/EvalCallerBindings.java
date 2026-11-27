@@ -98,7 +98,7 @@ final class EvalCallerBindings {
                 return;
             }
             if (shouldOverlayTopLevelLexicals && !callerContext.hasGlobalLexDeclaration(name)) {
-                boolean localBindingIsUndefined = value == null || value == JSUndefined.INSTANCE;
+                boolean localBindingIsUndefined = JSTypeChecking.isUndefinedOrMissing(value);
                 boolean evalSourceMentionsBinding = containsIdentifierReference(code, name);
                 if (localBindingIsUndefined || !evalSourceMentionsBinding) {
                     return;
@@ -126,7 +126,7 @@ final class EvalCallerBindings {
         for (int i = 0; i < localVarNames.length && i < callerLocals.length; i++) {
             String name = localVarNames[i];
             JSValue localValue = callerLocals[i];
-            if (name == null || localValue == null || localValue == JSUndefined.INSTANCE) {
+            if (name == null || JSTypeChecking.isUndefinedOrMissing(localValue)) {
                 continue;
             }
             if (!(localValue instanceof JSObject withObject) || !name.startsWith("#withObject")) {

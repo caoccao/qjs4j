@@ -1250,7 +1250,7 @@ public non-sealed class JSObject implements JSValue {
         if (primitiveValue instanceof JSString string) {
             long index = key.toArrayIndex();
             if (index >= 0 && index < string.length()) {
-                return new JSString(String.valueOf(string.value().charAt((int) index)));
+                return JSString.of(string.value().charAt((int) index));
             }
         }
 

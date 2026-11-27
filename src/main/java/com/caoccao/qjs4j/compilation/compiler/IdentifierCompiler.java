@@ -38,7 +38,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         String name = identifier.getName();
         // Handle 'this' keyword
         if (JSKeyword.THIS.equals(name)) {
-            compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
+            emitter.emitOpcode(Opcode.PUSH_THIS);
             return;
         }
 
@@ -46,16 +46,16 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         if ("new.target".equals(name)) {
             if (compilerContext.classFieldEvalContext || compilerContext.inClassFieldInitializer) {
                 // ES2024: eval in class field initializer treats new.target as undefined
-                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                emitter.emitOpcode(Opcode.UNDEFINED);
             } else {
-                compilerContext.emitter.emitOpcodeU8(Opcode.SPECIAL_OBJECT, 3);
+                emitter.emitIntOperand(Opcode.SPECIAL_OBJECT, 3);
             }
             return;
         }
 
         // Handle 'import.meta' meta-property
         if ("import.meta".equals(name)) {
-            compilerContext.emitter.emitOpcodeU8(Opcode.SPECIAL_OBJECT, 6);
+            emitter.emitIntOperand(Opcode.SPECIAL_OBJECT, 6);
             return;
         }
 
@@ -63,7 +63,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         // temporal dead zone — reports the identifier's position in a stack trace, as V8 does. A plain local
         // read cannot throw, so it records nothing.
         if (compilerContext.scopeManager.findLocalInScopes(name) == null || compilerContext.tdzLocals.contains(name)) {
-            compilerContext.emitter.emitSourcePosition(identifier.getLocation());
+            emitter.emitSourcePosition(identifier.getLocation());
         }
 
         if (compilerContext.withObjectManager.hasActiveWithObject()) {
@@ -77,10 +77,10 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
     void emitCapturedOrGlobalIdentifierLookup(String name, Opcode globalOpcode) {
         Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
         if (capturedIndex != null) {
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, capturedIndex);
+            emitter.emitIntOperand(Opcode.GET_VAR_REF_CHECK, capturedIndex);
         } else {
             // Not found in local scopes, use global variable
-            compilerContext.emitter.emitOpcodeAtom(globalOpcode, name);
+            emitter.emitOpcodeAtom(globalOpcode, name);
         }
     }
 
@@ -106,7 +106,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         if (JSArguments.NAME.equals(name) && compilerContext.hasEnclosingArgumentsBinding) {
             // Emit SPECIAL_OBJECT opcode with type 0 (SPECIAL_OBJECT_ARGUMENTS)
             // The VM will handle differently for arrow vs regular functions
-            compilerContext.emitter.emitOpcodeU8(Opcode.SPECIAL_OBJECT, 0); // Type 0 = arguments object
+            emitter.emitIntOperand(Opcode.SPECIAL_OBJECT, 0); // Type 0 = arguments object
             return;
         }
 
@@ -125,9 +125,9 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
             boolean fallbackToFalse) {
         if (withDepth >= withBindingNames.size()) {
             if (fallbackToFalse) {
-                compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
+                emitter.emitOpcode(Opcode.PUSH_FALSE);
             } else {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.DELETE_VAR, name);
+                emitter.emitOpcodeAtom(Opcode.DELETE_VAR, name);
             }
             return;
         }
@@ -155,7 +155,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         if (withDepth >= withBindingNames.size()) {
             emitCapturedOrGlobalIdentifierLookup(name, Opcode.GET_VAR);
             if (forCall) {
-                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                emitter.emitOpcode(Opcode.UNDEFINED);
             }
             return;
         }
@@ -175,12 +175,12 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
     boolean emitInheritedWithObject(String bindingName) {
         Integer localIndex = compilerContext.scopeManager.findLocalInScopes(bindingName);
         if (localIndex != null) {
-            compilerContext.emitter.emitGetLocal(localIndex);
+            emitter.emitGetLocal(localIndex);
             return true;
         }
         Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(bindingName);
         if (capturedIndex != null) {
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
+            emitter.emitIntOperand(Opcode.GET_VAR_REF, capturedIndex);
             return true;
         }
         return false;
@@ -189,7 +189,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
     /** A local in its temporal dead zone must throw even when read by typeof. */
     void emitLocalRead(String name, int index) {
         Opcode opcode = compilerContext.tdzLocals.contains(name) ? Opcode.GET_LOC_CHECK : Opcode.GET_LOC;
-        compilerContext.emitter.emitOpcodeU16(opcode, index);
+        emitter.emitOpcodeU16(opcode, index);
     }
 
     void emitWithAwareDeleteIdentifier(String name, List<Integer> withObjectLocals, int withDepth) {
@@ -200,16 +200,16 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
             boolean fallbackToFalse) {
         if (withDepth >= withObjectLocals.size()) {
             if (fallbackToFalse) {
-                compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
+                emitter.emitOpcode(Opcode.PUSH_FALSE);
             } else {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.DELETE_VAR, name);
+                emitter.emitOpcodeAtom(Opcode.DELETE_VAR, name);
             }
             return;
         }
 
         int withObjectLocalIndex = withObjectLocals.get(withDepth);
         // Load with-object and check if it has the property
-        compilerContext.emitter.emitGetLocal(withObjectLocalIndex);
+        emitter.emitGetLocal(withObjectLocalIndex);
         emitWithObjectDelete(name,
                 () -> emitWithAwareDeleteIdentifier(name, withObjectLocals, withDepth + 1, fallbackToFalse));
     }
@@ -224,13 +224,13 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         if (withDepth >= withObjectLocals.size()) {
             emitIdentifierLookupWithoutWith(name);
             if (forCall) {
-                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                emitter.emitOpcode(Opcode.UNDEFINED);
             }
             return;
         }
 
         int withObjectLocalIndex = withObjectLocals.get(withDepth);
-        compilerContext.emitter.emitGetLocal(withObjectLocalIndex);
+        emitter.emitGetLocal(withObjectLocalIndex);
         emitWithObjectLookup(name, forCall,
                 () -> emitWithAwareIdentifierLookup(name, withObjectLocals, withDepth + 1, forCall));
     }
@@ -247,7 +247,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
             return;
         }
         emitIdentifierLookupWithoutWith(name);
-        compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+        emitter.emitOpcode(Opcode.UNDEFINED);
     }
 
     /**
@@ -256,12 +256,12 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
      */
     private void emitWithObjectDelete(String name, Runnable emitFallback) {
         var fallback = WithBindingCompiler.emitHasBinding(compilerContext, name);
-        compilerContext.emitter.emitPushConstant(new JSString(name));
-        compilerContext.emitter.emitOpcode(Opcode.DELETE);
-        int end = compilerContext.emitter.emitJump(Opcode.GOTO);
-        fallback.begin(compilerContext.emitter);
+        emitter.emitPushConstant(new JSString(name));
+        emitter.emitOpcode(Opcode.DELETE);
+        int end = emitter.emitJump(Opcode.GOTO);
+        fallback.begin(emitter);
         emitFallback.run();
-        compilerContext.emitter.patchJumpToHere(end);
+        emitter.patchJumpToHere(end);
     }
 
     /**
@@ -271,36 +271,36 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
      */
     private void emitWithObjectLookup(String name, boolean forCall, Runnable emitFallback) {
         var fallback = WithBindingCompiler.emitHasBinding(compilerContext, name);
-        int jumpToMissingBinding = WithBindingCompiler.emitHasPropertyTest(compilerContext.emitter, name);
+        int jumpToMissingBinding = WithBindingCompiler.emitHasPropertyTest(emitter, name);
         emitWithPropertyLookup(name, forCall);
-        int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
+        int jumpToEnd = emitter.emitJump(Opcode.GOTO);
 
-        compilerContext.emitter.patchJumpToHere(jumpToMissingBinding);
+        emitter.patchJumpToHere(jumpToMissingBinding);
         if (forCall && !compilerContext.strictMode) {
             // Stack: withObject -> undefined, withObject (preserve the call receiver).
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitOpcode(Opcode.SWAP);
+            emitter.emitOpcode(Opcode.UNDEFINED);
+            emitter.emitOpcode(Opcode.SWAP);
         } else {
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            emitter.emitOpcode(Opcode.DROP);
             if (compilerContext.strictMode) {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, name + " is not defined");
-                compilerContext.emitter.emitU8(5);
+                emitter.emitOpcodeAtom(Opcode.THROW_ERROR, name + " is not defined");
+                emitter.emitU8(5);
             } else {
-                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                emitter.emitOpcode(Opcode.UNDEFINED);
             }
         }
-        int jumpToEndFromMissing = compilerContext.emitter.emitJump(Opcode.GOTO);
+        int jumpToEndFromMissing = emitter.emitJump(Opcode.GOTO);
 
-        fallback.begin(compilerContext.emitter);
+        fallback.begin(emitter);
         emitFallback.run();
-        compilerContext.emitter.patchJumpToHere(jumpToEnd);
-        compilerContext.emitter.patchJumpToHere(jumpToEndFromMissing);
+        emitter.patchJumpToHere(jumpToEnd);
+        emitter.patchJumpToHere(jumpToEndFromMissing);
     }
 
     private void emitWithPropertyLookup(String name, boolean forCall) {
-        compilerContext.emitter.emitOpcodeAtom(forCall ? Opcode.GET_FIELD2 : Opcode.GET_FIELD, name);
+        emitter.emitOpcodeAtom(forCall ? Opcode.GET_FIELD2 : Opcode.GET_FIELD, name);
         if (forCall) {
-            compilerContext.emitter.emitOpcode(Opcode.SWAP);
+            emitter.emitOpcode(Opcode.SWAP);
         }
     }
 }

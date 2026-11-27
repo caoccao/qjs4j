@@ -555,7 +555,7 @@ public sealed interface JSValue extends JSStackValue
      * @return true if this value is a BigInt, false otherwise
      */
     default boolean isBigInt() {
-        return this instanceof JSBigInt;
+        return JSTypeChecking.isBigInt(this);
     }
 
     default boolean isBigIntObject() {
@@ -568,7 +568,7 @@ public sealed interface JSValue extends JSStackValue
      * @return true if this value is a boolean, false otherwise
      */
     default boolean isBoolean() {
-        return this instanceof JSBoolean;
+        return JSTypeChecking.isBoolean(this);
     }
 
     /**
@@ -766,7 +766,7 @@ public sealed interface JSValue extends JSStackValue
      * @return true if this value is null, false otherwise
      */
     default boolean isNull() {
-        return this instanceof JSNull;
+        return JSTypeChecking.isNull(this);
     }
 
     /**
@@ -784,7 +784,7 @@ public sealed interface JSValue extends JSStackValue
      * @return true if this value is a number, false otherwise
      */
     default boolean isNumber() {
-        return this instanceof JSNumber;
+        return JSTypeChecking.isNumber(this);
     }
 
     /**
@@ -802,7 +802,7 @@ public sealed interface JSValue extends JSStackValue
      * @return true if this value is an object, false otherwise
      */
     default boolean isObject() {
-        return this instanceof JSObject;
+        return JSTypeChecking.isObject(this);
     }
 
     /**
@@ -856,7 +856,7 @@ public sealed interface JSValue extends JSStackValue
      * @return true if this value is a string, false otherwise
      */
     default boolean isString() {
-        return this instanceof JSString;
+        return JSTypeChecking.isString(this);
     }
 
     /**
@@ -874,7 +874,7 @@ public sealed interface JSValue extends JSStackValue
      * @return true if this value is a symbol, false otherwise
      */
     default boolean isSymbol() {
-        return this instanceof JSSymbol;
+        return JSTypeChecking.isSymbol(this);
     }
 
     /**
@@ -937,7 +937,7 @@ public sealed interface JSValue extends JSStackValue
      * @return true if this value is undefined, false otherwise
      */
     default boolean isUndefined() {
-        return this instanceof JSUndefined;
+        return JSTypeChecking.isUndefined(this);
     }
 
     /**

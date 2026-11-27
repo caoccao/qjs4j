@@ -168,8 +168,7 @@ final class ArrayLikeElements {
     static ArrayLikeElements arrayCallback(JSContext context, JSValue receiver, JSValue[] args, String method) {
         ArrayLikeElements elements = ordinary(context, receiver, method);
         if (elements != null && (args.length == 0 || !JSTypeChecking.isCallable(args[0]))) {
-            context.throwTypeError("Callback must be a function");
-            return null;
+            return context.rejectTypeError("Callback must be a function");
         }
         return elements;
     }

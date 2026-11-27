@@ -85,7 +85,7 @@ final class ArrowFunctionExpressionCompiler {
                 && functionContext.scopeManager.findLocalInScopes(JSArguments.NAME) == null) {
             int argumentsLocalIndex = functionContext.scopeManager.currentScope().declareLocal(JSArguments.NAME);
             functionContext.tdzLocals.add(JSArguments.NAME);
-            functionContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, argumentsLocalIndex);
+            functionContext.emitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, argumentsLocalIndex);
         }
 
         compilerContext.functionExpressionCompiler.initializeParameters(functionCompiler, arrowExpr,

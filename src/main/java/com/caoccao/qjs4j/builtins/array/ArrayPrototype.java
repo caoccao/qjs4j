@@ -283,9 +283,8 @@ public final class ArrayPrototype {
     }
 
     static JSObject requireArrayLike(JSContext context, JSValue receiver, String method) {
-        if (receiver instanceof JSNull || receiver instanceof JSUndefined) {
-            context.throwTypeError("Array.prototype." + method + " called on null or undefined");
-            return null;
+        if (JSTypeChecking.isNullish(receiver)) {
+            return context.rejectTypeError("Array.prototype." + method + " called on null or undefined");
         }
         return JSTypeConversions.toObject(context, receiver);
     }

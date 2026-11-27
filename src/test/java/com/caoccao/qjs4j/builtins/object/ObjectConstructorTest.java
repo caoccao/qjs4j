@@ -42,16 +42,16 @@ public class ObjectConstructorTest extends BaseJavetTest {
         var assign = builtin(ObjectConstructor::assign, JSUndefined.INSTANCE);
         JSValue result = assign.call(target, source1, source2);
         assertThat(result).isSameAs(target);
-        assertThat(target.get("a").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(10.0);
-        assertThat(target.get("b").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
-        assertThat(target.get("c").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(3.0);
+        assertNumberValue(target.get("a"), 10.0);
+        assertNumberValue(target.get("b"), 2.0);
+        assertNumberValue(target.get("c"), 3.0);
 
         // Edge case: null/undefined sources (should be ignored)
         JSObject target2 = new JSObject(context);
         target2.set("x", new JSNumber(1));
         result = assign.call(target2, JSNull.INSTANCE, JSUndefined.INSTANCE);
         assertThat(result).isSameAs(target2);
-        assertThat(target2.get("x").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
+        assertNumberValue(target2.get("x"), 1.0);
 
         // Edge case: no arguments
         assertPendingTypeError(context, assign.call());
@@ -142,8 +142,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result).isInstanceOfSatisfying(JSArray.class, entries -> {
             assertThat(entries.getLength()).isEqualTo(2);
             // Check first entry
-            JSValue firstEntry = entries.get(0);
-            assertThat(firstEntry).isInstanceOfSatisfying(JSArray.class, firstPair -> {
+            assertThat(entries.get(0)).isInstanceOfSatisfying(JSArray.class, firstPair -> {
                 assertThat(firstPair.getLength()).isEqualTo(2);
                 assertThat(firstPair.get(0).asString().isPresent()).isTrue();
                 assertThat(firstPair.get(1).asNumber().isPresent()).isTrue();
@@ -171,8 +170,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
         // Normal case
         var freezeMethod = builtin(ObjectConstructor::freeze, JSUndefined.INSTANCE);
-        JSValue result = freezeMethod.call(obj);
-        assertThat(result).isSameAs(obj);
+        assertThat(freezeMethod.call(obj)).isSameAs(obj);
         assertThat(obj.isFrozen()).isTrue();
 
         // Edge case: no arguments
@@ -342,8 +340,8 @@ public class ObjectConstructorTest extends BaseJavetTest {
         var fromEntriesMethod = builtin(ObjectConstructor::fromEntries, JSUndefined.INSTANCE);
         JSValue result = fromEntriesMethod.call(entries);
         assertThat(result).isInstanceOfSatisfying(JSObject.class, obj -> {
-            assertThat(obj.get("a").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(1.0);
-            assertThat(obj.get("b").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(2.0);
+            assertNumberValue(obj.get("a"), 1.0);
+            assertNumberValue(obj.get("b"), 2.0);
         });
 
         // Edge case: empty array
@@ -368,10 +366,8 @@ public class ObjectConstructorTest extends BaseJavetTest {
         mixedEntries.push(mixedEntry2);
 
         // Set prototype for the arrays
-        JSValue arrayConstructor = context.getGlobalObject().get("Array");
-        assertThat(arrayConstructor).isInstanceOfSatisfying(JSObject.class, arrayObj -> {
-            JSValue arrayProtoValue = arrayObj.get("prototype");
-            assertThat(arrayProtoValue).isInstanceOfSatisfying(JSObject.class, arrayProto -> {
+        assertThat(context.getGlobalObject().get("Array")).isInstanceOfSatisfying(JSObject.class, arrayObj -> {
+            assertThat(arrayObj.get("prototype")).isInstanceOfSatisfying(JSObject.class, arrayProto -> {
                 mixedEntries.setPrototype(arrayProto);
                 mixedEntry1.setPrototype(arrayProto);
                 mixedEntry2.setPrototype(arrayProto);
@@ -380,7 +376,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
         result = fromEntriesMethod.call(mixedEntries);
         assertThat(result).isInstanceOfSatisfying(JSObject.class, obj -> {
-            assertThat(obj.get("key1").asString().map(JSString::value).orElseThrow()).isEqualTo("value1");
+            assertStringValue(obj.get("key1"), "value1");
             assertThat(obj.get("key2")).isEqualTo(JSBoolean.TRUE);
         });
     }
@@ -394,7 +390,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         var getOwnPropertyDescriptor = builtin(ObjectConstructor::getOwnPropertyDescriptor, JSUndefined.INSTANCE);
         JSValue result = getOwnPropertyDescriptor.call(obj, new JSString("testProp"));
         assertThat(result).isInstanceOfSatisfying(JSObject.class, desc -> {
-            assertThat(desc.get("value").asString().map(JSString::value).orElseThrow()).isEqualTo("testValue");
+            assertStringValue(desc.get("value"), "testValue");
             assertThat(desc.get("writable").asBoolean().map(JSBoolean::isBooleanTrue).orElseThrow()).isTrue();
             assertThat(desc.get("enumerable").asBoolean().map(JSBoolean::isBooleanTrue).orElseThrow()).isTrue();
             assertThat(desc.get("configurable").asBoolean().map(JSBoolean::isBooleanTrue).orElseThrow()).isTrue();
@@ -679,8 +675,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
         // Normal case
         var sealMethod = builtin(ObjectConstructor::seal, JSUndefined.INSTANCE);
-        JSValue result = sealMethod.call(obj);
-        assertThat(result).isSameAs(obj);
+        assertThat(sealMethod.call(obj)).isSameAs(obj);
         assertThat(obj.isSealed()).isTrue();
 
         // Edge case: no arguments

@@ -53,7 +53,7 @@ final class LabeledStatementCompiler extends AstNodeCompiler<LabeledStatement> {
             compileLabeledLoop(labelName, body);
         } else {
             // Regular labeled statement: only 'break label;' is valid (not continue)
-            LoopContext labelContext = new LoopContext(compilerContext.emitter.currentOffset(),
+            LoopContext labelContext = new LoopContext(emitter.currentOffset(),
                     compilerContext.scopeManager.getScopeDepth(), compilerContext.scopeManager.getScopeDepth(),
                     labelName);
             labelContext.isRegularStmt = true;
@@ -65,9 +65,9 @@ final class LabeledStatementCompiler extends AstNodeCompiler<LabeledStatement> {
             }
 
             // Patch all break positions to jump here
-            int breakTarget = compilerContext.emitter.currentOffset();
+            int breakTarget = emitter.currentOffset();
             for (int pos : labelContext.breakPositions) {
-                compilerContext.emitter.patchJump(pos, breakTarget);
+                emitter.patchJump(pos, breakTarget);
             }
             compilerContext.loopManager.popLoop();
         }

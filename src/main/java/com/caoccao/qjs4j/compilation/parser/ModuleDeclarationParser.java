@@ -76,9 +76,7 @@ final class ModuleDeclarationParser {
         parserContext.expect(TokenType.EXPORT);
 
         if (parserContext.match(TokenType.DEFAULT)) {
-            if (parserContext.currentToken.escaped()) {
-                throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
-            }
+            parserContext.requireUnescapedToken("Unexpected token IDENTIFIER");
             addModuleExportedName("default");
             parserContext.advance();
 
@@ -122,9 +120,7 @@ final class ModuleDeclarationParser {
         // export * as "string" from 'module';
         if (parserContext.consumeIf(TokenType.MUL)) {
             if (parserContext.match(TokenType.AS)) {
-                if (parserContext.currentToken.escaped()) {
-                    throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
-                }
+                parserContext.requireUnescapedToken("Unexpected token IDENTIFIER");
                 parserContext.advance();
                 // export name can be identifier or string literal
                 String exportedName = parseModuleExportName();
@@ -193,9 +189,7 @@ final class ModuleDeclarationParser {
                 throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
             }
             if (parserContext.match(TokenType.AS)) {
-                if (parserContext.currentToken.escaped()) {
-                    throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
-                }
+                parserContext.requireUnescapedToken("Unexpected token IDENTIFIER");
                 parserContext.advance();
                 // The exported name can also be identifier or string
                 exportedName = parseModuleExportName();
@@ -206,9 +200,7 @@ final class ModuleDeclarationParser {
         parserContext.expect(TokenType.RBRACE);
         boolean hasFrom = false;
         if (parserContext.match(TokenType.FROM)) {
-            if (parserContext.currentToken.escaped()) {
-                throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
-            }
+            parserContext.requireUnescapedToken("Unexpected token IDENTIFIER");
             hasFrom = true;
             parserContext.advance();
             parseSourceAndAttributes();

@@ -158,8 +158,7 @@ final class DataViewElement<T> {
 
     static JSDataView requireDataView(JSContext context, JSValue thisArg, String errorMessage) {
         if (!(thisArg instanceof JSDataView dataView)) {
-            context.throwTypeError(errorMessage);
-            return null;
+            return context.rejectTypeError(errorMessage);
         }
         return dataView;
     }

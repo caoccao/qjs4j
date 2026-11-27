@@ -380,8 +380,7 @@ final class IntlDateTimeFormatBuiltins {
         boolean hasDate = dateStyle != null || date.specified();
         if (!hasDate && !hasTime) {
             if (requestedComponents && date.era() == null) {
-                context.throwTypeError("Invalid date/time formatting options");
-                return null;
+                return context.rejectTypeError("Invalid date/time formatting options");
             }
             date = date.withDate(supportsYear ? "numeric" : null, supportsMonth ? "numeric" : null,
                     supportsDay ? "numeric" : null);
@@ -615,8 +614,7 @@ final class IntlDateTimeFormatBuiltins {
             double millis = dateTime.toLocalDateTime().toInstant(ZoneOffset.UTC).toEpochMilli();
             return new DateTimeFormattable(kind, millis, calendar);
         } catch (DateTimeException e) {
-            context.throwRangeError(errorMessage);
-            return null;
+            return context.rejectRangeError(errorMessage);
         }
     }
 

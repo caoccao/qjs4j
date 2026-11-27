@@ -144,10 +144,7 @@ public final class CallStack {
      * Push a value onto the stack (QuickJS: *sp++ = value).
      */
     public void push(JSValue value) {
-        if (stackTop >= stack.length) {
-            grow();
-        }
-        stack[stackTop++] = value;
+        pushStackValue(value);
     }
 
     /**

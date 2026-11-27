@@ -177,20 +177,7 @@ public sealed abstract class JSTypedArray extends JSObject
         if (buffer.isDetached() || index >= getLength()) {
             return false;
         }
-        // IntegerIndexedObjectDefineOwnProperty per ES2024 10.4.5.3
-        // Accessor descriptors are not allowed
-        if (descriptor.isAccessorDescriptor()) {
-            return false;
-        }
-        // Step 2a: If Desc has [[Configurable]] and it's false, return false
-        // (TypedArray elements have configurable: true per ES2024)
-        if (descriptor.hasConfigurable() && !descriptor.isConfigurable()) {
-            return false;
-        }
-        if (descriptor.hasEnumerable() && !descriptor.isEnumerable()) {
-            return false;
-        }
-        if (descriptor.hasWritable() && !descriptor.isWritable()) {
+        if (!descriptor.acceptsDataAttributes(PropertyDescriptor.DataState.All)) {
             return false;
         }
         // IntegerIndexedElementSet: convert value then write if buffer still valid
@@ -710,7 +697,7 @@ public sealed abstract class JSTypedArray extends JSObject
         if (context.hasPendingException()) {
             return source;
         }
-        if (iteratorMethod instanceof JSUndefined || iteratorMethod instanceof JSNull) {
+        if (JSTypeChecking.isNullish(iteratorMethod)) {
             return source;
         }
         if (!(iteratorMethod instanceof JSFunction)) {

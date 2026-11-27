@@ -72,7 +72,7 @@ public class SetPrototypeTest extends BaseJavetTest {
 
     @Test
     void demonstrateInsertionOrderPreserved() {
-        assertStringValue(context.eval("""
+        assertEvalString("""
                 var result = '';
                 var s = new Set(['a']);
                 s.forEach(function(v) {
@@ -80,7 +80,7 @@ public class SetPrototypeTest extends BaseJavetTest {
                   if(v === 'a') { s.add('b'); s.add('c'); }
                   if(v === 'b') { s.add('d'); }
                 });
-                result"""), "abcd");
+                result""", "abcd");
     }
 
     @Test
@@ -167,7 +167,7 @@ public class SetPrototypeTest extends BaseJavetTest {
 
     @Test
     void testAdvancedSetMethods() {
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 (() => {
                   const a = new Set([1, 2, 3]);
                   const b = new Set([3, 4]);
@@ -196,12 +196,12 @@ public class SetPrototypeTest extends BaseJavetTest {
                     && typeof d2.value === 'function'
                     && d2.value.length === 1;
                 })()
-                """).toJavaObject()).isEqualTo(true);
+                """, true);
     }
 
     @Test
     void testAdvancedSetMethodsWithSetLikeObject() {
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 (() => {
                   const a = new Set([1, 2, 3]);
                   const setLike = {
@@ -217,7 +217,7 @@ public class SetPrototypeTest extends BaseJavetTest {
                     && a.isSubsetOf(setLike) === false
                     && a.isDisjointFrom(setLike) === false;
                 })()
-                """).toJavaObject()).isEqualTo(true);
+                """, true);
     }
 
     @Test
@@ -239,8 +239,7 @@ public class SetPrototypeTest extends BaseJavetTest {
         set.setAdd(new JSString("value2"));
 
         // Normal case: clear set
-        JSValue result = SetPrototype.clear(context, set, JSValue.NO_ARGS);
-        assertThat(result).isEqualTo(JSUndefined.INSTANCE);
+        assertThat(SetPrototype.clear(context, set, JSValue.NO_ARGS)).isEqualTo(JSUndefined.INSTANCE);
         assertThat(set.size()).isEqualTo(0);
 
         // Edge case: called on non-Set
@@ -539,8 +538,7 @@ public class SetPrototypeTest extends BaseJavetTest {
         });
 
         var forEachMethod = builtin(SetPrototype::forEach, set);
-        JSValue forEachResult = forEachMethod.call(callback);
-        assertThat(forEachResult).isEqualTo(JSUndefined.INSTANCE);
+        assertThat(forEachMethod.call(callback)).isEqualTo(JSUndefined.INSTANCE);
         // Note: Order might vary, but both values should be present
         String resultStr = result.toString();
         assertThat(resultStr).contains("value1");
@@ -1159,7 +1157,7 @@ public class SetPrototypeTest extends BaseJavetTest {
 
     @Test
     void testSetMethodsDoNotUseOverriddenAdd() {
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 (() => {
                   const a = new Set([1]);
                   const b = new Set([2]);
@@ -1177,7 +1175,7 @@ public class SetPrototypeTest extends BaseJavetTest {
                     Set.prototype.add = originalAdd;
                   }
                 })()
-                """).toJavaObject()).isEqualTo(true);
+                """, true);
     }
 
     @Test

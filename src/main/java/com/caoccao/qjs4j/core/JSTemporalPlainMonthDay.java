@@ -33,10 +33,6 @@ public final class JSTemporalPlainMonthDay extends JSTemporalCalendarDate {
 
     public static JSTemporalPlainMonthDay create(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId,
             JSObject prototype) {
-        JSTemporalPlainMonthDay plainMonthDay = new JSTemporalPlainMonthDay(context, isoDate, calendarId);
-        if (prototype != null) {
-            plainMonthDay.setPrototype(prototype);
-        }
-        return plainMonthDay;
+        return TemporalUtils.withPrototype(new JSTemporalPlainMonthDay(context, isoDate, calendarId), prototype);
     }
 }

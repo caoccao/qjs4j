@@ -80,9 +80,8 @@ public final class TemporalUtils {
     public static <T> T checkReceiver(JSContext context, JSValue thisArg, Class<T> expectedType, String typeName,
             String methodName) {
         if (!expectedType.isInstance(thisArg)) {
-            context.throwTypeError(
+            return context.rejectTypeError(
                     "Method " + typeName + ".prototype." + methodName + " called on incompatible receiver");
-            return null;
         }
         return (T) thisArg;
     }
@@ -168,7 +167,7 @@ public final class TemporalUtils {
 
     private static String getEnumOption(JSContext context, JSValue options, String name, String fallback,
             Function<String, ?> parse, boolean includeInvalidValue) {
-        if (options == null || options instanceof JSUndefined) {
+        if (JSTypeChecking.isUndefinedOrMissing(options)) {
             return fallback;
         }
         if (!(options instanceof JSObject object)) {
@@ -179,9 +178,8 @@ public final class TemporalUtils {
             return null;
         }
         if (parse.apply(value) == null) {
-            context.throwRangeError(
+            return context.rejectRangeError(
                     "Temporal error: Invalid " + name + " option" + (includeInvalidValue ? ": " + value : "."));
-            return null;
         }
         return value;
     }
@@ -194,7 +192,7 @@ public final class TemporalUtils {
         if (context.hasPendingException()) {
             return Integer.MIN_VALUE;
         }
-        if (value instanceof JSUndefined || value == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(value)) {
             return defaultValue;
         }
         return toIntegerThrowOnInfinity(context, value);
@@ -202,7 +200,7 @@ public final class TemporalUtils {
 
     public static Integer getOptionalIntegerField(JSContext context, JSObject fields, String name) {
         JSValue value = fields.get(PropertyKey.fromString(name));
-        if (context.hasPendingException() || value == null || value instanceof JSUndefined) {
+        if (context.hasPendingException() || JSTypeChecking.isUndefinedOrMissing(value)) {
             return null;
         }
         int integer = toIntegerThrowOnInfinity(context, value);
@@ -237,7 +235,7 @@ public final class TemporalUtils {
         if (context.hasPendingException()) {
             return null;
         }
-        if (value instanceof JSUndefined || value == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(value)) {
             return defaultValue;
         }
         JSString stringValue = JSTypeConversions.toString(context, value);
@@ -462,7 +460,7 @@ public final class TemporalUtils {
         if (context.hasPendingException()) {
             return Long.MIN_VALUE;
         }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(optionValue)) {
             return 1L;
         }
 
@@ -482,9 +480,8 @@ public final class TemporalUtils {
 
     public static TemporalCalendarId requireCalendarArgument(JSContext context, JSValue[] args) {
         JSValue calendar = JSValue.argumentOrUndefined(args, 0);
-        if (calendar == null || calendar instanceof JSUndefined) {
-            context.throwTypeError("Temporal error: Calendar is required.");
-            return null;
+        if (JSTypeChecking.isUndefinedOrMissing(calendar)) {
+            return context.rejectTypeError("Temporal error: Calendar is required.");
         }
         return TemporalCalendarId.createFromCalendarValue(context, calendar);
     }
@@ -501,24 +498,21 @@ public final class TemporalUtils {
         if (fields instanceof JSTemporalPlainDate || fields instanceof JSTemporalPlainDateTime
                 || fields instanceof JSTemporalPlainMonthDay || fields instanceof JSTemporalPlainTime
                 || fields instanceof JSTemporalPlainYearMonth || fields instanceof JSTemporalZonedDateTime) {
-            context.throwTypeError(errorMessage);
-            return null;
+            return context.rejectTypeError(errorMessage);
         }
         JSValue calendar = fields.get(PropertyKey.fromString("calendar"));
         if (context.hasPendingException()) {
             return null;
         }
         if (calendar != null && !(calendar instanceof JSUndefined)) {
-            context.throwTypeError(errorMessage);
-            return null;
+            return context.rejectTypeError(errorMessage);
         }
         JSValue timeZone = fields.get(PropertyKey.fromString("timeZone"));
         if (context.hasPendingException()) {
             return null;
         }
         if (timeZone != null && !(timeZone instanceof JSUndefined)) {
-            context.throwTypeError(errorMessage);
-            return null;
+            return context.rejectTypeError(errorMessage);
         }
         return fields;
     }
@@ -526,8 +520,7 @@ public final class TemporalUtils {
     /** Validate the partial object for a plain date or time's with() method, in observable property-read order. */
     public static JSObject requirePartialTemporalObject(JSContext context, JSValue[] args, String errorMessage) {
         if (args.length == 0 || !(args[0] instanceof JSObject fields)) {
-            context.throwTypeError(errorMessage);
-            return null;
+            return context.rejectTypeError(errorMessage);
         }
         return requirePartialTemporalObject(context, fields, errorMessage);
     }
@@ -538,8 +531,7 @@ public final class TemporalUtils {
         }
         String invalid = "Temporal error: Invalid ZonedDateTime-like object.";
         if (fields instanceof JSTemporalInstant || fields instanceof JSTemporalDuration) {
-            context.throwTypeError(invalid);
-            return null;
+            return context.rejectTypeError(invalid);
         }
         return requirePartialTemporalObject(context, fields, invalid);
     }
@@ -564,8 +556,7 @@ public final class TemporalUtils {
     public static Integer resolveEraYear(JSContext context, TemporalCalendarId calendar, Integer year, String era,
             Integer eraYear, String missingEraMessage) {
         if ((era == null) != (eraYear == null)) {
-            context.throwTypeError(missingEraMessage);
-            return null;
+            return context.rejectTypeError(missingEraMessage);
         }
         if (era == null) {
             return year;
@@ -683,14 +674,13 @@ public final class TemporalUtils {
     }
 
     public static JSObject toOptionalOptionsObject(JSContext context, JSValue optionsValue, String invalidTypeMessage) {
-        if (optionsValue instanceof JSUndefined || optionsValue == null) {
+        if (JSTypeChecking.isUndefinedOrMissing(optionsValue)) {
             return null;
         }
         if (optionsValue instanceof JSObject optionsObject) {
             return optionsObject;
         } else {
-            context.throwTypeError(invalidTypeMessage);
-            return null;
+            return context.rejectTypeError(invalidTypeMessage);
         }
     }
 
@@ -699,4 +689,13 @@ public final class TemporalUtils {
         getOverflowOption(context, options);
         return !context.hasPendingException();
     }
+
+    /** Finish creating an intrinsic with a prototype supplied by its constructor or conversion. */
+    public static <T extends JSObject> T withPrototype(T object, JSObject prototype) {
+        if (prototype != null) {
+            object.setPrototype(prototype);
+        }
+        return object;
+    }
+
 }

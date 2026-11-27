@@ -161,8 +161,7 @@ public final class TemporalCalendarDifference {
             return null;
         }
         if (!startCanonicalTimeZoneId.equals(endCanonicalTimeZoneId)) {
-            context.throwRangeError("Temporal error: Mismatched time zones.");
-            return null;
+            return context.rejectRangeError("Temporal error: Mismatched time zones.");
         }
 
         IsoDateTime startLocalDateTime = startZonedDateTime.toLocalDateTime();

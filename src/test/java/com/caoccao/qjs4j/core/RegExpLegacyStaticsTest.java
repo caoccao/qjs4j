@@ -134,11 +134,9 @@ public class RegExpLegacyStaticsTest extends BaseJavetTest {
         // capture that was not null. The last group is the second one, and it matched nothing.
         assertStringWithJavet("""
                 /(a)|(z)/.exec('a');
-                '[' + RegExp.lastParen + ']'""");
-        assertStringWithJavet("""
+                '[' + RegExp.lastParen + ']'""", """
                 /(a)(b)?/.exec('a');
-                '[' + RegExp.lastParen + ']'""");
-        assertStringWithJavet("""
+                '[' + RegExp.lastParen + ']'""", """
                 /(a)(b)/.exec('ab');
                 RegExp.lastParen""");
 

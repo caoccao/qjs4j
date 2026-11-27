@@ -126,8 +126,8 @@ public class JSObjectIntegrityLevelTest extends BaseJavetTest {
                 };
                 new Proxy({ a: 1 }, handler)""");
         assertThat(proxy.freeze()).isTrue();
-        assertThat(context.eval("log.join('|')").toString())
-                .isEqualTo("preventExtensions|ownKeys|gopd a|define a {\"writable\":false,\"configurable\":false}");
+        assertEvalText("log.join('|')",
+                "preventExtensions|ownKeys|gopd a|define a {\"writable\":false,\"configurable\":false}");
 
         JSObject refusing = (JSObject) context.eval("new Proxy({}, { preventExtensions() { return false } })");
         assertThat(refusing.freeze()).isFalse();

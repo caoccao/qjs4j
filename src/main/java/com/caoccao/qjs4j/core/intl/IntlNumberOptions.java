@@ -56,8 +56,7 @@ final class IntlNumberOptions {
         }
         int roundingIncrement = increment == null ? 1 : increment;
         if (validateIncrement && !VALID_ROUNDING_INCREMENTS.contains(roundingIncrement)) {
-            context.throwRangeError("Invalid roundingIncrement value: " + roundingIncrement);
-            return null;
+            return context.rejectRangeError("Invalid roundingIncrement value: " + roundingIncrement);
         }
         String mode = IntlFormatOptions.normalizedStringOption(context, optionsObject, "roundingMode", "halfExpand",
                 ROUNDING_MODE_VALUES);

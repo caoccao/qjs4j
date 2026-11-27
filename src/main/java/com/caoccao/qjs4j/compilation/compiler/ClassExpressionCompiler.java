@@ -42,7 +42,7 @@ final class ClassExpressionCompiler {
         if (hasClassNameScope) {
             compilerContext.scopeManager.enterScope();
             classNameLocalIndex = compilerContext.scopeManager.currentScope().declareConstLocal(className);
-            compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, classNameLocalIndex);
+            compilerContext.emitter.emitIntOperand(Opcode.SET_LOC_UNINITIALIZED, classNameLocalIndex);
             compilerContext.tdzLocals.add(className);
         }
 
@@ -170,7 +170,7 @@ final class ClassExpressionCompiler {
             // methods, as a loop closes its per-iteration bindings, so the constructor keeps them when the next
             // evaluation overwrites the slots — including a constructor a throwing static block let escape.
             for (ClassDeclarationCompiler.PrivateMethodEntry entry : privateInstanceMethodFunctions) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.CLOSE_LOC,
+                compilerContext.emitter.emitIntOperand(Opcode.CLOSE_LOC,
                         compilerContext.scopeManager.currentScope().getLocal(entry.bindingName()));
             }
 
@@ -221,7 +221,7 @@ final class ClassExpressionCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
                 compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, staticInitializerFunc);
                 compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                compilerContext.emitter.emitOpcodeU16(Opcode.CALL, 0);
+                compilerContext.emitter.emitIntOperand(Opcode.CALL, 0);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             }
 

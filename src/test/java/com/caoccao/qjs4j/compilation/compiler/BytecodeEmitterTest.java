@@ -118,8 +118,8 @@ public class BytecodeEmitterTest extends BaseTest {
         source.append("  return r + v0.p0 + v").append(branchCount - 1).append(".p").append(branchCount - 1)
                 .append(";\n}\n");
         context.eval(source.toString());
-        assertThat(context.eval("big(0)")).isEqualTo(JSNumber.of(400));
-        assertThat(context.eval("big(7)")).isEqualTo(JSNumber.of(400));
+        assertEvalValue("big(0)", JSNumber.of(400));
+        assertEvalValue("big(7)", JSNumber.of(400));
     }
 
     @Test
@@ -140,8 +140,8 @@ public class BytecodeEmitterTest extends BaseTest {
         int jumpPosition = emitter.emitJump(Opcode.GOTO);
         emitter.patchJump(jumpPosition, loopStart);
 
-        int patched = ByteBuffer.wrap(emitter.getCode()).getInt(jumpPosition);
-        assertThat(patched).isEqualTo(loopStart - (jumpPosition + 4)).isNegative();
+        assertThat(ByteBuffer.wrap(emitter.getCode()).getInt(jumpPosition)).isEqualTo(loopStart - (jumpPosition + 4))
+                .isNegative();
     }
 
     @Test
@@ -156,10 +156,20 @@ public class BytecodeEmitterTest extends BaseTest {
 
         assertThat(emitter.getCodeSize()).as("patching must not change the code size").isEqualTo(sizeBeforePatch);
         byte[] code = emitter.getCode();
-        int patched = ByteBuffer.wrap(code).getInt(jumpPosition);
-        assertThat(patched).isEqualTo(sizeBeforePatch - (jumpPosition + 4));
+        assertThat(ByteBuffer.wrap(code).getInt(jumpPosition)).isEqualTo(sizeBeforePatch - (jumpPosition + 4));
         assertThat(code[0]).as("bytes before the patch are untouched").isEqualTo((byte) 0x01);
         assertThat(code[sizeBeforePatch - 1]).as("bytes after the patch are untouched").isEqualTo((byte) 0x02);
+    }
+
+    @Test
+    public void testSingleIntegerOperandUsesInstructionWidth() {
+        BytecodeEmitter emitter = new BytecodeEmitter();
+        emitter.emitIntOperand(Opcode.SPECIAL_OBJECT, 0xAB);
+        emitter.emitIntOperand(Opcode.CALL, 0xCAFE);
+        emitter.emitIntOperand(Opcode.PUSH_I32, -2);
+        assertThat(emitter.getCode()).containsExactly((byte) Opcode.SPECIAL_OBJECT.getCode(), (byte) 0xAB,
+                (byte) Opcode.CALL.getCode(), (byte) 0xCA, (byte) 0xFE, (byte) Opcode.PUSH_I32.getCode(), (byte) 0xFF,
+                (byte) 0xFF, (byte) 0xFF, (byte) 0xFE);
     }
 
     @Test
@@ -214,7 +224,7 @@ public class BytecodeEmitterTest extends BaseTest {
         source.append("  return r + v0.p0 + v").append(branchCount - 1).append(".p").append(branchCount - 1)
                 .append(";\n}\n");
         context.eval(source.toString());
-        assertThat(context.eval("big(1)")).isEqualTo(JSNumber.of(8000));
+        assertEvalValue("big(1)", JSNumber.of(8000));
     }
 
 }

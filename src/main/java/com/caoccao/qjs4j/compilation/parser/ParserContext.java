@@ -535,6 +535,12 @@ final class ParserContext {
         return nextToken;
     }
 
+    void requireUnescapedToken(String message) {
+        if (currentToken.escaped()) {
+            throw new JSSyntaxErrorException(message);
+        }
+    }
+
     void restoreTokenPosition(TokenPosition position) {
         currentToken = position.current();
         nextToken = position.next();
@@ -570,9 +576,7 @@ final class ParserContext {
         if (isAlwaysReservedIdentifierName(name)) {
             // ES2024 12.7.1: Escaped keywords are tokenized as IDENTIFIER but
             // their StringValue still matches a reserved word — use V8's message.
-            if (currentToken.escaped()) {
-                throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
-            }
+            requireUnescapedToken("Keyword must not contain escaped characters");
             // V8 reports "Unexpected reserved word" for enum (a future reserved word)
             // but "Unexpected token 'X'" for regular keywords (with, debugger, etc.)
             if (JSKeyword.ENUM.equals(name)) {
@@ -581,22 +585,16 @@ final class ParserContext {
             throw new JSSyntaxErrorException("Unexpected token '" + name + "'");
         }
         if (strictMode && isStrictReservedIdentifierName(name)) {
-            if (currentToken.escaped()) {
-                throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
-            }
+            requireUnescapedToken("Keyword must not contain escaped characters");
             throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
         }
         // Contextual keywords via unicode escapes: use V8's escaped keyword message.
         if (JSKeyword.AWAIT.equals(name) && !isAwaitIdentifierAllowed()) {
-            if (currentToken.escaped()) {
-                throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
-            }
+            requireUnescapedToken("Keyword must not contain escaped characters");
             throw new JSSyntaxErrorException("Unexpected 'await' keyword");
         }
         if (JSKeyword.YIELD.equals(name) && !isYieldIdentifierAllowed()) {
-            if (currentToken.escaped()) {
-                throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
-            }
+            requireUnescapedToken("Keyword must not contain escaped characters");
             if (strictMode) {
                 throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
             }
@@ -676,7 +674,7 @@ final class ParserContext {
             default -> false;
         };
     }
-
     record TokenPosition(Token current, Token next, int previousLine, int previousEnd, LexerState lexerState) {
     }
+
 }

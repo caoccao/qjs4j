@@ -41,27 +41,26 @@ final class IdentifierPatternCompiler extends AstNodeCompiler<Identifier> {
         } else if (compilerContext.useExistingBindingInParentScopes
                 && compilerContext.withObjectManager.hasActiveWithObject()) {
             compilerContext.assignmentExpressionCompiler.emitIdentifierReference(varName);
-            compilerContext.emitter.emitOpcode(Opcode.ROT3L);
-            compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
+            emitter.emitStoreValueBelowReference();
         } else if (compilerContext.inGlobalScope && compilerContext.tdzLocals.contains(varName)) {
             // TDZ local: let/const was pre-declared as a local for TDZ enforcement
             Integer tdzLocal = compilerContext.scopeManager.findLocalInScopes(varName);
             if (tdzLocal != null) {
-                compilerContext.emitter.emitPutLocal(tdzLocal);
+                emitter.emitPutLocal(tdzLocal);
             } else {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+                emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
             }
         } else if (compilerContext.inGlobalScope) {
-            compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+            emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
         } else if (compilerContext.varInGlobalProgram) {
             // var declaration in global program inside a block (for, try, if, etc.).
             // var is global-scoped, so use PUT_VAR — UNLESS the name is already
             // a local (e.g., catch parameter per ES B.3.5), in which case use PUT_LOCAL.
             Integer existingLocal = compilerContext.scopeManager.findLocalInScopes(varName);
             if (existingLocal != null) {
-                compilerContext.emitter.emitPutLocal(existingLocal);
+                emitter.emitPutLocal(existingLocal);
             } else {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+                emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
             }
         } else {
             Integer localIndex;
@@ -85,7 +84,7 @@ final class IdentifierPatternCompiler extends AstNodeCompiler<Identifier> {
                     localIndex = compilerContext.scopeManager.currentScope().declareLocal(varName);
                 }
             }
-            compilerContext.emitter.emitPutLocal(localIndex);
+            emitter.emitPutLocal(localIndex);
         }
     }
 
@@ -101,10 +100,9 @@ final class IdentifierPatternCompiler extends AstNodeCompiler<Identifier> {
             compilerContext.preResolvedBindingReferences.remove(variableName);
         }
 
-        compilerContext.emitter.emitGetLocal(reference.objectLocalIndex());
-        compilerContext.emitter.emitGetLocal(reference.propertyLocalIndex());
-        compilerContext.emitter.emitOpcode(Opcode.ROT3L);
-        compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
+        emitter.emitGetLocal(reference.objectLocalIndex());
+        emitter.emitGetLocal(reference.propertyLocalIndex());
+        emitter.emitStoreValueBelowReference();
         return true;
     }
 }

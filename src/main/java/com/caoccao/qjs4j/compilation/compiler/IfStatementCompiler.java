@@ -46,33 +46,33 @@ final class IfStatementCompiler extends AstNodeCompiler<IfStatement> {
         if (compilerContext.evalReturnLocalIndex >= 0) {
             // IfStatement completion defaults to undefined before branch evaluation.
             // Branch statements that produce a completion value overwrite this slot.
-            compilerContext.emitter.emitUndefinedLocal(compilerContext.evalReturnLocalIndex);
+            emitter.emitUndefinedLocal(compilerContext.evalReturnLocalIndex);
         }
 
         // Compile condition
         compilerContext.expressionCompiler.compile(ifStmt.getTest());
 
         // Jump to else/end if condition is false
-        int jumpToElse = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
+        int jumpToElse = emitter.emitJump(Opcode.IF_FALSE);
 
         // Compile consequent — wrap bare function declarations in implicit block scope
         compileImplicitBlockStatement(ifStmt.getConsequent());
 
         if (ifStmt.getAlternate() != null) {
             // Jump over else block after consequent
-            int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
+            int jumpToEnd = emitter.emitJump(Opcode.GOTO);
 
             // Patch jump to else
-            compilerContext.emitter.patchJumpToHere(jumpToElse);
+            emitter.patchJumpToHere(jumpToElse);
 
             // Compile alternate — wrap bare function declarations in implicit block scope
             compileImplicitBlockStatement(ifStmt.getAlternate());
 
             // Patch jump to end
-            compilerContext.emitter.patchJumpToHere(jumpToEnd);
+            emitter.patchJumpToHere(jumpToEnd);
         } else {
             // Patch jump to end
-            compilerContext.emitter.patchJumpToHere(jumpToElse);
+            emitter.patchJumpToHere(jumpToElse);
         }
     }
 

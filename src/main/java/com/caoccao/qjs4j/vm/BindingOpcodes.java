@@ -128,7 +128,7 @@ final class BindingOpcodes {
 
     static void handleCloseLoc(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int localIndex = executionContext.bytecode.readU16(pc + 1);
+        int localIndex = executionContext.operandU16();
         executionContext.frame.closeLocal(localIndex);
         executionContext.pc = pc + op.getSize();
     }
@@ -159,7 +159,7 @@ final class BindingOpcodes {
 
     static void handleGetArg(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int argumentIndex = executionContext.bytecode.readU16(pc + 1);
+        int argumentIndex = executionContext.operandU16();
         executionContext.push(executionContext.virtualMachine.getArgumentValue(argumentIndex));
         executionContext.pc = pc + op.getSize();
     }
@@ -171,7 +171,7 @@ final class BindingOpcodes {
     }
 
     static void handleGetLoc(Opcode op, ExecutionContext executionContext) {
-        pushLocal(op, executionContext, executionContext.bytecode.readU16(executionContext.pc + 1));
+        pushLocal(op, executionContext, executionContext.operandU16());
     }
 
     static void handleGetLoc8(Opcode op, ExecutionContext executionContext) {
@@ -180,13 +180,13 @@ final class BindingOpcodes {
 
     static void handleGetLocCheck(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int localIndex = executionContext.bytecode.readU16(pc + 1);
+        int localIndex = executionContext.operandU16();
         JSValue localValue = executionContext.frame.getLocals()[localIndex];
         if (executionContext.virtualMachine.isUninitialized(localValue)) {
             executionContext.virtualMachine.throwVariableUninitializedReferenceError(
                     VirtualMachine.localVariableName(executionContext.frame, localIndex));
         }
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         stack[sp++] = localValue;
         executionContext.finishOpcode(op, sp);
@@ -199,7 +199,7 @@ final class BindingOpcodes {
 
     static void handleGetRefValue(Opcode op, ExecutionContext executionContext) {
         int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         JSValue property = (JSValue) stack[sp - 1];
         JSValue receiver = (JSValue) stack[sp - 2];
         int nextPc = executionContext.pc + op.getSize();
@@ -217,7 +217,7 @@ final class BindingOpcodes {
      */
     private static void handleGetVar(Opcode op, ExecutionContext executionContext, boolean allowMissing) {
         int pc = executionContext.pc;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
+        int atomIndex = executionContext.operandI32();
         String[] atoms = executionContext.bytecode.getAtoms();
         JSValue value;
         if (atomIndex < 0 || atomIndex >= atoms.length) {
@@ -232,14 +232,14 @@ final class BindingOpcodes {
 
     static void handleGetVarRef(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
+        int varRefIndex = executionContext.operandU16();
         executionContext.push(readVarRefValue(executionContext, varRefIndex));
         executionContext.pc = pc + op.getSize();
     }
 
     static void handleGetVarRefCheck(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
+        int varRefIndex = executionContext.operandU16();
         JSValue value = readVarRefValue(executionContext, varRefIndex);
         if (executionContext.virtualMachine.isUninitialized(value)) {
             executionContext.virtualMachine.throwVariableUninitializedReferenceError();
@@ -260,7 +260,7 @@ final class BindingOpcodes {
 
     static void handleMakeScopedRef(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
+        int atomIndex = executionContext.operandI32();
         int refIndex = executionContext.bytecode.readU16(pc + 5);
         String atomName = executionContext.bytecode.getAtom(atomIndex);
         JSObject referenceObject = executionContext.virtualMachine.createReferenceObject(op, refIndex, atomName);
@@ -296,7 +296,7 @@ final class BindingOpcodes {
 
     static void handlePutArg(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int argumentIndex = executionContext.bytecode.readU16(pc + 1);
+        int argumentIndex = executionContext.operandU16();
         JSValue argumentValue = executionContext.pop();
         executionContext.virtualMachine.setArgumentValue(argumentIndex, argumentValue);
         executionContext.pc = pc + op.getSize();
@@ -311,7 +311,7 @@ final class BindingOpcodes {
 
     static void handlePutLoc(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int localIndex = executionContext.bytecode.readU16(pc + 1);
+        int localIndex = executionContext.operandU16();
         executionContext.locals[localIndex] = executionContext.pop();
         executionContext.advance(op);
     }
@@ -329,7 +329,7 @@ final class BindingOpcodes {
 
     static void handlePutLocCheckInit(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int localIndex = executionContext.bytecode.readU16(pc + 1);
+        int localIndex = executionContext.operandU16();
         JSValue[] localValues = executionContext.frame.getLocals();
         if (!executionContext.virtualMachine.isUninitialized(localValues[localIndex])) {
             executionContext.raiseReferenceError("'this' can be initialized only once");
@@ -346,7 +346,7 @@ final class BindingOpcodes {
     }
 
     static void handlePutRefValue(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        JSStackValue[] stack = executionContext.stack();
         int sp = executionContext.sp;
         JSValue setValue = (JSValue) stack[--sp];
         JSValue propertyValue = (JSValue) stack[--sp];
@@ -429,7 +429,7 @@ final class BindingOpcodes {
 
     static void handlePutVar(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
+        int atomIndex = executionContext.operandI32();
         String[] atomPool = executionContext.bytecode.getAtoms();
         if (atomPool.length == 0 || atomIndex < 0 || atomIndex >= atomPool.length) {
             handlePutVarRef(op, executionContext);
@@ -513,7 +513,7 @@ final class BindingOpcodes {
 
     static void handlePutVarInit(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
+        int varRefIndex = executionContext.operandU16();
         JSValue value = executionContext.pop();
         executionContext.frame.setVarRef(varRefIndex, value);
         executionContext.pc = pc + op.getSize();
@@ -521,7 +521,7 @@ final class BindingOpcodes {
 
     static void handlePutVarRef(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
+        int varRefIndex = executionContext.operandU16();
         JSValue value = executionContext.pop();
         writeVarRefValue(executionContext, varRefIndex, value);
         executionContext.pc = pc + op.getSize();
@@ -529,7 +529,7 @@ final class BindingOpcodes {
 
     static void handlePutVarRefCheck(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
+        int varRefIndex = executionContext.operandU16();
         JSValue currentValue = readVarRefValue(executionContext, varRefIndex);
         if (executionContext.virtualMachine.isUninitialized(currentValue)) {
             executionContext.virtualMachine.throwVariableUninitializedReferenceError();
@@ -540,7 +540,7 @@ final class BindingOpcodes {
 
     static void handlePutVarRefCheckInit(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
+        int varRefIndex = executionContext.operandU16();
         JSValue currentValue = readVarRefValue(executionContext, varRefIndex);
         if (!executionContext.virtualMachine.isUninitialized(currentValue)) {
             executionContext.raiseReferenceError("variable is already initialized");
@@ -559,7 +559,7 @@ final class BindingOpcodes {
 
     static void handleSetArg(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int argumentIndex = executionContext.bytecode.readU16(pc + 1);
+        int argumentIndex = executionContext.operandU16();
         executionContext.virtualMachine.setArgumentValue(argumentIndex, executionContext.peek(0));
         executionContext.pc = pc + op.getSize();
     }
@@ -572,7 +572,7 @@ final class BindingOpcodes {
 
     static void handleSetLoc(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int localIndex = executionContext.bytecode.readU16(pc + 1);
+        int localIndex = executionContext.operandU16();
         executionContext.locals[localIndex] = executionContext.peek(0);
         executionContext.advance(op);
     }
@@ -596,7 +596,7 @@ final class BindingOpcodes {
 
     static void handleSetLocUninitialized(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int localIndex = executionContext.bytecode.readU16(pc + 1);
+        int localIndex = executionContext.operandU16();
         // Entering the scope that declares this binding again — a loop body's next iteration — starts a new
         // binding; closures from the previous entry keep the old one.
         executionContext.frame.detachLocalVarRef(localIndex);
@@ -606,7 +606,7 @@ final class BindingOpcodes {
 
     static void handleSetVarRef(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
+        int varRefIndex = executionContext.operandU16();
         executionContext.frame.setVarRef(varRefIndex, executionContext.peek(0));
         executionContext.pc = pc + op.getSize();
     }
@@ -636,7 +636,7 @@ final class BindingOpcodes {
 
     private static void pushLocal(Opcode op, ExecutionContext executionContext, int index) {
         JSValue value = executionContext.locals[index];
-        executionContext.virtualMachine.valueStack.stack[executionContext.sp++] = value;
+        executionContext.stack()[executionContext.sp++] = value;
         executionContext.advance(op);
     }
 
@@ -801,7 +801,7 @@ final class BindingOpcodes {
 
     private static void writeCheckedLocal(Opcode op, ExecutionContext executionContext, boolean pop) {
         int pc = executionContext.pc;
-        int localIndex = executionContext.bytecode.readU16(pc + 1);
+        int localIndex = executionContext.operandU16();
         JSValue[] localValues = executionContext.frame.getLocals();
         if (executionContext.virtualMachine.isUninitialized(localValues[localIndex])) {
             executionContext.virtualMachine.throwVariableUninitializedReferenceError(

@@ -322,9 +322,8 @@ public class JSGlobalObjectTest extends BaseJavetTest {
                 "Object.getOwnPropertyDescriptor(globalThis, 'globalThis').writable === true",
                 "Object.getOwnPropertyDescriptor(globalThis, 'globalThis').enumerable === false",
                 "Object.getOwnPropertyDescriptor(globalThis, 'globalThis').configurable === true");
-        assertThat(context.eval("globalThis[Symbol.toStringTag]").toJavaObject()).isEqualTo("global");
-        assertThat(context.eval("Object.prototype.toString.call(globalThis)").toJavaObject())
-                .isEqualTo("[object global]");
+        assertEvalJavaValue("globalThis[Symbol.toStringTag]", "global");
+        assertEvalJavaValue("Object.prototype.toString.call(globalThis)", "[object global]");
     }
 
     @Test
@@ -443,12 +442,11 @@ public class JSGlobalObjectTest extends BaseJavetTest {
 
     @Test
     public void testTypedArrayConstructorInstallationOrder() {
-        JSValue names = context.eval("""
+        assertThat(context.eval("""
                 Object.getOwnPropertyNames(globalThis)
                     .filter(name => /^(?:Int|Uint|Float|BigInt|BigUint)[0-9]+(?:Clamped)?Array$/.test(name))
                     .join(',')
-                """);
-        assertThat(names.toString()).isEqualTo("Int8Array,Uint8Array,Uint8ClampedArray,Int16Array,Uint16Array,"
+                """).toString()).isEqualTo("Int8Array,Uint8Array,Uint8ClampedArray,Int16Array,Uint16Array,"
                 + "Int32Array,Uint32Array,Float16Array,Float32Array,Float64Array,BigInt64Array,BigUint64Array");
     }
 
@@ -474,8 +472,8 @@ public class JSGlobalObjectTest extends BaseJavetTest {
         assertStringWithJavet("encodeURI('https://example.com/a b?x=1&y=#hash')", "encodeURI(';/?:@&=+$,#')",
                 "encodeURIComponent(';/?:@&=+$,#')", "encodeURIComponent('a+b c')",
                 "decodeURI('https://example.com/a%20b?x=%23#hash')", "decodeURIComponent('a%2Bb%20c%2F%3F%23')",
-                "decodeURIComponent('%F0%9F%98%80')", "decodeURI('%E4%BD%A0%E5%A5%BD')");
-        assertStringWithJavet("(() => { try { decodeURI('%'); return 'no error'; } catch (e) { return e.name; } })()",
+                "decodeURIComponent('%F0%9F%98%80')", "decodeURI('%E4%BD%A0%E5%A5%BD')",
+                "(() => { try { decodeURI('%'); return 'no error'; } catch (e) { return e.name; } })()",
                 "(() => { try { decodeURI('%E0%A4%A'); return 'no error'; } catch (e) { return e.name; } })()",
                 "(() => { try { decodeURI('%C0%AF'); return 'no error'; } catch (e) { return e.name; } })()",
                 "(() => { try { decodeURIComponent('%ED%A0%80'); return 'no error'; } catch (e) { return e.name; } })()",

@@ -191,7 +191,7 @@ public class JSErrorPathPurityTest extends BaseJavetTest {
                 throw Object.defineProperty({ message: 'm' }, 'name', {
                   get() { nameGetterRan = true; return 'Spoofed' },
                 });""")).isInstanceOf(JSException.class).hasMessage("Error: m");
-        assertThat(context.eval("String(nameGetterRan)").toString()).isEqualTo("false");
+        assertEvalText("String(nameGetterRan)", "false");
     }
 
     @Test

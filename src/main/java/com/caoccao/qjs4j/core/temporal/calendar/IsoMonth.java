@@ -25,8 +25,7 @@ public record IsoMonth(int month, boolean leapMonth) {
     public static IsoMonth parseByMonthCode(JSContext context, String monthCode, String rangeErrorMessage) {
         IsoMonth isoMonth = parseByMonthCode(monthCode);
         if (isoMonth == null) {
-            context.throwRangeError(rangeErrorMessage);
-            return null;
+            return context.rejectRangeError(rangeErrorMessage);
         }
         return isoMonth;
     }
@@ -61,7 +60,7 @@ public record IsoMonth(int month, boolean leapMonth) {
 
     /** Coerce a Temporal monthCode field, requiring its primitive value to be a string. */
     public static IsoMonth fromField(JSContext context, JSValue value) {
-        if (value == null || value instanceof JSUndefined) {
+        if (JSTypeChecking.isUndefinedOrMissing(value)) {
             return null;
         }
         if (value instanceof JSObject) {
@@ -73,8 +72,7 @@ public record IsoMonth(int month, boolean leapMonth) {
         if (value instanceof JSString text) {
             return parseByMonthCode(context, text.value(), TemporalError.MONTH_CODE_OUT_OF_RANGE.message());
         }
-        context.throwTypeError("Temporal error: Month code must be string.");
-        return null;
+        return context.rejectTypeError("Temporal error: Month code must be string.");
     }
 
     public String monthCode() {

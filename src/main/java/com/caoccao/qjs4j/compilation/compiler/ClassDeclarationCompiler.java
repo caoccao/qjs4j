@@ -47,26 +47,26 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
                 compilerContext.scopeManager.currentScope().declareLocal(varName);
                 Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(varName);
                 if (localIndex != null) {
-                    compilerContext.emitter.emitPutLocal(localIndex);
+                    emitter.emitPutLocal(localIndex);
                 }
             } else if (compilerContext.tdzLocals.contains(varName)) {
                 // TDZ local: class was pre-declared as a local for TDZ enforcement
                 Integer localIndex = compilerContext.scopeManager.findLocalInScopes(varName);
                 if (localIndex != null) {
-                    compilerContext.emitter.emitPutLocal(localIndex);
+                    emitter.emitPutLocal(localIndex);
                     // Direct eval creates an ephemeral lexical environment. When program
                     // lexicals are predeclared as locals, do not materialize class bindings
                     // on the global object.
                     if (!compilerContext.predeclareProgramLexicalsAsLocals) {
                         // Also store as global variable so class methods (compiled with separate
                         // BytecodeCompiler contexts) can access this class via GET_VAR.
-                        compilerContext.emitter.emitGetLocal(localIndex);
-                        compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+                        emitter.emitGetLocal(localIndex);
+                        emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
                     }
                 }
             } else {
                 compilerContext.nonDeletableGlobalBindings.add(varName);
-                compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+                emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
             }
         } else {
             // Anonymous class expression - leave on stack
@@ -92,17 +92,17 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
         // Stack: ctor proto -> proto ctor -> proto ctor symbol key -> proto ctor -> ctor proto.
         // DEFINE_METHOD_COMPUTED keeps its object, so the constructor is not duplicated first: a copy would
         // outlive the class expression and displace the receiver and arguments of a call it is passed to.
-        compilerContext.emitter.emitOpcode(Opcode.SWAP);
-        compilerContext.emitter.emitPushConstant(computedFieldSymbol);
+        emitter.emitOpcode(Opcode.SWAP);
+        emitter.emitPushConstant(computedFieldSymbol);
         try {
             if (compilerContext.inClassBody) {
                 compilerContext.functionExpressionCompiler.emitStrictClassBodyExpression(field.getKey());
             } else {
                 compilerContext.expressionCompiler.compile(field.getKey());
             }
-            compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
-            compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
-            compilerContext.emitter.emitOpcode(Opcode.SWAP);
+            emitter.emitOpcode(Opcode.TO_PROPKEY);
+            emitter.emitIntOperand(Opcode.DEFINE_METHOD_COMPUTED, 4);
+            emitter.emitOpcode(Opcode.SWAP);
         } finally {
             compilerContext.popState();
         }
@@ -116,13 +116,13 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
             IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols,
             IdentityHashMap<PropertyDefinition, JSSymbol> autoAccessorBackingSymbols) {
         for (PropertyDefinition field : fields) {
-            compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
+            emitter.emitOpcode(Opcode.PUSH_THIS);
             compilerContext.pushState();
             compilerContext.inClassFieldInitializer = true;
             emitFieldDefinition(compilerContext, field, privateSymbols, computedFieldSymbols,
                     autoAccessorBackingSymbols);
             compilerContext.popState();
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            emitter.emitOpcode(Opcode.DROP);
         }
     }
 
@@ -232,12 +232,12 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
             if (symbol == null) {
                 throw new JSCompilerException("Private method symbol not found: #" + entry.name(), entry.ast());
             }
-            compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
-            compilerContext.emitter.emitPushConstant(symbol);
+            emitter.emitOpcode(Opcode.PUSH_THIS);
+            emitter.emitPushConstant(symbol);
             int capture = compilerContext.captureResolver.resolveCapturedBindingIndex(entry.bindingName());
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capture);
-            compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, entry.definitionFlags());
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            emitter.emitIntOperand(Opcode.GET_VAR_REF, capture);
+            emitter.emitIntOperand(Opcode.DEFINE_METHOD_COMPUTED, entry.definitionFlags());
+            emitter.emitOpcode(Opcode.DROP);
         }
     }
 
@@ -383,13 +383,13 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
             }
 
             // Keep the constructor and prototype on the stack after installing the method.
-            compilerContext.emitter.emitOpcode(Opcode.SWAP);
-            compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.emitter.emitPushConstant(symbol);
-            compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, entry.function());
-            compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, entry.definitionFlags());
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcode(Opcode.SWAP);
+            emitter.emitOpcode(Opcode.SWAP);
+            emitter.emitOpcode(Opcode.DUP);
+            emitter.emitPushConstant(symbol);
+            emitter.emitOpcodeConstant(Opcode.FCLOSURE, entry.function());
+            emitter.emitIntOperand(Opcode.DEFINE_METHOD_COMPUTED, entry.definitionFlags());
+            emitter.emitOpcode(Opcode.DROP);
+            emitter.emitOpcode(Opcode.SWAP);
         }
     }
 
@@ -467,7 +467,7 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
             if (field.isStatic()) {
                 ctx.emitter.emitOpcode(Opcode.PUSH_THIS);
             } else {
-                ctx.emitter.emitOpcodeU8(Opcode.SPECIAL_OBJECT, 2);
+                ctx.emitter.emitIntOperand(Opcode.SPECIAL_OBJECT, 2);
             }
             ctx.emitter.emitPushConstant(symbol);
             ctx.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
@@ -475,7 +475,7 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
             ctx.emitHelpers.emitNonComputedPublicFieldKey(field.getKey());
         }
         emitFieldValue(ctx, field);
-        ctx.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
+        ctx.emitter.emitIntOperand(Opcode.DEFINE_METHOD_COMPUTED, 4);
     }
 
     private static void emitFieldValue(CompilerContext ctx, PropertyDefinition field) {

@@ -318,16 +318,8 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        IsoTime resultTime = bag.regulate(originalTime, overflow, TemporalError.INVALID_ISO_DATE.message());
-        if (resultTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        if (!resultDate.isWithinPlainDateTimeRange(resultTime)) {
-            return TemporalError.INVALID_ISO_DATE.undefined(context);
-        }
-
-        return JSTemporalPlainDateTime.create(context, resultDate.atTime(resultTime), plainDateTime.getCalendarId());
+        return TemporalPlainDateTimeConstructor.dateTimeFromRegulatedFields(context, bag, resultDate, originalTime,
+                overflow, TemporalError.INVALID_ISO_DATE, plainDateTime.getCalendarId());
     }
 
     public static JSValue withCalendar(JSContext context, JSValue thisArg, JSValue[] args) {

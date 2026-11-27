@@ -41,6 +41,10 @@ abstract class RegExpTestBase extends BaseJavetTest {
                 .isEqualTo(expected);
     }
 
+    protected void assertMatches(String pattern, String flags, String input, String description) {
+        assertThat(patternMatches(pattern, flags, input)).as(description).isTrue();
+    }
+
     protected RegExpEngine compilePattern(String pattern, String flags) {
         RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
         return new RegExpEngine(compiler.compile(pattern, flags));

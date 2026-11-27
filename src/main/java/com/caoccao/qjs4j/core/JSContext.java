@@ -1277,6 +1277,18 @@ public final class JSContext implements AutoCloseable {
         realmIntrinsics.registerIteratorPrototype(tag, prototype);
     }
 
+    /** Record a RangeError and return the null sentinel used by native conversions. */
+    public <T> T rejectRangeError(String message) {
+        throwRangeError(message);
+        return null;
+    }
+
+    /** Record a TypeError and return the null sentinel used by native conversions. */
+    public <T> T rejectTypeError(String message) {
+        throwTypeError(message);
+        return null;
+    }
+
     /**
      * Fail fast when an operation is attempted on a closed context.
      * <p>

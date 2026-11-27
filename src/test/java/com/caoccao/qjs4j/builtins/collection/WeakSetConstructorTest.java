@@ -19,8 +19,6 @@ package com.caoccao.qjs4j.builtins.collection;
 import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 public class WeakSetConstructorTest extends BaseJavetTest {
 
     @Test
@@ -84,7 +82,7 @@ public class WeakSetConstructorTest extends BaseJavetTest {
 
     @Test
     void testWeakSetConstructorIteratorCloseAndAdderLookup() {
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 (() => {
                   const original = WeakSet.prototype.add;
                   try {
@@ -98,9 +96,9 @@ public class WeakSetConstructorTest extends BaseJavetTest {
                   } finally {
                     WeakSet.prototype.add = original;
                   }
-                })()""").toJavaObject()).isEqualTo(true);
+                })()""", true);
 
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 (() => {
                   const original = WeakSet.prototype.add;
                   try {
@@ -112,7 +110,7 @@ public class WeakSetConstructorTest extends BaseJavetTest {
                   } finally {
                     WeakSet.prototype.add = original;
                   }
-                })()""").toJavaObject()).isEqualTo(true);
+                })()""", true);
     }
 
     @Test
@@ -136,7 +134,7 @@ public class WeakSetConstructorTest extends BaseJavetTest {
 
     @Test
     void testWeakSetSymbolValues() {
-        assertThat(context.eval("""
+        assertEvalJavaValue("""
                 (() => {
                   const weakSet = new WeakSet();
                   const symbolValue = Symbol('k');
@@ -144,7 +142,7 @@ public class WeakSetConstructorTest extends BaseJavetTest {
                   return weakSet.has(symbolValue)
                     && weakSet.delete(symbolValue)
                     && !weakSet.has(symbolValue);
-                })()""").toJavaObject()).isEqualTo(true);
+                })()""", true);
     }
 
 }

@@ -122,7 +122,7 @@ final class IntlListFormatBuiltins {
      */
     private static List<String> stringListFromIterable(JSContext context, JSValue list) {
         List<String> result = new ArrayList<>();
-        if (list == null || list instanceof JSUndefined) {
+        if (JSTypeChecking.isUndefinedOrMissing(list)) {
             return result;
         }
 

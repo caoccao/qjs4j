@@ -52,8 +52,7 @@ public record TemporalInstantToStringOptions(TemporalFractionalSecondDigitsOptio
         String timeZoneId = null;
         if (!(timeZoneValue instanceof JSUndefined) && timeZoneValue != null) {
             if (!(timeZoneValue instanceof JSString timeZoneString)) {
-                context.throwTypeError("Temporal error: Time zone must be string");
-                return null;
+                return context.rejectTypeError("Temporal error: Time zone must be string");
             }
             timeZoneId = TemporalTimeZone.parseTimeZoneIdentifierString(context, timeZoneString.value());
             if (context.hasPendingException()) {
@@ -70,8 +69,7 @@ public record TemporalInstantToStringOptions(TemporalFractionalSecondDigitsOptio
             try {
                 TemporalTimeZone.resolveTimeZone(timeZoneId);
             } catch (Exception invalidTimeZoneException) {
-                context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
-                return null;
+                return context.rejectRangeError("Temporal error: Invalid time zone: " + timeZoneId);
             }
         }
 

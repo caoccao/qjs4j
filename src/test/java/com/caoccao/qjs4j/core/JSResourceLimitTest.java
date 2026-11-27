@@ -55,8 +55,7 @@ public class JSResourceLimitTest extends BaseJavetTest {
                 JSContext unlimitedContext = runtime.createContext()) {
             // 0 disables the limit, restoring the previous unbounded behaviour. A 20-character
             // input is small enough to still finish quickly.
-            JSValue result = unlimitedContext.eval("/(a+)+$/.test('a'.repeat(20) + '!')");
-            assertThat(result).isEqualTo(JSBoolean.FALSE);
+            assertThat(unlimitedContext.eval("/(a+)+$/.test('a'.repeat(20) + '!')")).isEqualTo(JSBoolean.FALSE);
         }
         try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setRegExpBacktrackLimit(1000));
                 JSContext strictContext = runtime.createContext()) {
@@ -144,8 +143,8 @@ public class JSResourceLimitTest extends BaseJavetTest {
     @Test
     @Timeout(60)
     public void testNoDeadlineLeavesOrdinaryCodeUnaffected() {
-        assertThat(context.eval("let total = 0; for (let i = 0; i < 200000; i++) { total += i } total"))
-                .isEqualTo(JSNumber.of(19999900000L));
+        assertEvalValue("let total = 0; for (let i = 0; i < 200000; i++) { total += i } total",
+                JSNumber.of(19999900000L));
     }
 
     @Test
@@ -263,8 +262,7 @@ public class JSResourceLimitTest extends BaseJavetTest {
                   attempt(() => 'x'.repeat(1024).replaceAll('x', () => s)),
                   attempt(() => s.replaceAll('a', "$'".repeat(1024))),
                   attempt(() => s.replace('a', '$&'.repeat(1024))),
-                ].join('\\n')""");
-        assertStringWithJavet("""
+                ].join('\\n')""", """
                 try {
                     ('a' + 'b'.repeat(1000)).replace('a', () => 'c'.repeat(536870888 - 500));
                     'NO ERROR';

@@ -59,10 +59,6 @@ public final class JSTemporalPlainDateTime extends JSObject implements JSTempora
 
     public static JSTemporalPlainDateTime create(JSContext context, IsoDateTime isoDateTime,
             TemporalCalendarId calendarId, JSObject prototype) {
-        JSTemporalPlainDateTime plainDateTime = new JSTemporalPlainDateTime(context, isoDateTime, calendarId);
-        if (prototype != null) {
-            plainDateTime.setPrototype(prototype);
-        }
-        return plainDateTime;
+        return TemporalUtils.withPrototype(new JSTemporalPlainDateTime(context, isoDateTime, calendarId), prototype);
     }
 }

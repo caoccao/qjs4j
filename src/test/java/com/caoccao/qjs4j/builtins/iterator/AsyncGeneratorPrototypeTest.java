@@ -112,8 +112,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
         assertThat(awaitPromise(promise)).isTrue();
 
         // Check the result
-        JSValue promiseResult = promise.getResult();
-        assertIteratorResult(promiseResult, new JSNumber(42), false);
+        assertIteratorResult(promise.getResult(), new JSNumber(42), false);
     }
 
     @Test
@@ -150,8 +149,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
         assertThat(awaitPromise(promise)).isTrue();
 
         // Check the result
-        JSValue promiseResult = promise.getResult();
-        assertIteratorResult(promiseResult, new JSNumber(100), false);
+        assertIteratorResult(promise.getResult(), new JSNumber(100), false);
     }
 
     @Test
@@ -168,8 +166,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
         assertThat(awaitPromise(promise)).isTrue();
 
         // Check the result
-        JSValue promiseResult = promise.getResult();
-        assertIteratorResult(promiseResult, returnValue, true);
+        assertIteratorResult(promise.getResult(), returnValue, true);
     }
 
     @Test
