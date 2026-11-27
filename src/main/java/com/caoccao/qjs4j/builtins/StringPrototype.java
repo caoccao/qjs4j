@@ -1055,10 +1055,14 @@ public final class StringPrototype {
     }
 
     private enum CharacterResult {
-        CHARACTER, CODE_POINT, CODE_UNIT
+        CHARACTER,
+        CODE_POINT,
+        CODE_UNIT
     }
 
     private enum SearchMode {
-        INCLUDES, PREFIX, SUFFIX
+        INCLUDES,
+        PREFIX,
+        SUFFIX
     }
 }

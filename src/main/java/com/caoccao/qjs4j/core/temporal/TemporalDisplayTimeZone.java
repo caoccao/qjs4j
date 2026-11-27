@@ -21,7 +21,9 @@ package com.caoccao.qjs4j.core.temporal;
  * control time-zone annotation rendering.
  */
 public enum TemporalDisplayTimeZone {
-    AUTO("auto"), CRITICAL("critical"), NEVER("never");
+    AUTO("auto"),
+    CRITICAL("critical"),
+    NEVER("never");
 
     private final String jsName;
 

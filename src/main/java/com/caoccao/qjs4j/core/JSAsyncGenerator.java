@@ -382,7 +382,9 @@ public final class JSAsyncGenerator extends JSObject {
     }
 
     public enum AsyncGeneratorRequestKind {
-        NEXT, RETURN, THROW
+        NEXT,
+        RETURN,
+        THROW
     }
 
     /**

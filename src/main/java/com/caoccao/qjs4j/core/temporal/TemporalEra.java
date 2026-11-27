@@ -19,8 +19,22 @@ package com.caoccao.qjs4j.core.temporal;
 import com.caoccao.qjs4j.core.JSContext;
 
 public enum TemporalEra {
-    AA("aa"), AH("ah"), AM("am"), AP("ap"), BCE("bce"), BE("be"), BH("bh"), BROC("broc"), CE("ce"), HEISEI(
-            "heisei"), MEIJI("meiji"), REIWA("reiwa"), ROC("roc"), SHAKA("shaka"), SHOWA("showa"), TAISHO("taisho");
+    AA("aa"),
+    AH("ah"),
+    AM("am"),
+    AP("ap"),
+    BCE("bce"),
+    BE("be"),
+    BH("bh"),
+    BROC("broc"),
+    CE("ce"),
+    HEISEI("heisei"),
+    MEIJI("meiji"),
+    REIWA("reiwa"),
+    ROC("roc"),
+    SHAKA("shaka"),
+    SHOWA("showa"),
+    TAISHO("taisho");
 
     private final String identifier;
 

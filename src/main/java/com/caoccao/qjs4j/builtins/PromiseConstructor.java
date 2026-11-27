@@ -451,6 +451,7 @@ public final class PromiseConstructor {
         result.set(fulfilled ? PropertyKey.VALUE : PropertyKey.REASON, value);
         return result;
     }
+
     private static JSArray toArray(JSContext context, JSValue[] args, String methodName) {
         if (args.length == 0) {
             context.throwTypeError(methodName + " requires an iterable");
@@ -619,6 +620,9 @@ public final class PromiseConstructor {
     }
 
     private enum PromiseCombinatorMode {
-        ALL, ALL_SETTLED, ANY, RACE
+        ALL,
+        ALL_SETTLED,
+        ANY,
+        RACE
     }
 }

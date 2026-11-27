@@ -196,7 +196,7 @@ final class IteratorZip {
                     }
                 }
             } catch (JSVirtualMachineException e) {
-                convertVMException(context, e);
+                context.restoreVMException(e);
             }
             if (error == null) {
                 error = context.getPendingException();
@@ -396,7 +396,7 @@ final class IteratorZip {
             }
             return new IteratorZip(records, mode, padding, keys).create(context);
         } catch (JSVirtualMachineException e) {
-            convertVMException(context, e);
+            context.restoreVMException(e);
             return closeAll(context, records, context.getPendingException());
         }
     }
@@ -529,6 +529,9 @@ final class IteratorZip {
     }
 
     private enum State {
-        DONE, EXECUTING, START, YIELD
+        DONE,
+        EXECUTING,
+        START,
+        YIELD
     }
 }

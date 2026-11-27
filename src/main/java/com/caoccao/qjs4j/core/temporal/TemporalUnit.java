@@ -28,8 +28,16 @@ import java.util.Optional;
  * Temporal units with explicit ranks from largest (YEAR) to smallest (NANOSECOND).
  */
 public enum TemporalUnit {
-    DAY("day", 3), HOUR("hour", 4), MICROSECOND("microsecond", 8), MILLISECOND("millisecond", 7), MINUTE("minute",
-            5), MONTH("month", 1), NANOSECOND("nanosecond", 9), SECOND("second", 6), WEEK("week", 2), YEAR("year", 0);
+    DAY("day", 3),
+    HOUR("hour", 4),
+    MICROSECOND("microsecond", 8),
+    MILLISECOND("millisecond", 7),
+    MINUTE("minute", 5),
+    MONTH("month", 1),
+    NANOSECOND("nanosecond", 9),
+    SECOND("second", 6),
+    WEEK("week", 2),
+    YEAR("year", 0);
 
     /** Property access order for a Temporal duration-like object. */
     public static final List<TemporalUnit> DURATION_PROPERTY_ORDER = List.of(DAY, HOUR, MICROSECOND, MILLISECOND,

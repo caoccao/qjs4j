@@ -59,6 +59,14 @@ public final class UnaryExpression extends Expression {
     }
 
     public enum UnaryOperator {
-        BIT_NOT, DEC, DELETE, INC, MINUS, NOT, PLUS, TYPEOF, VOID
+        BIT_NOT,
+        DEC,
+        DELETE,
+        INC,
+        MINUS,
+        NOT,
+        PLUS,
+        TYPEOF,
+        VOID
     }
 }

@@ -420,7 +420,9 @@ public final class JSPromise extends JSObject {
      * Promise states as defined in ES2020.
      */
     public enum PromiseState {
-        FULFILLED, PENDING, REJECTED
+        FULFILLED,
+        PENDING,
+        REJECTED
     }
 
     /**

@@ -636,6 +636,9 @@ public final class MathObject {
     }
 
     private enum SumPreciseStateType {
-        FINITE, INFINITY, MINUS_INFINITY, NAN,
+        FINITE,
+        INFINITY,
+        MINUS_INFINITY,
+        NAN,
     }
 }

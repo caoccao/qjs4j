@@ -2073,6 +2073,8 @@ public non-sealed class JSObject implements JSValue {
     }
 
     public enum SetPrototypeResult {
-        CIRCULAR, NOT_EXTENSIBLE, SUCCESS
+        CIRCULAR,
+        NOT_EXTENSIBLE,
+        SUCCESS
     }
 }

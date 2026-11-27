@@ -21,7 +21,8 @@ package com.caoccao.qjs4j.core.temporal;
  * rendering.
  */
 public enum TemporalDisplayOffset {
-    AUTO("auto"), NEVER("never");
+    AUTO("auto"),
+    NEVER("never");
 
     private final String jsName;
 

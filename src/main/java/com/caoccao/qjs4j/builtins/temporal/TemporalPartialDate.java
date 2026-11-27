@@ -24,6 +24,7 @@ record TemporalPartialDate(Integer day, Integer month, String monthCode, Integer
     boolean isEmpty() {
         return day == null && month == null && monthCode == null && year == null && era == null && eraYear == null;
     }
+
     JSValue merge(JSContext context, JSTemporalPlainDate original, JSValue options) {
         String overflow = TemporalUtils.getOverflowOption(context, options);
         if (context.hasPendingException()) {

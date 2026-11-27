@@ -422,7 +422,10 @@ public final class PropertyDescriptor {
     }
 
     public enum AccessorState {
-        All(true, true), Configurable(false, true), Enumerable(true, false), None(false, false);
+        All(true, true),
+        Configurable(false, true),
+        Enumerable(true, false),
+        None(false, false);
 
         private final boolean configurable;
         private final boolean enumerable;
@@ -442,9 +445,14 @@ public final class PropertyDescriptor {
     }
 
     public enum DataState {
-        All(true, true, true), Configurable(false, false, true), ConfigurableWritable(true, false, true), Enumerable(
-                false, true, false), EnumerableConfigurable(false, true, true), EnumerableWritable(true, true,
-                        false), None(false, false, false), Writable(true, false, false);
+        All(true, true, true),
+        Configurable(false, false, true),
+        ConfigurableWritable(true, false, true),
+        Enumerable(false, true, false),
+        EnumerableConfigurable(false, true, true),
+        EnumerableWritable(true, true, false),
+        None(false, false, false),
+        Writable(true, false, false);
 
         private final boolean configurable;
         private final boolean enumerable;

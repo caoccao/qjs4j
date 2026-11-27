@@ -682,6 +682,8 @@ public final class ObjectPrototype {
     }
 
     private enum Enumeration {
-        ENTRIES, KEYS, VALUES
+        ENTRIES,
+        KEYS,
+        VALUES
     }
 }

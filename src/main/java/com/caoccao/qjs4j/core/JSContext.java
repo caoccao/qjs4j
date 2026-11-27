@@ -1312,6 +1312,16 @@ public final class JSContext implements AutoCloseable {
                 binding.owner().constantBindings().contains(name));
     }
 
+    /** Restore a guest exception at a boundary that reports failures through this context. */
+    public void restoreVMException(JSVirtualMachineException exception) {
+        JSValue value = exception.getThrownValue();
+        if (value != null) {
+            setPendingException(value);
+        } else if (!hasPendingException()) {
+            throwError(exception.getMessage() != null ? exception.getMessage() : "Unhandled exception");
+        }
+    }
+
     public void resumeEvalOverlays(JSGlobalObject.EvalOverlaySnapshot evalOverlaySnapshot) {
         evalOverlayManager.resume(evalOverlaySnapshot);
     }

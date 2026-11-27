@@ -22,9 +22,12 @@ import java.util.function.ToIntFunction;
 
 /** Numeric time getters shared by the Temporal prototypes with a local ISO time. */
 enum TemporalTimeProperty {
-    HOUR("hour", IsoTime::hour), MICROSECOND("microsecond", IsoTime::microsecond), MILLISECOND("millisecond",
-            IsoTime::millisecond), MINUTE("minute",
-                    IsoTime::minute), NANOSECOND("nanosecond", IsoTime::nanosecond), SECOND("second", IsoTime::second);
+    HOUR("hour", IsoTime::hour),
+    MICROSECOND("microsecond", IsoTime::microsecond),
+    MILLISECOND("millisecond", IsoTime::millisecond),
+    MINUTE("minute", IsoTime::minute),
+    NANOSECOND("nanosecond", IsoTime::nanosecond),
+    SECOND("second", IsoTime::second);
 
     private final ToIntFunction<IsoTime> field;
     private final String key;

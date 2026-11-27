@@ -35,9 +35,9 @@ public enum Opcode {
     /** array idx enum_obj -> array idx (append enumerated, update length) */
     APPEND(79, 1, 3, 2, IteratorOpcodes::handleAppend),
     /** func this args -> ret */
-    APPLY(39, 3, 3, 1, OpcodeHandler::handleApply),
+    APPLY(39, 3, 3, 1, CallOpcodes::handleApply),
     /** func array -> ret_eval */
-    APPLY_EVAL(51, 3, 2, 1, OpcodeHandler::handleApplyEval),
+    APPLY_EVAL(51, 3, 2, 1, CallOpcodes::handleApplyEval),
     /** args -> array (npop args not counted) */
     ARRAY_FROM(38, 3, -1, 1, OpcodeHandler::handleArrayFrom),
     /** val -> sent_val resume_kind (async generator delegation) */
@@ -45,19 +45,19 @@ public enum Opcode {
     /** promise -> resolved_val (await expression) */
     AWAIT(137, 1, 1, 1, IteratorOpcodes::handleAwait),
     /** func args -> ret (npop args not counted) */
-    CALL(34, 3, -1, 1, OpcodeHandler::handleCall),
+    CALL(34, 3, -1, 1, CallOpcodes::handleCall),
     /** func new.target args -> ret (npop args not counted) */
-    CALL_CONSTRUCTOR(33, 3, -1, 1, OpcodeHandler::handleCallConstructor),
+    CALL_CONSTRUCTOR(33, 3, -1, 1, CallOpcodes::handleCallConstructor),
     /** func receiver args -> ret */
-    CALL_METHOD(36, 3, -1, 1, OpcodeHandler::handleCallMethod),
+    CALL_METHOD(36, 3, -1, 1, CallOpcodes::handleCall),
     /** func -> ret (call with 0 args) */
-    CALL0(236, 1, 1, 1, OpcodeHandler::handleCall0),
+    CALL0(236, 1, 1, 1, CallOpcodes::handleCall0),
     /** func arg -> ret (call with 1 arg) */
-    CALL1(237, 1, 1, 1, OpcodeHandler::handleCall1),
+    CALL1(237, 1, 1, 1, CallOpcodes::handleCall1),
     /** func arg1 arg2 -> ret (call with 2 args) */
-    CALL2(238, 1, 1, 1, OpcodeHandler::handleCall2),
+    CALL2(238, 1, 1, 1, CallOpcodes::handleCall2),
     /** func arg1 arg2 arg3 -> ret (call with 3 args) */
-    CALL3(239, 1, 1, 1, OpcodeHandler::handleCall3),
+    CALL3(239, 1, 1, 1, CallOpcodes::handleCall3),
     /** -> val (set catch handler at label offset) */
     CATCH(107, 5, 0, 1, OpcodeHandler::handleCatch),
     /** this_obj func -> this_obj func (verify private brand) */
@@ -77,15 +77,15 @@ public enum Opcode {
     /** array idx val -> array idx (define indexed element) */
     DEFINE_ARRAY_EL(78, 1, 3, 2, PropertyOpcodes::handleDefineArrayEl),
     /** parent ctor -> ctor proto (define class by atom) */
-    DEFINE_CLASS(83, 5, 2, 1, OpcodeHandler::handleDefineClass),
+    DEFINE_CLASS(83, 5, 2, 1, ClassOpcodes::handleDefineClass),
     /** name parent ctor -> name ctor proto (class with computed name) */
-    DEFINE_CLASS_COMPUTED(84, 6, 3, 3, OpcodeHandler::handleDefineClassComputed),
+    DEFINE_CLASS_COMPUTED(84, 6, 3, 3, ClassOpcodes::handleDefineClassComputed),
     /** obj val -> obj (define own property by atom) */
     DEFINE_FIELD(73, 5, 2, 1, PropertyOpcodes::handleDefineField),
     /** obj func -> obj (define method by atom, u8 flags) */
-    DEFINE_METHOD(81, 5, 2, 1, OpcodeHandler::handleDefineMethod),
+    DEFINE_METHOD(81, 5, 2, 1, ClassOpcodes::handleDefineMethod),
     /** obj key func -> obj (define method with computed name, u8 flags) */
-    DEFINE_METHOD_COMPUTED(82, 2, 3, 1, OpcodeHandler::handleDefineMethodComputed),
+    DEFINE_METHOD_COMPUTED(82, 2, 3, 1, ClassOpcodes::handleDefineMethodComputed),
     /** obj prop value -> obj */
     DEFINE_PRIVATE_FIELD(66, 1, 3, 1, PropertyOpcodes::handleDefinePrivateField),
     /** obj prop -> bool (delete property) */
@@ -107,7 +107,7 @@ public enum Opcode {
     /** a b -> a==b (abstract equality) */
     EQ(167, 1, 2, 1, OpcodeHandler::handleAbstractEquality),
     /** func args... -> ret_val */
-    EVAL(50, 5, -1, 1, OpcodeHandler::handleEval),
+    EVAL(50, 5, -1, 1, CallOpcodes::handleEval),
     /** create function closure from constant -> func */
     FCLOSURE(3, 5, 0, 1, OpcodeHandler::handleFclosure),
     /** -> func (create closure, u8 index) */
@@ -207,7 +207,7 @@ public enum Opcode {
     /** val -> (branch if true, i8 offset) */
     IF_TRUE8(233, 2, 1, 0, OpcodeHandler::handleIfTrue8),
     /** specifier options -> promise (dynamic module import) */
-    IMPORT(54, 1, 2, 1, OpcodeHandler::handleImport),
+    IMPORT(54, 1, 2, 1, ModuleOpcodes::handleImport),
     /** prop obj -> bool (in operator) */
     IN(166, 1, 2, 1, OpcodeHandler::handleIn),
     /** val -> val+1 (prefix increment value) */
@@ -215,7 +215,7 @@ public enum Opcode {
     /** increment local variable in place (u8 loc index) */
     INC_LOC(145, 2, 0, 0, OpcodeHandler::handleIncLoc),
     /** initialize constructor this object -> this */
-    INIT_CTOR(44, 1, 0, 1, OpcodeHandler::handleInitCtor),
+    INIT_CTOR(44, 1, 0, 1, ClassOpcodes::handleInitCtor),
     /** suspend generator at start */
     INITIAL_YIELD(133, 1, 0, 0, IteratorOpcodes::handleInitialYield),
     /** obj a -> a obj a (dup_x1) */
@@ -429,7 +429,7 @@ public enum Opcode {
     /** val -> val (set argument 3) */
     SET_ARG3(218, 1, 1, 1, BindingOpcodes::handleSetArgShort),
     /** obj func -> obj func (set home object for super) */
-    SET_HOME_OBJECT(77, 1, 2, 2, OpcodeHandler::handleSetHomeObject),
+    SET_HOME_OBJECT(77, 1, 2, 2, ClassOpcodes::handleSetHomeObject),
     /** val -> val (set local, keep value) */
     SET_LOC(87, 3, 1, 1, BindingOpcodes::handleSetLoc),
     /** val -> val (set local with TDZ check) */
@@ -447,11 +447,11 @@ public enum Opcode {
     /** val -> val (set local, u8 index) */
     SET_LOC8(194, 2, 1, 1, BindingOpcodes::handleSetLoc8),
     /** func -> func (set function name by atom) */
-    SET_NAME(74, 5, 1, 1, OpcodeHandler::handleSetName),
+    SET_NAME(74, 5, 1, 1, ClassOpcodes::handleSetName),
     /** name func -> name func (set computed function name) */
-    SET_NAME_COMPUTED(75, 1, 2, 2, OpcodeHandler::handleSetNameComputed),
+    SET_NAME_COMPUTED(75, 1, 2, 2, ClassOpcodes::handleSetNameComputed),
     /** obj proto -> obj (set prototype) */
-    SET_PROTO(76, 1, 2, 1, OpcodeHandler::handleSetProto),
+    SET_PROTO(76, 1, 2, 1, ClassOpcodes::handleSetProto),
     /** val -> val (set closure variable, keep value) */
     SET_VAR_REF(93, 3, 1, 1, BindingOpcodes::handleSetVarRef),
     /** val -> val (set closure var 0) */
@@ -479,9 +479,9 @@ public enum Opcode {
     /** a b c d -> c d a b */
     SWAP2(28, 1, 4, 4, OpcodeHandler::handleSwap2),
     /** func args -> (npop args not counted) */
-    TAIL_CALL(35, 3, -1, 0, OpcodeHandler::handleTailCall),
+    TAIL_CALL(35, 3, -1, 0, CallOpcodes::handleTailCall),
     /** func receiver args -> (tail call) */
-    TAIL_CALL_METHOD(37, 3, -1, 0, OpcodeHandler::handleTailCallMethod),
+    TAIL_CALL_METHOD(37, 3, -1, 0, CallOpcodes::handleTailCall),
     /** val -> (throw exception) */
     THROW(48, 1, 1, 0, OpcodeHandler::handleThrow),
     /** throw error by atom name and u8 type */

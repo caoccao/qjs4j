@@ -26,10 +26,22 @@ import com.caoccao.qjs4j.vm.Opcode;
  * {@code ??=} have no opcode: the first stores the right operand as it is, the others compile to a conditional jump.
  */
 public enum AssignmentOperator {
-    AND_ASSIGN(Opcode.AND), ASSIGN(null), DIV_ASSIGN(Opcode.DIV), EXP_ASSIGN(Opcode.POW), LOGICAL_AND_ASSIGN(
-            null), LOGICAL_OR_ASSIGN(null), LSHIFT_ASSIGN(Opcode.SHL), MINUS_ASSIGN(Opcode.SUB), MOD_ASSIGN(
-                    Opcode.MOD), MUL_ASSIGN(Opcode.MUL), NULLISH_ASSIGN(null), OR_ASSIGN(Opcode.OR), PLUS_ASSIGN(
-                            Opcode.ADD), RSHIFT_ASSIGN(Opcode.SAR), URSHIFT_ASSIGN(Opcode.SHR), XOR_ASSIGN(Opcode.XOR);
+    AND_ASSIGN(Opcode.AND),
+    ASSIGN(null),
+    DIV_ASSIGN(Opcode.DIV),
+    EXP_ASSIGN(Opcode.POW),
+    LOGICAL_AND_ASSIGN(null),
+    LOGICAL_OR_ASSIGN(null),
+    LSHIFT_ASSIGN(Opcode.SHL),
+    MINUS_ASSIGN(Opcode.SUB),
+    MOD_ASSIGN(Opcode.MOD),
+    MUL_ASSIGN(Opcode.MUL),
+    NULLISH_ASSIGN(null),
+    OR_ASSIGN(Opcode.OR),
+    PLUS_ASSIGN(Opcode.ADD),
+    RSHIFT_ASSIGN(Opcode.SAR),
+    URSHIFT_ASSIGN(Opcode.SHR),
+    XOR_ASSIGN(Opcode.XOR);
 
     private final Opcode opcode;
 

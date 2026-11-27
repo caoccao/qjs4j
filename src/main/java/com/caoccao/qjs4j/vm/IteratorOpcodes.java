@@ -427,7 +427,7 @@ final class IteratorOpcodes {
             } catch (JSVirtualMachineException e) {
                 restoreForOfStateWithoutIteratorCloseMarker(executionContext, preservedMarkers, preservedMarkerCount,
                         depth);
-                vm.capturePendingExceptionFromVmOrContext(e);
+                vm.captureVMException(e);
                 executionContext.finishStackOpcode(nextPc);
                 return;
             }
@@ -839,7 +839,7 @@ final class IteratorOpcodes {
             }
             executionContext.finishStackOpcode(executionContext.pc + op.getSize());
         } catch (JSVirtualMachineException exception) {
-            vm.capturePendingExceptionFromVmOrContext(exception);
+            vm.captureVMException(exception);
             executionContext.finishStackOpcode(executionContext.pc + op.getSize());
         }
     }
@@ -974,7 +974,7 @@ final class IteratorOpcodes {
             execution.setErrorAsPending(e.getErrorValue());
             return;
         } catch (JSVirtualMachineException e) {
-            vm.capturePendingExceptionFromVmOrContext(e);
+            vm.captureVMException(e);
             return;
         }
         if (execution.capturePendingException()) {
@@ -1022,6 +1022,8 @@ final class IteratorOpcodes {
     }
 
     private enum ReplayStep {
-        ABRUPT, DONE, YIELDED
+        ABRUPT,
+        DONE,
+        YIELDED
     }
 }

@@ -312,6 +312,7 @@ public record TemporalDuration(long years, long months, long weeks, long days, l
     public long[] toComponents() {
         return new long[]{years, months, weeks, days, hours, minutes, seconds, milliseconds, microseconds, nanoseconds};
     }
+
     public static TemporalDuration fromComponents(long[] components) {
         return new TemporalDuration(components[0], components[1], components[2], components[3], components[4],
                 components[5], components[6], components[7], components[8], components[9]);

@@ -1116,6 +1116,7 @@ final class ModuleSourceTransformer {
         String declaration() {
             return end < 0 ? source : source.substring(0, end);
         }
+
         void appendTrailingCode(StringBuilder output) {
             if (end >= 0 && end < source.length()) {
                 String trailing = source.substring(end).trim();

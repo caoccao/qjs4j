@@ -21,6 +21,7 @@ import com.caoccao.qjs4j.compilation.ast.ASTNode;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
+import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
@@ -208,6 +209,21 @@ class JSExceptionTest extends BaseTest {
         assertThat(evalException.getMessage()).isEqualTo("SyntaxError: Unexpected token ';'");
         assertThat(evalException.getSourceLocation()).isEqualTo(new SourceLocation(1, 15, 14, 14));
         assertThat(context.hasPendingException()).isFalse();
+    }
+
+    @Test
+    public void testRestoreVMExceptionPreservesTheGuestValueAndPendingError() {
+        JSValue original = new JSString("thrown value");
+        context.restoreVMException(new JSVirtualMachineException("diagnostic", original));
+        assertThat(context.getPendingException()).isSameAs(original);
+
+        JSVirtualMachineException messageOnly = new JSVirtualMachineException("fallback");
+        context.restoreVMException(messageOnly);
+        assertThat(context.takePendingException()).isSameAs(original);
+
+        context.restoreVMException(messageOnly);
+        assertThat(context.takePendingException()).isInstanceOfSatisfying(JSError.class,
+                error -> assertThat(error.getMessage().value()).isEqualTo("fallback"));
     }
 
     @Test

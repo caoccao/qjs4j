@@ -33,12 +33,15 @@ public abstract sealed class JSTemporalCalendarDate extends JSObject implements 
     public final TemporalCalendarId getCalendarId() {
         return calendarId;
     }
+
     public final IsoDate getIsoDate() {
         return isoDate;
     }
+
     public boolean sameDate(JSTemporalCalendarDate other) {
         return getIsoDate().compareTo(other.getIsoDate()) == 0 && getCalendarId() == other.getCalendarId();
     }
+
     public final IsoCalendarDate toIsoCalendarDate() {
         return isoDate.toIsoCalendarDate(calendarId);
     }

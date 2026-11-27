@@ -129,6 +129,7 @@ final class TemporalCalendarDifference {
                     settings.smallestUnit(), settings.roundingIncrement(), settings.roundingMode());
         }
     }
+
     private static TemporalDuration differenceTemporalZonedDateTime(JSContext context,
             JSTemporalZonedDateTime startZonedDateTime, JSTemporalZonedDateTime endZonedDateTime,
             TemporalDifferenceSettings settings) {

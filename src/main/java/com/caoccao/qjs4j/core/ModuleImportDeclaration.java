@@ -127,6 +127,9 @@ final class ModuleImportDeclaration {
     }
 
     private enum Kind {
-        BINDINGS, DEFERRED_NAMESPACE, NAMESPACE, SIDE_EFFECT
+        BINDINGS,
+        DEFERRED_NAMESPACE,
+        NAMESPACE,
+        SIDE_EFFECT
     }
 }

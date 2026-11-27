@@ -24,6 +24,7 @@ abstract sealed class JSBigIntTypedArray extends JSTypedArray permits JSBigInt64
     JSBigIntTypedArray(JSContext context, IJSArrayBuffer buffer, long byteOffset, long length) {
         super(context, buffer, byteOffset, length, Long.BYTES);
     }
+
     JSBigIntTypedArray(JSContext context, long length) {
         super(context, length, Long.BYTES);
     }

@@ -549,7 +549,7 @@ final class PropertyOpcodes {
                 vm.pendingException = vm.context.takePendingException();
             }
         } catch (JSVirtualMachineException e) {
-            vm.capturePendingExceptionFromVmOrContext(e);
+            vm.captureVMException(e);
         }
     }
 
@@ -565,7 +565,7 @@ final class PropertyOpcodes {
                 setObjectProperty(vm, object, key, value);
                 vm.capturePendingExceptionFromContext(object.getContext());
             } catch (JSVirtualMachineException e) {
-                vm.capturePendingExceptionFromVmOrContext(e);
+                vm.captureVMException(e);
             }
             return;
         }

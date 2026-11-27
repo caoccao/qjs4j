@@ -20,7 +20,10 @@ package com.caoccao.qjs4j.core.temporal;
  * Temporal offset option enum for controlling how a provided UTC offset is handled during ZonedDateTime operations.
  */
 public enum TemporalOffsetOption {
-    IGNORE("ignore"), PREFER("prefer"), REJECT("reject"), USE("use");
+    IGNORE("ignore"),
+    PREFER("prefer"),
+    REJECT("reject"),
+    USE("use");
 
     private final String jsName;
 

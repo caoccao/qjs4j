@@ -987,10 +987,14 @@ public final class JSTypeConversions {
      * Preferred type for ToPrimitive operation.
      */
     public enum PreferredType {
-        DEFAULT, NUMBER, STRING
+        DEFAULT,
+        NUMBER,
+        STRING
     }
 
     public enum RelationalComparisonResult {
-        FALSE, TRUE, UNDEFINED
+        FALSE,
+        TRUE,
+        UNDEFINED
     }
 }

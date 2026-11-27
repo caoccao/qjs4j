@@ -69,14 +69,17 @@ public final class JSByteBuffer {
         check(index, 1);
         return (int) (store.bytes != null ? base + index : (base + index) % PAGE_SIZE);
     }
+
     public long capacity() {
         return capacity;
     }
+
     private void check(long index, long size) {
         if (index < 0 || size < 0 || index > limit - size) {
             throw new IndexOutOfBoundsException();
         }
     }
+
     /** Zero a range without materializing unallocated pages. */
     public void clearRange(long start, long end) {
         check(start, end - start);
@@ -223,6 +226,7 @@ public final class JSByteBuffer {
     public long position() {
         return position;
     }
+
     public JSByteBuffer position(long value) {
         if (value < 0 || value > limit) {
             throw new IndexOutOfBoundsException();
@@ -230,15 +234,18 @@ public final class JSByteBuffer {
         position = value;
         return this;
     }
+
     public JSByteBuffer put(byte[] source) {
         return put(source, 0, source.length);
     }
+
     public JSByteBuffer put(byte[] source, int offset, int count) {
         check(position, count);
         write(position, source, offset, count);
         position += count;
         return this;
     }
+
     public JSByteBuffer put(JSByteBuffer source) {
         if (source == this) {
             throw new IllegalArgumentException("Cannot copy a buffer into itself");
@@ -289,6 +296,7 @@ public final class JSByteBuffer {
         }
         return this;
     }
+
     public JSByteBuffer putLong(long index, long value) {
         check(index, 8);
         if (contiguous == null) {
@@ -298,6 +306,7 @@ public final class JSByteBuffer {
         }
         return this;
     }
+
     public JSByteBuffer putShort(long index, short value) {
         check(index, 2);
         if (contiguous == null) {
@@ -307,6 +316,7 @@ public final class JSByteBuffer {
         }
         return this;
     }
+
     private long readBits(long index, int size) {
         check(index, size);
         long absolute = base + index;
@@ -337,12 +347,15 @@ public final class JSByteBuffer {
         }
         return value;
     }
+
     public long remaining() {
         return limit - position;
     }
+
     public JSByteBuffer slice() {
         return new JSByteBuffer(store, base + position, remaining()).order(order);
     }
+
     private void write(long index, byte[] source, int offset, int count) {
         java.util.Objects.checkFromIndexSize(offset, count, source.length);
         while (count > 0) {
@@ -355,6 +368,7 @@ public final class JSByteBuffer {
             count -= chunk;
         }
     }
+
     private JSByteBuffer writeBits(long index, long value, int size) {
         check(index, size);
         if ((base + index) % size == 0) {
@@ -380,12 +394,14 @@ public final class JSByteBuffer {
         }
         return this;
     }
+
     public static JSByteBuffer allocate(long capacity) {
         if (capacity < 0 || capacity > JSArrayBuffer.MAX_DATA_BLOCK_BYTE_LENGTH + 1) {
             throw new IllegalArgumentException("Invalid buffer capacity");
         }
         return new JSByteBuffer(new Store(capacity), 0, capacity);
     }
+
     public static JSByteBuffer wrap(byte[] bytes) {
         return new JSByteBuffer(new Store(bytes), 0, bytes.length);
     }
@@ -402,6 +418,7 @@ public final class JSByteBuffer {
             this.bytes = bytes;
             pages = null;
         }
+
         Store(long capacity) {
             bytes = capacity <= PAGE_SIZE ? new byte[(int) capacity] : null;
             pages = bytes == null ? new ConcurrentHashMap<>() : null;

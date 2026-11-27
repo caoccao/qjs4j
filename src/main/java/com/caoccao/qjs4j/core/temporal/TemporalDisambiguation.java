@@ -20,7 +20,10 @@ package com.caoccao.qjs4j.core.temporal;
  * Temporal disambiguation mode enum for resolving ambiguous or invalid local times during timezone conversions.
  */
 public enum TemporalDisambiguation {
-    COMPATIBLE("compatible"), EARLIER("earlier"), LATER("later"), REJECT("reject");
+    COMPATIBLE("compatible"),
+    EARLIER("earlier"),
+    LATER("later"),
+    REJECT("reject");
 
     private final String jsName;
 

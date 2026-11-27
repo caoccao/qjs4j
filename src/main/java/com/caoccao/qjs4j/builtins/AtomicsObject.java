@@ -743,8 +743,13 @@ public final class AtomicsObject implements AutoCloseable {
     }
 
     private enum AtomicOperation {
-        ADD("add"), AND("and"), COMPARE_EXCHANGE("compareExchange"), EXCHANGE("exchange"), OR("or"), SUB("sub"), XOR(
-                "xor");
+        ADD("add"),
+        AND("and"),
+        COMPARE_EXCHANGE("compareExchange"),
+        EXCHANGE("exchange"),
+        OR("or"),
+        SUB("sub"),
+        XOR("xor");
 
         final String methodName;
 
@@ -980,7 +985,9 @@ public final class AtomicsObject implements AutoCloseable {
             }
 
             private enum State {
-                CANCELLED, NOTIFIED, WAITING
+                CANCELLED,
+                NOTIFIED,
+                WAITING
             }
         }
     }

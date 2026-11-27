@@ -112,11 +112,19 @@ final class IntlFormatOptions {
     }
 
     static JSValue localeMatcherError(JSContext context, JSValue options) {
+        return localeMatcherError(context, options, null);
+    }
+
+    static JSValue localeMatcherError(JSContext context, JSValue options, String operation) {
         String matcher = readStringOption(context, options, "localeMatcher");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
         if (!isValidLocaleMatcher(matcher)) {
+            if (operation != null) {
+                return context.throwRangeError(
+                        "Value " + matcher + " out of range for " + operation + " options property localeMatcher");
+            }
             return context.throwRangeError("localeMatcher must be \"lookup\" or \"best fit\"");
         }
         return null;
@@ -225,7 +233,6 @@ final class IntlFormatOptions {
         context.throwRangeError("Invalid " + key + ": " + value);
         return false;
     }
-
     record ConstructorLocale(JSObject prototype, Locale locale) {
         static ConstructorLocale resolve(JSContext context, JSObject prototype, JSValue[] args, String name) {
             JSObject resolvedPrototype = resolveIntlPrototype(context, prototype, name);

@@ -172,7 +172,14 @@ final class ExpressionBinaryParser {
     }
 
     private enum Precedence {
-        ADDITIVE(7), BIT_AND(3), BIT_OR(1), BIT_XOR(2), EQUALITY(4), MULTIPLICATIVE(8), RELATIONAL(5), SHIFT(6);
+        ADDITIVE(7),
+        BIT_AND(3),
+        BIT_OR(1),
+        BIT_XOR(2),
+        EQUALITY(4),
+        MULTIPLICATIVE(8),
+        RELATIONAL(5),
+        SHIFT(6);
         final int level;
         Precedence(int level) {
             this.level = level;

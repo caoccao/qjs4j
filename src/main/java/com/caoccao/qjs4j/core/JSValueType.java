@@ -20,5 +20,13 @@ package com.caoccao.qjs4j.core;
  * Enum representing JavaScript value types.
  */
 public enum JSValueType {
-    BIGINT, BOOLEAN, FUNCTION, NULL, NUMBER, OBJECT, STRING, SYMBOL, UNDEFINED
+    BIGINT,
+    BOOLEAN,
+    FUNCTION,
+    NULL,
+    NUMBER,
+    OBJECT,
+    STRING,
+    SYMBOL,
+    UNDEFINED
 }

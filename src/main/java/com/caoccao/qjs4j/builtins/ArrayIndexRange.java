@@ -37,6 +37,7 @@ record ArrayIndexRange(long start, long end) {
     long count() {
         return Math.max(0, end - start);
     }
+
     static long relativeIndex(JSContext context, JSValue[] args, int index, long length, long defaultValue) {
         if (args.length <= index || args[index] instanceof JSUndefined) {
             return defaultValue;

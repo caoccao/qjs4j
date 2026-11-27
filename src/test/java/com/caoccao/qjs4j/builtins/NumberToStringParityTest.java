@@ -45,6 +45,11 @@ public class NumberToStringParityTest extends BaseJavetTest {
             """;
 
     @Test
+    public void testAutomaticExponentialUsesShortestDigitsAtPowersOfTwo() {
+        assertStringWithJavet("(2 ** -24).toExponential()", "(-(2 ** -24)).toExponential()");
+    }
+
+    @Test
     public void testPowersOfTwoUseTheShortestDigits() {
         assertStringWithJavet("String(2 ** -24)", "String(new Float16Array([2 ** -24])[0])", """
                 var out = [];

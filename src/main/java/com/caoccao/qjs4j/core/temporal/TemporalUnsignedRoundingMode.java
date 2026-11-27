@@ -22,7 +22,11 @@ package com.caoccao.qjs4j.core.temporal;
  * Mirrors Rust temporal_rs {@code UnsignedRoundingMode} (options.rs:791-804).
  */
 public enum TemporalUnsignedRoundingMode {
-    HALF_EVEN("half-even"), HALF_INFINITY("half-infinity"), HALF_ZERO("half-zero"), INFINITY("infinity"), ZERO("zero");
+    HALF_EVEN("half-even"),
+    HALF_INFINITY("half-infinity"),
+    HALF_ZERO("half-zero"),
+    INFINITY("infinity"),
+    ZERO("zero");
 
     private final String jsName;
 

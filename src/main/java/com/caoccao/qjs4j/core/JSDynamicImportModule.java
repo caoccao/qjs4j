@@ -234,6 +234,10 @@ final class JSDynamicImportModule {
     }
 
     enum Status {
-        EVALUATED, EVALUATED_ERROR, EVALUATING, EVALUATING_ASYNC, LOADING
+        EVALUATED,
+        EVALUATED_ERROR,
+        EVALUATING,
+        EVALUATING_ASYNC,
+        LOADING
     }
 }

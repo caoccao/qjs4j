@@ -35,6 +35,7 @@ final class TemporalDurationArithmetic {
     private static final BigInteger WEEK_NANOSECONDS = TemporalConstants.BI_WEEK_NANOSECONDS;
     private TemporalDurationArithmetic() {
     }
+
     private static TemporalDuration balanceZonedDurationWithoutRounding(JSContext context,
             TemporalDuration durationRecord, TemporalRelativeToOption relativeToOption) {
         LocalDateTime dayBalanceAnchorDateTime = relativeToOption.startDateTime().plusYears(durationRecord.years())

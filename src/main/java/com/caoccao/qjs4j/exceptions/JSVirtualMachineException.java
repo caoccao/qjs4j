@@ -86,6 +86,12 @@ public class JSVirtualMachineException extends RuntimeException {
         return jsValue;
     }
 
+    /** Return the original thrown value when this exception carries one. */
+    public JSValue getThrownValue() {
+        JSValue value = getJsValue();
+        return value != null ? value : getJsError();
+    }
+
     /**
      * Read an error's {@code message} without invoking an accessor or a Proxy trap.
      *

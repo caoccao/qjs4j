@@ -22,7 +22,10 @@ package com.caoccao.qjs4j.core.temporal;
  * Controls how a calendar annotation is rendered in {@code toString()} output.
  */
 public enum TemporalDisplayCalendar {
-    ALWAYS("always"), AUTO("auto"), CRITICAL("critical"), NEVER("never");
+    ALWAYS("always"),
+    AUTO("auto"),
+    CRITICAL("critical"),
+    NEVER("never");
 
     private final String jsName;
 

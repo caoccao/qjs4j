@@ -921,7 +921,9 @@ public final class ObjectConstructor {
     }
 
     private enum EnumerableKind {
-        ENTRY, KEY, VALUE
+        ENTRY,
+        KEY,
+        VALUE
     }
 
     @FunctionalInterface

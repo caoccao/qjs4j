@@ -22,7 +22,8 @@ package com.caoccao.qjs4j.core.temporal;
  * Replaces scattered {@code "reject".equals(overflow)} and {@code "constrain".equals(overflow)} string comparisons.
  */
 public enum TemporalOverflow {
-    CONSTRAIN("constrain"), REJECT("reject");
+    CONSTRAIN("constrain"),
+    REJECT("reject");
 
     private final String jsName;
 

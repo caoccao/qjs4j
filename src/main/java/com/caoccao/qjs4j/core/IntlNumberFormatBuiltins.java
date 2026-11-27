@@ -107,13 +107,9 @@ final class IntlNumberFormatBuiltins {
             }
 
             // Option read order must match ECMA-402.
-            String localeMatcher = IntlFormatOptions.readStringOption(context, optionsObject, "localeMatcher");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (!IntlFormatOptions.isValidLocaleMatcher(localeMatcher)) {
-                return context.throwRangeError("Value " + localeMatcher
-                        + " out of range for Intl.NumberFormat options property localeMatcher");
+            JSValue matcherError = IntlFormatOptions.localeMatcherError(context, optionsObject, "Intl.NumberFormat");
+            if (matcherError != null) {
+                return matcherError;
             }
 
             String numberingSystemOption = IntlFormatOptions.readStringOption(context, optionsObject,

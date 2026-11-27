@@ -106,7 +106,10 @@ record RegExpQuantifier(int min, int max) {
     }
 
     private enum AtomBehavior {
-        CONSUMES(false, false), CONSUMES_WITH_BRANCH(false, true), EMPTY(true, false), UNKNOWN(true, true);
+        CONSUMES(false, false),
+        CONSUMES_WITH_BRANCH(false, true),
+        EMPTY(true, false),
+        UNKNOWN(true, true);
         final boolean checkAdvance;
         final boolean resetCaptures;
         AtomBehavior(boolean checkAdvance, boolean resetCaptures) {

@@ -137,16 +137,6 @@ public final class JSONObject {
         }
     }
 
-    private void convertVMException(JSVirtualMachineException e) {
-        if (e.getJsValue() != null) {
-            context.setPendingException(e.getJsValue());
-        } else if (e.getJsError() != null) {
-            context.setPendingException(e.getJsError());
-        } else if (!context.hasPendingException()) {
-            context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
-        }
-    }
-
     /**
      * Get the constructor name for a value (for error messages). Returns 'Object' for plain objects, 'Array' for
      * arrays.
@@ -471,7 +461,7 @@ public final class JSONObject {
         try {
             return parseText(args);
         } catch (JSVirtualMachineException e) {
-            convertVMException(e);
+            context.restoreVMException(e);
         } catch (JSException e) {
             convertJSException(e);
         }
@@ -827,7 +817,7 @@ public final class JSONObject {
         try {
             jsonString = JSTypeConversions.toString(context, args[0]);
         } catch (JSVirtualMachineException e) {
-            convertVMException(e);
+            context.restoreVMException(e);
             return JSUndefined.INSTANCE;
         }
         if (context.hasPendingException()) {
@@ -956,7 +946,7 @@ public final class JSONObject {
         try {
             return stringifyValue(args);
         } catch (JSVirtualMachineException e) {
-            convertVMException(e);
+            context.restoreVMException(e);
         } catch (JSException e) {
             convertJSException(e);
         }

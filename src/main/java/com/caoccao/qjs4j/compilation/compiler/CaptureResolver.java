@@ -142,6 +142,7 @@ final class CaptureResolver {
     }
 
     enum CaptureSourceType {
-        LOCAL, VAR_REF
+        LOCAL,
+        VAR_REF
     }
 }

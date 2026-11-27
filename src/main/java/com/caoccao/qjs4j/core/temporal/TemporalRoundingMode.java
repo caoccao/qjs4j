@@ -25,7 +25,15 @@ import java.math.BigInteger;
  * {@code isValidDifferenceRoundingMode()} methods across temporal prototype files.
  */
 public enum TemporalRoundingMode {
-    CEIL, EXPAND, FLOOR, HALF_CEIL, HALF_EVEN, HALF_EXPAND, HALF_FLOOR, HALF_TRUNC, TRUNC;
+    CEIL,
+    EXPAND,
+    FLOOR,
+    HALF_CEIL,
+    HALF_EVEN,
+    HALF_EXPAND,
+    HALF_FLOOR,
+    HALF_TRUNC,
+    TRUNC;
 
     /**
      * Returns the negated rounding mode, used for .since() operations. ceil ↔ floor, halfCeil ↔ halfFloor, others

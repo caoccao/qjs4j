@@ -20,8 +20,9 @@ import com.caoccao.qjs4j.core.*;
 
 /** Callback iteration shared by Array and TypedArray. */
 enum ArrayIteration {
-    EVERY("every", JSBoolean.FALSE, JSBoolean.TRUE), FOR_EACH("forEach", null, JSUndefined.INSTANCE), SOME("some",
-            JSBoolean.TRUE, JSBoolean.FALSE);
+    EVERY("every", JSBoolean.FALSE, JSBoolean.TRUE),
+    FOR_EACH("forEach", null, JSUndefined.INSTANCE),
+    SOME("some", JSBoolean.TRUE, JSBoolean.FALSE);
 
     final JSValue completion;
     final String methodName;

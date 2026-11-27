@@ -63,6 +63,9 @@ public record TestResult(String message, TestStatus status, Test262TestCase test
     }
 
     public enum TestStatus {
-        FAIL, PASS, SKIP, TIMEOUT
+        FAIL,
+        PASS,
+        SKIP,
+        TIMEOUT
     }
 }

@@ -67,6 +67,7 @@ final class IntlDurationUnitFormat {
         maximumFractionDigits = maxFraction;
         this.truncate = truncate;
     }
+
     // NumberFormat is mutable. Keep access to a cached formatter inside its owner's monitor.
     private synchronized String digits(double value, BigDecimal fraction, boolean magnitude) {
         NumberFormat format = numberFormat();
@@ -78,10 +79,12 @@ final class IntlDurationUnitFormat {
         }
         return format.format(magnitude ? Math.abs(value) : value);
     }
+
     String format(double value, BigDecimal fraction, boolean suppressSign) {
         String number = digits(value, fraction, suppressSign);
         return unit == null ? number : joinNumberAndUnit(number, unit, display, locale);
     }
+
     private NumberFormat numberFormat() {
         if (numberFormat == null) {
             numberFormat = createNumberFormat(minimumIntegerDigits, minimumFractionDigits, maximumFractionDigits,
@@ -89,12 +92,14 @@ final class IntlDurationUnitFormat {
         }
         return numberFormat;
     }
+
     List<FormatPart> parts(double value, BigDecimal fraction, boolean suppressSign) {
         boolean negative = fraction == null
                 ? (value < 0 || Double.doubleToRawLongBits(value) == Long.MIN_VALUE)
                 : fraction.signum() < 0;
         return numberParts(digits(value, fraction, true), !suppressSign && negative, unit, display, locale);
     }
+
     /**
      * Split a formatted number string into integer/decimal/fraction parts.
      */
@@ -110,6 +115,7 @@ final class IntlDurationUnitFormat {
             parts.add(new FormatPart("integer", formatted, null));
         }
     }
+
     private static void addUnitParts(List<FormatPart> parts, String numberPart, String singularUnit, String unitDisplay,
             Locale locale) {
         String unitName = getEnglishTimeUnitName(numberPart, singularUnit, unitDisplay, locale);

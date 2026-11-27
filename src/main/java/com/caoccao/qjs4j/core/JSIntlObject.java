@@ -26,7 +26,6 @@ import java.util.stream.Collectors;
  * Implementation of Intl object and Intl.* prototype methods.
  */
 public final class JSIntlObject {
-    private static final Set<String> AVAILABLE_LOCALE_LANGUAGES;
 
     static final Set<String> SANCTIONED_SIMPLE_UNITS;
     private static final List<String> SORTED_SIMPLE_UNITS = List.of("acre", "bit", "byte", "celsius", "centimeter",
@@ -52,25 +51,8 @@ public final class JSIntlObject {
      */
     private static volatile Map<String, String> TIMEZONE_LOOKUP_MAP;
 
-    /**
-     * Check if a collation value is valid/supported.
-     */
-    private static final Set<String> VALID_COLLATION_TYPES = Set.of("big5han", "compat", "dict", "direct", "ducet",
-            "emoji", "eor", "gb2312", "phonebk", "phonetic", "pinyin", "reformed", "searchjl", "stroke", "trad",
-            "unihan", "zhuyin");
-
     static {
         SANCTIONED_SIMPLE_UNITS = Set.copyOf(SORTED_SIMPLE_UNITS);
-    }
-
-    static {
-        AVAILABLE_LOCALE_LANGUAGES = Arrays.stream(Locale.getAvailableLocales()).map(Locale::toLanguageTag)
-                .filter(tag -> !tag.isEmpty() && !"und".equals(tag)).map(tag -> {
-                    int dashIndex = tag.indexOf('-');
-                    return dashIndex > 0
-                            ? tag.substring(0, dashIndex).toLowerCase(Locale.ROOT)
-                            : tag.toLowerCase(Locale.ROOT);
-                }).collect(Collectors.toSet());
     }
 
     static void appendMatchingExtension(StringBuilder tag, int baseLength, String key, String resolved,
@@ -78,22 +60,6 @@ public final class JSIntlObject {
         if (resolved != null && resolved.equals(requested)) {
             tag.append(tag.length() == baseLength ? "-u-" : "-").append(key).append('-').append(resolved);
         }
-    }
-
-    /**
-     * Build resolved locale tag including applied unicode extensions. Extension keys are only included when the
-     * resolved value matches the original unicode extension value. Sorted alphabetically per BCP 47.
-     */
-    private static String buildResolvedLocaleTag(Locale baseLocale, String collation, boolean numeric, String caseFirst,
-            Map<String, String> unicodeExtensions) {
-        StringBuilder tag = new StringBuilder(IntlLocaleTag.stripUnicodeExtensions(baseLocale).toLanguageTag());
-        int baseLength = tag.length();
-        appendMatchingExtension(tag, baseLength, "co", collation, unicodeExtensions.get("co"));
-        appendMatchingExtension(tag, baseLength, "kf", caseFirst, unicodeExtensions.get("kf"));
-        if (numeric && unicodeExtensions.containsKey("kn") && !"false".equals(unicodeExtensions.get("kn"))) {
-            tag.append(tag.length() == baseLength ? "-u-kn" : "-kn");
-        }
-        return tag.toString();
     }
 
     /**
@@ -130,279 +96,24 @@ public final class JSIntlObject {
         return lowered;
     }
 
-    private static List<String> canonicalizeLocaleList(JSContext context, JSValue localeValue) {
-        List<String> localeTags = new ArrayList<>();
-        if (localeValue == null || localeValue instanceof JSUndefined) {
-            return localeTags;
-        }
-        if (localeValue instanceof JSNull) {
-            context.throwTypeError("Cannot convert null to object");
-            return localeTags;
-        }
-        // Per ECMA-402 §9.2.1 CanonicalizeLocaleList:
-        // Step 3: If Type(locales) is String, wrap in array
-        if (localeValue instanceof JSString) {
-            localeTags.add(((JSString) localeValue).value());
-        } else if (localeValue instanceof JSIntlLocale intlLocale) {
-            // Handle Intl.Locale as top-level argument (use its [[Locale]] internal slot)
-            localeTags.add(intlLocale.getTag());
-        } else {
-            // Step 4: Let O be ToObject(locales)
-            JSObject localeObject;
-            if (localeValue instanceof JSObject obj) {
-                localeObject = obj;
-            } else {
-                localeObject = JSTypeConversions.toObject(context, localeValue);
-                if (context.hasPendingException()) {
-                    return localeTags;
-                }
-            }
-            // Step 5: Let len be ToLength(Get(O, "length"))
-            JSValue lengthValue = localeObject.get(PropertyKey.LENGTH);
-            if (context.hasPendingException()) {
-                return localeTags;
-            }
-            long length;
-            if (lengthValue == null || lengthValue instanceof JSUndefined) {
-                length = 0;
-            } else {
-                double lenNum = JSTypeConversions.toNumber(context, lengthValue).value();
-                if (context.hasPendingException()) {
-                    return localeTags;
-                }
-                if (Double.isNaN(lenNum) || lenNum < 0) {
-                    length = 0;
-                } else {
-                    length = (long) Math.min(lenNum, (double) Long.MAX_VALUE);
-                }
-            }
-            // Step 6: Iterate from 0 to len
-            for (long i = 0; i < length; i++) {
-                PropertyKey pk = PropertyKey.fromString(String.valueOf(i));
-                // Step 7b: Let kPresent be HasProperty(O, Pk)
-                boolean kPresent;
-                try {
-                    kPresent = localeObject.has(pk);
-                } catch (JSException e) {
-                    // Proxy has trap may throw
-                    return localeTags;
-                }
-                if (context.hasPendingException()) {
-                    return localeTags;
-                }
-                if (!kPresent) {
-                    continue;
-                }
-                JSValue element = localeObject.get(pk);
-                if (context.hasPendingException()) {
-                    return localeTags;
-                }
-                if (element == null || element instanceof JSUndefined) {
-                    context.throwTypeError("undefined is not a well-formed locale value");
-                    return localeTags;
-                }
-                if (!(element instanceof JSString) && !(element instanceof JSObject)) {
-                    context.throwTypeError(JSTypeConversions.toString(context, element).value()
-                            + " is not a well-formed currency value");
-                    return localeTags;
-                }
-                // Per ECMA-402, if element has [[InitializedLocale]], use its [[Locale]] tag
-                if (element instanceof JSIntlLocale intlLocale) {
-                    localeTags.add(intlLocale.getTag());
-                } else {
-                    localeTags.add(JSTypeConversions.toString(context, element).value());
-                }
-                if (context.hasPendingException()) {
-                    return localeTags;
-                }
-            }
-        }
-        LinkedHashSet<String> canonicalLocales = new LinkedHashSet<>();
-        for (String localeTag : localeTags) {
-            try {
-                canonicalLocales.add(canonicalizeLocaleTag(localeTag));
-            } catch (IllegalArgumentException e) {
-                context.throwRangeError("Invalid language tag: " + localeTag);
-                return new ArrayList<>();
-            }
-        }
-        return new ArrayList<>(canonicalLocales);
-    }
-
     static String canonicalizeLocaleTag(String localeTag) {
         return IntlLocaleTag.canonicalizeLocaleTag(localeTag);
     }
 
     public static JSValue collatorCompare(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlCollator collator)) {
-            return context.throwTypeError("Intl.Collator.prototype.compare called on incompatible receiver");
-        }
-        String left = args.length > 0 ? JSTypeConversions.toString(context, args[0]).value() : "undefined";
-        String right = args.length > 1 ? JSTypeConversions.toString(context, args[1]).value() : "undefined";
-        return JSNumber.of(collator.compare(left, right));
+        return IntlCollatorBuiltins.collatorCompare(context, thisArg, args);
     }
 
-    /**
-     * Getter for Intl.Collator.prototype.compare. Per ECMA-402 §10.3.3, this is an accessor property that returns a
-     * bound compare function.
-     */
     public static JSValue collatorCompareGetter(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlCollator collator)) {
-            return context.throwTypeError("Intl.Collator.prototype.compare called on incompatible receiver");
-        }
-        // Return the cached bound compare function, creating it on first access
-        JSFunction cached = collator.getBoundCompareFunction();
-        if (cached != null) {
-            return cached;
-        }
-        JSNativeFunction boundCompare = new JSNativeFunction(context, "", 2,
-                (ctx, thisVal, compareArgs) -> collatorCompare(ctx, collator, compareArgs));
-        context.transferPrototype(boundCompare, JSFunction.NAME);
-        collator.setBoundCompareFunction(boundCompare);
-        return boundCompare;
+        return IntlCollatorBuiltins.collatorCompareGetter(context, thisArg, args);
     }
 
     public static JSValue collatorResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlCollator collator)) {
-            return context.throwTypeError("Intl.Collator.prototype.resolvedOptions called on incompatible receiver");
-        }
-        JSObject resolvedOptions = context.createJSObject();
-        createDataProperty(resolvedOptions, "locale", new JSString(collator.getResolvedLocaleTag()));
-        createDataProperty(resolvedOptions, "usage", new JSString(collator.getUsage()));
-        createDataProperty(resolvedOptions, "sensitivity", new JSString(collator.getSensitivity()));
-        createDataProperty(resolvedOptions, "ignorePunctuation", JSBoolean.valueOf(collator.getIgnorePunctuation()));
-        createDataProperty(resolvedOptions, "collation", new JSString(collator.getCollation()));
-        createDataProperty(resolvedOptions, "numeric", JSBoolean.valueOf(collator.getNumeric()));
-        createDataProperty(resolvedOptions, "caseFirst", new JSString(collator.getCaseFirst()));
-        return resolvedOptions;
+        return IntlCollatorBuiltins.collatorResolvedOptions(context, thisArg, args);
     }
 
     public static JSValue createCollator(JSContext context, JSObject prototype, JSValue[] args) {
-        try {
-            Locale locale = resolveLocale(context, args, 0);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            JSValue optionsValue = JSValue.argumentOrUndefined(args, 1);
-
-            // Parse unicode extension keys from locale tag (e.g. en-u-kn-true-co-phonebk)
-            Map<String, String> unicodeExtensions = IntlLocaleTag.parseUnicodeExtensions(locale.toLanguageTag());
-
-            // Read options in ECMA-402 spec order
-
-            // 1. usage
-            String usage = IntlFormatOptions.normalizedStringOption(context, optionsValue, "usage", "sort", "sort",
-                    "search");
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-
-            // 2. localeMatcher
-            String localeMatcher = IntlFormatOptions.readStringOption(context, optionsValue, "localeMatcher");
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (!IntlFormatOptions.isValidLocaleMatcher(localeMatcher)) {
-                return context.throwRangeError("Invalid option value " + localeMatcher + " for property localeMatcher");
-            }
-
-            // 3. collation: resolve from option and/or extension per ECMA-402
-            String optionCollation = IntlFormatOptions.readStringOption(context, optionsValue, "collation");
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            String extensionCollation = unicodeExtensions.get("co");
-            String collation;
-            if (optionCollation != null) {
-                if (isValidCollation(optionCollation) && isSupportedCollation(locale.getLanguage(), optionCollation)) {
-                    collation = optionCollation;
-                } else if (isValidCollation(extensionCollation)
-                        && isSupportedCollation(locale.getLanguage(), extensionCollation)) {
-                    collation = extensionCollation;
-                } else {
-                    collation = "default";
-                }
-            } else if (isValidCollation(extensionCollation)
-                    && isSupportedCollation(locale.getLanguage(), extensionCollation)) {
-                collation = extensionCollation;
-            } else {
-                collation = "default";
-            }
-
-            // 4. numeric: option overrides extension key "kn"
-            boolean numericSet = false;
-            boolean numeric = false;
-            if (optionsValue instanceof JSObject optionsObject) {
-                JSValue numericValue = optionsObject.get(PropertyKey.fromString("numeric"));
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                if (numericValue != null && !numericValue.isNullOrUndefined()) {
-                    numeric = JSTypeConversions.toBoolean(numericValue).value();
-                    numericSet = true;
-                }
-            }
-            if (!numericSet && unicodeExtensions.containsKey("kn")) {
-                String extNumeric = unicodeExtensions.get("kn");
-                numeric = !"false".equals(extNumeric);
-            }
-
-            // 5. caseFirst: option overrides extension key "kf"
-            String caseFirst = IntlFormatOptions.readStringOption(context, optionsValue, "caseFirst");
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (caseFirst != null && !"upper".equals(caseFirst) && !"lower".equals(caseFirst)
-                    && !"false".equals(caseFirst)) {
-                return context.throwRangeError("Invalid option value " + caseFirst + " for property caseFirst");
-            }
-            if (caseFirst == null && unicodeExtensions.containsKey("kf")) {
-                String extCaseFirst = unicodeExtensions.get("kf");
-                if ("upper".equals(extCaseFirst) || "lower".equals(extCaseFirst) || "false".equals(extCaseFirst)) {
-                    caseFirst = extCaseFirst;
-                }
-            }
-            if (caseFirst == null) {
-                // CLDR's Danish tailoring orders uppercase first, and ICU reports that as the resolved default.
-                caseFirst = "da".equals(locale.getLanguage()) ? "upper" : "false";
-            }
-
-            // 6. sensitivity - default depends on usage per ECMA-402 Table 4
-            String sensitivity = IntlFormatOptions.readStringOption(context, optionsValue, "sensitivity");
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            String sensitivityDefault = "search".equals(usage) ? "base" : "variant";
-            sensitivity = IntlFormatOptions.normalizeOption(sensitivity, sensitivityDefault, "base", "accent", "case",
-                    "variant");
-
-            // 7. ignorePunctuation - Thai locale defaults to true per ECMA-402
-            boolean ignorePunctuation = "th".equals(locale.getLanguage());
-            if (optionsValue instanceof JSObject optionsObject2) {
-                JSValue ipValue = optionsObject2.get(PropertyKey.fromString("ignorePunctuation"));
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                if (ipValue != null && !ipValue.isNullOrUndefined()) {
-                    ignorePunctuation = JSTypeConversions.toBoolean(ipValue).value();
-                }
-            }
-
-            // Build resolved locale with applied unicode extensions
-            Locale resolvedLocale = IntlLocaleTag.stripUnicodeExtensions(locale);
-            String resolvedLocaleTag = buildResolvedLocaleTag(locale, collation, numeric, caseFirst, unicodeExtensions);
-
-            JSIntlCollator collator = new JSIntlCollator(context, resolvedLocale, sensitivity, usage, collation,
-                    numeric, caseFirst, ignorePunctuation, resolvedLocaleTag);
-            JSObject resolvedPrototype = IntlFormatOptions.resolveIntlPrototype(context, prototype, "Collator");
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            collator.setPrototype(resolvedPrototype);
-            return collator;
-        } catch (IllegalArgumentException e) {
-            return context.throwRangeError(e.getMessage());
-        }
+        return IntlCollatorBuiltins.createCollator(context, prototype, args);
     }
 
     /**
@@ -521,53 +232,7 @@ public final class JSIntlObject {
     }
 
     public static JSValue createListFormat(JSContext context, JSObject prototype, JSValue[] args) {
-        try {
-            Locale locale = resolveLocale(context, args, 0);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            // GetOptionsObject: validate options argument
-            JSValue optionsArg = JSValue.argumentOrUndefined(args, 1);
-            JSValue optionsObj = IntlFormatOptions.getOptionsObject(context, optionsArg);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            // Read options in spec order: localeMatcher, type, style
-            String localeMatcher = IntlFormatOptions.readStringOption(context, optionsObj, "localeMatcher");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (!IntlFormatOptions.isValidLocaleMatcher(localeMatcher)) {
-                return context.throwRangeError(
-                        "Value " + localeMatcher + " out of range for Intl.ListFormat options property localeMatcher");
-            }
-
-            String type = IntlFormatOptions.normalizeOption(
-                    IntlFormatOptions.readStringOption(context, optionsObj, "type"), "conjunction", "conjunction",
-                    "disjunction", "unit");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            String style = IntlFormatOptions.normalizeOption(
-                    IntlFormatOptions.readStringOption(context, optionsObj, "style"), "long", "long", "short",
-                    "narrow");
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            JSIntlListFormat listFormat = new JSIntlListFormat(context, locale, style, type);
-            JSObject resolvedPrototype = IntlFormatOptions.resolveIntlPrototype(context, prototype, "ListFormat");
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            listFormat.setPrototype(resolvedPrototype);
-            return listFormat;
-        } catch (IllegalArgumentException e) {
-            return context.throwRangeError(e.getMessage());
-        }
+        return IntlListFormatBuiltins.createListFormat(context, prototype, args);
     }
 
     public static JSValue createLocale(JSContext context, JSObject prototype, JSValue[] args) {
@@ -651,14 +316,13 @@ public final class JSIntlObject {
                 if (args[0] instanceof JSNull) {
                     return context.throwTypeError("Cannot convert null to object");
                 }
-                List<String> canonicalLocales = canonicalizeLocaleList(context, args[0]);
+                List<String> canonicalLocales = IntlLocaleList.canonicalizeLocaleList(context, args[0]);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
                 for (String localeTag : canonicalLocales) {
-                    Locale candidateLocale = Locale.forLanguageTag(localeTag);
-                    String language = candidateLocale.getLanguage().toLowerCase(Locale.ROOT);
-                    if (!language.isEmpty() && AVAILABLE_LOCALE_LANGUAGES.contains(language)) {
+                    Locale candidateLocale = IntlLocaleList.supportedLocale(localeTag);
+                    if (candidateLocale != null) {
                         locale = candidateLocale;
                         break;
                     }
@@ -820,16 +484,7 @@ public final class JSIntlObject {
     }
 
     public static JSValue getCanonicalLocales(JSContext context, JSValue thisArg, JSValue[] args) {
-        try {
-            List<String> localeList = canonicalizeLocaleList(context, JSValue.argumentOrUndefined(args, 0));
-            JSArray localesArray = context.createJSArray();
-            for (String localeTag : localeList) {
-                localesArray.push(new JSString(localeTag));
-            }
-            return localesArray;
-        } catch (IllegalArgumentException e) {
-            return context.throwRangeError(e.getMessage());
-        }
+        return IntlLocaleList.getCanonicalLocales(context, thisArg, args);
     }
 
     /**
@@ -891,78 +546,16 @@ public final class JSIntlObject {
         };
     }
 
-    /**
-     * Check if a collation type is supported for a given locale language. Based on CLDR data for common locale-specific
-     * collation types.
-     */
-    private static boolean isSupportedCollation(String language, String collation) {
-        if (collation == null || "default".equals(collation)) {
-            return true;
-        }
-        return switch (language) {
-            case "de" -> "phonebk".equals(collation) || "eor".equals(collation);
-            case "es" -> "trad".equals(collation) || "eor".equals(collation);
-            case "zh" -> "pinyin".equals(collation) || "stroke".equals(collation) || "zhuyin".equals(collation)
-                    || "big5han".equals(collation) || "gb2312".equals(collation) || "unihan".equals(collation);
-            case "ja", "ko" -> "unihan".equals(collation) || "searchjl".equals(collation);
-            case "si" -> "dict".equals(collation);
-            case "sv" -> "reformed".equals(collation);
-            case "en" -> "ducet".equals(collation) || "emoji".equals(collation) || "eor".equals(collation);
-            case "ln" -> "phonetic".equals(collation);
-            case "hi" -> "direct".equals(collation);
-            default -> false;
-        };
-    }
-
-    private static boolean isValidCollation(String collation) {
-        if (collation == null || collation.isEmpty()) {
-            return false;
-        }
-        return VALID_COLLATION_TYPES.contains(collation);
-    }
-
     public static JSValue listFormatFormat(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlListFormat listFormat)) {
-            return context.throwTypeError("Intl.ListFormat.prototype.format called on incompatible receiver");
-        }
-        JSValue listArg = JSValue.argumentOrUndefined(args, 0);
-        List<String> values = stringListFromIterable(context, listArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(listFormat.format(values));
+        return IntlListFormatBuiltins.listFormatFormat(context, thisArg, args);
     }
 
     public static JSValue listFormatFormatToParts(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlListFormat listFormat)) {
-            return context.throwTypeError("Intl.ListFormat.prototype.formatToParts called on incompatible receiver");
-        }
-        JSValue listArg = JSValue.argumentOrUndefined(args, 0);
-        List<String> values = stringListFromIterable(context, listArg);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        List<JSIntlDurationFormat.ListFormatPart> parts = JSIntlDurationFormat.formatListToParts(listFormat, values);
-        JSArray result = context.createJSArray();
-        for (int i = 0; i < parts.size(); i++) {
-            JSIntlDurationFormat.ListFormatPart part = parts.get(i);
-            JSObject partObj = createPartObject(context, part.type(), part.value());
-            result.set(i, partObj);
-        }
-        return result;
+        return IntlListFormatBuiltins.listFormatFormatToParts(context, thisArg, args);
     }
 
     public static JSValue listFormatResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSIntlListFormat listFormat)) {
-            return context.throwTypeError("Intl.ListFormat.prototype.resolvedOptions called on incompatible receiver");
-        }
-        JSObject resolvedOptions = context.createJSObject();
-        // Use CreateDataProperty (defineProperty) instead of [[Set]] to avoid
-        // triggering getter-only accessors on Object.prototype (per spec §9.1.6.3)
-        createDataProperty(resolvedOptions, "locale", new JSString(listFormat.getLocale().toLanguageTag()));
-        createDataProperty(resolvedOptions, "type", new JSString(listFormat.getType()));
-        createDataProperty(resolvedOptions, "style", new JSString(listFormat.getStyle()));
-        return resolvedOptions;
+        return IntlListFormatBuiltins.listFormatResolvedOptions(context, thisArg, args);
     }
 
     public static JSValue localeGetBaseName(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1116,22 +709,7 @@ public final class JSIntlObject {
     }
 
     public static Locale resolveLocale(JSContext context, JSValue[] args, int index) {
-        if (index >= args.length || args[index].isUndefined()) {
-            return Locale.getDefault();
-        }
-        // Per ECMA-402 CanonicalizeLocaleList: null → TypeError
-        if (args[index] instanceof JSNull) {
-            context.throwTypeError("Cannot convert null to object");
-            return null;
-        }
-        List<String> canonicalLocales = canonicalizeLocaleList(context, args[index]);
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (canonicalLocales.isEmpty()) {
-            return Locale.getDefault();
-        }
-        return Locale.forLanguageTag(canonicalLocales.get(0));
+        return IntlLocaleList.resolveLocale(context, args, index);
     }
 
     public static JSValue segmenterResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1171,149 +749,8 @@ public final class JSIntlObject {
         return segments.createIterator(context);
     }
 
-    /**
-     * StringListFromIterable (ECMA-402 §13.5.1). Converts an iterable to a list of strings, throwing TypeError for
-     * non-string elements.
-     */
-    private static List<String> stringListFromIterable(JSContext context, JSValue list) {
-        List<String> result = new ArrayList<>();
-        if (list == null || list instanceof JSUndefined) {
-            return result;
-        }
-
-        // Get the iterator
-        if (list instanceof JSString jsString) {
-            // Strings are iterable character by character
-            String s = jsString.value();
-            for (int i = 0; i < s.length();) {
-                int cp = s.codePointAt(i);
-                result.add(new String(Character.toChars(cp)));
-                i += Character.charCount(cp);
-            }
-            return result;
-        }
-
-        if (!(list instanceof JSObject listObj)) {
-            context.throwTypeError(JSTypeConversions.toString(context, list).value() + " is not iterable");
-            return result;
-        }
-
-        // Get [Symbol.iterator]
-        JSValue iteratorMethod = listObj.get(PropertyKey.SYMBOL_ITERATOR);
-        if (context.hasPendingException()) {
-            return result;
-        }
-        if (!(iteratorMethod instanceof JSFunction iteratorFunc)) {
-            context.throwTypeError("object is not iterable");
-            return result;
-        }
-
-        // Call the iterator method
-        JSValue iterator = iteratorFunc.call(context, list, JSValue.NO_ARGS);
-        if (context.hasPendingException()) {
-            return result;
-        }
-        if (!(iterator instanceof JSObject iteratorObj)) {
-            context.throwTypeError("iterator must return an object");
-            return result;
-        }
-
-        // Get next method
-        JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT);
-        if (context.hasPendingException()) {
-            return result;
-        }
-        if (!(nextMethod instanceof JSFunction nextFunc)) {
-            context.throwTypeError("iterator next is not a function");
-            return result;
-        }
-
-        // Iterate
-        while (true) {
-            JSValue nextResult = nextFunc.call(context, iterator, JSValue.NO_ARGS);
-            if (context.hasPendingException()) {
-                return result;
-            }
-            if (!(nextResult instanceof JSObject nextResultObj)) {
-                context.throwTypeError("iterator result is not an object");
-                return result;
-            }
-
-            JSValue doneValue = nextResultObj.get(PropertyKey.DONE);
-            if (context.hasPendingException()) {
-                return result;
-            }
-            if (JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE) {
-                break;
-            }
-
-            JSValue value = nextResultObj.get(PropertyKey.VALUE);
-            if (context.hasPendingException()) {
-                return result;
-            }
-
-            // Per spec, each element must be a string
-            if (!(value instanceof JSString)) {
-                // IteratorClose: call return() if it exists
-                JSValue returnMethod = iteratorObj.get(PropertyKey.RETURN);
-                if (returnMethod instanceof JSFunction returnFunc) {
-                    returnFunc.call(context, iterator, JSValue.NO_ARGS);
-                }
-                context.throwTypeError("Iterable yielded " + JSTypeConversions.toString(context, value).value()
-                        + " which is not a string");
-                return result;
-            }
-            result.add(((JSString) value).value());
-        }
-        return result;
-    }
-
     public static JSValue supportedLocalesOf(JSContext context, JSValue thisArg, JSValue[] args) {
-        try {
-            // Validate and process options argument per SupportedLocales spec
-            if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
-                JSValue optionsArg = args[1];
-                if (optionsArg instanceof JSNull) {
-                    return context.throwTypeError("Cannot convert null to object");
-                }
-                // ToObject for primitives
-                JSValue optionsObj;
-                if (optionsArg instanceof JSObject) {
-                    optionsObj = optionsArg;
-                } else {
-                    optionsObj = JSTypeConversions.toObject(context, optionsArg);
-                    if (context.hasPendingException()) {
-                        return JSUndefined.INSTANCE;
-                    }
-                }
-                // Validate localeMatcher
-                String localeMatcher = IntlFormatOptions.readStringOption(context, optionsObj, "localeMatcher");
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                if (!IntlFormatOptions.isValidLocaleMatcher(localeMatcher)) {
-                    return context.throwRangeError("Value " + localeMatcher
-                            + " out of range for supportedLocalesOf options property localeMatcher");
-                }
-            }
-            JSArray localesArray = context.createJSArray();
-            if (args.length > 0) {
-                List<String> canonicalLocales = canonicalizeLocaleList(context, args[0]);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                for (String localeTag : canonicalLocales) {
-                    Locale locale = Locale.forLanguageTag(localeTag);
-                    String language = locale.getLanguage().toLowerCase(Locale.ROOT);
-                    if (!language.isEmpty() && AVAILABLE_LOCALE_LANGUAGES.contains(language)) {
-                        localesArray.push(new JSString(localeTag));
-                    }
-                }
-            }
-            return localesArray;
-        } catch (IllegalArgumentException e) {
-            return context.throwRangeError(e.getMessage());
-        }
+        return IntlLocaleList.supportedLocalesOf(context, thisArg, args);
     }
 
     /**
@@ -1415,5 +852,4 @@ public final class JSIntlObject {
         }
         return result;
     }
-
 }

@@ -909,6 +909,13 @@ final class IntlDateTimeFormatBuiltins {
     }
 
     private enum DateTimeFormattableKind {
-        INSTANT, NUMBER, PLAIN_DATE, PLAIN_DATE_TIME, PLAIN_MONTH_DAY, PLAIN_TIME, PLAIN_YEAR_MONTH, ZONED_DATE_TIME
+        INSTANT,
+        NUMBER,
+        PLAIN_DATE,
+        PLAIN_DATE_TIME,
+        PLAIN_MONTH_DAY,
+        PLAIN_TIME,
+        PLAIN_YEAR_MONTH,
+        ZONED_DATE_TIME
     }
 }

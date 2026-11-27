@@ -20,7 +20,11 @@ package com.caoccao.qjs4j.compilation.ast;
  * The kind of a variable declaration.
  */
 public enum VariableKind {
-    AWAIT_USING("await using"), CONST("const"), LET("let"), USING("using"), VAR("var");
+    AWAIT_USING("await using"),
+    CONST("const"),
+    LET("let"),
+    USING("using"),
+    VAR("var");
 
     private final String keyword;
 

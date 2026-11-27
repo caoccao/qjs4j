@@ -22,7 +22,9 @@ import java.util.List;
 
 /** Bytecode for block-bodied functions, including hoisting and completion. */
 enum FunctionBodyCompiler {
-    ARROW("#arrow_return_"), METHOD("#method_return_"), ORDINARY("#function_return_");
+    ARROW("#arrow_return_"),
+    METHOD("#method_return_"),
+    ORDINARY("#function_return_");
 
     private final String returnLocalPrefix;
 

@@ -28,11 +28,22 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.LongAdder;
 
 public enum TemporalCalendarId {
-    BUDDHIST("buddhist", true), CHINESE("chinese", false), COPTIC("coptic", true), DANGI("dangi", false), ETHIOAA(
-            "ethioaa", true), ETHIOPIC("ethiopic", true), GREGORY("gregory", true), HEBREW("hebrew",
-                    true), INDIAN("indian", true), ISLAMIC_CIVIL("islamic-civil", true), ISLAMIC_TBLA("islamic-tbla",
-                            true), ISLAMIC_UMALQURA("islamic-umalqura", true), ISO8601("iso8601",
-                                    false), JAPANESE("japanese", true), PERSIAN("persian", true), ROC("roc", true);
+    BUDDHIST("buddhist", true),
+    CHINESE("chinese", false),
+    COPTIC("coptic", true),
+    DANGI("dangi", false),
+    ETHIOAA("ethioaa", true),
+    ETHIOPIC("ethiopic", true),
+    GREGORY("gregory", true),
+    HEBREW("hebrew", true),
+    INDIAN("indian", true),
+    ISLAMIC_CIVIL("islamic-civil", true),
+    ISLAMIC_TBLA("islamic-tbla", true),
+    ISLAMIC_UMALQURA("islamic-umalqura", true),
+    ISO8601("iso8601", false),
+    JAPANESE("japanese", true),
+    PERSIAN("persian", true),
+    ROC("roc", true);
 
     private static final int[] CHINESE_LUNAR_YEAR_INFO = {0x04bd8, 0x04ae0, 0x0a570, 0x054d5, 0x0d260, 0x0d950, 0x16554,
             0x056a0, 0x09ad0, 0x055d2, 0x04ae0, 0x0a5b6, 0x0a4d0, 0x0d250, 0x1d255, 0x0b540, 0x0d6a0, 0x0ada2, 0x095b0,

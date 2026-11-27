@@ -138,6 +138,7 @@ final class ArrayFromAsync {
                 }), promise.rejectHandler(context, "onError"));
 
     }
+
     private boolean rejectPending() {
         if (!context.hasPendingException()) {
             return false;

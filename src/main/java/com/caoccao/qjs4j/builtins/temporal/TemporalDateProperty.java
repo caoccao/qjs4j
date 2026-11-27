@@ -20,10 +20,20 @@ import com.caoccao.qjs4j.core.temporal.*;
 
 /** Calendar-derived properties shared by Temporal date types. */
 enum TemporalDateProperty {
-    DAY("day"), DAY_OF_WEEK("dayOfWeek"), DAY_OF_YEAR("dayOfYear"), DAYS_IN_MONTH("daysInMonth"), DAYS_IN_YEAR(
-            "daysInYear"), ERA("era"), ERA_YEAR("eraYear"), IN_LEAP_YEAR("inLeapYear"), MONTH(
-                    "month"), MONTH_CODE("monthCode"), MONTHS_IN_YEAR(
-                            "monthsInYear"), WEEK_OF_YEAR("weekOfYear"), YEAR("year"), YEAR_OF_WEEK("yearOfWeek");
+    DAY("day"),
+    DAY_OF_WEEK("dayOfWeek"),
+    DAY_OF_YEAR("dayOfYear"),
+    DAYS_IN_MONTH("daysInMonth"),
+    DAYS_IN_YEAR("daysInYear"),
+    ERA("era"),
+    ERA_YEAR("eraYear"),
+    IN_LEAP_YEAR("inLeapYear"),
+    MONTH("month"),
+    MONTH_CODE("monthCode"),
+    MONTHS_IN_YEAR("monthsInYear"),
+    WEEK_OF_YEAR("weekOfYear"),
+    YEAR("year"),
+    YEAR_OF_WEEK("yearOfWeek");
     final String key;
     TemporalDateProperty(String key) {
         this.key = key;

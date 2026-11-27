@@ -19,8 +19,12 @@ package com.caoccao.qjs4j.compilation.ast;
 /** Common syntax of function declarations and function expressions. */
 public interface OrdinaryFunctionNode extends FunctionNode {
     BlockStatement getBody();
+
     Identifier getId();
+
     boolean isAsync();
+
     boolean isGenerator();
+
     boolean needsArguments();
 }

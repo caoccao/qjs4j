@@ -22,13 +22,17 @@ import java.math.BigInteger;
 /** Resolved precision for the ISO time portion of a Temporal string. */
 interface TemporalTimePrecision {
     boolean autoFractionalSecondDigits();
+
     default String format(IsoDateTime dateTime) {
         return dateTime.date() + "T" + format(dateTime.time());
     }
+
     default String format(IsoTime time) {
         return time.formatTimeString(smallestUnit(), autoFractionalSecondDigits(), fractionalSecondDigits());
     }
+
     int fractionalSecondDigits();
+
     default BigInteger roundedEpoch(JSContext context, BigInteger nanos) {
         long increment = roundingIncrementNanoseconds();
         BigInteger rounded = increment == 1L

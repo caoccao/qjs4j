@@ -498,12 +498,15 @@ public final class TypedArrayPrototype {
     }
 
     private enum IteratorKind {
-        ENTRIES, KEYS, VALUES
+        ENTRIES,
+        KEYS,
+        VALUES
     }
 
     private enum Search {
-        FIRST("TypedArray.prototype.indexOf"), INCLUDES("TypedArray.prototype.includes"), LAST(
-                "TypedArray.prototype.lastIndexOf");
+        FIRST("TypedArray.prototype.indexOf"),
+        INCLUDES("TypedArray.prototype.includes"),
+        LAST("TypedArray.prototype.lastIndexOf");
         final String method;
         Search(String method) {
             this.method = method;

@@ -102,6 +102,7 @@ final class StatementCompiler extends AstNodeCompiler<Statement> {
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
         }
     }
+
     private void initializeLexicalBinding(String name, boolean immutable) {
         var scope = compilerContext.scopeManager.currentScope();
         Integer index = scope.getLocal(name);
