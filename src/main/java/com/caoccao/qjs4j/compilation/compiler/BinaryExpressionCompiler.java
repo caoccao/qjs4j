@@ -76,15 +76,7 @@ final class BinaryExpressionCompiler extends AstNodeCompiler<BinaryExpression> {
     private void compilePrivateInExpression(PrivateIdentifier privateIdentifier, Expression right) {
         compilerContext.expressionCompiler.compile(right);
 
-        JSSymbol symbol = compilerContext.privateSymbols != null
-                ? compilerContext.privateSymbols.get(privateIdentifier.getName())
-                : null;
-        if (symbol == null) {
-            throw new JSCompilerException("undefined private field '#" + privateIdentifier.getName() + "'",
-                    privateIdentifier);
-        }
-
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+        compilerContext.emitHelpers.emitPrivateSymbol(privateIdentifier);
         compilerContext.emitter.emitOpcode(Opcode.PRIVATE_IN);
     }
 

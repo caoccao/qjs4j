@@ -50,10 +50,8 @@ final class StatementCompiler extends AstNodeCompiler<Statement> {
             compilerContext.whileStatementCompiler.compile(loop);
         } else if (stmt instanceof ForStatement forStmt) {
             ForStatementCompiler.compile(compilerContext, forStmt);
-        } else if (stmt instanceof ForInStatement forInStmt) {
-            ForInStatementCompiler.compile(compilerContext, forInStmt);
-        } else if (stmt instanceof ForOfStatement forOfStmt) {
-            compilerContext.forOfStatementCompiler.compile(forOfStmt);
+        } else if (stmt instanceof ForEachStatement forEach) {
+            compilerContext.forEachStatementCompiler.compile(forEach);
         } else if (stmt instanceof ReturnStatement retStmt) {
             ReturnStatementCompiler.compile(compilerContext, retStmt);
         } else if (stmt instanceof JumpStatement jump) {

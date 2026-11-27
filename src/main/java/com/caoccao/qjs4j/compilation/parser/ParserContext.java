@@ -237,10 +237,6 @@ final class ParserContext {
         return isAlwaysReservedIdentifierName(name);
     }
 
-    private boolean isAlwaysReservedIdentifierName(String name) {
-        return ALWAYS_RESERVED_IDENTIFIER_NAMES.contains(name);
-    }
-
     boolean isASIToken() {
         return switch (currentToken.type()) {
             case NUMBER, STRING, IDENTIFIER, INC, DEC, NULL, FALSE, TRUE, IF, RETURN, VAR, THIS, DELETE, TYPEOF, NEW,
@@ -364,15 +360,6 @@ final class ParserContext {
         return isStrictReservedIdentifierName(name);
     }
 
-    private boolean isStrictReservedIdentifierName(String name) {
-        return switch (name) {
-            case JSKeyword.IMPLEMENTS, JSKeyword.INTERFACE, JSKeyword.LET, JSKeyword.PACKAGE, JSKeyword.PRIVATE,
-                    JSKeyword.PROTECTED, JSKeyword.PUBLIC, JSKeyword.STATIC, JSKeyword.YIELD ->
-                true;
-            default -> false;
-        };
-    }
-
     boolean isUsingDeclarationStart() {
         return currentToken.type() == TokenType.IDENTIFIER && JSKeyword.USING.equals(currentToken.value())
                 && isBindingIdentifierStartToken(nextToken) && nextToken.line() == currentToken.line();
@@ -407,6 +394,35 @@ final class ParserContext {
 
     boolean match(TokenType type) {
         return currentToken.type() == type;
+    }
+
+    String parseBindingIdentifierName() {
+        String name = currentToken.value();
+        switch (currentToken.type()) {
+            case IDENTIFIER -> validateIdentifierName(name);
+            case ASYNC, FROM, OF, AS -> {
+                // Contextual keywords can bind a name here.
+            }
+            case AWAIT -> {
+                if (!isAwaitIdentifierAllowed()) {
+                    throw new JSSyntaxErrorException("Unexpected 'await' keyword");
+                }
+            }
+            case YIELD -> {
+                if (!isYieldIdentifierAllowed()) {
+                    throw new JSSyntaxErrorException(
+                            strictMode ? "Unexpected strict mode reserved word" : "Unexpected token 'yield'");
+                }
+            }
+            case LET -> {
+                if (strictMode && isStrictReservedIdentifierName(name)) {
+                    throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
+                }
+            }
+            default -> throw new JSSyntaxErrorException("Unexpected token '" + name + "'");
+        }
+        advance();
+        return name;
     }
 
     /**
@@ -489,107 +505,58 @@ final class ParserContext {
 
     Identifier parseIdentifier() {
         SourceLocation location = getLocation();
-        if (match(TokenType.IDENTIFIER)) {
-            String name = currentToken.value();
-            if (isAlwaysReservedIdentifierName(name)) {
-                // ES2024 12.7.1: Escaped keywords are tokenized as IDENTIFIER but
-                // their StringValue still matches a reserved word — use V8's message.
-                if (currentToken.escaped()) {
-                    throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
-                }
-                // V8 reports "Unexpected reserved word" for enum (a future reserved word)
-                // but "Unexpected token 'X'" for regular keywords (with, debugger, etc.)
-                if (JSKeyword.ENUM.equals(name)) {
-                    throw new JSSyntaxErrorException("Unexpected reserved word");
-                }
-                throw new JSSyntaxErrorException("Unexpected token '" + name + "'");
+        return new Identifier(parseBindingIdentifierName(), location);
+    }
+
+    Token peek() {
+        return nextToken;
+    }
+
+    private void validateIdentifierName(String name) {
+        if (isAlwaysReservedIdentifierName(name)) {
+            // ES2024 12.7.1: Escaped keywords are tokenized as IDENTIFIER but
+            // their StringValue still matches a reserved word — use V8's message.
+            if (currentToken.escaped()) {
+                throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
             }
-            if (strictMode && isStrictReservedIdentifierName(name)) {
-                if (currentToken.escaped()) {
-                    throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
-                }
-                throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
+            // V8 reports "Unexpected reserved word" for enum (a future reserved word)
+            // but "Unexpected token 'X'" for regular keywords (with, debugger, etc.)
+            if (JSKeyword.ENUM.equals(name)) {
+                throw new JSSyntaxErrorException("Unexpected reserved word");
             }
-            // Contextual keywords via unicode escapes: use V8's escaped keyword message.
-            if (JSKeyword.AWAIT.equals(name) && !isAwaitIdentifierAllowed()) {
-                if (currentToken.escaped()) {
-                    throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
-                }
-                throw new JSSyntaxErrorException("Unexpected 'await' keyword");
-            }
-            if (JSKeyword.YIELD.equals(name) && !isYieldIdentifierAllowed()) {
-                if (currentToken.escaped()) {
-                    throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
-                }
-                if (strictMode) {
-                    throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
-                }
-                throw new JSSyntaxErrorException("Unexpected token 'yield'");
-            }
-            // ES2024 14.7.1 Static Semantics: ContainsArguments
-            // 'arguments' is forbidden in class field initializers (including arrows)
-            if (JSKeyword.ARGUMENTS.equals(name) && (inClassFieldInitializer || inClassStaticInit)) {
-                throw new JSSyntaxErrorException(
-                        "'arguments' is not allowed in class field initializer or static initialization block");
-            }
-            if (JSKeyword.ARGUMENTS.equals(name) || JSKeyword.EVAL.equals(name)) {
-                needsArguments = true;
-            }
-            advance();
-            return new Identifier(name, location);
+            throw new JSSyntaxErrorException("Unexpected token '" + name + "'");
         }
-        if (match(TokenType.ASYNC)) {
-            String name = currentToken.value();
-            advance();
-            return new Identifier(name, location);
+        if (strictMode && isStrictReservedIdentifierName(name)) {
+            if (currentToken.escaped()) {
+                throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
+            }
+            throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
         }
-        if (match(TokenType.AWAIT)) {
-            if (isAwaitIdentifierAllowed()) {
-                String name = currentToken.value();
-                advance();
-                return new Identifier(name, location);
+        // Contextual keywords via unicode escapes: use V8's escaped keyword message.
+        if (JSKeyword.AWAIT.equals(name) && !isAwaitIdentifierAllowed()) {
+            if (currentToken.escaped()) {
+                throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
             }
             throw new JSSyntaxErrorException("Unexpected 'await' keyword");
         }
-        if (match(TokenType.YIELD)) {
-            if (isYieldIdentifierAllowed()) {
-                String name = currentToken.value();
-                advance();
-                return new Identifier(name, location);
+        if (JSKeyword.YIELD.equals(name) && !isYieldIdentifierAllowed()) {
+            if (currentToken.escaped()) {
+                throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
             }
             if (strictMode) {
                 throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
             }
             throw new JSSyntaxErrorException("Unexpected token 'yield'");
         }
-        if (match(TokenType.FROM)) {
-            String name = currentToken.value();
-            advance();
-            return new Identifier(name, location);
+        // ES2024 14.7.1 Static Semantics: ContainsArguments
+        // 'arguments' is forbidden in class field initializers (including arrows)
+        if (JSKeyword.ARGUMENTS.equals(name) && (inClassFieldInitializer || inClassStaticInit)) {
+            throw new JSSyntaxErrorException(
+                    "'arguments' is not allowed in class field initializer or static initialization block");
         }
-        if (match(TokenType.OF)) {
-            String name = currentToken.value();
-            advance();
-            return new Identifier(name, location);
+        if (JSKeyword.ARGUMENTS.equals(name) || JSKeyword.EVAL.equals(name)) {
+            needsArguments = true;
         }
-        if (match(TokenType.AS)) {
-            String name = currentToken.value();
-            advance();
-            return new Identifier(name, location);
-        }
-        if (match(TokenType.LET)) {
-            String name = currentToken.value();
-            if (strictMode && isStrictReservedIdentifierName(name)) {
-                throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
-            }
-            advance();
-            return new Identifier(name, location);
-        }
-        throw new JSSyntaxErrorException("Unexpected token '" + currentToken.value() + "'");
-    }
-
-    Token peek() {
-        return nextToken;
     }
 
     static AssignmentOperator assignmentOperator(TokenType type) {
@@ -614,6 +581,10 @@ final class ParserContext {
         };
     }
 
+    static boolean isAlwaysReservedIdentifierName(String name) {
+        return ALWAYS_RESERVED_IDENTIFIER_NAMES.contains(name);
+    }
+
     /**
      * Whether an expression is an {@code IdentifierReference}.
      * <p>
@@ -632,5 +603,14 @@ final class ParserContext {
         }
         String name = identifier.getName();
         return !"import.meta".equals(name) && !"new.target".equals(name) && !JSKeyword.THIS.equals(name);
+    }
+
+    static boolean isStrictReservedIdentifierName(String name) {
+        return switch (name) {
+            case JSKeyword.IMPLEMENTS, JSKeyword.INTERFACE, JSKeyword.LET, JSKeyword.PACKAGE, JSKeyword.PRIVATE,
+                    JSKeyword.PROTECTED, JSKeyword.PUBLIC, JSKeyword.STATIC, JSKeyword.YIELD ->
+                true;
+            default -> false;
+        };
     }
 }

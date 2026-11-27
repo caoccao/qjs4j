@@ -74,23 +74,7 @@ final class ReturnStatementCompiler {
 
         // Execute active finally blocks via GOSUB before returning.
         // Walk from innermost to outermost finally context.
-        Iterator<List<Integer>> gosubPatchIterator = compilerContext.activeFinallyGosubPatches.iterator();
-        Iterator<Integer> nipCatchCountIterator = compilerContext.activeFinallyNipCatchCounts.iterator();
-        while (gosubPatchIterator.hasNext() && nipCatchCountIterator.hasNext()) {
-            List<Integer> gosubPatches = gosubPatchIterator.next();
-            int nipCatchCount = nipCatchCountIterator.next();
-            // Push dummy value (NIP_CATCH expects a value on top of the CatchOffset)
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            // NIP_CATCH removes the CatchOffset for this try-finally, keeps dummy on top
-            for (int i = 0; i < nipCatchCount; i++) {
-                compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
-            }
-            // GOSUB pushes return address and jumps to finally block (patched later)
-            int gosubPos = compilerContext.emitter.emitJump(Opcode.GOSUB);
-            gosubPatches.add(gosubPos);
-            // After RET returns here, drop the dummy value
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-        }
+        compilerContext.emitHelpers.emitActiveFinallyGosubs();
 
         if (compilerContext.finallySubroutineDepth > 0) {
             // Return from a finally subroutine must discard the caller completion value

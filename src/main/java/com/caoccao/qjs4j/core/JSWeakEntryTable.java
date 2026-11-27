@@ -54,16 +54,31 @@ final class JSWeakEntryTable {
      */
     static final JSValue PRESENT = JSBoolean.TRUE;
 
-    private final List<Entry> entries = new ArrayList<>(2);
+    // Most keys belong to a single collection. Allocate a list only when a second live owner uses the same key.
+    private Entry first;
+    private List<Entry> others;
 
-    private Entry find(Object owner) {
-        for (int index = entries.size() - 1; index >= 0; index--) {
-            Entry entry = entries.get(index);
-            Object entryOwner = entry.get();
-            if (entryOwner == null) {
-                entries.remove(index);
-            } else if (entryOwner == owner) {
-                return entry;
+    private Entry find(Object owner, boolean remove) {
+        Entry entry = first;
+        if (entry != null && entry.refersTo(owner)) {
+            if (remove) {
+                first = null;
+            }
+            return entry;
+        }
+        if (others != null) {
+            for (int index = others.size() - 1; index >= 0; index--) {
+                entry = others.get(index);
+                Object entryOwner = entry.get();
+                if (entryOwner == owner) {
+                    if (remove) {
+                        others.remove(index);
+                    }
+                    return entry;
+                }
+                if (entryOwner == null) {
+                    others.remove(index);
+                }
             }
         }
         return null;
@@ -77,19 +92,8 @@ final class JSWeakEntryTable {
      * @return the value, or {@code null} when this key is not in that collection
      */
     JSValue get(Object owner) {
-        Entry entry = find(owner);
+        Entry entry = find(owner, false);
         return entry == null ? null : entry.value;
-    }
-
-    /**
-     * Whether this key is in a collection.
-     *
-     * @param owner
-     *            the owning {@code WeakMap} or {@code WeakSet}
-     * @return true when an entry exists
-     */
-    boolean has(Object owner) {
-        return get(owner) != null;
     }
 
     /**
@@ -103,11 +107,19 @@ final class JSWeakEntryTable {
      *            the runtime's queue, which the new entry registers itself with
      */
     void put(Object owner, JSValue value, ReferenceQueue<Object> deadOwners) {
-        Entry entry = find(owner);
-        if (entry == null) {
-            entries.add(new Entry(owner, value, deadOwners));
-        } else {
+        Entry entry = find(owner, false);
+        if (entry != null) {
             entry.value = value;
+            return;
+        }
+        entry = new Entry(owner, value, deadOwners);
+        if (first == null || first.refersTo(null)) {
+            first = entry;
+        } else {
+            if (others == null) {
+                others = new ArrayList<>(2);
+            }
+            others.add(entry);
         }
     }
 
@@ -119,18 +131,7 @@ final class JSWeakEntryTable {
      * @return true when an entry was removed
      */
     boolean remove(Object owner) {
-        boolean removed = false;
-        for (int index = entries.size() - 1; index >= 0; index--) {
-            Entry entry = entries.get(index);
-            Object entryOwner = entry.get();
-            if (entryOwner == null) {
-                entries.remove(index);
-            } else if (entryOwner == owner) {
-                entries.remove(index);
-                removed = true;
-            }
-        }
-        return removed;
+        return find(owner, true) != null;
     }
 
     /**
@@ -139,8 +140,15 @@ final class JSWeakEntryTable {
      * @return the entry count after pruning dead owners
      */
     int size() {
-        entries.removeIf(entry -> entry.get() == null);
-        return entries.size();
+        if (first != null && first.refersTo(null)) {
+            first = null;
+        }
+        int count = first == null ? 0 : 1;
+        if (others != null) {
+            others.removeIf(entry -> entry.refersTo(null));
+            count += others.size();
+        }
+        return count;
     }
 
     /**

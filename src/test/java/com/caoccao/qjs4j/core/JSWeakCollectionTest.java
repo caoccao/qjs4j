@@ -21,6 +21,7 @@ import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 import org.junit.jupiter.api.Test;
 
 import java.lang.ref.WeakReference;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -121,6 +122,24 @@ public class JSWeakCollectionTest extends BaseJavetTest {
     }
 
     @Test
+    public void testIndependentRuntimesCanUseTheSameWellKnownSymbolConcurrently() {
+        IntStream.range(0, 8).parallel().forEach(i -> {
+            try (JSRuntime runtime = new JSRuntime()) {
+                JSContext context = runtime.createContext();
+                JSWeakSet set = context.createJSWeakSet();
+                JSWeakMap map = context.createJSWeakMap();
+                JSSymbol key = JSSymbol.HAS_INSTANCE;
+                for (int j = 0; j < 2_000; j++) {
+                    map.weakMapSet(key, JSBoolean.TRUE);
+                    set.weakSetAdd(key);
+                    assertThat(map.weakMapDelete(key)).isTrue();
+                    assertThat(set.weakSetDelete(key)).isTrue();
+                }
+            }
+        });
+    }
+
+    @Test
     public void testKeyMayBelongToSeveralCollections() {
         assertStringWithJavet("""
                 const key = {};
@@ -202,6 +221,31 @@ public class JSWeakCollectionTest extends BaseJavetTest {
     }
 
     @Test
+    public void testSharedKeyPrunesDeadOwnersAndReusesTheFirstEntry() {
+        try (JSRuntime runtime = new JSRuntime()) {
+            JSContext context = runtime.createContext();
+            JSWeakMap first = context.createJSWeakMap();
+            JSWeakMap second = context.createJSWeakMap();
+            JSObject key = context.createJSObject();
+            first.weakMapSet(key, JSBoolean.TRUE);
+            second.weakMapSet(key, JSBoolean.FALSE);
+            JSWeakEntryTable entries = key.weakEntries(false);
+            assertThat(entries.size()).isEqualTo(2);
+
+            WeakReference<JSWeakMap> reference = new WeakReference<>(first);
+            first = null;
+            assertThat(awaitCleared(reference)).isTrue();
+            assertThat(entries.size()).isOne();
+            JSWeakSet set = context.createJSWeakSet();
+            set.weakSetAdd(key);
+            assertThat(second.weakMapGet(key)).isSameAs(JSBoolean.FALSE);
+            assertThat(second.weakMapDelete(key)).isTrue();
+            assertThat(set.weakSetHas(key)).isTrue();
+            assertThat(entries.size()).isOne();
+        }
+    }
+
+    @Test
     public void testSymbolKeysBehaveTheSameWay() {
         assertStringWithJavet("""
                 const first = Symbol('same');
@@ -257,6 +301,18 @@ public class JSWeakCollectionTest extends BaseJavetTest {
             member = null;
             assertThat(awaitCleared(memberReference)).isTrue();
             assertThat(weakSet).isNotNull();
+        }
+    }
+
+    @Test
+    public void testWellKnownSymbolDoesNotKeepItsWeakMapAliveThroughItsValue() {
+        try (JSRuntime runtime = new JSRuntime()) {
+            JSWeakMap map = runtime.createContext().createJSWeakMap();
+            map.weakMapSet(JSSymbol.HAS_INSTANCE, map);
+            assertThat(map.weakMapGet(JSSymbol.HAS_INSTANCE)).isSameAs(map);
+            WeakReference<JSWeakMap> reference = new WeakReference<>(map);
+            map = null;
+            assertThat(awaitCleared(reference)).isTrue();
         }
     }
 

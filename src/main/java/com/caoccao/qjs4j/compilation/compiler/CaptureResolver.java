@@ -33,6 +33,12 @@ final class CaptureResolver {
         this.capturedBindings = new LinkedHashMap<>();
     }
 
+    private CaptureBinding addBinding(String name, CaptureSource source) {
+        CaptureBinding binding = new CaptureBinding(capturedBindings.size(), source);
+        capturedBindings.put(name, binding);
+        return binding;
+    }
+
     Integer findCapturedBindingIndex(String name) {
         CaptureBinding binding = capturedBindings.get(name);
         return binding != null ? binding.slot() : null;
@@ -58,35 +64,13 @@ final class CaptureResolver {
     }
 
     boolean isCapturedBindingFunctionName(String name) {
-        CaptureBinding captureBinding = capturedBindings.get(name);
-        if (captureBinding != null) {
-            return captureBinding.source().functionName();
-        }
-        if (parentResolver == null) {
-            return false;
-        }
-        Integer capturedIndex = resolveCapturedBindingIndex(name);
-        if (capturedIndex == null) {
-            return false;
-        }
-        CaptureBinding resolvedBinding = capturedBindings.get(name);
-        return resolvedBinding != null && resolvedBinding.source().functionName();
+        CaptureBinding binding = resolveBinding(name);
+        return binding != null && binding.source().functionName();
     }
 
     boolean isCapturedBindingImmutable(String name) {
-        CaptureBinding captureBinding = capturedBindings.get(name);
-        if (captureBinding != null) {
-            return captureBinding.source().immutable();
-        }
-        if (parentResolver == null) {
-            return false;
-        }
-        Integer capturedIndex = resolveCapturedBindingIndex(name);
-        if (capturedIndex == null) {
-            return false;
-        }
-        CaptureBinding resolvedBinding = capturedBindings.get(name);
-        return resolvedBinding != null && resolvedBinding.source().immutable();
+        CaptureBinding binding = resolveBinding(name);
+        return binding != null && binding.source().immutable();
     }
 
     int registerCapturedBinding(String name, CaptureSource source) {
@@ -94,21 +78,24 @@ final class CaptureResolver {
         if (existing != null) {
             return existing.slot();
         }
-        int slot = capturedBindings.size();
-        capturedBindings.put(name, new CaptureBinding(slot, source));
-        return slot;
+        return addBinding(name, source).slot();
     }
 
-    Integer resolveCapturedBindingIndex(String name) {
-        Integer capturedIndex = findCapturedBindingIndex(name);
-        if (capturedIndex != null || parentResolver == null) {
-            return capturedIndex;
+    private CaptureBinding resolveBinding(String name) {
+        CaptureBinding binding = capturedBindings.get(name);
+        if (binding != null || parentResolver == null) {
+            return binding;
         }
         CaptureSource captureSource = parentResolver.resolveCaptureSourceForChild(name);
         if (captureSource == null) {
             return null;
         }
-        return registerCapturedBinding(name, captureSource);
+        return addBinding(name, captureSource);
+    }
+
+    Integer resolveCapturedBindingIndex(String name) {
+        CaptureBinding binding = resolveBinding(name);
+        return binding == null ? null : binding.slot();
     }
 
     CaptureSource resolveCaptureSourceForChild(String name) {

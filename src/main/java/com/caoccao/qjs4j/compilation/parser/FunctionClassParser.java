@@ -384,12 +384,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         if (hasFunctionNameToken()) {
             id = parserContext.parseIdentifier();
             // Named function in export default creates a lexical binding for the name
-            if (parserContext.moduleMode && parserContext.functionNesting == 0) {
-                String name = id.getName();
-                if (parserContext.moduleVarNames.contains(name) || !parserContext.moduleLexicalNames.add(name)) {
-                    throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
-                }
-            }
+            delegates.declarations.addModuleLexicalName(id.getName());
         } else {
             id = new Identifier(JSKeyword.DEFAULT, location);
         }
@@ -456,7 +451,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             parserContext.exitFunctionLabelScope(enclosingLabels);
         }
 
-        delegates.statements.validateFunctionBodyEarlyErrors(body);
+        delegates.declarations.validateFunctionBodyEarlyErrors(body);
         // Check that parameter names don't conflict with lexical declarations in body
         // Per spec: "It is a Syntax Error if BoundNames of FormalParameters also occurs
         // in the LexicallyDeclaredNames of FunctionBody"

@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.regexp;
 
+import static com.caoccao.qjs4j.regexp.RegExpEscapes.*;
+
 import com.caoccao.qjs4j.unicode.UnicodePropertyResolver;
 import com.caoccao.qjs4j.unicode.UnicodeRangeBuilder;
 
@@ -69,7 +71,7 @@ final class RegExpCharacterClass {
             context.buffer.appendU8(RegExpOpcode.PREV.getCode());
         }
         if (context.isUnicodeSetsMode()) {
-            emitExtendedClassSet(context, readUnicodeSet(context));
+            emitClassSet(context, RegExpUnicodeSet.read(context));
         } else {
             compileRangeClass(context);
         }
@@ -119,9 +121,9 @@ final class RegExpCharacterClass {
      * Based on QuickJS parse_unicode_property + re_emit_string_list.
      */
     static void compileUnicodePropertyEscape(CompileContext context, boolean isInverted, boolean isBackwardDirection) {
-        ExtendedClassSet property = readProperty(context, context.isUnicodeSetsMode() && !isInverted);
+        RegExpUnicodeSet property = readProperty(context, context.isUnicodeSetsMode() && !isInverted);
         if (!property.sequences().isEmpty()) {
-            emitExtendedClassSet(context, property);
+            emitClassSet(context, property);
             return;
         }
         int[] propertyRanges = property.ranges();
@@ -140,7 +142,7 @@ final class RegExpCharacterClass {
         }
     }
 
-    private static void emitExtendedClassSet(CompileContext context, ExtendedClassSet extendedClassSet) {
+    private static void emitClassSet(CompileContext context, RegExpUnicodeSet extendedClassSet) {
         emitStringList(context, extendedClassSet.ranges(), extendedClassSet.sequences());
     }
 
@@ -185,174 +187,51 @@ final class RegExpCharacterClass {
      * SPLIT_NEXT_FIRST/GOTO to create a chain of alternatives.
      */
     private static void emitStringList(CompileContext context, int[] ranges, List<int[]> sequences) {
-
         if (sequences.isEmpty()) {
-            // Simple case: only code point ranges
             emitRanges(context, ranges, false);
             return;
         }
-
-        // Sort sequences by length descending (longest first)
-        List<int[]> sortedSequences = new ArrayList<>(sequences);
-        sortedSequences.sort((a, b) -> Integer.compare(b.length, a.length));
-
-        // Check for empty string and filter it out
-        boolean hasEmptyString = false;
-        List<int[]> nonEmptySequences = new ArrayList<>();
-        for (int[] seq : sortedSequences) {
-            if (seq.length == 0) {
-                hasEmptyString = true;
-            } else {
-                nonEmptySequences.add(seq);
+        List<int[]> sorted = new ArrayList<>(sequences);
+        sorted.sort((a, b) -> Integer.compare(b.length, a.length));
+        boolean empty = sorted.get(sorted.size() - 1).length == 0;
+        List<Integer> exits = new ArrayList<>();
+        for (int i = 0; i < sorted.size(); i++) {
+            int[] sequence = sorted.get(i);
+            if (sequence.length == 0) {
+                break;
             }
-        }
-
-        boolean hasRanges = ranges.length > 0;
-        List<Integer> gotoPositions = new ArrayList<>();
-
-        // Emit each sequence as an alternative
-        for (int i = 0; i < nonEmptySequences.size(); i++) {
-            int[] seq = nonEmptySequences.get(i);
-            boolean isLast = !hasEmptyString && !hasRanges && i == nonEmptySequences.size() - 1;
-
-            int splitPos = -1;
-            if (!isLast) {
-                splitPos = context.buffer.size();
-                context.buffer.appendU8(RegExpOpcode.SPLIT_NEXT_FIRST.getCode());
-                context.buffer.appendU32(0); // placeholder
-            }
-
-            // Emit each character in the sequence
-            for (int codePoint : seq) {
+            boolean last = i + 1 == sorted.size() && ranges.length == 0;
+            int next = last ? -1 : context.emitForwardJump(RegExpOpcode.SPLIT_NEXT_FIRST);
+            for (int codePoint : sequence) {
                 compileLiteralChar(context, codePoint);
             }
-
-            if (!isLast) {
-                gotoPositions.add(context.buffer.size());
-                context.buffer.appendU8(RegExpOpcode.GOTO.getCode());
-                context.buffer.appendU32(0); // placeholder
-
-                // Patch SPLIT offset: jump to after this GOTO
-                int splitOffset = context.buffer.size() - (splitPos + 5);
-                context.buffer.setU32(splitPos + 1, splitOffset);
+            if (!last) {
+                exits.add(context.emitForwardJump(RegExpOpcode.GOTO));
+                context.patchJumpToHere(next);
             }
         }
-
-        // Emit char ranges if present
-        if (hasRanges) {
-            boolean isLast = !hasEmptyString;
-            int splitPos = -1;
-            if (!isLast) {
-                splitPos = context.buffer.size();
-                context.buffer.appendU8(RegExpOpcode.SPLIT_NEXT_FIRST.getCode());
-                context.buffer.appendU32(0); // placeholder
-            }
-
+        if (ranges.length > 0) {
+            int next = empty ? context.emitForwardJump(RegExpOpcode.SPLIT_NEXT_FIRST) : -1;
             emitRanges(context, ranges, false);
-
-            if (!isLast) {
-                // Patch SPLIT offset
-                int splitOffset = context.buffer.size() - (splitPos + 5);
-                context.buffer.setU32(splitPos + 1, splitOffset);
+            if (empty) {
+                context.patchJumpToHere(next);
             }
         }
-
-        // Patch all GOTO targets to point to current position (end of all alternatives)
-        for (int gotoPos : gotoPositions) {
-            int gotoOffset = context.buffer.size() - (gotoPos + 5);
-            context.buffer.setU32(gotoPos + 1, gotoOffset);
+        for (int exit : exits) {
+            context.patchJumpToHere(exit);
         }
-    }
-
-    private static List<int[]> filterSequences(List<int[]> left, List<int[]> right, boolean keepMatches) {
-        Set<String> rightKeys = new HashSet<>();
-        for (int[] sequence : right) {
-            rightKeys.add(sequenceKey(sequence));
-        }
-        List<int[]> result = new ArrayList<>();
-        for (int[] sequence : left) {
-            if (rightKeys.contains(sequenceKey(sequence)) == keepMatches) {
-                result.add(sequence);
-            }
-        }
-        return result;
-    }
-
-    private static ExtendedClassSet intersectExtendedClassSets(ExtendedClassSet left, ExtendedClassSet right) {
-        int[] ranges = UnicodePropertyResolver.intersectRanges(left.ranges(), right.ranges());
-        List<int[]> sequences = filterSequences(left.sequences(), right.sequences(), true);
-        return normalizeExtendedClassSet(new ExtendedClassSet(ranges, sequences, null));
-    }
-
-    private static boolean isInvalidUnicodeSetsClassSinglePunctuator(int ch) {
-        return ch == '(' || ch == ')' || ch == '[' || ch == '{' || ch == '}' || ch == '/' || ch == '-' || ch == '|';
-    }
-
-    private static boolean isInvalidUnicodeSetsDoublePunctuator(CompileContext context, int ch) {
-        if (!isUnicodeSetsReservedDoublePunctuator(ch)) {
-            return false;
-        }
-        int nextPos = context.pos + 1;
-        return nextPos < context.codePoints.length && context.codePoints[nextPos] == ch;
     }
 
     private static boolean isUnicodePropertyChar(int ch) {
         return (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch == '_';
     }
 
-    private static boolean isUnicodeSetsClassEnd(CompileContext context) {
-        return context.pos >= context.codePoints.length || context.codePoints[context.pos] == ']';
-    }
-
-    private static boolean isUnicodeSetsOperatorAt(CompileContext context, String operator) {
-        if (context.pos + operator.length() > context.codePoints.length) {
-            return false;
-        }
-        for (int i = 0; i < operator.length(); i++) {
-            if (context.codePoints[context.pos + i] != operator.charAt(i)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static boolean isUnicodeSetsReservedDoublePunctuator(int ch) {
-        return ch == '&' || ch == '!' || ch == '#' || ch == '$' || ch == '%' || ch == '*' || ch == '+' || ch == ','
-                || ch == '.' || ch == ':' || ch == ';' || ch == '<' || ch == '=' || ch == '>' || ch == '?' || ch == '@'
-                || ch == '^' || ch == '`' || ch == '~';
-    }
-
-    private static ExtendedClassSet normalizeExtendedClassSet(ExtendedClassSet extendedClassSet) {
-        int[] normalizedRanges = UnicodeRangeBuilder.normalize(extendedClassSet.ranges());
-        List<int[]> normalizedSequences = new ArrayList<>();
-        Set<String> sequenceKeys = new LinkedHashSet<>();
-        for (int[] sequence : extendedClassSet.sequences()) {
-            if (sequence.length == 0) {
-                continue;
-            }
-            if (sequence.length == 1) {
-                normalizedRanges = UnicodePropertyResolver.unionRanges(normalizedRanges,
-                        new int[]{sequence[0], sequence[0]});
-                continue;
-            }
-            String key = sequenceKey(sequence);
-            if (sequenceKeys.add(key)) {
-                normalizedSequences.add(sequence);
-            }
-        }
-        return new ExtendedClassSet(normalizedRanges, normalizedSequences, extendedClassSet.singleCodePoint());
-    }
-
-    private static int parseClassEscape(CompileContext context, UnicodeRangeBuilder ranges) {
+    static int parseClassEscape(CompileContext context, UnicodeRangeBuilder ranges) {
         int ch = context.codePoints[context.pos++];
 
         return switch (ch) {
             case 'b' -> '\b'; // backspace (U+0008) inside character class
-            case 'n' -> '\n';
-            case 'r' -> '\r';
-            case 't' -> '\t';
-            case 'f' -> '\f';
-            case 'v' -> '\u000B';
+            case 'n', 'r', 't', 'f', 'v', '0', 'x', 'u' -> readCharacterEscape(context, ch);
             case 'd', 'D', 'w', 'W', 's', 'S' -> {
                 ranges.addAll(characterClassRanges(context, ch));
                 yield -1;
@@ -369,42 +248,12 @@ final class RegExpCharacterClass {
                 yield -1;
             }
             case 'c' -> {
-                // \c ControlLetter in character class
-                if (context.pos < context.codePoints.length) {
-                    int next = context.codePoints[context.pos];
-                    if ((next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z')) {
-                        context.pos++;
-                        yield next % 32;
-                    }
-                    // Annex B.1.4: In non-unicode mode, \c inside character class also
-                    // accepts DecimalDigit (0-9) and _ as ClassControlLetter
-                    if (!context.isUnicodeMode() && ((next >= '0' && next <= '9') || next == '_')) {
-                        context.pos++;
-                        yield next % 32;
-                    }
+                int code = readControlLetter(context, true);
+                if (code < 0) {
+                    ranges.add((int) '\\', (int) '\\');
+                    yield 'c';
                 }
-                // AnnexB: Invalid \c in char class → class contains '\' and 'c'
-                if (context.isUnicodeMode()) {
-                    throw new RegExpSyntaxException("Invalid control escape");
-                }
-                ranges.add((int) '\\', (int) '\\');
-                yield 'c';
-            }
-            case 'x' -> readFixedHexEscape(context, 'x', 2);
-            case 'u' -> parseUnicodeEscape(context);
-            case '0' -> {
-                if (context.isUnicodeMode()) {
-                    // In unicode mode, \0 is allowed only if NOT followed by a decimal digit
-                    if (context.pos < context.codePoints.length) {
-                        int nextCh = context.codePoints[context.pos];
-                        if (nextCh >= '0' && nextCh <= '9') {
-                            throw new RegExpSyntaxException("Invalid escape sequence");
-                        }
-                    }
-                    yield 0; // NULL character
-                } else {
-                    yield parseLegacyOctalEscape(context, 0);
-                }
+                yield code;
             }
             case '1', '2', '3', '4', '5', '6', '7' -> {
                 if (context.isUnicodeMode()) {
@@ -421,205 +270,7 @@ final class RegExpCharacterClass {
         };
     }
 
-    private static ExtendedClassSet parseUnicodeSetsElement(CompileContext context) {
-        if (context.pos >= context.codePoints.length) {
-            throw new RegExpSyntaxException("Unterminated character class");
-        }
-        int currentChar = context.codePoints[context.pos];
-        if (currentChar == '\\') {
-            context.pos++;
-            return parseUnicodeSetsEscapeElement(context);
-        }
-        // V8's wording for each.
-        if (currentChar == ']' || currentChar == '[') {
-            throw new RegExpSyntaxException("Invalid character in character class");
-        }
-        if (isInvalidUnicodeSetsClassSinglePunctuator(currentChar)) {
-            throw new RegExpSyntaxException("Invalid character in character class");
-        }
-        if (isInvalidUnicodeSetsDoublePunctuator(context, currentChar)) {
-            throw new RegExpSyntaxException("Invalid set operation in character class");
-        }
-        context.pos++;
-        return singleCodePointExtendedClassSet(currentChar);
-    }
-
-    private static ExtendedClassSet parseUnicodeSetsEscapeElement(CompileContext context) {
-        if (context.pos >= context.codePoints.length) {
-            throw new RegExpSyntaxException("Incomplete escape in character class");
-        }
-        int escapedChar = context.codePoints[context.pos];
-        if (escapedChar == 'q') {
-            return parseUnicodeSetsStringLiteralSet(context);
-        }
-        if (escapedChar == 'p' || escapedChar == 'P') {
-            context.pos++;
-            return parseUnicodeSetsPropertyEscapeSet(context, escapedChar == 'P');
-        }
-
-        if ("dDwWsS".indexOf(escapedChar) >= 0) {
-            context.pos++;
-            return new ExtendedClassSet(characterClassRanges(context, escapedChar), List.of(), null);
-        }
-        UnicodeRangeBuilder ranges = new UnicodeRangeBuilder();
-        int parsedValue = parseClassEscape(context, ranges);
-        if (parsedValue == -1) {
-            return normalizeExtendedClassSet(new ExtendedClassSet(ranges.toArray(), new ArrayList<>(), null));
-        }
-        return singleCodePointExtendedClassSet(parsedValue);
-    }
-
-    /**
-     * ClassSetExpression in {@code v} mode: exactly one of a union, an intersection ({@code &&}) or a subtraction
-     * ({@code --}), whose operands are nested classes, escapes or single characters but not ranges. The operators used
-     * to be accepted in any mix, as in {@code [a&&b--c]} and {@code [ab&&c]}, and {@code [a&&&b]} was accepted.
-     */
-    private static ExtendedClassSet parseUnicodeSetsExpression(CompileContext context) {
-        if (isUnicodeSetsClassEnd(context)) {
-            return new ExtendedClassSet(new int[0], List.of(), null);
-        }
-        // A class cannot start with an operator; V8 reports a leading "--" as two stray '-' characters.
-        if (isUnicodeSetsOperatorAt(context, "&&")) {
-            throw new RegExpSyntaxException("Invalid set operation in character class");
-        }
-        if (isUnicodeSetsOperatorAt(context, "--")) {
-            throw new RegExpSyntaxException("Invalid character in character class");
-        }
-        context.lastUnicodeSetsOperandWasRange = false;
-        ExtendedClassSet result = parseUnicodeSetsOperand(context);
-        String operator = isUnicodeSetsOperatorAt(context, "&&")
-                ? "&&"
-                : isUnicodeSetsOperatorAt(context, "--") ? "--" : null;
-        if (operator != null) {
-            if (context.lastUnicodeSetsOperandWasRange) {
-                throw new RegExpSyntaxException("Invalid set operation in character class");
-            }
-            while (isUnicodeSetsOperatorAt(context, operator)) {
-                context.pos += 2;
-                // ClassIntersection :: ClassSetOperand && [lookahead ≠ &] ClassSetOperand
-                if ("&&".equals(operator) && context.pos < context.codePoints.length
-                        && context.codePoints[context.pos] == '&') {
-                    throw new RegExpSyntaxException("Invalid character in character class");
-                }
-                context.lastUnicodeSetsOperandWasRange = false;
-                ExtendedClassSet right = parseUnicodeSetsOperand(context);
-                if (context.lastUnicodeSetsOperandWasRange) {
-                    throw new RegExpSyntaxException("Invalid set operation in character class");
-                }
-                result = "&&".equals(operator)
-                        ? intersectExtendedClassSets(result, right)
-                        : subtractExtendedClassSets(result, right);
-            }
-            if (!isUnicodeSetsClassEnd(context)) {
-                throw new RegExpSyntaxException("Invalid set operation in character class");
-            }
-            return normalizeExtendedClassSet(result);
-        }
-        while (!isUnicodeSetsClassEnd(context)) {
-            if (isUnicodeSetsOperatorAt(context, "&&") || isUnicodeSetsOperatorAt(context, "--")) {
-                throw new RegExpSyntaxException("Invalid set operation in character class");
-            }
-            result = unionExtendedClassSets(result, parseUnicodeSetsOperand(context));
-        }
-        return normalizeExtendedClassSet(result);
-    }
-
-    private static ExtendedClassSet parseUnicodeSetsOperand(CompileContext context) {
-        if (context.pos >= context.codePoints.length) {
-            throw new RegExpSyntaxException("Unterminated character class");
-        }
-        if (context.codePoints[context.pos] == '[') {
-            ExtendedClassSet nested = readUnicodeSet(context);
-            context.lastUnicodeSetsOperandWasRange = false;
-            return nested;
-        }
-        ExtendedClassSet firstElement = parseUnicodeSetsElement(context);
-        if (firstElement.singleCodePoint() == null) {
-            return firstElement;
-        }
-        if (context.pos + 1 == context.codePoints.length && context.codePoints[context.pos] == '-') {
-            // A range cut off by the end of the pattern: the class is unterminated, as V8 reports it.
-            throw new RegExpSyntaxException("Unterminated character class");
-        }
-        if (context.pos < context.codePoints.length && context.codePoints[context.pos] == '-'
-                && !isUnicodeSetsOperatorAt(context, "--") && context.pos + 1 < context.codePoints.length
-                && context.codePoints[context.pos + 1] != ']') {
-            int rangeStart = firstElement.singleCodePoint();
-            context.pos++;
-            ExtendedClassSet rangeEndElement = parseUnicodeSetsElement(context);
-            if (rangeEndElement.singleCodePoint() == null) {
-                throw new RegExpSyntaxException("Invalid range in character class");
-            }
-            int rangeEnd = rangeEndElement.singleCodePoint();
-            if (rangeStart > rangeEnd) {
-                throw new RegExpSyntaxException("Range out of order in character class");
-            }
-            context.lastUnicodeSetsOperandWasRange = true;
-            return new ExtendedClassSet(new int[]{rangeStart, rangeEnd}, List.of(), null);
-        }
-        return firstElement;
-    }
-
-    private static ExtendedClassSet parseUnicodeSetsPropertyEscapeSet(CompileContext context, boolean inverted) {
-        ExtendedClassSet set = readProperty(context, !inverted);
-        if (inverted) {
-            return new ExtendedClassSet(UnicodePropertyResolver.invertRanges(set.ranges()), List.of(), null);
-        }
-        return set.sequences().isEmpty() ? set : normalizeExtendedClassSet(set);
-    }
-
-    private static ExtendedClassSet parseUnicodeSetsStringLiteralSet(CompileContext context) {
-        context.pos++; // Skip 'q'
-        if (context.pos >= context.codePoints.length || context.codePoints[context.pos] != '{') {
-            throw new RegExpSyntaxException("Invalid UnicodeSets string literal");
-        }
-        context.pos++;
-
-        List<int[]> sequences = new ArrayList<>();
-        while (true) {
-            List<Integer> sequenceCodePoints = new ArrayList<>();
-            while (context.pos < context.codePoints.length) {
-                int currentChar = context.codePoints[context.pos];
-                if (currentChar == '|' || currentChar == '}') {
-                    break;
-                }
-                if (currentChar == '\\') {
-                    context.pos++;
-                    if (context.pos >= context.codePoints.length) {
-                        throw new RegExpSyntaxException("Invalid UnicodeSets string literal");
-                    }
-                    EscapedCodePoint unicodeEscapeParseResult = tryParseUnicodeEscapeAt(context.codePoints,
-                            context.pos - 1, true);
-                    if (unicodeEscapeParseResult != null) {
-                        sequenceCodePoints.add(unicodeEscapeParseResult.codePoint());
-                        context.pos = unicodeEscapeParseResult.nextPos();
-                    } else {
-                        int escapedChar = context.codePoints[context.pos++];
-                        sequenceCodePoints.add(escapedChar);
-                    }
-                } else {
-                    context.pos++;
-                    sequenceCodePoints.add(currentChar);
-                }
-            }
-
-            sequences.add(toIntArray(sequenceCodePoints));
-
-            if (context.pos >= context.codePoints.length) {
-                throw new RegExpSyntaxException("Invalid UnicodeSets string literal");
-            }
-            if (context.codePoints[context.pos] == '}') {
-                context.pos++;
-                break;
-            }
-            context.pos++; // Skip '|'
-        }
-
-        ExtendedClassSet result = new ExtendedClassSet(new int[0], sequences, null);
-        return normalizeExtendedClassSet(result);
-    }
-
-    private static ExtendedClassSet readProperty(CompileContext context, boolean allowSequences) {
+    static RegExpUnicodeSet readProperty(CompileContext context, boolean allowSequences) {
         if (!context.consume('{')) {
             throw new RegExpSyntaxException("expecting '{' after \\p");
         }
@@ -630,13 +281,13 @@ final class RegExpCharacterClass {
         }
         int[] ranges = resolveUnicodePropertyRanges(context.properties, name, value);
         if (ranges != null) {
-            return new ExtendedClassSet(ranges, List.of(), null);
+            return new RegExpUnicodeSet(ranges, List.of(), null);
         }
         if (allowSequences && value == null) {
             UnicodePropertyResolver.SequencePropertyResult result = UnicodePropertyResolver
                     .resolveSequenceProperty(name);
             if (result != null) {
-                return new ExtendedClassSet(result.codePointRanges(), result.sequences(), null);
+                return new RegExpUnicodeSet(result.codePointRanges(), result.sequences(), null);
             }
         }
         throw new RegExpSyntaxException("unknown unicode property name");
@@ -662,27 +313,6 @@ final class RegExpCharacterClass {
             throw new RegExpSyntaxException("Incomplete escape in character class");
         }
         return parseClassEscape(context, ranges);
-    }
-
-    private static ExtendedClassSet readUnicodeSet(CompileContext context) {
-        context.pos++; // Skip '['
-
-        boolean inverted = context.consume('^');
-
-        ExtendedClassSet extendedClassSet = parseUnicodeSetsExpression(context);
-        if (!context.consume(']')) {
-            throw new RegExpSyntaxException("Unterminated character class");
-        }
-
-        if (inverted) {
-            if (!extendedClassSet.sequences().isEmpty()) {
-                throw new RegExpSyntaxException("Invalid UnicodeSets negated class");
-            }
-            extendedClassSet = new ExtendedClassSet(UnicodePropertyResolver.invertRanges(extendedClassSet.ranges()),
-                    List.of(), null);
-        }
-
-        return extendedClassSet;
     }
 
     private static int[] resolveUnicodePropertyRanges(UnicodePropertyResolver unicodePropertyResolver,
@@ -725,55 +355,8 @@ final class RegExpCharacterClass {
         return null;
     }
 
-    private static String sequenceKey(int[] sequence) {
-        StringBuilder keyBuilder = new StringBuilder(sequence.length * 8);
-        for (int codePoint : sequence) {
-            keyBuilder.append(codePoint).append(',');
-        }
-        return keyBuilder.toString();
-    }
-
-    private static ExtendedClassSet singleCodePointExtendedClassSet(int codePoint) {
-        return new ExtendedClassSet(new int[]{codePoint, codePoint}, List.of(), codePoint);
-    }
-
-    private static ExtendedClassSet subtractExtendedClassSets(ExtendedClassSet left, ExtendedClassSet right) {
-        int[] ranges = UnicodePropertyResolver.intersectRanges(left.ranges(),
-                UnicodePropertyResolver.invertRanges(right.ranges()));
-        List<int[]> sequences = filterSequences(left.sequences(), right.sequences(), false);
-        return normalizeExtendedClassSet(new ExtendedClassSet(ranges, sequences, null));
-    }
-
-    private static int[] toIntArray(List<Integer> values) {
-        int[] result = new int[values.size()];
-        for (int i = 0; i < values.size(); i++) {
-            result[i] = values.get(i);
-        }
-        return result;
-    }
-
-    private static ExtendedClassSet unionExtendedClassSets(ExtendedClassSet left, ExtendedClassSet right) {
-        int[] ranges = UnicodePropertyResolver.unionRanges(left.ranges(), right.ranges());
-        List<int[]> sequences = unionSequenceLists(left.sequences(), right.sequences());
-        return normalizeExtendedClassSet(new ExtendedClassSet(ranges, sequences, null));
-    }
-
-    private static List<int[]> unionSequenceLists(List<int[]> left, List<int[]> right) {
-        List<int[]> result = new ArrayList<>();
-        Set<String> keys = new LinkedHashSet<>();
-        for (int[] sequence : left) {
-            if (keys.add(sequenceKey(sequence))) {
-                result.add(sequence);
-            }
-        }
-        for (int[] sequence : right) {
-            if (keys.add(sequenceKey(sequence))) {
-                result.add(sequence);
-            }
-        }
-        return result;
-    }
-
-    private record ExtendedClassSet(int[] ranges, List<int[]> sequences, Integer singleCodePoint) {
+    static CharacterClass whitespace(boolean inverted) {
+        // CharacterClass exposes its ranges through the Java API.
+        return new CharacterClass(inverted, JS_WHITESPACE_RANGES.clone());
     }
 }

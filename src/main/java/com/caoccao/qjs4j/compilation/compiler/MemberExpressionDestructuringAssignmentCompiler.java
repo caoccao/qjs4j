@@ -33,42 +33,46 @@ final class MemberExpressionDestructuringAssignmentCompiler {
     }
 
     static void compile(CompilerContext compilerContext, MemberExpression memberExpr) {
-        // Stack: [value]
         if (memberExpr.isOptional()) {
             throw new JSSyntaxErrorException("Invalid destructuring assignment target", memberExpr.getLocation());
         }
         if (memberExpr.getObject().isSuperIdentifier()) {
-            // Stack starts with [value]
             compilerContext.emitHelpers.emitSuperPropertyReference(memberExpr);
-            // Stack: [value, this, superObj, key] → ROT4L → [this, superObj, key, value]
-            compilerContext.emitter.emitOpcode(Opcode.ROT4L);
-            compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
         } else {
-            // Stack: [value]
             compilerContext.expressionCompiler.compile(memberExpr.getObject());
-            // Stack: [value, obj]
             if (memberExpr.isComputed()) {
                 compilerContext.expressionCompiler.compile(memberExpr.getProperty());
-                // Stack: [value, obj, prop] → ROT3L → [obj, prop, value]
-                compilerContext.emitter.emitOpcode(Opcode.ROT3L);
-                compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
-            } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateIdentifier) {
-                String fieldName = privateIdentifier.getName();
-                JSSymbol privateSymbol = compilerContext.privateSymbols != null
-                        ? compilerContext.privateSymbols.get(fieldName)
-                        : null;
-                if (privateSymbol == null) {
-                    throw new JSCompilerException("undefined private field '#" + fieldName + "'", privateIdentifier);
-                }
-                // Stack: [value, obj] -> [obj, value] -> [obj, value, privateSymbol]
-                compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, privateSymbol);
-                compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
-            } else if (memberExpr.getProperty() instanceof Identifier propId) {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.getName());
             }
         }
-        // PUT_* leaves value on stack; drop it
+        store(compilerContext, memberExpr, false);
+    }
+
+    /** A pre-evaluated reference is below the value. An ordinary destructuring target is evaluated above it. */
+    static void store(CompilerContext compilerContext, MemberExpression member, boolean valueOnTop) {
+        if (member.getObject().isSuperIdentifier()) {
+            if (!valueOnTop) {
+                compilerContext.emitter.emitOpcode(Opcode.ROT4L);
+            }
+            compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
+        } else if (member.isComputed()) {
+            if (!valueOnTop) {
+                compilerContext.emitter.emitOpcode(Opcode.ROT3L);
+            }
+            compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+        } else if (member.getProperty() instanceof PrivateIdentifier id) {
+            if (!valueOnTop) {
+                compilerContext.emitter.emitOpcode(Opcode.SWAP);
+            }
+            compilerContext.emitHelpers.emitPrivateSymbol(id);
+            compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
+        } else if (member.getProperty() instanceof Identifier id) {
+            if (valueOnTop) {
+                compilerContext.emitter.emitOpcode(Opcode.SWAP);
+            }
+            compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, id.getName());
+        } else if (valueOnTop) {
+            return;
+        }
         compilerContext.emitter.emitOpcode(Opcode.DROP);
     }
 }

@@ -29,17 +29,6 @@ import java.util.List;
 import java.util.Set;
 
 final class ExpressionAssignmentParser {
-    private static final Set<String> RESERVED_WORDS = Set.of(JSKeyword.BREAK, JSKeyword.CASE, JSKeyword.CATCH,
-            JSKeyword.CLASS, JSKeyword.CONST, JSKeyword.CONTINUE, JSKeyword.DEBUGGER, JSKeyword.DEFAULT,
-            JSKeyword.DELETE, JSKeyword.DO, JSKeyword.ELSE, JSKeyword.ENUM, JSKeyword.EXPORT, JSKeyword.EXTENDS,
-            JSKeyword.FALSE, JSKeyword.FINALLY, JSKeyword.FOR, JSKeyword.FUNCTION, JSKeyword.IF, JSKeyword.IMPORT,
-            JSKeyword.IN, JSKeyword.INSTANCEOF, JSKeyword.NEW, JSKeyword.NULL, JSKeyword.RETURN, JSKeyword.SUPER,
-            JSKeyword.SWITCH, JSKeyword.THIS, JSKeyword.THROW, JSKeyword.TRUE, JSKeyword.TRY, JSKeyword.TYPEOF,
-            JSKeyword.VAR, JSKeyword.VOID, JSKeyword.WHILE, JSKeyword.WITH);
-
-    private static final Set<String> STRICT_RESERVED_WORDS = Set.of(JSKeyword.IMPLEMENTS, JSKeyword.INTERFACE,
-            JSKeyword.LET, JSKeyword.PACKAGE, JSKeyword.PRIVATE, JSKeyword.PROTECTED, JSKeyword.PUBLIC,
-            JSKeyword.STATIC, JSKeyword.YIELD);
 
     private final ParserDelegates delegates;
     private final ExpressionParser expressions;
@@ -699,10 +688,10 @@ final class ExpressionAssignmentParser {
         if (isAsyncContext && JSKeyword.AWAIT.equals(name)) {
             throw new JSSyntaxErrorException("'await' is not a valid identifier name in an async function");
         }
-        if (RESERVED_WORDS.contains(name)) {
+        if (ParserContext.isAlwaysReservedIdentifierName(name)) {
             throw new JSSyntaxErrorException("Unexpected reserved word");
         }
-        if (parserContext.strictMode && STRICT_RESERVED_WORDS.contains(name)) {
+        if (parserContext.strictMode && ParserContext.isStrictReservedIdentifierName(name)) {
             throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
         }
     }
@@ -766,7 +755,7 @@ final class ExpressionAssignmentParser {
         }
         // Every lexical declaration counts — class and using as well as let and const — and the message is
         // V8's.
-        for (String declaredName : StatementParser.collectFunctionBodyLexicalNames(body)) {
+        for (String declaredName : DeclarationEarlyErrors.collectFunctionBodyLexicalNames(body)) {
             if (paramNames.contains(declaredName)) {
                 throw new JSSyntaxErrorException("Identifier '" + declaredName + "' has already been declared");
             }

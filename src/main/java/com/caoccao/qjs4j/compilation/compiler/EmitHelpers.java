@@ -414,6 +414,19 @@ final class EmitHelpers {
         functionContext.tdzLocals.addAll(originalTdzLocals);
     }
 
+    /** Stack: value -> value, evaluating the initializer only for undefined. */
+    void emitDefaultValue(String inferredName, Expression initializer) {
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED);
+        int skip = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.expressionCompiler.compile(initializer);
+        if (inferredName != null && initializer.isAnonymousFunction()) {
+            compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, inferredName);
+        }
+        compilerContext.emitter.patchJumpToHere(skip);
+    }
+
     /**
      * Emit the Annex B.3.3 var store at the function declaration's source position. This copies the block-scoped
      * function value to the enclosing var-scope binding. Per spec, this happens when the FunctionDeclaration is
@@ -613,6 +626,18 @@ final class EmitHelpers {
         compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         compilerContext.optionalChainJumps.add(compilerContext.emitter.emitJump(Opcode.GOTO));
         compilerContext.emitter.patchJumpToHere(jumpToNext);
+    }
+
+    void emitPrivateSymbol(PrivateIdentifier privateIdentifier) {
+        JSSymbol symbol = compilerContext.privateSymbols != null
+                ? compilerContext.privateSymbols.get(privateIdentifier.getName())
+                : null;
+        if (symbol == null) {
+            throw new JSCompilerException("undefined private field '#" + privateIdentifier.getName() + "'",
+                    privateIdentifier);
+        }
+
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
     }
 
     void emitScopeUsingDisposal(CompilerScope scope) {

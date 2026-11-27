@@ -30,21 +30,8 @@ final class AssignmentPatternCompiler {
     }
 
     static void compile(CompilerContext compilerContext, AssignmentPattern assignPattern) {
-        // Stack: [value]
-        // If value is undefined, use the default value instead
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED);
-        int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
-        // Value is undefined: drop it and use default
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
-        compilerContext.expressionCompiler.compile(assignPattern.getRight());
-        if (assignPattern.getLeft() instanceof Identifier identifier
-                && assignPattern.getRight().isAnonymousFunction()) {
-            compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
-        }
-        // Patch jump target
-        compilerContext.emitter.patchJumpToHere(jumpNotUndefined);
-        // Now the stack has the resolved value; assign to the inner pattern
+        compilerContext.emitHelpers.emitDefaultValue(
+                assignPattern.getLeft() instanceof Identifier id ? id.getName() : null, assignPattern.getRight());
         compilerContext.patternCompiler.compile(assignPattern.getLeft());
     }
 }

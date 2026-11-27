@@ -138,7 +138,7 @@ public final class Parser {
         if (parserContext.moduleMode) {
             validateModuleEarlyErrors(body);
         } else {
-            delegates.statements.validateProgramEarlyErrors(body);
+            delegates.declarations.validateProgramEarlyErrors(body);
         }
 
         return new Program(body, parserContext.moduleMode,
@@ -157,64 +157,39 @@ public final class Parser {
      * declarations, and unresolvable export bindings.
      */
     private void validateModuleEarlyErrors(List<Statement> body) {
-        // Collect all top-level bound names (lex + var + import bindings)
-        Set<String> allBoundNames = new HashSet<>();
         Set<String> lexicalNames = new HashSet<>();
         Set<String> varNames = new HashSet<>();
-
         for (Statement stmt : body) {
-            if (stmt instanceof VariableDeclaration varDecl) {
-                boolean isVar = varDecl.getKind() == VariableKind.VAR;
-                for (VariableDeclarator declarator : varDecl.getDeclarations()) {
-                    declarator.getId().getBoundNames().forEach(name -> {
-                        allBoundNames.add(name);
-                        if (isVar) {
+            if (stmt instanceof VariableDeclaration declaration) {
+                for (VariableDeclarator declarator : declaration.getDeclarations()) {
+                    for (String name : declarator.getId().getBoundNames()) {
+                        if (declaration.getKind() == VariableKind.VAR) {
                             if (lexicalNames.contains(name)) {
                                 throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
                             }
                             varNames.add(name);
                         } else {
-                            if (varNames.contains(name) || !lexicalNames.add(name)) {
-                                throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
-                            }
+                            DeclarationEarlyErrors.addLexicalName(lexicalNames, varNames, name);
                         }
-                    });
+                    }
                 }
-            } else if (stmt instanceof FunctionDeclaration funcDecl && funcDecl.getId() != null) {
-                String name = funcDecl.getId().getName();
-                allBoundNames.add(name);
-                // In modules (always strict), all functions are lexical
-                if (varNames.contains(name) || !lexicalNames.add(name)) {
-                    throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
-                }
-            } else if (stmt instanceof ClassDeclaration classDecl && classDecl.getId() != null) {
-                String name = classDecl.getId().getName();
-                allBoundNames.add(name);
-                if (varNames.contains(name) || !lexicalNames.add(name)) {
-                    throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
-                }
-            } else if (stmt instanceof ExpressionStatement exprStmt
-                    && exprStmt.getExpression() instanceof ClassExpression classExpr && classExpr.getId() != null
-                    && !"default".equals(classExpr.getId().getName())) {
-                // export default class with explicit name
-                String name = classExpr.getId().getName();
-                allBoundNames.add(name);
-                if (varNames.contains(name) || !lexicalNames.add(name)) {
-                    throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
-                }
+            } else if (stmt instanceof FunctionDeclaration declaration && declaration.getId() != null) {
+                DeclarationEarlyErrors.addLexicalName(lexicalNames, varNames, declaration.getId().getName());
+            } else if (stmt instanceof ClassDeclaration declaration && declaration.getId() != null) {
+                DeclarationEarlyErrors.addLexicalName(lexicalNames, varNames, declaration.getId().getName());
+            } else if (stmt instanceof ExpressionStatement expression
+                    && expression.getExpression() instanceof ClassExpression cls && cls.getId() != null
+                    && !"default".equals(cls.getId().getName())) {
+                DeclarationEarlyErrors.addLexicalName(lexicalNames, varNames, cls.getId().getName());
             }
-            // Note: import bindings are tracked via pendingExportBindings check only
         }
-
-        // Also add import bindings to allBoundNames
-        // Import local names are always lexical bindings
-        allBoundNames.addAll(parserContext.moduleLexicalNames);
-        allBoundNames.addAll(parserContext.moduleVarNames);
 
         // ES2024 16.2.1.1: For each name in ExportedBindings,
         // it must be in the module's BoundNames.
         for (String exportBinding : parserContext.pendingExportBindings) {
-            if (!allBoundNames.contains(exportBinding)) {
+            if (!parserContext.moduleLexicalNames.contains(exportBinding)
+                    && !parserContext.moduleVarNames.contains(exportBinding) && !lexicalNames.contains(exportBinding)
+                    && !varNames.contains(exportBinding)) {
                 throw new JSSyntaxErrorException("Export '" + exportBinding + "' is not defined in module");
             }
         }

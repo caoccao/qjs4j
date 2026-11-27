@@ -36,112 +36,6 @@ import java.util.Set;
  */
 record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
-    private void addModuleExportedName(String name) {
-        if (parserContext.moduleMode && !parserContext.moduleExportedNames.add(name)) {
-            throw new JSSyntaxErrorException("Duplicate export of '" + name + "'");
-        }
-    }
-
-    private void addModuleLexicalName(String name) {
-        if (parserContext.moduleMode && parserContext.functionNesting == 0) {
-            if (parserContext.moduleVarNames.contains(name) || !parserContext.moduleLexicalNames.add(name)) {
-                throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
-            }
-        }
-    }
-
-    /**
-     * Collect declared names from an exported declaration and register them as exported names.
-     */
-    private void collectDeclaredNames(Statement decl, boolean isVar) {
-        if (!parserContext.moduleMode) {
-            return;
-        }
-        if (decl instanceof VariableDeclaration varDecl) {
-            for (VariableDeclarator declarator : varDecl.getDeclarations()) {
-                collectPatternNames(declarator.getId(), name -> {
-                    addModuleExportedName(name);
-                });
-            }
-        } else if (decl instanceof FunctionDeclaration funcDecl) {
-            if (funcDecl.getId() != null) {
-                addModuleExportedName(funcDecl.getId().getName());
-            }
-        } else if (decl instanceof ClassDeclaration classDecl) {
-            if (classDecl.getId() != null) {
-                addModuleExportedName(classDecl.getId().getName());
-            }
-        }
-    }
-
-    private void collectPatternBoundNames(Pattern pattern, Set<String> names) {
-        List<String> boundNames = pattern.getBoundNames();
-        if (parserContext.inClassStaticInit) {
-            for (String name : boundNames) {
-                if (JSKeyword.AWAIT.equals(name)) {
-                    throw new JSSyntaxErrorException("Unexpected 'await' keyword");
-                }
-            }
-        }
-        names.addAll(boundNames);
-    }
-
-    private void collectPatternBoundNamesAndCheckDuplicates(Pattern pattern, Set<String> names) {
-        for (String name : pattern.getBoundNames()) {
-            if (parserContext.inClassStaticInit && JSKeyword.AWAIT.equals(name)) {
-                throw new JSSyntaxErrorException("Unexpected 'await' keyword");
-            }
-            if (!names.add(name)) {
-                throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
-            }
-        }
-    }
-
-    private void collectPatternNames(Pattern pattern, java.util.function.Consumer<String> consumer) {
-        pattern.getBoundNames().forEach(consumer);
-    }
-
-    /**
-     * The LexicallyDeclaredNames of a function body, static block or arrow body (ES2024 15.2.1): its top-level
-     * {@code let}, {@code const}, {@code using} and {@code class} declarations. Function declarations at the top of a
-     * function body are var-scoped, not lexical.
-     *
-     * @param statements
-     *            the body's statements
-     * @return the names
-     * @throws JSSyntaxErrorException
-     *             when a name is declared twice
-     */
-    static Set<String> collectFunctionBodyLexicalNames(List<Statement> statements) {
-        Set<String> lexicalNames = new HashSet<>();
-        for (Statement statement : statements) {
-            List<String> names = new ArrayList<>();
-            if (statement instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.getKind() != VariableKind.VAR) {
-                for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                    names.addAll(declarator.getId().getBoundNames());
-                }
-            } else if (statement instanceof ClassDeclaration classDeclaration) {
-                names.add(classDeclaration.getId().getName());
-            }
-            for (String name : names) {
-                if (!lexicalNames.add(name)) {
-                    throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
-                }
-            }
-        }
-        return lexicalNames;
-    }
-
-    private void collectVarDeclaredNames(Statement statement, Set<String> varNames) {
-        if (statement == null) {
-            return;
-        }
-        for (VariableDeclarator declarator : statement.getVarDeclarators()) {
-            collectPatternBoundNames(declarator.getId(), varNames);
-        }
-    }
-
     private boolean containsCoverInitializedName(ObjectExpression objectExpression) {
         for (ObjectExpressionProperty property : objectExpression.getProperties()) {
             if (!property.isShorthand()) {
@@ -155,16 +49,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         return false;
     }
 
-    private void expectContextualKeyword(TokenType type, String keyword) {
-        if (!parserContext.match(type) || parserContext.currentToken.escaped()) {
-            throw new JSSyntaxErrorException(
-                    "Expected '" + keyword + "' but got '" + parserContext.currentToken.value() + "' at line "
-                            + parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
-        }
-        parserContext.advance();
-    }
-
-    private boolean hasUsingInitializer(VariableDeclaration variableDeclaration) {
+    static boolean hasUsingInitializer(VariableDeclaration variableDeclaration) {
         if (variableDeclaration == null) {
             return false;
         }
@@ -271,9 +156,9 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
 
         if (functionBody) {
-            validateFunctionBodyEarlyErrors(body);
+            delegates.declarations.validateFunctionBodyEarlyErrors(body);
         } else {
-            validateBlockEarlyErrors(body);
+            delegates.declarations.validateBlockEarlyErrors(body);
         }
         parserContext.expect(TokenType.RBRACE);
         return new BlockStatement(body, location);
@@ -300,7 +185,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
         // An arrow function's body: function-body rules, under which a top-level function declaration is
         // var-scoped and `function f() {} var f;` is legal.
-        validateFunctionBodyEarlyErrors(body);
+        delegates.declarations.validateFunctionBodyEarlyErrors(body);
         parserContext.expect(TokenType.RBRACE);
         BlockStatement block = new BlockStatement(body, location);
         block.setHasUseStrictDirective(hasUseStrict);
@@ -335,165 +220,6 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         parserContext.expect(TokenType.RPAREN);
         parserContext.consumeIf(TokenType.SEMICOLON);
         return new DoWhileStatement(body, test, location);
-    }
-
-    Statement parseExportDeclaration() {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.EXPORT);
-
-        if (parserContext.match(TokenType.DEFAULT)) {
-            if (parserContext.currentToken.escaped()) {
-                throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
-            }
-            addModuleExportedName("default");
-            parserContext.advance();
-
-            if (parserContext.match(TokenType.CLASS)) {
-                // export default class { ... } — infer name "default" per spec
-                ClassExpression classExpr = delegates.functions.parseClassExpression();
-                String className = classExpr.getId() != null ? classExpr.getId().getName() : null;
-                if (classExpr.getId() == null) {
-                    classExpr = new ClassExpression(new Identifier(JSKeyword.DEFAULT, classExpr.getLocation()),
-                            classExpr.getSuperClass(), classExpr.getBody(), classExpr.getLocation());
-                }
-                // Named class in export default creates a lexical binding
-                if (className != null) {
-                    addModuleLexicalName(className);
-                }
-                return new ExpressionStatement(classExpr, location);
-            } else if (parserContext.match(TokenType.FUNCTION)) {
-                Statement funcDecl = delegates.functions.parseExportDefaultFunctionDeclaration(false);
-                if (parserContext.match(TokenType.LPAREN)) {
-                    throw new JSSyntaxErrorException("Unexpected token '('");
-                }
-                return funcDecl;
-            } else if (parserContext.match(TokenType.ASYNC) && parserContext.peek() != null
-                    && parserContext.peek().type() == TokenType.FUNCTION
-                    && parserContext.peek().line() == parserContext.currentToken.line()) {
-                Statement asyncDecl = delegates.functions.parseExportDefaultAsyncFunctionDeclaration();
-                if (parserContext.match(TokenType.LPAREN)) {
-                    throw new JSSyntaxErrorException("Unexpected token '('");
-                }
-                return asyncDecl;
-            } else {
-                // export default <expression>;
-                Expression expr = delegates.expressions.parseAssignmentExpression();
-                parserContext.consumeSemicolon();
-                return new ExpressionStatement(expr, location);
-            }
-        }
-
-        // export * from 'module';
-        // export * as name from 'module';
-        // export * as "string" from 'module';
-        if (parserContext.consumeIf(TokenType.MUL)) {
-            if (parserContext.match(TokenType.AS)) {
-                if (parserContext.currentToken.escaped()) {
-                    throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
-                }
-                parserContext.advance();
-                // export name can be identifier or string literal
-                String exportedName = parseModuleExportNameAndReturn();
-                addModuleExportedName(exportedName);
-            }
-            expectContextualKeyword(TokenType.FROM, "from");
-            parserContext.expect(TokenType.STRING);
-            parseWithClause();
-            parserContext.consumeSemicolon();
-            return new BlockStatement(List.of(), location);
-        }
-
-        // export var/let/const/function/class ...
-        if (parserContext.match(TokenType.VAR) || parserContext.match(TokenType.LET)
-                || parserContext.match(TokenType.CONST)) {
-            boolean isVar = parserContext.match(TokenType.VAR);
-            Statement decl = parseVariableDeclaration();
-            // Track exported names from declaration
-            collectDeclaredNames(decl, isVar);
-            return decl;
-        }
-        if (parserContext.match(TokenType.FUNCTION)) {
-            Statement decl = delegates.functions.parseFunctionDeclaration(false, false);
-            collectDeclaredNames(decl, false);
-            return decl;
-        }
-        if (parserContext.match(TokenType.ASYNC) && parserContext.peek() != null
-                && parserContext.peek().type() == TokenType.FUNCTION
-                && parserContext.peek().line() == parserContext.currentToken.line()) {
-            Statement decl = parseAsyncDeclaration();
-            collectDeclaredNames(decl, false);
-            return decl;
-        }
-        if (parserContext.match(TokenType.CLASS)) {
-            Statement decl = delegates.functions.parseClassDeclaration();
-            collectDeclaredNames(decl, false);
-            return decl;
-        }
-        if (parserContext.match(TokenType.LBRACE)) {
-            parseExportNamedSpecifiers();
-            parserContext.consumeSemicolon();
-            return new BlockStatement(List.of(), location);
-        }
-
-        throw new JSSyntaxErrorException("Unexpected export syntax");
-    }
-
-    /**
-     * Parse export { specifiers } and optional 'from' clause. Handles string export/import names per ES2024
-     * ModuleExportName.
-     */
-    private void parseExportNamedSpecifiers() {
-        parserContext.advance(); // consume '{'
-        boolean hasStringLocalName = false;
-        List<String[]> specifiers = new ArrayList<>(); // [localName, exportedName]
-        while (!parserContext.match(TokenType.RBRACE)) {
-            if (parserContext.consumeIf(TokenType.COMMA)) {
-                continue;
-            }
-            // The local name in export { local as exported }
-            boolean localIsString = parserContext.match(TokenType.STRING);
-            if (localIsString) {
-                hasStringLocalName = true;
-            }
-            String localName = parseModuleExportNameAndReturn();
-            String exportedName = localName;
-            if (parserContext.match(TokenType.IDENTIFIER) && JSKeyword.AS.equals(parserContext.currentToken.value())) {
-                throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
-            }
-            if (parserContext.match(TokenType.AS)) {
-                if (parserContext.currentToken.escaped()) {
-                    throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
-                }
-                parserContext.advance();
-                // The exported name can also be identifier or string
-                exportedName = parseModuleExportNameAndReturn();
-            }
-            specifiers.add(new String[]{localName, exportedName});
-            if (parserContext.consumeIf(TokenType.COMMA)) {
-            }
-        }
-        parserContext.expect(TokenType.RBRACE);
-        boolean hasFrom = false;
-        if (parserContext.match(TokenType.FROM)) {
-            if (parserContext.currentToken.escaped()) {
-                throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
-            }
-            hasFrom = true;
-            parserContext.advance();
-            parserContext.expect(TokenType.STRING);
-            parseWithClause();
-        } else if (hasStringLocalName) {
-            // String local names require a 'from' clause per spec
-            throw new JSSyntaxErrorException("Expected 'from' but got '" + parserContext.currentToken.value() + "'");
-        }
-        // Register exported names and track local bindings
-        for (String[] spec : specifiers) {
-            addModuleExportedName(spec[1]);
-            if (!hasFrom) {
-                // Without 'from', the local names must be bound locally
-                parserContext.pendingExportBindings.add(spec[0]);
-            }
-        }
     }
 
     Statement parseExpressionStatement() {
@@ -594,7 +320,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
         Statement body = parseIterationBody("for");
         if (init instanceof VariableDeclaration varDecl && varDecl.getKind() != VariableKind.VAR) {
-            validateForInOfDeclarationBodyEarlyErrors(varDecl, body);
+            delegates.declarations.validateForInOfDeclarationBodyEarlyErrors(varDecl, body);
         }
 
         return new ForStatement(init, test, update, body, location);
@@ -623,109 +349,6 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
 
         return new IfStatement(test, consequent, alternate, location);
-    }
-
-    Statement parseImportDeclarationStatement() {
-        SourceLocation location = parserContext.getLocation();
-        if (!parserContext.moduleMode || parserContext.functionNesting != 0) {
-            throw new JSSyntaxErrorException("Cannot use import statement outside a module");
-        }
-
-        parserContext.expect(TokenType.IMPORT);
-
-        // Side-effect-only import: import 'module';
-        if (parserContext.consumeIf(TokenType.STRING)) {
-            parseWithClause();
-            parserContext.consumeSemicolon();
-            return null;
-        }
-
-        // import defer * as ns from 'module';
-        if (parserContext.match(TokenType.IDENTIFIER) && "defer".equals(parserContext.currentToken.value())
-                && parserContext.peek() != null && parserContext.peek().type() == TokenType.MUL) {
-            parserContext.advance(); // consume 'defer'
-            parserContext.advance(); // consume '*'
-            expectContextualKeyword(TokenType.AS, "as");
-            Identifier nsBinding = parserContext.parseIdentifier();
-            addModuleLexicalName(nsBinding.getName());
-            expectContextualKeyword(TokenType.FROM, "from");
-            parserContext.expect(TokenType.STRING);
-            parseWithClause();
-            parserContext.consumeSemicolon();
-            return null;
-        }
-
-        // Namespace import: import * as ns from 'module';
-        if (parserContext.consumeIf(TokenType.MUL)) {
-            expectContextualKeyword(TokenType.AS, "as");
-            Identifier nsBinding = parserContext.parseIdentifier();
-            addModuleLexicalName(nsBinding.getName());
-            expectContextualKeyword(TokenType.FROM, "from");
-            parserContext.expect(TokenType.STRING);
-            parseWithClause();
-            parserContext.consumeSemicolon();
-            return null;
-        }
-
-        // Named imports: import { x, y as z } from 'module';
-        if (parserContext.match(TokenType.LBRACE)) {
-            parseNamedImportSpecifiers();
-            expectContextualKeyword(TokenType.FROM, "from");
-            parserContext.expect(TokenType.STRING);
-            parseWithClause();
-            parserContext.consumeSemicolon();
-            return null;
-        }
-
-        // Default import, possibly with named/namespace: import foo from 'module';
-        if (parserContext.match(TokenType.IDENTIFIER)) {
-            Identifier defaultBinding = parserContext.parseIdentifier();
-            addModuleLexicalName(defaultBinding.getName());
-            Set<String> boundNames = new HashSet<>();
-            boundNames.add(defaultBinding.getName());
-            if (parserContext.consumeIf(TokenType.COMMA)) {
-                if (parserContext.consumeIf(TokenType.MUL)) {
-                    expectContextualKeyword(TokenType.AS, "as");
-                    Identifier nsBinding = parserContext.parseIdentifier();
-                    addModuleLexicalName(nsBinding.getName());
-                    if (boundNames.contains(nsBinding.getName())) {
-                        throw new JSSyntaxErrorException("duplicate import binding");
-                    }
-                } else if (parserContext.match(TokenType.LBRACE)) {
-                    parseNamedImportSpecifiers(boundNames);
-                } else {
-                    throw new JSSyntaxErrorException("Unsupported import declaration");
-                }
-            }
-            expectContextualKeyword(TokenType.FROM, "from");
-            parserContext.expect(TokenType.STRING);
-            parseWithClause();
-            parserContext.consumeSemicolon();
-            return null;
-        }
-
-        throw new JSSyntaxErrorException("Unsupported import declaration");
-    }
-
-    private String parseImportIdentifierName() {
-        TokenType type = parserContext.currentToken.type();
-        if (type == TokenType.STRING) {
-            String name = parserContext.currentToken.value();
-            // ES2024: ModuleExportName string must not contain unpaired surrogates
-            if (UnicodeStringUtils.hasUnpairedSurrogate(name)) {
-                throw new JSSyntaxErrorException("Invalid module export name: unpaired surrogate");
-            }
-            parserContext.advance();
-            return name;
-        }
-        // Any IdentifierName including reserved keywords is allowed as
-        // import/export specifier names (ES2024 ModuleExportName).
-        if (type.isIdentifierName()) {
-            String name = parserContext.currentToken.value();
-            parserContext.advance();
-            return name;
-        }
-        throw new JSSyntaxErrorException("Unexpected token '" + parserContext.currentToken.value() + "'");
     }
 
     /**
@@ -764,70 +387,6 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         } finally {
             parserContext.labelStack.pop();
         }
-    }
-
-    /**
-     * Parse a module export name without returning value (backward compat).
-     */
-    private void parseModuleExportName() {
-        parseModuleExportNameAndReturn();
-    }
-
-    /**
-     * Parse a module export name: either an identifier name or a string literal. ModuleExportName :: IdentifierName |
-     * StringLiteral Returns the parsed name for tracking purposes.
-     */
-    private String parseModuleExportNameAndReturn() {
-        if (parserContext.match(TokenType.STRING)) {
-            String name = parserContext.currentToken.value();
-            // ES2024: ModuleExportName string must not contain unpaired surrogates
-            if (UnicodeStringUtils.hasUnpairedSurrogate(name)) {
-                throw new JSSyntaxErrorException("Invalid module export name: unpaired surrogate");
-            }
-            parserContext.advance();
-            return name;
-        } else {
-            // Any IdentifierName including keywords is allowed as export name
-            String name = parseImportIdentifierName();
-            return name;
-        }
-    }
-
-    private void parseNamedImportSpecifiers() {
-        parseNamedImportSpecifiers(new HashSet<>());
-    }
-
-    private void parseNamedImportSpecifiers(Set<String> boundNames) {
-        parserContext.expect(TokenType.LBRACE);
-        if (!parserContext.match(TokenType.RBRACE)) {
-            while (true) {
-                String importName = parseImportIdentifierName();
-                String localName;
-                if (parserContext.match(TokenType.AS) && !parserContext.currentToken.escaped()) {
-                    parserContext.advance();
-                    localName = parserContext.parseIdentifier().getName();
-                } else {
-                    localName = importName;
-                }
-                // In strict mode (modules are always strict), eval/arguments are forbidden
-                if (parserContext.strictMode
-                        && (JSKeyword.EVAL.equals(localName) || JSKeyword.ARGUMENTS.equals(localName))) {
-                    throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
-                }
-                addModuleLexicalName(localName);
-                if (!boundNames.add(localName)) {
-                    throw new JSSyntaxErrorException("duplicate import binding");
-                }
-                if (!parserContext.match(TokenType.COMMA)) {
-                    break;
-                }
-                parserContext.advance();
-                if (parserContext.match(TokenType.RBRACE)) {
-                    break;
-                }
-            }
-        }
-        parserContext.expect(TokenType.RBRACE);
     }
 
     Statement parseReturnStatement() {
@@ -911,7 +470,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     if (!parserContext.moduleMode || parserContext.statementNesting > 1) {
                         throw new JSSyntaxErrorException("Unexpected token 'export'");
                     }
-                    yield parseExportDeclaration();
+                    yield delegates.modules().parseExportDeclaration();
                 }
                 case IMPORT -> {
                     Token nextToken = parserContext.peek();
@@ -920,7 +479,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     if (!isDynamicImportExpression) {
                         if (parserContext.moduleMode && parserContext.functionNesting == 0
                                 && parserContext.statementNesting <= 1) {
-                            yield parseImportDeclarationStatement();
+                            yield delegates.modules().parseImportDeclarationStatement();
                         }
                         throw new JSSyntaxErrorException("Cannot use import statement outside a module");
                     }
@@ -973,7 +532,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
 
         parserContext.expect(TokenType.RBRACE);
-        validateSwitchCaseBlockEarlyErrors(cases);
+        delegates.declarations.validateSwitchCaseBlockEarlyErrors(cases);
         return new SwitchStatement(discriminant, cases, location);
     }
 
@@ -999,7 +558,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             if (parserContext.consumeIf(TokenType.LPAREN)) {
                 param = delegates.patterns.parsePattern();
                 Set<String> boundNames = new HashSet<>();
-                collectPatternBoundNamesAndCheckDuplicates(param, boundNames);
+                delegates.declarations.collectPatternBoundNamesAndCheckDuplicates(param, boundNames);
                 if (parserContext.strictMode) {
                     for (String boundName : boundNames) {
                         if (JSKeyword.EVAL.equals(boundName) || JSKeyword.ARGUMENTS.equals(boundName)) {
@@ -1010,7 +569,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 parserContext.expect(TokenType.RPAREN);
             }
             BlockStatement catchBody = parseBlockStatement();
-            validateCatchClauseEarlyErrors(param, catchBody);
+            delegates.declarations.validateCatchClauseEarlyErrors(param, catchBody);
             handler = new TryStatement.CatchClause(param, catchBody);
         }
 
@@ -1071,12 +630,12 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             Pattern id = delegates.patterns.parsePattern();
             Set<String> declaredNames = new HashSet<>();
             if (kind != VariableKind.VAR) {
-                collectPatternBoundNamesAndCheckDuplicates(id, declaredNames);
+                delegates.declarations.collectPatternBoundNamesAndCheckDuplicates(id, declaredNames);
                 if (declaredNames.contains(JSKeyword.LET)) {
                     throw new JSSyntaxErrorException("let is disallowed as a lexically bound name");
                 }
             } else {
-                collectPatternBoundNames(id, declaredNames);
+                delegates.declarations.collectPatternBoundNames(id, declaredNames);
             }
             if (parserContext.strictMode) {
                 for (String declaredName : declaredNames) {
@@ -1116,40 +675,6 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         Statement body = parseIterationBody("while");
 
         return new WhileStatement(test, body, location);
-    }
-
-    private void parseWithClause() {
-        if (parserContext.currentToken.type() == TokenType.IDENTIFIER
-                && "with".equals(parserContext.currentToken.value())) {
-            parserContext.advance(); // consume 'with'
-            parserContext.expect(TokenType.LBRACE);
-            Set<String> attributeKeys = new HashSet<>();
-            while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
-                // Parse key: either identifier or string
-                String key;
-                if (parserContext.match(TokenType.STRING)) {
-                    key = parserContext.currentToken.value();
-                    parserContext.advance();
-                } else if (parserContext.currentToken.type().isIdentifierName()) {
-                    // AttributeKey is IdentifierName, not IdentifierReference, so a reserved word
-                    // is a valid key: `import x from './m.js' with {if: ''}` parses.
-                    key = parserContext.currentToken.value();
-                    parserContext.advance();
-                } else {
-                    throw new JSSyntaxErrorException("identifier expected");
-                }
-                if (!attributeKeys.add(key)) {
-                    throw new JSSyntaxErrorException("Duplicate attribute key '" + key + "'");
-                }
-                parserContext.expect(TokenType.COLON);
-                parserContext.expect(TokenType.STRING);
-                if (!parserContext.match(TokenType.COMMA)) {
-                    break;
-                }
-                parserContext.advance();
-            }
-            parserContext.expect(TokenType.RBRACE);
-        }
     }
 
     Statement parseWithStatement() {
@@ -1196,91 +721,6 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         throw new JSSyntaxErrorException("using declarations are not allowed at the top level of scripts");
     }
 
-    private void validateBlockEarlyErrors(List<Statement> statements) {
-        // Without a direct lexical declaration there can be no lexical/var conflict.
-        // Static initializers still need to inspect var patterns for a forbidden "await".
-        if (!parserContext.inClassStaticInit && !hasBlockLexicalDeclaration(statements)) {
-            return;
-        }
-        BlockBindings bindings = new BlockBindings();
-        for (Statement statement : statements) {
-            bindings.collect(statement, false);
-        }
-        bindings.checkVarConflicts();
-    }
-
-    /**
-     * The early errors of a function body, class static block or arrow body (ES2024 15.2.1): no lexically declared name
-     * twice, and none that is also var-declared — by a {@code var} anywhere in the body outside nested functions, or by
-     * a top-level function declaration.
-     * <p>
-     * Only module and script top levels and blocks used to be checked, so {@code function f() { let x; var x; }} was
-     * accepted and the {@code var} silently won.
-     *
-     * @param statements
-     *            the body's statements
-     */
-    void validateFunctionBodyEarlyErrors(List<Statement> statements) {
-        Set<String> lexicalNames = collectFunctionBodyLexicalNames(statements);
-        Set<String> varNames = new HashSet<>();
-        for (Statement statement : statements) {
-            collectVarDeclaredNames(statement, varNames);
-            FunctionDeclaration functionDeclaration = statement.unwrapLabeledFunctionDeclaration();
-            if (functionDeclaration != null) {
-                varNames.add(functionDeclaration.getId().getName());
-            }
-        }
-        for (String lexicalName : lexicalNames) {
-            if (varNames.contains(lexicalName)) {
-                throw new JSSyntaxErrorException("Identifier '" + lexicalName + "' has already been declared");
-            }
-        }
-    }
-
-    private void validateCatchClauseEarlyErrors(Pattern catchParameter, BlockStatement catchBody) {
-        if (catchParameter == null || catchBody == null) {
-            return;
-        }
-        Set<String> catchParameterNames = new HashSet<>();
-        collectPatternBoundNames(catchParameter, catchParameterNames);
-
-        Set<String> lexicalNames = new HashSet<>();
-        for (Statement statement : catchBody.getBody()) {
-            if (statement instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.getKind() != VariableKind.VAR) {
-                for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                    collectPatternBoundNames(declarator.getId(), lexicalNames);
-                }
-            } else if (statement instanceof FunctionDeclaration functionDeclaration
-                    && functionDeclaration.getId() != null) {
-                lexicalNames.add(functionDeclaration.getId().getName());
-            } else if (statement instanceof ClassDeclaration classDeclaration && classDeclaration.getId() != null) {
-                lexicalNames.add(classDeclaration.getId().getName());
-            }
-        }
-
-        for (String catchParameterName : catchParameterNames) {
-            if (lexicalNames.contains(catchParameterName)) {
-                throw new JSSyntaxErrorException("Identifier '" + catchParameterName + "' has already been declared");
-            }
-        }
-
-        // Annex B.3.4 lets a var in the catch block redeclare a simple catch parameter only. A destructuring
-        // parameter's names conflict with any var of the block: `catch ([e]) { var e }` is a SyntaxError.
-        if (!(catchParameter instanceof Identifier)) {
-            Set<String> varNames = new HashSet<>();
-            for (Statement statement : catchBody.getBody()) {
-                collectVarDeclaredNames(statement, varNames);
-            }
-            for (String catchParameterName : catchParameterNames) {
-                if (varNames.contains(catchParameterName)) {
-                    throw new JSSyntaxErrorException(
-                            "Identifier '" + catchParameterName + "' has already been declared");
-                }
-            }
-        }
-    }
-
     private void validateForInDeclarationInitializers(VariableDeclaration variableDeclaration) {
         if (variableDeclaration == null || variableDeclaration.getDeclarations().isEmpty()) {
             return;
@@ -1294,33 +734,6 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
         if (parserContext.strictMode || !(variableDeclarator.getId() instanceof Identifier)) {
             throw new JSSyntaxErrorException("Invalid initializer in for-in declaration");
-        }
-    }
-
-    private void validateForInOfDeclarationBodyEarlyErrors(VariableDeclaration declaration, Statement statement) {
-        if (declaration == null || declaration.getKind() == VariableKind.VAR) {
-            return;
-        }
-        Set<String> boundNames = new HashSet<>();
-        for (VariableDeclarator declarator : declaration.getDeclarations()) {
-            collectPatternBoundNames(declarator.getId(), boundNames);
-        }
-        Set<String> varNames = new HashSet<>();
-        collectVarDeclaredNames(statement, varNames);
-        for (String boundName : boundNames) {
-            if (varNames.contains(boundName)) {
-                throw new JSSyntaxErrorException("Identifier '" + boundName + "' has already been declared");
-            }
-        }
-    }
-
-    private void validateForInOfDeclarationBoundNames(VariableDeclaration declaration) {
-        if (declaration == null || declaration.getKind() == VariableKind.VAR) {
-            return;
-        }
-        Set<String> boundNames = new HashSet<>();
-        for (VariableDeclarator declarator : declaration.getDeclarations()) {
-            collectPatternBoundNamesAndCheckDuplicates(declarator.getId(), boundNames);
         }
     }
 
@@ -1377,61 +790,6 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
     }
 
-    void validateProgramEarlyErrors(List<Statement> statements) {
-        Set<String> lexicalNames = new HashSet<>();
-        Set<String> varNames = new HashSet<>();
-
-        for (Statement statement : statements) {
-            if (statement instanceof VariableDeclaration variableDeclaration) {
-                if (variableDeclaration.getKind() == VariableKind.VAR) {
-                    for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                        collectPatternBoundNames(declarator.getId(), varNames);
-                    }
-                } else {
-                    for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                        Set<String> names = new HashSet<>();
-                        collectPatternBoundNames(declarator.getId(), names);
-                        for (String name : names) {
-                            if (varNames.contains(name) || !lexicalNames.add(name)) {
-                                throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
-                            }
-                        }
-                    }
-                }
-            } else if (statement instanceof ClassDeclaration classDeclaration && classDeclaration.getId() != null) {
-                String className = classDeclaration.getId().getName();
-                if (varNames.contains(className) || !lexicalNames.add(className)) {
-                    throw new JSSyntaxErrorException("Identifier '" + className + "' has already been declared");
-                }
-            } else if (statement instanceof FunctionDeclaration functionDeclaration
-                    && functionDeclaration.getId() != null) {
-                varNames.add(functionDeclaration.getId().getName());
-            }
-            collectVarDeclaredNames(statement, varNames);
-        }
-
-        for (String lexicalName : lexicalNames) {
-            if (varNames.contains(lexicalName)) {
-                throw new JSSyntaxErrorException("Identifier '" + lexicalName + "' has already been declared");
-            }
-        }
-    }
-
-    private void validateSwitchCaseBlockEarlyErrors(List<SwitchStatement.SwitchCase> cases) {
-        if (cases == null || cases.isEmpty()) {
-            return;
-        }
-        BlockBindings bindings = new BlockBindings();
-        for (SwitchStatement.SwitchCase switchCase : cases) {
-            if (switchCase != null) {
-                for (Statement statement : switchCase.getConsequent()) {
-                    bindings.collect(statement, true);
-                }
-            }
-        }
-        bindings.checkVarConflicts();
-    }
-
     private VariableDeclaration parseForDeclaration(boolean using) {
         SourceLocation location = parserContext.getLocation();
         VariableKind kind;
@@ -1464,7 +822,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             if (declaration.getDeclarations().size() != 1) {
                 throw new JSSyntaxErrorException(kind + " loop must have exactly one declaration");
             }
-            validateForInOfDeclarationBoundNames(declaration);
+            delegates.declarations.validateForInOfDeclarationBoundNames(declaration);
             if (of) {
                 VariableDeclarator declarator = declaration.getDeclarations().get(0);
                 if (declarator != null && declarator.getInit() != null) {
@@ -1483,7 +841,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         parserContext.expect(TokenType.RPAREN);
         Statement body = parseIterationBody(kind);
         if (left instanceof VariableDeclaration declaration) {
-            validateForInOfDeclarationBodyEarlyErrors(declaration, body);
+            delegates.declarations.validateForInOfDeclarationBodyEarlyErrors(declaration, body);
         }
         return of
                 ? new ForOfStatement(left, right, body, isAwait, location)
@@ -1521,73 +879,4 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         return label;
     }
 
-    private final class BlockBindings {
-        private final Set<String> lexicalNames = new HashSet<>();
-        private final Set<String> simpleFunctionLexicalNames = new HashSet<>();
-        private final Set<String> varNames = new HashSet<>();
-
-        void checkVarConflicts() {
-            for (String lexicalName : lexicalNames) {
-                if (varNames.contains(lexicalName)) {
-                    throw new JSSyntaxErrorException("Identifier '" + lexicalName + "' has already been declared");
-                }
-            }
-        }
-
-        void collect(Statement statement, boolean inSwitch) {
-            if (statement instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.getKind() != VariableKind.VAR) {
-                if (inSwitch && hasUsingInitializer(variableDeclaration)) {
-                    throw new JSSyntaxErrorException(
-                            "using declarations are not allowed directly in case/default clauses");
-                }
-                for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                    Set<String> names = new HashSet<>();
-                    if (inSwitch) {
-                        collectPatternBoundNamesAndCheckDuplicates(declarator.getId(), names);
-                    } else {
-                        collectPatternBoundNames(declarator.getId(), names);
-                    }
-                    for (String name : names) {
-                        if (!lexicalNames.add(name)) {
-                            throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
-                        }
-                    }
-                }
-            } else if (statement instanceof FunctionDeclaration functionDeclaration
-                    && functionDeclaration.getId() != null) {
-                String name = functionDeclaration.getId().getName();
-                boolean isSimpleFunction = functionDeclaration.isAnnexBSimpleDeclaration();
-                if (lexicalNames.contains(name)) {
-                    boolean duplicatedSimpleFunctionDeclaration = simpleFunctionLexicalNames.contains(name)
-                            && isSimpleFunction;
-                    if (!duplicatedSimpleFunctionDeclaration || parserContext.strictMode) {
-                        throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
-                    }
-                } else {
-                    lexicalNames.add(name);
-                }
-                if (isSimpleFunction) {
-                    simpleFunctionLexicalNames.add(name);
-                }
-            } else if (statement instanceof ClassDeclaration classDeclaration && classDeclaration.getId() != null) {
-                String name = classDeclaration.getId().getName();
-                if (lexicalNames.contains(name)) {
-                    throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
-                }
-                lexicalNames.add(name);
-            }
-            collectVarDeclaredNames(statement, varNames);
-        }
-    }
-
-    private static boolean hasBlockLexicalDeclaration(List<Statement> statements) {
-        for (Statement statement : statements) {
-            if (statement instanceof Declaration
-                    || statement instanceof VariableDeclaration variable && variable.getKind() != VariableKind.VAR) {
-                return true;
-            }
-        }
-        return false;
-    }
 }

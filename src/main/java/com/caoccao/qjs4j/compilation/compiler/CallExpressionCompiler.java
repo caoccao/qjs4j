@@ -40,15 +40,10 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
 
     private void compileCall(CallExpression callExpr) {
         boolean hasSpread = callExpr.getArguments().stream().anyMatch(arg -> arg instanceof SpreadElement);
-        if (hasSpread) {
-            compileCallExpressionWithSpread(callExpr);
-        } else {
-            compileCallExpressionRegular(callExpr);
-        }
-    }
-
-    private void compileCallExpressionRegular(CallExpression callExpr) {
         if (callExpr.getCallee() instanceof Identifier calleeId && JSKeyword.SUPER.equals(calleeId.getName())) {
+            if (hasSpread) {
+                compilerContext.emitTailCalls = false;
+            }
             compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
             compilerContext.emitter.emitU8(3);
             compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
@@ -60,6 +55,14 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
             emitPendingPostSuperInitialization();
             return;
         }
+        if (hasSpread) {
+            compileCallExpressionWithSpread(callExpr);
+        } else {
+            compileCallExpressionRegular(callExpr);
+        }
+    }
+
+    private void compileCallExpressionRegular(CallExpression callExpr) {
         boolean isTailCall = compilerContext.emitTailCalls;
         compilerContext.emitTailCalls = false;
 
@@ -102,18 +105,6 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
 
     private void compileCallExpressionWithSpread(CallExpression callExpr) {
         compilerContext.emitTailCalls = false;
-        if (callExpr.getCallee() instanceof Identifier calleeId && JSKeyword.SUPER.equals(calleeId.getName())) {
-            compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-            compilerContext.emitter.emitU8(3);
-            compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-            compilerContext.emitter.emitU8(2);
-            compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
-            compilerContext.emitHelpers.emitArgumentsArrayWithSpread(callExpr.getArguments());
-            compilerContext.emitter.emitOpcodeU16(Opcode.APPLY, 1);
-            compilerContext.emitter.emitOpcode(Opcode.INIT_CTOR);
-            emitPendingPostSuperInitialization();
-            return;
-        }
         if (callExpr.isDirectEvalCall()) {
             compilerContext.expressionCompiler.compile(callExpr.getCallee());
             compilerContext.emitHelpers.emitArgumentsArrayWithSpread(callExpr.getArguments());

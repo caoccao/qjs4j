@@ -50,52 +50,17 @@ final class ExpressionDestructuringAssignmentCompiler extends AstNodeCompiler<Ex
     }
 
     void compileFromPreEvaluated(Expression element, int depth) {
+        Expression target = element;
+        if (element instanceof AssignmentExpression assignment
+                && assignment.getOperator() == AssignmentOperator.ASSIGN) {
+            target = assignment.getLeft();
+            compilerContext.emitHelpers.emitDefaultValue(target instanceof Identifier id ? id.getName() : null,
+                    assignment.getRight());
+        }
         if (depth == 0) {
-            compileWithDefaultValue(element);
-            return;
-        }
-        // Handle default values first
-        Expression target;
-        if (element instanceof AssignmentExpression assignExpr
-                && assignExpr.getOperator() == AssignmentOperator.ASSIGN) {
-            compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED);
-            int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.expressionCompiler.compile(assignExpr.getRight());
-            if (assignExpr.getLeft() instanceof Identifier targetId && assignExpr.getRight().isAnonymousFunction()) {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
-            }
-            compilerContext.emitter.patchJumpToHere(jumpNotUndefined);
-            target = assignExpr.getLeft();
-        } else {
-            target = element;
-        }
-        // Now assign using the pre-evaluated references
-        // Stack: [pre-eval-values...] value
-        if (target instanceof MemberExpression memberExpr) {
-            if (memberExpr.getObject().isSuperIdentifier()) {
-                compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
-            } else if (memberExpr.isComputed()) {
-                compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
-            } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateIdentifier) {
-                String fieldName = privateIdentifier.getName();
-                JSSymbol privateSymbol = compilerContext.privateSymbols != null
-                        ? compilerContext.privateSymbols.get(fieldName)
-                        : null;
-                if (privateSymbol == null) {
-                    throw new JSCompilerException("undefined private field '#" + fieldName + "'", privateIdentifier);
-                }
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, privateSymbol);
-                compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
-            } else if (memberExpr.getProperty() instanceof Identifier propId) {
-                compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.getName());
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
-            }
+            compile(target);
+        } else if (target instanceof MemberExpression member) {
+            MemberExpressionDestructuringAssignmentCompiler.store(compilerContext, member, true);
         }
     }
 
@@ -111,24 +76,4 @@ final class ExpressionDestructuringAssignmentCompiler extends AstNodeCompiler<Ex
         compile(leftExpression);
     }
 
-    private void compileWithDefaultValue(Expression element) {
-        // Stack: [value]
-        if (element instanceof AssignmentExpression assignExpr
-                && assignExpr.getOperator() == AssignmentOperator.ASSIGN) {
-            // Default value: check if value is undefined
-            compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED);
-            int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.expressionCompiler.compile(assignExpr.getRight());
-            // Set function name for anonymous function definitions
-            if (assignExpr.getLeft() instanceof Identifier targetId && assignExpr.getRight().isAnonymousFunction()) {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
-            }
-            compilerContext.emitter.patchJumpToHere(jumpNotUndefined);
-            compile(assignExpr.getLeft());
-        } else {
-            compile(element);
-        }
-    }
 }

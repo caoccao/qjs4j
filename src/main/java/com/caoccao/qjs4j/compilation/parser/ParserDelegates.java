@@ -21,17 +21,27 @@ package com.caoccao.qjs4j.compilation.parser;
  * other delegates.
  */
 final class ParserDelegates {
+    final DeclarationEarlyErrors declarations;
     final ExpressionParser expressions;
     final FunctionClassParser functions;
     final LiteralParser literals;
+    private ModuleDeclarationParser modules;
     final PatternParser patterns;
     final StatementParser statements;
 
     ParserDelegates(ParserContext parserContext) {
+        this.declarations = new DeclarationEarlyErrors(parserContext);
         this.expressions = new ExpressionParser(parserContext, this);
         this.statements = new StatementParser(parserContext, this);
         this.functions = new FunctionClassParser(parserContext, this);
         this.patterns = new PatternParser(parserContext, this);
         this.literals = new LiteralParser(parserContext, this);
+    }
+
+    ModuleDeclarationParser modules() {
+        if (modules == null) {
+            modules = new ModuleDeclarationParser(statements.parserContext(), this);
+        }
+        return modules;
     }
 }

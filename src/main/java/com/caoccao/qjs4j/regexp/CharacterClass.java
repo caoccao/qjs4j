@@ -76,8 +76,7 @@ public record CharacterClass(boolean inverted, int[] ranges) {
      * \S - Non-whitespace character class
      */
     public static CharacterClass notWhitespace() {
-        return new CharacterClass(true, new int[]{0x0009, 0x000D, 0x0020, 0x0020, 0x00A0, 0x00A0, 0x1680, 0x1680,
-                0x2000, 0x200A, 0x2028, 0x2029, 0x202F, 0x202F, 0x205F, 0x205F, 0x3000, 0x3000, 0xFEFF, 0xFEFF});
+        return RegExpCharacterClass.whitespace(true);
     }
 
     /**
@@ -126,18 +125,7 @@ public record CharacterClass(boolean inverted, int[] ranges) {
      * \s - Whitespace character class
      */
     public static CharacterClass whitespace() {
-        // JavaScript whitespace: space, tab, CR, LF, FF, VT, and Unicode spaces
-        return new CharacterClass(false, new int[]{0x0009, 0x000D, // \t to \r
-                0x0020, 0x0020, // space
-                0x00A0, 0x00A0, // non-breaking space
-                0x1680, 0x1680, // Ogham space mark
-                0x2000, 0x200A, // various spaces
-                0x2028, 0x2029, // line separator, paragraph separator
-                0x202F, 0x202F, // narrow no-break space
-                0x205F, 0x205F, // medium mathematical space
-                0x3000, 0x3000, // ideographic space
-                0xFEFF, 0xFEFF // zero width no-break space
-        });
+        return RegExpCharacterClass.whitespace(false);
     }
 
     /**

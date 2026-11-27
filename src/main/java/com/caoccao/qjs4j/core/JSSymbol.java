@@ -55,23 +55,24 @@ public final class JSSymbol implements JSValue {
      * @see JSWeakEntryTable
      */
     private JSWeakEntryTable weakEntryTable;
+    private final boolean wellKnown;
 
     public JSSymbol(String description) {
-        this.id = nextId.getAndIncrement();
-        this.description = description;
-        this.registered = false;
+        this(description, false);
     }
 
     public JSSymbol(String description, boolean registered) {
         this.id = nextId.getAndIncrement();
         this.description = description;
         this.registered = registered;
+        this.wellKnown = false;
     }
 
     private JSSymbol(String description, int id) {
         this.id = id;
         this.description = description;
         this.registered = false;
+        this.wellKnown = true;
     }
 
     public String getDescription() {
@@ -84,6 +85,10 @@ public final class JSSymbol implements JSValue {
 
     public boolean isRegistered() {
         return registered;
+    }
+
+    boolean isWellKnown() {
+        return wellKnown;
     }
 
     @Override

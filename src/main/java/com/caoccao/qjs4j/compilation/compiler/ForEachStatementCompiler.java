@@ -22,82 +22,132 @@ import com.caoccao.qjs4j.core.JSDisposableStack;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
-    ForOfStatementCompiler(CompilerContext compilerContext) {
+/** Compiles the common binding scope and the distinct enumeration and iterator loops of for-in and for-of. */
+final class ForEachStatementCompiler extends AstNodeCompiler<ForEachStatement> {
+    ForEachStatementCompiler(CompilerContext compilerContext) {
         super(compilerContext);
     }
 
     @Override
-    void compile(ForOfStatement forOfStmt) {
+    void compile(ForEachStatement statement) {
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
+        if (statement instanceof ForOfStatement of && of.getLeft() instanceof CallExpression call) {
+            compileForOfWithCallExpressionTarget(of, call);
+            return;
+        }
 
-        boolean isExpressionBased = !(forOfStmt.getLeft() instanceof VariableDeclaration);
-        VariableDeclaration varDecl = null;
+        VariableDeclaration declaration = statement.getLeft() instanceof VariableDeclaration variable ? variable : null;
         Pattern pattern = null;
-        boolean isVar = false;
-
-        if (isExpressionBased) {
-            if (forOfStmt.getLeft() instanceof CallExpression callExpr) {
-                compileForOfWithCallExpressionTarget(forOfStmt, callExpr);
-                return;
+        if (declaration != null) {
+            if (declaration.getDeclarations().size() != 1) {
+                String loop = statement instanceof ForInStatement ? "for-in" : "for-of";
+                throw new JSCompilerException(loop + " loop must have exactly one variable", declaration);
             }
-        } else {
-            varDecl = (VariableDeclaration) forOfStmt.getLeft();
-            if (varDecl.getDeclarations().size() != 1) {
-                throw new JSCompilerException("for-of loop must have exactly one variable", varDecl);
-            }
-            pattern = varDecl.getDeclarations().get(0).getId();
-            isVar = varDecl.getKind() == VariableKind.VAR;
-
-            if (isVar && !compilerContext.inGlobalScope) {
+            pattern = declaration.getDeclarations().get(0).getId();
+            if (declaration.getKind() == VariableKind.VAR && !compilerContext.inGlobalScope) {
                 compilerContext.patternCompiler.declarePatternVariables(pattern);
             }
         }
-
-        boolean hasHeadTdzScope = !isExpressionBased && !isVar;
-        if (hasHeadTdzScope && pattern != null) {
+        boolean lexical = declaration != null && declaration.getKind() != VariableKind.VAR;
+        if (lexical) {
+            // The RHS sees the loop names in their temporal dead zone.
             compilerContext.scopeManager.enterScope();
             compilerContext.patternCompiler.declarePatternVariables(pattern);
-            for (String boundName : pattern.getBoundNames()) {
-                Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(boundName);
-                if (localIndex != null) {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
-                    compilerContext.tdzLocals.add(boundName);
+            for (String name : pattern.getBoundNames()) {
+                Integer local = compilerContext.scopeManager.currentScope().getLocal(name);
+                if (local != null) {
+                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, local);
+                    compilerContext.tdzLocals.add(name);
                 }
             }
-            compilerContext.expressionCompiler.compile(forOfStmt.getRight());
-            // A value that is not iterable reports the iterable's position, as V8 does.
-            compilerContext.emitter.emitSourcePosition(forOfStmt.getRight().getLocation());
-            if (forOfStmt.isAsync()) {
-                compilerContext.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_START);
-            } else {
-                compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
-            }
+            startIteration(statement);
             compilerContext.scopeManager.exitScope();
         }
-
         compilerContext.scopeManager.enterScope();
-
-        boolean isUsingForOf = varDecl != null && varDecl.getKind().isUsing();
-        boolean isAwaitUsingForOf = varDecl != null && varDecl.getKind() == VariableKind.AWAIT_USING;
-
-        if (!isExpressionBased && !isVar) {
+        if (lexical) {
             compilerContext.patternCompiler.declarePatternVariables(pattern);
-            if (varDecl != null && varDecl.getKind().isImmutable()) {
+            boolean immutable = statement instanceof ForInStatement
+                    ? declaration.getKind() == VariableKind.CONST
+                    : declaration.getKind().isImmutable();
+            if (immutable) {
                 compilerContext.patternCompiler.markPatternConstBindings(pattern);
             }
         }
-        if (!hasHeadTdzScope) {
-            compilerContext.expressionCompiler.compile(forOfStmt.getRight());
-            // A value that is not iterable reports the iterable's position, as V8 does.
-            compilerContext.emitter.emitSourcePosition(forOfStmt.getRight().getLocation());
-            if (forOfStmt.isAsync()) {
-                compilerContext.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_START);
-            } else {
-                compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
-            }
+        if (statement instanceof ForInStatement && declaration != null) {
+            compileForInInitializer(pattern, declaration.getDeclarations().get(0).getInit());
         }
+        if (!lexical) {
+            startIteration(statement);
+        }
+        if (statement instanceof ForOfStatement of) {
+            compileForOfLoop(of, declaration, pattern, lexical);
+        } else {
+            compileForInLoop(statement, pattern, lexical);
+        }
+    }
 
+    private void compileBody(ForEachStatement statement, Pattern pattern, boolean lexical) {
+        if (statement.getLeft() instanceof Expression expression) {
+            compilerContext.expressionDestructuringAssignmentCompiler.compileIterationTarget(expression);
+        } else if (pattern != null) {
+            compilerContext.patternCompiler.compileForOfValueAssignment(pattern, !lexical);
+        }
+        compilerContext.statementCompiler.compileNestedStatement(statement.getBody());
+        if (lexical) {
+            compilerContext.emitHelpers.emitCloseLocForPattern(pattern);
+        }
+    }
+
+    private void compileForInInitializer(Pattern pattern, Expression initializer) {
+        if (initializer == null || pattern == null) {
+            return;
+        }
+        if (pattern instanceof Identifier id && initializer instanceof ClassExpression cls && cls.getId() == null) {
+            compilerContext.inferredClassName = id.getName();
+        }
+        compilerContext.expressionCompiler.compile(initializer);
+        if (pattern instanceof Identifier id && initializer.isAnonymousFunction()) {
+            compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, id.getName());
+        }
+        compilerContext.inferredClassName = null;
+        compilerContext.patternCompiler.compileForOfValueAssignment(pattern, true);
+    }
+
+    private void compileForInLoop(ForEachStatement forInStmt, Pattern pattern, boolean lexical) {
+        int loopStart = compilerContext.emitter.currentOffset();
+        LoopContext loop = compilerContext.loopManager.createLoopContext(loopStart,
+                compilerContext.scopeManager.getScopeDepth() - 1, compilerContext.scopeManager.getScopeDepth());
+        compilerContext.loopManager.pushLoop(loop);
+
+        compilerContext.emitter.emitOpcode(Opcode.FOR_IN_NEXT);
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
+        int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+        compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
+
+        compileBody(forInStmt, pattern, lexical);
+
+        compilerContext.emitter.emitGoto(loopStart);
+
+        compilerContext.emitter.patchJumpToHere(jumpToEnd);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+
+        for (int breakPos : loop.breakPositions) {
+            compilerContext.emitter.patchJumpToHere(breakPos);
+        }
+        compilerContext.emitter.patchJumps(loop.continuePositions, loopStart);
+
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+
+        compilerContext.loopManager.popLoop();
+        compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+        compilerContext.scopeManager.exitScope();
+    }
+
+    private void compileForOfLoop(ForOfStatement forOfStmt, VariableDeclaration varDecl, Pattern pattern,
+            boolean lexical) {
+        boolean isUsingForOf = varDecl != null && varDecl.getKind().isUsing();
+        boolean isAwaitUsingForOf = varDecl != null && varDecl.getKind() == VariableKind.AWAIT_USING;
         // Declare a local for the per-iteration DisposableStack if needed
         int forOfUsingStackLocal = -1;
         if (isUsingForOf) {
@@ -175,18 +225,7 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
             compilerContext.emitHelpers.emitMethodCallWithSingleArgOnLocalObject(forOfUsingStackLocal, "use");
         }
 
-        if (isExpressionBased) {
-            compilerContext.expressionDestructuringAssignmentCompiler
-                    .compileIterationTarget((Expression) forOfStmt.getLeft());
-        } else {
-            compilerContext.patternCompiler.compileForOfValueAssignment(pattern, isVar);
-        }
-
-        compilerContext.statementCompiler.compileNestedStatement(forOfStmt.getBody());
-
-        if (!isExpressionBased && !isVar) {
-            compilerContext.emitHelpers.emitCloseLocForPattern(pattern);
-        }
+        compileBody(forOfStmt, pattern, lexical);
 
         // Per-iteration disposal for using/await-using
         if (isUsingForOf) {
@@ -278,5 +317,15 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
 
         compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.scopeManager.exitScope();
+    }
+
+    private void startIteration(ForEachStatement statement) {
+        compilerContext.expressionCompiler.compile(statement.getRight());
+        if (statement instanceof ForInStatement) {
+            compilerContext.emitter.emitOpcode(Opcode.FOR_IN_START);
+        } else {
+            compilerContext.emitter.emitSourcePosition(statement.getRight().getLocation());
+            compilerContext.emitter.emitOpcode(statement.isAsync() ? Opcode.FOR_AWAIT_OF_START : Opcode.FOR_OF_START);
+        }
     }
 }

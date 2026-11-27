@@ -57,7 +57,7 @@ final class CompilerContext {
     ExpressionCompiler expressionCompiler;
     ExpressionDestructuringAssignmentCompiler expressionDestructuringAssignmentCompiler;
     int finallySubroutineDepth;
-    ForOfStatementCompiler forOfStatementCompiler;
+    ForEachStatementCompiler forEachStatementCompiler;
     FunctionExpressionCompiler functionExpressionCompiler;
     boolean hasEnclosingArgumentsBinding;
     IdentifierCompiler identifierCompiler;
@@ -221,7 +221,7 @@ final class CompilerContext {
         this.emitHelpers = new EmitHelpers(this);
         this.expressionCompiler = new ExpressionCompiler(this);
         this.expressionDestructuringAssignmentCompiler = new ExpressionDestructuringAssignmentCompiler(this);
-        this.forOfStatementCompiler = new ForOfStatementCompiler(this);
+        this.forEachStatementCompiler = new ForEachStatementCompiler(this);
         this.functionExpressionCompiler = new FunctionExpressionCompiler(this);
         this.identifierCompiler = new IdentifierCompiler(this);
         this.identifierDestructuringAssignmentCompiler = new IdentifierDestructuringAssignmentCompiler(this);
