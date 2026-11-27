@@ -26,12 +26,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -43,19 +40,6 @@ import static org.junit.jupiter.api.Assertions.fail;
  */
 public class Test262Test {
     private static final Path TEST262_ROOT = Paths.get("../test262");
-
-    private List<Path> discoverTests(Path testsDir, Test262Config config) throws IOException {
-        List<Path> testFiles = new ArrayList<>();
-
-        try (Stream<Path> paths = Files.walk(testsDir)) {
-            paths.filter(Files::isRegularFile).filter(p -> p.toString().endsWith(".js"))
-                    .filter(p -> !p.toString().contains("_FIXTURE")).filter(p -> config.matchesIncludePattern(p))
-                    .sorted(Comparator.comparing(Path::toString)) // Sort for consistent order
-                    .limit(config.getMaxTests()).forEach(testFiles::add);
-        }
-
-        return testFiles;
-    }
 
     private String getTestName(Path testFile) {
         Path relativePath = TEST262_ROOT.relativize(testFile);
@@ -78,7 +62,7 @@ public class Test262Test {
         Test262Executor executor = new Test262Executor(harnessLoader, config.getAsyncTimeoutMs());
 
         Path testsDir = TEST262_ROOT.resolve("test");
-        List<Path> testFiles = discoverTests(testsDir, config);
+        List<Path> testFiles = Test262Runner.discoverTests(testsDir, config, config.getMaxTests());
 
         return testFiles.stream().map(testFile -> DynamicTest.dynamicTest(getTestName(testFile), () -> {
             Test262TestCase testCase = new Test262TestCase(testFile);

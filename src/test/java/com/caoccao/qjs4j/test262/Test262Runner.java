@@ -137,20 +137,8 @@ public class Test262Runner {
         }
     }
 
-    private List<Path> discoverTests(Path testsDir) throws IOException {
-        List<Path> testFiles = new ArrayList<>();
-
-        try (Stream<Path> paths = Files.walk(testsDir)) {
-            paths.filter(Files::isRegularFile).filter(p -> p.toString().endsWith(".js"))
-                    .filter(p -> !p.toString().contains("_FIXTURE")).filter(p -> config.matchesIncludePattern(p))
-                    .sorted(Comparator.comparing(Path::toString)) // Sort for consistent order
-                    .forEach(testFiles::add);
-        }
-        return testFiles;
-    }
-
     private List<Path> discoverTestsWithSingleFilter(Path testsDir) throws IOException {
-        List<Path> testFiles = discoverTests(testsDir);
+        List<Path> testFiles = discoverTests(testsDir, config, Long.MAX_VALUE);
         String normalizedPathFragment = singleTestPathFragment.replace('\\', '/');
         testFiles.removeIf(testFile -> !testFile.toString().replace('\\', '/').contains(normalizedPathFragment));
         return testFiles;
@@ -220,7 +208,7 @@ public class Test262Runner {
             }
             System.out.println("Single-test filter: " + normalizedPathFragment);
         } else {
-            testFiles = discoverTests(testsDir);
+            testFiles = discoverTests(testsDir, config, Long.MAX_VALUE);
         }
         System.out.println("Discovered " + testFiles.size() + " test files");
         if (testFiles.isEmpty()) {
@@ -429,6 +417,18 @@ public class Test262Runner {
      */
     String workerThreadNamePrefix() {
         return workerThreadNamePrefix;
+    }
+
+    static List<Path> discoverTests(Path testsDir, Test262Config config, long limit) throws IOException {
+        List<Path> testFiles = new ArrayList<>();
+
+        try (Stream<Path> paths = Files.walk(testsDir)) {
+            paths.filter(Files::isRegularFile).filter(p -> p.toString().endsWith(".js"))
+                    .filter(p -> !p.toString().contains("_FIXTURE")).filter(p -> config.matchesIncludePattern(p))
+                    .sorted(Comparator.comparing(Path::toString)) // Sort for consistent order
+                    .limit(limit).forEach(testFiles::add);
+        }
+        return testFiles;
     }
 
     public static void main(String[] args) {

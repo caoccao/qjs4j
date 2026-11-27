@@ -41,12 +41,6 @@ public final class JSGlobalObject {
         this.jsonObject = new JSONObject(context);
     }
 
-    private JSObject createTemporalPrototype(String tag) {
-        JSObject prototype = context.createJSObject();
-        defineToStringTag(prototype, tag);
-        return prototype;
-    }
-
     private void defineGetter(JSObject prototype, String name, JSNativeCallback getter) {
         JSNativeFunction getterFunc = new JSNativeFunction(context, "get " + name, 0, getter);
         prototype.defineProperty(PropertyKey.fromString(name), getterFunc,
@@ -160,18 +154,7 @@ public final class JSGlobalObject {
     private void initializeArrayBufferConstructor() {
         // Create ArrayBuffer.prototype
         JSObject arrayBufferPrototype = context.createJSObject();
-        defineMethod(arrayBufferPrototype, "resize", 1, ArrayBufferPrototype::resize);
-        defineMethod(arrayBufferPrototype, "slice", 2, ArrayBufferPrototype::slice);
-        defineMethod(arrayBufferPrototype, "transfer", 0, ArrayBufferPrototype::transfer);
-        defineMethod(arrayBufferPrototype, "transferToFixedLength", 0, ArrayBufferPrototype::transferToFixedLength);
-        defineMethod(arrayBufferPrototype, "transferToImmutable", 0, ArrayBufferPrototype::transferToImmutable);
-
-        // Define getter properties
-        defineGetter(arrayBufferPrototype, "byteLength", ArrayBufferPrototype::getByteLength);
-        defineGetter(arrayBufferPrototype, "detached", ArrayBufferPrototype::getDetached);
-        defineGetter(arrayBufferPrototype, "immutable", ArrayBufferPrototype::getImmutable);
-        defineGetter(arrayBufferPrototype, "maxByteLength", ArrayBufferPrototype::getMaxByteLength);
-        defineGetter(arrayBufferPrototype, "resizable", ArrayBufferPrototype::getResizable);
+        IntrinsicFunctions.ARRAY_BUFFER_PROTOTYPE.install(arrayBufferPrototype);
         defineToStringTag(arrayBufferPrototype, JSArrayBuffer.NAME);
 
         // Create ArrayBuffer constructor as a function
@@ -197,42 +180,7 @@ public final class JSGlobalObject {
         JSArray arrayPrototype = new JSArray(context, 0, 0);
         context.transferPrototype(arrayPrototype, JSObject.NAME);
         JSNativeFunction valuesFunction = new JSNativeFunction(context, "values", 0, IteratorPrototype::arrayValues);
-        defineMethod(arrayPrototype, "at", 1, ArrayPrototype::at);
-        defineMethod(arrayPrototype, "concat", 1, ArrayPrototype::concat);
-        defineMethod(arrayPrototype, "copyWithin", 2, ArrayPrototype::copyWithin);
-        defineMethod(arrayPrototype, "entries", 0, IteratorPrototype::arrayEntries);
-        defineMethod(arrayPrototype, "every", 1, ArrayPrototype::every);
-        defineMethod(arrayPrototype, "fill", 1, ArrayPrototype::fill);
-        defineMethod(arrayPrototype, "filter", 1, ArrayPrototype::filter);
-        defineMethod(arrayPrototype, "find", 1, ArrayPrototype::find);
-        defineMethod(arrayPrototype, "findIndex", 1, ArrayPrototype::findIndex);
-        defineMethod(arrayPrototype, "findLast", 1, ArrayPrototype::findLast);
-        defineMethod(arrayPrototype, "findLastIndex", 1, ArrayPrototype::findLastIndex);
-        defineMethod(arrayPrototype, "flat", 0, ArrayPrototype::flat);
-        defineMethod(arrayPrototype, "flatMap", 1, ArrayPrototype::flatMap);
-        defineMethod(arrayPrototype, "forEach", 1, ArrayPrototype::forEach);
-        defineMethod(arrayPrototype, "includes", 1, ArrayPrototype::includes);
-        defineMethod(arrayPrototype, "indexOf", 1, ArrayPrototype::indexOf);
-        defineMethod(arrayPrototype, "join", 1, ArrayPrototype::join);
-        defineMethod(arrayPrototype, "keys", 0, IteratorPrototype::arrayKeys);
-        defineMethod(arrayPrototype, "lastIndexOf", 1, ArrayPrototype::lastIndexOf);
-        defineMethod(arrayPrototype, "map", 1, ArrayPrototype::map);
-        defineMethod(arrayPrototype, "pop", 0, ArrayPrototype::pop);
-        defineMethod(arrayPrototype, "push", 1, ArrayPrototype::push);
-        defineMethod(arrayPrototype, "reduce", 1, ArrayPrototype::reduce);
-        defineMethod(arrayPrototype, "reduceRight", 1, ArrayPrototype::reduceRight);
-        defineMethod(arrayPrototype, "reverse", 0, ArrayPrototype::reverse);
-        defineMethod(arrayPrototype, "shift", 0, ArrayPrototype::shift);
-        defineMethod(arrayPrototype, "slice", 2, ArrayPrototype::slice);
-        defineMethod(arrayPrototype, "some", 1, ArrayPrototype::some);
-        defineMethod(arrayPrototype, "sort", 1, ArrayPrototype::sort);
-        defineMethod(arrayPrototype, "splice", 2, ArrayPrototype::splice);
-        defineMethod(arrayPrototype, "toLocaleString", 0, ArrayPrototype::toLocaleString);
-        defineMethod(arrayPrototype, "toReversed", 0, ArrayPrototype::toReversed);
-        defineMethod(arrayPrototype, "toSorted", 1, ArrayPrototype::toSorted);
-        defineMethod(arrayPrototype, "toSpliced", 2, ArrayPrototype::toSpliced);
-        defineMethod(arrayPrototype, "toString", 0, ArrayPrototype::toString);
-        defineMethod(arrayPrototype, "unshift", 1, ArrayPrototype::unshift);
+        IntrinsicFunctions.ARRAY_PROTOTYPE.install(arrayPrototype);
         defineBuiltin(arrayPrototype, "values", valuesFunction);
         defineMethod(arrayPrototype, "with", 2, ArrayPrototype::with);
 
@@ -248,10 +196,7 @@ public final class JSGlobalObject {
         linkConstructor(arrayConstructor, arrayPrototype, JSConstructorType.ARRAY);
 
         // Array static methods (writable, non-enumerable, configurable per spec)
-        defineMethod(arrayConstructor, "from", 1, ArrayConstructor::from);
-        defineMethod(arrayConstructor, "fromAsync", 1, ArrayConstructor::fromAsync);
-        defineMethod(arrayConstructor, "isArray", 1, ArrayConstructor::isArray);
-        defineMethod(arrayConstructor, "of", 0, ArrayConstructor::of);
+        IntrinsicFunctions.ARRAY_CONSTRUCTOR.install(arrayConstructor);
 
         // Symbol.species getter
         defineSpeciesGetter(arrayConstructor, ArrayConstructor::getSpecies);
@@ -419,9 +364,7 @@ public final class JSGlobalObject {
     private void initializeBigIntConstructor() {
         // Create BigInt.prototype
         JSObject bigIntPrototype = context.createJSObject();
-        defineMethod(bigIntPrototype, "toLocaleString", 0, BigIntPrototype::toLocaleString);
-        defineMethod(bigIntPrototype, "toString", 0, BigIntPrototype::toString);
-        defineMethod(bigIntPrototype, "valueOf", 0, BigIntPrototype::valueOf);
+        IntrinsicFunctions.BIG_INT_PROTOTYPE.install(bigIntPrototype);
         defineToStringTag(bigIntPrototype, JSBigInt.NAME);
 
         // Create BigInt constructor
@@ -491,42 +434,10 @@ public final class JSGlobalObject {
         JSObject dataViewPrototype = context.createJSObject();
 
         // Define getter properties
-        defineGetter(dataViewPrototype, "buffer", DataViewPrototype::getBuffer);
-        defineGetter(dataViewPrototype, "byteLength", DataViewPrototype::getByteLength);
-        defineGetter(dataViewPrototype, "byteOffset", DataViewPrototype::getByteOffset);
+        IntrinsicFunctions.DATA_VIEW_ACCESSORS.install(dataViewPrototype);
         defineToStringTag(dataViewPrototype, "DataView");
 
-        // Int8/Uint8 methods
-        defineMethod(dataViewPrototype, "getInt8", 1, DataViewPrototype::getInt8);
-        defineMethod(dataViewPrototype, "setInt8", 2, DataViewPrototype::setInt8);
-        defineMethod(dataViewPrototype, "getUint8", 1, DataViewPrototype::getUint8);
-        defineMethod(dataViewPrototype, "setUint8", 2, DataViewPrototype::setUint8);
-
-        // Int16/Uint16 methods
-        defineMethod(dataViewPrototype, "getInt16", 1, DataViewPrototype::getInt16);
-        defineMethod(dataViewPrototype, "setInt16", 2, DataViewPrototype::setInt16);
-        defineMethod(dataViewPrototype, "getUint16", 1, DataViewPrototype::getUint16);
-        defineMethod(dataViewPrototype, "setUint16", 2, DataViewPrototype::setUint16);
-
-        // Int32/Uint32 methods
-        defineMethod(dataViewPrototype, "getInt32", 1, DataViewPrototype::getInt32);
-        defineMethod(dataViewPrototype, "setInt32", 2, DataViewPrototype::setInt32);
-        defineMethod(dataViewPrototype, "getUint32", 1, DataViewPrototype::getUint32);
-        defineMethod(dataViewPrototype, "setUint32", 2, DataViewPrototype::setUint32);
-
-        // BigInt methods
-        defineMethod(dataViewPrototype, "getBigInt64", 1, DataViewPrototype::getBigInt64);
-        defineMethod(dataViewPrototype, "setBigInt64", 2, DataViewPrototype::setBigInt64);
-        defineMethod(dataViewPrototype, "getBigUint64", 1, DataViewPrototype::getBigUint64);
-        defineMethod(dataViewPrototype, "setBigUint64", 2, DataViewPrototype::setBigUint64);
-
-        // Float methods
-        defineMethod(dataViewPrototype, "getFloat16", 1, DataViewPrototype::getFloat16);
-        defineMethod(dataViewPrototype, "setFloat16", 2, DataViewPrototype::setFloat16);
-        defineMethod(dataViewPrototype, "getFloat32", 1, DataViewPrototype::getFloat32);
-        defineMethod(dataViewPrototype, "setFloat32", 2, DataViewPrototype::setFloat32);
-        defineMethod(dataViewPrototype, "getFloat64", 1, DataViewPrototype::getFloat64);
-        defineMethod(dataViewPrototype, "setFloat64", 2, DataViewPrototype::setFloat64);
+        IntrinsicFunctions.DATA_VIEW_METHODS.install(dataViewPrototype);
 
         // Create DataView constructor as a function that requires 'new'
         JSNativeFunction dataViewConstructor = new JSNativeFunction(context, "DataView", 1, DataViewConstructor::call,
@@ -545,50 +456,9 @@ public final class JSGlobalObject {
         JSNativeFunction toPrimitive = new JSNativeFunction(context, "[Symbol.toPrimitive]", 1,
                 DatePrototype::symbolToPrimitive);
 
-        defineMethod(datePrototype, "getDate", 0, DatePrototype::getDate);
-        defineMethod(datePrototype, "getDay", 0, DatePrototype::getDay);
-        defineMethod(datePrototype, "getFullYear", 0, DatePrototype::getFullYear);
-        defineMethod(datePrototype, "getHours", 0, DatePrototype::getHours);
-        defineMethod(datePrototype, "getMilliseconds", 0, DatePrototype::getMilliseconds);
-        defineMethod(datePrototype, "getMinutes", 0, DatePrototype::getMinutes);
-        defineMethod(datePrototype, "getMonth", 0, DatePrototype::getMonth);
-        defineMethod(datePrototype, "getSeconds", 0, DatePrototype::getSeconds);
-        defineMethod(datePrototype, "getTime", 0, DatePrototype::getTime);
-        defineMethod(datePrototype, "getTimezoneOffset", 0, DatePrototype::getTimezoneOffset);
-        defineMethod(datePrototype, "getUTCDate", 0, DatePrototype::getUTCDate);
-        defineMethod(datePrototype, "getUTCDay", 0, DatePrototype::getUTCDay);
-        defineMethod(datePrototype, "getUTCFullYear", 0, DatePrototype::getUTCFullYear);
-        defineMethod(datePrototype, "getUTCHours", 0, DatePrototype::getUTCHours);
-        defineMethod(datePrototype, "getUTCMilliseconds", 0, DatePrototype::getUTCMilliseconds);
-        defineMethod(datePrototype, "getUTCMinutes", 0, DatePrototype::getUTCMinutes);
-        defineMethod(datePrototype, "getUTCMonth", 0, DatePrototype::getUTCMonth);
-        defineMethod(datePrototype, "getUTCSeconds", 0, DatePrototype::getUTCSeconds);
-        defineMethod(datePrototype, "getYear", 0, DatePrototype::getYear);
-        defineMethod(datePrototype, "setDate", 1, DatePrototype::setDate);
-        defineMethod(datePrototype, "setFullYear", 3, DatePrototype::setFullYear);
-        defineMethod(datePrototype, "setHours", 4, DatePrototype::setHours);
-        defineMethod(datePrototype, "setMilliseconds", 1, DatePrototype::setMilliseconds);
-        defineMethod(datePrototype, "setMinutes", 3, DatePrototype::setMinutes);
-        defineMethod(datePrototype, "setMonth", 2, DatePrototype::setMonth);
-        defineMethod(datePrototype, "setSeconds", 2, DatePrototype::setSeconds);
-        defineMethod(datePrototype, "setTime", 1, DatePrototype::setTime);
-        defineMethod(datePrototype, "setUTCDate", 1, DatePrototype::setUTCDate);
-        defineMethod(datePrototype, "setUTCFullYear", 3, DatePrototype::setUTCFullYear);
-        defineMethod(datePrototype, "setUTCHours", 4, DatePrototype::setUTCHours);
-        defineMethod(datePrototype, "setUTCMilliseconds", 1, DatePrototype::setUTCMilliseconds);
-        defineMethod(datePrototype, "setUTCMinutes", 3, DatePrototype::setUTCMinutes);
-        defineMethod(datePrototype, "setUTCMonth", 2, DatePrototype::setUTCMonth);
-        defineMethod(datePrototype, "setUTCSeconds", 2, DatePrototype::setUTCSeconds);
-        defineMethod(datePrototype, "setYear", 1, DatePrototype::setYear);
-        defineMethod(datePrototype, "toDateString", 0, DatePrototype::toDateString);
+        IntrinsicFunctions.DATE_PROTOTYPE.install(datePrototype);
         defineBuiltin(datePrototype, "toGMTString", toUTCString);
-        defineMethod(datePrototype, "toISOString", 0, DatePrototype::toISOString);
-        defineMethod(datePrototype, "toJSON", 1, DatePrototype::toJSON);
-        defineMethod(datePrototype, "toLocaleDateString", 0, DatePrototype::toLocaleDateString);
-        defineMethod(datePrototype, "toLocaleString", 0, DatePrototype::toLocaleString);
-        defineMethod(datePrototype, "toLocaleTimeString", 0, DatePrototype::toLocaleTimeString);
-        defineMethod(datePrototype, "toString", 0, DatePrototype::toStringMethod);
-        defineMethod(datePrototype, "toTimeString", 0, DatePrototype::toTimeString);
+        IntrinsicFunctions.DATE_STRING_METHODS.install(datePrototype);
         defineBuiltin(datePrototype, "toUTCString", toUTCString);
         if (context.getRuntime().getOptions().isTemporalEnabled()) {
             defineMethod(datePrototype, "toTemporalInstant", 0, DatePrototype::toTemporalInstant);
@@ -600,9 +470,7 @@ public final class JSGlobalObject {
         JSNativeFunction dateConstructor = new JSNativeFunction(context, JSDate.NAME, 7, DateConstructor::call, true);
         linkConstructor(dateConstructor, datePrototype, JSConstructorType.DATE);
 
-        defineMethod(dateConstructor, "UTC", 7, DateConstructor::UTC);
-        defineMethod(dateConstructor, "now", 0, DateConstructor::now);
-        defineMethod(dateConstructor, "parse", 1, DateConstructor::parse);
+        IntrinsicFunctions.DATE_CONSTRUCTOR.install(dateConstructor);
 
         defineBuiltin(globalObject, JSDate.NAME, dateConstructor);
     }
@@ -677,10 +545,7 @@ public final class JSGlobalObject {
         functionPrototype.delete(PropertyKey.NAME);
         functionPrototype.delete(PropertyKey.PROTOTYPE);
 
-        defineMethod(functionPrototype, "apply", 2, FunctionPrototype::apply);
-        defineMethod(functionPrototype, "bind", 1, FunctionPrototype::bind);
-        defineMethod(functionPrototype, "call", 1, FunctionPrototype::call);
-        defineMethod(functionPrototype, "toString", 0, FunctionPrototype::toString_);
+        IntrinsicFunctions.FUNCTION_PROTOTYPE.install(functionPrototype);
 
         String restrictedFunctionPropertyMessage = "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them";
 
@@ -796,9 +661,7 @@ public final class JSGlobalObject {
 
         // Generator.prototype methods: writable+configurable (not enumerable)
         // Matches QuickJS js_generator_proto_funcs using JS_ITERATOR_NEXT_DEF
-        defineMethod(generatorPrototype, "next", 1, GeneratorPrototype::next);
-        defineMethod(generatorPrototype, "return", 1, GeneratorPrototype::returnMethod);
-        defineMethod(generatorPrototype, "throw", 1, GeneratorPrototype::throwMethod);
+        IntrinsicFunctions.GENERATOR_PROTOTYPE.install(generatorPrototype);
 
         // Symbol.toStringTag = "Generator" (configurable only)
         // Matches QuickJS JS_PROP_STRING_DEF("[Symbol.toStringTag]", "Generator", JS_PROP_CONFIGURABLE)
@@ -854,18 +717,7 @@ public final class JSGlobalObject {
                 new JSNativeFunction(context, "eval", 1,
                         (callerContext, thisArg, args) -> GlobalFunction.eval(realmContext, callerContext, args)),
                 PropertyDescriptor.DataState.ConfigurableWritable);
-        defineMethod(globalObject, "isFinite", 1, GlobalFunction::isFinite);
-        defineMethod(globalObject, "isNaN", 1, GlobalFunction::isNaN);
-        defineMethod(globalObject, "parseFloat", 1, GlobalFunction::parseFloat);
-        defineMethod(globalObject, "parseInt", 2, GlobalFunction::parseInt);
-
-        // URI handling functions
-        defineMethod(globalObject, "decodeURI", 1, GlobalFunction::decodeURI);
-        defineMethod(globalObject, "decodeURIComponent", 1, GlobalFunction::decodeURIComponent);
-        defineMethod(globalObject, "encodeURI", 1, GlobalFunction::encodeURI);
-        defineMethod(globalObject, "encodeURIComponent", 1, GlobalFunction::encodeURIComponent);
-        defineMethod(globalObject, "escape", 1, GlobalFunction::escape);
-        defineMethod(globalObject, "unescape", 1, GlobalFunction::unescape);
+        IntrinsicFunctions.GLOBAL_OBJECT.install(globalObject);
 
         // Console object for debugging
         initializeConsoleObject();
@@ -887,11 +739,7 @@ public final class JSGlobalObject {
         defineMethod(intlObject, "supportedValuesOf", 1, JSIntlObject::supportedValuesOf_Intl);
 
         JSObject dateTimeFormatPrototype = context.createJSObject();
-        defineGetter(dateTimeFormatPrototype, "format", JSIntlObject::dateTimeFormatFormatGetter);
-        defineMethod(dateTimeFormatPrototype, "resolvedOptions", 0, JSIntlObject::dateTimeFormatResolvedOptions);
-        defineMethod(dateTimeFormatPrototype, "formatToParts", 1, JSIntlObject::dateTimeFormatFormatToParts);
-        defineMethod(dateTimeFormatPrototype, "formatRange", 2, JSIntlObject::dateTimeFormatFormatRange);
-        defineMethod(dateTimeFormatPrototype, "formatRangeToParts", 2, JSIntlObject::dateTimeFormatFormatRangeToParts);
+        IntrinsicFunctions.DATE_TIME_FORMAT_PROTOTYPE.install(dateTimeFormatPrototype);
         defineToStringTag(dateTimeFormatPrototype, "Intl.DateTimeFormat");
         installIntlConstructor(intlObject, "DateTimeFormat", 0, dateTimeFormatPrototype, false, (childContext, thisArg,
                 args) -> JSIntlObject.createDateTimeFormat(childContext, dateTimeFormatPrototype, args));
@@ -904,19 +752,13 @@ public final class JSGlobalObject {
                 args) -> JSIntlObject.createDisplayNames(childContext, displayNamesPrototype, args));
 
         JSObject durationFormatPrototype = context.createJSObject();
-        defineMethod(durationFormatPrototype, "format", 1, JSIntlObject::durationFormatFormat);
-        defineMethod(durationFormatPrototype, "formatToParts", 1, JSIntlObject::durationFormatFormatToParts);
-        defineMethod(durationFormatPrototype, "resolvedOptions", 0, JSIntlObject::durationFormatResolvedOptions);
+        IntrinsicFunctions.DURATION_FORMAT_PROTOTYPE.install(durationFormatPrototype);
         defineToStringTag(durationFormatPrototype, "Intl.DurationFormat");
         installIntlConstructor(intlObject, "DurationFormat", 0, durationFormatPrototype, true, (childContext, thisArg,
                 args) -> JSIntlObject.createDurationFormat(childContext, durationFormatPrototype, args));
 
         JSObject numberFormatPrototype = context.createJSObject();
-        defineGetter(numberFormatPrototype, "format", JSIntlObject::numberFormatFormatGetter);
-        defineMethod(numberFormatPrototype, "formatRange", 2, JSIntlObject::numberFormatFormatRange);
-        defineMethod(numberFormatPrototype, "formatRangeToParts", 2, JSIntlObject::numberFormatFormatRangeToParts);
-        defineMethod(numberFormatPrototype, "formatToParts", 1, JSIntlObject::numberFormatFormatToParts);
-        defineMethod(numberFormatPrototype, "resolvedOptions", 0, JSIntlObject::numberFormatResolvedOptions);
+        IntrinsicFunctions.NUMBER_FORMAT_PROTOTYPE.install(numberFormatPrototype);
         defineToStringTag(numberFormatPrototype, "Intl.NumberFormat");
         installIntlConstructor(intlObject, "NumberFormat", 0, numberFormatPrototype, false, (childContext, thisArg,
                 args) -> JSIntlObject.createNumberFormat(childContext, numberFormatPrototype, args));
@@ -929,18 +771,13 @@ public final class JSGlobalObject {
                 (childContext, thisArg, args) -> JSIntlObject.createCollator(childContext, collatorPrototype, args));
 
         JSObject pluralRulesPrototype = context.createJSObject();
-        defineMethod(pluralRulesPrototype, "select", 1, JSIntlObject::pluralRulesSelect);
-        defineMethod(pluralRulesPrototype, "selectRange", 2, JSIntlObject::pluralRulesSelectRange);
-        defineMethod(pluralRulesPrototype, "resolvedOptions", 0, JSIntlObject::pluralRulesResolvedOptions);
+        IntrinsicFunctions.PLURAL_RULES_PROTOTYPE.install(pluralRulesPrototype);
         defineToStringTag(pluralRulesPrototype, "Intl.PluralRules");
         installIntlConstructor(intlObject, "PluralRules", 0, pluralRulesPrototype, true, (childContext, thisArg,
                 args) -> JSIntlObject.createPluralRules(childContext, pluralRulesPrototype, args));
 
         JSObject relativeTimeFormatPrototype = context.createJSObject();
-        defineMethod(relativeTimeFormatPrototype, "format", 2, JSIntlObject::relativeTimeFormatFormat);
-        defineMethod(relativeTimeFormatPrototype, "formatToParts", 2, JSIntlObject::relativeTimeFormatFormatToParts);
-        defineMethod(relativeTimeFormatPrototype, "resolvedOptions", 0,
-                JSIntlObject::relativeTimeFormatResolvedOptions);
+        IntrinsicFunctions.RELATIVE_TIME_FORMAT_PROTOTYPE.install(relativeTimeFormatPrototype);
         defineToStringTag(relativeTimeFormatPrototype, "Intl.RelativeTimeFormat");
         installIntlConstructor(intlObject, "RelativeTimeFormat", 0, relativeTimeFormatPrototype, true,
                 (childContext, thisArg, args) -> JSIntlObject.createRelativeTimeFormat(childContext,
@@ -964,36 +801,13 @@ public final class JSGlobalObject {
                 args) -> JSIntlObject.createSegmenter(childContext, segmenterPrototype, segmentDataPrototype, args));
 
         JSObject listFormatPrototype = context.createJSObject();
-        defineMethod(listFormatPrototype, "format", 1, JSIntlObject::listFormatFormat);
-        defineMethod(listFormatPrototype, "formatToParts", 1, JSIntlObject::listFormatFormatToParts);
-        defineMethod(listFormatPrototype, "resolvedOptions", 0, JSIntlObject::listFormatResolvedOptions);
+        IntrinsicFunctions.LIST_FORMAT_PROTOTYPE.install(listFormatPrototype);
         defineToStringTag(listFormatPrototype, "Intl.ListFormat");
         installIntlConstructor(intlObject, "ListFormat", 0, listFormatPrototype, true, (childContext, thisArg,
                 args) -> JSIntlObject.createListFormat(childContext, listFormatPrototype, args));
 
         JSObject localePrototype = context.createJSObject();
-        defineMethod(localePrototype, "toString", 0, JSIntlObject::localeToString);
-        defineGetter(localePrototype, "baseName", JSIntlObject::localeGetBaseName);
-        defineGetter(localePrototype, "calendar", JSIntlObject::localeGetCalendar);
-        defineGetter(localePrototype, "caseFirst", JSIntlObject::localeGetCaseFirst);
-        defineGetter(localePrototype, "collation", JSIntlObject::localeGetCollation);
-        defineGetter(localePrototype, "hourCycle", JSIntlObject::localeGetHourCycle);
-        defineGetter(localePrototype, "language", JSIntlObject::localeGetLanguage);
-        defineGetter(localePrototype, "numberingSystem", JSIntlObject::localeGetNumberingSystem);
-        defineGetter(localePrototype, "numeric", JSIntlObject::localeGetNumeric);
-        defineGetter(localePrototype, "script", JSIntlObject::localeGetScript);
-        defineGetter(localePrototype, "region", JSIntlObject::localeGetRegion);
-        defineGetter(localePrototype, "variants", JSIntlObject::localeGetVariants);
-        defineGetter(localePrototype, "firstDayOfWeek", JSIntlObject::localeGetFirstDayOfWeek);
-        defineMethod(localePrototype, "maximize", 0, JSIntlObject::localeMaximize);
-        defineMethod(localePrototype, "minimize", 0, JSIntlObject::localeMinimize);
-        defineMethod(localePrototype, "getCalendars", 0, JSIntlObject::localeGetCalendars);
-        defineMethod(localePrototype, "getCollations", 0, JSIntlObject::localeGetCollations);
-        defineMethod(localePrototype, "getHourCycles", 0, JSIntlObject::localeGetHourCycles);
-        defineMethod(localePrototype, "getNumberingSystems", 0, JSIntlObject::localeGetNumberingSystems);
-        defineMethod(localePrototype, "getTextInfo", 0, JSIntlObject::localeGetTextInfo);
-        defineMethod(localePrototype, "getTimeZones", 0, JSIntlObject::localeGetTimeZones);
-        defineMethod(localePrototype, "getWeekInfo", 0, JSIntlObject::localeGetWeekInfo);
+        IntrinsicFunctions.LOCALE_PROTOTYPE.install(localePrototype);
         defineToStringTag(localePrototype, "Intl.Locale");
         JSNativeFunction localeConstructor = new JSNativeFunction(context, "Locale", 1,
                 (childContext, thisArg, args) -> JSIntlObject.createLocale(childContext, localePrototype, args), true,
@@ -1010,18 +824,7 @@ public final class JSGlobalObject {
     private void initializeIteratorConstructor() {
         JSObject iteratorPrototype = context.createJSObject();
 
-        defineMethod(iteratorPrototype, "drop", 1, IteratorPrototype::drop);
-        defineMethod(iteratorPrototype, "every", 1, IteratorPrototype::every);
-        defineMethod(iteratorPrototype, "filter", 1, IteratorPrototype::filter);
-        defineMethod(iteratorPrototype, "find", 1, IteratorPrototype::find);
-        defineMethod(iteratorPrototype, "flatMap", 1, IteratorPrototype::flatMap);
-        defineMethod(iteratorPrototype, "forEach", 1, IteratorPrototype::forEach);
-        defineMethod(iteratorPrototype, "map", 1, IteratorPrototype::map);
-        defineMethod(iteratorPrototype, "next", 0, IteratorPrototype::next);
-        defineMethod(iteratorPrototype, "reduce", 1, IteratorPrototype::reduce);
-        defineMethod(iteratorPrototype, "some", 1, IteratorPrototype::some);
-        defineMethod(iteratorPrototype, "take", 1, IteratorPrototype::take);
-        defineMethod(iteratorPrototype, "toArray", 0, IteratorPrototype::toArray);
+        IntrinsicFunctions.ITERATOR_PROTOTYPE.install(iteratorPrototype);
         iteratorPrototype.defineProperty(PropertyKey.SYMBOL_ITERATOR,
                 new JSNativeFunction(context, "[Symbol.iterator]", 0, (childContext, thisArg, args) -> thisArg),
                 PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1049,10 +852,7 @@ public final class JSGlobalObject {
                 IteratorConstructor::call, true, true);
         iteratorConstructor.defineProperty(PropertyKey.PROTOTYPE,
                 PropertyDescriptor.dataDescriptor(iteratorPrototype, PropertyDescriptor.DataState.None));
-        defineMethod(iteratorConstructor, "concat", 0, IteratorPrototype::concat);
-        defineMethod(iteratorConstructor, "from", 1, IteratorPrototype::from);
-        defineMethod(iteratorConstructor, "zip", 1, IteratorPrototype::zip);
-        defineMethod(iteratorConstructor, "zipKeyed", 1, IteratorPrototype::zipKeyed);
+        IntrinsicFunctions.ITERATOR_CONSTRUCTOR.install(iteratorConstructor);
 
         JSNativeFunction constructorAccessor = new JSNativeFunction(context, "constructor", 0,
                 (childContext, thisArg, args) -> {
@@ -1165,14 +965,7 @@ public final class JSGlobalObject {
     private void initializeMapConstructor() {
         // Create Map.prototype
         JSObject mapPrototype = context.createJSObject();
-        defineMethod(mapPrototype, "clear", 0, MapPrototype::clear);
-        defineMethod(mapPrototype, "delete", 1, MapPrototype::delete);
-        defineMethod(mapPrototype, "forEach", 1, MapPrototype::forEach);
-        defineMethod(mapPrototype, "get", 1, MapPrototype::get);
-        defineMethod(mapPrototype, "getOrInsert", 2, MapPrototype::getOrInsert);
-        defineMethod(mapPrototype, "getOrInsertComputed", 2, MapPrototype::getOrInsertComputed);
-        defineMethod(mapPrototype, "has", 1, MapPrototype::has);
-        defineMethod(mapPrototype, "set", 2, MapPrototype::set);
+        IntrinsicFunctions.MAP_PROTOTYPE.install(mapPrototype);
         // Create entries function once and use it for both entries and Symbol.iterator (ES spec requirement)
         JSNativeFunction entriesFunction = new JSNativeFunction(context, "entries", 0,
                 IteratorPrototype::mapEntriesIterator);
@@ -1223,43 +1016,7 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.None);
 
         // Math methods
-        defineMethod(math, "abs", 1, MathObject::abs);
-        defineMethod(math, "acos", 1, MathObject::acos);
-        defineMethod(math, "acosh", 1, MathObject::acosh);
-        defineMethod(math, "asin", 1, MathObject::asin);
-        defineMethod(math, "asinh", 1, MathObject::asinh);
-        defineMethod(math, "atan", 1, MathObject::atan);
-        defineMethod(math, "atanh", 1, MathObject::atanh);
-        defineMethod(math, "atan2", 2, MathObject::atan2);
-        defineMethod(math, "cbrt", 1, MathObject::cbrt);
-        defineMethod(math, "ceil", 1, MathObject::ceil);
-        defineMethod(math, "clz32", 1, MathObject::clz32);
-        defineMethod(math, "cos", 1, MathObject::cos);
-        defineMethod(math, "cosh", 1, MathObject::cosh);
-        defineMethod(math, "exp", 1, MathObject::exp);
-        defineMethod(math, "expm1", 1, MathObject::expm1);
-        defineMethod(math, "f16round", 1, MathObject::f16round);
-        defineMethod(math, "floor", 1, MathObject::floor);
-        defineMethod(math, "fround", 1, MathObject::fround);
-        defineMethod(math, "hypot", 2, MathObject::hypot);
-        defineMethod(math, "imul", 2, MathObject::imul);
-        defineMethod(math, "log", 1, MathObject::log);
-        defineMethod(math, "log1p", 1, MathObject::log1p);
-        defineMethod(math, "log10", 1, MathObject::log10);
-        defineMethod(math, "log2", 1, MathObject::log2);
-        defineMethod(math, "max", 2, MathObject::max);
-        defineMethod(math, "min", 2, MathObject::min);
-        defineMethod(math, "pow", 2, MathObject::pow);
-        defineMethod(math, "random", 0, MathObject::random);
-        defineMethod(math, "round", 1, MathObject::round);
-        defineMethod(math, "sign", 1, MathObject::sign);
-        defineMethod(math, "sin", 1, MathObject::sin);
-        defineMethod(math, "sinh", 1, MathObject::sinh);
-        defineMethod(math, "sqrt", 1, MathObject::sqrt);
-        defineMethod(math, "sumPrecise", 1, MathObject::sumPrecise);
-        defineMethod(math, "tan", 1, MathObject::tan);
-        defineMethod(math, "tanh", 1, MathObject::tanh);
-        defineMethod(math, "trunc", 1, MathObject::trunc);
+        IntrinsicFunctions.MATH.install(math);
         defineToStringTag(math, "Math");
 
         defineBuiltin(globalObject, "Math", math);
@@ -1292,12 +1049,7 @@ public final class JSGlobalObject {
         // Create Number.prototype as a Number object with [[NumberData]] = +0 (ES2024 20.1.3)
         JSNumberObject numberPrototype = new JSNumberObject(context, 0.0);
         context.transferPrototype(numberPrototype, JSObject.NAME);
-        defineMethod(numberPrototype, "toExponential", 1, NumberPrototype::toExponential);
-        defineMethod(numberPrototype, "toFixed", 1, NumberPrototype::toFixed);
-        defineMethod(numberPrototype, "toLocaleString", 0, NumberPrototype::toLocaleString);
-        defineMethod(numberPrototype, "toPrecision", 1, NumberPrototype::toPrecision);
-        defineMethod(numberPrototype, "toString", 1, NumberPrototype::toString);
-        defineMethod(numberPrototype, "valueOf", 0, NumberPrototype::valueOf);
+        IntrinsicFunctions.NUMBER_PROTOTYPE.install(numberPrototype);
 
         // Create Number constructor
         JSNativeFunction numberConstructor = new JSNativeFunction(context, JSNumberObject.NAME, 1,
@@ -1305,10 +1057,7 @@ public final class JSGlobalObject {
         linkConstructor(numberConstructor, numberPrototype, JSConstructorType.NUMBER_OBJECT);
 
         // Number static methods
-        defineMethod(numberConstructor, "isFinite", 1, NumberPrototype::isFinite);
-        defineMethod(numberConstructor, "isInteger", 1, NumberPrototype::isInteger);
-        defineMethod(numberConstructor, "isNaN", 1, NumberPrototype::isNaN);
-        defineMethod(numberConstructor, "isSafeInteger", 1, NumberPrototype::isSafeInteger);
+        IntrinsicFunctions.NUMBER_CONSTRUCTOR.install(numberConstructor);
 
         // QuickJS compatibility: Number.parseInt/parseFloat are aliases of global parseInt/parseFloat.
         JSValue globalParseInt = globalObject.get("parseInt");
@@ -1341,16 +1090,7 @@ public final class JSGlobalObject {
     private void initializeObjectConstructor() {
         // Create Object.prototype
         JSObject objectPrototype = context.createJSObject();
-        defineMethod(objectPrototype, "__defineGetter__", 2, ObjectPrototype::__defineGetter__);
-        defineMethod(objectPrototype, "__defineSetter__", 2, ObjectPrototype::__defineSetter__);
-        defineMethod(objectPrototype, "__lookupGetter__", 1, ObjectPrototype::__lookupGetter__);
-        defineMethod(objectPrototype, "__lookupSetter__", 1, ObjectPrototype::__lookupSetter__);
-        defineMethod(objectPrototype, "hasOwnProperty", 1, ObjectPrototype::hasOwnProperty);
-        defineMethod(objectPrototype, "isPrototypeOf", 1, ObjectPrototype::isPrototypeOf);
-        defineMethod(objectPrototype, "propertyIsEnumerable", 1, ObjectPrototype::propertyIsEnumerable);
-        defineMethod(objectPrototype, "toLocaleString", 0, ObjectPrototype::toLocaleString);
-        defineMethod(objectPrototype, "toString", 0, ObjectPrototype::toString);
-        defineMethod(objectPrototype, "valueOf", 0, ObjectPrototype::valueOf);
+        IntrinsicFunctions.OBJECT_PROTOTYPE.install(objectPrototype);
 
         // Define __proto__ as an accessor property
         PropertyDescriptor protoDesc = PropertyDescriptor.accessorDescriptor(
@@ -1368,29 +1108,7 @@ public final class JSGlobalObject {
         linkConstructor(objectConstructor, objectPrototype);
 
         // Object static methods
-        defineMethod(objectConstructor, "assign", 2, ObjectConstructor::assign);
-        defineMethod(objectConstructor, "create", 2, ObjectConstructor::create);
-        defineMethod(objectConstructor, "defineProperties", 2, ObjectConstructor::defineProperties);
-        defineMethod(objectConstructor, "defineProperty", 3, ObjectPrototype::defineProperty);
-        defineMethod(objectConstructor, "entries", 1, ObjectConstructor::entries);
-        defineMethod(objectConstructor, "freeze", 1, ObjectConstructor::freeze);
-        defineMethod(objectConstructor, "fromEntries", 1, ObjectConstructor::fromEntries);
-        defineMethod(objectConstructor, "getOwnPropertyDescriptor", 2, ObjectConstructor::getOwnPropertyDescriptor);
-        defineMethod(objectConstructor, "getOwnPropertyDescriptors", 1, ObjectConstructor::getOwnPropertyDescriptors);
-        defineMethod(objectConstructor, "getOwnPropertyNames", 1, ObjectConstructor::getOwnPropertyNames);
-        defineMethod(objectConstructor, "getOwnPropertySymbols", 1, ObjectConstructor::getOwnPropertySymbols);
-        defineMethod(objectConstructor, "getPrototypeOf", 1, ObjectConstructor::getPrototypeOf);
-        defineMethod(objectConstructor, "groupBy", 2, ObjectConstructor::groupBy);
-        defineMethod(objectConstructor, "hasOwn", 2, ObjectConstructor::hasOwn);
-        defineMethod(objectConstructor, "is", 2, ObjectConstructor::is);
-        defineMethod(objectConstructor, "isExtensible", 1, ObjectConstructor::isExtensible);
-        defineMethod(objectConstructor, "isFrozen", 1, ObjectConstructor::isFrozen);
-        defineMethod(objectConstructor, "isSealed", 1, ObjectConstructor::isSealed);
-        defineMethod(objectConstructor, "keys", 1, ObjectConstructor::keys);
-        defineMethod(objectConstructor, "preventExtensions", 1, ObjectConstructor::preventExtensions);
-        defineMethod(objectConstructor, "seal", 1, ObjectConstructor::seal);
-        defineMethod(objectConstructor, "setPrototypeOf", 2, ObjectConstructor::setPrototypeOf);
-        defineMethod(objectConstructor, "values", 1, ObjectConstructor::values);
+        IntrinsicFunctions.OBJECT_CONSTRUCTOR.install(objectConstructor);
 
         defineBuiltin(globalObject, JSObject.NAME, objectConstructor);
     }
@@ -1401,9 +1119,7 @@ public final class JSGlobalObject {
     private void initializePromiseConstructor() {
         // Create Promise.prototype
         JSObject promisePrototype = context.createJSObject();
-        defineMethod(promisePrototype, "catch", 1, PromisePrototype::catchMethod);
-        defineMethod(promisePrototype, "finally", 1, PromisePrototype::finallyMethod);
-        defineMethod(promisePrototype, "then", 2, PromisePrototype::then);
+        IntrinsicFunctions.PROMISE_PROTOTYPE.install(promisePrototype);
         defineToStringTag(promisePrototype, JSPromise.NAME);
 
         // Create Promise constructor as JSNativeFunction
@@ -1413,16 +1129,7 @@ public final class JSGlobalObject {
         linkConstructor(promiseConstructor, promisePrototype, JSConstructorType.PROMISE);
 
         // Static methods
-        defineMethod(promiseConstructor, "all", 1, PromiseConstructor::all);
-        defineMethod(promiseConstructor, "allKeyed", 1, PromiseConstructor::allKeyed);
-        defineMethod(promiseConstructor, "allSettled", 1, PromiseConstructor::allSettled);
-        defineMethod(promiseConstructor, "allSettledKeyed", 1, PromiseConstructor::allSettledKeyed);
-        defineMethod(promiseConstructor, "any", 1, PromiseConstructor::any);
-        defineMethod(promiseConstructor, "race", 1, PromiseConstructor::race);
-        defineMethod(promiseConstructor, "reject", 1, PromiseConstructor::reject);
-        defineMethod(promiseConstructor, "resolve", 1, PromiseConstructor::resolve);
-        defineMethod(promiseConstructor, "try", 1, PromiseConstructor::tryMethod);
-        defineMethod(promiseConstructor, "withResolvers", 0, PromiseConstructor::withResolvers);
+        IntrinsicFunctions.PROMISE_CONSTRUCTOR.install(promiseConstructor);
         defineSpeciesGetter(promiseConstructor, PromiseConstructor::getSpecies);
 
         defineBuiltin(globalObject, JSPromise.NAME, promiseConstructor);
@@ -1453,19 +1160,7 @@ public final class JSGlobalObject {
      */
     private void initializeReflectObject() {
         JSObject reflect = context.createJSObject();
-        defineMethod(reflect, "apply", 3, JSReflectObject::apply);
-        defineMethod(reflect, "construct", 2, JSReflectObject::construct);
-        defineMethod(reflect, "defineProperty", 3, JSReflectObject::defineProperty);
-        defineMethod(reflect, "deleteProperty", 2, JSReflectObject::deleteProperty);
-        defineMethod(reflect, "get", 2, JSReflectObject::get);
-        defineMethod(reflect, "getOwnPropertyDescriptor", 2, JSReflectObject::getOwnPropertyDescriptor);
-        defineMethod(reflect, "getPrototypeOf", 1, JSReflectObject::getPrototypeOf);
-        defineMethod(reflect, "has", 2, JSReflectObject::has);
-        defineMethod(reflect, "isExtensible", 1, JSReflectObject::isExtensible);
-        defineMethod(reflect, "ownKeys", 1, JSReflectObject::ownKeys);
-        defineMethod(reflect, "preventExtensions", 1, JSReflectObject::preventExtensions);
-        defineMethod(reflect, "set", 3, JSReflectObject::set);
-        defineMethod(reflect, "setPrototypeOf", 2, JSReflectObject::setPrototypeOf);
+        IntrinsicFunctions.REFLECT.install(reflect);
         defineToStringTag(reflect, "Reflect");
 
         defineBuiltin(globalObject, "Reflect", reflect);
@@ -1500,16 +1195,7 @@ public final class JSGlobalObject {
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Accessor properties
-        defineGetter(regexpPrototype, "dotAll", RegExpPrototype::getDotAllAccessor);
-        defineGetter(regexpPrototype, "flags", RegExpPrototype::getFlagsAccessor);
-        defineGetter(regexpPrototype, "global", RegExpPrototype::getGlobalAccessor);
-        defineGetter(regexpPrototype, "hasIndices", RegExpPrototype::getHasIndicesAccessor);
-        defineGetter(regexpPrototype, "ignoreCase", RegExpPrototype::getIgnoreCaseAccessor);
-        defineGetter(regexpPrototype, "multiline", RegExpPrototype::getMultilineAccessor);
-        defineGetter(regexpPrototype, "source", RegExpPrototype::getSourceAccessor);
-        defineGetter(regexpPrototype, "sticky", RegExpPrototype::getStickyAccessor);
-        defineGetter(regexpPrototype, "unicode", RegExpPrototype::getUnicodeAccessor);
-        defineGetter(regexpPrototype, "unicodeSets", RegExpPrototype::getUnicodeSetsAccessor);
+        IntrinsicFunctions.REGEXP_PROTOTYPE.install(regexpPrototype);
 
         // Create RegExp constructor as a function
         JSNativeFunction regexpConstructor = new JSNativeFunction(context, JSRegExp.NAME, 2, RegExpConstructor::call,
@@ -1595,19 +1281,7 @@ public final class JSGlobalObject {
     private void initializeSetConstructor() {
         // Create Set.prototype
         JSObject setPrototype = context.createJSObject();
-        defineMethod(setPrototype, "add", 1, SetPrototype::add);
-        defineMethod(setPrototype, "clear", 0, SetPrototype::clear);
-        defineMethod(setPrototype, "delete", 1, SetPrototype::delete);
-        defineMethod(setPrototype, "difference", 1, SetPrototype::difference);
-        defineMethod(setPrototype, "entries", 0, SetPrototype::entries);
-        defineMethod(setPrototype, "forEach", 1, SetPrototype::forEach);
-        defineMethod(setPrototype, "has", 1, SetPrototype::has);
-        defineMethod(setPrototype, "intersection", 1, SetPrototype::intersection);
-        defineMethod(setPrototype, "isDisjointFrom", 1, SetPrototype::isDisjointFrom);
-        defineMethod(setPrototype, "isSubsetOf", 1, SetPrototype::isSubsetOf);
-        defineMethod(setPrototype, "isSupersetOf", 1, SetPrototype::isSupersetOf);
-        defineMethod(setPrototype, "symmetricDifference", 1, SetPrototype::symmetricDifference);
-        defineMethod(setPrototype, "union", 1, SetPrototype::union);
+        IntrinsicFunctions.SET_PROTOTYPE.install(setPrototype);
 
         // Create values function - keys and Symbol.iterator will alias to this
         JSNativeFunction valuesFunction = new JSNativeFunction(context, "values", 0, SetPrototype::values);
@@ -1657,13 +1331,7 @@ public final class JSGlobalObject {
     private void initializeSharedArrayBufferConstructor() {
         // Create SharedArrayBuffer.prototype
         JSObject sharedArrayBufferPrototype = context.createJSObject();
-        defineMethod(sharedArrayBufferPrototype, "grow", 1, SharedArrayBufferPrototype::grow);
-        defineMethod(sharedArrayBufferPrototype, "slice", 2, SharedArrayBufferPrototype::slice);
-
-        // Define getter properties
-        defineGetter(sharedArrayBufferPrototype, "byteLength", SharedArrayBufferPrototype::getByteLength);
-        defineGetter(sharedArrayBufferPrototype, "growable", SharedArrayBufferPrototype::getGrowable);
-        defineGetter(sharedArrayBufferPrototype, "maxByteLength", SharedArrayBufferPrototype::getMaxByteLength);
+        IntrinsicFunctions.SHARED_ARRAY_BUFFER_PROTOTYPE.install(sharedArrayBufferPrototype);
         defineToStringTag(sharedArrayBufferPrototype, JSSharedArrayBuffer.NAME);
 
         // Create SharedArrayBuffer constructor as a function
@@ -1685,62 +1353,14 @@ public final class JSGlobalObject {
         // Create String.prototype - per ES spec, it is itself a String object whose value is ""
         JSObject stringPrototype = new JSStringObject(context);
         context.transferPrototype(stringPrototype, JSObject.NAME);
-        defineMethod(stringPrototype, "at", 1, StringPrototype::at);
-        defineMethod(stringPrototype, "charAt", 1, StringPrototype::charAt);
-        defineMethod(stringPrototype, "charCodeAt", 1, StringPrototype::charCodeAt);
-        defineMethod(stringPrototype, "codePointAt", 1, StringPrototype::codePointAt);
-        defineMethod(stringPrototype, "concat", 1, StringPrototype::concat);
-        defineMethod(stringPrototype, "endsWith", 1, StringPrototype::endsWith);
-        defineMethod(stringPrototype, "includes", 1, StringPrototype::includes);
-        defineMethod(stringPrototype, "indexOf", 1, StringPrototype::indexOf);
-        defineMethod(stringPrototype, "lastIndexOf", 1, StringPrototype::lastIndexOf);
-        defineMethod(stringPrototype, "localeCompare", 1, StringPrototype::localeCompare);
-        defineMethod(stringPrototype, "match", 1, StringPrototype::match);
-        defineMethod(stringPrototype, "matchAll", 1, StringPrototype::matchAll);
-        defineMethod(stringPrototype, "padEnd", 1, StringPrototype::padEnd);
-        defineMethod(stringPrototype, "padStart", 1, StringPrototype::padStart);
-        defineMethod(stringPrototype, "repeat", 1, StringPrototype::repeat);
-        defineMethod(stringPrototype, "replace", 2, StringPrototype::replace);
-        defineMethod(stringPrototype, "replaceAll", 2, StringPrototype::replaceAll);
-        defineMethod(stringPrototype, "search", 1, StringPrototype::search);
-        defineMethod(stringPrototype, "slice", 2, StringPrototype::slice);
-        defineMethod(stringPrototype, "split", 2, StringPrototype::split);
-        defineMethod(stringPrototype, "startsWith", 1, StringPrototype::startsWith);
-        defineMethod(stringPrototype, "substr", 2, StringPrototype::substr);
-        defineMethod(stringPrototype, "substring", 2, StringPrototype::substring);
-        defineMethod(stringPrototype, "toLowerCase", 0, StringPrototype::toLowerCase);
-        defineMethod(stringPrototype, "toString", 0, StringPrototype::toString_);
-        defineMethod(stringPrototype, "toUpperCase", 0, StringPrototype::toUpperCase);
-        defineMethod(stringPrototype, "trim", 0, StringPrototype::trim);
+        IntrinsicFunctions.STRING_PROTOTYPE.install(stringPrototype);
         JSNativeFunction trimEnd = new JSNativeFunction(context, "trimEnd", 0, StringPrototype::trimEnd);
         JSNativeFunction trimStart = new JSNativeFunction(context, "trimStart", 0, StringPrototype::trimStart);
         defineBuiltin(stringPrototype, "trimEnd", trimEnd);
         defineBuiltin(stringPrototype, "trimRight", trimEnd);
         defineBuiltin(stringPrototype, "trimStart", trimStart);
         defineBuiltin(stringPrototype, "trimLeft", trimStart);
-        defineMethod(stringPrototype, "valueOf", 0, StringPrototype::valueOf);
-
-        // HTML wrapper methods (deprecated but still part of spec)
-        defineMethod(stringPrototype, "anchor", 1, StringPrototype::anchor);
-        defineMethod(stringPrototype, "big", 0, StringPrototype::big);
-        defineMethod(stringPrototype, "blink", 0, StringPrototype::blink);
-        defineMethod(stringPrototype, "bold", 0, StringPrototype::bold);
-        defineMethod(stringPrototype, "fixed", 0, StringPrototype::fixed);
-        defineMethod(stringPrototype, "fontcolor", 1, StringPrototype::fontcolor);
-        defineMethod(stringPrototype, "fontsize", 1, StringPrototype::fontsize);
-        defineMethod(stringPrototype, "italics", 0, StringPrototype::italics);
-        defineMethod(stringPrototype, "link", 1, StringPrototype::link);
-        defineMethod(stringPrototype, "small", 0, StringPrototype::small);
-        defineMethod(stringPrototype, "strike", 0, StringPrototype::strike);
-        defineMethod(stringPrototype, "sub", 0, StringPrototype::sub);
-        defineMethod(stringPrototype, "sup", 0, StringPrototype::sup);
-
-        // Unicode methods
-        defineMethod(stringPrototype, "isWellFormed", 0, StringPrototype::isWellFormed);
-        defineMethod(stringPrototype, "normalize", 0, StringPrototype::normalize);
-        defineMethod(stringPrototype, "toLocaleLowerCase", 0, StringPrototype::toLocaleLowerCase);
-        defineMethod(stringPrototype, "toLocaleUpperCase", 0, StringPrototype::toLocaleUpperCase);
-        defineMethod(stringPrototype, "toWellFormed", 0, StringPrototype::toWellFormed);
+        IntrinsicFunctions.STRING_PROTOTYPE_AFTER_TRIM.install(stringPrototype);
 
         // String.prototype[Symbol.iterator]
         stringPrototype.defineProperty(PropertyKey.SYMBOL_ITERATOR,
@@ -1756,9 +1376,7 @@ public final class JSGlobalObject {
         linkConstructor(stringConstructor, stringPrototype, JSConstructorType.STRING_OBJECT);
 
         // Add static methods
-        defineMethod(stringConstructor, "fromCharCode", 1, StringConstructor::fromCharCode);
-        defineMethod(stringConstructor, "fromCodePoint", 1, StringConstructor::fromCodePoint);
-        defineMethod(stringConstructor, "raw", 1, StringConstructor::raw);
+        IntrinsicFunctions.STRING_CONSTRUCTOR.install(stringConstructor);
 
         defineBuiltin(globalObject, JSString.NAME, stringConstructor);
     }
@@ -1837,76 +1455,6 @@ public final class JSGlobalObject {
         defineBuiltin(globalObject, JSSymbol.NAME, symbolConstructor);
     }
 
-    private void initializeTemporalDuration(JSObject temporalObject) {
-        JSObject prototype = createTemporalPrototype("Temporal.Duration");
-
-        // Getters
-        defineGetter(prototype, "years", TemporalDurationPrototype::years);
-        defineGetter(prototype, "months", TemporalDurationPrototype::months);
-        defineGetter(prototype, "weeks", TemporalDurationPrototype::weeks);
-        defineGetter(prototype, "days", TemporalDurationPrototype::days);
-        defineGetter(prototype, "hours", TemporalDurationPrototype::hours);
-        defineGetter(prototype, "minutes", TemporalDurationPrototype::minutes);
-        defineGetter(prototype, "seconds", TemporalDurationPrototype::seconds);
-        defineGetter(prototype, "milliseconds", TemporalDurationPrototype::milliseconds);
-        defineGetter(prototype, "microseconds", TemporalDurationPrototype::microseconds);
-        defineGetter(prototype, "nanoseconds", TemporalDurationPrototype::nanoseconds);
-        defineGetter(prototype, "sign", TemporalDurationPrototype::sign);
-        defineGetter(prototype, "blank", TemporalDurationPrototype::blank);
-
-        // Methods
-        defineMethod(prototype, "with", 1, TemporalDurationPrototype::with);
-        defineMethod(prototype, "negated", 0, TemporalDurationPrototype::negated);
-        defineMethod(prototype, "abs", 0, TemporalDurationPrototype::abs);
-        defineMethod(prototype, "add", 1, TemporalDurationPrototype::add);
-        defineMethod(prototype, "subtract", 1, TemporalDurationPrototype::subtract);
-        defineMethod(prototype, "round", 1, TemporalDurationPrototype::round);
-        defineMethod(prototype, "total", 1, TemporalDurationPrototype::total);
-        defineMethod(prototype, "toString", 0, TemporalDurationPrototype::toStringMethod);
-        defineMethod(prototype, "toJSON", 0, TemporalDurationPrototype::toJSON);
-        defineMethod(prototype, "toLocaleString", 0, TemporalDurationPrototype::toLocaleString);
-        defineMethod(prototype, "valueOf", 0, TemporalDurationPrototype::valueOf);
-
-        // Constructor
-        JSNativeFunction constructor = new JSNativeFunction(context, "Duration", 0,
-                TemporalDurationConstructor::construct, true, false);
-        defineMethod(constructor, "from", 1, TemporalDurationConstructor::from);
-        defineMethod(constructor, "compare", 2, TemporalDurationConstructor::compare);
-
-        installTemporalConstructor(temporalObject, "Duration", constructor, prototype);
-    }
-
-    private void initializeTemporalInstant(JSObject temporalObject) {
-        JSObject prototype = createTemporalPrototype("Temporal.Instant");
-
-        // Getters
-        defineGetter(prototype, "epochMilliseconds", TemporalInstantPrototype::epochMilliseconds);
-        defineGetter(prototype, "epochNanoseconds", TemporalInstantPrototype::epochNanoseconds);
-
-        // Methods
-        defineMethod(prototype, "add", 1, TemporalInstantPrototype::add);
-        defineMethod(prototype, "subtract", 1, TemporalInstantPrototype::subtract);
-        defineMethod(prototype, "until", 1, TemporalInstantPrototype::until);
-        defineMethod(prototype, "since", 1, TemporalInstantPrototype::since);
-        defineMethod(prototype, "round", 1, TemporalInstantPrototype::round);
-        defineMethod(prototype, "equals", 1, TemporalInstantPrototype::equals);
-        defineMethod(prototype, "toString", 0, TemporalInstantPrototype::toStringMethod);
-        defineMethod(prototype, "toJSON", 0, TemporalInstantPrototype::toJSON);
-        defineMethod(prototype, "toLocaleString", 0, TemporalInstantPrototype::toLocaleString);
-        defineMethod(prototype, "valueOf", 0, TemporalInstantPrototype::valueOf);
-        defineMethod(prototype, "toZonedDateTimeISO", 1, TemporalInstantPrototype::toZonedDateTimeISO);
-
-        // Constructor
-        JSNativeFunction constructor = new JSNativeFunction(context, "Instant", 1,
-                TemporalInstantConstructor::construct, true, false);
-        defineMethod(constructor, "from", 1, TemporalInstantConstructor::from);
-        defineMethod(constructor, "fromEpochMilliseconds", 1, TemporalInstantConstructor::fromEpochMilliseconds);
-        defineMethod(constructor, "fromEpochNanoseconds", 1, TemporalInstantConstructor::fromEpochNanoseconds);
-        defineMethod(constructor, "compare", 2, TemporalInstantConstructor::compare);
-
-        installTemporalConstructor(temporalObject, "Instant", constructor, prototype);
-    }
-
     private void initializeTemporalNow(JSObject temporalObject) {
         JSObject nowObject = context.createJSObject();
         defineToStringTag(nowObject, "Temporal.Now");
@@ -1928,295 +1476,18 @@ public final class JSGlobalObject {
         // Register Temporal on globalThis first so prototype lookup works during construction
         defineBuiltin(globalObject, "Temporal", temporalObject);
 
-        // Temporal.Duration (registered before PlainDateTime so Duration prototype is available)
-        initializeTemporalDuration(temporalObject);
-
-        // Temporal.PlainDate
-        initializeTemporalPlainDate(temporalObject);
-
-        // Temporal.PlainTime
-        initializeTemporalPlainTime(temporalObject);
-
-        // Temporal.PlainDateTime
-        initializeTemporalPlainDateTime(temporalObject);
-
-        // Temporal.PlainYearMonth
-        initializeTemporalPlainYearMonth(temporalObject);
-
-        // Temporal.PlainMonthDay
-        initializeTemporalPlainMonthDay(temporalObject);
-
-        // Temporal.Instant
-        initializeTemporalInstant(temporalObject);
-
-        // Temporal.ZonedDateTime
-        initializeTemporalZonedDateTime(temporalObject);
+        // Duration must be available before PlainDateTime is installed.
+        TemporalIntrinsic.DURATION.install(temporalObject);
+        TemporalIntrinsic.PLAIN_DATE.install(temporalObject);
+        TemporalIntrinsic.PLAIN_TIME.install(temporalObject);
+        TemporalIntrinsic.PLAIN_DATE_TIME.install(temporalObject);
+        TemporalIntrinsic.PLAIN_YEAR_MONTH.install(temporalObject);
+        TemporalIntrinsic.PLAIN_MONTH_DAY.install(temporalObject);
+        TemporalIntrinsic.INSTANT.install(temporalObject);
+        TemporalIntrinsic.ZONED_DATE_TIME.install(temporalObject);
 
         // Temporal.Now
         initializeTemporalNow(temporalObject);
-    }
-
-    private void initializeTemporalPlainDate(JSObject temporalObject) {
-        JSObject prototype = createTemporalPrototype("Temporal.PlainDate");
-
-        // Getters (registered as zero-arg functions accessed as properties via get accessor)
-        defineGetter(prototype, "calendarId", TemporalPlainDatePrototype::calendarId);
-        defineGetter(prototype, "day", TemporalPlainDatePrototype::day);
-        defineGetter(prototype, "dayOfWeek", TemporalPlainDatePrototype::dayOfWeek);
-        defineGetter(prototype, "dayOfYear", TemporalPlainDatePrototype::dayOfYear);
-        defineGetter(prototype, "daysInMonth", TemporalPlainDatePrototype::daysInMonth);
-        defineGetter(prototype, "daysInWeek", TemporalPlainDatePrototype::daysInWeek);
-        defineGetter(prototype, "daysInYear", TemporalPlainDatePrototype::daysInYear);
-        defineGetter(prototype, "era", TemporalPlainDatePrototype::era);
-        defineGetter(prototype, "eraYear", TemporalPlainDatePrototype::eraYear);
-        defineGetter(prototype, "inLeapYear", TemporalPlainDatePrototype::inLeapYear);
-        defineGetter(prototype, "month", TemporalPlainDatePrototype::month);
-        defineGetter(prototype, "monthCode", TemporalPlainDatePrototype::monthCode);
-        defineGetter(prototype, "monthsInYear", TemporalPlainDatePrototype::monthsInYear);
-        defineGetter(prototype, "weekOfYear", TemporalPlainDatePrototype::weekOfYear);
-        defineGetter(prototype, "year", TemporalPlainDatePrototype::year);
-        defineGetter(prototype, "yearOfWeek", TemporalPlainDatePrototype::yearOfWeek);
-
-        // Methods
-        defineMethod(prototype, "add", 1, TemporalPlainDatePrototype::add);
-        defineMethod(prototype, "equals", 1, TemporalPlainDatePrototype::equals);
-        defineMethod(prototype, "since", 1, TemporalPlainDatePrototype::since);
-        defineMethod(prototype, "subtract", 1, TemporalPlainDatePrototype::subtract);
-        defineMethod(prototype, "toJSON", 0, TemporalPlainDatePrototype::toJSON);
-        defineMethod(prototype, "toLocaleString", 0, TemporalPlainDatePrototype::toLocaleString);
-        defineMethod(prototype, "toPlainDateTime", 0, TemporalPlainDatePrototype::toPlainDateTime);
-        defineMethod(prototype, "toPlainMonthDay", 0, TemporalPlainDatePrototype::toPlainMonthDay);
-        defineMethod(prototype, "toPlainYearMonth", 0, TemporalPlainDatePrototype::toPlainYearMonth);
-        defineMethod(prototype, "toString", 0, TemporalPlainDatePrototype::toStringMethod);
-        defineMethod(prototype, "toZonedDateTime", 1, TemporalPlainDatePrototype::toZonedDateTime);
-        defineMethod(prototype, "until", 1, TemporalPlainDatePrototype::until);
-        defineMethod(prototype, "valueOf", 0, TemporalPlainDatePrototype::valueOf);
-        defineMethod(prototype, "with", 1, TemporalPlainDatePrototype::with);
-        defineMethod(prototype, "withCalendar", 1, TemporalPlainDatePrototype::withCalendar);
-
-        // Constructor
-        JSNativeFunction constructor = new JSNativeFunction(context, "PlainDate", 3,
-                TemporalPlainDateConstructor::construct, true, false);
-        defineMethod(constructor, "compare", 2, TemporalPlainDateConstructor::compare);
-        defineMethod(constructor, "from", 1, TemporalPlainDateConstructor::from);
-
-        installTemporalConstructor(temporalObject, "PlainDate", constructor, prototype);
-    }
-
-    private void initializeTemporalPlainDateTime(JSObject temporalObject) {
-        JSObject prototype = createTemporalPrototype("Temporal.PlainDateTime");
-
-        // Getters
-        defineGetter(prototype, "calendarId", TemporalPlainDateTimePrototype::calendarId);
-        defineGetter(prototype, "day", TemporalPlainDateTimePrototype::day);
-        defineGetter(prototype, "dayOfWeek", TemporalPlainDateTimePrototype::dayOfWeek);
-        defineGetter(prototype, "dayOfYear", TemporalPlainDateTimePrototype::dayOfYear);
-        defineGetter(prototype, "daysInMonth", TemporalPlainDateTimePrototype::daysInMonth);
-        defineGetter(prototype, "daysInWeek", TemporalPlainDateTimePrototype::daysInWeek);
-        defineGetter(prototype, "daysInYear", TemporalPlainDateTimePrototype::daysInYear);
-        defineGetter(prototype, "era", TemporalPlainDateTimePrototype::era);
-        defineGetter(prototype, "eraYear", TemporalPlainDateTimePrototype::eraYear);
-        defineGetter(prototype, "hour", TemporalPlainDateTimePrototype::hour);
-        defineGetter(prototype, "inLeapYear", TemporalPlainDateTimePrototype::inLeapYear);
-        defineGetter(prototype, "microsecond", TemporalPlainDateTimePrototype::microsecond);
-        defineGetter(prototype, "millisecond", TemporalPlainDateTimePrototype::millisecond);
-        defineGetter(prototype, "minute", TemporalPlainDateTimePrototype::minute);
-        defineGetter(prototype, "month", TemporalPlainDateTimePrototype::month);
-        defineGetter(prototype, "monthCode", TemporalPlainDateTimePrototype::monthCode);
-        defineGetter(prototype, "monthsInYear", TemporalPlainDateTimePrototype::monthsInYear);
-        defineGetter(prototype, "nanosecond", TemporalPlainDateTimePrototype::nanosecond);
-        defineGetter(prototype, "second", TemporalPlainDateTimePrototype::second);
-        defineGetter(prototype, "weekOfYear", TemporalPlainDateTimePrototype::weekOfYear);
-        defineGetter(prototype, "year", TemporalPlainDateTimePrototype::year);
-        defineGetter(prototype, "yearOfWeek", TemporalPlainDateTimePrototype::yearOfWeek);
-
-        // Methods
-        defineMethod(prototype, "add", 1, TemporalPlainDateTimePrototype::add);
-        defineMethod(prototype, "equals", 1, TemporalPlainDateTimePrototype::equals);
-        defineMethod(prototype, "round", 1, TemporalPlainDateTimePrototype::round);
-        defineMethod(prototype, "since", 1, TemporalPlainDateTimePrototype::since);
-        defineMethod(prototype, "subtract", 1, TemporalPlainDateTimePrototype::subtract);
-        defineMethod(prototype, "toJSON", 0, TemporalPlainDateTimePrototype::toJSON);
-        defineMethod(prototype, "toLocaleString", 0, TemporalPlainDateTimePrototype::toLocaleString);
-        defineMethod(prototype, "toPlainDate", 0, TemporalPlainDateTimePrototype::toPlainDate);
-        defineMethod(prototype, "toPlainTime", 0, TemporalPlainDateTimePrototype::toPlainTime);
-        defineMethod(prototype, "toString", 0, TemporalPlainDateTimePrototype::toStringMethod);
-        defineMethod(prototype, "toZonedDateTime", 1, TemporalPlainDateTimePrototype::toZonedDateTime);
-        defineMethod(prototype, "until", 1, TemporalPlainDateTimePrototype::until);
-        defineMethod(prototype, "valueOf", 0, TemporalPlainDateTimePrototype::valueOf);
-        defineMethod(prototype, "with", 1, TemporalPlainDateTimePrototype::with);
-        defineMethod(prototype, "withCalendar", 1, TemporalPlainDateTimePrototype::withCalendar);
-        defineMethod(prototype, "withPlainTime", 0, TemporalPlainDateTimePrototype::withPlainTime);
-
-        // Constructor
-        JSNativeFunction constructor = new JSNativeFunction(context, "PlainDateTime", 3,
-                TemporalPlainDateTimeConstructor::construct, true, false);
-        defineMethod(constructor, "from", 1, TemporalPlainDateTimeConstructor::from);
-        defineMethod(constructor, "compare", 2, TemporalPlainDateTimeConstructor::compare);
-
-        installTemporalConstructor(temporalObject, "PlainDateTime", constructor, prototype);
-    }
-
-    private void initializeTemporalPlainMonthDay(JSObject temporalObject) {
-        JSObject prototype = createTemporalPrototype("Temporal.PlainMonthDay");
-
-        // Getters
-        defineGetter(prototype, "calendarId", TemporalPlainMonthDayPrototype::calendarId);
-        defineGetter(prototype, "day", TemporalPlainMonthDayPrototype::day);
-        defineGetter(prototype, "monthCode", TemporalPlainMonthDayPrototype::monthCode);
-        defineGetter(prototype, "referenceISOYear", TemporalPlainMonthDayPrototype::referenceISOYear);
-
-        // Methods
-        defineMethod(prototype, "equals", 1, TemporalPlainMonthDayPrototype::equals);
-        defineMethod(prototype, "toJSON", 0, TemporalPlainMonthDayPrototype::toJSON);
-        defineMethod(prototype, "toLocaleString", 0, TemporalPlainMonthDayPrototype::toLocaleString);
-        defineMethod(prototype, "toPlainDate", 1, TemporalPlainMonthDayPrototype::toPlainDate);
-        defineMethod(prototype, "toString", 0, TemporalPlainMonthDayPrototype::toStringMethod);
-        defineMethod(prototype, "valueOf", 0, TemporalPlainMonthDayPrototype::valueOf);
-        defineMethod(prototype, "with", 1, TemporalPlainMonthDayPrototype::with);
-
-        // Constructor
-        JSNativeFunction constructor = new JSNativeFunction(context, "PlainMonthDay", 2,
-                TemporalPlainMonthDayConstructor::construct, true, false);
-        defineMethod(constructor, "from", 1, TemporalPlainMonthDayConstructor::from);
-
-        installTemporalConstructor(temporalObject, "PlainMonthDay", constructor, prototype);
-    }
-
-    private void initializeTemporalPlainTime(JSObject temporalObject) {
-        JSObject prototype = createTemporalPrototype("Temporal.PlainTime");
-
-        // Getters
-        defineGetter(prototype, "hour", TemporalPlainTimePrototype::hour);
-        defineGetter(prototype, "microsecond", TemporalPlainTimePrototype::microsecond);
-        defineGetter(prototype, "millisecond", TemporalPlainTimePrototype::millisecond);
-        defineGetter(prototype, "minute", TemporalPlainTimePrototype::minute);
-        defineGetter(prototype, "nanosecond", TemporalPlainTimePrototype::nanosecond);
-        defineGetter(prototype, "second", TemporalPlainTimePrototype::second);
-
-        // Methods
-        defineMethod(prototype, "add", 1, TemporalPlainTimePrototype::add);
-        defineMethod(prototype, "equals", 1, TemporalPlainTimePrototype::equals);
-        defineMethod(prototype, "round", 1, TemporalPlainTimePrototype::round);
-        defineMethod(prototype, "since", 1, TemporalPlainTimePrototype::since);
-        defineMethod(prototype, "subtract", 1, TemporalPlainTimePrototype::subtract);
-        defineMethod(prototype, "toJSON", 0, TemporalPlainTimePrototype::toJSON);
-        defineMethod(prototype, "toLocaleString", 0, TemporalPlainTimePrototype::toLocaleString);
-        defineMethod(prototype, "toString", 0, TemporalPlainTimePrototype::toStringMethod);
-        defineMethod(prototype, "until", 1, TemporalPlainTimePrototype::until);
-        defineMethod(prototype, "valueOf", 0, TemporalPlainTimePrototype::valueOf);
-        defineMethod(prototype, "with", 1, TemporalPlainTimePrototype::with);
-
-        // Constructor
-        JSNativeFunction constructor = new JSNativeFunction(context, "PlainTime", 0,
-                TemporalPlainTimeConstructor::construct, true, false);
-        defineMethod(constructor, "compare", 2, TemporalPlainTimeConstructor::compare);
-        defineMethod(constructor, "from", 1, TemporalPlainTimeConstructor::from);
-
-        installTemporalConstructor(temporalObject, "PlainTime", constructor, prototype);
-    }
-
-    private void initializeTemporalPlainYearMonth(JSObject temporalObject) {
-        JSObject prototype = createTemporalPrototype("Temporal.PlainYearMonth");
-
-        // Getters
-        defineGetter(prototype, "calendarId", TemporalPlainYearMonthPrototype::calendarId);
-        defineGetter(prototype, "daysInMonth", TemporalPlainYearMonthPrototype::daysInMonth);
-        defineGetter(prototype, "daysInYear", TemporalPlainYearMonthPrototype::daysInYear);
-        defineGetter(prototype, "era", TemporalPlainYearMonthPrototype::era);
-        defineGetter(prototype, "eraYear", TemporalPlainYearMonthPrototype::eraYear);
-        defineGetter(prototype, "inLeapYear", TemporalPlainYearMonthPrototype::inLeapYear);
-        defineGetter(prototype, "month", TemporalPlainYearMonthPrototype::month);
-        defineGetter(prototype, "monthCode", TemporalPlainYearMonthPrototype::monthCode);
-        defineGetter(prototype, "monthsInYear", TemporalPlainYearMonthPrototype::monthsInYear);
-        defineGetter(prototype, "referenceISODay", TemporalPlainYearMonthPrototype::referenceISODay);
-        defineGetter(prototype, "year", TemporalPlainYearMonthPrototype::year);
-
-        // Methods
-        defineMethod(prototype, "add", 1, TemporalPlainYearMonthPrototype::add);
-        defineMethod(prototype, "equals", 1, TemporalPlainYearMonthPrototype::equals);
-        defineMethod(prototype, "since", 1, TemporalPlainYearMonthPrototype::since);
-        defineMethod(prototype, "subtract", 1, TemporalPlainYearMonthPrototype::subtract);
-        defineMethod(prototype, "toJSON", 0, TemporalPlainYearMonthPrototype::toJSON);
-        defineMethod(prototype, "toLocaleString", 0, TemporalPlainYearMonthPrototype::toLocaleString);
-        defineMethod(prototype, "toPlainDate", 1, TemporalPlainYearMonthPrototype::toPlainDate);
-        defineMethod(prototype, "toString", 0, TemporalPlainYearMonthPrototype::toStringMethod);
-        defineMethod(prototype, "until", 1, TemporalPlainYearMonthPrototype::until);
-        defineMethod(prototype, "valueOf", 0, TemporalPlainYearMonthPrototype::valueOf);
-        defineMethod(prototype, "with", 1, TemporalPlainYearMonthPrototype::with);
-
-        // Constructor
-        JSNativeFunction constructor = new JSNativeFunction(context, "PlainYearMonth", 2,
-                TemporalPlainYearMonthConstructor::construct, true, false);
-        defineMethod(constructor, "compare", 2, TemporalPlainYearMonthConstructor::compare);
-        defineMethod(constructor, "from", 1, TemporalPlainYearMonthConstructor::from);
-
-        installTemporalConstructor(temporalObject, "PlainYearMonth", constructor, prototype);
-    }
-
-    private void initializeTemporalZonedDateTime(JSObject temporalObject) {
-        JSObject prototype = createTemporalPrototype("Temporal.ZonedDateTime");
-
-        // Getters (28)
-        defineGetter(prototype, "calendar", TemporalZonedDateTimePrototype::calendar);
-        defineGetter(prototype, "calendarId", TemporalZonedDateTimePrototype::calendarId);
-        defineGetter(prototype, "day", TemporalZonedDateTimePrototype::day);
-        defineGetter(prototype, "dayOfWeek", TemporalZonedDateTimePrototype::dayOfWeek);
-        defineGetter(prototype, "dayOfYear", TemporalZonedDateTimePrototype::dayOfYear);
-        defineGetter(prototype, "daysInMonth", TemporalZonedDateTimePrototype::daysInMonth);
-        defineGetter(prototype, "daysInWeek", TemporalZonedDateTimePrototype::daysInWeek);
-        defineGetter(prototype, "daysInYear", TemporalZonedDateTimePrototype::daysInYear);
-        defineGetter(prototype, "epochMilliseconds", TemporalZonedDateTimePrototype::epochMilliseconds);
-        defineGetter(prototype, "epochNanoseconds", TemporalZonedDateTimePrototype::epochNanoseconds);
-        defineGetter(prototype, "era", TemporalZonedDateTimePrototype::era);
-        defineGetter(prototype, "eraYear", TemporalZonedDateTimePrototype::eraYear);
-        defineGetter(prototype, "hour", TemporalZonedDateTimePrototype::hour);
-        defineGetter(prototype, "hoursInDay", TemporalZonedDateTimePrototype::hoursInDay);
-        defineGetter(prototype, "inLeapYear", TemporalZonedDateTimePrototype::inLeapYear);
-        defineGetter(prototype, "microsecond", TemporalZonedDateTimePrototype::microsecond);
-        defineGetter(prototype, "millisecond", TemporalZonedDateTimePrototype::millisecond);
-        defineGetter(prototype, "minute", TemporalZonedDateTimePrototype::minute);
-        defineGetter(prototype, "month", TemporalZonedDateTimePrototype::month);
-        defineGetter(prototype, "monthCode", TemporalZonedDateTimePrototype::monthCode);
-        defineGetter(prototype, "monthsInYear", TemporalZonedDateTimePrototype::monthsInYear);
-        defineGetter(prototype, "nanosecond", TemporalZonedDateTimePrototype::nanosecond);
-        defineGetter(prototype, "offset", TemporalZonedDateTimePrototype::offset);
-        defineGetter(prototype, "offsetNanoseconds", TemporalZonedDateTimePrototype::offsetNanoseconds);
-        defineGetter(prototype, "second", TemporalZonedDateTimePrototype::second);
-        defineGetter(prototype, "timeZoneId", TemporalZonedDateTimePrototype::timeZoneId);
-        defineGetter(prototype, "weekOfYear", TemporalZonedDateTimePrototype::weekOfYear);
-        defineGetter(prototype, "year", TemporalZonedDateTimePrototype::year);
-        defineGetter(prototype, "yearOfWeek", TemporalZonedDateTimePrototype::yearOfWeek);
-
-        // Methods (20)
-        defineMethod(prototype, "add", 1, TemporalZonedDateTimePrototype::add);
-        defineMethod(prototype, "equals", 1, TemporalZonedDateTimePrototype::equals);
-        defineMethod(prototype, "getTimeZoneTransition", 1, TemporalZonedDateTimePrototype::getTimeZoneTransition);
-        defineMethod(prototype, "round", 1, TemporalZonedDateTimePrototype::round);
-        defineMethod(prototype, "since", 1, TemporalZonedDateTimePrototype::since);
-        defineMethod(prototype, "startOfDay", 0, TemporalZonedDateTimePrototype::startOfDay);
-        defineMethod(prototype, "subtract", 1, TemporalZonedDateTimePrototype::subtract);
-        defineMethod(prototype, "toInstant", 0, TemporalZonedDateTimePrototype::toInstant);
-        defineMethod(prototype, "toJSON", 0, TemporalZonedDateTimePrototype::toJSON);
-        defineMethod(prototype, "toLocaleString", 0, TemporalZonedDateTimePrototype::toLocaleString);
-        defineMethod(prototype, "toPlainDate", 0, TemporalZonedDateTimePrototype::toPlainDate);
-        defineMethod(prototype, "toPlainDateTime", 0, TemporalZonedDateTimePrototype::toPlainDateTime);
-        defineMethod(prototype, "toPlainTime", 0, TemporalZonedDateTimePrototype::toPlainTime);
-        defineMethod(prototype, "toString", 0, TemporalZonedDateTimePrototype::toStringMethod);
-        defineMethod(prototype, "until", 1, TemporalZonedDateTimePrototype::until);
-        defineMethod(prototype, "valueOf", 0, TemporalZonedDateTimePrototype::valueOf);
-        defineMethod(prototype, "with", 1, TemporalZonedDateTimePrototype::with);
-        defineMethod(prototype, "withCalendar", 1, TemporalZonedDateTimePrototype::withCalendar);
-        defineMethod(prototype, "withPlainTime", 0, TemporalZonedDateTimePrototype::withPlainTime);
-        defineMethod(prototype, "withTimeZone", 1, TemporalZonedDateTimePrototype::withTimeZone);
-
-        // Constructor
-        JSNativeFunction constructor = new JSNativeFunction(context, "ZonedDateTime", 2,
-                TemporalZonedDateTimeConstructor::construct, true, false);
-        defineMethod(constructor, "compare", 2, TemporalZonedDateTimeConstructor::compare);
-        defineMethod(constructor, "from", 1, TemporalZonedDateTimeConstructor::from);
-
-        installTemporalConstructor(temporalObject, "ZonedDateTime", constructor, prototype);
     }
 
     /**
@@ -2237,34 +1508,7 @@ public final class JSGlobalObject {
         JSObject typedArrayPrototype = context.createJSObject();
 
         JSNativeFunction valuesFunction = new JSNativeFunction(context, "values", 0, TypedArrayPrototype::values);
-        defineMethod(typedArrayPrototype, "at", 1, TypedArrayPrototype::at);
-        defineMethod(typedArrayPrototype, "copyWithin", 2, TypedArrayPrototype::copyWithin);
-        defineMethod(typedArrayPrototype, "entries", 0, TypedArrayPrototype::entries);
-        defineMethod(typedArrayPrototype, "every", 1, TypedArrayPrototype::every);
-        defineMethod(typedArrayPrototype, "fill", 1, TypedArrayPrototype::fill);
-        defineMethod(typedArrayPrototype, "filter", 1, TypedArrayPrototype::filter);
-        defineMethod(typedArrayPrototype, "find", 1, TypedArrayPrototype::find);
-        defineMethod(typedArrayPrototype, "findIndex", 1, TypedArrayPrototype::findIndex);
-        defineMethod(typedArrayPrototype, "findLast", 1, TypedArrayPrototype::findLast);
-        defineMethod(typedArrayPrototype, "findLastIndex", 1, TypedArrayPrototype::findLastIndex);
-        defineMethod(typedArrayPrototype, "forEach", 1, TypedArrayPrototype::forEach);
-        defineMethod(typedArrayPrototype, "includes", 1, TypedArrayPrototype::includes);
-        defineMethod(typedArrayPrototype, "indexOf", 1, TypedArrayPrototype::indexOf);
-        defineMethod(typedArrayPrototype, "join", 1, TypedArrayPrototype::join);
-        defineMethod(typedArrayPrototype, "keys", 0, TypedArrayPrototype::keys);
-        defineMethod(typedArrayPrototype, "lastIndexOf", 1, TypedArrayPrototype::lastIndexOf);
-        defineMethod(typedArrayPrototype, "map", 1, TypedArrayPrototype::map);
-        defineMethod(typedArrayPrototype, "reduce", 1, TypedArrayPrototype::reduce);
-        defineMethod(typedArrayPrototype, "reduceRight", 1, TypedArrayPrototype::reduceRight);
-        defineMethod(typedArrayPrototype, "reverse", 0, TypedArrayPrototype::reverse);
-        defineMethod(typedArrayPrototype, "set", 1, TypedArrayPrototype::set);
-        defineMethod(typedArrayPrototype, "slice", 2, TypedArrayPrototype::slice);
-        defineMethod(typedArrayPrototype, "some", 1, TypedArrayPrototype::some);
-        defineMethod(typedArrayPrototype, "sort", 1, TypedArrayPrototype::sort);
-        defineMethod(typedArrayPrototype, "subarray", 2, TypedArrayPrototype::subarray);
-        defineMethod(typedArrayPrototype, "toLocaleString", 0, TypedArrayPrototype::toLocaleString);
-        defineMethod(typedArrayPrototype, "toReversed", 0, TypedArrayPrototype::toReversed);
-        defineMethod(typedArrayPrototype, "toSorted", 1, TypedArrayPrototype::toSorted);
+        IntrinsicFunctions.TYPED_ARRAY_PROTOTYPE.install(typedArrayPrototype);
         if (arrayToString instanceof JSFunction) {
             typedArrayPrototype.defineProperty(PropertyKey.TO_STRING, arrayToString,
                     PropertyDescriptor.DataState.ConfigurableWritable);
@@ -2276,10 +1520,7 @@ public final class JSGlobalObject {
         typedArrayPrototype.defineProperty(PropertyKey.SYMBOL_ITERATOR, valuesFunction,
                 PropertyDescriptor.DataState.ConfigurableWritable);
 
-        defineGetter(typedArrayPrototype, "buffer", TypedArrayPrototype::getBuffer);
-        defineGetter(typedArrayPrototype, "byteLength", TypedArrayPrototype::getByteLength);
-        defineGetter(typedArrayPrototype, "byteOffset", TypedArrayPrototype::getByteOffset);
-        defineGetter(typedArrayPrototype, "length", TypedArrayPrototype::getLength);
+        IntrinsicFunctions.TYPED_ARRAY_ACCESSORS.install(typedArrayPrototype);
         typedArrayPrototype.defineProperty(PropertyKey.SYMBOL_TO_STRING_TAG,
                 new JSNativeFunction(context, "get [Symbol.toStringTag]", 0, TypedArrayPrototype::getToStringTag),
                 PropertyDescriptor.AccessorState.Configurable);
@@ -2322,10 +1563,7 @@ public final class JSGlobalObject {
                 defineMethod(constructor, "fromHex", 1, Uint8ArrayBase64Hex::fromHex);
 
                 // Prototype methods
-                defineMethod(prototype, "toBase64", 0, Uint8ArrayBase64Hex::toBase64);
-                defineMethod(prototype, "toHex", 0, Uint8ArrayBase64Hex::toHex);
-                defineMethod(prototype, "setFromBase64", 1, Uint8ArrayBase64Hex::setFromBase64);
-                defineMethod(prototype, "setFromHex", 1, Uint8ArrayBase64Hex::setFromHex);
+                IntrinsicFunctions.UINT8_ARRAY_PROTOTYPE.install(prototype);
             }
 
             defineBuiltin(globalObject, def.name, constructor);
@@ -2337,12 +1575,7 @@ public final class JSGlobalObject {
      */
     private void initializeWeakMapConstructor() {
         JSObject weakMapPrototype = context.createJSObject();
-        defineMethod(weakMapPrototype, "set", 2, WeakMapPrototype::set);
-        defineMethod(weakMapPrototype, "get", 1, WeakMapPrototype::get);
-        defineMethod(weakMapPrototype, "getOrInsert", 2, WeakMapPrototype::getOrInsert);
-        defineMethod(weakMapPrototype, "getOrInsertComputed", 2, WeakMapPrototype::getOrInsertComputed);
-        defineMethod(weakMapPrototype, "has", 1, WeakMapPrototype::has);
-        defineMethod(weakMapPrototype, "delete", 1, WeakMapPrototype::delete);
+        IntrinsicFunctions.WEAK_MAP_PROTOTYPE.install(weakMapPrototype);
         defineToStringTag(weakMapPrototype, JSWeakMap.NAME);
 
         JSNativeFunction weakMapConstructor = new JSNativeFunction(context, JSWeakMap.NAME, 0, WeakMapConstructor::call,
@@ -2372,9 +1605,7 @@ public final class JSGlobalObject {
      */
     private void initializeWeakSetConstructor() {
         JSObject weakSetPrototype = context.createJSObject();
-        defineMethod(weakSetPrototype, "add", 1, WeakSetPrototype::add);
-        defineMethod(weakSetPrototype, "has", 1, WeakSetPrototype::has);
-        defineMethod(weakSetPrototype, "delete", 1, WeakSetPrototype::delete);
+        IntrinsicFunctions.WEAK_SET_PROTOTYPE.install(weakSetPrototype);
         defineToStringTag(weakSetPrototype, JSWeakSet.NAME);
 
         JSNativeFunction weakSetConstructor = new JSNativeFunction(context, JSWeakSet.NAME, 0, WeakSetConstructor::call,
@@ -2394,22 +1625,16 @@ public final class JSGlobalObject {
         defineBuiltin(intl, name, constructor);
     }
 
-    private static void defineBuiltin(JSObject target, String name, JSValue value) {
+    static void defineBuiltin(JSObject target, String name, JSValue value) {
         target.defineProperty(PropertyKey.fromString(name), value, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
-    private static void defineToStringTag(JSObject target, String tag) {
+    static void defineToStringTag(JSObject target, String tag) {
         target.defineProperty(PropertyKey.SYMBOL_TO_STRING_TAG, new JSString(tag),
                 PropertyDescriptor.DataState.Configurable);
     }
 
-    private static void installTemporalConstructor(JSObject temporalObject, String name, JSNativeFunction constructor,
-            JSObject prototype) {
-        linkConstructor(constructor, prototype);
-        defineBuiltin(temporalObject, name, constructor);
-    }
-
-    private static void linkConstructor(JSObject constructor, JSObject prototype) {
+    static void linkConstructor(JSObject constructor, JSObject prototype) {
         linkConstructor(constructor, prototype, null);
     }
 

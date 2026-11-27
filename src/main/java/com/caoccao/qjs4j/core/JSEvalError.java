@@ -64,7 +64,7 @@ public final class JSEvalError extends JSError {
     }
 
     public static JSObject createPrototype(JSContext context, JSValue... args) {
-        return createNativeErrorPrototype(context, NAME,
+        return createNativeErrorPrototype(context, NAME, 1,
                 (childContext, thisObj, childArgs) -> create(childContext, childArgs));
     }
 }

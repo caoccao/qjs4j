@@ -373,11 +373,8 @@ final class EvalRunner {
             JSValue evalResult = context.moduleLoader().evaluateDynamicImportModule(dynamicImportEvalModuleRecord);
             if (dynamicImportEvalModuleRecord.hasTLA() && evalResult instanceof JSPromise asyncPromise) {
                 dynamicImportEvalModuleRecord
-                        .setAsyncEvaluationOrder(context.moduleLoader().nextAsyncEvaluationOrder());
-                dynamicImportEvalModuleRecord.setStatus(JSDynamicImportModule.Status.EVALUATING_ASYNC);
-                dynamicImportEvalModuleRecord.setAsyncEvaluationPromise(asyncPromise);
-                context.moduleLoader().registerAsyncModuleCompletion(dynamicImportEvalModuleRecord, asyncPromise,
-                        new HashSet<>());
+                        .setAsyncEvaluationOrder(context.moduleLoader().asyncEvaluation.nextAsyncEvaluationOrder());
+                context.moduleLoader().asyncEvaluation.awaitCompletion(dynamicImportEvalModuleRecord, asyncPromise);
             } else {
                 if (dynamicImportEvalModuleRecord.hasExportSyntax()) {
                     context.moduleLinker().resolveDynamicImportReExports(dynamicImportEvalModuleRecord,

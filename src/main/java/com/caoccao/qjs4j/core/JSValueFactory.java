@@ -34,10 +34,7 @@ final class JSValueFactory {
     }
 
     JSAggregateError createJSAggregateError(String message) {
-        JSAggregateError jsError = new JSAggregateError(context, message);
-        context.transferPrototype(jsError, JSAggregateError.NAME);
-        context.captureStackTrace(jsError);
-        return jsError;
+        return initializeError(new JSAggregateError(context, message));
     }
 
     /**
@@ -296,17 +293,11 @@ final class JSValueFactory {
     }
 
     JSError createJSError(String message) {
-        JSError jsError = new JSError(context, message);
-        context.transferPrototype(jsError, JSError.NAME);
-        context.captureStackTrace(jsError);
-        return jsError;
+        return initializeError(new JSError(context, message));
     }
 
     JSEvalError createJSEvalError(String message) {
-        JSEvalError jsError = new JSEvalError(context, message);
-        context.transferPrototype(jsError, JSEvalError.NAME);
-        context.captureStackTrace(jsError);
-        return jsError;
+        return initializeError(new JSEvalError(context, message));
     }
 
     JSFloat16Array createJSFloat16Array(IJSArrayBuffer buffer, long byteOffset, long length) {
@@ -448,17 +439,11 @@ final class JSValueFactory {
     }
 
     JSRangeError createJSRangeError(String message) {
-        JSRangeError jsError = new JSRangeError(context, message);
-        context.transferPrototype(jsError, JSRangeError.NAME);
-        context.captureStackTrace(jsError);
-        return jsError;
+        return initializeError(new JSRangeError(context, message));
     }
 
     JSReferenceError createJSReferenceError(String message) {
-        JSReferenceError jsError = new JSReferenceError(context, message);
-        context.transferPrototype(jsError, JSReferenceError.NAME);
-        context.captureStackTrace(jsError);
-        return jsError;
+        return initializeError(new JSReferenceError(context, message));
     }
 
     /**
@@ -504,10 +489,7 @@ final class JSValueFactory {
     }
 
     JSSuppressedError createJSSuppressedError(String message) {
-        JSSuppressedError jsError = new JSSuppressedError(context, message);
-        context.transferPrototype(jsError, JSSuppressedError.NAME);
-        context.captureStackTrace(jsError);
-        return jsError;
+        return initializeError(new JSSuppressedError(context, message));
     }
 
     JSSymbolObject createJSSymbolObject(JSSymbol value) {
@@ -517,17 +499,11 @@ final class JSValueFactory {
     }
 
     JSSyntaxError createJSSyntaxError(String message) {
-        JSSyntaxError jsError = new JSSyntaxError(context, message);
-        context.transferPrototype(jsError, JSSyntaxError.NAME);
-        context.captureStackTrace(jsError);
-        return jsError;
+        return initializeError(new JSSyntaxError(context, message));
     }
 
     JSTypeError createJSTypeError(String message) {
-        JSTypeError jsError = new JSTypeError(context, message);
-        context.transferPrototype(jsError, JSTypeError.NAME);
-        context.captureStackTrace(jsError);
-        return jsError;
+        return initializeError(new JSTypeError(context, message));
     }
 
     JSUint16Array createJSUint16Array(IJSArrayBuffer buffer, long byteOffset, long length) {
@@ -591,10 +567,7 @@ final class JSValueFactory {
     }
 
     JSURIError createJSURIError(String message) {
-        JSURIError jsError = new JSURIError(context, message);
-        context.transferPrototype(jsError, JSURIError.NAME);
-        context.captureStackTrace(jsError);
-        return jsError;
+        return initializeError(new JSURIError(context, message));
     }
 
     /**
@@ -617,6 +590,12 @@ final class JSValueFactory {
         JSWeakSet jsWeakSet = new JSWeakSet(context);
         context.transferPrototype(jsWeakSet, JSWeakSet.NAME);
         return jsWeakSet;
+    }
+
+    private <T extends JSError> T initializeError(T error) {
+        context.transferPrototype(error, error.getErrorName());
+        context.captureStackTrace(error);
+        return error;
     }
 
     private <T extends JSTypedArray> T initializeTypedArray(T typedArray) {

@@ -100,27 +100,6 @@ public final class JSSuppressedError extends JSError {
     }
 
     public static JSObject createPrototype(JSContext context, JSValue... args) {
-        // Prototype is a plain object per ES spec
-        JSObject errorPrototype = new JSObject(context);
-        context.transferPrototype(errorPrototype, JSError.NAME);
-
-        // Properties: writable, non-enumerable, configurable
-        errorPrototype.defineProperty(PropertyKey.NAME, new JSString(NAME),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        errorPrototype.defineProperty(PropertyKey.MESSAGE, new JSString(""),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-
-        // SuppressedError(error, suppressed, message)
-        int length = 3;
-
-        JSNativeFunction errorConstructor = new JSNativeFunction(context, NAME, length,
-                (childContext, thisObj, childArgs) -> create(childContext, childArgs), true);
-        errorConstructor.defineProperty(PropertyKey.PROTOTYPE, errorPrototype, PropertyDescriptor.DataState.None);
-
-        // Set constructor property on prototype (writable, non-enumerable, configurable)
-        errorPrototype.defineProperty(PropertyKey.CONSTRUCTOR, errorConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
-
-        return errorConstructor;
+        return createNativeErrorPrototype(context, NAME, 3, (ctx, receiver, arguments) -> create(ctx, arguments));
     }
 }

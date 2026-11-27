@@ -93,9 +93,9 @@ public class ModuleLoaderTest extends ModuleFileTest {
     public void testAsyncEvaluationOrderIsHandedOutInSequence() {
         // ES2024 16.2.1.5.2 runs the modules that become ready in the order they were deferred, so
         // the stamps have to be distinct and increasing.
-        int first = loader().nextAsyncEvaluationOrder();
-        int second = loader().nextAsyncEvaluationOrder();
-        int third = loader().nextAsyncEvaluationOrder();
+        int first = loader().asyncEvaluation.nextAsyncEvaluationOrder();
+        int second = loader().asyncEvaluation.nextAsyncEvaluationOrder();
+        int third = loader().asyncEvaluation.nextAsyncEvaluationOrder();
         assertThat(second).isEqualTo(first + 1);
         assertThat(third).isEqualTo(second + 1);
     }
@@ -175,7 +175,7 @@ public class ModuleLoaderTest extends ModuleFileTest {
         finished.pendingDependents().add(stillWaiting);
 
         List<JSDynamicImportModule> execList = new ArrayList<>();
-        loader().gatherAvailableAncestors(finished, execList);
+        loader().asyncEvaluation.gatherAvailableAncestors(finished, execList);
 
         assertThat(execList).containsExactly(ready);
         assertThat(stillWaiting.pendingAsyncDependencyCount())
@@ -197,7 +197,7 @@ public class ModuleLoaderTest extends ModuleFileTest {
         middle.pendingDependents().add(top);
 
         List<JSDynamicImportModule> execList = new ArrayList<>();
-        loader().gatherAvailableAncestors(finished, execList);
+        loader().asyncEvaluation.gatherAvailableAncestors(finished, execList);
         assertThat(execList).containsExactly(middle, top);
 
         JSDynamicImportModule awaitingFinished = moduleRecord("/modules/awaiting-finished.mjs");
@@ -210,7 +210,7 @@ public class ModuleLoaderTest extends ModuleFileTest {
         awaiting.pendingDependents().add(aboveAwaiting);
 
         List<JSDynamicImportModule> awaitingExecList = new ArrayList<>();
-        loader().gatherAvailableAncestors(awaitingFinished, awaitingExecList);
+        loader().asyncEvaluation.gatherAvailableAncestors(awaitingFinished, awaitingExecList);
         assertThat(awaitingExecList).containsExactly(awaiting);
     }
 

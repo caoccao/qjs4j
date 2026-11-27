@@ -33,6 +33,30 @@ public final class PromisePrototype {
         return invokeThen(context, thisArg, thenArgs);
     }
 
+    private static JSNativeFunction finallyHandler(JSContext context, JSValue constructor, JSFunction onFinally,
+            boolean rejected) {
+        return PromiseConstructor.createBuiltinFunction(context, "", 1, (ctx, thisValue, args) -> {
+            JSValue value = JSValue.argumentOrUndefined(args, 0);
+            JSValue result = onFinally.call(ctx, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+            if (ctx.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            JSValue promise = PromiseConstructor.resolve(ctx, constructor, new JSValue[]{result});
+            if (ctx.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            JSNativeFunction continuation = PromiseConstructor.createBuiltinFunction(ctx, "", 0,
+                    (nestedContext, nestedThis, nestedArgs) -> {
+                        if (rejected) {
+                            nestedContext.setPendingException(value);
+                            return JSUndefined.INSTANCE;
+                        }
+                        return value;
+                    });
+            return invokeThen(ctx, promise, new JSValue[]{continuation});
+        });
+    }
+
     /**
      * Promise.prototype.finally(onFinally) ES2020 25.6.5.2 Returns a new Promise, and attaches a callback that is
      * called when the promise is settled.
@@ -47,44 +71,9 @@ public final class PromisePrototype {
             return invokeThen(context, thisArg, new JSValue[]{onFinallyValue, onFinallyValue});
         }
 
-        JSNativeFunction onFulfilledWrapper = PromiseConstructor.createBuiltinFunction(context, "", 1,
-                (childContext, thisValue, funcArgs) -> {
-                    JSValue value = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-                    JSValue onFinallyResult = onFinally.call(childContext, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-                    if (childContext.hasPendingException()) {
-                        return JSUndefined.INSTANCE;
-                    }
-                    JSValue resolved = PromiseConstructor.resolve(childContext, constructor,
-                            new JSValue[]{onFinallyResult});
-                    if (childContext.hasPendingException()) {
-                        return JSUndefined.INSTANCE;
-                    }
-                    JSNativeFunction valueThunk = PromiseConstructor.createBuiltinFunction(childContext, "", 0,
-                            (nestedContext, nestedThis, nestedArgs) -> value);
-                    return invokeThen(childContext, resolved, new JSValue[]{valueThunk});
-                });
-
-        JSNativeFunction onRejectedWrapper = PromiseConstructor.createBuiltinFunction(context, "", 1,
-                (childContext, thisValue, funcArgs) -> {
-                    JSValue reason = funcArgs.length > 0 ? funcArgs[0] : JSUndefined.INSTANCE;
-                    JSValue onFinallyResult = onFinally.call(childContext, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-                    if (childContext.hasPendingException()) {
-                        return JSUndefined.INSTANCE;
-                    }
-                    JSValue resolved = PromiseConstructor.resolve(childContext, constructor,
-                            new JSValue[]{onFinallyResult});
-                    if (childContext.hasPendingException()) {
-                        return JSUndefined.INSTANCE;
-                    }
-                    JSNativeFunction thrower = PromiseConstructor.createBuiltinFunction(childContext, "", 0,
-                            (nestedContext, nestedThis, nestedArgs) -> {
-                                nestedContext.setPendingException(reason);
-                                return JSUndefined.INSTANCE;
-                            });
-                    return invokeThen(childContext, resolved, new JSValue[]{thrower});
-                });
-
-        return invokeThen(context, thisArg, new JSValue[]{onFulfilledWrapper, onRejectedWrapper});
+        JSNativeFunction thenFinally = finallyHandler(context, constructor, onFinally, false);
+        JSNativeFunction catchFinally = finallyHandler(context, constructor, onFinally, true);
+        return invokeThen(context, thisArg, new JSValue[]{thenFinally, catchFinally});
     }
 
     private static JSValue getDefaultPromiseConstructor(JSContext context) {

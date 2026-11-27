@@ -48,29 +48,11 @@ public final class JSNativeFunction extends JSFunction {
         this.isConstructor = isConstructor;
         this.requiresNew = requiresNew;
 
-        // Set up function properties on the object
-        // Functions are objects in JavaScript and have these standard properties
-        // Per ES spec, "length" comes before "name" in property order
-
-        // Per ECMAScript spec, the "length" property has attributes:
-        // { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: true }
-        this.defineProperty(PropertyKey.LENGTH,
-                PropertyDescriptor.dataDescriptor(JSNumber.of(this.length), PropertyDescriptor.DataState.Configurable));
-
-        // Per ECMAScript spec, the "name" property has attributes:
-        // { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: true }
-        // Use empty string for name property if name is null (e.g., Function.prototype)
-        this.defineProperty(PropertyKey.NAME, PropertyDescriptor.dataDescriptor(
-                new JSString(this.name != null ? this.name : ""), PropertyDescriptor.DataState.Configurable));
+        initializeNameAndLength(name == null ? "" : name, JSNumber.of(length));
 
         // Native functions have a prototype property only if they are constructors
         if (isConstructor) {
-            JSObject funcPrototype = new JSObject(context);
-            funcPrototype.defineProperty(PropertyKey.CONSTRUCTOR,
-                    PropertyDescriptor.dataDescriptor(this, PropertyDescriptor.DataState.ConfigurableWritable));
-            // Default prototype is configurable so it can be deleted (Proxy) or overridden by explicit setup
-            this.defineProperty(PropertyKey.PROTOTYPE, PropertyDescriptor.dataDescriptor(funcPrototype,
-                    PropertyDescriptor.DataState.ConfigurableWritable));
+            initializeConstructorPrototype(PropertyDescriptor.DataState.ConfigurableWritable);
         }
     }
 

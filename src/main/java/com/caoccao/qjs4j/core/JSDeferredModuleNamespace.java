@@ -80,12 +80,9 @@ final class JSDeferredModuleNamespace extends JSModuleNamespace {
             moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATING);
             try {
                 context.evaluateDynamicImportModule(moduleRecord);
-                context.resolveDynamicImportReExports(moduleRecord, new HashSet<>());
-                moduleRecord.namespace().finalizeNamespace();
-                moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
+                context.moduleLoader().finishLinkedModule(moduleRecord);
             } catch (JSException jsException) {
-                moduleRecord.setEvaluationError(jsException.getErrorValue());
-                moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
+                moduleRecord.failEvaluation(jsException.getErrorValue());
                 throw jsException;
             }
         }

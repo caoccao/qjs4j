@@ -124,13 +124,7 @@ public final class JSBytecodeFunction extends JSFunction {
         this.selfCaptureIndex = selfCaptureIndex;
         selfLocalIndex = -1;
 
-        // Set up function properties on the object
-        // Per ES spec, length comes before name in property order
-        // Both are {writable: false, enumerable: false, configurable: true}
-        this.defineProperty(PropertyKey.LENGTH,
-                PropertyDescriptor.dataDescriptor(JSNumber.of(this.length), PropertyDescriptor.DataState.Configurable));
-        this.defineProperty(PropertyKey.NAME,
-                PropertyDescriptor.dataDescriptor(new JSString(this.name), PropertyDescriptor.DataState.Configurable));
+        initializeNameAndLength(this.name, JSNumber.of(length));
 
         // Every function (except arrow functions) has a prototype property
         if (prototype != null) {
@@ -138,11 +132,7 @@ public final class JSBytecodeFunction extends JSFunction {
             this.defineProperty(PropertyKey.PROTOTYPE, prototype, PropertyDescriptor.DataState.None);
         } else if (isConstructor) {
             // User-defined function constructor: prototype is {writable: true, enumerable: false, configurable: false}
-            JSObject funcPrototype = new JSObject(context);
-            funcPrototype.defineProperty(PropertyKey.CONSTRUCTOR,
-                    PropertyDescriptor.dataDescriptor(this, PropertyDescriptor.DataState.ConfigurableWritable));
-            this.defineProperty(PropertyKey.PROTOTYPE,
-                    PropertyDescriptor.dataDescriptor(funcPrototype, PropertyDescriptor.DataState.Writable));
+            initializeConstructorPrototype(PropertyDescriptor.DataState.Writable);
         }
     }
 

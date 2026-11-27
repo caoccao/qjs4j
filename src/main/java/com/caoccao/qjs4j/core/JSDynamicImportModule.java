@@ -116,6 +116,11 @@ final class JSDynamicImportModule {
         return exportOrigins;
     }
 
+    void failEvaluation(JSValue evaluationError) {
+        this.evaluationError = evaluationError;
+        this.status = Status.EVALUATED_ERROR;
+    }
+
     boolean hasExportSyntax() {
         return hasExportSyntax;
     }
@@ -178,10 +183,6 @@ final class JSDynamicImportModule {
 
     void setDeferredPreload(boolean deferredPreload) {
         this.deferredPreload = deferredPreload;
-    }
-
-    void setEvaluationError(JSValue evaluationError) {
-        this.evaluationError = evaluationError;
     }
 
     void setExportBindingName(String exportBindingName) {

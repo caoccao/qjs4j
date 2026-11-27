@@ -12,6 +12,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 public class JSGlobalObjectTest extends BaseJavetTest {
     @Test
+    public void testBuiltinFunctionsBelongToTheirRealm() {
+        try (JSContext other = context.getRuntime().createContext()) {
+            for (String source : new String[]{"Array.prototype.map",
+                    "Object.getOwnPropertyDescriptor(Temporal.PlainDate.prototype, 'year').get"}) {
+                JSObject first = context.eval(source).asObject().orElseThrow();
+                JSObject second = other.eval(source).asObject().orElseThrow();
+                assertThat(first).isNotSameAs(second);
+                assertThat(first.getPrototype()).isSameAs(context.eval("Function.prototype"));
+                assertThat(second.getPrototype()).isSameAs(other.eval("Function.prototype"));
+            }
+        }
+    }
+
+    @Test
     public void testDecodeURIBasicAscii() {
         // Basic ASCII percent-decoding
         assertStringWithJavet("decodeURIComponent('%41')", // A

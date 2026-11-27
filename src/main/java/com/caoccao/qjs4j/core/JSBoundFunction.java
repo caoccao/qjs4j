@@ -42,23 +42,14 @@ public final class JSBoundFunction extends JSFunction {
         this.computedLength = computedLength;
         this.computedName = computedName != null ? computedName : "bound ";
 
-        // Set up function properties on the object
-        // Per ECMAScript spec, bound functions have "name" and "length" properties
-        // with attributes: { [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: true }
-        // Following QuickJS implementation: use defineProperty with only configurable=true
-
         // Length can be Infinity or a large double, use JSNumber for full range
-        JSValue lengthValue;
+        JSNumber lengthValue;
         if (Double.isInfinite(this.computedLength) || this.computedLength > Integer.MAX_VALUE) {
             lengthValue = JSNumber.of(this.computedLength);
         } else {
             lengthValue = JSNumber.of((int) this.computedLength);
         }
-        this.defineProperty(PropertyKey.LENGTH,
-                PropertyDescriptor.dataDescriptor(lengthValue, PropertyDescriptor.DataState.Configurable));
-
-        this.defineProperty(PropertyKey.NAME, PropertyDescriptor.dataDescriptor(new JSString(this.computedName),
-                PropertyDescriptor.DataState.Configurable));
+        initializeNameAndLength(this.computedName, lengthValue);
     }
 
     public JSBoundFunction(JSFunction target, JSValue boundThis, JSValue[] boundArgs) {

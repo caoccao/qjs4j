@@ -82,6 +82,22 @@ public abstract sealed class JSFunction extends JSObject
         return homeContext != null ? homeContext : getContext();
     }
 
+    final void initializeConstructorPrototype(PropertyDescriptor.DataState attributes) {
+        JSObject functionPrototype = new JSObject(context);
+        functionPrototype.definePropertyInternal(PropertyKey.CONSTRUCTOR,
+                PropertyDescriptor.dataDescriptor(this, PropertyDescriptor.DataState.ConfigurableWritable));
+        definePropertyInternal(PropertyKey.PROTOTYPE, PropertyDescriptor.dataDescriptor(functionPrototype, attributes));
+    }
+
+    /** Installs the initial own properties, in ECMAScript order, on a newly allocated function. */
+    final void initializeNameAndLength(String functionName, JSNumber functionLength) {
+        // Both descriptors are already complete and these slots have no existing attributes to merge.
+        definePropertyInternal(PropertyKey.LENGTH,
+                PropertyDescriptor.dataDescriptor(functionLength, PropertyDescriptor.DataState.Configurable));
+        definePropertyInternal(PropertyKey.NAME, PropertyDescriptor.dataDescriptor(new JSString(functionName),
+                PropertyDescriptor.DataState.Configurable));
+    }
+
     /**
      * Initialize the function's prototype chain to inherit from Function.prototype. This should be called after
      * creation when the context is available.

@@ -64,15 +64,7 @@ final class VariableDeclarationCompiler {
                             declarator);
                 }
 
-                if (declarator.getId() instanceof Identifier targetId
-                        && declarator.getInit() instanceof ClassExpression classExpr && classExpr.getId() == null) {
-                    compilerContext.inferredClassName = targetId.getName();
-                }
-                compilerContext.expressionCompiler.compile(declarator.getInit());
-                if (declarator.getId() instanceof Identifier targetId && declarator.getInit().isAnonymousFunction()) {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
-                }
-                compilerContext.inferredClassName = null;
+                compileInitializer(compilerContext, declarator);
                 int usingStackLocalIndex = compilerContext.emitHelpers.ensureUsingStackLocal(isAwaitUsingDeclaration,
                         declarator);
                 compilerContext.emitHelpers.emitMethodCallWithSingleArgOnLocalObject(usingStackLocalIndex, "use");
@@ -122,16 +114,7 @@ final class VariableDeclarationCompiler {
 
             // Compile initializer or push undefined
             if (declarator.getInit() != null) {
-                // Pass inferred name to anonymous class expressions for NamedEvaluation
-                if (declarator.getId() instanceof Identifier targetId
-                        && declarator.getInit() instanceof ClassExpression classExpr && classExpr.getId() == null) {
-                    compilerContext.inferredClassName = targetId.getName();
-                }
-                compilerContext.expressionCompiler.compile(declarator.getInit());
-                if (declarator.getId() instanceof Identifier targetId && declarator.getInit().isAnonymousFunction()) {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
-                }
-                compilerContext.inferredClassName = null;
+                compileInitializer(compilerContext, declarator);
             } else {
                 compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
             }
@@ -143,5 +126,18 @@ final class VariableDeclarationCompiler {
             }
         }
         compilerContext.popState();
+    }
+
+    private static void compileInitializer(CompilerContext compilerContext, VariableDeclarator declarator) {
+        // NamedEvaluation supplies the binding name while compiling an anonymous class.
+        if (declarator.getId() instanceof Identifier targetId
+                && declarator.getInit() instanceof ClassExpression classExpr && classExpr.getId() == null) {
+            compilerContext.inferredClassName = targetId.getName();
+        }
+        compilerContext.expressionCompiler.compile(declarator.getInit());
+        if (declarator.getId() instanceof Identifier targetId && declarator.getInit().isAnonymousFunction()) {
+            compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
+        }
+        compilerContext.inferredClassName = null;
     }
 }

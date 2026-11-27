@@ -86,31 +86,11 @@ public final class JSAggregateError extends JSError {
     }
 
     public static JSObject createPrototype(JSContext context, JSValue... args) {
-        // Create AggregateError.prototype (not an error instance per spec)
-        JSObject errorPrototype = new JSObject(context);
-        context.transferPrototype(errorPrototype, JSError.NAME);
-        errorPrototype.defineProperty(PropertyKey.NAME, PropertyDescriptor.dataDescriptor(new JSString(NAME),
-                PropertyDescriptor.DataState.ConfigurableWritable));
-        errorPrototype.defineProperty(PropertyKey.MESSAGE,
-                PropertyDescriptor.dataDescriptor(new JSString(""), PropertyDescriptor.DataState.ConfigurableWritable));
-
-        // AggregateError(errors, message)
-        int length = 2;
-
-        JSNativeFunction errorConstructor = new JSNativeFunction(context, NAME, length,
-                (childContext, thisObj, childArgs) -> create(childContext, childArgs), true);
-        errorConstructor.defineProperty(PropertyKey.PROTOTYPE, errorPrototype, PropertyDescriptor.DataState.None);
-
-        // AggregateError.[[Prototype]] = Error (the constructor inherits from Error)
-        JSValue errorCtor = context.getGlobalObject().get(JSError.NAME);
-        if (errorCtor instanceof JSObject errorCtorObj) {
-            errorConstructor.setPrototype(errorCtorObj);
+        JSObject constructor = createNativeErrorPrototype(context, NAME, 2,
+                (ctx, receiver, arguments) -> create(ctx, arguments));
+        if (context.getGlobalObject().get(JSError.NAME) instanceof JSObject parentConstructor) {
+            constructor.setPrototype(parentConstructor);
         }
-
-        // Set constructor property on prototype (non-enumerable per spec)
-        errorPrototype.defineProperty(PropertyKey.CONSTRUCTOR,
-                PropertyDescriptor.dataDescriptor(errorConstructor, PropertyDescriptor.DataState.ConfigurableWritable));
-
-        return errorConstructor;
+        return constructor;
     }
 }

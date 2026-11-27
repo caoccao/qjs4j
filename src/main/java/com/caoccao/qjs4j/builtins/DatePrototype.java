@@ -19,7 +19,6 @@ package com.caoccao.qjs4j.builtins;
 import com.caoccao.qjs4j.core.*;
 
 import java.math.BigInteger;
-import java.util.Locale;
 
 /**
  * Implementation of JavaScript Date.prototype methods.
@@ -44,6 +43,26 @@ public final class DatePrototype {
     private static final int PART_ALL = 3;
     private static final int PART_DATE = 1;
     private static final int PART_TIME = 2;
+
+    private static void appendPadded(StringBuilder text, int magnitude, int width) {
+        for (int digits = 1, remaining = magnitude; digits < width; digits++) {
+            remaining /= 10;
+            if (remaining == 0) {
+                text.append('0');
+            }
+        }
+        text.append(magnitude);
+    }
+
+    private static void appendYear(StringBuilder text, int year, boolean iso) {
+        boolean extended = iso && (year < 0 || year > 9999);
+        if (year < 0) {
+            text.append('-');
+        } else if (extended) {
+            text.append('+');
+        }
+        appendPadded(text, Math.abs(year), extended ? 6 : 4);
+    }
 
     private static String dayName(int day) {
         int index = Math.max(0, Math.min(6, day));
@@ -110,6 +129,10 @@ public final class DatePrototype {
             return context.getPendingException();
         }
 
+        // A directly constructed Java date may contain an infinity without passing through TimeClip.
+        if (format == FORMAT_TO_STRING && part == PART_ALL && !Double.isFinite(date.getTimeValue())) {
+            return new JSString("Invalid Date");
+        }
         double[] fields = new double[9];
         int result = JSDate.getDateFields(date.getTimeValue(), fields, (format & 1) == 1, false);
         if (result == 0) {
@@ -133,60 +156,71 @@ public final class DatePrototype {
 
         if ((part & PART_DATE) != 0) {
             switch (format) {
-                case FORMAT_UTC ->
-                    builder.append(String.format(Locale.ENGLISH, "%s, %02d %s %0" + (4 + (year < 0 ? 1 : 0)) + "d ",
-                            dayName(weekDay), day, monthName(month), year));
+                case FORMAT_UTC -> {
+                    builder.append(dayName(weekDay)).append(", ");
+                    appendPadded(builder, day, 2);
+                    builder.append(' ').append(monthName(month)).append(' ');
+                    appendYear(builder, year, false);
+                    builder.append(' ');
+                }
                 case FORMAT_TO_STRING -> {
-                    builder.append(String.format(Locale.ENGLISH, "%s %s %02d %0" + (4 + (year < 0 ? 1 : 0)) + "d",
-                            dayName(weekDay), monthName(month), day, year));
+                    builder.append(dayName(weekDay)).append(' ').append(monthName(month)).append(' ');
+                    appendPadded(builder, day, 2);
+                    builder.append(' ');
+                    appendYear(builder, year, false);
                     if (part == PART_ALL) {
                         builder.append(' ');
                     }
                 }
                 case FORMAT_ISO -> {
-                    if (year >= 0 && year <= 9999) {
-                        builder.append(String.format(Locale.ENGLISH, "%04d", year));
-                    } else {
-                        builder.append(String.format(Locale.ENGLISH, "%+07d", year));
-                    }
-                    builder.append(String.format(Locale.ENGLISH, "-%02d-%02dT", month + 1, day));
+                    appendYear(builder, year, true);
+                    builder.append('-');
+                    appendPadded(builder, month + 1, 2);
+                    builder.append('-');
+                    appendPadded(builder, day, 2);
+                    builder.append('T');
                 }
                 case FORMAT_LOCALE -> {
-                    builder.append(String.format(Locale.ENGLISH, "%02d/%02d/%0" + (4 + (year < 0 ? 1 : 0)) + "d",
-                            month + 1, day, year));
+                    appendPadded(builder, month + 1, 2);
+                    builder.append('/');
+                    appendPadded(builder, day, 2);
+                    builder.append('/');
+                    appendYear(builder, year, false);
                     if (part == PART_ALL) {
                         builder.append(", ");
                     }
-                }
-                default -> {
                 }
             }
         }
 
         if ((part & PART_TIME) != 0) {
+            appendPadded(builder, format == FORMAT_LOCALE ? (hour + 11) % 12 + 1 : hour, 2);
+            builder.append(':');
+            appendPadded(builder, minute, 2);
+            builder.append(':');
+            appendPadded(builder, second, 2);
             switch (format) {
-                case FORMAT_UTC ->
-                    builder.append(String.format(Locale.ENGLISH, "%02d:%02d:%02d GMT", hour, minute, second));
+                case FORMAT_UTC -> builder.append(" GMT");
                 case FORMAT_TO_STRING -> {
-                    builder.append(String.format(Locale.ENGLISH, "%02d:%02d:%02d GMT", hour, minute, second));
-                    int tz = timezoneOffset;
-                    if (tz < 0) {
-                        builder.append('-');
-                        tz = -tz;
-                    } else {
-                        builder.append('+');
+                    builder.append(timezoneOffset < 0 ? " GMT-" : " GMT+");
+                    int magnitude = Math.abs(timezoneOffset);
+                    appendPadded(builder, magnitude / 60, 2);
+                    appendPadded(builder, magnitude % 60, 2);
+                    if (part == PART_ALL) {
+                        JSStackFrame frame = context.getCurrentStackFrame();
+                        boolean useLongName = frame != null && !"<eval>".equals(frame.filename());
+                        builder.append(" (").append(JSDate.getTimezoneName((long) date.getTimeValue(), useLongName))
+                                .append(')');
                     }
-                    builder.append(String.format(Locale.ENGLISH, "%02d%02d", tz / 60, tz % 60));
                 }
-                case FORMAT_ISO -> builder.append(
-                        String.format(Locale.ENGLISH, "%02d:%02d:%02d.%03dZ", hour, minute, second, millisecond));
-                case FORMAT_LOCALE -> builder.append(String.format(Locale.ENGLISH, "%02d:%02d:%02d %cM",
-                        (hour + 11) % 12 + 1, minute, second, hour < 12 ? 'A' : 'P'));
-                default -> {
+                case FORMAT_ISO -> {
+                    builder.append('.');
+                    appendPadded(builder, millisecond, 3);
+                    builder.append('Z');
                 }
+                case FORMAT_LOCALE -> builder.append(hour < 12 ? " AM" : " PM");
             }
         }
-
         return new JSString(builder.toString());
     }
 
@@ -550,44 +584,7 @@ public final class DatePrototype {
     }
 
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDate date = requireDate(context, thisArg, "toString");
-        if (date == null) {
-            return context.getPendingException();
-        }
-        if (!Double.isFinite(date.getTimeValue())) {
-            return new JSString("Invalid Date");
-        }
-        // Use getDateFields for correct negative year handling, then append timezone name
-        double[] fields = new double[9];
-        JSDate.getDateFields(date.getTimeValue(), fields, true, false);
-        int year = (int) fields[FIELD_YEAR];
-        int month = (int) fields[FIELD_MONTH];
-        int day = (int) fields[FIELD_DATE];
-        int hour = (int) fields[FIELD_HOURS];
-        int minute = (int) fields[FIELD_MINUTES];
-        int second = (int) fields[FIELD_SECONDS];
-        int weekDay = (int) fields[FIELD_DAY];
-        int timezoneOffset = (int) fields[FIELD_TIMEZONE_OFFSET];
-
-        StringBuilder builder = new StringBuilder(64);
-        builder.append(
-                String.format(Locale.ENGLISH, "%s %s %02d %0" + (4 + (year < 0 ? 1 : 0)) + "d %02d:%02d:%02d GMT",
-                        dayName(weekDay), monthName(month), day, year, hour, minute, second));
-        int tz = timezoneOffset;
-        if (tz < 0) {
-            builder.append('-');
-            tz = -tz;
-        } else {
-            builder.append('+');
-        }
-        builder.append(String.format(Locale.ENGLISH, "%02d%02d", tz / 60, tz % 60));
-        // Append timezone name in parentheses
-        // Use long name when called from JS code (matching V8), short when called directly from Java
-        JSStackFrame stackFrame = context.getCurrentStackFrame();
-        boolean useLongName = stackFrame != null && !"<eval>".equals(stackFrame.filename());
-        String tzName = JSDate.getTimezoneName((long) date.getTimeValue(), useLongName);
-        builder.append(" (").append(tzName).append(')');
-        return new JSString(builder.toString());
+        return getDateString(context, thisArg, FORMAT_TO_STRING, PART_ALL);
     }
 
     public static JSValue toTemporalInstant(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -36,13 +36,13 @@ import java.util.regex.Matcher;
  * <p>
  * The harder half is ordering. A module whose body contains a top-level {@code await} finishes asynchronously, and
  * everything that imports it has to wait — so a dependent registers itself on the modules it is waiting for, an
- * {@code asyncEvaluationOrder} is stamped on each one as it is deferred, and {@link #triggerPendingDependents} runs the
- * ones that become ready in that order. This is ES2024 16.2.1.5.2's AsyncModuleExecutionFulfilled /
- * GatherAvailableAncestors, and {@code import defer} adds ReadyForSyncExecution on top of it.
+ * {@code asyncEvaluationOrder} is stamped on each one as it is deferred, and
+ * {@link AsyncModuleEvaluation#triggerPendingDependents} runs the ones that become ready in that order. This is ES2024
+ * 16.2.1.5.2's AsyncModuleExecutionFulfilled / GatherAvailableAncestors, and {@code import defer} adds
+ * ReadyForSyncExecution on top of it.
  */
 final class ModuleLoader {
-    // Counter for tracking the order modules have their async evaluation set
-    private int asyncEvaluationOrderCounter;
+    final AsyncModuleEvaluation asyncEvaluation;
     private final JSContext context;
     private final Map<String, JSDynamicImportModule> dynamicImportModuleCache = new HashMap<>();
     private final Map<String, JSObject> importMetaCache = new HashMap<>();
@@ -53,19 +53,7 @@ final class ModuleLoader {
         this.context = context;
         this.transformer = transformer;
         this.linker = linker;
-        this.asyncEvaluationOrderCounter = 0;
-    }
-
-    private JSDynamicImportModule cachedDependency(JSDynamicImportModule module, Matcher matcher) {
-        String specifier = ModuleSourceText.decodeModuleStringLiteralValue(matcher.group(1));
-        try {
-            String resolved = resolveDynamicImportSpecifier(specifier, module.resolvedSpecifier(), specifier);
-            return dynamicImportModuleCache.get(resolved);
-        } catch (JSException ignored) {
-            // Resolution also sets a pending exception. This scan skips unresolvable requests.
-            context.clearPendingException();
-            return null;
-        }
+        this.asyncEvaluation = new AsyncModuleEvaluation(context, this);
     }
 
     /**
@@ -94,34 +82,6 @@ final class ModuleLoader {
      */
     void cacheModule(String moduleCacheKey, JSDynamicImportModule moduleRecord) {
         dynamicImportModuleCache.put(moduleCacheKey, moduleRecord);
-    }
-
-    void chainImportPromiseOntoAsyncDependencies(List<JSPromise> dependencyPromises, JSObject namespace,
-            JSPromise importPromise, JSPromise.ResolveState resolveState) {
-        int[] remaining = {dependencyPromises.size()};
-        JSNativeFunction onFulfill = new JSNativeFunction(context, "", 0, (ctx, thisArg, args) -> {
-            if (--remaining[0] == 0) {
-                resolveImportPromise(ctx, namespace, importPromise, resolveState);
-            }
-            return JSUndefined.INSTANCE;
-        });
-        onFulfill.initializePrototypeChain(context);
-        JSNativeFunction onReject = importRejectionHandler(importPromise, resolveState);
-        for (JSPromise dependencyPromise : dependencyPromises) {
-            dependencyPromise.observe(context, onFulfill, onReject);
-        }
-    }
-
-    void chainImportPromiseOntoAsyncModule(JSDynamicImportModule moduleRecord, JSPromise importPromise,
-            JSPromise.ResolveState resolveState) {
-        JSObject namespace = moduleRecord.namespace();
-        JSNativeFunction onFulfill = new JSNativeFunction(context, "", 0, (ctx, thisArg, args) -> {
-            resolveImportPromise(ctx, namespace, importPromise, resolveState);
-            return JSUndefined.INSTANCE;
-        });
-        onFulfill.initializePrototypeChain(context);
-        moduleRecord.asyncEvaluationPromise().observe(context, onFulfill,
-                importRejectionHandler(importPromise, resolveState));
     }
 
     /**
@@ -153,32 +113,14 @@ final class ModuleLoader {
     JSValue evaluateDynamicImportModule(JSDynamicImportModule moduleRecord) {
         if (!moduleRecord.hasExportSyntax()) {
             linker.validateModuleScriptEarlyErrors(moduleRecord.rawSource());
-            return context.eval(moduleRecord.transformedSource(), moduleRecord.resolvedSpecifier(), true);
         }
         return context.eval(moduleRecord.transformedSource(), moduleRecord.resolvedSpecifier(), true);
     }
 
-    /**
-     * ES2024 16.2.1.5.2.4 GatherAvailableAncestors. Collects all ancestor modules whose pending async dependencies have
-     * all resolved.
-     */
-    void gatherAvailableAncestors(JSDynamicImportModule module, List<JSDynamicImportModule> execList) {
-        List<JSDynamicImportModule> dependents = new ArrayList<>(module.pendingDependents());
-        module.pendingDependents().clear();
-        for (JSDynamicImportModule dependent : dependents) {
-            if (execList.contains(dependent)) {
-                continue;
-            }
-            dependent.decrementPendingAsyncDependencyCount();
-            if (dependent.pendingAsyncDependencyCount() <= 0) {
-                execList.add(dependent);
-                if (!dependent.hasTLA()) {
-                    // Non-TLA modules will execute synchronously, so their ancestors
-                    // might also become available immediately.
-                    gatherAvailableAncestors(dependent, execList);
-                }
-            }
-        }
+    void finishLinkedModule(JSDynamicImportModule module) {
+        linker.resolveDynamicImportReExports(module, new HashSet<>());
+        module.namespace().finalizeNamespace();
+        module.setStatus(JSDynamicImportModule.Status.EVALUATED);
     }
 
     void gatherDeferredAsyncDependencySpecifiers(String resolvedSpecifier, String sourceCode,
@@ -230,51 +172,6 @@ final class ModuleLoader {
             return resolvedSpecifier + "\u0000type=" + importType;
         }
         return resolvedSpecifier;
-    }
-
-    List<JSPromise> getEvaluatingAsyncDependencyPromises(JSDynamicImportModule moduleRecord) {
-        Matcher matcher = staticImports(moduleRecord);
-        List<JSPromise> dependencyPromises = new ArrayList<>();
-        Set<String> seenSpecifiers = new HashSet<>();
-        JSDynamicImportModule moduleCycleRoot = moduleRecord.cycleRoot() != null
-                ? moduleRecord.cycleRoot()
-                : moduleRecord;
-        while (matcher.find()) {
-            JSDynamicImportModule depRecord = cachedDependency(moduleRecord, matcher);
-            if (depRecord == null) {
-                continue;
-            }
-            JSDynamicImportModule effectiveDep = effectiveDependency(depRecord, moduleCycleRoot);
-            if (effectiveDep.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC
-                    && effectiveDep.asyncEvaluationPromise() != null
-                    && seenSpecifiers.add(effectiveDep.resolvedSpecifier())) {
-                dependencyPromises.add(effectiveDep.asyncEvaluationPromise());
-            }
-        }
-        return dependencyPromises;
-    }
-
-    boolean hasEvaluatingAsyncDependency(JSDynamicImportModule moduleRecord) {
-        Matcher matcher = staticImports(moduleRecord);
-        while (matcher.find()) {
-            JSDynamicImportModule depRecord = cachedDependency(moduleRecord, matcher);
-            if (depRecord != null && depRecord.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private JSNativeFunction importRejectionHandler(JSPromise importPromise, JSPromise.ResolveState resolveState) {
-        JSNativeFunction handler = new JSNativeFunction(context, "", 1, (ctx, thisArg, args) -> {
-            if (!resolveState.alreadyResolved) {
-                resolveState.alreadyResolved = true;
-                importPromise.reject(JSValue.argumentOrUndefined(args, 0));
-            }
-            return JSUndefined.INSTANCE;
-        });
-        handler.initializePrototypeChain(context);
-        return handler;
     }
 
     /**
@@ -411,14 +308,10 @@ final class ModuleLoader {
                     moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATING);
                     JSValue evalResult = evaluateDynamicImportModule(moduleRecord);
                     if (moduleRecord.hasTLA() && evalResult instanceof JSPromise asyncPromise) {
-                        moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATING_ASYNC);
-                        moduleRecord.setAsyncEvaluationPromise(asyncPromise);
-                        registerAsyncModuleCompletion(moduleRecord, asyncPromise, new HashSet<>());
+                        asyncEvaluation.awaitCompletion(moduleRecord, asyncPromise);
                         tlaEvaluationPromises.add(asyncPromise);
                     } else {
-                        linker.resolveDynamicImportReExports(moduleRecord, new HashSet<>());
-                        moduleRecord.namespace().finalizeNamespace();
-                        moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
+                        finishLinkedModule(moduleRecord);
                     }
                 } else {
                     JSDynamicImportModule depRecord = loadJSDynamicImportModule(asyncDependencySpecifier,
@@ -442,8 +335,8 @@ final class ModuleLoader {
         // using a Promise.all-like counter. This avoids relying on context.processMicrotasks()
         // which is a no-op when called re-entrantly from within a microtask.
         if (importPromise != null && !tlaEvaluationPromises.isEmpty()) {
-            chainImportPromiseOntoAsyncDependencies(tlaEvaluationPromises, moduleRecord.deferredNamespace(),
-                    importPromise, resolveState);
+            asyncEvaluation.chainImportPromiseOntoAsyncDependencies(tlaEvaluationPromises,
+                    moduleRecord.deferredNamespace(), importPromise, resolveState);
             return null; // Import promise will be resolved via TLA promise chain
         }
 
@@ -467,12 +360,9 @@ final class ModuleLoader {
                 && preloaded.deferredPreload()) {
             try {
                 evaluateDynamicImportModule(preloaded);
-                linker.resolveDynamicImportReExports(preloaded, new HashSet<>());
-                preloaded.namespace().finalizeNamespace();
-                preloaded.setStatus(JSDynamicImportModule.Status.EVALUATED);
+                finishLinkedModule(preloaded);
             } catch (JSException jsException) {
-                preloaded.setEvaluationError(jsException.getErrorValue());
-                preloaded.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
+                preloaded.failEvaluation(jsException.getErrorValue());
                 throw jsException;
             }
             return preloaded.namespace();
@@ -484,15 +374,16 @@ final class ModuleLoader {
         if (importPromise != null && resolveState != null
                 && moduleRecord.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC
                 && moduleRecord.asyncEvaluationPromise() != null) {
-            chainImportPromiseOntoAsyncModule(moduleRecord, importPromise, resolveState);
+            asyncEvaluation.chainImportPromiseOntoAsyncModule(moduleRecord, importPromise, resolveState);
             return null;
         }
         if (importPromise != null && resolveState != null
                 && moduleRecord.status() != JSDynamicImportModule.Status.EVALUATED_ERROR) {
-            List<JSPromise> asyncDependencyPromises = getEvaluatingAsyncDependencyPromises(moduleRecord);
+            List<JSPromise> asyncDependencyPromises = asyncEvaluation
+                    .getEvaluatingAsyncDependencyPromises(moduleRecord);
             if (!asyncDependencyPromises.isEmpty()) {
-                chainImportPromiseOntoAsyncDependencies(asyncDependencyPromises, moduleRecord.namespace(),
-                        importPromise, resolveState);
+                asyncEvaluation.chainImportPromiseOntoAsyncDependencies(asyncDependencyPromises,
+                        moduleRecord.namespace(), importPromise, resolveState);
                 return null;
             }
         }
@@ -543,13 +434,13 @@ final class ModuleLoader {
             if (context.isSuppressingEvalMicrotasks()) {
                 preloadStaticImports(moduleRecord, importResolutionStack, importAttributes);
             }
-            if (context.isSuppressingEvalMicrotasks() && hasEvaluatingAsyncDependency(moduleRecord)) {
+            if (context.isSuppressingEvalMicrotasks() && asyncEvaluation.hasEvaluatingAsyncDependency(moduleRecord)) {
                 // ES2024 16.2.1.5.2.1: Module depends on an EVALUATING_ASYNC module.
                 // Don't evaluate yet; register as a pending dependent.
                 // Set EVALUATING_ASYNC so transitive dependents also defer.
-                moduleRecord.setAsyncEvaluationOrder(asyncEvaluationOrderCounter++);
+                moduleRecord.setAsyncEvaluationOrder(asyncEvaluation.nextAsyncEvaluationOrder());
                 moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATING_ASYNC);
-                registerPendingDependent(moduleRecord);
+                asyncEvaluation.registerPendingDependent(moduleRecord);
                 return moduleRecord;
             }
             if (moduleRecord.hasTLA()) {
@@ -566,10 +457,8 @@ final class ModuleLoader {
                     context.setSuppressingEvalMicrotasks(prevSuppress);
                 }
                 if (evalResult instanceof JSPromise asyncPromise) {
-                    moduleRecord.setAsyncEvaluationOrder(asyncEvaluationOrderCounter++);
-                    moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATING_ASYNC);
-                    moduleRecord.setAsyncEvaluationPromise(asyncPromise);
-                    registerAsyncModuleCompletion(moduleRecord, asyncPromise, importResolutionStack);
+                    moduleRecord.setAsyncEvaluationOrder(asyncEvaluation.nextAsyncEvaluationOrder());
+                    asyncEvaluation.awaitCompletion(moduleRecord, asyncPromise);
                     if (!context.isSuppressingEvalMicrotasks()) {
                         // Not in a suppressed context — drain microtasks now to
                         // let the async module complete before returning.
@@ -597,20 +486,17 @@ final class ModuleLoader {
         } catch (JSSyntaxErrorException syntaxErrorException) {
             JSValue error = context.throwSyntaxError(syntaxErrorException.getMessage(),
                     syntaxErrorException.getSourceLocation());
-            moduleRecord.setEvaluationError(error);
-            moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
+            moduleRecord.failEvaluation(error);
             throw new JSException(error);
         } catch (JSCompilerException compilerException) {
             JSValue error = context.throwSyntaxError(compilerException.getMessage(),
                     compilerException.getSourceLocation());
-            moduleRecord.setEvaluationError(error);
-            moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
+            moduleRecord.failEvaluation(error);
             throw new JSException(error);
         } catch (JSException jsException) {
             // Keep the module in cache with EVALUATED_ERROR status so that subsequent
             // deferred imports can rethrow the same error object (per spec).
-            moduleRecord.setEvaluationError(jsException.getErrorValue());
-            moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
+            moduleRecord.failEvaluation(jsException.getErrorValue());
             throw jsException;
         } catch (Exception exception) {
             dynamicImportModuleCache.remove(moduleCacheKey);
@@ -667,19 +553,6 @@ final class ModuleLoader {
      */
     int moduleCacheSize() {
         return dynamicImportModuleCache.size();
-    }
-
-    /**
-     * The order stamp for the next module to be deferred by an asynchronous dependency.
-     * <p>
-     * ES2024 16.2.1.5.2 gives every module deferred during the depth-first evaluation an
-     * {@code [[AsyncEvaluationOrder]]}, and {@link #triggerPendingDependents} runs the ones that become ready in that
-     * order.
-     *
-     * @return the next order stamp
-     */
-    int nextAsyncEvaluationOrder() {
-        return asyncEvaluationOrderCounter++;
     }
 
     String normalizeModuleSpecifier(String specifier) {
@@ -845,59 +718,6 @@ final class ModuleLoader {
         return true;
     }
 
-    void registerAsyncModuleCompletion(JSDynamicImportModule moduleRecord, JSPromise asyncPromise,
-            Set<String> importResolutionStack) {
-        JSNativeFunction onFulfill = new JSNativeFunction(context, "onFulfill", 0, (ctx, thisArg, args) -> {
-            linker.resolveDynamicImportReExports(moduleRecord, new HashSet<>());
-            moduleRecord.namespace().finalizeNamespace();
-            moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
-            triggerPendingDependents(moduleRecord);
-            return JSUndefined.INSTANCE;
-        });
-        onFulfill.initializePrototypeChain(context);
-        JSNativeFunction onReject = new JSNativeFunction(context, "onReject", 1, (ctx, thisArg, args) -> {
-            JSValue error = JSValue.argumentOrUndefined(args, 0);
-            // A top-level-await body that finished and then rejected still failed while
-            // the graph was being evaluated. Counting it is what lets a host tell that
-            // apart from a graph that never got past linking — see
-            // hasModuleBodyEvaluationFailed().
-            context.recordFailedModuleBodyEvaluation();
-            moduleRecord.setEvaluationError(error);
-            moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
-            triggerPendingDependents(moduleRecord);
-            return JSUndefined.INSTANCE;
-        });
-        onReject.initializePrototypeChain(context);
-        asyncPromise.addReactions(new JSPromise.ReactionRecord(onFulfill, context, null, null),
-                new JSPromise.ReactionRecord(onReject, context, null, null));
-    }
-
-    void registerPendingDependent(JSDynamicImportModule moduleRecord) {
-        Matcher matcher = staticImports(moduleRecord);
-        int asyncDepCount = 0;
-        Set<String> registeredOnSpecifiers = new HashSet<>();
-        // Determine this module's effective cycle root for same-cycle detection.
-        JSDynamicImportModule moduleCycleRoot = moduleRecord.cycleRoot() != null
-                ? moduleRecord.cycleRoot()
-                : moduleRecord;
-        while (matcher.find()) {
-            JSDynamicImportModule depRecord = cachedDependency(moduleRecord, matcher);
-            if (depRecord == null) {
-                continue;
-            }
-            // ES2024 16.2.1.5.2.1 step 11.c.iv.1: Follow CycleRoot pointer only
-            // for dependencies NOT in the same cycle. Modules in the same cycle
-            // (sharing a cycle root) register directly on each other.
-            JSDynamicImportModule effectiveDep = effectiveDependency(depRecord, moduleCycleRoot);
-            if (effectiveDep.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC
-                    && registeredOnSpecifiers.add(effectiveDep.resolvedSpecifier())) {
-                effectiveDep.pendingDependents().add(moduleRecord);
-                asyncDepCount++;
-            }
-        }
-        moduleRecord.setPendingAsyncDependencyCount(asyncDepCount);
-    }
-
     /**
      * Drop a module record from the cache.
      * <p>
@@ -945,62 +765,4 @@ final class ModuleLoader {
         return resolvedSpecifier;
     }
 
-    private Matcher staticImports(JSDynamicImportModule module) {
-        return ModuleSourceTransformer.MODULE_STATIC_IMPORT_PATTERN
-                .matcher(ModuleSourceScan.maskModuleComments(module.rawSource()));
-    }
-
-    void triggerPendingDependents(JSDynamicImportModule moduleRecord) {
-        // ES2024 16.2.1.5.2.4 AsyncModuleExecutionFulfilled / 16.2.1.5.2.5 AsyncModuleExecutionRejected
-        // Step 1: Gather all ancestors that are now ready (all async deps resolved)
-        List<JSDynamicImportModule> readyModules = new ArrayList<>();
-        gatherAvailableAncestors(moduleRecord, readyModules);
-
-        // Step 2: Sort by async evaluation order (the order they were deferred during DFS)
-        readyModules.sort(Comparator.comparingInt(JSDynamicImportModule::asyncEvaluationOrder));
-
-        // Step 3: Execute each ready module in order
-        for (JSDynamicImportModule ready : readyModules) {
-            if (moduleRecord.status() == JSDynamicImportModule.Status.EVALUATED_ERROR) {
-                // Propagate error to dependents
-                ready.setEvaluationError(moduleRecord.evaluationError());
-                ready.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
-                triggerPendingDependents(ready);
-                continue;
-            }
-            try {
-                ready.setStatus(JSDynamicImportModule.Status.EVALUATING);
-                JSValue evalResult = evaluateDynamicImportModule(ready);
-                if (ready.hasTLA() && evalResult instanceof JSPromise asyncPromise) {
-                    ready.setAsyncEvaluationOrder(asyncEvaluationOrderCounter++);
-                    ready.setStatus(JSDynamicImportModule.Status.EVALUATING_ASYNC);
-                    ready.setAsyncEvaluationPromise(asyncPromise);
-                    registerAsyncModuleCompletion(ready, asyncPromise, new HashSet<>());
-                } else {
-                    linker.resolveDynamicImportReExports(ready, new HashSet<>());
-                    ready.namespace().finalizeNamespace();
-                    ready.setStatus(JSDynamicImportModule.Status.EVALUATED);
-                    triggerPendingDependents(ready);
-                }
-            } catch (JSException jsException) {
-                ready.setEvaluationError(jsException.getErrorValue());
-                ready.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
-                triggerPendingDependents(ready);
-            }
-        }
-    }
-
-    private static JSDynamicImportModule effectiveDependency(JSDynamicImportModule dependency,
-            JSDynamicImportModule moduleCycleRoot) {
-        JSDynamicImportModule root = dependency.cycleRoot();
-        return root != null && root != moduleCycleRoot ? root : dependency;
-    }
-
-    private static void resolveImportPromise(JSContext context, JSObject namespace, JSPromise importPromise,
-            JSPromise.ResolveState resolveState) {
-        if (!resolveState.alreadyResolved) {
-            resolveState.alreadyResolved = true;
-            importPromise.resolve(context, namespace);
-        }
-    }
 }

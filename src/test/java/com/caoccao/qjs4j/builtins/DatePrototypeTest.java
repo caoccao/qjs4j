@@ -199,6 +199,13 @@ public class DatePrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testExtendedYearAndMillisecondPadding() {
+        assertStringWithJavet("new Date('-000001-01-02T03:04:05.006Z').toISOString()",
+                "new Date('+010000-01-02T03:04:05.060Z').toUTCString()",
+                "new Date('0001-01-02T03:04:05.006Z').toUTCString()");
+    }
+
+    @Test
     public void testGetDay() {
         // Test with 2024-01-01 00:00:00 UTC
         JSDate date = new JSDate(context, 1704067200000L);
@@ -314,6 +321,14 @@ public class DatePrototypeTest extends BaseJavetTest {
         assumeFalse(isWindows(), "Skipping on Windows - timezone format differences with V8");
 
         assertStringWithJavet("new Date(1735689600000).toString();");
+    }
+
+    @Test
+    public void testToStringForNonFiniteJavaDates() {
+        for (double value : new double[]{Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY, Double.NaN}) {
+            assertStringValue(DatePrototype.toStringMethod(context, new JSDate(context, value), JSValue.NO_ARGS),
+                    "Invalid Date");
+        }
     }
 
     @Test
